@@ -1877,12 +1877,16 @@ bun **不报错**，只跑了 `tests/architecture/`——输出看起来完全�
 **正确姿势**（任选，别再用无引号变量）：
 ```zsh
 grep -rl ... > /tmp/files.txt
-xargs -a /tmp/files.txt bun test --isolate          # 最稳
+xargs bun test --isolate < /tmp/files.txt          # 最稳、且跨平台
 # 或 zsh 显式分词：
 bun test --isolate ${=FILES}
 # 或用数组：
 FILES=( ${(f)"$(grep -rl ...)"} ); bun test --isolate $FILES
 ```
+
+⚠️ **别写 `xargs -a <file>`**：`-a` 是 **GNU 扩展**，macOS 自带的 BSD xargs 不认，直接报
+`xargs: invalid option -- a` 并打印 usage——而它的**退出码看起来像正常失败**，
+套在 `until grep -q "Ran .* tests"` 这类等待里就会静默空转。用 `< file` 重定向，两边都行。
 
 **自查**：跑完看**文件数对不对**。`Ran N tests across M files` 里的 M 必须和你给的清单长度相符——
 这一条比看 pass/fail 更早暴露问题。

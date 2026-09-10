@@ -29,6 +29,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   gt,
   inArray,
   isNotNull,
@@ -36,6 +37,7 @@ import {
   ne,
   notExists,
   notInArray,
+  or,
   sql,
 } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
@@ -132,6 +134,7 @@ import {
   nodeRuns,
   reviewComments,
   reviewNodeReviewers,
+  taskCollaborators,
   tasks,
   workflows,
 } from '@/db/schema'
@@ -1873,6 +1876,21 @@ export async function countPendingReviews(
   db: ProviderNeutralDatabase,
   actor?: Actor,
 ): Promise<number> {
+  // RFC-359 AC-11 —— 这条端点原本打**三次串行往返**：①主 join 捞出全部待审行，
+  // ②`visibleTaskIds(...)` 按 taskId 列表查可见性，③`chunkedAll` 查指派表；再在 JS 里
+  // 归并去重计数。三段在 SQLite 上几乎免费（进程内、每条 ~0μs），在 PostgreSQL 上每段
+  // 都是一次真实往返——实测该端点 SQLite P95 1.80ms / PG 7.33ms，差值 +5.5ms ≈ 3 × RTT，
+  // 且**不随行数放大**，即代价来自往返次数而非查询本身。
+  //
+  // 这里把三段折成**一条**语句：可见性与指派都下推成谓词，计数交给 SQL。
+  // 判据逐字不变（RFC-340：徽标数 = 任务可见 ∪ 节点被指派）：
+  //   · 可见性 = `canReadAllTasks ? 恒真 : (owner 是我 OR 我在 task_collaborators 里)`
+  //     —— 与 `taskAuthorization.visibleIds` 同一判据；原实现按 500 分块只是为了绕开
+  //     `IN (…)` 的绑定参数上限，不传列表就不需要分块，谓词下推后语义相同。
+  //   · 指派 = `EXISTS(review_node_reviewers WHERE taskId/reviewNodeId 与本行相等 AND 我是评审人)`
+  //     —— 原实现按 `${taskId}:${reviewNodeId}` 配对，相关子查询与之等价。
+  // 顺带去掉「把所有匹配行搬进 JS 再数一遍」——RFC-311 的注释一直声称这里是
+  // indexed count(*) 形状，此前并不是。
   const newer = alias(docVersions, 'dv_newer')
   const conditions = [
     eq(docVersions.decision, 'pending'),
@@ -1890,8 +1908,40 @@ export async function countPendingReviews(
         ),
     ),
   ]
-  const rows = await db
-    .select({ taskId: docVersions.taskId, reviewNodeId: docVersions.reviewNodeId })
+  if (actor !== undefined && !actor.permissions.has('tasks:read:all')) {
+    // 只有在 actor 存在**且**不能读全部任务时才需要收窄；`canReadAllTasks` 为真时
+    // 原 `visibleIds` 的可见性谓词恒真，此处同样不加条件（少一层无谓的 OR）。
+    conditions.push(
+      or(
+        eq(tasks.ownerUserId, actor.user.id),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(taskCollaborators)
+            .where(
+              and(
+                eq(taskCollaborators.taskId, tasks.id),
+                eq(taskCollaborators.userId, actor.user.id),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(reviewNodeReviewers)
+            .where(
+              and(
+                eq(reviewNodeReviewers.taskId, docVersions.taskId),
+                eq(reviewNodeReviewers.reviewNodeId, docVersions.reviewNodeId),
+                eq(reviewNodeReviewers.reviewerUserId, actor.user.id),
+              ),
+            ),
+        ),
+      )!,
+    )
+  }
+  const counted = await db
+    .select({ total: sql<number>`count(*)` })
     .from(docVersions)
     .innerJoin(
       nodeRuns,
@@ -1903,41 +1953,7 @@ export async function countPendingReviews(
     )
     .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(and(...conditions))
-  if (actor === undefined || rows.length === 0) return rows.length
-
-  const taskIds = [...new Set(rows.map((row) => row.taskId))]
-  const visibleTaskIds = await createTaskAuthorizationQueries(db).visibleTaskIds({
-    subject: {
-      userId: actor.user.id,
-      canReadAllTasks: actor.permissions.has('tasks:read:all'),
-    },
-    taskIds,
-  })
-  const assignments = await chunkedAll(taskIds, (ids) =>
-    db
-      .select({
-        taskId: reviewNodeReviewers.taskId,
-        reviewNodeId: reviewNodeReviewers.reviewNodeId,
-      })
-      .from(reviewNodeReviewers)
-      .where(
-        and(
-          eq(reviewNodeReviewers.reviewerUserId, actor.user.id),
-          inArray(reviewNodeReviewers.taskId, ids),
-        ),
-      ),
-  )
-  const assignedReviews = new Set(
-    assignments.map((assignment) => `${assignment.taskId}:${assignment.reviewNodeId}`),
-  )
-  return rows.reduce(
-    (total, row) =>
-      total +
-      (visibleTaskIds.has(row.taskId) || assignedReviews.has(`${row.taskId}:${row.reviewNodeId}`)
-        ? 1
-        : 0),
-    0,
-  )
+  return Number(counted[0]?.total ?? 0)
 }
 
 export async function getReviewDetail(
