@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 853,
+    "consumers": 857,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1061,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20443,
-    "symbols": 982
+    "symbols": 983
   },
   "entries": [
     {
@@ -150527,6 +150527,66 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:1afb83b27d4624c8c9b5",
+        "import:efa567e9378d5522e0c2",
+        "import:fd1db2c3d3f381bab934"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:humanGateNodeProjectionMember",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#humanGateNodeProjectionMember",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "collaboration",
+          "edgeId": "import:1afb83b27d4624c8c9b5",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file"
+        },
+        {
+          "context": "collaboration",
+          "edgeId": "import:efa567e9378d5522e0c2",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#$file"
+        },
+        {
+          "context": "collaboration",
+          "edgeId": "import:fd1db2c3d3f381bab934",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:fffc5b21c96a93a2daae17482cff8315848dca87107e5ba8e9d06c0eaacbee49",
+      "status": "target-context-current-surface",
+      "symbol": "humanGateNodeProjectionMember",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
@@ -161684,7 +161744,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e9c24d1c2afe84aab6274dbd992af89002edf552b0742283cf2d4b51a10ae425",
+  "sourceDigest": "sha256:69b1e3e26b0db7cb027dda3e2a273a832af2ca018ebb5f3a85134942387a44c4",
   "targetContexts": [
     "collaboration",
     "development-automation",

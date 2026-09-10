@@ -60,6 +60,7 @@ import {
 } from '../domain/ownership'
 import {
   humanGateNodeProjectionFence as humanGateNodeProjectionFenceInternal,
+  humanGateNodeProjectionMember as humanGateNodeProjectionMemberInternal,
   isLegacyTaskGateContinuationPayload as isLegacyTaskGateContinuationPayloadInternal,
   type HumanGateContinuationLineage,
   type HumanGateNodeProjectionFence,
@@ -238,6 +239,7 @@ export const submitTaskContinuationTx = submitTaskContinuationTxInternal
 // without creating a value cycle.
 export const bindTaskDecisionParticipantInTx = bindTaskDecisionParticipantInTxInternal
 export const humanGateNodeProjectionFence = humanGateNodeProjectionFenceInternal
+export const humanGateNodeProjectionMember = humanGateNodeProjectionMemberInternal
 export const isLegacyTaskGateContinuationPayload = isLegacyTaskGateContinuationPayloadInternal
 export const terminalizeTaskExecutionIntentsTx = terminalizeTaskExecutionIntentsTxInternal
 export const buildCodeHostRecoveryDescriptor = buildCodeHostRecoveryDescriptorInternal

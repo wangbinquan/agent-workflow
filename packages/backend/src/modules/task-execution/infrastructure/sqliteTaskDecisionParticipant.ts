@@ -13,7 +13,6 @@ import {
   humanGateNodeProjectionFence,
   type HumanGateContinuationLineage,
   type HumanGateNodeProjectionFence,
-  type HumanGateNodeProjectionMember,
 } from '../domain/humanGateContinuation'
 import type { TaskExecutionEffectStore } from './taskExecutionEffectTransactionStore'
 import type { HumanGateTaskLifecycle } from './humanGateTaskLifecycleTransaction'
@@ -24,32 +23,10 @@ import type {
   AcceptHumanGateDecisionInput,
   AcceptedHumanGateDecision,
 } from '../application/acceptHumanGateDecision'
+import { humanGateNodeProjectionMember } from '../domain/humanGateContinuation'
 
 export interface TaskDecisionParticipantInTx {
   acceptGateDecisionTx(input: AcceptHumanGateDecisionInput): AcceptedHumanGateDecision
-}
-
-function projectionMember(row: typeof nodeRuns.$inferSelect): HumanGateNodeProjectionMember {
-  return {
-    id: row.id,
-    taskId: row.taskId,
-    nodeId: row.nodeId,
-    parentNodeRunId: row.parentNodeRunId,
-    iteration: row.iteration,
-    shardKey: row.shardKey,
-    retryIndex: row.retryIndex,
-    reviewIteration: row.reviewIteration,
-    status: row.status,
-    failureCode: row.failureCode,
-    preSnapshot: row.preSnapshot,
-    preSnapshotReposJson: row.preSnapshotReposJson,
-    rerunCause: row.rerunCause,
-    supersededByReview: row.supersededByReview,
-    rolledBack: row.rolledBack,
-    continuationSlotKey: row.continuationSlotKey,
-    lineageSlotPathJson: row.lineageSlotPathJson,
-    operationGeneration: row.operationGeneration,
-  }
 }
 
 function assertProjection(input: {
@@ -74,7 +51,7 @@ function assertProjection(input: {
       `human-gate node projection changed for task '${input.taskId}'`,
     )
   }
-  const actual = humanGateNodeProjectionFence(rows.map(projectionMember))
+  const actual = humanGateNodeProjectionFence(rows.map(humanGateNodeProjectionMember))
   if (
     actual.memberCount !== input.expected.memberCount ||
     actual.digest !== input.expected.digest

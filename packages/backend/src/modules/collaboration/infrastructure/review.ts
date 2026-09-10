@@ -194,6 +194,7 @@ import {
 } from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
+import { humanGateNodeProjectionMember } from '@/modules/task-execution/public/participants'
 
 const {
   canonicalHumanGateRequestHash,
@@ -3250,29 +3251,6 @@ async function ensureLegacyReviewGateRevisionTx(input: {
   return 1
 }
 
-function reviewDecisionProjectionMember(row: typeof nodeRuns.$inferSelect) {
-  return {
-    id: row.id,
-    taskId: row.taskId,
-    nodeId: row.nodeId,
-    parentNodeRunId: row.parentNodeRunId,
-    iteration: row.iteration,
-    shardKey: row.shardKey,
-    retryIndex: row.retryIndex,
-    reviewIteration: row.reviewIteration,
-    status: row.status,
-    failureCode: row.failureCode,
-    preSnapshot: row.preSnapshot,
-    preSnapshotReposJson: row.preSnapshotReposJson,
-    rerunCause: row.rerunCause,
-    supersededByReview: row.supersededByReview,
-    rolledBack: row.rolledBack,
-    continuationSlotKey: row.continuationSlotKey,
-    lineageSlotPathJson: row.lineageSlotPathJson,
-    operationGeneration: row.operationGeneration,
-  }
-}
-
 async function submitReviewDecisionUnlocked(
   args: SubmitReviewDecisionArgs,
 ): Promise<SubmitReviewDecisionResult> {
@@ -3848,7 +3826,7 @@ async function submitReviewDecisionUnlocked(
             .where(inArray(nodeRuns.id, lineageIds))
             .limit(lineageIds.length)
     const expectedNodeProjection = humanGateNodeProjectionFence(
-      projectionRows.map(reviewDecisionProjectionMember),
+      projectionRows.map(humanGateNodeProjectionMember),
     )
     const accepted = await acceptHumanGateDecisionTx(tx, {
       taskId: taskRow.id,

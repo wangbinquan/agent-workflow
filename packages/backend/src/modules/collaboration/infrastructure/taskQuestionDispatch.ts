@@ -132,6 +132,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { runIdsWithOutput } from './nodeRunOutputPresence'
+import { humanGateNodeProjectionMember } from '@/modules/task-execution/public/participants'
 
 const log = createLogger('task-questions.dispatch')
 
@@ -351,29 +352,6 @@ async function ensureLegacyQuestionGateRevisionTx(input: {
     now: input.now,
   })
   return 1
-}
-
-function questionDispatchProjectionMember(row: typeof nodeRuns.$inferSelect) {
-  return {
-    id: row.id,
-    taskId: row.taskId,
-    nodeId: row.nodeId,
-    parentNodeRunId: row.parentNodeRunId,
-    iteration: row.iteration,
-    shardKey: row.shardKey,
-    retryIndex: row.retryIndex,
-    reviewIteration: row.reviewIteration,
-    status: row.status,
-    failureCode: row.failureCode,
-    preSnapshot: row.preSnapshot,
-    preSnapshotReposJson: row.preSnapshotReposJson,
-    rerunCause: row.rerunCause,
-    supersededByReview: row.supersededByReview,
-    rolledBack: row.rolledBack,
-    continuationSlotKey: row.continuationSlotKey,
-    lineageSlotPathJson: row.lineageSlotPathJson,
-    operationGeneration: row.operationGeneration,
-  }
 }
 
 /** Thrown inside the atomic tx to roll it back when a concurrent dispatcher already
@@ -1502,7 +1480,7 @@ async function commitDispatchPlan(
             gate: { kind: 'clarify', ref: decision.gateRef },
             expectedTaskRevision: decision.request.expectedTaskRevision,
             expectedNodeProjection: humanGateNodeProjectionFence(
-              projectionRows.map(questionDispatchProjectionMember),
+              projectionRows.map(humanGateNodeProjectionMember),
             ),
             continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
             operationId: begun.operation.id,

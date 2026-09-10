@@ -40,6 +40,7 @@ import {
   DatabaseHumanGateOperationJournal,
   type HumanGateOperationJournal,
 } from './humanGateOperationJournal'
+import { humanGateNodeProjectionMember } from '@/modules/task-execution/public/participants'
 
 export interface ClarifyDecisionArgs {
   readonly expectedTaskRevision?: number
@@ -69,29 +70,6 @@ function clarifyDecisionPayload(input: {
     answersJson: canonicalHumanGateValueJson(input.answers),
     releaseGate: true,
     actorRole: input.actorRole,
-  }
-}
-
-function projectionMember(row: typeof nodeRuns.$inferSelect) {
-  return {
-    id: row.id,
-    taskId: row.taskId,
-    nodeId: row.nodeId,
-    parentNodeRunId: row.parentNodeRunId,
-    iteration: row.iteration,
-    shardKey: row.shardKey,
-    retryIndex: row.retryIndex,
-    reviewIteration: row.reviewIteration,
-    status: row.status,
-    failureCode: row.failureCode,
-    preSnapshot: row.preSnapshot,
-    preSnapshotReposJson: row.preSnapshotReposJson,
-    rerunCause: row.rerunCause,
-    supersededByReview: row.supersededByReview,
-    rolledBack: row.rolledBack,
-    continuationSlotKey: row.continuationSlotKey,
-    lineageSlotPathJson: row.lineageSlotPathJson,
-    operationGeneration: row.operationGeneration,
   }
 }
 
@@ -349,7 +327,9 @@ export async function prepareClarifyDecision(input: {
         taskId: input.taskId,
         gate: { kind: 'clarify', ref: gateRef },
         expectedTaskRevision: request.expectedTaskRevision,
-        expectedNodeProjection: humanGateNodeProjectionFence(sourceRows.map(projectionMember)),
+        expectedNodeProjection: humanGateNodeProjectionFence(
+          sourceRows.map(humanGateNodeProjectionMember),
+        ),
         continuationLineage: {
           sourceNodeRunIds: [input.originNodeRunId],
           rerunNodeRunIds: [],

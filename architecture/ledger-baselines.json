@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5330,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5333,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "5330 → 5333。RFC-359 W57：`node_runs` 行 → 人工门投影成员（18 个同名字段）此前在**五处**被逐字抄了一遍——collaboration 的 `taskQuestionDispatch` / `review` / `clarifyDecision`，以及 task-execution 的 `sqliteTaskDecisionParticipant` / `taskDecisionParticipant`。它是决策路径交给 `humanGateNodeProjectionFence` 算摘要的那份载荷：给 `node_runs` 加一个决策要读的列，五处都得记得改，漏一处的表现是该路径的围栏摘要与别处对不上。收进 `domain/humanGateContinuation.ts`（类型与围栏本来就在那儿），并经既有的公共缝`public/participants` 导出——collaboration 的三处因此各多一条指向该 public 的边（+3），public 面多一个导出（+1）。形参收的是 `HumanGateNodeProjectionMember` 而不是 drizzle 的行类型，公共面不泄漏 ORM 类型（N1b 判据）。**一次性许可，下一提删除。**"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -846,8 +849,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 982,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 983,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "982 → 983。RFC-359 W57：`node_runs` 行 → 人工门投影成员（18 个同名字段）此前在**五处**被逐字抄了一遍——collaboration 的 `taskQuestionDispatch` / `review` / `clarifyDecision`，以及 task-execution 的 `sqliteTaskDecisionParticipant` / `taskDecisionParticipant`。它是决策路径交给 `humanGateNodeProjectionFence` 算摘要的那份载荷：给 `node_runs` 加一个决策要读的列，五处都得记得改，漏一处的表现是该路径的围栏摘要与别处对不上。收进 `domain/humanGateContinuation.ts`（类型与围栏本来就在那儿），并经既有的公共缝`public/participants` 导出——collaboration 的三处因此各多一条指向该 public 的边（+3），public 面多一个导出（+1）。形参收的是 `HumanGateNodeProjectionMember` 而不是 drizzle 的行类型，公共面不泄漏 ORM 类型（N1b 判据）。**一次性许可，下一提删除。**"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -867,12 +873,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25038,
+      "baseline": 25035,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e9c24d1c2afe84aab6274dbd992af89002edf552b0742283cf2d4b51a10ae425",
+    "sourceDigest": "sha256:69b1e3e26b0db7cb027dda3e2a273a832af2ca018ebb5f3a85134942387a44c4",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +891,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "94cec6bf64c33f0c00a546a5a8e9fb776eecd20c",
-    "contentDigest": "sha256:6d3dda0e256f946d6dd99ad57e98b73a1ded2576ce72f44e32825f548f055880",
+    "currentSnapshotSha": "4aa21f8d2e9ba5a3c502b6b5ae712af87524ddb5",
+    "contentDigest": "sha256:8fc81299bcd0d1cf087077537a9fd2a8dd1921cff24e92080ebe019fcd01c6ae",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

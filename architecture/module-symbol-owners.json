@@ -6,7 +6,7 @@
     "moduleFiles": 1200,
     "productionFiles": 2581,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25038
+    "symbolsIncludingFileRoots": 25035
   },
   "entries": [
     {
@@ -20372,18 +20372,6 @@
     {
       "currentContext": "collaboration",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#projectionMember",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "projectionMember",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#replayCommittedClarifyDecision",
@@ -23182,18 +23170,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#reviewDecisionProjectionMember",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "reviewDecisionProjectionMember",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#ReviewPromptCtxBuilder",
       "removeAfterWave": null,
       "status": "current-module",
@@ -24674,18 +24650,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "questionDispatchPayload",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#questionDispatchProjectionMember",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "questionDispatchProjectionMember",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -124423,6 +124387,18 @@
       "currentLayer": "domain",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/domain/humanGateContinuation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/humanGateContinuation.ts#humanGateNodeProjectionMember",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "humanGateNodeProjectionMember",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/humanGateContinuation.ts",
       "id": "owner:packages/backend/src/modules/task-execution/domain/humanGateContinuation.ts#HumanGateNodeProjectionMember",
       "removeAfterWave": null,
       "status": "current-module",
@@ -132473,18 +132449,6 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionParticipant.ts#projectionMember",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "projectionMember",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionParticipant.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionParticipant.ts#SqliteTaskDecisionParticipantInTx",
@@ -133451,18 +133415,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DatabaseTaskDecisionPersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts#projectionMember",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "projectionMember",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -137459,6 +137411,19 @@
       "signatureDigest": "sha256:2b24ed2635ae1f40dc3609594f355ee5258ffaec6b58bd53bdcbed89d1784eb9",
       "status": "current-module",
       "symbol": "humanGateNodeProjectionFence",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#humanGateNodeProjectionMember",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:fffc5b21c96a93a2daae17482cff8315848dca87107e5ba8e9d06c0eaacbee49",
+      "status": "current-module",
+      "symbol": "humanGateNodeProjectionMember",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -301158,5 +301123,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e9c24d1c2afe84aab6274dbd992af89002edf552b0742283cf2d4b51a10ae425"
+  "sourceDigest": "sha256:69b1e3e26b0db7cb027dda3e2a273a832af2ca018ebb5f3a85134942387a44c4"
 }
