@@ -2,6 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 harness 选型定案 + 一条记反的机制更正（2026-09-11）**：`docs/audit-backlog.md` 里「先量再选」的 harness 那一刀，两个未知数都测掉了——① 迁移开销**不是增量**（harness 今天已经在每个文件 drop schema + 跑一次完整迁移，实测 PG-only 单断言文件端到端 1.57–1.69s、SQLite-only 0.54–0.55s，差出来的 ~1.05s 就是这份已在付的开销）；② `CREATE DATABASE` 只要 **~83ms**（5 次中位数）。按 ~500 个 PG 文件 / 8 分片算每分片 +5s。**选型确定：每文件一个数据库**，它同时消掉 40P01 死锁、跨文件数据互踩，并解锁 AC-1 最后一对的对拍见证（迁移器要在隔离库上被驱动）。
+> **顺带更正一条记反的机制**：`docs/dev-gotchas.md` 原写「PostgreSQL 的 advisory lock 是**集群级**的，按库隔离不隔离锁」——**是错的**。实测 `pg_locks` 里 advisory 行带非零 `database` OID，三会话并发验证：同键不同库**不互斥**、同键同库互斥。那条结论一直在挡「每文件/每进程一库」这条本来可行的隔离路线；已按实测重写（含两分钟复现步骤），并把「实例级资源不隔离」那一半保留。
+> **一次被红先写救回来的误改**：我据那条错误 gotcha 判定 `migratePostgresqlSchema` 的锁作用域写错（以为同集群不同库的部署会互相 fail-fast），先写红——**结果是绿的**，生产代码本来就对。测试留了下来：`tests/rfc359-w8-migration-lock-scope.test.ts` 钉住「不同库不互斥 + 同库仍 fail-fast」，因为每文件一库那条路线**整个建立在这个性质上**而此前没有任何测试钉着它。②的牙实测过（把锁判据改成恒假当场转红）。
+
 > **RFC-359 AC-1 收口进度（2026-09-11）**：成对适配器账本实测已是 **10 对 / 9 对已见证 / 1 对未见证**（proposal §7 里「仍缺 5 对」的历史数字早已过期）。剩的 `platform/persistence/Migrator` **查清了为什么见不了证**：守卫认的是机械判据（`describeEachProvider` + 两侧实现各有一条值 import，即对拍必须真的驱动两个实现），而「驱动 PG 侧」要在测试里重跑 `migratePostgresqlSchema`，它的 schema 名 `agent_workflow` 是写死的——重跑会打到 harness 共用的 schema 上、破坏同集群其他测试文件的库。**卡点是产品侧的可测试性缺口，不是排期**；要收口 AC-1 得先让迁移器能在隔离 schema/库上被驱动，这与 audit-backlog 里 harness 那一刀是同一件事。落档见 plan §5m。
 > 与此同时补上**用户可见契约那一层**的见证：`tests/rfc359-w8-migrator-conformance.test.ts`（双引擎，6 pass）拿 `buildLogicalSchemaContract()` 的花名册去问活库，每张声明的表都发一条不带投影的 `select`（= 选出全部声明列），少一表或少一列当场炸。它挡的是「drizzle 声明与迁移 SQL 两侧各漏一半」这类**没有别的测试会照出来**的漂移。判据自证不空转（整个循环跑在 `recordStatements()` 里，断言查询数 ≥ 花名册长度）+ 负 fixture（查不存在的表必须抛）。**状态位不动**——放宽 `witnessesPair` 去迁就它是错的。
 > 另：`fb1a83a51` 的 CI 红一格 `40P01 deadlock detected`，是 `docs/audit-backlog.md` 已登记的 harness 缺陷（同分片多文件共用一个 PG 库，文件切换处 TRUNCATE 与 SELECT 互锁），非本次改动。

@@ -114,7 +114,14 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'platform/persistence/LogicalSource: sqlite 12/8, postgresql 7/5',
   // W55 CI：原 SQLite 迁移器全文逐字移入既有 PostgreSQL 迁移器所在目录，
   // 同目录判据首次识别这两个原文件；补录原 ref/drive，不代表新增实现或行覆盖。
-  'platform/persistence/Migrator: sqlite 2/1, postgresql 10/9',
+  // RFC-359 W8（2026-09-11）：PG 侧 +1（10/9 → 11/10），来自
+  // `tests/rfc359-w8-migration-lock-scope.test.ts` 的一条**值 import**。这不是「又在给强侧加判据」
+  // ——它锁的性质（advisory lock 按库隔离、同库仍 fail-fast）**只存在于 PostgreSQL 侧**：
+  // SQLite 的迁移器没有锁，它的隔离天然是「一个文件一个库」。把它写成 `describeEachProvider`
+  // 会得到一条在 SQLite 上无事可断言的空壳，那才是假对等。
+  // 这条倒挂的真实收敛路径是 audit-backlog 记的 harness 那一刀（每文件一库）落地后，
+  // 两侧的迁移器都会被同一批用例驱动——届时这一行会自己变小。
+  'platform/persistence/Migrator: sqlite 2/1, postgresql 11/10',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -132,7 +139,7 @@ export const INVERTED_PAIRS: readonly string[] = [
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 12 vs 7',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
-  'platform/persistence/Migrator: 2 vs 10',
+  'platform/persistence/Migrator: 2 vs 11',
 ]
 
 interface Side {

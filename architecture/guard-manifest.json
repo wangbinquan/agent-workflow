@@ -1897,7 +1897,7 @@
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 362
+      "lines": 374
     },
     {
       "id": "rfc359-w5-t19f-test-engine-hardcoding",
@@ -2054,6 +2054,18 @@
       "negativeFixture": false,
       "classified": true,
       "lines": 150
+    },
+    {
+      "id": "rfc359-w8-migration-lock-scope",
+      "file": "packages/backend/tests/rfc359-w8-migration-lock-scope.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 158
     },
     {
       "id": "rfc359-w8-t29-unnormalized-unique-insert",
@@ -2471,8 +2483,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "fb1a83a514144002aceceb54a20f48a771b47a84",
-    "contentDigest": "sha256:5d5e40e03128f3b820e4a25b49e3e1d4b7edccd154c9962e4731eabf570b4535",
+    "currentSnapshotSha": "1d46913a5444e90fa2066878ef673f8506712e07",
+    "contentDigest": "sha256:1199052fb8e9cdcac4e5cc5ee01644b56c841b70954d92c49beddb1633965967",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -4388,9 +4388,38 @@ TRUNCATE 已经是**单条语句**列出全部表，两条同样的 TRUNCATE 之
 - 文件级 advisory lock（beforeAll 拿、afterAll 放）：能同时解决锁与数据两半，但 `pg_advisory_lock`
   是**会话级**的，在连接池上要保证同一条连接持有，写法有讲究。
 
-**处置建议**：作为 RFC-359 的 harness 独立一刀，先量「每文件一库」的迁移开销再定。
-在那之前把它当**已知的间歇红**：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据莫名消失，
-先对照本条，别去改被判红的那条业务用例。
+### 2026-09-11：**已量完，选型有答案了**——「每文件一库」，增量成本 ~83ms/文件
+
+上面「先量再选」的两个未知数都测掉了：
+
+1. **迁移开销不是增量。** harness 今天**已经**在每个文件 `drop schema if exists agent_workflow
+   cascade` + 跑一次完整迁移（`createPostgresqlHarnessDatabase` 里的
+   `schema.drop-application` / `schema.migrate` 两步）。实测一个只有一条断言的 PG-only 测试文件
+   端到端 **1.57–1.69s**，同一个文件 SQLite-only 是 **0.54–0.55s**——差出来的 ~1.05s 就是这份
+   已经在付的迁移开销。改成每文件一库**不会多跑一次迁移**，只是把它跑在自己的库上。
+2. **`CREATE DATABASE` 只要 ~83ms**（本机容器，5 次中位数，含 docker exec + psql 启动开销，
+   服务端实际更低）。按 ~500 个参与 PG 的测试文件 / 8 个分片算，每分片约 +5s。
+
+3. **锁也按库隔离**——这一条此前被 `docs/dev-gotchas.md` 记反了（写成「advisory lock 是集群级」），
+   2026-09-11 已实测更正：`pg_locks` 里 advisory 行带非零 `database` OID，同键不同库不互斥、
+   同键同库互斥。也就是说「每文件一库」能同时解决**三样**：40P01 死锁（DDL 锁按库分开）、
+   跨文件数据互踩（`TRUNCATE CASCADE` 只影响自己的库）、以及 advisory lock 串扰（本就没有）。
+
+**因此选型确定：每文件一个数据库。** 另两个候选可以不用再考虑——`DELETE` 换 `TRUNCATE`
+解决不了数据互踩；每文件一 schema 要动 `db/providerSchema.ts` 的模块级 `pgSchema` 常量，
+影响面比建库大得多。
+
+**它还顺带解锁 AC-1 的最后一对**：`platform/persistence/Migrator` 的对拍见证要求真的驱动 PG 侧
+迁移器，而迁移器的 schema 名写死为 `agent_workflow`——只有在**隔离的库**上驱动它才不会破坏
+别的测试文件（见 `design/RFC-359-*/plan.md` §5m）。两件事应该同一刀做。
+
+**尚未做的**：harness 改造本身（建库 / 迁移 / 用完删库的生命周期，以及 CI 上的清理兜底——
+测试进程被 kill 时不能把库留在集群里）。锁的按库隔离性质已由
+`packages/backend/tests/rfc359-w8-migration-lock-scope.test.ts` 钉住（同库仍 fail-fast、
+不同库不互斥），改造时不会把它带坏。
+
+**在改造落地之前**仍把它当已知的间歇红：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据
+莫名消失，先对照本条，别去改被判红的那条业务用例。
 
 ## 前端 `rfc152-batch-import-ws-path` 间歇红（2026-09-10 CI 实撞，未处置）
 

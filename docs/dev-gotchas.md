@@ -5624,27 +5624,48 @@ wait
 **判据**：本地红、单独跑绿；或错误里出现 `declared operation has no mounted binding`
 而对应的 `public/operations.ts` 与 `origin/main` 逐字相同。
 
-## PostgreSQL 的 advisory lock 是**集群级**的——按库隔离并不能隔离并行测试（2026-09-07 实撞）
+## 并行跑 PG lane：数据与锁按库都隔离，**实例级资源**不隔离（2026-09-07 实撞，2026-09-11 更正机制）
 
 想让多个测试进程并行跑 PostgreSQL lane 时，直觉做法是「一个进程一个数据库」
-（`CREATE DATABASE awpar1..awpar8`）。**数据隔离了，锁没有**：`pg_advisory_lock` /
-`pg_try_advisory_lock` 的键空间是**整个实例共享**的，与当前连的是哪个库无关。
+（`CREATE DATABASE awpar1..awpar8`）。这条**曾被记成「数据隔离了、锁没有」**，理由写的是
+「`pg_advisory_lock` 的键空间是整个实例共享的」。
+
+> **⚠️ 2026-09-11 实测更正：那个机制说法是错的。PostgreSQL 的 advisory lock 是按数据库的。**
+>
+> `pg_locks` 里 `locktype='advisory'` 的行带着**非零 `database` OID**；三个并发会话实测：
+>
+> ```
+> db1 会话A: pg_try_advisory_lock(K) -> true
+> db2 会话B: pg_try_advisory_lock(K) -> true   ← 同键、不同库，不互斥
+> db1 会话C: pg_try_advisory_lock(K) -> false  ← 同键、同库，互斥
+> ```
+>
+> 复现（两分钟）：`create database d1; create database d2;` 然后开三条连接跑上面三句。
+> 别再引用「advisory lock 跨库共享」这个说法——它会让人否掉「每文件/每进程一个库」这条
+> 本来可行的隔离路线。
+
+**仍然成立的那一半**：一个实例上的并行仍会踩**实例级资源**——连接池上限、CPU、WAL、
+以及 `drop schema` + 全量迁移的 IO。当年那 55 条假红里，`beforeEach` 的
+`drop schema` + 全量迁移争用是实打实的一份；把它整个记到 advisory lock 头上是归因错了。
 
 实撞：4 个测试分片各连一个独立库、但同一个 PG 容器，已提交事件出站存储那批用例
 （append 路径用 `pg_try_advisory_lock(hashtextextended($1…))`）跨分片互相抢锁，
 连同 `beforeEach` 的 `drop schema` + 全量迁移争用，一共造出 **55 条假红**——
 而单独跑那些文件是全绿的。
 
-**规矩**：
+**规矩（按更正后的机制重写）**：
 
-- 要并行跑 PG lane，**必须一个进程一个 PostgreSQL 实例**（CI 就是这么做的：4 个分片 = 4 个
-  独立服务容器），不是一个实例开多个库；
-- 一个实例上只能**串行**跑；
-- 给并行 agent 分配「独立数据库」时要意识到这只隔离数据，**不隔离 advisory lock、也不隔离
-  实例级资源**（连接池、CPU、WAL）。少量文件不会踩，全量必踩。
+- **按库隔离是有效的隔离**：数据、advisory lock、DDL 锁（`TRUNCATE` 的 AccessExclusiveLock）
+  三样都按库分开。`CREATE DATABASE` 实测 **~83ms**（本机容器，含 docker exec + psql 启动开销）。
+- **不隔离的是实例级资源**：连接池上限、CPU、WAL、以及并发全量迁移的 IO。所以「一个实例开
+  N 个库并行」的天花板是**机器**，不是正确性；跑多少并行度要按机器量，不能想当然拉满。
+- CI 现状（每分片一个独立服务容器）依然是最省心的做法，但它不是唯一正确的做法——
+  同一实例上按库隔离**不会**再造出当年那类锁串扰。
 
-**判据**：失败集中在 `[postgresql]` 分支，错因是 `a beforeEach/afterEach hook timed out`
-或与 `pg_advisory_lock` 相关，而同一批文件单独跑全绿。
+**判据**：失败集中在 `[postgresql]` 分支，错因是 `a beforeEach/afterEach hook timed out`、
+`40P01 deadlock detected`、或跨文件的数据莫名消失，而同一批文件单独跑全绿。
+先怀疑**共用同一个库**（今天 harness 就是全部文件共用 `awtest`，见 `docs/audit-backlog.md`），
+再怀疑实例级资源；**不要**再怀疑 advisory lock 跨库串扰。
 
 ## PostgreSQL 会**常量折叠**掉 `CASE` 的保护：`from (select ? as v)` 里的表达式在计划期就求值（2026-09-07 实测）
 
