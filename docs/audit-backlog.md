@@ -4405,3 +4405,32 @@ frames on the subscription still drive the table`，报
 
 同一条在 `b0ee9d8e9`（40/40 全绿）上是过的，此后触及前端的提交都不是这条链路。
 **未立项**：需要该文件的 owner 按「用 `findByRole` 等待、而不是同步 `getByText`」的定式修一次。
+
+## macOS backend 分片贴着 15 分钟预算跑（2026-09-10 实测，已加 runner 缓解）
+
+**症状**：`7e11a2dd0` 的聚合 job「CI required」判红，但 40 个作业里 **38 个 success**，
+唯一非成功的是 `Backend tests (macos-latest shard 1/4)`——状态是 **`cancelled` 而不是 `failure`**。
+它跑了 **15 分 16 秒**，而 job 预算是 `timeout-minutes: 15`：**GitHub 把超时报成 cancelled**。
+
+**这是一条容易误判的形状**：`gh run view --json jobs` 里它不在 `conclusion=="failure"` 里，
+按「列出 failure」的姿势查会看到「只有聚合 job 红、没有具体作业红」，然后误以为是并发 push 的
+supersede。判据：**同时看 `cancelled`**，并算一下 `completedAt - startedAt` 是不是正好卡在预算上。
+
+**实测的余量**（三轮 exact SHA 的四个 macOS backend 分片，单位分钟）：
+
+| run | 1/4 | 2/4 | 3/4 | 4/4 |
+| --- | --- | --- | --- | --- |
+| `593fe3681` | 12.4 | 12.8 | 6.0 | 11.6 |
+| `0b313c0d1` | 11.7 | 7.0 | 11.5 | 13.3 |
+| `7e11a2dd0` | **15.3 ⇒ 被杀** | 6.5 | 7.1 | 11.2 |
+
+最长的一片长期在预算的 **75%~90%**，方差一大就有一个翻。分片之间也很不均（同一轮 6.0 vs 12.8）
+——bun 按路径确定性分片，慢文件聚在哪一片是随机的。
+
+**已做**：macOS backend 分片 **4 → 6**（`.github/workflows/ci.yml`）。处置方式照该文件自己立的
+规矩：「**add runners** instead of extending it or changing individual test timeouts」。
+六片把最长的一片压回 ~10 分钟量级。
+
+**仍未处置**：套件还在长，这只是买了余量不是解决。真正的问题是**分片不均**——
+按文件路径切，慢文件（起真 daemon、跑真子进程的那些）会成堆落在同一片。
+候选：按历史耗时加权分片，或把已知的慢文件显式拆到不同片。**未立项。**

@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5330,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "5329 → 5330。RFC-359 W57：`assertRuntimeReference` 此前在 `digitalEmployeeAgentTemplateCatalog.ts` 与 `aggregateAdapters/postgresqlResourcePackageMutationArms.ts` 各存一份**逐字相同**的私有副本（连抛的 `runtime-not-found` / `runtime-disabled` 文案都一样），`assertBranchPortsDeclared` 也在前者有一份私有副本——而 `agentBranchPorts.ts` 明明早就导出了它。三处收进 `agentBranchPorts.ts` 之后，该文件从「纯函数校验」变成要查 `runtimes` 表，于是多出 `@/db/schema` 与 `@/platform/persistence/databaseTransaction` 两条边、同时少一条，净 +1。这是**用户可见的校验错误**，一份实现换三份副本是对的交换。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -888,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7e11a2dd0941209f5cab4f5656d7090eacbbd826",
-    "contentDigest": "sha256:3f32311e5dc314ba5129922969249bc2d33a01ea3e6add4777383b49558fe0da",
+    "currentSnapshotSha": "c68d5549535a9a22838dfed8bb68d8875bdd9673",
+    "contentDigest": "sha256:e5347ad18a3aa14e85d66a9836f0edc496e06960c6d8dc8fa4c85cc8a4e5d810",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

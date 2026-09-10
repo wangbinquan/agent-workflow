@@ -68,7 +68,14 @@ jobs:
   test-backend:
     # W20 run 34229654417 exhausted the 15-minute budget on three Ubuntu
     # shards; the fourth finished in 14m34s. Ubuntu now runs both providers,
-    # so split it eight ways while retaining the four native macOS shards.
+    # so split it eight ways.
+    #
+    # RFC-359 W57：macOS 从四片加到**六片**。实测三轮 exact SHA 的四片耗时分别是
+    # 11.7 / 7.0 / 11.5 / 13.3、12.4 / 12.8 / 6.0 / 11.6、15.3 / 6.5 / 7.1 / 11.2 分钟
+    # ——预算 15 分钟，最长的一片已经贴到 88~102%，第三轮的 shard 1/4 直接被超时杀掉
+    # （GitHub 把超时报成 `cancelled`，聚合 job 随之判红，而 38 个作业全是 success）。
+    # 处置照本文件下面那条注释自己立的规矩：**加 runner，不动预算、不改单条用例的超时**。
+    # 六片把最长的一片压回 ~10 分钟量级，留出方差空间。
     # Bun `--parallel` DEADLOCKS this suite — several files spawn a real
     # daemon that takes a single-instance flock, so running them concurrently in
     # one VM contends forever. Sharding across runners keeps each shard serial
@@ -86,16 +93,22 @@ jobs:
         include:
           - os: macos-latest
             shard: 1
-            shards: 4
+            shards: 6
           - os: macos-latest
             shard: 2
-            shards: 4
+            shards: 6
           - os: macos-latest
             shard: 3
-            shards: 4
+            shards: 6
           - os: macos-latest
             shard: 4
-            shards: 4
+            shards: 6
+          - os: macos-latest
+            shard: 5
+            shards: 6
+          - os: macos-latest
+            shard: 6
+            shards: 6
     runs-on: ${{ matrix.os }}
     # A sync child-process stall once left macOS shard 4 silent for 17+ minutes.
     # Keep that same job budget as the provider workload grows; add runners
