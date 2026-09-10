@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5340,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W8 一次性豁免：pending-intent 唯一冲突的领域映射从「整笔事务外按约束名正则判」改成「贴着那条 insert、只问是不是唯一冲突」。判据要在事务里取本引擎的能力矩阵，于是 `taskContinuationAdmission.ts` 多引一个 `engineOf`（`@/platform/persistence/databaseTransaction`，与它已有的 `DatabaseTransaction` 类型同一个模块，只是从 type-only 变成也取值）。换来的是关掉一个真实可达的洞：能力矩阵对「23505 但驱动没报约束名」返回空串，旧正则把这一档判成「不是冲突」，驱动错误原样漏成 500 而不是 409（CI 的 ubuntu 分片两次红在 rfc359-w8-t29 上）。这条边随 platform/persistence 的词汇线归位一起消失。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4801,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W8 一次性豁免：pending-intent 唯一冲突的领域映射从「整笔事务外按约束名正则判」改成「贴着那条 insert、只问是不是唯一冲突」。判据要在事务里取本引擎的能力矩阵，于是 `taskContinuationAdmission.ts` 多引一个 `engineOf`（`@/platform/persistence/databaseTransaction`，与它已有的 `DatabaseTransaction` 类型同一个模块，只是从 type-only 变成也取值）。换来的是关掉一个真实可达的洞：能力矩阵对「23505 但驱动没报约束名」返回空串，旧正则把这一档判成「不是冲突」，驱动错误原样漏成 500 而不是 409（CI 的 ubuntu 分片两次红在 rfc359-w8-t29 上）。这条边随 platform/persistence 的词汇线归位一起消失。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -891,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "3dc167004bc45f18876b4a342a72b9eb52ae36d5",
-    "contentDigest": "sha256:d34589b533d6b4c5684266f118e4cba977663eb305c607dff31b8dc8bf67bcf3",
+    "currentSnapshotSha": "6698945ff0e9c43dfce8821962014b755b136178",
+    "contentDigest": "sha256:ce48fafa0d9a3309e9717ea99bb2cabb40138d21310eee5bc2df037ed8fca56b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
