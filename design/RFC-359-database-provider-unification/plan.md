@@ -4940,6 +4940,14 @@ provider 的真实生产入口」，合理；但副作用是把分叉写进了�
 同一 actor 在对应列表端点拿到的行数」。它已改成打合成后的查询，**一次就绿**（195 条断言）——
 这正是「两份实现语义等价」这个判断的直接验证。
 
+⚠️ **对 `b3162f6c8` 提交信息末尾那段归因的更正**：那里写「合跑红是既有的进程级泄漏
+（`db/providerSchema.ts` 的 `activeProvider`）」——**不准确**。真正的原因是本地命令漏了
+`--isolate`（CI 的 backend 分片跑的是 `bun test --isolate --randomize --seed=… --shard=N/M`）。
+不带它，bun 把多个文件放进同一进程并发跑，进程级全局态互相踩；而被我看到的那 7 条
+`rfc190` 失败其实来自**另一条**机制——`rfc305-architecture-lock` 的 `resetRouteMetaRegistry()`
+清掉了并发跑着的 `createApp` 的路由注册表。加上 `--isolate` 后**同样 33 个文件 396 pass /
+0 fail**，一条不红。判据与规矩已落 `docs/dev-gotchas.md`。
+
 **仍欠的一格（AC-6）**：这条 oracle 目前还是 SQLite 单引擎（它经 `createApp` 起真 HTTP 应用，
 `describeEachProvider` 化要先解决 app 装配的 provider 参数化）。留作 AC-6 的待办。
 

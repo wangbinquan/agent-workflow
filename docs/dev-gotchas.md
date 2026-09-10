@@ -1786,6 +1786,40 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 ⚠️ **别写成 `grep -c allowGrowth`**（2026-09-10 实撞）：这份文件的 `note` 字段本身就在正文里
 解释 `allowGrowth`，裸词恒能命中一次，于是判据**永远返回 1**、永远像「上一笔留了债」。
 必须带引号匹配 **JSON 键**（`"allowGrowth"`）才数得到真条目。
+## 本地跑多个测试文件**必须带 `--isolate`**——CI 就是这么跑的，不带会看见一片假红（2026-09-10 实撞）
+
+`.github/workflows/ci.yml` 的 backend 分片跑的是：
+
+```
+bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=N/M …
+```
+
+**`--isolate` 让每个测试文件在自己的上下文里跑**。不带它，bun 把多个文件放进**同一个进程并发**
+执行，于是本仓所有**进程级全局态**都会互相踩：
+
+- `routes/registry.ts` 的路由元注册表——`rfc305-architecture-lock` 在 `beforeEach`/`afterEach`
+  里 `resetRouteMetaRegistry()`，会把并发跑着的 `rfc190-overview-route` 刚 `createApp` 建好的
+  注册表清空，后者当场 `declared operation has no mounted binding`；
+- `db/providerSchema.ts` 的 `activeProvider`——`createPostgresqlDatabaseClient()`
+  （**生产代码**，`postgresqlDatabaseClient.ts:307`）会把它翻成 `postgresql`，并发跑的 SQLite
+  用例随后就去查 `agent_workflow.users`，报 `no such table`。
+
+**这不是仓库缺陷**：生产 daemon 一个进程只跑一个 provider、只装一次路由；CI 带 `--isolate`
+也从不暴露。是**本地命令写错**。
+
+**实撞代价**：我用 `bun test <33 个文件>` 做失败归因，看到 18~19 条红，还在 HEAD 上跑同一份
+清单做了对照（base 也红 19 条），于是判成「既有的跨文件干扰」并写进了提交信息
+（`b3162f6c8`，那句根因描述**不准确**——真正的原因是漏了 flag，且两种机制我只认出一种）。
+加上 `--isolate` 之后**同样 33 个文件 396 pass / 0 fail**。
+
+**规矩**：
+
+- 本地一次跑多于一个文件，命令一律是 `bun test --isolate <files…>`；
+- 单文件跑可以不带（没有并发对象），但带上也无害，建议养成习惯；
+- 看到「合跑红、单跑绿」先加 `--isolate` 重跑**再**下任何结论——那不是 flaky，也不是别人留的债，
+  多半就是这条。这和「绝不允许『重跑就过了』作为通过依据」不冲突：这里换的是**命令**，
+  不是碰运气再来一遍。
+
 ## `GIT_DIR` 会**盖过 `git -C`**：一轮带它的 `bun test` 把测试夹具的提交打进了真仓库（2026-09-10 实撞）
 
 **损失**：main 上凭空多出一笔提交，作者 `Execution Chain Fixture <execution-chain@example.test>`，

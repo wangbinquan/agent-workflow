@@ -362,7 +362,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
   })
 
-  test('daemon phase retains the complete original 162-statement graph and ordered effects', () => {
+  // RFC-359 W57：daemon 相位从 162 条降到 159 条——`/api/overview` 两侧收成一份时，这里那段
+  // 「`WeakMap<authority, Actor>` + `{ resolve }` 解析器 + `systemOverview` 常量 + 包一层
+  // `execute` 填 map」的胶水整段删掉了（目录概览端口现在直接收请求者投影），换成一条
+  // `composeSystemOverviewQuery({...})` 赋值。降，不是升。
+  test('daemon phase retains the complete original 159-statement graph and ordered effects', () => {
     const body = functionBody(pg, 'composePostgresqlApplication')
     const phaseBlocks = body.statements.filter(
       (node): node is ts.IfStatement =>
@@ -370,9 +374,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
     expect(phaseBlocks).toHaveLength(8)
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
-    expect(restored.statements).toHaveLength(162)
+    expect(restored.statements).toHaveLength(159)
     expect(digest(restored, pg)).toBe(
-      '80c3bc4a21d2f4d390e4b09ccf14449921ec9abd49c0e4f25a296916c241f421',
+      'd37eb8dceeccbcfe123abe96eee56bc93cdb151ccc464b174c2f0e3612810b5a',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -381,11 +385,15 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   })
 
   test('SQLite phase preserves complete original composition and captures the real initialization', () => {
+    // RFC-359 W57：`overviewQuery` 不再在这一层装配——它要的 `scheduledTaskRuntime.overview`
+    // 要到 `composeSqliteApiRouteMounts` 才齐备，装配挪到了那里（依赖在哪层齐备就在哪层装）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      'f7bd7f69a83b2905bd58b97bf43ac3cf863ae160d29d460e2746abef79847dad',
+      'db69fbb5cfe4a99cc835e8fc7f20aa920a9bb4a796f34c576983037faafadbf8',
     )
+    // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
+    // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '33f19a2d7f6a8afa43b71a369328466b6360fcefd6e30274c0dd804108d0cef8',
+      'f904bc047d8101ee0823be686e8d595c8b3f31555170a43a84b0f4fd9d9d5eb4',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '3e6131c32a868090e7236eb8e554605e8b46a5df15a149671acd396c0a072194',
