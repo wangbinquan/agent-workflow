@@ -1776,8 +1776,40 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 3. 如果确实还会继续涨（后面还有波次要落），**不要反复开关许可**——把那几笔攒到一起落一次，
    或者干脆等波次收尾再采一次普查。反复开许可 = 反复过期。
 
-**判据**：`git show HEAD:architecture/ledger-baselines.json | grep -c allowGrowth` ——
+**判据**：`git show HEAD:architecture/ledger-baselines.json | grep -c '"allowGrowth"'` ——
 推之前看一眼，非零就问自己「这一提涨了吗」。
+
+⚠️ **别写成 `grep -c allowGrowth`**（2026-09-10 实撞）：这份文件的 `note` 字段本身就在正文里
+解释 `allowGrowth`，裸词恒能命中一次，于是判据**永远返回 1**、永远像「上一笔留了债」。
+必须带引号匹配 **JSON 键**（`"allowGrowth"`）才数得到真条目。
+## 普查产物钉的是**源码摘要**：删掉一行 import 也会让 N1b 红（2026-09-10 实撞）
+
+上一条讲的是「账本涨了要重采」，这一条讲的是更常被漏掉的那半：**任何触及
+`packages/*/src/**` 的提交都要在同一提里重采普查**，与改动大小无关。
+
+实撞：我为了修 CI 推了一笔纯修复——`review.ts` 换成 drizzle 的 `count()`、
+`taskAuthorization.ts` 删掉一行变成未使用的 `or` import。行为测试、lint、format、
+`tsc --noEmit` 全绿，于是我推了。CI 上 **N1b「the seven canonical manifests and report are
+exact generated projections」当场红**，而且是 ubuntu 与 macOS **两个分片同时红**（同一条用例，
+分片号不同只是因为两个 OS 的分片总数不同——8 vs 4）：
+
+```
+"sourceDigest": "sha256:ac1e14…"   ← 产物里存的（上一次重采时算的）
+"sourceDigest": "sha256:4a08e7…"   ← CI 现算的
+```
+
+**根因**：`module-symbol-owners.json` 的 `canonicalProjection.sourceDigest` 是对**源码文件内容**
+取的摘要，不是对「符号表」取的。删一行 import 就换了摘要，哪怕导出的符号一个没变、
+owner 一个没动。同理：改注释、调整 import 顺序、prettier 重排，都会让它前移。
+
+**规矩**：把重采并入「改了 `src/` 就要做」的固定收尾，判据不是「这次算不算重构」，而是
+`git diff --cached --name-only | grep -q '^packages/.*/src/'`。真值只有一个来源——在 HEAD
+只读导出上跑 `bun run scripts/architecture-census.ts --write --snapshot-sha HEAD`（配方见上文
+「谁重采，谁就把别人当时的在制品一并记进账本」），把 8 份产物 + `status.md` 整批拷回来。
+
+**代价不对称**：漏采 = 全员主干红一轮 + 一笔补提；多采 = 几个 digest 前移、零风险。
+拿不准就采。
+
 ## `PostgresqlDatabaseClient` **不是** PostgreSQL 客户端类型——「吃这个类型」不是分叉的证据（2026-09-08 实测）
 
 它是 drizzle 的 **sqlite-proxy**：`SqliteRemoteDatabase<typeof schema> & { $provider, $generationId }`，
@@ -2185,7 +2217,7 @@ T17 `allowGrowth` 过期 → N1b 投影不一致 → RFC-345 门面守卫 → T1
 
 **开工自查**（30 秒，能挡住第六次）：
 ```bash
-git show HEAD:architecture/ledger-baselines.json | grep -c allowGrowth   # 期望 0
+git show HEAD:architecture/ledger-baselines.json | grep -c '"allowGrowth"'   # 期望 0（必须带引号：裸词会命中 note 正文）
 ```
 不是 0 就说明上一笔留了债，**先把它清干净再干自己的活**。
 
