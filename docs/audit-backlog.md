@@ -4449,6 +4449,34 @@ drop 附加库」，主库自己变成一次性库就得改成用 base URL 开�
 **在完整方案落地之前**仍把它当已知的间歇红：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据
 莫名消失，先对照本条，别去改被判红的那条业务用例。
 
+## 工作组回合引擎 `rfc359-w4-d19c` 的 `[postgresql]` 间歇红（2026-09-11 实撞一次，未定性）
+
+**证据**：run `34511582810`（`ae629f9a0`，该提交**只改了一个 markdown 文件**，其父提交
+`ca0c200fe` 是 CI 42/42 全绿）——`Backend tests (ubuntu-latest shard 7/8)` 红一条：
+
+```
+(fail) RFC-359 W4-D19c —— 工作组回合引擎 [postgresql]
+       > 成员瞬态故障重试耗尽：卡片落为 failed 并通知领队，不遗留 running 卡片
+Expected: "ok"  Received: "failed"
+```
+
+**本机复跑 3 次全绿**（真 PG）。同一份代码在上一提交上跑出过 42/42。
+
+**已排除的机制**：「`session.serializable` 重试整笔事务 ⇒ 多消耗一条脚本化 host 响应 ⇒ 剧本错位」
+——`workgroupTurnsDriver.ts` 里 `runHost` 的调用点**不在任何事务内**（该文件没有任何
+`serializable(` / `.transaction(` / `databaseSessionFor`），假设不成立。
+
+**仍在候选**：驱动有好几条**整轮失败**的路径，任何一条都会让 `outcome.kind` 变成 `failed`——
+`max-rounds`（`workgroupTurnsDriver.ts:1995`）、`fc-deadlock`（同文件 `:2024`）、
+领队侧的失败，以及成员瞬时预算耗尽后收场方式不同。单看 `kind` 分不出是哪一条。
+
+**已做的**：把该文件 5 处 `expect(outcome.kind).toBe('ok')` 改成带 `outcomeWhy(outcome)` 的
+自述断言——`WorkgroupTurnsOutcome` 本来就带 `detail.summary` / `detail.message` / `nodeId`，
+只断言 `kind` 等于把这些信息全丢掉。**下一次复发会直接说出走的是哪条失败路径**，届时再定性。
+
+**在那之前**：看到这条红先对照本条，别去改被判红的那条业务用例；也别当成「重跑就过了」——
+它只出现过一次，机制未知。
+
 ## 前端 `rfc152-batch-import-ws-path` 间歇红（2026-09-10 CI 实撞，未处置）
 
 `53d670270` 的 Frontend 分片 3/3 红一条：

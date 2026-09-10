@@ -602,10 +602,7 @@
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
       "baseline": 45,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。",
-      "allowGrowth": {
-        "why": "RFC-359 W8 一次性豁免：`test-suite-allowed-skips` 44 → 45，新增的是 `tests/rfc359-w8-migration-lock-scope.test.ts#skip`。它锁的是 PostgreSQL 专属机制——schema 准备锁的作用域（按库隔离 / 同库互斥）；SQLite 的迁移器根本没有锁，隔离天然是「一个文件一个库」，在 SQLite lane 上无事可断言。门控与既有的 `rfc359-w6-t26-postgresql-plan-audit.test.ts#skip` 逐字同形：显式 `AW_TEST_PROVIDERS=sqlite` 时留一条**可见的** skip（macOS / Windows 原生 lane 就是这一档，没有 PG 服务容器）；选了 postgresql 却缺 URL 时仍然判红不 skip。这条性质有人依赖：`docs/audit-backlog.md` 里「每文件一库」那条隔离路线整个建立在它上面，而在此之前没有任何测试钉着它。"
-      }
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。"
     },
     {
       "id": "ux-embedded-table-allowlist",
@@ -888,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "23b19d46b5463acccbd3f83922a01da809d33f33",
-    "contentDigest": "sha256:c5e1245c2cf0cb6968fc67046b4a6dcdc5bef56d02bed7ba1043b1fbc32feedc",
+    "currentSnapshotSha": "ae629f9a0fe17830327fe456c797f352714568b9",
+    "contentDigest": "sha256:e22367a2294f427e23f4f43d854d404d7829af58fee0ab710aa7ca6e36b7d2a8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

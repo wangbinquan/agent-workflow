@@ -24,6 +24,7 @@ import type {
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,
   WorkgroupTurnLogger,
+  WorkgroupTurnsOutcome,
 } from '@/modules/task-execution/public/commands'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID,
@@ -150,6 +151,24 @@ function scriptedHost(script: {
   }
 }
 
+/**
+ * 断言失败时把**为什么**一并带出来。
+ *
+ * 2026-09-11 CI 实撞：ubuntu 分片 7/8 报 `Expected: "ok" / Received: "failed"`，除此之外
+ * 一个字都没有——而 `WorkgroupTurnsOutcome` 里本来就带着 `detail.summary` / `detail.message`
+ * （驱动的失败路径有好几条：成员瞬时故障预算耗尽、`max-rounds`、`fc-deadlock`、领队侧失败……）。
+ * 只断言 `kind` 等于把这些信息全丢掉，复发时只能从零猜。本机复跑 3 次全绿，正是这种
+ * 「只在 CI 上偶发」的红最需要自述。
+ */
+function outcomeWhy(outcome: WorkgroupTurnsOutcome): string {
+  const detail = outcome.detail
+  return detail === undefined
+    ? `outcome.kind=${outcome.kind}（没有 detail）`
+    : `outcome.kind=${outcome.kind} summary=${detail.summary} message=${detail.message}` +
+        `${detail.nodeId === undefined ? '' : ` nodeId=${detail.nodeId}`}` +
+        `${outcome.processUnreaped === true ? ' processUnreaped=true' : ''}`
+}
+
 describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) => {
   test('领队派单 → 成员交付 → 领队收敛 done：两个引擎同一套回合', async () => {
     const db = harness.db as unknown as ProviderNeutralDatabase
@@ -177,7 +196,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
 
     const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
 
-    expect(outcome.kind).toBe('ok')
+    expect(outcome.kind, outcomeWhy(outcome)).toBe('ok')
     // 领队两轮 + 成员一轮
     expect(requests.map((request) => request.nodeId)).toEqual([
       WORKGROUP_TURN_LEADER_NODE_ID,
@@ -227,7 +246,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
 
     const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
 
-    expect(outcome.kind).toBe('ok')
+    expect(outcome.kind, outcomeWhy(outcome)).toBe('ok')
     expect(requests).toHaveLength(2)
     // 重提示块的标题与围栏形态是用户可见的提示词——合一后两个引擎都取这一份。
     expect(requests[1]?.promptTemplate).toContain('## Protocol errors in your previous reply')
@@ -308,7 +327,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
         (request) => request.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID,
       )
       expect(memberRequests).toHaveLength(2)
-      expect(outcome.kind).toBe('ok')
+      expect(outcome.kind, outcomeWhy(outcome)).toBe('ok')
       expect(memberRequests[1]?.promptTemplate).not.toContain(
         '## Protocol errors in your previous reply',
       )
@@ -377,7 +396,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
 
     const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
 
-    expect(outcome.kind).toBe('ok')
+    expect(outcome.kind, outcomeWhy(outcome)).toBe('ok')
     const cards = await db
       .select()
       .from(workgroupAssignments)
@@ -428,7 +447,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
 
     const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
 
-    expect(outcome.kind).toBe('ok')
+    expect(outcome.kind, outcomeWhy(outcome)).toBe('ok')
     expect(requests).toHaveLength(2)
     // 换进程重来，不是「你上一轮答错了」——不能贴协议重提示。
     expect(requests[1]?.promptTemplate).not.toContain('## Protocol errors in your previous reply')
