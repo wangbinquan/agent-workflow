@@ -777,10 +777,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1739,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "1738 → 1739。RFC-359 W57：续跑准入的部分唯一索引冲突（23505）此前没有映射——SSI 先冒 40001 时 `serializable` 会重试并收敛到领域错误，索引先抛时驱动错误原样漏给调用方（用户侧 500 而非 409）。2026-09-10 CI 上 ubuntu 分片 1/8 因此红过。修复在 `taskContinuationAdmission.ts` 新增 `isPendingIntentUniqueConflict` / `admitWithPendingIntentConflict` 与其判据常量共三个符号，并新增一个变异入口。同批把 `rfc359-w8-unnormalized-unique-insert` 账本里那条（原 why 写「已实测不可达」——它少看了「直接打端口」这条路）销账，20 → 19。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -871,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25043,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "25040 → 25043。RFC-359 W57：续跑准入的部分唯一索引冲突（23505）此前没有映射——SSI 先冒 40001 时 `serializable` 会重试并收敛到领域错误，索引先抛时驱动错误原样漏给调用方（用户侧 500 而非 409）。2026-09-10 CI 上 ubuntu 分片 1/8 因此红过。修复在 `taskContinuationAdmission.ts` 新增 `isPendingIntentUniqueConflict` / `admitWithPendingIntentConflict` 与其判据常量共三个符号，并新增一个变异入口。同批把 `rfc359-w8-unnormalized-unique-insert` 账本里那条（原 why 写「已实测不可达」——它少看了「直接打端口」这条路）销账，20 → 19。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -891,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8dca88adeacbe72c52addec66d5626bb17cf42c9",
-    "contentDigest": "sha256:4f88a202aad57c16ce1293cb3db9522498ce57fc480595739b3a1328a6d106d1",
+    "currentSnapshotSha": "3e89f52ec043fc255d9a32e1ba495bc3166a2a84",
+    "contentDigest": "sha256:a65bc0ba084f32c6383c0386e307cb07e90f9e7098d53b95e5155027302e57f7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
