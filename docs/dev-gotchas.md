@@ -1234,6 +1234,17 @@ bun 的 `test` / `beforeAll` / `beforeEach` 默认超时都是 **5s**，而 fixt
 
 **仍要自己做的**：带 `*` 的通配段守卫看不了。移动目录时顺手 `grep -rn '<旧目录>' .github scripts`。
 
+**守卫存在不等于你跑了它**（2026-09-11 同一天里第二次推红，就是这么来的）：这两条守卫都不在
+`tests/architecture/` 下，也不会被按主题挑的波及面捞到。**任何一笔删 / 搬源文件的提交，推之前把
+这两条单独跑一遍**——两秒钟的事：
+
+```
+bun test tests/rfc359-w14-p0-mutation-verdict.test.ts tests/test-suite-policy.test.ts
+```
+
+（第二次实撞：删 `sqliteTerminalizeExecutionIntent.ts`，两条守卫本机都能红，但我只跑了
+`tests/architecture/` 与主题波及面，于是四个 CI job 替我发现。）
+
 ## 给 eslint 的文件清单里混进**已删除的路径**，它一条都不 lint 还退 0（RFC-359 实撞，2026-09-11）
 
 删文件的那种提交最容易撞：习惯性用 `git status --porcelain | awk '{print $2}'` 拼出「本次改动的

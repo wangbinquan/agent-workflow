@@ -630,7 +630,6 @@ export const sourceFiles = [
   'packages/backend/src/modules/task-execution/infrastructure/taskDriverRelease.ts',
   'packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts',
