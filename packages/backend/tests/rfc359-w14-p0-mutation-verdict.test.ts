@@ -1,7 +1,15 @@
 // Compact Bun reporter transcripts from the observed historical mutations.
 // IDs, stack prefixes and timings are normalized; no database/process runs here.
 import { describe, expect, test } from 'bun:test'
-import { PHASES, validatePhaseLog, type Phase } from '../../../scripts/rfc359-p0-mutations'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+import {
+  PHASES,
+  sourceFiles,
+  validatePhaseLog,
+  type Phase,
+} from '../../../scripts/rfc359-p0-mutations'
 
 const diagnostics: Readonly<Record<string, readonly string[]>> = {
   'p0-2-owner-snapshot': [
@@ -202,6 +210,16 @@ function verdict(id: string, log: string, exitCode = 1) {
 }
 
 describe('RFC-359 AC7 historical mutation verdict', () => {
+  // 这条判据存在的理由：`sourceFiles` 是硬写的路径清单，只有真 PostgreSQL 那条 lane 在跑
+  // `scripts/rfc359-p0-mutations.ts` 时才会读它。某次提交删掉清单里的一个源文件后，本地
+  // typecheck / 全量 bun test 全绿，红只在推上去之后从那条 lane 里以一条 ENOENT 冒出来
+  // （c16ff9f4e，删 `sqliteCommittedEventStore.ts`）。把「清单里的路径都还在」挪进普通后端套件，
+  // 让删文件的那一刀在本地就能看见。
+  test('every fingerprinted source path still exists', () => {
+    const repository = resolve(import.meta.dir, '..', '..', '..')
+    expect(sourceFiles.filter((file) => !existsSync(resolve(repository, file)))).toEqual([])
+  })
+
   test('P0-2 requires an actual advanced heartbeat snapshot and its same-task native error', () => {
     const id = 'p0-2-owner-snapshot'
     const log = transcript(id)

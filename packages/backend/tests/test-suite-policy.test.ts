@@ -7,7 +7,7 @@
 // skip in one reviewed inventory.
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { toPortableRelativePath } from '@/util/platformExec'
@@ -410,5 +410,39 @@ describe('repository test-suite policy', () => {
       'utf8',
     )
     expect(source.match(/^\s+- 'e2e\/harness\.ts'$/gm)).toHaveLength(2)
+  })
+
+  // 为什么存在：workflow 的 `paths:` 触发器与 `scripts/**` 里硬写的源文件清单都是**纯字符串**，
+  // 源文件被删或被搬走时没有任何编译期或本地测试会红。两种都实撞过——
+  //   · `scripts/rfc359-p0-mutations.ts` 的指纹清单指着已删的
+  //     `platform/persistence/sqliteCommittedEventStore.ts`，只在真 PostgreSQL 那条 lane 里以
+  //     ENOENT 冒出来，main 已经红了才被发现（c16ff9f4e）；
+  //   · `maintenance-soak-nightly.yml` 的 `paths:` 还指着合一前的
+  //     `platform/persistence/sqlite/maintenanceRunStore.ts`，于是改了真正那份文件，夜跑
+  //     **静默不触发**——没有红，只有覆盖面凭空消失。
+  // 只看不含 glob 的字面路径；带 `*` 的通配段照旧由各自的 workflow 负责。
+  test('every literal repository path in workflows and scripts still exists', () => {
+    const sources: string[] = []
+    for (const root of ['.github/workflows', 'scripts']) {
+      const dir = resolve(REPO_ROOT, root)
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile()) continue
+        if (!/\.(ya?ml|ts)$/.test(entry.name)) continue
+        sources.push(readFileSync(resolve(dir, entry.name), 'utf8'))
+      }
+    }
+    // 只认**带引号的字面量**（YAML 的 `- 'path'` 与 TS 的字符串）；注释散文里出现的同形路径
+    // 不算（`scripts/depcheck.ts` 就在注释里写过一个「会去找但并不存在」的 tsconfig 路径）。
+    const referenced = new Set<string>()
+    for (const source of sources) {
+      for (const match of source.matchAll(
+        /(['"])((?:packages\/(?:backend|frontend|shared|system-mocks)|e2e|scripts)\/[A-Za-z0-9_./-]+\.(?:tsx?|sql|json|ya?ml))\1/g,
+      )) {
+        referenced.add(match[2]!)
+      }
+    }
+    expect([...referenced].filter((path) => !existsSync(resolve(REPO_ROOT, path))).sort()).toEqual(
+      [],
+    )
   })
 })

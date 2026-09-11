@@ -610,7 +610,11 @@ function parseOptions(args: readonly string[]) {
 
 const repository = dirname(dirname(fileURLToPath(import.meta.url)))
 const fixture = 'packages/backend/tests/fixtures/rfc359-p0-mutations.ts'
-const sourceFiles = [
+/** The mutation run fingerprints these before and after, so a run that edited its own
+ *  targets is reported as failed. `rfc359-w14-p0-mutation-verdict` asserts every entry
+ *  still exists — a file deleted elsewhere used to surface only as an ENOENT inside the
+ *  real-PostgreSQL lane, long after the deleting commit was pushed. */
+export const sourceFiles = [
   'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts',
   'packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts',
   'packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts',
@@ -649,7 +653,6 @@ const sourceFiles = [
   'packages/backend/src/platform/events/committed/append.ts',
   'packages/backend/src/platform/events/committed/appendProgram.ts',
   'packages/backend/src/platform/events/committed/appendShared.ts',
-  'packages/backend/src/platform/persistence/sqliteCommittedEventStore.ts',
   'packages/backend/src/services/orphanReconcile.ts',
   'packages/backend/src/services/orphans.ts',
   'packages/backend/src/services/autoRepair.ts',
