@@ -6077,3 +6077,30 @@ file:line 锚点，`rfc359-w5-t19d` 的成对覆盖账本**当场从 10 vs 6 变
 会造出 `[postgresql] > … > [sqlite]` 的**交叉积**，两层 harness 还互不相干。
 正解是把那一条补进已有的 `describeEachProvider` 里。**迁移前先 grep 文件里有没有
 `describeEachProvider`。**
+
+## 5aa. 迁移工具本身的一个坑（W58 实撞，已记进 dev-gotchas）
+
+账本 590 → 589（`auth-self-service-idor`）。这一批只落了一个文件，因为撞上了一件更值得写下来的事。
+
+批量迁移用的脚本按**单行正则**扫 `createApp({…})` 的选项键。而那些测试注入依赖
+（`runtimeDiagnosticTestDependencies` / `mcpRuntimeTestDependencies` / `intentTestDependencies`
+/ `executionContracts` / `webhookDispatcher`）的值几乎都是**跨多行的对象字面量**，于是被**静默
+丢掉**——迁出来的应用少装一份依赖，而脚本还报告「选项集合是标准五项」。
+
+`rfc135-runtimes-status` 就是这么坏的：`runtimeDiagnosticTestDependencies` 里的
+`probeTimeoutMsForTest` 与桩二进制注入整块消失，探测改打真机 PATH，hang 用例 5s 超时。
+**这次是红的，所以被抓住了；下一次可能是绿的**——注入的若是「把某个开关关掉」这类依赖，
+用例照过，判据已经空了。
+
+已做三件事：
+1. **回退** `rfc135-runtimes-status`（它需要的依赖今天接不进共用作用域，保持单引擎）；
+2. **审计本轮此前已迁的全部文件**，逐个比对迁移前的 `createApp` 选项键——只出现过 `secretBox`
+   与 `daemonInfoPath` 两种，都是作用域已提供且我显式接了的，**没有文件因此少装依赖**；
+3. 把「迁移前逐字核对 `createApp` 选项」与「迁移前先 grep `describeEachProvider`」写进
+   `docs/dev-gotchas.md`。
+
+**结论对后续批次的约束**：带 `*TestDependencies` 的文件（`rfc135-runtimes-status` /
+`runtime-routes` / `rfc238-mcp-runtime-test-http` / `rfc349-mcp-runtime-test-daemon-identity` /
+`rfc355-intent-session-event-callsites` / `rfc317-runtime-spawn-capability-guard` /
+`rfc349-execution-contract-postgresql-adapter`）**先别迁**——要么给作用域加一条通用的
+「额外 createApp 依赖」直通口，要么就接受它们留在单引擎。这是个设计决定，不该在批量迁移里顺手做。

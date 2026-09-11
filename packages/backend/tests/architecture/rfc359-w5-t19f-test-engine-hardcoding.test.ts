@@ -66,7 +66,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'architecture/rfc329-mcp-surface-guard.test.ts: 1',
   'architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts: 2',
   'auth-routes.test.ts: 1',
-  'auth-self-service-idor.test.ts: 1',
   'auth-session.test.ts: 4',
   'backup.test.ts: 3',
   'cached-repos-http.test.ts: 1',

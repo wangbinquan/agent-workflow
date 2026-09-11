@@ -30,21 +30,22 @@
 //
 // See design/test-guard-audit-2026-07-21 §1 (P0 list) / 逃逸机制③.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
+
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createPat } from './helpers/auth/patStore'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { oidcProviders } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createIdentity } from '../src/services/userIdentities'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const PASSWORD = 'correctPassword123'
 
 interface Actor {
@@ -54,7 +55,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   alice: Actor
   bob: Actor
@@ -84,17 +85,9 @@ async function as(
   return app.request(path, { ...init, headers })
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const secretBox = createSecretBoxFromKey(randomBytes(32))
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-    secretBox,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
 
   // Deliberately BOTH non-admin: an admin actor could legitimately be allowed
   // more, which would blur what these cases prove.
@@ -133,204 +126,230 @@ async function buildHarness(): Promise<Harness> {
   return { db, app, alice, bob, providerId }
 }
 
-describe('account self-service is scoped to the calling user', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'account self-service is scoped to the calling user',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-idor-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
 
-  test("a user cannot revoke another user's session", async () => {
-    // Alice opens a second session (the one she is browsing with must survive
-    // for the "victim still works" assertion to mean anything).
-    const victimToken = await login(h.app, 'alice')
-    const listed = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
-      id: string
-    }>
-    expect(listed.length).toBeGreaterThanOrEqual(2)
+    test("a user cannot revoke another user's session", async () => {
+      // Alice opens a second session (the one she is browsing with must survive
+      // for the "victim still works" assertion to mean anything).
+      const victimToken = await login(h.app, 'alice')
+      const listed = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
+        id: string
+      }>
+      expect(listed.length).toBeGreaterThanOrEqual(2)
 
-    for (const session of listed) {
-      const res = await as(h.app, h.bob, `/api/auth/sessions/${session.id}/revoke`, {
-        method: 'POST',
+      for (const session of listed) {
+        const res = await as(h.app, h.bob, `/api/auth/sessions/${session.id}/revoke`, {
+          method: 'POST',
+        })
+        expect(`bob revoking alice session → ${res.status}`).toBe(
+          'bob revoking alice session → 403',
+        )
+      }
+
+      // The sessions must still be usable — a handler that revoked first and threw
+      // afterwards would satisfy the status assertion above.
+      const meVictim = await h.app.request('/api/auth/me', {
+        headers: { authorization: `Bearer ${victimToken}` },
       })
-      expect(`bob revoking alice session → ${res.status}`).toBe('bob revoking alice session → 403')
-    }
-
-    // The sessions must still be usable — a handler that revoked first and threw
-    // afterwards would satisfy the status assertion above.
-    const meVictim = await h.app.request('/api/auth/me', {
-      headers: { authorization: `Bearer ${victimToken}` },
-    })
-    expect(meVictim.status).toBe(200)
-    expect((await as(h.app, h.alice, '/api/auth/me')).status).toBe(200)
-  })
-
-  test("a user cannot revoke another user's personal access token", async () => {
-    // RFC-221 disables the public creation endpoint. Seed a legacy PAT through
-    // the store so this test continues to guard the retained revoke path.
-    const { meta: pat, token } = await createPat({
-      db: h.db,
-      userId: h.alice.id,
-      name: 'ci',
-      purpose: 'general',
+      expect(meVictim.status).toBe(200)
+      expect((await as(h.app, h.alice, '/api/auth/me')).status).toBe(200)
     })
 
-    const res = await as(h.app, h.bob, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })
-    expect(res.status).toBe(403)
+    test("a user cannot revoke another user's personal access token", async () => {
+      // RFC-221 disables the public creation endpoint. Seed a legacy PAT through
+      // the store so this test continues to guard the retained revoke path.
+      const { meta: pat, token } = await createPat({
+        db: h.db,
+        userId: h.alice.id,
+        name: 'ci',
+        purpose: 'general',
+      })
 
-    // Alice's CI token still authenticates. Probed via `/api/whoami` rather than
-    // `/api/auth/me`: RFC-247 D6 closes the whole `/api/auth/*` surface to
-    // tokens (a token must not be able to mint or manage tokens), so
-    // `/api/auth/me` now 403s for a PAT by design. `/api/whoami` sits outside
-    // that surface and is the token-reachable identity probe — it proves the
-    // same thing this assertion has always been here to prove: bob's refused
-    // DELETE did not actually revoke anything.
-    const me = await h.app.request('/api/whoami', {
-      headers: { authorization: `Bearer ${token}` },
-    })
-    expect(me.status).toBe(200)
-    const stillListed = (await (await as(h.app, h.alice, '/api/auth/pats')).json()) as Array<{
-      id: string
-    }>
-    expect(stillListed.some((row) => row.id === pat.id)).toBe(true)
-  })
+      const res = await as(h.app, h.bob, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })
+      expect(res.status).toBe(403)
 
-  test("a user cannot unlink another user's SSO identity", async () => {
-    // Worst case of the three: for a user provisioned through SSO with no local
-    // password, unlinking the only identity is an account lockout.
-    const identity = await createIdentity(h.db, {
-      userId: h.alice.id,
-      providerId: h.providerId,
-      subject: 'alice-at-idp',
-      email: 'alice@example.com',
-      emailVerified: true,
-    })
-
-    const res = await as(h.app, h.bob, `/api/auth/identities/${identity.id}`, { method: 'DELETE' })
-    expect(res.status).toBe(403)
-
-    const stillLinked = (await (await as(h.app, h.alice, '/api/auth/identities')).json()) as Array<{
-      id: string
-    }>
-    expect(stillLinked.map((row) => row.id)).toEqual([identity.id])
-  })
-
-  test('listing endpoints only ever return the calling user’s own rows', async () => {
-    await createPat({
-      db: h.db,
-      userId: h.alice.id,
-      name: 'alice-ci',
-      purpose: 'general',
-    })
-    await createIdentity(h.db, {
-      userId: h.alice.id,
-      providerId: h.providerId,
-      subject: 'alice-at-idp',
-      email: 'alice@example.com',
-      emailVerified: true,
+      // Alice's CI token still authenticates. Probed via `/api/whoami` rather than
+      // `/api/auth/me`: RFC-247 D6 closes the whole `/api/auth/*` surface to
+      // tokens (a token must not be able to mint or manage tokens), so
+      // `/api/auth/me` now 403s for a PAT by design. `/api/whoami` sits outside
+      // that surface and is the token-reachable identity probe — it proves the
+      // same thing this assertion has always been here to prove: bob's refused
+      // DELETE did not actually revoke anything.
+      const me = await h.app.request('/api/whoami', {
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(me.status).toBe(200)
+      const stillListed = (await (await as(h.app, h.alice, '/api/auth/pats')).json()) as Array<{
+        id: string
+      }>
+      expect(stillListed.some((row) => row.id === pat.id)).toBe(true)
     })
 
-    // Bob sees none of it — the projection, not just the mutation, is scoped.
-    expect((await (await as(h.app, h.bob, '/api/auth/pats')).json()) as unknown[]).toEqual([])
-    expect((await (await as(h.app, h.bob, '/api/auth/identities')).json()) as unknown[]).toEqual([])
-    const bobSessions = (await (await as(h.app, h.bob, '/api/auth/sessions')).json()) as Array<{
-      userId?: string
-    }>
-    expect(bobSessions.length).toBe(1)
-  })
+    test("a user cannot unlink another user's SSO identity", async () => {
+      // Worst case of the three: for a user provisioned through SSO with no local
+      // password, unlinking the only identity is an account lockout.
+      const identity = await createIdentity(h.db, {
+        userId: h.alice.id,
+        providerId: h.providerId,
+        subject: 'alice-at-idp',
+        email: 'alice@example.com',
+        emailVerified: true,
+      })
 
-  // --- positive controls -----------------------------------------------------
-  // Without these, a handler that rejected EVERY request would pass every case
-  // above, and this file would be a guard with no teeth.
+      const res = await as(h.app, h.bob, `/api/auth/identities/${identity.id}`, {
+        method: 'DELETE',
+      })
+      expect(res.status).toBe(403)
 
-  test('a user can revoke their own session and legacy token, while identity unlink stays disabled', async () => {
-    const before = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
-      id: string
-    }>
-    const doomedToken = await login(h.app, 'alice')
-    const after = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
-      id: string
-    }>
-    const doomed = after.find((s) => !before.some((b) => b.id === s.id))
-    if (!doomed) throw new Error('could not identify the newly created session')
-
-    // Revoke the session that is NOT the one we authenticate with, so the 204
-    // cannot be confused with "the caller nuked its own credential".
-    expect(
-      (await h.app.request('/api/auth/me', { headers: { authorization: `Bearer ${doomedToken}` } }))
-        .status,
-    ).toBe(200)
-    expect(
-      (await as(h.app, h.alice, `/api/auth/sessions/${doomed.id}/revoke`, { method: 'POST' }))
-        .status,
-    ).toBe(204)
-    expect(
-      (await h.app.request('/api/auth/me', { headers: { authorization: `Bearer ${doomedToken}` } }))
-        .status,
-    ).toBe(401)
-    // …and the caller's own session is untouched.
-    expect((await as(h.app, h.alice, '/api/auth/me')).status).toBe(200)
-
-    const alice: Actor = h.alice
-    const { meta: pat } = await createPat({
-      db: h.db,
-      userId: alice.id,
-      name: 'mine',
-      purpose: 'general',
+      const stillLinked = (await (
+        await as(h.app, h.alice, '/api/auth/identities')
+      ).json()) as Array<{
+        id: string
+      }>
+      expect(stillLinked.map((row) => row.id)).toEqual([identity.id])
     })
-    expect((await as(h.app, alice, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })).status).toBe(
-      204,
-    )
 
-    const identity = await createIdentity(h.db, {
-      userId: alice.id,
-      providerId: h.providerId,
-      subject: 'alice-at-idp',
-      email: 'alice@example.com',
-      emailVerified: true,
-    })
-    const unlink = await as(h.app, alice, `/api/auth/identities/${identity.id}`, {
-      method: 'DELETE',
-    })
-    expect(unlink.status).toBe(403)
-    expect(((await unlink.json()) as { code: string }).code).toBe('identity-unlink-disabled')
-    const identities = (await (await as(h.app, alice, '/api/auth/identities')).json()) as Array<{
-      id: string
-    }>
-    expect(identities.map((row) => row.id)).toEqual([identity.id])
-  })
+    test('listing endpoints only ever return the calling user’s own rows', async () => {
+      await createPat({
+        db: h.db,
+        userId: h.alice.id,
+        name: 'alice-ci',
+        purpose: 'general',
+      })
+      await createIdentity(h.db, {
+        userId: h.alice.id,
+        providerId: h.providerId,
+        subject: 'alice-at-idp',
+        email: 'alice@example.com',
+        emailVerified: true,
+      })
 
-  // All three destructive self-service endpoints must be indistinguishable
-  // between "this id does not exist" and "this id is not yours". Sessions used
-  // to answer 404 for the former, which let any logged-in user probe whether a
-  // given session id was live. Unified to 403 (user decision, 2026-07-21) to
-  // match PATs/identities and RFC-099's "indistinguishable from not-found" rule.
-  test("an unknown id and someone else's id are refused identically (no existence oracle)", async () => {
-    const unknownId = ulid()
-    const victimSession = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
-      id: string
-    }>
-    const someoneElsesId = victimSession[0]?.id
-    expect(someoneElsesId).toBeDefined()
-
-    for (const [label, path] of [
-      ['sessions', `/api/auth/sessions/{id}/revoke`],
-      ['pats', `/api/auth/pats/{id}`],
-      ['identities', `/api/auth/identities/{id}`],
-    ] as const) {
-      const method = label === 'sessions' ? 'POST' : 'DELETE'
-      const unknown = await as(h.app, h.bob, path.replace('{id}', unknownId), { method })
-      const foreign = await as(
-        h.app,
-        h.bob,
-        path.replace('{id}', label === 'sessions' ? (someoneElsesId as string) : unknownId),
-        { method },
+      // Bob sees none of it — the projection, not just the mutation, is scoped.
+      expect((await (await as(h.app, h.bob, '/api/auth/pats')).json()) as unknown[]).toEqual([])
+      expect((await (await as(h.app, h.bob, '/api/auth/identities')).json()) as unknown[]).toEqual(
+        [],
       )
-      expect(`${label}: unknown=${unknown.status} foreign=${foreign.status}`).toBe(
-        `${label}: unknown=403 foreign=403`,
-      )
-      // Byte-identical bodies too — a differing code or message re-opens the
-      // oracle even when both answers are 403.
-      expect(`${label}: ${await unknown.text()}`).toBe(`${label}: ${await foreign.text()}`)
-    }
-  })
-})
+      const bobSessions = (await (await as(h.app, h.bob, '/api/auth/sessions')).json()) as Array<{
+        userId?: string
+      }>
+      expect(bobSessions.length).toBe(1)
+    })
+
+    // --- positive controls -----------------------------------------------------
+    // Without these, a handler that rejected EVERY request would pass every case
+    // above, and this file would be a guard with no teeth.
+
+    test('a user can revoke their own session and legacy token, while identity unlink stays disabled', async () => {
+      const before = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
+        id: string
+      }>
+      const doomedToken = await login(h.app, 'alice')
+      const after = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
+        id: string
+      }>
+      const doomed = after.find((s) => !before.some((b) => b.id === s.id))
+      if (!doomed) throw new Error('could not identify the newly created session')
+
+      // Revoke the session that is NOT the one we authenticate with, so the 204
+      // cannot be confused with "the caller nuked its own credential".
+      expect(
+        (
+          await h.app.request('/api/auth/me', {
+            headers: { authorization: `Bearer ${doomedToken}` },
+          })
+        ).status,
+      ).toBe(200)
+      expect(
+        (await as(h.app, h.alice, `/api/auth/sessions/${doomed.id}/revoke`, { method: 'POST' }))
+          .status,
+      ).toBe(204)
+      expect(
+        (
+          await h.app.request('/api/auth/me', {
+            headers: { authorization: `Bearer ${doomedToken}` },
+          })
+        ).status,
+      ).toBe(401)
+      // …and the caller's own session is untouched.
+      expect((await as(h.app, h.alice, '/api/auth/me')).status).toBe(200)
+
+      const alice: Actor = h.alice
+      const { meta: pat } = await createPat({
+        db: h.db,
+        userId: alice.id,
+        name: 'mine',
+        purpose: 'general',
+      })
+      expect(
+        (await as(h.app, alice, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })).status,
+      ).toBe(204)
+
+      const identity = await createIdentity(h.db, {
+        userId: alice.id,
+        providerId: h.providerId,
+        subject: 'alice-at-idp',
+        email: 'alice@example.com',
+        emailVerified: true,
+      })
+      const unlink = await as(h.app, alice, `/api/auth/identities/${identity.id}`, {
+        method: 'DELETE',
+      })
+      expect(unlink.status).toBe(403)
+      expect(((await unlink.json()) as { code: string }).code).toBe('identity-unlink-disabled')
+      const identities = (await (await as(h.app, alice, '/api/auth/identities')).json()) as Array<{
+        id: string
+      }>
+      expect(identities.map((row) => row.id)).toEqual([identity.id])
+    })
+
+    // All three destructive self-service endpoints must be indistinguishable
+    // between "this id does not exist" and "this id is not yours". Sessions used
+    // to answer 404 for the former, which let any logged-in user probe whether a
+    // given session id was live. Unified to 403 (user decision, 2026-07-21) to
+    // match PATs/identities and RFC-099's "indistinguishable from not-found" rule.
+    test("an unknown id and someone else's id are refused identically (no existence oracle)", async () => {
+      const unknownId = ulid()
+      const victimSession = (await (
+        await as(h.app, h.alice, '/api/auth/sessions')
+      ).json()) as Array<{
+        id: string
+      }>
+      const someoneElsesId = victimSession[0]?.id
+      expect(someoneElsesId).toBeDefined()
+
+      for (const [label, path] of [
+        ['sessions', `/api/auth/sessions/{id}/revoke`],
+        ['pats', `/api/auth/pats/{id}`],
+        ['identities', `/api/auth/identities/{id}`],
+      ] as const) {
+        const method = label === 'sessions' ? 'POST' : 'DELETE'
+        const unknown = await as(h.app, h.bob, path.replace('{id}', unknownId), { method })
+        const foreign = await as(
+          h.app,
+          h.bob,
+          path.replace('{id}', label === 'sessions' ? (someoneElsesId as string) : unknownId),
+          { method },
+        )
+        expect(`${label}: unknown=${unknown.status} foreign=${foreign.status}`).toBe(
+          `${label}: unknown=403 foreign=403`,
+        )
+        // Byte-identical bodies too — a differing code or message re-opens the
+        // oracle even when both answers are 403.
+        expect(`${label}: ${await unknown.text()}`).toBe(`${label}: ${await foreign.text()}`)
+      }
+    })
+  },
+)

@@ -6250,3 +6250,30 @@ bun 的 hook 默认预算是 5s。`eachProvider` 的 PostgreSQL `beforeEach` 做
 
 更一般的规律：**改「几百个用例共用的 helper」时，"跑我改过的那些文件" 这条选择法天然漏判**
 ——受影响面不是你改的文件，是依赖它的文件。至少要把对该 helper 做断言的用例找出来跑掉。
+
+## 把用例迁上共用 HTTP 作用域时，**先逐字核对 `createApp` 的选项**
+
+`createApp` 的选项里，除了 `token / configPath / opencodeVersion / dbVersion / db` 这五个标准项，
+还常有**测试注入依赖**：`runtimeDiagnosticTestDependencies`、`mcpRuntimeTestDependencies`、
+`intentTestDependencies`、`executionContracts`、`webhookDispatcher`、`daemonInfoPath`、`secretBox` …
+它们的值往往是**跨多行的对象字面量**。
+
+迁移时如果漏掉其中一个，迁出来的应用就少装一份依赖。后果分两档，都不好：
+
+- **红得莫名其妙**：探测类依赖漏了 ⇒ 打到真机 PATH 上，用例超时（2026-09-12
+  `rfc135-runtimes-status` 实撞：`runtimeDiagnosticTestDependencies` 被漏，hang 用例 5s 超时）；
+- **更糟：绿着测不到东西**——注入的是「把某个开关关掉」这类依赖时，用例照过，判据已经空了。
+
+所以动手前：
+
+```sh
+# 列出这个文件 createApp 的全部顶层选项键（含多行值的那些）
+grep -n 'createApp(' -A 30 <file> | grep -E '^\s*[0-9]*[-:]?\s*[A-Za-z_$][\w$]*\s*[:,]'
+```
+
+凡是超出那五个标准项的，逐个决定：作用域已经提供（`secretBox` / `daemonInfoPath` /
+`config`）、能直通（`bootstrap`）、还是**根本没法带**（各类 `*TestDependencies`）。最后一类
+今天接不进共用作用域，**保持单引擎并在块内写清理由**，不要硬迁。
+
+同理，**迁移前先 `grep describeEachProvider <file>`**：有的文件已经部分双引擎，外层再包一层会
+造出 `[postgresql] > … > [sqlite]` 的交叉积、两层 harness 互不相干。
