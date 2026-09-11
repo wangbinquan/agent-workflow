@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5259,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-8：准入耗尽 SERIALIZABLE 重试后仍是 40001 时，原先把裸驱动错误抛给用户（SQLite 上同一场竞争回 409、PostgreSQL 回 500）。新增唯一的翻译点 `taskExecutionIntentPersistence.ts#admissionSerializationConflict` 与它到 `platform/persistence/postgresqlSerializationRetry` 的那条 import 边，三本账各 +1。一次性；下一笔提交退役。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4725,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-8：准入耗尽 SERIALIZABLE 重试后仍是 40001 时，原先把裸驱动错误抛给用户（SQLite 上同一场竞争回 409、PostgreSQL 回 500）。新增唯一的翻译点 `taskExecutionIntentPersistence.ts#admissionSerializationConflict` 与它到 `platform/persistence/postgresqlSerializationRetry` 的那条 import 边，三本账各 +1。一次性；下一笔提交退役。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -874,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24931,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-8：准入耗尽 SERIALIZABLE 重试后仍是 40001 时，原先把裸驱动错误抛给用户（SQLite 上同一场竞争回 409、PostgreSQL 回 500）。新增唯一的翻译点 `taskExecutionIntentPersistence.ts#admissionSerializationConflict` 与它到 `platform/persistence/postgresqlSerializationRetry` 的那条 import 边，三本账各 +1。一次性；下一笔提交退役。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -894,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4dd4dc86fec1c9dce4b25a8bd61a28068715d85f",
-    "contentDigest": "sha256:07291e2eb366e35094b2773863c2e757d2bf90692bd1a8e0478fa29e61af00a0",
+    "currentSnapshotSha": "ae654866ec632d8278205fb8b1da0de2234b9a02",
+    "contentDigest": "sha256:7c295f508ede76c3f700ea1c70c96bdff876875b2b123e3928bc6d771f157039",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
