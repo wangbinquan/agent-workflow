@@ -10,24 +10,25 @@
 //     tasks:delete out of a PAT unless explicitly scoped; last-admin protection
 //     does not count manager as an admin.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describe, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { resolveTaskRole } from '../src/services/resourceAcl'
 import { createUser, patchUser } from '../src/services/users'
 import { ValidationError } from '../src/util/errors'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   adminToken: string
   managerToken: string
@@ -36,20 +37,14 @@ interface Harness {
   managerId: string
 }
 
-async function tokenFor(db: DbClient, userId: string): Promise<string> {
+async function tokenFor(db: ProviderNeutralDatabase, userId: string): Promise<string> {
   const { token } = await createSession({ db, userId })
   return token
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const admin = await createUser(db, {
     username: 'root',
     displayName: 'Root',
@@ -106,91 +101,112 @@ async function reqAs(
   return app.request(path, { ...init, headers })
 }
 
-describe('RFC-222 manager — denial face (system domain 403)', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-222 manager — denial face (system domain 403)',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-manager-role-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
 
-  const cases: Array<[string, string, RequestInit]> = [
-    ['GET /api/users', '/api/users', {}],
-    ['GET /api/config (settings:read)', '/api/config', {}],
-    [
-      'PUT /api/config (settings:write)',
-      '/api/config',
-      { method: 'PUT', body: '{"logLevel":"debug"}' },
-    ],
-    // (OIDC denial is locked by the shared permission snapshot — manager lacks
-    // oidc:read/oidc:configure; the HTTP route path is owned by RFC-220.)
-    ['POST /api/backup', '/api/backup', { method: 'POST' }],
-    ['POST /api/restore', '/api/restore', { method: 'POST' }],
-  ]
-  for (const [name, path, init] of cases) {
-    test(`manager ${name} → 403`, async () => {
-      const res = await reqAs(h.app, h.managerToken, path, init)
+    const cases: Array<[string, string, RequestInit]> = [
+      ['GET /api/users', '/api/users', {}],
+      ['GET /api/config (settings:read)', '/api/config', {}],
+      [
+        'PUT /api/config (settings:write)',
+        '/api/config',
+        { method: 'PUT', body: '{"logLevel":"debug"}' },
+      ],
+      // (OIDC denial is locked by the shared permission snapshot — manager lacks
+      // oidc:read/oidc:configure; the HTTP route path is owned by RFC-220.)
+      ['POST /api/backup', '/api/backup', { method: 'POST' }],
+      ['POST /api/restore', '/api/restore', { method: 'POST' }],
+    ]
+    for (const [name, path, init] of cases) {
+      test(`manager ${name} → 403`, async () => {
+        const res = await reqAs(h.app, h.managerToken, path, init)
+        expect(res.status).toBe(403)
+      })
+    }
+
+    test('manager POST /api/users/:id role change → 403 (no users:write)', async () => {
+      const res = await reqAs(h.app, h.managerToken, `/api/users/${h.aliceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: 'manager' }),
+      })
       expect(res.status).toBe(403)
     })
-  }
+  },
+)
 
-  test('manager POST /api/users/:id role change → 403 (no users:write)', async () => {
-    const res = await reqAs(h.app, h.managerToken, `/api/users/${h.aliceId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ role: 'manager' }),
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-222 manager — positive resource / task / memory domain',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-manager-role-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
     })
-    expect(res.status).toBe(403)
-  })
-})
 
-describe('RFC-222 manager — positive resource / task / memory domain', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('manager sees alice’s private agent in the list (row bypass)', async () => {
-    const res = await reqAs(h.app, h.managerToken, '/api/agents')
-    expect(res.status).toBe(200)
-    const list = (await res.json()) as Array<{ name: string; visibility?: string }>
-    expect(list.some((a) => a.name.startsWith('alice-secret-'))).toBe(true)
-  })
-
-  test('a stranger user does NOT see alice’s private agent', async () => {
-    const res = await reqAs(h.app, h.userToken, '/api/agents')
-    expect(res.status).toBe(200)
-    const list = (await res.json()) as Array<{ name: string }>
-    expect(list.some((a) => a.name.startsWith('alice-secret-'))).toBe(false)
-  })
-
-  test('manager GET /api/memory-distill-jobs → 200 (D3); stranger → 403', async () => {
-    const mgr = await reqAs(h.app, h.managerToken, '/api/memory-distill-jobs')
-    expect(mgr.status).toBe(200)
-    const usr = await reqAs(h.app, h.userToken, '/api/memory-distill-jobs')
-    expect(usr.status).toBe(403)
-  })
-
-  // RFC-247 split `repos:write` into create/delete/execute and moved the gate
-  // from a prefix middleware into each route's declaration. `/api/repos` itself
-  // is not an endpoint (the old 403 came from the prefix middleware running
-  // before routing), so this now exercises a real repos-domain write.
-  test('manager holds the repos write verbs (batch-import not 403); stranger → 403', async () => {
-    const mgr = await reqAs(h.app, h.managerToken, '/api/cached-repos/batch-import', {
-      method: 'POST',
-      body: JSON.stringify({}),
+    test('manager sees alice’s private agent in the list (row bypass)', async () => {
+      const res = await reqAs(h.app, h.managerToken, '/api/agents')
+      expect(res.status).toBe(200)
+      const list = (await res.json()) as Array<{ name: string; visibility?: string }>
+      expect(list.some((a) => a.name.startsWith('alice-secret-'))).toBe(true)
     })
-    expect(mgr.status).not.toBe(403) // gate open → 422/400 for empty body
-    const usr = await reqAs(h.app, h.userToken, '/api/cached-repos/batch-import', {
-      method: 'POST',
-      body: JSON.stringify({}),
+
+    test('a stranger user does NOT see alice’s private agent', async () => {
+      const res = await reqAs(h.app, h.userToken, '/api/agents')
+      expect(res.status).toBe(200)
+      const list = (await res.json()) as Array<{ name: string }>
+      expect(list.some((a) => a.name.startsWith('alice-secret-'))).toBe(false)
     })
-    expect(usr.status).toBe(403)
-  })
 
-  test('manager GET /api/tasks?scope=all → 200 (tasks:read:all)', async () => {
-    const res = await reqAs(h.app, h.managerToken, '/api/tasks?scope=all')
-    expect(res.status).toBe(200)
-  })
-})
+    test('manager GET /api/memory-distill-jobs → 200 (D3); stranger → 403', async () => {
+      const mgr = await reqAs(h.app, h.managerToken, '/api/memory-distill-jobs')
+      expect(mgr.status).toBe(200)
+      const usr = await reqAs(h.app, h.userToken, '/api/memory-distill-jobs')
+      expect(usr.status).toBe(403)
+    })
 
+    // RFC-247 split `repos:write` into create/delete/execute and moved the gate
+    // from a prefix middleware into each route's declaration. `/api/repos` itself
+    // is not an endpoint (the old 403 came from the prefix middleware running
+    // before routing), so this now exercises a real repos-domain write.
+    test('manager holds the repos write verbs (batch-import not 403); stranger → 403', async () => {
+      const mgr = await reqAs(h.app, h.managerToken, '/api/cached-repos/batch-import', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      expect(mgr.status).not.toBe(403) // gate open → 422/400 for empty body
+      const usr = await reqAs(h.app, h.userToken, '/api/cached-repos/batch-import', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      expect(usr.status).toBe(403)
+    })
+
+    test('manager GET /api/tasks?scope=all → 200 (tasks:read:all)', async () => {
+      const res = await reqAs(h.app, h.managerToken, '/api/tasks?scope=all')
+      expect(res.status).toBe(200)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
 describe('RFC-222 manager — resolveTaskRole attribution', () => {
   test('non-member manager → "manager" (never folded into admin)', () => {
     const managerActor = buildActor({
@@ -217,6 +233,7 @@ describe('RFC-222 manager — resolveTaskRole attribution', () => {
   })
 })
 
+// RFC-359 AC-6：两个引擎各跑一遍。
 describe('RFC-222 — PAT explicit-only for tasks:delete (P1-3)', () => {
   test('empty-scoped admin PAT does NOT inherit tasks:delete', () => {
     const actor = buildActor({
@@ -252,37 +269,47 @@ describe('RFC-222 — PAT explicit-only for tasks:delete (P1-3)', () => {
   })
 })
 
-describe('RFC-222 — last-admin protection does not count manager', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-222 — last-admin protection does not count manager',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-manager-role-',
+  },
+  (scope) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = scope.harness.db
+    })
 
-  test('demoting the only admin to manager is rejected (no admin left)', async () => {
-    const admin = await createUser(db, {
-      username: 'solo',
-      displayName: 'Solo',
-      role: 'admin',
-      password: 'longEnoughPassword',
+    test('demoting the only admin to manager is rejected (no admin left)', async () => {
+      const admin = await createUser(db, {
+        username: 'solo',
+        displayName: 'Solo',
+        role: 'admin',
+        password: 'longEnoughPassword',
+      })
+      await createUser(db, {
+        username: 'mgr',
+        displayName: 'Mgr',
+        role: 'manager',
+        password: 'longEnoughPassword',
+      })
+      // If manager counted as an admin this demotion would succeed; it must not.
+      await expect(patchUser(db, admin.id, { role: 'manager' })).rejects.toBeInstanceOf(
+        ValidationError,
+      )
+      // A second real admin lifts the protection — demotion then succeeds.
+      await createUser(db, {
+        username: 'root2',
+        displayName: 'Root2',
+        role: 'admin',
+        password: 'longEnoughPassword',
+      })
+      const demoted = await patchUser(db, admin.id, { role: 'manager' })
+      expect(demoted.role).toBe('manager')
     })
-    await createUser(db, {
-      username: 'mgr',
-      displayName: 'Mgr',
-      role: 'manager',
-      password: 'longEnoughPassword',
-    })
-    // If manager counted as an admin this demotion would succeed; it must not.
-    await expect(patchUser(db, admin.id, { role: 'manager' })).rejects.toBeInstanceOf(
-      ValidationError,
-    )
-    // A second real admin lifts the protection — demotion then succeeds.
-    await createUser(db, {
-      username: 'root2',
-      displayName: 'Root2',
-      role: 'admin',
-      password: 'longEnoughPassword',
-    })
-    const demoted = await patchUser(db, admin.id, { role: 'manager' })
-    expect(demoted.role).toBe('manager')
-  })
-})
+  },
+)

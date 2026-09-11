@@ -6,7 +6,7 @@
     "moduleFiles": 1187,
     "productionFiles": 2566,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24931
+    "symbolsIncludingFileRoots": 24936
   },
   "entries": [
     {
@@ -123388,6 +123388,18 @@
       "currentLayer": "domain",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/domain/executionIntent.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/executionIntent.ts#canonicalTaskLineageScope",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "canonicalTaskLineageScope",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/executionIntent.ts",
       "id": "owner:packages/backend/src/modules/task-execution/domain/executionIntent.ts#continuationRequestHash",
       "removeAfterWave": null,
       "status": "current-module",
@@ -125956,10 +125968,34 @@
       "currentLayer": "domain",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts#builtinWorkflowSyncPreview",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "builtinWorkflowSyncPreview",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts",
       "id": "owner:packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts#notSyncableWorkflowPreview",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "notSyncableWorkflowPreview",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts#workflowSyncGateReason",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "workflowSyncGateReason",
       "targetContext": "task-execution",
       "targetLayer": "domain"
     },
@@ -136210,6 +136246,19 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#builtinWorkflowSyncPreview",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:70f1adec2c429e817a7b0cde0c77ef0b04e079006df43bbc489a709e2b55d035",
+      "status": "current-module",
+      "symbol": "builtinWorkflowSyncPreview",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#canonicalTaskExecutionJson",
       "removeAfterWave": null,
       "signatureDigest": "sha256:66a3b6d24d5bcd64ef0e9d349306460248dd1ef740648600a554ca4ec291f2e6",
@@ -136926,6 +136975,19 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "workerIdentityBrand",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#workflowSyncGateReason",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:d260bf2cc17fbd8c8f787a366858ad5b5cd9f4d036e427993d4f497e200c0ed2",
+      "status": "current-module",
+      "symbol": "workflowSyncGateReason",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -299869,5 +299931,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b11a395708707f5005a75acd844cf2b1c9429b9038c505114102b8fb49e3f4c4"
+  "sourceDigest": "sha256:f3e9cdb565bc5e7264f84d4f96718da0e5fdd65b274f773ba5fe6568bbc93226"
 }

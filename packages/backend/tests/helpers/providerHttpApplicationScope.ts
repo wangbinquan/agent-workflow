@@ -51,8 +51,16 @@ export interface OpenedProviderHttpApplication extends ProviderHttpApplication {
 
 export interface ProviderHttpApplicationScope {
   readonly harness: ProviderHarness
-  /** 装配一个真应用；同一个用例里重复调用会先关掉上一个。 */
-  open(): Promise<OpenedProviderHttpApplication>
+  /**
+   * 装配一个真应用；同一个用例里重复调用会先关掉上一个。
+   *
+   * `overrides.config` 在装配前并进配置文件——用例需要非默认的守护进程配置
+   * （`plantumlEndpoint` 这类）时走这里，不要另建 app home 自己写 config：应用读的是
+   * 本作用域现建的那个路径，自写的那份会被整份绕开。
+   */
+  open(overrides?: {
+    readonly config?: Readonly<Record<string, unknown>>
+  }): Promise<OpenedProviderHttpApplication>
 }
 
 /**
@@ -93,7 +101,7 @@ export function describeEachProviderHttpApplication(
 
       register({
         harness,
-        async open() {
+        async open(overrides) {
           await closeCurrent()
           const { mkdtempSync } = await import('node:fs')
           const { tmpdir } = await import('node:os')
@@ -106,6 +114,7 @@ export function describeEachProviderHttpApplication(
           const { tempPrefix: _tempPrefix, ...applicationInput } = options
           const opened = await createProviderHttpApplication(harness, {
             ...applicationInput,
+            ...(overrides?.config === undefined ? {} : { config: overrides.config }),
             configPath: join(appHome, 'config.json'),
             appHome,
           })

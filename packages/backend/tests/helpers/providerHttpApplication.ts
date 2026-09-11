@@ -24,7 +24,18 @@ import type { ProviderDatabaseHarness } from './eachProvider'
 export type ProviderHttpApplicationInput = Pick<
   AppDeps,
   'token' | 'configPath' | 'dbVersion' | 'opencodeVersion' | 'workflowExactOperationHook'
-> & { readonly appHome: string }
+> & {
+  readonly appHome: string
+  /**
+   * 装配前并进配置文件的字段（`plantumlEndpoint` 这类守护进程配置）。
+   *
+   * 为什么需要这个口子：应用读的是 `input.configPath`，而这个路径由作用域在 `open()` 里
+   * 现建——用例无从提前往那个文件里写东西。合一前每份用例自建 app home、自写 config，
+   * 迁到共用作用域后那份自写的 config 就被绕开了，测出来的永远是默认值（`plantuml-proxy`
+   * 迁移时实测：配了端点的用例照样回 `{ unconfigured: true }`）。
+   */
+  readonly config?: Readonly<Record<string, unknown>>
+}
 
 export interface ProviderHttpApplication {
   readonly app: Hono
@@ -149,7 +160,7 @@ export async function createProviderHttpApplication(
   }
 
   try {
-    const config = loadConfig(input.configPath)
+    const config = { ...loadConfig(input.configPath), ...input.config }
     const unexpectedAdmission = async (): Promise<never> => {
       throw new Error('provider HTTP fixture does not implement daemon migration admission')
     }

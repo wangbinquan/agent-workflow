@@ -7,7 +7,13 @@
 //
 // 落在 `domain/` 而不是 `infrastructure/`：它的入参与返回值全部来自 `@agent-workflow/shared`
 // 的执行合同，没有任何持久化面。
-import { emptyWorkflowSyncDiff, type Task, type WorkflowSyncPreview } from '@agent-workflow/shared'
+import {
+  allowedFromForTaskEvent,
+  emptyWorkflowSyncDiff,
+  type Task,
+  type TaskStatus,
+  type WorkflowSyncPreview,
+} from '@agent-workflow/shared'
 
 /** 一个不可同步的任务的完整预览：理由是唯一变量，其余字段是这个形态的常量。 */
 export function notSyncableWorkflowPreview(
@@ -26,4 +32,34 @@ export function notSyncableWorkflowPreview(
     invalidIssues: [],
     diff: emptyWorkflowSyncDiff(),
   }
+}
+
+/**
+ * RFC-104 —— 内置工作流永远不能被手动 sync（`POST sync-workflow` 是 403 `builtin-readonly`），
+ * 所以预览必须明说 `builtin-workflow`，前端据此**隐藏**同步横幅（Codex impl-gate F4）。
+ *
+ * 与 `notSyncableWorkflowPreview` 的差别只有 `latestVersion`：这里是知道工作流行的，最新版本号
+ * 照常给出，前端仍能显示「上游已到 vN」。合一前只有 SQLite 一侧有这个分支——PostgreSQL 侧压根
+ * 不看 `workflows.builtin`，内置工作流的任务在 PG 上拿到的是 `workflow-deleted`（因为可启动性
+ * 授权把内置工作流挡了下来，异常被兜成「工作流没了」），横幅内容直接是错的。
+ */
+export function builtinWorkflowSyncPreview(task: Task, latestVersion: number): WorkflowSyncPreview {
+  return { ...notSyncableWorkflowPreview(task, 'builtin-workflow'), latestVersion }
+}
+
+/**
+ * 可同步判据：**任务状态**在 `sync-workflow` 的允许集内，且工作树还在。两个 provider 共用。
+ *
+ * 合一前只有 SQLite 的预览走这条判据；PostgreSQL 的预览改看**进程内**活跃表
+ * (`activity.isActive`)，于是一个持久化状态是 `running` 的任务（守护进程刚重启、或任务由别的
+ * 进程在跑）在 PG 上预览成 `syncable: true`，而同一个请求真点下去，`syncWorkflow` 用的又是
+ * 状态判据，稳定 409 `task-not-syncable`：横幅说能同步、按钮必然失败。
+ */
+export function workflowSyncGateReason(
+  input: Readonly<{ status: TaskStatus; worktreeMissing: boolean }>,
+): Extract<WorkflowSyncPreview['reason'], 'ok' | 'worktree-missing' | 'task-active'> {
+  if (input.worktreeMissing) return 'worktree-missing'
+  return allowedFromForTaskEvent({ kind: 'sync-workflow' }).includes(input.status)
+    ? 'ok'
+    : 'task-active'
 }

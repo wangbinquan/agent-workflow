@@ -7,21 +7,22 @@
 //     writes, owner transfer keeps the previous owner as collaborator
 //   - task users hold operational rights (D13): a collaborator may cancel
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { taskCollaborators, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   alice: { id: string; token: string }
   carol: { id: string; token: string }
@@ -29,15 +30,9 @@ interface Harness {
   admin: { id: string; token: string }
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   async function mk(username: string, role: 'admin' | 'user') {
     const u = await createUser(db, {
       username,
@@ -101,149 +96,169 @@ async function seedTask(h: Harness, ownerId: string, collaboratorIds: string[]):
   return taskId
 }
 
-describe('RFC-099 — POST /api/tasks gates', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-099 — POST /api/tasks gates',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-task-members-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
 
-  test('payload still carrying assignments → 422 assignments-removed', async () => {
-    const res = await req(h.app, h.alice.token, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 't',
-        workflowId: 'whatever',
-        repoPath: '/tmp/x',
-        inputs: {},
-        assignments: [{ nodeId: 'n1', kind: 'reviewer', userId: 'u1' }],
-      }),
-    })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('assignments-removed')
-  })
-
-  test('private workflow: launch 404s identically to a missing workflow (D3)', async () => {
-    const created = await req(h.app, h.alice.token, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'private-flow',
-        description: '',
-        definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
-      }),
-    })
-    const wf = (await created.json()) as { id: string }
-    await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        visibility: 'private',
-        expectedResourceId: wf.id,
-        expectedAclRevision: 0,
-      }),
-    })
-    const launchBody = (workflowId: string) =>
-      JSON.stringify({
-        name: 't',
-        workflowId,
-        repoUrl: 'https://git.invalid/placeholder.git',
-        ref: 'main',
-        inputs: {},
+    test('payload still carrying assignments → 422 assignments-removed', async () => {
+      const res = await req(h.app, h.alice.token, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 't',
+          workflowId: 'whatever',
+          repoPath: '/tmp/x',
+          inputs: {},
+          assignments: [{ nodeId: 'n1', kind: 'reviewer', userId: 'u1' }],
+        }),
       })
-    const invisible = await req(h.app, h.dave.token, '/api/tasks', {
-      method: 'POST',
-      body: launchBody(wf.id),
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('assignments-removed')
     })
-    const missing = await req(h.app, h.dave.token, '/api/tasks', {
-      method: 'POST',
-      body: launchBody('01HNOPE000000000000000000000'),
-    })
-    expect(invisible.status).toBe(404)
-    expect(missing.status).toBe(404)
-    expect(((await invisible.json()) as { code: string }).code).toBe(
-      ((await missing.json()) as { code: string }).code,
-    )
-  })
-})
 
-describe('RFC-099 — task members endpoints + member operational rights', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('members GET visible to members; stranger 403; PUT owner/admin only', async () => {
-    const taskId = await seedTask(h, h.alice.id, [h.carol.id])
-    const asCarol = (await (
-      await req(h.app, h.carol.token, `/api/tasks/${taskId}/members`)
-    ).json()) as {
-      ownerUserId: string
-      // RFC-324：裸 `users` 换成带档位的 `members`（observer 档随之进来）。
-      members: Array<{ user: { id: string }; role: 'collaborator' | 'observer' }>
-      canManage: boolean
-    }
-    expect(asCarol.ownerUserId).toBe(h.alice.id)
-    expect(asCarol.members.map((m) => m.user.id)).toEqual([h.carol.id])
-    expect(
-      asCarol.members.map((m) => m.role),
-      '存量成员一律迁 collaborator',
-    ).toEqual(['collaborator'])
-    expect(asCarol.canManage).toBe(false)
-    // stranger blocked by the task visibility middleware —— RFC-285 B1：
-    // 与不存在同形 404（旧 403 退役）
-    expect((await req(h.app, h.dave.token, `/api/tasks/${taskId}/members`)).status).toBe(404)
-    // collaborator cannot PUT —— B1 边界反例（AC-1）：可见成员打管理写门仍 403，
-    // 不随可见性判定改 404
-    expect(
-      (
-        await req(h.app, h.carol.token, `/api/tasks/${taskId}/members`, {
-          method: 'PUT',
-          body: JSON.stringify({ members: [{ userId: h.dave.id, role: 'collaborator' }] }),
+    test('private workflow: launch 404s identically to a missing workflow (D3)', async () => {
+      const created = await req(h.app, h.alice.token, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'private-flow',
+          description: '',
+          definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+        }),
+      })
+      const wf = (await created.json()) as { id: string }
+      await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: wf.id,
+          expectedAclRevision: 0,
+        }),
+      })
+      const launchBody = (workflowId: string) =>
+        JSON.stringify({
+          name: 't',
+          workflowId,
+          repoUrl: 'https://git.invalid/placeholder.git',
+          ref: 'main',
+          inputs: {},
         })
-      ).status,
-    ).toBe(403)
-    // owner adds dave
-    const put = await req(h.app, h.alice.token, `/api/tasks/${taskId}/members`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        members: [
-          { userId: h.carol.id, role: 'collaborator' },
-          { userId: h.dave.id, role: 'collaborator' },
-        ],
-      }),
+      const invisible = await req(h.app, h.dave.token, '/api/tasks', {
+        method: 'POST',
+        body: launchBody(wf.id),
+      })
+      const missing = await req(h.app, h.dave.token, '/api/tasks', {
+        method: 'POST',
+        body: launchBody('01HNOPE000000000000000000000'),
+      })
+      expect(invisible.status).toBe(404)
+      expect(missing.status).toBe(404)
+      expect(((await invisible.json()) as { code: string }).code).toBe(
+        ((await missing.json()) as { code: string }).code,
+      )
     })
-    expect(put.status).toBe(200)
-    const after = (await put.json()) as { members: Array<{ user: { id: string } }> }
-    expect(after.members.map((m) => m.user.id).sort()).toEqual([h.carol.id, h.dave.id].sort())
-    // dave can now see the task
-    expect((await req(h.app, h.dave.token, `/api/tasks/${taskId}`)).status).toBe(200)
-  })
+  },
+)
 
-  test('owner transfer via members PUT keeps previous owner as collaborator', async () => {
-    const taskId = await seedTask(h, h.alice.id, [])
-    const put = await req(h.app, h.admin.token, `/api/tasks/${taskId}/members`, {
-      method: 'PUT',
-      body: JSON.stringify({ ownerUserId: h.carol.id }),
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-099 — task members endpoints + member operational rights',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-task-members-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
     })
-    expect(put.status).toBe(200)
-    const body = (await put.json()) as {
-      ownerUserId: string
-      members: Array<{ user: { id: string }; role: string }>
-    }
-    expect(body.ownerUserId).toBe(h.carol.id)
-    expect(body.members.map((m) => m.user.id)).toContain(h.alice.id)
-    expect(
-      body.members.find((m) => m.user.id === h.alice.id)?.role,
-      '转移之后前任落协作者档：他本来就是全权操作者，降成观察者等于顺手削权',
-    ).toBe('collaborator')
-  })
 
-  test('collaborator may cancel the task (D13 user-equal operational rights)', async () => {
-    const taskId = await seedTask(h, h.alice.id, [h.carol.id])
-    const res = await req(h.app, h.carol.token, `/api/tasks/${taskId}/cancel`, { method: 'POST' })
-    expect(res.status).toBe(200)
-    const stranger = await req(h.app, h.dave.token, `/api/tasks/${taskId}/cancel`, {
-      method: 'POST',
+    test('members GET visible to members; stranger 403; PUT owner/admin only', async () => {
+      const taskId = await seedTask(h, h.alice.id, [h.carol.id])
+      const asCarol = (await (
+        await req(h.app, h.carol.token, `/api/tasks/${taskId}/members`)
+      ).json()) as {
+        ownerUserId: string
+        // RFC-324：裸 `users` 换成带档位的 `members`（observer 档随之进来）。
+        members: Array<{ user: { id: string }; role: 'collaborator' | 'observer' }>
+        canManage: boolean
+      }
+      expect(asCarol.ownerUserId).toBe(h.alice.id)
+      expect(asCarol.members.map((m) => m.user.id)).toEqual([h.carol.id])
+      expect(
+        asCarol.members.map((m) => m.role),
+        '存量成员一律迁 collaborator',
+      ).toEqual(['collaborator'])
+      expect(asCarol.canManage).toBe(false)
+      // stranger blocked by the task visibility middleware —— RFC-285 B1：
+      // 与不存在同形 404（旧 403 退役）
+      expect((await req(h.app, h.dave.token, `/api/tasks/${taskId}/members`)).status).toBe(404)
+      // collaborator cannot PUT —— B1 边界反例（AC-1）：可见成员打管理写门仍 403，
+      // 不随可见性判定改 404
+      expect(
+        (
+          await req(h.app, h.carol.token, `/api/tasks/${taskId}/members`, {
+            method: 'PUT',
+            body: JSON.stringify({ members: [{ userId: h.dave.id, role: 'collaborator' }] }),
+          })
+        ).status,
+      ).toBe(403)
+      // owner adds dave
+      const put = await req(h.app, h.alice.token, `/api/tasks/${taskId}/members`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          members: [
+            { userId: h.carol.id, role: 'collaborator' },
+            { userId: h.dave.id, role: 'collaborator' },
+          ],
+        }),
+      })
+      expect(put.status).toBe(200)
+      const after = (await put.json()) as { members: Array<{ user: { id: string } }> }
+      expect(after.members.map((m) => m.user.id).sort()).toEqual([h.carol.id, h.dave.id].sort())
+      // dave can now see the task
+      expect((await req(h.app, h.dave.token, `/api/tasks/${taskId}`)).status).toBe(200)
     })
-    // RFC-285 B1：外人打 cancel 先撞可见性门 → 404 同形
-    expect(stranger.status).toBe(404)
-  })
-})
+
+    test('owner transfer via members PUT keeps previous owner as collaborator', async () => {
+      const taskId = await seedTask(h, h.alice.id, [])
+      const put = await req(h.app, h.admin.token, `/api/tasks/${taskId}/members`, {
+        method: 'PUT',
+        body: JSON.stringify({ ownerUserId: h.carol.id }),
+      })
+      expect(put.status).toBe(200)
+      const body = (await put.json()) as {
+        ownerUserId: string
+        members: Array<{ user: { id: string }; role: string }>
+      }
+      expect(body.ownerUserId).toBe(h.carol.id)
+      expect(body.members.map((m) => m.user.id)).toContain(h.alice.id)
+      expect(
+        body.members.find((m) => m.user.id === h.alice.id)?.role,
+        '转移之后前任落协作者档：他本来就是全权操作者，降成观察者等于顺手削权',
+      ).toBe('collaborator')
+    })
+
+    test('collaborator may cancel the task (D13 user-equal operational rights)', async () => {
+      const taskId = await seedTask(h, h.alice.id, [h.carol.id])
+      const res = await req(h.app, h.carol.token, `/api/tasks/${taskId}/cancel`, { method: 'POST' })
+      expect(res.status).toBe(200)
+      const stranger = await req(h.app, h.dave.token, `/api/tasks/${taskId}/cancel`, {
+        method: 'POST',
+      })
+      // RFC-285 B1：外人打 cancel 先撞可见性门 → 404 同形
+      expect(stranger.status).toBe(404)
+    })
+  },
+)

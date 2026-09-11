@@ -25,6 +25,7 @@ import { TaskExecutionError } from '../application/taskExecutionError'
 import { sha256Hex } from '../domain/digest'
 import {
   canonicalJson,
+  canonicalTaskLineageScope,
   continuationRequestHash,
   decodeLineageSlotPath,
   encodeLineageSlotPath,
@@ -161,13 +162,12 @@ export async function submitCanonicalTaskExecutionIntent(
 
   // 迁移期的 json_object/json_array 保留插入顺序，而 encodeLineageSlotPath 会规范化键序；
   // 解码后再比较，迁移过来的任务与应用写入的任务才有相同的 continuation 语义。
-  const storedSlotPathJson =
-    task.lineageSlotPathJson === null
-      ? null
-      : encodeLineageSlotPath(decodeLineageSlotPath(task.lineageSlotPathJson))
+  // lineage 两列为 NULL 时的根作用域由 `canonicalTaskLineageScope` 派生——与
+  // `submitTaskContinuation` 派生请求时**同一个函数**，否则两侧对 NULL 的解释会分叉。
+  const canonical = canonicalTaskLineageScope(request.taskId, task)
   if (
-    request.scope.executionLineageId !== task.executionLineageId ||
-    encodeLineageSlotPath(request.scope.slotPath) !== storedSlotPathJson
+    request.scope.executionLineageId !== canonical.executionLineageId ||
+    encodeLineageSlotPath(request.scope.slotPath) !== encodeLineageSlotPath(canonical.slotPath)
   ) {
     throw new TaskExecutionError(
       'task-continuation-stale',
@@ -235,17 +235,7 @@ export async function submitTaskContinuation(
     .orderBy(desc(taskExecutionIntents.createdAt), desc(taskExecutionIntents.id))
     .limit(1)
     .get()
-  const executionLineageId = task.executionLineageId ?? input.taskId
-  const slotPath =
-    task.lineageSlotPathJson === null
-      ? [
-          {
-            stableNodeKey: 'task-root',
-            frozenOccurrenceKey: executionLineageId,
-            workflowRevision: null,
-          },
-        ]
-      : decodeLineageSlotPath(task.lineageSlotPathJson)
+  const { executionLineageId, slotPath } = canonicalTaskLineageScope(input.taskId, task)
   const continuationSlotKey =
     latest?.continuationSlotKey ??
     sha256Hex(`${executionLineageId}\u0000${task.lineageSlotPathJson ?? input.taskId}`)

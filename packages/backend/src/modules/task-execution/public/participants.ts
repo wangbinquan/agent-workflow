@@ -41,6 +41,10 @@ import {
   requestHash as taskExecutionRequestHashInternal,
 } from '../domain/executionEffect'
 import {
+  builtinWorkflowSyncPreview as builtinWorkflowSyncPreviewInternal,
+  workflowSyncGateReason as workflowSyncGateReasonInternal,
+} from '../domain/workflowSyncPreview'
+import {
   canonicalJson as canonicalTaskExecutionJsonInternal,
   decodeLineageSlotPath as decodeLineageSlotPathInternal,
   encodeLineageSlotPath as encodeLineageSlotPathInternal,
@@ -248,6 +252,9 @@ export const taskExecutionRequestHash = taskExecutionRequestHashInternal
 export const canonicalTaskExecutionJson = canonicalTaskExecutionJsonInternal
 export const decodeLineageSlotPath = decodeLineageSlotPathInternal
 export const encodeLineageSlotPath = encodeLineageSlotPathInternal
+/** RFC-359 —— 工作流同步预览的两条判据（纯投影），legacy `services/task.ts` 经此取用。 */
+export const builtinWorkflowSyncPreview = builtinWorkflowSyncPreviewInternal
+export const workflowSyncGateReason = workflowSyncGateReasonInternal
 export const appendTaskCreatedCommittedEvent = appendTaskCreatedCommittedEventInternal
 export const setNodeRunStatusInTransaction = setNodeRunStatusInTransactionInternal
 export const revokeExactOwnerInTransaction = revokeExactOwnerInTransactionInternal

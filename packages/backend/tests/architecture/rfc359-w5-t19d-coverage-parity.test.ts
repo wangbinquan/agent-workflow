@@ -102,7 +102,10 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 8/2, postgresql 10/2',
+  // RFC-359 W58：PG 侧多一处引用——`workflowSyncPreview` 的内置工作流分支补齐了
+  // （此前它只在 SQLite 侧有，PG 上内置工作流的任务拿到的是 `workflow-deleted`）。
+  // 两侧的 ref 差因此从 2 拉到 3，越过阈值，进下面的观察名单。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 8/2, postgresql 11/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -137,6 +140,10 @@ export const INVERTED_PAIRS: readonly string[] = [
   'modules/intent/infrastructure/IntentApplyOperations: 21 vs 7',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 10 vs 6',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
+  // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
+  // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
+  // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。
+  'modules/task-execution/infrastructure/TaskRouteOperations: 8 vs 11',
   'platform/persistence/LogicalSource: 12 vs 7',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
   'platform/persistence/Migrator: 3 vs 12',

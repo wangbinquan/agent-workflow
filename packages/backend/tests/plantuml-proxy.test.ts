@@ -7,16 +7,17 @@
 // admin-only), never leaks the auth header, and can't be steered off the
 // configured host (no SSRF).
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, afterEach, expect, test } from 'bun:test'
 import { inflateRawSync } from 'node:zlib'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 import {
   encodeForGet,
@@ -27,7 +28,6 @@ import {
 } from '../src/services/plantuml'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ---- encoders ----
 
@@ -51,6 +51,7 @@ function plantumlAlphaDecode(s: string): Buffer {
   return Buffer.from(out)
 }
 
+// RFC-359 AC-6：两个引擎各跑一遍。
 describe('plantuml encoders', () => {
   const SRC = '@startuml\nAlice -> Bob: hi\n@enduml\n'
 
@@ -85,6 +86,7 @@ function res(status: number, body: string): Response {
   return new Response(body, { status })
 }
 
+// RFC-359 AC-6：两个引擎各跑一遍。
 describe('renderPlantuml', () => {
   test('step 1 success returns svg, no further calls', async () => {
     const calls: string[] = []
@@ -165,33 +167,25 @@ describe('renderPlantuml', () => {
 // ---- route ----
 
 interface AppCtx {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   configPath: string
   cleanup: () => void
 }
 
-function buildApp(plantuml?: { endpoint: string; authHeader?: string }): AppCtx {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-plantuml-'))
-  const configPath = join(tmp, 'config.json')
-  writeFileSync(
-    configPath,
-    JSON.stringify({
-      $schema_version: 1,
-      ...(plantuml !== undefined
-        ? { plantumlEndpoint: plantuml.endpoint, plantumlAuthHeader: plantuml.authHeader }
-        : {}),
-    }),
-  )
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath,
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
+async function buildApp(
+  scope: ProviderHttpApplicationScope,
+  plantuml?: { endpoint: string; authHeader?: string },
+): Promise<AppCtx> {
+  const db = scope.harness.db
+  // 配置并进作用域现建的那份 config——应用读的就是它；自建一份写 plantuml 端点会被整份绕开。
+  const { app, appHome } = await scope.open({
+    config:
+      plantuml === undefined
+        ? {}
+        : { plantumlEndpoint: plantuml.endpoint, plantumlAuthHeader: plantuml.authHeader },
   })
-  return { db, app, configPath, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, app, configPath: join(appHome, 'config.json'), cleanup: () => {} }
 }
 
 async function post(app: Hono, token: string, source: unknown): Promise<Response> {
@@ -204,65 +198,78 @@ async function post(app: Hono, token: string, source: unknown): Promise<Response
 
 const realFetch = globalThis.fetch
 
-describe('POST /api/plantuml/render', () => {
-  let ctx: AppCtx | null = null
-  afterEach(() => {
-    globalThis.fetch = realFetch
-    ctx?.cleanup()
-    ctx = null
-  })
-
-  test('unconfigured endpoint → { unconfigured: true }', async () => {
-    ctx = buildApp()
-    const r = await post(ctx.app, DAEMON_TOKEN, '@startuml\nA->B\n@enduml')
-    expect(r.status).toBe(200)
-    expect(await r.json()).toEqual({ unconfigured: true })
-  })
-
-  test('missing source → 400; oversized → 413 (before JSON parse)', async () => {
-    ctx = buildApp({ endpoint: 'https://p.test' })
-    expect((await post(ctx.app, DAEMON_TOKEN, '')).status).toBe(400)
-    // Large body → rejected by the Content-Length guard ahead of json parsing.
-    expect((await post(ctx.app, DAEMON_TOKEN, 'x'.repeat(100 * 1024 + 1))).status).toBe(413)
-  })
-
-  test('all renderer attempts fail → 200 { error } (not a thrown non-2xx)', async () => {
-    ctx = buildApp({ endpoint: 'https://kroki.test' })
-    globalThis.fetch = (async () => new Response('down', { status: 503 })) as never
-    const r = await post(ctx.app, DAEMON_TOKEN, '@startuml\nA->B\n@enduml')
-    // 200 so the browser's api.post resolves and can show the detail.
-    expect(r.status).toBe(200)
-    const json = (await r.json()) as { error?: string }
-    expect(typeof json.error).toBe('string')
-  })
-
-  test('configured + render → { svg, host }, auth header never in response', async () => {
-    ctx = buildApp({ endpoint: 'https://kroki.test/', authHeader: 'Bearer TOPSECRET' })
-    globalThis.fetch = (async () => new Response('<svg>diagram</svg>', { status: 200 })) as never
-    const r = await post(ctx.app, DAEMON_TOKEN, '@startuml\nA->B\n@enduml')
-    expect(r.status).toBe(200)
-    const text = await r.text()
-    expect(text).toContain('<svg>diagram</svg>')
-    expect(text).toContain('"host":"kroki.test"')
-    expect(text).not.toContain('TOPSECRET')
-  })
-
-  test('any logged-in user (not just admin) can render — config stays admin-only', async () => {
-    ctx = buildApp({ endpoint: 'https://kroki.test' })
-    globalThis.fetch = (async () => new Response('<svg>ok</svg>', { status: 200 })) as never
-    const u = await createUser(ctx.db, {
-      username: 'plantuml-user',
-      displayName: 'u',
-      role: 'user',
-      password: 'longEnoughPassword',
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'POST /api/plantuml/render',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-plantuml-',
+  },
+  (scope) => {
+    let ctx: AppCtx | null = null
+    afterEach(() => {
+      globalThis.fetch = realFetch
+      ctx?.cleanup()
+      ctx = null
     })
-    const { token } = await createSession({ db: ctx.db, userId: u.id })
-    // PlantUML proxy: 200 for a regular user.
-    expect((await post(ctx.app, token, '@startuml\nA->B\n@enduml')).status).toBe(200)
-    // Contrast: /api/config is still admin-only for the same user.
-    const cfgRes = await ctx.app.request('/api/config', {
-      headers: { Authorization: `Bearer ${token}` },
+
+    test('unconfigured endpoint → { unconfigured: true }', async () => {
+      ctx = await buildApp(scope)
+      const r = await post(ctx.app, DAEMON_TOKEN, '@startuml\nA->B\n@enduml')
+      expect(r.status).toBe(200)
+      expect(await r.json()).toEqual({ unconfigured: true })
     })
-    expect(cfgRes.status).toBe(403)
-  })
-})
+
+    test('missing source → 400; oversized → 413 (before JSON parse)', async () => {
+      ctx = await buildApp(scope, { endpoint: 'https://p.test' })
+      expect((await post(ctx.app, DAEMON_TOKEN, '')).status).toBe(400)
+      // Large body → rejected by the Content-Length guard ahead of json parsing.
+      expect((await post(ctx.app, DAEMON_TOKEN, 'x'.repeat(100 * 1024 + 1))).status).toBe(413)
+    })
+
+    test('all renderer attempts fail → 200 { error } (not a thrown non-2xx)', async () => {
+      ctx = await buildApp(scope, { endpoint: 'https://kroki.test' })
+      globalThis.fetch = (async () => new Response('down', { status: 503 })) as never
+      const r = await post(ctx.app, DAEMON_TOKEN, '@startuml\nA->B\n@enduml')
+      // 200 so the browser's api.post resolves and can show the detail.
+      expect(r.status).toBe(200)
+      const json = (await r.json()) as { error?: string }
+      expect(typeof json.error).toBe('string')
+    })
+
+    test('configured + render → { svg, host }, auth header never in response', async () => {
+      ctx = await buildApp(scope, {
+        endpoint: 'https://kroki.test/',
+        authHeader: 'Bearer TOPSECRET',
+      })
+      globalThis.fetch = (async () => new Response('<svg>diagram</svg>', { status: 200 })) as never
+      const r = await post(ctx.app, DAEMON_TOKEN, '@startuml\nA->B\n@enduml')
+      expect(r.status).toBe(200)
+      const text = await r.text()
+      expect(text).toContain('<svg>diagram</svg>')
+      expect(text).toContain('"host":"kroki.test"')
+      expect(text).not.toContain('TOPSECRET')
+    })
+
+    test('any logged-in user (not just admin) can render — config stays admin-only', async () => {
+      ctx = await buildApp(scope, { endpoint: 'https://kroki.test' })
+      globalThis.fetch = (async () => new Response('<svg>ok</svg>', { status: 200 })) as never
+      const u = await createUser(ctx.db, {
+        username: 'plantuml-user',
+        displayName: 'u',
+        role: 'user',
+        password: 'longEnoughPassword',
+      })
+      const { token } = await createSession({ db: ctx.db, userId: u.id })
+      // PlantUML proxy: 200 for a regular user.
+      expect((await post(ctx.app, token, '@startuml\nA->B\n@enduml')).status).toBe(200)
+      // Contrast: /api/config is still admin-only for the same user.
+      const cfgRes = await ctx.app.request('/api/config', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(cfgRes.status).toBe(403)
+    })
+  },
+)

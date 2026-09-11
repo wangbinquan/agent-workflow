@@ -58,6 +58,16 @@ const OPERATION_ID = 'lcop_each_provider_harness'
 const POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS = 60_000
 // 为 30s 连接池关闭配置与一次 60s 语句窗口预留顺序清理预算。
 const POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS = 90_000
+/**
+ * 每个用例前的快照回滚预算。**必须显式给**：这个 `beforeEach` 做的是对一台真实
+ * PostgreSQL 的整库快照恢复，而 bun 的默认 hook 预算是 5s——`beforeAll` / `afterAll`
+ * 早就各自显式给了 60s / 90s，只有它一直吃默认值。CI 上 runner 一忙（同 job 里还并行着
+ * 别的分片），一次回滚偶尔越过 5s，于是随机某个用例以
+ * 「a beforeEach/afterEach hook timed out for this test」收场——与被测代码无关，
+ * 2026-09-11 的 real-PostgreSQL 泳道就是这么红的（`rfc359-w14-legacy-mission-execution`）。
+ * 判据不变（超时仍然会失败），变的只是预算与它实际要做的事相称。
+ */
+const POSTGRESQL_DATABASE_RESET_TIMEOUT_MS = 30_000
 
 /** 纯函数：从环境解析要跑的引擎集合。缺省两个都跑；只接受 sqlite / postgresql。 */
 export function resolveTestProviders(
@@ -1253,46 +1263,48 @@ function registerPostgresql(
   if (databaseCount === 1) beforeAll(setupDatabases)
   else beforeAll(setupDatabases, databaseCount * POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS)
 
-  beforeEach(() =>
-    runProviderHarnessLifecycle(lifecycle, 'beforeEach.reset', async (phase) => {
-      if (databases.length !== databaseCount) {
-        throw new Error('PostgreSQL harness 未完成装配（beforeAll 失败）')
-      }
-      restoreProvider = selectDatabaseSchemaProvider('postgresql')
-      try {
-        for (const [index, database] of databases.entries()) {
-          const { client, raw, snapshot, sinks } = database
-          await runProviderHarnessLifecycleStep(phase, 'fixture.reset', () =>
-            resetToSnapshot(raw, snapshot, options),
-          )
-          if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
-          const state = states[index]!
-          const query = raw
-          state.db = client
-          state.applicationBinding = database.applicationBinding
-          state.session = databaseSessionFor(client)
-          state.record = () => {
-            const statements: RecordedStatement[] = []
-            sinks.add(statements)
-            return {
-              statements,
-              selects: () => statements.filter((statement) => /^\s*select/i.test(statement.sql)),
-              stop: () => sinks.delete(statements),
+  beforeEach(
+    () =>
+      runProviderHarnessLifecycle(lifecycle, 'beforeEach.reset', async (phase) => {
+        if (databases.length !== databaseCount) {
+          throw new Error('PostgreSQL harness 未完成装配（beforeAll 失败）')
+        }
+        restoreProvider = selectDatabaseSchemaProvider('postgresql')
+        try {
+          for (const [index, database] of databases.entries()) {
+            const { client, raw, snapshot, sinks } = database
+            await runProviderHarnessLifecycleStep(phase, 'fixture.reset', () =>
+              resetToSnapshot(raw, snapshot, options),
+            )
+            if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
+            const state = states[index]!
+            const query = raw
+            state.db = client
+            state.applicationBinding = database.applicationBinding
+            state.session = databaseSessionFor(client)
+            state.record = () => {
+              const statements: RecordedStatement[] = []
+              sinks.add(statements)
+              return {
+                statements,
+                selects: () => statements.filter((statement) => /^\s*select/i.test(statement.sql)),
+                stop: () => sinks.delete(statements),
+              }
+            }
+            state.explain = async (statement) => await postgresqlExplain(query, statement)
+            state.fixtureDdl = async (statement) => {
+              await query(statement)
             }
           }
-          state.explain = async (statement) => await postgresqlExplain(query, statement)
-          state.fixtureDdl = async (statement) => {
-            await query(statement)
-          }
+        } catch (error) {
+          restoreProvider?.()
+          restoreProvider = undefined
+          databases.forEach(({ sinks }) => sinks.clear())
+          states.forEach(clearState)
+          throw error
         }
-      } catch (error) {
-        restoreProvider?.()
-        restoreProvider = undefined
-        databases.forEach(({ sinks }) => sinks.clear())
-        states.forEach(clearState)
-        throw error
-      }
-    }),
+      }),
+    databaseCount * POSTGRESQL_DATABASE_RESET_TIMEOUT_MS,
   )
 
   afterEach(() => {

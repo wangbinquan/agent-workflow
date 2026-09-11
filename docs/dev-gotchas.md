@@ -6200,3 +6200,33 @@ grep -rln "guardTestFiles\|'tests'\|/tests\b" tests/*.test.ts tests/architecture
 **三条挑法互不覆盖**，加一个既扫源码、又带 skip、名字里还有 `lock` 的测试文件会同时撞上三批。
 本轮就是这么连推三次红的（macOS provider 门 → 求值型 harness 守卫 → skip 政策 + 计数账本）。
 省事的做法：新增测试文件后，把三条 grep 的结果并起来跑一遍，比等 CI 逐条告诉你便宜得多。
+
+## 双引擎用例：bun:sqlite 的同步终结符是「本机绿、CI 红」的常客
+
+`.run()` / `.get()` / `.all()` 是 bun:sqlite 的**同步**终结符。同一条 drizzle 语句在
+provider 中立面（`ProviderNeutralDatabase`）上返回的是 promise，于是
+
+```ts
+db.insert(memoryDistillJobs).values({ … }).run()   // ← 没人 await
+```
+
+在 SQLite 上同步落库、什么都看不出来，在 PostgreSQL 上是一次**悬空的写**：行还没落，紧接着那条
+HTTP 请求先到，于是 409 / 外键 23503。它**不稳定复现**——本机赢了这个竞态就是绿的，CI 输了才红
+（2026-09-11 `93b5c6409` 就是这么把 main 推红的：本地 135 pass 全绿）。
+
+- 写：`await db.insert(x).values({ … })`
+- 读：`const [row] = await db.select().from(x).where(…)`（`.get()` 在 PG 上取不到值）
+- seed 辅助函数随之变 `async`，所有调用点补 `await`
+
+守卫：`tests/test-suite-policy.test.ts` 的「provider HTTP tests carry no bun:sqlite-only sync
+terminals」对走共用 HTTP 作用域的用例零容忍。更早那批直接用 `describeEachProvider` 的文件仍有
+存量（归 `rfc359-w5-t19f` 账本），迁移这些文件时**先 grep 这三个终结符**再动手。
+
+## 测试 harness 的 hook 也要有与它实际工作量相称的预算
+
+bun 的 hook 默认预算是 5s。`eachProvider` 的 PostgreSQL `beforeEach` 做的是对一台真实 PG 的
+整库快照恢复——它的 `beforeAll` / `afterAll` 早就各自显式给了 60s / 90s，只有 `beforeEach`
+一直吃默认值，CI 一忙就偶发「a beforeEach/afterEach hook timed out for this test」，
+而失败会记在**随机某个用例**头上，与被测代码毫无关系（2026-09-11 real-PostgreSQL 泳道）。
+新写带真实 I/O 的 hook 时显式给预算；看到「hook timed out」先去看那个 hook 做了多少事，
+不要从被测代码找原因。

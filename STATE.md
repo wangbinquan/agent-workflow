@@ -2,6 +2,59 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 本轮进展（2026-09-12，AC-6 迁移 21 份 + **它当天抓出的三条 PG 缺陷已修**）
+>
+> ### 这一轮最值得记的一件事
+>
+> **「把一个单引擎用例改成双引擎」本身就是一次审计。** `rfc109-sync-route.test.ts` 只是从写死
+> SQLite 改成 `describeEachProviderHttpApplication`，**一行产品代码都没动**，当天红出三条
+> PostgreSQL 专有缺陷——没有一条是靠读代码发现的。三条都已修 + 带回归防护，详见
+> `design/RFC-359-database-provider-unification/plan.md` §5u：
+>
+> 1. **lineage 列为 NULL 的任务，其 continuation 在 PG 上全部死锁**。派生请求的一侧对 NULL
+>    以任务自身为根派生作用域，准入那一侧却拿派生后的值去比**原始列**（`'task-x' !== null`
+>    永真），于是 sync-workflow / resume / retry 每一次都 409 `task-continuation-stale`，
+>    **没有任何推进办法**。修法：两侧共用 `canonicalTaskLineageScope`。
+> 2. **内置工作流在 PG 上被预览成「工作流已删除」**（PG 不看 `workflows.builtin`，可启动性
+>    授权把它挡下，异常被兜成 `workflow-deleted`）。
+> 3. **预览说能同步、按钮必然 409**（PG 预览看进程内活跃表，动作看持久化状态）。
+>
+> ②③ 的判据落进 `domain/workflowSyncPreview.ts` 两个 provider 共用；legacy `services/task.ts`
+> 经 `public/participants.ts` 取（直接 import 模块内部会被 `RFC-317 T22` 当场拦下）。
+>
+> ### AC-6 进度与工具
+>
+> `rfc359-w5-test-engine-hardcoding` 账本 **625 → 604**（本轮迁 21 份 HTTP 用例）。迁移动作已
+> 固定成三步，写在 `tests/helpers/providerHttpApplicationScope.ts` 抬头：
+> `createInMemoryDb` 那行 → `scope.harness.db`；`createApp({…})` → `(await scope.open()).app`；
+> 外层 `describe` → `describeEachProviderHttpApplication`。作用域新增两个口子：
+> `createProviderHttpApplication` 暴露它实际装进应用的 `SecretBox`（夹具要 seed 加密行时必须用
+> 同一个盒子），`open({ config })` 把守护进程配置并进作用域现建的那份 config（自建 app home
+> 写 config 会被整份绕开——`plantuml-proxy` 迁移时实测）。
+>
+> **迁移时唯一要动脑的**：bun:sqlite 专有的同步终结符 `.run()` / `.get()` / `.all()`。它们在中立面
+> 上返回 promise，不 await 就是一次悬空的写——SQLite 同步落库看不出问题，PG 上行还没落、下一步
+> 就读不到。**这类红不稳定复现**（本机赢了竞态就是绿的，CI 输了才红，`93b5c6409` 就是这么把 main
+> 推红的），所以已加源代码层守卫 `test-suite-policy`「provider HTTP tests carry no
+> bun:sqlite-only sync terminals」（零容忍，已变异验证）。更早那批直接用 `describeEachProvider`
+> 的文件仍有 157 处存量，归 `rfc359-w5-t19f` 账本管。
+>
+> ### 顺带修掉的一条 CI 不稳定
+>
+> `eachProvider` 的 PG `beforeEach` 快照回滚吃的是 bun 默认 5s hook 预算（`beforeAll`/`afterAll`
+> 早就各自显式给了 60s/90s），CI 一忙就偶发
+> 「a beforeEach/afterEach hook timed out」——2026-09-11 real-PostgreSQL 泳道就是这么红的。
+> 已给 `databaseCount × 30s`。
+>
+> ### 还没做的两件（都在 plan §5u 写明了前置）
+>
+> - **退役 `rfc328_tasks_lineage_after_insert`**：SQLite 有这条兜底触发器、PG 一个触发器都没有，
+>   于是非生产写入者在两个引擎上落出不同的行（上面第 1 条 bug 的温床）。应用层现在对 NULL 容忍，
+>   退役的前置条件已具备。
+> - **`syncWorkflow` 的墓碑工作树判据**：PG 比 SQLite 严一档（多一条 `workspacePrunedAt !== null`）。
+>   收敛要走 `shared` 的 `taskWorkspacePhase` 单一事实源，而那个函数要 `hasRepoPrepRow`，
+>   得先给两侧的读补上这一列。
+
 > ## 📌 RFC-359 本轮进展（2026-09-11 晚，同步孪生退役 9 刀 + 3 条守卫）
 >
 > 上一段交接说「同步事务面账本清零 ≠ `DbTxSync` 没人用，退役同步孪生才是 AC-6 的真正前置」。

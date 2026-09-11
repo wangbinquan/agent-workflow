@@ -5,16 +5,19 @@
 // click target) via useTaskSync. A PARTIAL seal keeps the round awaiting_human →
 // no event (canvas nav stays 'awaiting').
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import type { ClarifyQuestion, TaskWsMessage } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import { createClarifyRound } from '../src/services/clarify/service'
@@ -22,7 +25,6 @@ import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const SELF_DEF = {
   $schema_version: 3,
@@ -56,21 +58,15 @@ const makeAns = (qid: string) => ({
 })
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   alice: { id: string; token: string }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
   process.env.AGENT_WORKFLOW_HOME = mkdtempSync(join(tmpdir(), 'aw-rfc161-'))
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const u = await createUser(db, {
     username: 'alice',
     displayName: 'alice',
@@ -90,7 +86,7 @@ async function req(app: Hono, token: string, path: string, body: unknown): Promi
 }
 
 async function seedSelfRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   ownerUserId: string,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; nodeRunId: string }> {
@@ -147,49 +143,62 @@ function captureTaskEvents(taskId: string): { events: TaskWsMessage[]; stop: () 
   return { events, stop }
 }
 
-describe('RFC-161 defer full-seal node.status broadcast', () => {
-  let h: Harness
-  let uninstallProjection = (): void => {}
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-    uninstallProjection = await installCommittedEventProjectionHarness(h.db)
-  })
-  afterEach(() => {
-    uninstallProjection()
-    resetBroadcastersForTests()
-  })
-
-  test('defer=true FULL seal → node.status(done) for the intermediary run', async () => {
-    const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1')])
-    const cap = captureTaskEvents(taskId)
-    const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
-      answers: [makeAns('q1')],
-      defer: true,
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-161 defer full-seal node.status broadcast',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-defer-seal-',
+  },
+  (scope) => {
+    let h: Harness
+    let uninstallProjection = (): void => {}
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+      uninstallProjection = await installCommittedEventProjectionHarness(h.db)
     })
-    cap.stop()
-    expect(res.status).toBe(200)
-    const nodeStatus = cap.events.filter(
-      (e) => e.type === 'node.status' && e.nodeRunId === nodeRunId,
-    )
-    expect(nodeStatus.length).toBeGreaterThanOrEqual(1)
-    expect((nodeStatus[0] as { status?: string }).status).toBe('done')
-  })
-
-  test('defer=true PARTIAL seal → NO node.status (round stays awaiting_human)', async () => {
-    const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1'), makeQ('q2')])
-    const cap = captureTaskEvents(taskId)
-    // Seal only q1 (questionIds cap) → round is not fully sealed.
-    const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
-      answers: [makeAns('q1')],
-      questionIds: ['q1'],
-      defer: true,
+    afterEach(() => {
+      uninstallProjection()
+      resetBroadcastersForTests()
     })
-    cap.stop()
-    expect(res.status).toBe(200)
-    const nodeStatus = cap.events.filter(
-      (e) => e.type === 'node.status' && e.nodeRunId === nodeRunId,
-    )
-    expect(nodeStatus.length).toBe(0)
-  })
-})
+
+    test('defer=true FULL seal → node.status(done) for the intermediary run', async () => {
+      const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1')])
+      const cap = captureTaskEvents(taskId)
+      const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+        answers: [makeAns('q1')],
+        defer: true,
+      })
+      cap.stop()
+      expect(res.status).toBe(200)
+      const nodeStatus = cap.events.filter(
+        (e) => e.type === 'node.status' && e.nodeRunId === nodeRunId,
+      )
+      expect(nodeStatus.length).toBeGreaterThanOrEqual(1)
+      expect((nodeStatus[0] as { status?: string }).status).toBe('done')
+    })
+
+    test('defer=true PARTIAL seal → NO node.status (round stays awaiting_human)', async () => {
+      const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [
+        makeQ('q1'),
+        makeQ('q2'),
+      ])
+      const cap = captureTaskEvents(taskId)
+      // Seal only q1 (questionIds cap) → round is not fully sealed.
+      const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+        answers: [makeAns('q1')],
+        questionIds: ['q1'],
+        defer: true,
+      })
+      cap.stop()
+      expect(res.status).toBe(200)
+      const nodeStatus = cap.events.filter(
+        (e) => e.type === 'node.status' && e.nodeRunId === nodeRunId,
+      )
+      expect(nodeStatus.length).toBe(0)
+    })
+  },
+)

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b11a395708707f5005a75acd844cf2b1c9429b9038c505114102b8fb49e3f4c4`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f3e9cdb565bc5e7264f84d4f96718da0e5fdd65b274f773ba5fe6568bbc93226`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4725 |
+| `architectureExceptions` | 4727 |
 | `backgroundJobs` | 335 |
-| `crossContextImports` | 5259 |
+| `crossContextImports` | 5261 |
 | `facades` | 322 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24931 |
+| `moduleSymbolOwners` | 24936 |
 | `mutationEntrypoints` | 1729 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 979 |
+| `publicSurfaces` | 981 |
 | `transactionExternalEffects` | 270 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -201,7 +201,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3116 |
-| legacy-inbound | 1429 |
+| legacy-inbound | 1431 |
 | infrastructure-external | 275 |
 | offered-consumption | 160 |
 | off-dag-offered | 88 |
@@ -216,7 +216,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3116 |
-| legacy-inbound | 1429 |
+| legacy-inbound | 1431 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 81 |
 | no-circular | 6 |
@@ -228,7 +228,7 @@
 | removeAfterWave | 数量 |
 | --- | --- |
 | W9 | 2379 |
-| W4-E1 | 816 |
+| W4-E1 | 818 |
 | W4-C | 399 |
 | W4-E0 | 216 |
 | W4 | 193 |
@@ -253,7 +253,7 @@
 | context | 数量 |
 | --- | --- |
 | resource-catalog | 249 |
-| task-execution | 208 |
+| task-execution | 210 |
 | collaboration | 122 |
 | identity-access | 62 |
 | system-operations | 62 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 137 / 979）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 137 / 981）
 
 | context | 数量 |
 | --- | --- |

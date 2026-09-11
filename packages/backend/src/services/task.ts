@@ -48,7 +48,6 @@ import {
   WorkflowDefinitionSchema,
   allowedFromForTaskEvent,
   diffWorkflowForSync,
-  emptyWorkflowSyncDiff,
   isTerminalNodeRunStatus,
   migrateWorkflowDefinitionToLatest,
   planCanonicalWorkflowLayout,
@@ -206,7 +205,11 @@ import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { parsePortValidationFailuresJson } from './envelope'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
 // RFC-359 W10：任务铸行事件改走两个引擎共用的 `appendTaskCreatedCommittedEvent`（async）。
-import { appendTaskCreatedCommittedEvent } from '@/modules/task-execution/public/participants'
+import {
+  appendTaskCreatedCommittedEvent,
+  builtinWorkflowSyncPreview,
+  workflowSyncGateReason,
+} from '@/modules/task-execution/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
@@ -5157,20 +5160,8 @@ export async function computeWorkflowSyncPreview(
 ): Promise<WorkflowSyncPreview> {
   // RFC-104 built-in workflows are never manually executed (POST sync-workflow
   // would 403) — so the banner must not appear for them (Codex impl-gate F4).
-  if (workflow.builtin) {
-    return {
-      syncable: false,
-      reason: 'builtin-workflow',
-      workflowId: task.workflowId,
-      workflowName: task.workflowName,
-      currentVersion: task.workflowVersion,
-      latestVersion: workflow.version,
-      differs: false,
-      invalid: false,
-      invalidIssues: [],
-      diff: emptyWorkflowSyncDiff(),
-    }
-  }
+  // RFC-359: the projection lives in the shared domain so PostgreSQL answers identically.
+  if (workflow.builtin) return builtinWorkflowSyncPreview(task, workflow.version)
   const oldDef = parseSnapshotDefinition(task.workflowSnapshot)
   const newDef = workflow.definition
   let candidateClosureJson: string | null = null
@@ -5260,15 +5251,12 @@ export async function computeWorkflowSyncPreview(
         ]
   const invalidIssues = [...closureIssues, ...validationIssues, ...triggerIssues]
 
-  const syncableStatuses = allowedFromForTaskEvent({ kind: 'sync-workflow' })
-  const worktreeMissing = task.worktreePath === ''
-  const statusSyncable = syncableStatuses.includes(task.status)
-  const syncable = statusSyncable && !worktreeMissing
-  const reason: WorkflowSyncPreview['reason'] = syncable
-    ? 'ok'
-    : worktreeMissing
-      ? 'worktree-missing'
-      : 'task-active'
+  // RFC-359: 判据落在共用 domain 里，PostgreSQL 的预览用同一条。
+  const reason = workflowSyncGateReason({
+    status: task.status,
+    worktreeMissing: task.worktreePath === '',
+  })
+  const syncable = reason === 'ok'
 
   return {
     syncable,

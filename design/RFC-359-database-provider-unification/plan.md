@@ -5851,3 +5851,70 @@ W7 实测：`sqliteTerminalMaintenance.ts`（519 行）删不掉，唯一原因�
 | W4 体量大、跨 6 个 context、与并发 RFC 撞车 | 每 context 一个 PR；合一时只动 provider 维度，不顺手重构；撞车面按 CLAUDE.md 多人协作规则处置              |
 | 合一过程中把 SQLite 侧的正确行为改坏        | 每对合一都带「合一前后 SQLite 行为逐字对拍」（AC-8）                                                       |
 | P0 修复本身引入回归                         | 每条先红后绿 + 修完再跑一次原变异确认转红（RFC-287 五轮门纪律）                                            |
+
+## 5u. AC-6 迁移当天抓出的三处真分叉（W58，**已修**）
+
+AC-6 的价值在这一轮被兑现了一次：`rfc109-sync-route.test.ts` 只是从「写死 SQLite」改成
+双引擎，**什么产品代码都没动**，当天就红出三条 PostgreSQL 专有缺陷。三条都属于本 RFC 要消灭的
+形态——同一份产品行为在两个库上给出不同答案，而两边各自的用例都绿着。
+
+### ① lineage 列为 NULL 的任务，其 continuation 在 PG 上**全部**死锁
+
+`tasks.execution_lineage_id` / `lineage_slot_path_json` 允许为 NULL。派生 continuation 请求的
+一侧（`submitTaskContinuation`）遇到 NULL 会以任务自身为根派生一份作用域；而准入那一侧
+（`submitCanonicalTaskExecutionIntent`）的 lineage 判据直接拿派生后的请求去比**原始列**：
+
+```
+request.scope.executionLineageId !== task.executionLineageId   // 'task-x' !== null ⇒ 永真
+```
+
+于是这类任务的每一次 sync-workflow / resume / retry 都在准入这一步 409
+`task-continuation-stale`，**没有任何推进办法**。这条准入只在 PostgreSQL 上跑
+（SQLite 的 route operations 不走 intent 准入），所以它是典型的「一个库好、另一个库不好」。
+
+处置：派生与复核共用 `domain/executionIntent.ts` 的 `canonicalTaskLineageScope`。
+回归防护 `tests/rfc359-w58-continuation-null-lineage.test.ts`（纯函数 3 条 + 双引擎行为 1 条
++ 源代码层 2 条），已变异验证：把复核改回比原始列 ⇒ 3 条红。
+
+**顺带确认的一处引擎不对称**（不是本次修的）：SQLite 有迁移 0210 的
+`rfc328_tasks_lineage_after_insert`，任何绕过生产工厂的写入者（测试、任务迁移 SQL、直连 SQL）
+落的行都会被它悄悄补齐两列；PostgreSQL 的 DDL 由 `db/schema.ts` 投影，**一个触发器都没有**。
+迁移 0224 退役 `node_runs` 上的同名触发器时已经论证过这个形态为什么危险，但 `tasks` 上那条
+被留了下来（理由：四个生产插入点由 `rfc359-w7-task-insert-lineage-completeness` 钉着显式写三列，
+触发器够不着）。这次的 bug 说明「够不着」只对生产路径成立：**非生产写入者仍然在两个引擎上落出
+不同的行**，于是 PG 独有的 NULL 状态长期没有任何用例覆盖。应用层现在对 NULL 是容忍的
+（`canonicalTaskLineageScope`），所以退役这条触发器的前置条件已经具备——留给下一波，
+连同一次「SQLite 上删触发器后全量跑一遍」的验证。
+
+### ② 内置工作流在 PG 上被预览成「工作流已删除」
+
+SQLite 的 `computeWorkflowSyncPreview` 一上来就看 `workflow.builtin`，回 `builtin-workflow`
+（RFC-104：内置工作流永远不能被手动 sync；前端据此隐藏同步横幅，Codex impl-gate F4）。
+PG 侧压根不看这一列，而它装载工作流走的是**可启动性**授权，内置工作流在那里就被挡下，
+异常被 catch 兜成 `workflow-deleted`——横幅写「工作流已被删除」，而工作流好端端地在。
+
+### ③ 预览说能同步、按钮必然 409
+
+SQLite 的可同步判据是**持久化**任务状态（`allowedFromForTaskEvent`）+ 工作树；PG 的预览看的是
+**进程内**活跃表 `activity.isActive`。于是持久化状态就是 `running` 的任务——守护进程刚重启、
+或任务由另一个进程在跑——在 PG 上预览成 `syncable: true`，而真点下去，`syncWorkflow` 用的又是
+状态判据，稳定 409 `task-not-syncable`。
+
+②③ 的处置：两条判据落进 `domain/workflowSyncPreview.ts`
+（`builtinWorkflowSyncPreview` / `workflowSyncGateReason`），两个 provider 都从那里取；
+legacy `services/task.ts` 经 `public/participants.ts` 取用（RFC-317 T22 边界）。
+回归防护 `tests/rfc359-w58-workflow-sync-preview-parity.test.ts` + 行为面在
+`rfc109-sync-route.test.ts` 上两个引擎各跑一遍。
+
+**留下的一条差异（本次没动）**：PG 的 `syncWorkflow` 有一条 `workspacePrunedAt !== null` 的
+工作树判据，SQLite 的 `syncTaskWorkflow` 没有（它只看 `worktreePath === ''`）。预览这一侧现在
+两边逐字相同（只看空路径），所以**预览不再与 SQLite 分叉**；但 PG 的「动作」比 SQLite 严一档，
+对已打墓碑的工作树两边给出不同答案。收敛它要先决定哪一侧是对的（直觉上「墓碑了就不能同步」
+是对的，那意味着改 SQLite 的动作），并且这条判据应该走 `shared` 的 `taskWorkspacePhase`
+单一事实源——而那个函数要 `hasRepoPrepRow`，得先给两侧的读补上这一列。独立一刀。
+
+### 这一轮的方法论结论
+
+**「把一个单引擎用例改成双引擎」本身就是一次审计**，而且成本极低——三条缺陷都不是靠读代码
+发现的，是迁移当天测出来的。AC-6 剩下的量（`rfc359-w5-test-engine-hardcoding` 账本 604 行）
+应当按「先迁行为面最厚的文件」排序，而不是按最好迁的排序。

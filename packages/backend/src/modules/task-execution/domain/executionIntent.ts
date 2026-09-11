@@ -114,6 +114,33 @@ export function continuationRequestHash(request: CanonicalContinuationRequest): 
   return sha256Hex(canonicalJson(canonical))
 }
 
+/**
+ * 任务 lineage 的**规范作用域**：`tasks.execution_lineage_id` / `lineage_slot_path_json` 允许为
+ * NULL（早于这两列的存量任务、以及不经完整启动链落下的行），此时以任务自身为根派生一份。
+ *
+ * 为什么必须只有这一个函数：派生 continuation 请求的一侧（`submitTaskContinuation`）用的是派生
+ * 后的值，而准入那一侧的 lineage 判据此前直接拿请求去比**原始列**——两边对 NULL 的解释不一致，
+ * 于是 lineage 列为空的任务，其 continuation（sync-workflow / resume / retry）在准入这一步必然
+ * 409 `task-continuation-stale`，没有任何推进办法。两侧现在都从这里取。
+ */
+export function canonicalTaskLineageScope(
+  taskId: string,
+  task: Readonly<{ executionLineageId: string | null; lineageSlotPathJson: string | null }>,
+): Readonly<{ executionLineageId: string; slotPath: readonly LineageSlot[] }> {
+  const executionLineageId = task.executionLineageId ?? taskId
+  const slotPath: readonly LineageSlot[] =
+    task.lineageSlotPathJson === null
+      ? [
+          {
+            stableNodeKey: 'task-root',
+            frozenOccurrenceKey: executionLineageId,
+            workflowRevision: null,
+          },
+        ]
+      : decodeLineageSlotPath(task.lineageSlotPathJson)
+  return { executionLineageId, slotPath }
+}
+
 export function encodeLineageSlotPath(path: readonly LineageSlot[]): string {
   if (path.length === 0) throw new Error('lineage slot path must not be empty')
   for (const slot of path) {

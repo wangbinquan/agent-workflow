@@ -156,7 +156,11 @@ import {
   worktreeDiff,
 } from '@/util/git'
 import { Paths } from '@/util/paths'
-import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
+import {
+  builtinWorkflowSyncPreview,
+  notSyncableWorkflowPreview,
+  workflowSyncGateReason,
+} from '../domain/workflowSyncPreview'
 
 const log = createLogger('task-execution.postgresql-task-routes')
 
@@ -340,14 +344,24 @@ async function failedCode(
 async function workflowIdentities(
   db: PostgresqlDatabaseClient,
   workflowIds: readonly string[],
-): Promise<ReadonlyMap<string, Readonly<{ name: string; builtin: boolean }>>> {
+): Promise<ReadonlyMap<string, Readonly<{ name: string; builtin: boolean; version: number }>>> {
   const wanted = [...new Set(workflowIds)]
   if (wanted.length === 0) return new Map()
   const rows = await db
-    .select({ id: workflows.id, name: workflows.name, builtin: workflows.builtin })
+    .select({
+      id: workflows.id,
+      name: workflows.name,
+      builtin: workflows.builtin,
+      version: workflows.version,
+    })
     .from(workflows)
     .where(inArray(workflows.id, wanted))
-  return new Map(rows.map((row) => [row.id, { name: row.name, builtin: row.builtin === true }]))
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { name: row.name, builtin: row.builtin === true, version: row.version },
+    ]),
+  )
 }
 
 /**
@@ -363,7 +377,7 @@ async function workflowIdentities(
 async function builtinCandidateWorkflow(
   db: PostgresqlDatabaseClient,
   workflowId: string,
-): Promise<Readonly<{ builtin: boolean }> | null> {
+): Promise<Readonly<{ builtin: boolean; version: number }> | null> {
   return (await workflowIdentities(db, [workflowId])).get(workflowId) ?? null
 }
 
@@ -1377,6 +1391,13 @@ async function workflowSyncPreview(
   if (taskExecutionKind(task) !== 'workflow') {
     return notSyncableWorkflowPreview(task, 'workflow-deleted')
   }
+  // 判据缺口 —— 内置工作流的预览必须是 `builtin-workflow`（RFC-104：它永远不可被手动 sync）。
+  // 这一步要在可见性装载**之前**：`loadVisibleWorkflow` 走的是可启动性授权，内置工作流在那里
+  // 就被挡住，异常被下面的 catch 兜成 `workflow-deleted` —— 横幅内容直接是错的。
+  const builtinCandidate = await builtinCandidateWorkflow(dependencies.db, task.workflowId)
+  if (builtinCandidate?.builtin === true) {
+    return builtinWorkflowSyncPreview(task, builtinCandidate.version)
+  }
   await dependencies.activity.awaitReleasedSettled(taskId)
   if (dependencies.activity.isActive(taskId)) return notSyncableWorkflowPreview(task, 'task-active')
   let loaded: Awaited<ReturnType<typeof loadVisibleWorkflow>>
@@ -1427,9 +1448,20 @@ async function workflowSyncPreview(
     loaded.workflow.definition,
     runSummary,
   )
+  // 判据缺口 —— 可同步与否此前在 PG 侧只看**进程内**活跃表，于是一个持久化状态就是 `running`
+  // 的任务（守护进程刚重启、或由别的进程在跑）预览成 `syncable: true`，而 `syncWorkflow` 用的是
+  // 状态 + 工作树判据，点下去稳定 409。两边现在共用 `workflowSyncGateReason`。
+  const reason = workflowSyncGateReason({
+    status: task.status,
+    // 工作树判据与 SQLite 侧**逐字相同**（空路径即没有工作树）。PG 的 `syncWorkflow` 另有一条
+    // `workspacePrunedAt !== null`，SQLite 的 `syncTaskWorkflow` 没有——那条差异是既有的，
+    // 不在本次收敛范围内（见 RFC-359 plan §5u）；这里不擅自把它带进预览，否则预览与 SQLite
+    // 又分叉一次。
+    worktreeMissing: task.worktreePath === '',
+  })
   return {
-    syncable: true,
-    reason: 'ok',
+    syncable: reason === 'ok',
+    reason,
     workflowId: task.workflowId,
     workflowName: loaded.workflow.name,
     currentVersion: task.workflowVersion,
