@@ -2841,8 +2841,10 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
   },
   {
     subtype: 'gate-control',
-    file: 'packages/backend/src/modules/task-execution/composition/humanGate.ts',
-    symbol: 'bindTaskDecisionParticipantInTx',
+    // RFC-359：同步的 `bindTaskDecisionParticipantInTx` 整条链退役（生产零消费者），
+    // 决定接受的唯一写者是中立的 `acceptHumanGateDecisionTx`。写点与判据未变，只是搬了家。
+    file: 'packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts',
+    symbol: 'acceptHumanGateDecisionTx',
     allowedTables: ['tasks', 'taskExecutionIntents', 'gate-companion-table'],
     allowedTransitions: ['awaiting-gate->pending', 'intent-absent->pending'],
     revisionPredicate: 'task-lifecycle-event-revision',

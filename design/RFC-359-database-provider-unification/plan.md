@@ -5677,6 +5677,45 @@ interpretation」的用法。
 根刀落地后复测，机械迁移 138 个文件仍有 137 个被 `DbClient` 形参挡住，整棵 `src/` 放宽实验的残留
 只从 92 条降到 90 条，剩下的窄标注全在这批同步孪生上（§5n / STATE 第 3 条）。
 
+## 5r. 同步孪生开始退役：整条**同步人工门链**删除（W8）
+
+同步事务面清零之后，下一层是那批**同步孪生**（`DbTxSync` 定型的函数）——它们才是 AC-6 的真正前置
+（§5q 末尾）。第一刀拿的是其中最长的一条链，删掉 **2 个文件 + 3 个函数**：
+
+```
+bindTaskDecisionParticipantInTx   (composition/humanGate.ts + sqliteTaskDecisionParticipant.ts)
+  └→ LegacyHumanGateTaskLifecycle (legacyHumanGateTaskLifecycle.ts)
+       └→ transitionHumanGateTaskTx (sqlite/taskLifecycle.ts)
+            └→ writeTaskStatusTx    (同上)
+另：cancelOpenNodeRunsTx（根那一刀之后即零调用方）
+```
+
+**整条链生产侧一直零消费者。** `bindTaskDecisionParticipantInTx` 的全部引用是：自身定义、
+composition 绑定、`public/participants` 转出、`services/humanGateComposition` 上一个同名包装
+（也没人调），以及**一处测试夹具**。决定接受的生产路径早就是中立的 `acceptHumanGateDecisionTx`
+（`infrastructure/taskDecisionParticipant.ts`）。
+
+夹具（`rfc333-task-participants.test.ts`）平移过去：两侧入参 / 出参类型相同
+（`AcceptHumanGateDecisionInput` / `AcceptedHumanGateDecision`），所以只是把
+`bindTaskDecisionParticipantInTx(tx, effects).acceptGateDecisionTx(x)` 换成
+`await acceptHumanGateDecisionTx(tx, x)`，外层 5 处 `dbTxSync(db, …)` 换成
+`databaseSessionFor(db).transaction(async …)`。
+
+### 一条判据按「锁机制还是锁产品行为」拆开
+
+`rfc359-w16` 有一条 `human-gate result is immediate; an outer throw rolls back the CAS and event`。
+前半句 `expect(result).not.toBeInstanceOf(Promise)` 锁的是**实现机制**（「这一份是同步的」），
+机制退役它就该跟着走；后半句「外层抛错要把 CAS 与事件一起回滚」是**产品行为**，改锁在中立的
+`transitionHumanGateTask` 上，与生产路径一致。判据因此改名，覆盖面不减反增（从只验 legacy 那份，
+变成验真正在跑的那份）。这与 §5o 里 `onSettledTx` 的处置是同一条方法。
+
+### 账本联动（删文件的代价）
+
+删两个文件牵动四本账：`rfc294Canonical` 的 `gate-control` 写点（改指中立参与者，写点与判据未变）、
+`rfc359-w5-t17` 的 provider 命名文件表（56 → 55）、`rfc359-converged-twins` 的
+`humanGateNodeProjectionMember` 消费者白名单、以及普查的七份清单。**删代码比加代码更容易漏账本**
+——四本里有三本是「它被列在名单上」而不是「它调用了谁」，grep 调用点找不到它们。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

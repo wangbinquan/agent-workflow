@@ -25,7 +25,10 @@ import { createCollaborationCommandContext } from '@/modules/collaboration/compo
 import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/prepareClarifyGateOpen'
 import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 // RFC-359 W10：此前这里 import 的是 `infrastructure/sqliteGateContinuationEffectStep`——一份
 // **零生产调用方**的同步孪生（生产路径注入的是下面这个中立 step + `DrizzleGateContinuationEffect
@@ -40,7 +43,7 @@ import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execut
 import type { GateWorkspaceRollbackExecutor } from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
-import { bindTaskDecisionParticipantInTx } from '@/modules/task-execution/composition/humanGate'
+import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import {
   humanGateNodeProjectionFence,
   type HumanGateNodeProjectionMember,
@@ -140,22 +143,19 @@ function projectionMember(row: typeof nodeRuns.$inferSelect): HumanGateNodeProje
   }
 }
 
-function projectionFence(
-  tx: DbTxSync | ReturnType<typeof createInMemoryDb>,
-  ids: readonly string[],
-) {
+async function projectionFence(tx: ProviderNeutralDatabase, ids: readonly string[]) {
   return humanGateNodeProjectionFence(
-    tx
-      .select()
-      .from(nodeRuns)
-      .where(inArray(nodeRuns.id, [...ids]))
-      .all()
-      .map(projectionMember),
+    (
+      await tx
+        .select()
+        .from(nodeRuns)
+        .where(inArray(nodeRuns.id, [...ids]))
+    ).map(projectionMember),
   )
 }
 
-function submitDecision(
-  tx: DbTxSync,
+async function submitDecision(
+  tx: DatabaseTransaction,
   input: {
     taskId: string
     sourceNodeRunId: string
@@ -167,11 +167,11 @@ function submitDecision(
   },
 ) {
   const ids = [input.sourceNodeRunId, input.rerunNodeRunId]
-  return bindTaskDecisionParticipantInTx(tx, input.module.effects).acceptGateDecisionTx({
+  return await acceptHumanGateDecisionTx(tx, {
     taskId: input.taskId,
     gate: { kind: 'review', ref: `review:${input.taskId}:1` },
     expectedTaskRevision: input.expectedTaskRevision ?? 1,
-    expectedNodeProjection: input.expectedFence ?? projectionFence(tx, ids),
+    expectedNodeProjection: input.expectedFence ?? (await projectionFence(tx, ids)),
     continuationLineage: {
       sourceNodeRunIds: [input.sourceNodeRunId],
       rerunNodeRunIds: [input.rerunNodeRunId],
@@ -611,13 +611,15 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
 })
 
 describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
-  test('commits task event + exactly one intent + linked rollback effect', () => {
+  test('commits task event + exactly one intent + linked rollback effect', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-decision'
     seedTask(db, taskId, 'awaiting_review')
     const ids = seedDecisionNodes(db, taskId)
     const module = createTaskExecutionTestModule('daemon-rfc333-decision')
-    const receipt = dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))
+    const receipt = await databaseSessionFor(db).transaction(
+      async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
+    )
 
     expect(receipt.taskRevision).toBe(2)
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
@@ -659,7 +661,11 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         .get(),
     ).toMatchObject({ aggregateId: taskId, eventType: 'task.lifecycle-transitioned.v1' })
 
-    expect(() => dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))).toThrow()
+    await expect(
+      databaseSessionFor(db).transaction(
+        async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
+      ),
+    ).rejects.toThrow()
     expect(db.select().from(taskExecutionIntents).all()).toHaveLength(1)
   })
 
@@ -711,7 +717,9 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       }),
     ).rejects.toEqual(expect.objectContaining({ code: 'task-continuation-conflict' }))
 
-    const decision = dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))
+    const decision = await databaseSessionFor(db).transaction(
+      async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
+    )
     const active = db
       .select({ id: taskExecutionIntents.id, state: taskExecutionIntents.state })
       .from(taskExecutionIntents)
@@ -748,14 +756,14 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     ).rejects.toEqual(expect.objectContaining({ code: 'task-continuation-conflict' }))
   })
 
-  test('projection, lifecycle-event, and intent faults each roll prior domain writes back', () => {
+  test('projection, lifecycle-event, and intent faults each roll prior domain writes back', async () => {
     for (const fault of ['projection', 'event', 'intent'] as const) {
       const db = createInMemoryDb(MIGRATIONS)
       const taskId = `task-333-${fault}-fault`
       seedTask(db, taskId, 'awaiting_review')
       const ids = seedDecisionNodes(db, taskId)
       const module = createTaskExecutionTestModule(`daemon-rfc333-${fault}`)
-      const oldFence = projectionFence(db, [ids.sourceNodeRunId, ids.rerunNodeRunId])
+      const oldFence = await projectionFence(db, [ids.sourceNodeRunId, ids.rerunNodeRunId])
       if (fault === 'event') {
         db.run(sql`
           CREATE TRIGGER rfc333_fail_lifecycle_event
@@ -771,17 +779,17 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         `)
       }
 
-      expect(() =>
-        dbTxSync(db, (tx) => {
-          tx.update(nodeRuns)
+      await expect(
+        databaseSessionFor(db).transaction(async (tx) => {
+          await tx
+            .update(nodeRuns)
             .set({ reviewIteration: 1 })
             .where(eq(nodeRuns.id, ids.sourceNodeRunId))
-            .run()
           const fence =
             fault === 'projection'
               ? oldFence
-              : projectionFence(tx, [ids.sourceNodeRunId, ids.rerunNodeRunId])
-          return submitDecision(tx, {
+              : await projectionFence(tx, [ids.sourceNodeRunId, ids.rerunNodeRunId])
+          return await submitDecision(tx, {
             taskId,
             ...ids,
             module,
@@ -789,7 +797,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
             rollback: false,
           })
         }),
-      ).toThrow()
+      ).rejects.toThrow()
 
       expect(
         db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)).get()
@@ -810,7 +818,9 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     seedTask(db, taskId, 'awaiting_review')
     const ids = seedDecisionNodes(db, taskId)
     const module = createTaskExecutionTestModule('daemon-rfc333-pre-drive')
-    const decision = dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))
+    const decision = await databaseSessionFor(db).transaction(
+      async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
+    )
     const claimed = await module.claim({ db, intentId: decision.continuationRef, now: NOW + 1 })
     module.claimGate.leave(claimed.permit)
     const events: string[] = []

@@ -228,37 +228,6 @@ export function transitionNodeRunStatusTx(args: {
 }
 
 /**
- * Terminal task control revokes the active owner before that owner's callbacks
- * can settle their node rows. Project every still-live node row to `canceled`
- * in the SAME transaction as the task/owner transition, using the shared node
- * transition table rather than a task-status allowlist or a blind bulk write.
- *
- * The caller broadcasts only after its enclosing transaction commits.
- */
-export function cancelOpenNodeRunsTx(args: {
-  tx: DbTxSync
-  taskId: string
-  finishedAt: number
-  errorMessage: string
-}): Array<{ id: string; nodeId: string }> {
-  const cancelableStatuses = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
-  const rows = args.tx
-    .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, args.taskId), inArray(nodeRuns.status, [...cancelableStatuses])))
-    .all()
-  for (const row of rows) {
-    transitionNodeRunStatusTx({
-      tx: args.tx,
-      nodeRunId: row.id,
-      event: { kind: 'mark-canceled', reason: args.errorMessage },
-      extra: { finishedAt: args.finishedAt, errorMessage: args.errorMessage },
-    })
-  }
-  return rows
-}
-
-/**
  * Lower-level CAS update for sites whose business decision about `to`
  * doesn't fit the event ADT. Caller passes:
  *   - `to`: the resulting status
@@ -566,30 +535,6 @@ interface WriteTaskStatusTxInput {
 }
 
 /**
- * Synchronous interpretation of the shared writer. Standalone lifecycle commands and the
- * RFC-333 in-transaction human-gate participants both enter here, so adding an
- * atomic participant does not create a second lifecycle authority.
- */
-function writeTaskStatusTx(input: WriteTaskStatusTxInput): Readonly<{
-  revision: number
-  eventRef: CommittedEventRef | null
-}> {
-  const result = driveSyncProgram(
-    taskLifecycleWriteSequence(input.tx, input, (tx, event) =>
-      appendTaskLifecycleTransitionCommittedEventTx(tx, {
-        ...event,
-        sourceTerminationEffectRef: event.sourceTerminationEffectRef ?? null,
-      }),
-    ),
-    executeTransactionStepSync,
-  )
-  if (result === null) {
-    throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
-  }
-  return { revision: result.lifecycleEventRevision, eventRef: result.eventRef }
-}
-
-/**
  * RFC-359 —— 同一个写序列的**异步解释**。
  *
  * `taskLifecycleWriteSequence` 本来就是 provider 中立的 transaction program，它的头注释写得很直白：
@@ -656,114 +601,6 @@ export type HumanGateTaskTransition =
   | 'park-human'
   | 'release-review'
   | 'release-human'
-
-/**
- * RFC-333 purpose-specific synchronous lifecycle participant. It deliberately
- * supports only the four human-gate edges and requires the task revision seen
- * by the operation prepare phase. No terminal revival, workspace policy, hook,
- * or arbitrary status/extra bag can enter through this surface.
- */
-export function transitionHumanGateTaskTx(args: {
-  readonly tx: DbTxSync
-  readonly taskId: string
-  readonly expectedTaskRevision: number
-  readonly transition: HumanGateTaskTransition
-  readonly now: number
-  readonly nodeChanges?: readonly TaskNodeChangeV1[]
-  readonly committedEventIdentity?: Partial<TaskCommittedEventIdentity>
-}): {
-  readonly from: TaskStatus
-  readonly to: TaskStatus
-  readonly taskRevision: number
-  readonly eventRefs: readonly CommittedEventRef[]
-} {
-  const row = args.tx
-    .select({
-      status: tasks.status,
-      lifecycleEventRevision: tasks.lifecycleEventRevision,
-      errorSummary: tasks.errorSummary,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, args.taskId))
-    .get()
-  if (row === undefined) {
-    throw new NotFoundError('task-not-found', `task ${args.taskId} not found`)
-  }
-  if (row.lifecycleEventRevision !== args.expectedTaskRevision) {
-    throw new ConcurrentTaskTransition(
-      args.taskId,
-      [row.status],
-      `human-gate revision changed (expected ${args.expectedTaskRevision}, current ${row.lifecycleEventRevision})`,
-    )
-  }
-
-  // Several review branches may park in the same scheduler wave. The first
-  // gate performs running→awaiting_review; later gates join the already-parked
-  // task at the exact same lifecycle revision while committing their own
-  // manifests. This is an exact idempotent target, not a second status writer.
-  if (
-    (args.transition === 'park-review' && row.status === 'awaiting_review') ||
-    (args.transition === 'park-human' && row.status === 'awaiting_human')
-  ) {
-    return {
-      from: row.status,
-      to: row.status,
-      taskRevision: row.lifecycleEventRevision,
-      eventRefs: [],
-    }
-  }
-
-  const event: TaskTransitionEvent =
-    args.transition === 'park-review'
-      ? { kind: 'park-review' }
-      : args.transition === 'park-human'
-        ? { kind: 'park-human' }
-        : { kind: 'resume' }
-  const expectedFrom: readonly TaskStatus[] =
-    args.transition === 'release-review'
-      ? ['awaiting_review']
-      : args.transition === 'release-human'
-        ? ['awaiting_human']
-        : allowedFromForTaskEvent(event)
-  const from = row.status as TaskStatus
-  if (!expectedFrom.includes(from)) {
-    throw new ConflictError(
-      'illegal-task-transition',
-      `task ${args.taskId} status='${from}' cannot ${args.transition}`,
-    )
-  }
-  const to = targetForTaskEvent(event)
-  const committed = writeTaskStatusTx({
-    tx: args.tx,
-    taskId: args.taskId,
-    from,
-    to,
-    allowedFrom: expectedFrom,
-    ...(args.transition === 'release-review' || args.transition === 'release-human'
-      ? {
-          extra: {
-            finishedAt: null,
-            errorSummary: null,
-            errorMessage: null,
-            failedNodeId: null,
-          },
-        }
-      : {}),
-    now: args.now,
-    reason: `human-gate:${args.transition}`,
-    isRevival: false,
-    workspacePruneDecision: { prune: false },
-    previousErrorSummary: row.errorSummary,
-    nodeChanges: args.nodeChanges,
-    committedEventIdentity: args.committedEventIdentity,
-  })
-  return {
-    from,
-    to,
-    taskRevision: committed.revision,
-    eventRefs: committed.eventRef === null ? [] : [committed.eventRef],
-  }
-}
 
 /**
  * CAS-strict task status write. `allowedFrom` is the explicit legal-source

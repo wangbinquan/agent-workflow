@@ -11,10 +11,6 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbTxSync } from '@/db/txSync'
 import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
 import {
-  bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal,
-  type TaskDecisionParticipantInTx,
-} from '../infrastructure/sqliteTaskDecisionParticipant'
-import {
   parkTaskAtHumanGate,
   type ParkTaskAtHumanGateResult,
 } from '../application/parkTaskAtHumanGate'
@@ -27,17 +23,11 @@ import type { TaskExecutionEffectStore } from '../infrastructure/taskExecutionEf
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import { assertTaskExecutionContext } from '../application/taskExecutionContext'
 import { DatabaseHumanGateTaskLifecyclePersistence } from '../infrastructure/humanGateTaskLifecyclePersistence'
-import { LegacyHumanGateTaskLifecycle } from '../infrastructure/legacyHumanGateTaskLifecycle'
 
-const humanGateTaskLifecycle = new LegacyHumanGateTaskLifecycle()
-
-export function bindTaskDecisionParticipantInTx(
-  tx: DbTxSync,
-  effects?: TaskExecutionEffectStore,
-): TaskDecisionParticipantInTx {
-  return bindTaskDecisionParticipantInTxInternal(tx, humanGateTaskLifecycle, effects)
-}
-
+// RFC-359：同步的决定接受参与者（`bindTaskDecisionParticipantInTx` →
+// `LegacyHumanGateTaskLifecycle` → `transitionHumanGateTaskTx` → `writeTaskStatusTx`）整条链退役。
+// 它生产侧一直零消费者——`humanGateComposition` 上那个同名包装也没人调；决定接受走的是中立的
+// `acceptHumanGateDecisionTx`（`infrastructure/taskDecisionParticipant.ts`）。
 export async function parkPreparedHumanGate(input: {
   // RFC-359 W7：停靠原子本来就跑在中立的 `DatabaseHumanGateTaskLifecyclePersistence` 上
   // （W4-D25），这里的 `DbClient` 只是没跟着放宽的类型标注。

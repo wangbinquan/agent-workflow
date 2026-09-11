@@ -18,16 +18,15 @@ import {
   workflows,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import type { TaskNodeChangeV1 } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
 import { appendTaskLifecycleTransitionCommittedEventTx } from '@/modules/task-execution/infrastructure/taskLifecycleEventParticipant'
 import { taskLifecycleWriteSequence } from '@/modules/task-execution/infrastructure/taskLifecycleWriteSequence'
 import { writeTaskRuntimeLifecycleInTx } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
-import {
-  setTaskStatus,
-  transitionHumanGateTaskTx,
-} from '@/platform/persistence/sqlite/taskLifecycle'
+import { setTaskStatus } from '@/platform/persistence/sqlite/taskLifecycle'
 import {
   driveSyncProgram,
   executeTransactionStepSync,
@@ -126,33 +125,37 @@ describe('RFC-359 lifecycle native synchronous contract', () => {
     db.$client.close()
   })
 
-  test('human-gate result is immediate; an outer throw rolls back the CAS and event', async () => {
+  // RFC-359：同步的 `transitionHumanGateTaskTx` 已随整条同步人工门链退役
+  //（`bindTaskDecisionParticipantInTx` → `LegacyHumanGateTaskLifecycle` → 它 → `writeTaskStatusTx`，
+  // 生产侧一直零消费者）。原判据里那句 `expect(result).not.toBeInstanceOf(Promise)` 锁的是
+  // **实现机制**（「这一份是同步的」），机制退役它就该跟着走；判据真正承重的那半句——
+  // 「外层抛错要把 CAS 与事件一起回滚」——是**产品行为**，改锁在中立的
+  // `transitionHumanGateTask` 上，与生产路径一致。
+  test('human-gate CAS and event roll back together when the outer transaction throws', async () => {
     const before = await taskRow(db, 'native')
     const sentinel = new Error('native outer rollback')
-    expect(() =>
-      dbTxSync(db, (tx) => {
-        const result = transitionHumanGateTaskTx({
-          tx,
+    await expect(
+      databaseSessionFor(db).transaction(async (tx) => {
+        const result = await transitionHumanGateTask(tx, {
           taskId: 'native',
           expectedTaskRevision: 4,
           transition: 'park-review',
           now: NOW,
           nodeChanges: [INITIAL],
         })
-        expect(result).not.toBeInstanceOf(Promise)
         expect(result).toMatchObject({
           from: 'running',
           to: 'awaiting_review',
           taskRevision: 5,
           eventRefs: [{ eventId: 'task-lifecycle:native:5' }],
         })
-        expect(tx.select().from(tasks).where(eq(tasks.id, 'native')).get()?.status).toBe(
+        expect((await tx.select().from(tasks).where(eq(tasks.id, 'native')).get())?.status).toBe(
           'awaiting_review',
         )
-        expect(tx.select().from(committedEvents).all()).toHaveLength(1)
+        expect(await tx.select().from(committedEvents)).toHaveLength(1)
         throw sentinel
       }),
-    ).toThrow(sentinel)
+    ).rejects.toBe(sentinel)
     expect(await taskRow(db, 'native')).toEqual(before)
     expect(await durableRows(db)).toEqual({ events: [], heads: [], deliveries: [] })
   })

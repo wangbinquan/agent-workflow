@@ -30,7 +30,6 @@ import type {
   AcceptHumanGateDecisionInput,
   AcceptedHumanGateDecision,
 } from '../application/acceptHumanGateDecision'
-import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '../composition/humanGate'
 import { terminalizeTaskExecutionIntentsTx as terminalizeTaskExecutionIntentsTxInternal } from '../composition/intentTerminalization'
 import {
   buildCodeHostRecoveryDescriptor as buildCodeHostRecoveryDescriptorInternal,
@@ -242,7 +241,6 @@ export const submitTaskContinuationTx = submitTaskContinuationTxInternal
 // public task-execution surface does not close over the legacy lifecycle
 // adapter, so lifecycle.ts can consume the remaining participant aggregate
 // without creating a value cycle.
-export const bindTaskDecisionParticipantInTx = bindTaskDecisionParticipantInTxInternal
 export const humanGateNodeProjectionFence = humanGateNodeProjectionFenceInternal
 export const humanGateNodeProjectionMember = humanGateNodeProjectionMemberInternal
 export const isLegacyTaskGateContinuationPayload = isLegacyTaskGateContinuationPayloadInternal

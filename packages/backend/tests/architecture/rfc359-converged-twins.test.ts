@@ -80,7 +80,6 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     consumers: [
       `${B}modules/task-execution/public/participants.ts`,
       `${B}modules/task-execution/infrastructure/taskDecisionParticipant.ts`,
-      `${B}modules/task-execution/infrastructure/sqliteTaskDecisionParticipant.ts`,
       `${B}modules/collaboration/infrastructure/review.ts`,
       `${B}modules/collaboration/infrastructure/clarifyDecision.ts`,
       `${B}modules/collaboration/infrastructure/taskQuestionDispatch.ts`,

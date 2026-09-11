@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1739,
+    "entries": 1737,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -32458,28 +32458,6 @@
     },
     {
       "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#cancelOpenNodeRunsTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#cancelOpenNodeRunsTx",
-      "symbol": "cancelOpenNodeRunsTx",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": true,
@@ -32540,27 +32518,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setTaskStatus",
       "symbol": "setTaskStatus",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionHumanGateTaskTx",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionHumanGateTaskTx",
-      "symbol": "transitionHumanGateTaskTx",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -41531,7 +41488,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a36f1c28e64e91cb2bfbbf10e1dee290c24d6a72d817ceb42cf9c5d30b866fef",
+  "sourceDigest": "sha256:8a7264fc26f45e0aa5bbdc9393988eb410f8afe5cf9313567188ad0d83407ad3",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41582,13 +41539,13 @@
           "awaiting-gate->pending",
           "intent-absent->pending"
         ],
-        "file": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts",
         "id": "task-control:gate-control",
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#bindTaskDecisionParticipantInTx",
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts#acceptHumanGateDecisionTx",
         "requiredBrandedProof": "GateDecisionTransaction",
         "revisionPredicate": "task-lifecycle-event-revision",
         "subtype": "gate-control",
-        "symbol": "bindTaskDecisionParticipantInTx"
+        "symbol": "acceptHumanGateDecisionTx"
       },
       {
         "allowedTables": [
@@ -44083,28 +44040,12 @@
           "nodeRuns"
         ],
         "authorityKind": "control-revision",
-        "consumer": "transitionMergeState",
-        "controlSubtype": "terminal-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1147:nodeRuns",
-        "line": 1147,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-or-node-lifecycle-status-cas",
-        "symbol": "transitionMergeState"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
         "consumer": "abandonSupersededMergeStates",
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1260:nodeRuns",
-        "line": 1260,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1097:nodeRuns",
+        "line": 1097,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#abandonSupersededMergeStates",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44135,8 +44076,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#351:nodeRuns",
-        "line": 351,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#320:nodeRuns",
+        "line": 320,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setNodeRunStatus",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44151,8 +44092,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#410:nodeRuns",
-        "line": 410,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#379:nodeRuns",
+        "line": 379,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setNodeRunStatusTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44167,12 +44108,28 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#897:tasks",
-        "line": 897,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#734:tasks",
+        "line": 734,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setTaskStatus",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
         "symbol": "setTaskStatus"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "transitionMergeState",
+        "controlSubtype": "terminal-control",
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#984:nodeRuns",
+        "line": 984,
+        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-or-node-lifecycle-status-cas",
+        "symbol": "transitionMergeState"
       },
       {
         "allowedTables": [

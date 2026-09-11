@@ -47,7 +47,6 @@ import {
 } from '@/modules/collaboration/domain/reviewDecision'
 import { GitWorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector'
 import { parkPreparedHumanGate as parkPreparedHumanGateInternal } from '@/modules/task-execution/public/commands'
-import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '@/modules/task-execution/public/participants'
 
 export const humanGateComposition = {
   createCollaborationCommandContext: createCollaborationCommandContextInternal,
@@ -75,11 +74,6 @@ export const humanGateComposition = {
       ...input,
       inspector: new GitWorkspaceRollbackSnapshotInspector(),
     })
-  },
-  bindTaskDecisionParticipantInTx(
-    tx: Parameters<typeof bindTaskDecisionParticipantInTxInternal>[0],
-  ) {
-    return bindTaskDecisionParticipantInTxInternal(tx)
   },
   parkPreparedHumanGate(
     input: Parameters<typeof parkPreparedHumanGateInternal>[0],

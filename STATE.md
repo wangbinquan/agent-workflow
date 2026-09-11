@@ -39,6 +39,13 @@
 >    （`writeTaskStatusTx` / `transitionNodeRunStatusTx` / RFC-333 人工门参与者一族）。
 >    账本数的是调用点——那才是「只有一个 provider 能走」的路；同步孪生本身还活着、
 >    还被别人的同步大事务用着，**退役它们是下一件事，也正是 AC-6 的真正前置**（见第 3 条）。
+>    **第一刀已下（plan §5r）**：整条**同步人工门链**删除——`bindTaskDecisionParticipantInTx` →
+>    `LegacyHumanGateTaskLifecycle` → `transitionHumanGateTaskTx` → `writeTaskStatusTx`，
+>    外加 `cancelOpenNodeRunsTx`（共 2 文件 + 3 函数）。整条链生产零消费者，只被一处夹具挡着。
+>    **下刀方法照旧**：先 `grep` 全部引用，确认「除定义 / 转出 / 夹具外无人调」，再平移夹具、删链。
+>    **删代码比加代码更容易漏账本**——本刀牵动四本，其中三本是「它被列在名单上」而不是
+>    「它调用了谁」，按调用点 grep 找不到（`rfc294Canonical` 写点表 / provider 命名文件表 /
+>    converged-twins 消费者白名单）。
 >    **两条注入点的教训**（已落 `docs/dev-gotchas.md`）：并发回归判据不要从外面包 db 代理拦
 >    `db.transaction`（统一原语不走它，旧注入器一次都不触发、用例照样绿却什么都没验）；
 >    换事务原语只搬形态、**不要顺手改写检查**（孪生的写检查 / CAS 判据 / 错误类型要逐项对照）。

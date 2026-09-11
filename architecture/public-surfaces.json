@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 853,
+    "consumers": 851,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1064,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20513,
-    "symbols": 989
+    "symbols": 988
   },
   "entries": [
     {
@@ -145911,52 +145911,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24",
-        "import:cec3edcdb48a1c4c4030"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:bindTaskDecisionParticipantInTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:cec3edcdb48a1c4c4030",
-          "file": "packages/backend/src/services/humanGateComposition.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:006e9f752b20b5673d95aedd9dd17b110c2d7e4c6279d49138031a007c69d939",
-      "status": "target-context-current-surface",
-      "symbol": "bindTaskDecisionParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
@@ -162324,7 +162278,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a36f1c28e64e91cb2bfbbf10e1dee290c24d6a72d817ceb42cf9c5d30b866fef",
+  "sourceDigest": "sha256:8a7264fc26f45e0aa5bbdc9393988eb410f8afe5cf9313567188ad0d83407ad3",
   "targetContexts": [
     "collaboration",
     "development-automation",
