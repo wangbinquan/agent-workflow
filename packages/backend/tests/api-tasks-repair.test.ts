@@ -16,14 +16,12 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { TasksListWsMessage, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { lifecycleAlerts, lifecycleRepairAudit, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import {
   resetBroadcastersForTests,
   TASKS_LIST_CHANNEL,
@@ -38,23 +36,10 @@ import {
 import { rmSync } from 'node:fs'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 afterEach(() => {
   resetBroadcastersForTests()
 })
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function seedRunningTaskWithS3(
   db: ProviderNeutralDatabase,
@@ -123,25 +108,29 @@ function authed(method: 'GET' | 'POST', body?: unknown): RequestInit {
 }
 
 describe('RFC-057 — auth gate', () => {
-  test('GET repair-options 401 without bearer', async () => {
-    const { db, app } = buildApp()
-    const seed = await seedRunningTaskWithS3(db)
-    const res = await app.request(
-      `/api/tasks/${seed.taskId}/alerts/${seed.alertId}/repair-options`,
-      { method: 'GET' },
-    )
-    expect(res.status).toBe(401)
-  })
-
-  test('POST repair 401 without bearer', async () => {
-    const { db, app } = buildApp()
-    const seed = await seedRunningTaskWithS3(db)
-    const res = await app.request(`/api/tasks/${seed.taskId}/alerts/${seed.alertId}/repair`, {
-      method: 'POST',
-      body: JSON.stringify({ optionId: 'S3.demote-task', confirm: true }),
-      headers: { 'Content-Type': 'application/json' },
+  // RFC-359 AC-6：鉴权门与库无关，但「无关」得由两个引擎各跑一遍来证明——路由挂载、
+  // 中间件顺序、错误体在两侧各走一条装配。
+  registerProviderApplication((buildApp, seedRunningTaskWithS3) => {
+    test('GET repair-options 401 without bearer', async () => {
+      const { db, app } = await buildApp()
+      const seed = await seedRunningTaskWithS3(db)
+      const res = await app.request(
+        `/api/tasks/${seed.taskId}/alerts/${seed.alertId}/repair-options`,
+        { method: 'GET' },
+      )
+      expect(res.status).toBe(401)
     })
-    expect(res.status).toBe(401)
+
+    test('POST repair 401 without bearer', async () => {
+      const { db, app } = await buildApp()
+      const seed = await seedRunningTaskWithS3(db)
+      const res = await app.request(`/api/tasks/${seed.taskId}/alerts/${seed.alertId}/repair`, {
+        method: 'POST',
+        body: JSON.stringify({ optionId: 'S3.demote-task', confirm: true }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      expect(res.status).toBe(401)
+    })
   })
 })
 
@@ -323,29 +312,31 @@ describe('RFC-057 — POST repair validation', () => {
     })
   })
 
-  test('body.actorUserId is IGNORED — actor comes from session', async () => {
-    const { db, app } = buildApp()
-    const seed = await seedRunningTaskWithS3(db)
-    const res = await app.request(
-      `/api/tasks/${seed.taskId}/alerts/${seed.alertId}/repair`,
-      authed('POST', {
-        optionId: 'S3.demote-task',
-        confirm: true,
-        actorUserId: 'forged-evil-user',
-      }),
-    )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { auditId: string }
-    const { eq } = await import('drizzle-orm')
-    const audit = await db
-      .select()
-      .from(lifecycleRepairAudit)
-      .where(eq(lifecycleRepairAudit.id, body.auditId))
-      .limit(1)
-    // actor_user_id is whatever the session resolved to. For the daemon bearer
-    // token in tests that's the auto-created `__system__` user (or wires that
-    // map to the system actor). What matters is it's NOT 'forged-evil-user'.
-    expect(audit[0]!.actorUserId).not.toBe('forged-evil-user')
+  registerProviderApplication((buildApp, seedRunningTaskWithS3) => {
+    test('body.actorUserId is IGNORED — actor comes from session', async () => {
+      const { db, app } = await buildApp()
+      const seed = await seedRunningTaskWithS3(db)
+      const res = await app.request(
+        `/api/tasks/${seed.taskId}/alerts/${seed.alertId}/repair`,
+        authed('POST', {
+          optionId: 'S3.demote-task',
+          confirm: true,
+          actorUserId: 'forged-evil-user',
+        }),
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { auditId: string }
+      const { eq } = await import('drizzle-orm')
+      const audit = await db
+        .select()
+        .from(lifecycleRepairAudit)
+        .where(eq(lifecycleRepairAudit.id, body.auditId))
+        .limit(1)
+      // actor_user_id is whatever the session resolved to. For the daemon bearer
+      // token in tests that's the auto-created `__system__` user (or wires that
+      // map to the system actor). What matters is it's NOT 'forged-evil-user'.
+      expect(audit[0]!.actorUserId).not.toBe('forged-evil-user')
+    })
   })
 })
 

@@ -5,12 +5,9 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -23,23 +20,10 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 afterEach(() => {
   resetBroadcastersForTests()
 })
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function seedTask(
   db: ProviderNeutralDatabase,
@@ -77,11 +61,15 @@ async function alerts(app: Hono, taskId: string, opts: { auth?: boolean } = {}):
 }
 
 describe('GET /api/tasks/:id/alerts', () => {
-  test('401 without bearer', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db)
-    const res = await alerts(app, taskId, { auth: false })
-    expect(res.status).toBe(401)
+  // RFC-359 AC-6：本文件最后一处直接建库就在这条 401 判据里。鉴权门与库无关，
+  // 但「无关」得由两个引擎各跑一遍来证明——路由挂载、中间件顺序、错误体在两侧各走一条装配。
+  registerProviderApplication((buildApp, seedTask) => {
+    test('401 without bearer', async () => {
+      const { db, app } = await buildApp()
+      const taskId = await seedTask(db)
+      const res = await alerts(app, taskId, { auth: false })
+      expect(res.status).toBe(401)
+    })
   })
 
   registerProviderApplication((buildApp, seedTask) => {

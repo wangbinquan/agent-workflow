@@ -13,14 +13,11 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode, TasksListWsMessage } from '@agent-workflow/shared'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import {
   resetBroadcastersForTests,
   TASKS_LIST_CHANNEL,
@@ -37,23 +34,10 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 afterEach(() => {
   resetBroadcastersForTests()
 })
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function diagnose(
   app: Hono,
@@ -100,11 +84,15 @@ async function seedTask(
 }
 
 describe('POST /api/tasks/:id/diagnose — auth gate', () => {
-  test('401 without bearer token', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db, 'running', [])
-    const res = await diagnose(app, taskId, { auth: false })
-    expect(res.status).toBe(401)
+  // RFC-359 AC-6：鉴权门与库无关，但「无关」得由两个引擎各跑一遍来证明——路由挂载、
+  // 中间件顺序、错误体在两侧各走一条装配。
+  registerProviderApplication((buildApp, seedTask) => {
+    test('401 without bearer token', async () => {
+      const { db, app } = await buildApp()
+      const taskId = await seedTask(db, 'running', [])
+      const res = await diagnose(app, taskId, { auth: false })
+      expect(res.status).toBe(401)
+    })
   })
 })
 
@@ -222,13 +210,15 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
 })
 
 describe('POST /api/tasks/:id/diagnose — unknown task id', () => {
-  test('returns 200 scanned=0 (visibility middleware handles 404 via service-side lookup)', async () => {
-    const { app } = buildApp()
-    const res = await diagnose(app, 'task_does_not_exist')
-    // The visibility middleware short-circuits with 403/404 BEFORE the handler
-    // runs when the task is missing. Either is acceptable as long as it's not
-    // a 5xx.
-    expect([200, 403, 404]).toContain(res.status)
+  registerProviderApplication((buildApp) => {
+    test('returns 200 scanned=0 (visibility middleware handles 404 via service-side lookup)', async () => {
+      const { app } = await buildApp()
+      const res = await diagnose(app, 'task_does_not_exist')
+      // The visibility middleware short-circuits with 403/404 BEFORE the handler
+      // runs when the task is missing. Either is acceptable as long as it's not
+      // a 5xx.
+      expect([200, 403, 404]).toContain(res.status)
+    })
   })
 })
 
