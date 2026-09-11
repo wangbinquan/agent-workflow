@@ -19,7 +19,15 @@ import {
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import { agents, resourceBundleApplies, skills, skillVersions, users } from '@/db/schema'
+import {
+  agents,
+  mcps,
+  resourceBundleApplies,
+  skills,
+  skillVersions,
+  users,
+  workflows,
+} from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
@@ -108,6 +116,111 @@ danglingCallRefs: []
   ])
 }
 
+// RFC-359 §5t：资源包导入的分叉（legacy ↔ postgresql 两套 commit 臂）此前只有 agent / skill
+// 两个 kind 有双引擎对拍，而分叉里 `commit{Agent,Skill,Mcp,Plugin,Workflow,Workgroup}
+// PackageMutation` 是逐 kind 一条臂——没对拍的 kind 等于两侧各写一份、谁漂了都看不出来。
+// 这里把 workflow 与 mcp 两条补上（余下 plugin / workgroup 需要装配安装器与成员映射，随下一波）。
+function workflowPackage(revision: number): Uint8Array {
+  return encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: package-flow
+  type: workflow
+  name: package-flow
+resources:
+  - slug: package-flow
+    type: workflow
+    name: package-flow
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'workflow-create',
+              slug: 'package-flow',
+              payload: {
+                name: 'package-flow',
+                description: `flow revision ${revision}`,
+                definition: {
+                  $schema_version: 1,
+                  nodes: [{ id: 'inp', kind: 'input', inputKey: 'docs' }],
+                  edges: [],
+                },
+              },
+            },
+          ],
+          rootRef: 'local:package-flow',
+        }),
+      ),
+    },
+  ])
+}
+
+function mcpPackage(revision: number): Uint8Array {
+  return encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: package-mcp
+  type: mcp
+  name: package-mcp
+resources:
+  - slug: package-mcp
+    type: mcp
+    name: package-mcp
+requirements:
+  runtimes: []
+  codeHosts: []
+  executables:
+    - /usr/bin/env
+  pluginSources: []
+  projectSkills: []
+  mcpKinds:
+    - local
+  humanMembers: []
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'mcp-create',
+              slug: 'package-mcp',
+              payload: {
+                name: 'package-mcp',
+                description: `mcp revision ${revision}`,
+                type: 'local',
+                enabled: true,
+                config: { command: ['/usr/bin/env', 'true'], timeoutMs: 1000 },
+              },
+            },
+          ],
+          rootRef: 'local:package-mcp',
+        }),
+      ),
+    },
+  ])
+}
+
 function agentDependencyPackage(revision: number, dependencies: readonly string[]): Uint8Array {
   return encodeZip([
     {
@@ -176,6 +289,42 @@ function writeTree(root: string, entries: Readonly<Record<string, string>>): voi
 
 describeEachProvider('RFC-359 W12 resource package provider commit', (harness: ProviderHarness) => {
   const temporaryRoots: string[] = []
+
+  // 与第一条用例里那对内联的 preview / apply 同形，提出来给后加的 kind 复用（它们各自建
+  // 自己的 catalog，所以 catalog 是参数而不是闭包变量）。
+  async function previewWith(
+    catalog: ComposedResourcePackageCatalog,
+    f: Awaited<ReturnType<typeof fixture>>,
+    bytes: Uint8Array,
+  ) {
+    const staged = await catalog.operations.inspect.invoke(
+      f.context,
+      catalog.transport.stageInspect(f.actor, bytes),
+    )
+    const view = await catalog.operations.getPreview.invoke(f.context, staged)
+    return PackagePreviewSchema.parse(JSON.parse(view.document))
+  }
+
+  async function applyWith(
+    catalog: ComposedResourcePackageCatalog,
+    f: Awaited<ReturnType<typeof fixture>>,
+    bytes: Uint8Array,
+    previewToken: string,
+    decision: ResourcePackageImportDecision,
+  ) {
+    const result = await catalog.operations.apply.invoke(
+      f.context,
+      catalog.transport.stageApply(f.actor, {
+        bytes,
+        previewToken,
+        decisions: [decision],
+        humanMemberMappings: [],
+        secretInputs: [],
+      }),
+    )
+    const view = await catalog.operations.getReceipt.invoke(f.context, result)
+    return PackageImportReceiptSchema.parse(JSON.parse(view.document))
+  }
   afterEach(() => {
     for (const root of temporaryRoots.splice(0)) removeTempDirSync(root)
   })
@@ -634,5 +783,90 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       ['b.txt', 'second snapshot'],
       ['b/c.txt', 'nested snapshot'],
     ])
+  })
+
+  // RFC-359 §5t：workflow 与 mcp 两条 commit 臂的双引擎对拍。判据与 agent 那条同形——
+  // **落行 + 回执 + 重放幂等**三件一起看，因为分叉里每个 kind 是各自一条臂，
+  // 只验其中一个 kind 证明不了别的 kind 两侧同码同判。
+  test('workflow package create and replay persist the same row and receipt on both engines', async () => {
+    const f = await fixture()
+    const { catalog } = f.compose()
+    const bytes = workflowPackage(1)
+    const prepared = await previewWith(catalog, f, bytes)
+    const decision = { localSlug: 'package-flow', action: 'new' as const }
+    const receipt = await applyWith(catalog, f, bytes, prepared.previewToken, decision)
+    if (receipt.root === undefined) throw new Error('package Workflow root missing')
+    const id = receipt.root.resourceId
+    const row = await harness.db.select().from(workflows).where(eq(workflows.id, id)).get()
+    if (row === undefined) throw new Error('package Workflow row missing')
+    expect(row).toMatchObject({
+      id,
+      name: 'package-flow',
+      description: 'flow revision 1',
+      ownerUserId: OWNER,
+      visibility: 'private',
+      version: 1,
+    })
+    // 导入会把定义升到当前 schema 版本——这正是要两个引擎逐字一致的东西（升级发生在共用的
+    // 中立代码里，但落库经的是两条各自的 commit 臂）。
+    expect(JSON.parse(row.definition)).toEqual({
+      $schema_version: 6,
+      nodes: [{ id: 'inp', kind: 'input', inputKey: 'docs' }],
+      edges: [],
+      inputs: [],
+    })
+    expect(receipt.applied).toEqual([
+      {
+        opId: 'op-1',
+        resourceType: 'workflow',
+        resourceId: id,
+        action: 'create',
+        name: 'package-flow',
+      },
+    ])
+    // 重放走一份全新装配的 catalog：回执与行都必须逐字不变（journal 认账、不重复写）。
+    expect(await applyWith(f.compose().catalog, f, bytes, prepared.previewToken, decision)).toEqual(
+      receipt,
+    )
+    expect(await harness.db.select().from(workflows).where(eq(workflows.id, id)).get()).toEqual(row)
+  })
+
+  test('mcp package create and replay persist the same row and receipt on both engines', async () => {
+    const f = await fixture()
+    const { catalog } = f.compose()
+    const bytes = mcpPackage(1)
+    const prepared = await previewWith(catalog, f, bytes)
+    const decision = { localSlug: 'package-mcp', action: 'new' as const }
+    const receipt = await applyWith(catalog, f, bytes, prepared.previewToken, decision)
+    if (receipt.root === undefined) throw new Error('package MCP root missing')
+    const id = receipt.root.resourceId
+    const row = await harness.db.select().from(mcps).where(eq(mcps.id, id)).get()
+    if (row === undefined) throw new Error('package MCP row missing')
+    expect(row).toMatchObject({
+      id,
+      name: 'package-mcp',
+      description: 'mcp revision 1',
+      type: 'local',
+      enabled: true,
+      ownerUserId: OWNER,
+      visibility: 'private',
+    })
+    expect(JSON.parse(row.config)).toEqual({
+      command: ['/usr/bin/env', 'true'],
+      timeoutMs: 1000,
+    })
+    expect(receipt.applied).toEqual([
+      {
+        opId: 'op-1',
+        resourceType: 'mcp',
+        resourceId: id,
+        action: 'create',
+        name: 'package-mcp',
+      },
+    ])
+    expect(await applyWith(f.compose().catalog, f, bytes, prepared.previewToken, decision)).toEqual(
+      receipt,
+    )
+    expect(await harness.db.select().from(mcps).where(eq(mcps.id, id)).get()).toEqual(row)
   })
 })

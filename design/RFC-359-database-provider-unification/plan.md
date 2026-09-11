@@ -5779,10 +5779,26 @@ resource-catalog 的两条 `legacy*` ↔ `postgresql*` 分叉上。实测行数�
 **为什么不能照前面那样一刀切**：前 9 刀能成立的前提是「同步那面零生产调用方」。这两条分叉
 **两面都在生产里跑**（`main.ts:235/250` 按 provider 分别装配），删任何一面都是真行为变更。
 
-**建议的第一步（不是合并，是建对拍）**：`POST /api/resource-packages/commit` 的双引擎对拍。
-上游 parse / preview / closure / secretInputs / export 全是共用的中立代码，fork 点只在
-`services/resourcePackage/executionAdapter.ts` 的 `apply`；两侧 compose 方式已在 `main.ts` 写全。
-先有对拍再谈合并——否则 3000 : 3200 行的两份实现无从验证「合完还等价」。
+**第一步（不是合并，是把对拍补全）**：对拍的**骨架 W12 已经有了**
+（`tests/rfc359-w12-resource-package-commit-provider.test.ts`，`describeEachProvider`，两侧
+compose 方式与 `main.ts:235/250` 同源），但它**只覆盖 agent / skill 两个 kind**——而分叉里
+`commit{Agent,Skill,Mcp,Plugin,Workflow,Workgroup}PackageMutation` 是**逐 kind 一条臂**，
+没对拍的 kind 等于两侧各写一份、谁漂了都看不出来。
+
+本轮补了 **workflow 与 mcp** 两条（落行 + 回执 + 重放幂等三件一起看）。做了变异验证：把
+`postgresqlResourcePackageMutationArms.ts#commitPostgresqlWorkflowPackageMutation` 的 create 臂
+写坏一个字段，**只有 `[postgresql]` 那条新用例红**、其余 11 条全绿——证明新覆盖真的打到了分叉那条臂上。
+
+**还缺 plugin 与 workgroup 两条**：前者要给两侧 compose 装一个真的 plugin 安装器
+（现在 PG 那侧的夹具对 plugin 直接 throw），后者要带 `humanMemberMappings`。补完这两条，
+「合完还等价」才有可验证的基线；在那之前不要动 3000 : 3200 行里的任何一面。
+
+写 fixture 时会撞到的两处（已实撞）：①`manifest.requirements` 与 `collectBundleRequirements(bundle)`
+做的是 **`JSON.stringify` 逐字比对**，所以 YAML 里的键序必须与 collector 的返回对象一致
+（runtimes / codeHosts / executables / pluginSources / projectSkills / mcpKinds / humanMembers），
+全空时写 `requirements: {}` 才对（zod default 会按 schema 序补齐）；②工作流节点是
+`{ id, kind, inputKey }` 而不是 `{ id, type, data }`，且导入会把 `$schema_version` 升到当前版本
+（本轮实测 1 → 6）——那个升级正是要两个引擎逐字一致的东西。
 
 ## 6. 债与不做的事
 
