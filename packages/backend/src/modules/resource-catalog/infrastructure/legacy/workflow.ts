@@ -132,7 +132,9 @@ export interface CreateWorkflowOptions {
   beforeWriteTransaction?: () => void | Promise<void>
 }
 
-export async function listWorkflows(db: DbClient): Promise<Workflow[]> {
+// RFC-359：函数体就是一条中立 select（同文件的 `getWorkflow` 早已是 `ProviderNeutralDatabase`）。
+// 入参此前写 `DbClient` 是纯类型债，它把这个读面挡在双引擎用例之外。
+export async function listWorkflows(db: ProviderNeutralDatabase): Promise<Workflow[]> {
   const rows = await db.select().from(workflows)
   return rows.map(rowToWorkflow)
 }

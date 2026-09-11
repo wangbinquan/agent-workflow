@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { __resetBatchImportForTests } from '../src/services/repoBatchImport'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -16,27 +19,20 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   tmp: string
 }
 
-function buildHarness(): Harness {
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-batch-http-'))
   const appHome = join(tmp, 'home')
   mkdirSync(appHome, { recursive: true })
   process.env.AGENT_WORKFLOW_HOME = appHome
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: join(tmp, 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 8,
-    db,
-  })
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   return { db, app, tmp }
 }
 
@@ -190,28 +186,38 @@ describeEachProvider('cached-repos batch import HTTP (RFC-033)', (provider) => {
   describe('complete application lifetime', () => registerProviderBatchHttpCases(provider))
 })
 
-describe('cached-repos batch import HTTP (RFC-033)', () => {
-  let h: Harness
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'cached-repos batch import HTTP (RFC-033)',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 8,
+    tempPrefix: 'aw-cached-batch-',
+  },
+  (scope) => {
+    let h: Harness
 
-  beforeEach(() => {
-    __resetBatchImportForTests()
-    h = buildHarness()
-  })
-  afterEach(() => {
-    __resetBatchImportForTests()
-    resetBroadcastersForTests()
-    rmSync(h.tmp, { recursive: true, force: true })
-  })
-
-  test('credential URL is redacted in HTTP response body', async () => {
-    const cred = 'https://x-token-auth:s3cr3t@github.com/foo/bar.git'
-    const res = await req(h.app, '/api/cached-repos/batch-import', {
-      method: 'POST',
-      body: JSON.stringify({ urls: [cred] }),
+    beforeEach(async () => {
+      __resetBatchImportForTests()
+      h = await buildHarness(scope)
     })
-    expect(res.status).toBe(201)
-    const text = await res.text()
-    expect(text).not.toContain('s3cr3t')
-    expect(text).not.toContain('x-token-auth')
-  })
-})
+    afterEach(() => {
+      __resetBatchImportForTests()
+      resetBroadcastersForTests()
+      rmSync(h.tmp, { recursive: true, force: true })
+    })
+
+    test('credential URL is redacted in HTTP response body', async () => {
+      const cred = 'https://x-token-auth:s3cr3t@github.com/foo/bar.git'
+      const res = await req(h.app, '/api/cached-repos/batch-import', {
+        method: 'POST',
+        body: JSON.stringify({ urls: [cred] }),
+      })
+      expect(res.status).toBe(201)
+      const text = await res.text()
+      expect(text).not.toContain('s3cr3t')
+      expect(text).not.toContain('x-token-auth')
+    })
+  },
+)

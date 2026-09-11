@@ -6029,3 +6029,51 @@ file:line 锚点，`rfc359-w5-t19d` 的成对覆盖账本**当场从 10 vs 6 变
 
 另：`rfc221` 两个文件里的 `.get()` / `.all()` 读回断言改成 await 的语句
 （`const [row] = await db.select()…` / `await db.select()…`）——`test-suite-policy` 那条守卫盯的形态。
+
+## 5z. AC-6 第六批（W58）：两条「不是还没迁，是没法迁」的记账
+
+账本 594 → 590（`cached-repos-http-batch` / `routes-session` / `rfc201-mcp-exact-operation` /
+`rfc101-builtin-list-hidden`；另 `rfc222-task-delete` 除一条外全迁）。
+
+### ① PG 侧的 `task-active` 删除闸门**没有任何用例覆盖**（真缺口，待补）
+
+`rfc222-task-delete` 的「active-in-memory（已取消但 controller 还活着）⇒ 409 `task-active`」
+这一条迁不过去。两侧的**产品判据其实同形**——都是「本进程还有没有 driver 在跑这个任务」：
+
+| | `activity.isActive` |
+| --- | --- |
+| SQLite | `isTaskActive` = `runtimeRegistry.hasTask(id) \|\| testActiveControllers.has(id)` |
+| PostgreSQL | `(id) => executionModule.runtimeRegistry.hasTask(id)` |
+
+差的是后面那个**测试注入项**：`__setActiveTaskForTesting` 往 `testActiveControllers` 里塞，
+只有 SQLite 那一支读它。而且两侧锚的还不是同一个模块实例（SQLite 用进程级单例
+`taskExecutionModule`，PG 用 `createProviderTaskExecutionModule` 装配出来的那个）。
+
+后果不是「迁移做不完」，是**PG 侧这条闸门今天零覆盖**。处置：那一条显式留成单引擎
+`describe` + `createApp` 并在块内写清理由（不用条件 skip——`test-suite-policy` 盯静默弱化）。
+补法二选一，都不该夹在用例迁移里做：
+- 给夹具加一个 provider 中立的「把任务标成在跑」口子：SQLite 走现有钩子，PG 往
+  `selected.executionModule.runtimeRegistry` 注册（`SelectedPostgresqlTaskExecutionProviderRuntime`
+  已经把 `executionModule` 暴露出来了，HTTP 夹具也已带 `taskExecution.selected`）；
+- 或先统一两侧锚执行模块实例的方式。
+
+### ② WebSocket 那两个文件卡在**真正的成对适配器**上
+
+`ws.test.ts` / `rfc152-ws-frame-gates.test.ts` 用
+`composeTestSqliteRealtimeRuntime`，它底下是 `composeSqliteRealtimeRuntime`——
+`modules/runtime-management/composition.ts` 里 `db: DbClient` 与 `db: PostgresqlDatabaseClient`
+**两个声明**，是登记在册的成对实现，不是类型债。要迁这两个文件，得先合这一对
+（W4 那条线的活）。本轮原样退回，不做半吊子。
+
+### 顺带清掉一处 src 类型债
+
+`listWorkflows(db: DbClient)` 的函数体就是一条中立 select，同文件的 `getWorkflow` 早已是
+`ProviderNeutralDatabase`。改成中立——纯类型债，却把这个读面挡在双引擎用例之外。
+
+### 迁移工具的一个坑
+
+`rfc201-mcp-exact-operation` **本来就已部分双引擎**（`describeEachProvider` + 一份本地 provider
+夹具），只剩一条用例还在单引擎 `harness()` 上。机械地在外层再包一层 `describeEachProvider*`
+会造出 `[postgresql] > … > [sqlite]` 的**交叉积**，两层 harness 还互不相干。
+正解是把那一条补进已有的 `describeEachProvider` 里。**迁移前先 grep 文件里有没有
+`describeEachProvider`。**

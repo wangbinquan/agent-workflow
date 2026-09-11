@@ -26,11 +26,10 @@
 //      `workflows.name` is non-unique and the framework owns only its builtin=1
 //      row.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/services/agent'
@@ -41,24 +40,22 @@ import {
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { excludeBuiltinAgents, excludeBuiltinWorkflows } from '../src/services/systemResources'
 import { listWorkflows } from '../src/services/workflow'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent, Workflow } from '@agent-workflow/shared'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const TOKEN = 'a'.repeat(64) // 64-char hex → resolves to the __system__ admin actor
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-async function buildApp(): Promise<{ db: DbClient; app: Hono }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function buildApp(
+  scope: ProviderHttpApplicationScope,
+): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+  const db = scope.harness.db
   await seedTestDefaultOpencodeRuntime(db)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-rfc101-config-never-used.json',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
+  const app = (await scope.open()).app
   return { db, app }
 }
 
@@ -69,7 +66,7 @@ async function api(app: Hono, path: string, init?: RequestInit): Promise<Respons
   })
 }
 
-function fusionPersistence(db: DbClient) {
+function fusionPersistence(db: ProviderNeutralDatabase) {
   return composeSqliteFusionPersistence({ db, appHome: '/tmp', ...TEST_SQLITE_FUSION_PARTICIPANTS })
 }
 
@@ -91,85 +88,95 @@ function samplePayload(name: string): Record<string, unknown> {
   }
 }
 
-describe('RFC-101 built-in fusion resources are hidden from user-facing lists', () => {
-  beforeEach(() => resetBroadcastersForTests())
-  afterEach(() => resetBroadcastersForTests())
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-101 built-in fusion resources are hidden from user-facing lists',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    tempPrefix: 'aw-builtin-hidden-',
+  },
+  (scope) => {
+    beforeEach(() => resetBroadcastersForTests())
+    afterEach(() => resetBroadcastersForTests())
 
-  test('GET /api/agents (as daemon/admin) excludes the system-owned aw-skill-merger', async () => {
-    const { db, app } = await buildApp()
-    await seedFusionResources(fusionPersistence(db))
+    test('GET /api/agents (as daemon/admin) excludes the system-owned aw-skill-merger', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResources(fusionPersistence(db))
 
-    // Sanity: the row really is seeded, system-owned, and still resolvable at
-    // the service layer (the fusion engine resolves it by name there).
-    const merger = (await listAgents(db)).find((a) => a.name === SKILL_MERGER_AGENT_NAME)
-    expect(merger).toBeDefined()
-    expect(merger?.ownerUserId).toBe(SYSTEM_USER_ID)
+      // Sanity: the row really is seeded, system-owned, and still resolvable at
+      // the service layer (the fusion engine resolves it by name there).
+      const merger = (await listAgents(db)).find((a) => a.name === SKILL_MERGER_AGENT_NAME)
+      expect(merger).toBeDefined()
+      expect(merger?.ownerUserId).toBe(SYSTEM_USER_ID)
 
-    const res = await api(app, '/api/agents')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Agent[]
-    expect(body.some((a) => a.name === SKILL_MERGER_AGENT_NAME)).toBe(false)
-  })
-
-  test('GET /api/workflows (as daemon/admin) excludes the system-owned aw-skill-fusion', async () => {
-    const { db, app } = await buildApp()
-    await seedFusionResources(fusionPersistence(db))
-
-    const fusion = (await listWorkflows(db)).find((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)
-    expect(fusion).toBeDefined()
-    expect(fusion?.ownerUserId).toBe(SYSTEM_USER_ID)
-
-    const res = await api(app, '/api/workflows')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Workflow[]
-    expect(body.some((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)).toBe(false)
-  })
-
-  test('a normal agent created THROUGH the daemon token (also __system__-owned) stays visible', async () => {
-    // The exact failure of the first owner-only attempt: this agent's owner is
-    // __system__ (the daemon token's identity), yet its name is not reserved, so
-    // it is NOT a built-in and must remain in the list. The name+owner
-    // conjunction keeps it; the owner-only filter wrongly dropped it.
-    const { db, app } = await buildApp()
-    await seedFusionResources(fusionPersistence(db))
-    const created = await api(app, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify(samplePayload('my-coder')),
+      const res = await api(app, '/api/agents')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Agent[]
+      expect(body.some((a) => a.name === SKILL_MERGER_AGENT_NAME)).toBe(false)
     })
-    expect(created.status).toBe(201)
-    expect((await listAgents(db)).find((a) => a.name === 'my-coder')?.ownerUserId).toBe(
-      SYSTEM_USER_ID,
-    )
 
-    const body = (await (await api(app, '/api/agents')).json()) as Agent[]
-    expect(body.some((a) => a.name === 'my-coder')).toBe(true)
-    expect(body.some((a) => a.name === SKILL_MERGER_AGENT_NAME)).toBe(false)
-  })
+    test('GET /api/workflows (as daemon/admin) excludes the system-owned aw-skill-fusion', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResources(fusionPersistence(db))
 
-  test('excludeBuiltin* drop a row iff its `builtin` column is set — drift-proof (pure)', () => {
-    // RFC-104: the column is the discriminator. Owner/name are irrelevant to the
-    // hide — a built-in whose owner DRIFTED is still hidden (the footgun), and a
-    // user row reusing the reserved name (builtin=false) is always kept.
-    const agentRows = [
-      { name: SKILL_MERGER_AGENT_NAME, ownerUserId: SYSTEM_USER_ID, builtin: true }, // built-in → drop
-      { name: SKILL_MERGER_AGENT_NAME, ownerUserId: 'user_real', builtin: true }, // built-in, owner DRIFTED → still drop
-      { name: 'my-coder', ownerUserId: SYSTEM_USER_ID, builtin: false }, // daemon-token normal agent → keep
-      { name: SKILL_MERGER_AGENT_NAME, ownerUserId: 'user_real', builtin: false }, // user reused the name → keep
-    ]
-    expect(
-      excludeBuiltinAgents(agentRows).map((r) => `${r.name}:${r.ownerUserId}:${r.builtin}`),
-    ).toEqual(['my-coder:__system__:false', `${SKILL_MERGER_AGENT_NAME}:user_real:false`])
+      const fusion = (await listWorkflows(db)).find((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)
+      expect(fusion).toBeDefined()
+      expect(fusion?.ownerUserId).toBe(SYSTEM_USER_ID)
 
-    // workflows.name is NON-unique: a user-owned aw-skill-fusion (builtin=false)
-    // must survive; only the framework's builtin=true row is dropped.
-    const wfRows = [
-      { name: SKILL_FUSION_WORKFLOW_NAME, ownerUserId: SYSTEM_USER_ID, builtin: true }, // built-in → drop
-      { name: SKILL_FUSION_WORKFLOW_NAME, ownerUserId: 'user_real', builtin: false }, // user import → keep
-      { name: 'my-pipeline', ownerUserId: 'user_real', builtin: false }, // keep
-    ]
-    expect(excludeBuiltinWorkflows(wfRows).map((r) => `${r.name}:${r.builtin}`)).toEqual([
-      `${SKILL_FUSION_WORKFLOW_NAME}:false`,
-      'my-pipeline:false',
-    ])
-  })
-})
+      const res = await api(app, '/api/workflows')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Workflow[]
+      expect(body.some((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)).toBe(false)
+    })
+
+    test('a normal agent created THROUGH the daemon token (also __system__-owned) stays visible', async () => {
+      // The exact failure of the first owner-only attempt: this agent's owner is
+      // __system__ (the daemon token's identity), yet its name is not reserved, so
+      // it is NOT a built-in and must remain in the list. The name+owner
+      // conjunction keeps it; the owner-only filter wrongly dropped it.
+      const { db, app } = await buildApp(scope)
+      await seedFusionResources(fusionPersistence(db))
+      const created = await api(app, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify(samplePayload('my-coder')),
+      })
+      expect(created.status).toBe(201)
+      expect((await listAgents(db)).find((a) => a.name === 'my-coder')?.ownerUserId).toBe(
+        SYSTEM_USER_ID,
+      )
+
+      const body = (await (await api(app, '/api/agents')).json()) as Agent[]
+      expect(body.some((a) => a.name === 'my-coder')).toBe(true)
+      expect(body.some((a) => a.name === SKILL_MERGER_AGENT_NAME)).toBe(false)
+    })
+
+    test('excludeBuiltin* drop a row iff its `builtin` column is set — drift-proof (pure)', () => {
+      // RFC-104: the column is the discriminator. Owner/name are irrelevant to the
+      // hide — a built-in whose owner DRIFTED is still hidden (the footgun), and a
+      // user row reusing the reserved name (builtin=false) is always kept.
+      const agentRows = [
+        { name: SKILL_MERGER_AGENT_NAME, ownerUserId: SYSTEM_USER_ID, builtin: true }, // built-in → drop
+        { name: SKILL_MERGER_AGENT_NAME, ownerUserId: 'user_real', builtin: true }, // built-in, owner DRIFTED → still drop
+        { name: 'my-coder', ownerUserId: SYSTEM_USER_ID, builtin: false }, // daemon-token normal agent → keep
+        { name: SKILL_MERGER_AGENT_NAME, ownerUserId: 'user_real', builtin: false }, // user reused the name → keep
+      ]
+      expect(
+        excludeBuiltinAgents(agentRows).map((r) => `${r.name}:${r.ownerUserId}:${r.builtin}`),
+      ).toEqual(['my-coder:__system__:false', `${SKILL_MERGER_AGENT_NAME}:user_real:false`])
+
+      // workflows.name is NON-unique: a user-owned aw-skill-fusion (builtin=false)
+      // must survive; only the framework's builtin=true row is dropped.
+      const wfRows = [
+        { name: SKILL_FUSION_WORKFLOW_NAME, ownerUserId: SYSTEM_USER_ID, builtin: true }, // built-in → drop
+        { name: SKILL_FUSION_WORKFLOW_NAME, ownerUserId: 'user_real', builtin: false }, // user import → keep
+        { name: 'my-pipeline', ownerUserId: 'user_real', builtin: false }, // keep
+      ]
+      expect(excludeBuiltinWorkflows(wfRows).map((r) => `${r.name}:${r.builtin}`)).toEqual([
+        `${SKILL_FUSION_WORKFLOW_NAME}:false`,
+        'my-pipeline:false',
+      ])
+    })
+  },
+)

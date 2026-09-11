@@ -4,30 +4,19 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
-import { createInMemoryDb } from '../src/db/client'
+
 import { __setProbeOptionsForTesting } from '../src/routes/mcps'
 import type { OpenClientFn, ProbedMcpClient } from '../src/services/mcpProbe'
-import { createApp } from '../src/server'
+
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'rfc201-mcp-token'
-
-function harness(): Hono {
-  return createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-rfc201-mcp.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db: createInMemoryDb(MIGRATIONS),
-  })
-}
 
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
@@ -256,51 +245,55 @@ describe('RFC-201 MCP exact operation wire', () => {
     })
   })
 
-  test('rename and ACL mutation share the stable-id fence and stale a paused probe', async () => {
-    for (const mutation of ['rename', 'acl'] as const) {
-      const app = harness()
-      const created = await createMcp(app)
-      const gate = deferred()
-      let opened = false
-      __setProbeOptionsForTesting({
-        openClient: async () => {
-          opened = true
-          await gate.promise
-          return { client: client('stale'), handshakeMs: 1 }
-        },
-      })
-      const responseP = postProbe(app, created.id, created.operationConfigHash)
-      await waitForStart(() => opened, `${mutation} probe transport`)
-      const changed =
-        mutation === 'rename'
-          ? await req(app, `/api/mcps/${created.id}/rename`, {
-              method: 'POST',
-              body: JSON.stringify({
-                newName: 'pg-renamed',
-                expectedConfigHash: created.operationConfigHash,
-              }),
-            })
-          : await req(app, `/api/mcps/${created.id}/acl`, {
-              method: 'PUT',
-              body: JSON.stringify({
-                visibility: 'private',
-                expectedResourceId: created.id,
-                expectedAclRevision: 0,
-              }),
-            })
-      expect(changed.status).toBe(200)
-      const changedResource =
-        mutation === 'rename'
-          ? ((await changed.clone().json()) as Resource)
-          : await getMcp(app, created.id)
-      expect(changedResource.operationConfigHash).not.toBe(created.operationConfigHash)
-      gate.resolve()
-      const response = await responseP
-      expect(response.status).toBe(409)
-      const probeGet = await req(app, `/api/mcps/${created.id}/probe`)
-      expect(probeGet.status).toBe(404)
-      expect(((await probeGet.json()) as { code: string }).code).toBe('probe-not-found')
-    }
+  // RFC-359 AC-6：本文件其余部分早已双引擎（`describeEachProvider` + 本地 provider 夹具），
+  // 只剩这一条还在用单引擎 `harness()`。补进同一个夹具，两个引擎各跑一遍。
+  describeEachProvider('stable-id fence', (provider) => {
+    test('rename and ACL mutation share the stable-id fence and stale a paused probe', async () => {
+      for (const mutation of ['rename', 'acl'] as const) {
+        const app = await providerHarness(provider)
+        const created = await createMcp(app)
+        const gate = deferred()
+        let opened = false
+        __setProbeOptionsForTesting({
+          openClient: async () => {
+            opened = true
+            await gate.promise
+            return { client: client('stale'), handshakeMs: 1 }
+          },
+        })
+        const responseP = postProbe(app, created.id, created.operationConfigHash)
+        await waitForStart(() => opened, `${mutation} probe transport`)
+        const changed =
+          mutation === 'rename'
+            ? await req(app, `/api/mcps/${created.id}/rename`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  newName: 'pg-renamed',
+                  expectedConfigHash: created.operationConfigHash,
+                }),
+              })
+            : await req(app, `/api/mcps/${created.id}/acl`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                  visibility: 'private',
+                  expectedResourceId: created.id,
+                  expectedAclRevision: 0,
+                }),
+              })
+        expect(changed.status).toBe(200)
+        const changedResource =
+          mutation === 'rename'
+            ? ((await changed.clone().json()) as Resource)
+            : await getMcp(app, created.id)
+        expect(changedResource.operationConfigHash).not.toBe(created.operationConfigHash)
+        gate.resolve()
+        const response = await responseP
+        expect(response.status).toBe(409)
+        const probeGet = await req(app, `/api/mcps/${created.id}/probe`)
+        expect(probeGet.status).toBe(404)
+        expect(((await probeGet.json()) as { code: string }).code).toBe('probe-not-found')
+      }
+    })
   })
 
   describeEachProvider('functional operations', (provider) => {
