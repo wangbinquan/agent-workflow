@@ -407,6 +407,21 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **CI 上「跑满取消预算」的那条用例耗时随分片内排位放大 60 倍，根因未归因（RFC-359 实测，2026-09-11）**：
+  `tests/retry-cascade-kind-matrix.test.ts` 的
+  `child cancel CAS starvation fails retry closed without rollback or mint` 要把生产的取消预算打满
+  （`services/task.ts` 的 `attempts++ >= 8`，即 9 笔完整的取消写事务）。**实测数据**：本机稳定
+  0.14s（连测 3 次 0.144 / 0.140 / 0.143）；CI 上排在分片第 87 位时 58–69ms（连续三个提交），
+  排在第 60 位时同一提交两次分别 **5166ms（撞 5s 缺省预算，红）与 3797ms（侥幸绿）**。
+  同文件其余 20 条用例两次都稳定在 40–70ms，只有跑满 9 笔事务的这条被放大；它的姊妹用例
+  （只跑 1 笔注入取消）同批从 37ms 涨到 497ms。bun 的分片内文件序在两次 run 之间会变，所以这
+  等于掷硬币。**已排除**：①代码回归——同一提交同一文件序两次相差 1.4s，而前后提交的 diff
+  （`a3e4482a1`）在这条路径上零改动；②事件循环让渡饥饿——本机用持续 I/O 的 preload 压测，
+  耗时仍是 0.165s；③`rfc213-sqlite-synchronous` 之类前置文件的 pragma 泄漏——本机按 CI 的前置
+  文件序复跑仍是 0.14s；④本机整段前缀（60 个文件）复跑也只到 0.354s。**已做的处置**：给这两条
+  用例显式 60s 预算（承重判据仍是 `cancelCasAttempts === 8`），让「跑满 9 笔」本身不再是红的来源。
+  **仍未做**：为什么单笔取消事务在 CI 的某些排位下要 ~420ms。下次动取消 / 事务原语时顺手量一次。
+
 - ⏳ **任务域 MCP 工具的审计行 `resource_kind` / `resource_id` 为空（RFC-326 实现期登记，2026-08-25）**：
   `token_audit` 的资源身份来自工具参数里的 `kind` / `id`（`mcp/server.ts` 的 `stringArg(args.kind)`），
   收敛工具天然带这两个参数；具名工具里 RFC-326 给评审 / 人工门工具加了 `McpToolDef.audit` 钩子

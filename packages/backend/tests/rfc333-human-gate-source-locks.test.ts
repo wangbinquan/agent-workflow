@@ -158,7 +158,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(count('parkPreparedHumanGate')).toBe(1)
     expect(count('finalizeCommittedHumanGate')).toBe(1)
     expect(count('setTaskStatus')).toBe(0)
-    expect(count('submitTaskContinuationTx')).toBe(0)
+    expect(count('submitTaskContinuationInTransaction')).toBe(0)
 
     const position = (name: string): number =>
       callInventory.find((candidate) => candidate.name === name)!.position
@@ -314,10 +314,8 @@ describe('RFC-333 T2 canonical continuation authority lock', () => {
     // 回调拿到的是 `DatabaseTransaction`，因此走的是同一套判据的**异步孪生**
     // （`submitTaskContinuationInTransaction`）。本判据锁的东西没变——「legacy resume helper
     // 必须经 public 合同抵达 RFC-328 的准入参与者，而不是自己拼一份」——只是锚点跟着实现走。
-    // 同步那份仍在（`sqliteTaskExecutionIntentAdmission.ts` 的事务内参与者用它），所以两条都锁。
-    expect(participants).toContain(
-      'export const submitTaskContinuationTx = submitTaskContinuationTxInternal',
-    )
+    // 同步那份（`sqliteTaskExecutionIntentAdmission.ts`）已随它唯一的调用方
+    // `sqliteTaskDecisionParticipant.ts` 一起退役，只剩这一条要锁。
     expect(participants).toContain(
       'export const submitTaskContinuationInTransaction = submitTaskContinuationInTransactionInternal',
     )

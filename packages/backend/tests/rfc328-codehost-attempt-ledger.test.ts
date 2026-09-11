@@ -8,7 +8,7 @@ import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   taskExecutionEffectAttempts,
   taskExecutionEffects,
@@ -36,7 +36,7 @@ import {
   validateCodeHostRecoveryBindingManifest,
 } from '@/modules/task-execution/domain/codeHostRecovery'
 import { createVerifiedOutcomeUnknownClosure } from '@/modules/task-execution/domain/ownership'
-import { submitTaskContinuationTx } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission'
+import { submitTaskContinuationInTransaction } from '@/modules/task-execution/public/participants'
 // RFC-359 W10：同步 store 上的 `closeOutcomeUnknownAndRelease` 生产零调用方、已删除；
 // 这里改指两个引擎共用的那一份。
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
@@ -467,17 +467,21 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     ).toBe('requires-actor')
 
     const manualIntentId = 'intent-approve-manual-generation-1'
-    dbTxSync(h.db, (tx) =>
-      submitTaskContinuationTx(tx, {
-        taskId: h.taskId,
-        intentId: manualIntentId,
-        kind: 'resume',
-        source: 'mcp',
-        actorUserId: 'actor-2',
-        payload: { v: 1 },
-        now: 21,
-        advanceOperationGeneration: true,
-      }),
+    // RFC-359：同步的 `submitTaskContinuationTx` 随它唯一的调用方
+    // （`sqliteTaskDecisionParticipant.ts` 的 `dbTxSync` 体）一起退役；判据锁的是**准入语义**
+    // （resume intent 落行 + operationGeneration 推进），与解释无关，改走中立孪生。
+    await databaseSessionFor(h.db).transaction(
+      async (tx) =>
+        await submitTaskContinuationInTransaction(tx, {
+          taskId: h.taskId,
+          intentId: manualIntentId,
+          kind: 'resume',
+          source: 'mcp',
+          actorUserId: 'actor-2',
+          payload: { v: 1 },
+          now: 21,
+          advanceOperationGeneration: true,
+        }),
     )
     const claim = await h.module.claim({ db: h.db, intentId: manualIntentId })
     h.module.claimGate.leave(claim.permit)

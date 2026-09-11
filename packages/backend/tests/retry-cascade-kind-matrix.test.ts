@@ -482,8 +482,18 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
         (r) => r.errorMessage === 'queued for retry',
       ),
     ).toHaveLength(0)
-  })
+    // 同上：这条也跑注入的取消钩子，同一次 CI 里跟着从 37ms 涨到 497ms。它只跑一笔，离 5s
+    // 还远，但放大来源相同，一并给预算，免得下一次排位更靠前时又变成掷硬币。
+  }, 60_000)
 
+  // 这条判据要把生产的取消预算**打满**：`services/task.ts` 的 `attempts++ >= 8` 意味着 9 次
+  // 完整的取消写事务。本机 0.14s，但它在 CI 上的耗时**强烈依赖同分片里它排在第几个**——
+  // 2026-09-11 实测：同一提交、同一文件序（第 60 位）两次分别 5166ms 与 3797ms，而前一提交
+  // 排在第 87 位时是 58ms；同文件其余用例两次都稳定在 40–70ms，只有这条（唯一跑满 9 笔事务的）
+  // 被放大。bun 的分片内文件序在两次 run 之间会变，于是这条用例在 5s 缺省预算下等于掷硬币。
+  // 给它一个显式预算，让「跑满 9 笔」这件事本身不再是红的来源；真正承重的判据仍是下面的
+  // `cancelCasAttempts === 8`（少了是真回归，多了是钩子被无关路径触发）。
+  // 放大倍率的根因未归因，已记进 `docs/audit-backlog.md`。
   test('child cancel CAS starvation fails retry closed without rollback or mint', async () => {
     const downId = 'down_call_workflow'
     const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
@@ -537,7 +547,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
         (r) => r.errorMessage === 'queued for retry',
       ),
     ).toHaveLength(0)
-  })
+  }, 60_000)
 
   test('TARGET — even non-process target gets minted (current behavior, may change in PR-C)', async () => {
     // The user-clicked target is unconditionally added to `targets` in

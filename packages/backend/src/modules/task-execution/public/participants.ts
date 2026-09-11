@@ -25,7 +25,6 @@ import {
 } from '../composition/sqliteTaskExecutionContext'
 import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
 import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
-import { submitTaskContinuationTx as submitTaskContinuationTxInternal } from '../composition/continuationAdmission'
 import type {
   AcceptHumanGateDecisionInput,
   AcceptedHumanGateDecision,
@@ -235,7 +234,6 @@ export const currentTaskExecutionContext = currentTaskExecutionContextInternal
 export const runWithTaskExecutionContext = runWithTaskExecutionContextInternal
 export const fenceTaskWrite = fenceTaskWriteInternal
 export const withTaskExecutionWrite = withTaskExecutionWriteInternal
-export const submitTaskContinuationTx = submitTaskContinuationTxInternal
 // Composition supplies only the exact lifecycle transition participant. The
 // public task-execution surface does not close over the legacy lifecycle
 // adapter, so lifecycle.ts can consume the remaining participant aggregate

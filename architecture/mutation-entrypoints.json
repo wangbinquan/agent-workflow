@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1733,
+    "entries": 1730,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27235,26 +27235,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts#submitTaskContinuationTx",
-      "missingControls": [
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts#submitTaskContinuationTx",
-      "symbol": "submitTaskContinuationTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "request",
         "authorization": true,
@@ -27936,27 +27916,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts#applyWorkspacePreparationProjection",
       "symbol": "applyWorkspacePreparationProjection",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "effect",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionEffectTransactionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskExecutionEffectTransactionStore.ts#SettleEffectAttemptInput",
-      "missingControls": [
-        "audit",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionEffectTransactionStore.ts#SettleEffectAttemptInput",
-      "symbol": "SettleEffectAttemptInput",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -28722,31 +28681,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#submitTaskContinuationInTransaction",
       "symbol": "submitTaskContinuationInTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/public/participants.ts#submitTaskContinuationTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#submitTaskContinuationTx",
-      "symbol": "submitTaskContinuationTx",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -41396,7 +41330,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ba6d91a3c29774fb97ee697cf23c5329e4ada1d4994f8f9d5c387f06016f97c",
+  "sourceDigest": "sha256:f895262ca065c1f019694e548a7a9ece41ee2cd03a6073e3511fe102d4bd1c8d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41508,7 +41442,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 165,
+      "durableWriterSites": 163,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -42859,22 +42793,6 @@
       },
       {
         "allowedTables": [
-          "taskExecutionEffects"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "linkWorkspaceRollbackTx",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffects",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#81:taskExecutionEffects",
-        "line": 81,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
           "taskExecutionIntents"
         ],
         "authorityKind": "control-revision",
@@ -42888,22 +42806,6 @@
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
         "symbol": "SqliteTaskExecutionIntentStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "submitTaskContinuationTx",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts#142:taskExecutionLineageOperationRecords",
-        "line": 142,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts#submitTaskContinuationTx",
-        "requiredBrandedProof": "CanonicalContinuationRequest",
-        "revisionPredicate": "expected-task-revision-and-active-intent-unique",
-        "symbol": "submitTaskContinuationTx"
       },
       {
         "allowedTables": [

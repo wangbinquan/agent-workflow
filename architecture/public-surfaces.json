@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 847,
+    "consumers": 846,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20481,
-    "symbols": 980
+    "symbols": 979
   },
   "entries": [
     {
@@ -151985,45 +151985,6 @@
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:submitTaskContinuationTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#submitTaskContinuationTx",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:435d6eda81a40db934008e3906fc96e6771af1ac366618187d90a88131556c6f",
-      "status": "target-context-current-surface",
-      "symbol": "submitTaskContinuationTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
       "fields": [
         {
           "consumerEdgeIds": [],
@@ -161819,7 +161780,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ba6d91a3c29774fb97ee697cf23c5329e4ada1d4994f8f9d5c387f06016f97c",
+  "sourceDigest": "sha256:f895262ca065c1f019694e548a7a9ece41ee2cd03a6073e3511fe102d4bd1c8d",
   "targetContexts": [
     "collaboration",
     "development-automation",

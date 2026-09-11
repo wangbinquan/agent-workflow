@@ -498,8 +498,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       'released',
     )
     expect(
-      module.effects.planCodeHostAttempt({
-        db: database,
+      await effectsOf(database).planCodeHostAttempt({
         executionLineageId: 'task-probe-stop-window',
         operationFamilyKey: family,
       }),
@@ -607,8 +606,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         .every((row) => row.releasedAt === 21),
     ).toBe(true)
     expect(
-      module.effects.nextOperationGeneration({
-        db: database,
+      await effectsOf(database).nextOperationGeneration({
         executionLineageId: 'task-effect',
         operationFamilyKey: family,
       }),
@@ -1304,8 +1302,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
         .get()?.state,
     ).toBe('retry-authorized')
     expect(
-      oldModule.effects.planCodeHostAttempt({
-        db: database,
+      await effectsOf(database).planCodeHostAttempt({
         executionLineageId: 'task-codehost-recovered-retry',
         operationFamilyKey: effects.get('task-codehost-recovered-retry')!.family,
       }),
