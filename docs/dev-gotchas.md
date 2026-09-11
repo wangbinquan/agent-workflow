@@ -6230,3 +6230,23 @@ bun 的 hook 默认预算是 5s。`eachProvider` 的 PostgreSQL `beforeEach` 做
 而失败会记在**随机某个用例**头上，与被测代码毫无关系（2026-09-11 real-PostgreSQL 泳道）。
 新写带真实 I/O 的 hook 时显式给预算；看到「hook timed out」先去看那个 hook 做了多少事，
 不要从被测代码找原因。
+
+## 改 `tests/helpers/eachProvider.ts` 要连带跑对它做**源码级自省**的那两个文件
+
+有两个用例把 `registerPostgresql` 的**源码文本**取出来、在自己构造的绑定表里 `new Function`
+重新求值，用来断言它注册了哪些 hook、hook 的实参数、清理顺序：
+
+- `tests/rfc359-w31-provider-fixture-registration.test.ts`
+- `tests/rfc359-w39-provider-harness-lifecycle-diagnostics.test.ts`
+
+后果：往 `eachProvider.ts` 里**加一个模块级常量**，在那个重新求值的作用域里就是
+`ReferenceError`——而 typecheck / eslint / 本文件自身的用例全都看不见。改 hook 的实参形状
+（比如给 `beforeEach` 加超时预算）同样会撞 `['beforeEach', 1]` 这类实参数断言。
+2026-09-11 `08b925859` 就是这么把 main 推红的：本地跑了 `tests/architecture/` 与本次触及的
+全部用例，唯独没跑这两个。
+
+找它们：`grep -rln "readFileSync.*eachProvider" packages/backend/tests/`。
+动 harness 前后各跑一次这两个 + `rfc359-each-provider-harness.test.ts`（合计几秒）。
+
+更一般的规律：**改「几百个用例共用的 helper」时，"跑我改过的那些文件" 这条选择法天然漏判**
+——受影响面不是你改的文件，是依赖它的文件。至少要把对该 helper 做断言的用例找出来跑掉。

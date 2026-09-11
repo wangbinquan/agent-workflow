@@ -406,9 +406,6 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
       "baseline": 7,
-      "allowGrowth": {
-        "why": "RFC-359 W58：`TaskRouteOperations` 进观察名单（8 vs 11）。PG 侧 `workflowSyncPreview` 补齐内置工作流分支所致——判据两侧现在共用 `domain/workflowSyncPreview.ts`，ref 差是实现形状差（SQLite 把同一段判据集中在 `computeWorkflowSyncPreview` 一个函数里），不是覆盖差。"
-      },
       "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。"
     },
     {
@@ -815,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5261,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W58：PG 侧 `workflowSyncPreview` 补齐内置工作流分支与持久化可同步判据（此前内置工作流在 PG 上回 `workflow-deleted`、running 任务预览成可同步而按钮必 409），判据落在共用 `domain/workflowSyncPreview.ts`，由 `public/participants.ts` 再导出两个符号给 legacy `services/task.ts` 取用。涨的是公共面符号数与由此产生的跨上下文引用，不是新的耦合。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -839,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4727,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W58：PG 侧 `workflowSyncPreview` 补齐内置工作流分支与持久化可同步判据（此前内置工作流在 PG 上回 `workflow-deleted`、running 任务预览成可同步而按钮必 409），判据落在共用 `domain/workflowSyncPreview.ts`，由 `public/participants.ts` 再导出两个符号给 legacy `services/task.ts` 取用。涨的是公共面符号数与由此产生的跨上下文引用，不是新的耦合。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -856,10 +847,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 981,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 W58：PG 侧 `workflowSyncPreview` 补齐内置工作流分支与持久化可同步判据（此前内置工作流在 PG 上回 `workflow-deleted`、running 任务预览成可同步而按钮必 409），判据落在共用 `domain/workflowSyncPreview.ts`，由 `public/participants.ts` 再导出两个符号给 legacy `services/task.ts` 取用。涨的是公共面符号数与由此产生的跨上下文引用，不是新的耦合。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -880,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24936,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W58：PG 侧 `workflowSyncPreview` 补齐内置工作流分支与持久化可同步判据（此前内置工作流在 PG 上回 `workflow-deleted`、running 任务预览成可同步而按钮必 409），判据落在共用 `domain/workflowSyncPreview.ts`，由 `public/participants.ts` 再导出两个符号给 legacy `services/task.ts` 取用。涨的是公共面符号数与由此产生的跨上下文引用，不是新的耦合。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -900,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0edf5122c07ee46b763ad41c601f839b16c07eb1",
-    "contentDigest": "sha256:cbc337eb82c79c3b319851fa1eec0c053c30710517279a1616fa64edb7acf02d",
+    "currentSnapshotSha": "4e9a73960b90b27f17a406f9adadae6046aecc7d",
+    "contentDigest": "sha256:9f9478c5d0e396aff2e9b1791ce9276a1dd5bb7ed83f87762aac0ef231b832ff",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
