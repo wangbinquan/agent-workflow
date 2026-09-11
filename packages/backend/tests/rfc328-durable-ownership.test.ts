@@ -203,9 +203,8 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
     expect(() => module.claim({ db: database, intentId: submitted.intentId, now: 12 })).toThrow(
       expect.objectContaining({ code: 'task-execution-owner-conflict' }),
     )
-    const before = module.ownership.read(database, 'task-owner')!
-    module.ownership.revokeExact({
-      db: database,
+    const before = (await module.ownershipFor(database).read('task-owner'))!
+    await module.ownershipFor(database).revokeExact({
       owner: {
         taskId: before.taskId,
         ownerId: before.ownerId,
@@ -233,7 +232,7 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
     ).rejects.toEqual(expect.objectContaining({ code: 'task-execution-stale-owner' }))
     expect(database.select({ value: tasks.errorSummary }).from(tasks).get()?.value).toBeNull()
 
-    const revoked = module.ownership.read(database, 'task-owner')!
+    const revoked = (await module.ownershipFor(database).read('task-owner'))!
     await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
       token: claimed.token,
       intentId: submitted.intentId,
@@ -480,7 +479,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       retryAuthority: 'probe',
       now: 41,
     })
-    const owner = module.ownership.read(database, 'task-probe-stop-window')!
+    const owner = (await module.ownershipFor(database).read('task-probe-stop-window'))!
     await expect(
       new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
         token: claim.token,
@@ -495,7 +494,9 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         now: 42,
       }),
     ).resolves.toMatchObject({ state: 'released' })
-    expect(module.ownership.read(database, 'task-probe-stop-window')?.state).toBe('released')
+    expect((await module.ownershipFor(database).read('task-probe-stop-window'))?.state).toBe(
+      'released',
+    )
     expect(
       module.effects.planCodeHostAttempt({
         db: database,
@@ -678,7 +679,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       retryAuthority: 'none',
       failureCode: 'response-lost',
     })
-    const owner = module.ownership.read(database, 'task-unknown')!
+    const owner = (await module.ownershipFor(database).read('task-unknown'))!
     await closeOutcomeUnknownAndRelease(database, {
       token: claim.token,
       intentId: intent.intentId,
@@ -692,7 +693,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       }),
       now: 30,
     })
-    expect(module.ownership.read(database, 'task-unknown')?.state).toBe('released')
+    expect((await module.ownershipFor(database).read('task-unknown'))?.state).toBe('released')
     const decision = database
       .select()
       .from(taskExecutionLineageOperationRecords)
@@ -1476,7 +1477,7 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       .set({ status: 'done', finishedAt: 62 })
       .where(eq(tasks.id, 'task-archive-ledger'))
       .run()
-    const owner = module.ownership.read(database, 'task-archive-ledger')!
+    const owner = (await module.ownershipFor(database).read('task-archive-ledger'))!
     await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
       token: owned.token,
       intentId: intent.intentId,

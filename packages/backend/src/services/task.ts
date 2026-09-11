@@ -428,45 +428,10 @@ export async function shutdownActiveTaskExecutions(
   return [...survivors.map((token) => token.taskId), ...testActiveControllers.keys()]
 }
 
-/** Move an exact same-daemon shutdown survivor behind durable recovery. */
-export function markTaskExecutionShutdownSurvivor(
-  db: LegacySqliteTaskDatabase,
-  taskId: string,
-): void {
-  const token = taskDriverRegistry.tokenForTask(taskId)
-  if (token === null) return
-  let owner = taskExecutionModule.ownership.read(db, taskId)
-  if (owner === null || owner.epoch !== token.epoch) return
-  try {
-    if (owner.state === 'claimed') {
-      owner = taskExecutionModule.ownership.revokeExact({
-        db,
-        owner: {
-          taskId: owner.taskId,
-          ownerId: owner.ownerId,
-          daemonGeneration: owner.daemonGeneration,
-          epoch: owner.epoch,
-        },
-        expectedRevision: owner.revision,
-        now: Date.now(),
-        recoveryCode: 'daemon-shutdown-survivor',
-      })
-    }
-    if (owner.state === 'revoked') {
-      taskExecutionModule.ownership.markRecoveryRequired({
-        db,
-        token,
-        expectedRevision: owner.revision,
-        code: 'daemon-shutdown-survivor',
-        now: Date.now(),
-      })
-    }
-  } catch (error) {
-    if (!(error instanceof TaskExecutionError) || error.code !== 'task-execution-stale-owner') {
-      throw error
-    }
-  }
-}
+// RFC-359：同名的 SQLite 专属 `markTaskExecutionShutdownSurvivor` 已删除。优雅停机的幸存者处置
+// 早在 W4-B1 批 2h 合成了两个引擎共用的一份
+// （`DrizzleTaskExecutionShutdownOperations.interruptSurvivor` / `.markRecoveryRequired`，
+// 由 `services/shutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
 
 /** RFC-303: a terminal effect may cancel a task that has no process-local
  * scheduler owner (pending/waiting or recovered row). In that case there is no
@@ -4420,10 +4385,10 @@ export async function cancelTask(
       Bun.sleep(5000).then(() => null),
     ])
     if (result === null) {
-      const owner = taskExecutionModule.ownership.read(db, id)
+      const ownership = taskExecutionModule.ownershipFor(db)
+      const owner = await ownership.read(id)
       if (owner !== null && owner.epoch === exactStopToken.epoch && owner.state === 'revoked') {
-        taskExecutionModule.ownership.markRecoveryRequired({
-          db,
+        await ownership.markRecoveryRequired({
           token: exactStopToken,
           expectedRevision: owner.revision,
           code: 'terminal-stop-timeout',

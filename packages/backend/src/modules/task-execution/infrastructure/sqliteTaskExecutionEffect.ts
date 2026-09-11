@@ -6,18 +6,16 @@ import {
   taskExecutionIntents,
   taskExecutionLineageOperationRecords,
 } from '@/db/schema'
+import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type {
   CodeHostAttemptPlan,
   LinkedWorkspaceRollbackEffect,
   TaskExecutionEffectStore,
 } from './taskExecutionEffectTransactionStore'
-import type { TaskOwnershipStore } from './taskOwnershipTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
 
 export class SqliteTaskExecutionEffectStore implements TaskExecutionEffectStore {
-  constructor(private readonly ownership: TaskOwnershipStore) {}
-
   linkWorkspaceRollbackTx(input: {
     tx: DbTxSync
     taskId: string
@@ -105,7 +103,7 @@ export class SqliteTaskExecutionEffectStore implements TaskExecutionEffectStore 
   }
 
   planCodeHostAttempt(input: {
-    db: Parameters<TaskOwnershipStore['read']>[0]
+    db: DbClient
     executionLineageId: string
     operationFamilyKey: string
   }): CodeHostAttemptPlan {
@@ -144,7 +142,7 @@ export class SqliteTaskExecutionEffectStore implements TaskExecutionEffectStore 
   }
 
   nextOperationGeneration(input: {
-    db: Parameters<TaskOwnershipStore['read']>[0]
+    db: DbClient
     executionLineageId: string
     operationFamilyKey: string
   }): number {

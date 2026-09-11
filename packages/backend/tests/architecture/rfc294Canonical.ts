@@ -2861,12 +2861,20 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
   },
   {
     subtype: 'daemon-shutdown',
-    file: 'packages/backend/src/services/task.ts',
-    symbol: 'markTaskExecutionShutdownSurvivor',
-    allowedTables: ['taskExecutionOwners', 'taskExecutionIntents'],
-    allowedTransitions: ['claimed->revoked', 'revoked->recovery-required'],
-    revisionPredicate: 'exact-owner-tuple-and-revision',
-    requiredBrandedProof: 'ExplicitShutdownReason+ExactOwnershipToken',
+    // RFC-359：优雅停机的幸存者处置在 W4-B1 批 2h 合成了两个引擎共用的一份；SQLite 专属的
+    // `services/task.ts#markTaskExecutionShutdownSurvivor` 自那以后生产零调用方，现已删除。
+    // 权威没有消失，只是搬了家：`services/shutdown.ts` 经 `dependencies.operations` 调这一个类，
+    // 写点（tasks / intents / owners）与 CAS 判据逐条未变。
+    file: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts',
+    symbol: 'DrizzleTaskExecutionShutdownOperations',
+    allowedTables: ['tasks', 'taskExecutionIntents', 'taskExecutionOwners'],
+    allowedTransitions: [
+      'running->interrupted',
+      'claimed->recovery-required',
+      'revoked->recovery-required',
+    ],
+    revisionPredicate: 'task-lifecycle-event-revision+exact-owner-revision',
+    requiredBrandedProof: 'ExplicitShutdownReason+ExactOwnerTuple',
   },
   {
     subtype: 'recovery-candidate-revoke',

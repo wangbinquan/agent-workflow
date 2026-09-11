@@ -166,7 +166,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts',
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts',
   'modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
-  'modules/task-execution/infrastructure/sqliteTaskOwnership.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
   'modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts',

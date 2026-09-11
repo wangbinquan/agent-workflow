@@ -1204,6 +1204,26 @@ bun 的 `test` / `beforeAll` / `beforeEach` 默认超时都是 **5s**，而 fixt
 必须排除在替换面之外**；否则量到的是自己制造的噪声，还会把结论引到完全相反的方向
 （当时差点据此把「76 个文件用 `dbTxSync`」写进交接，实际是 4 个文件 7 个调用点）。
 
+## 删 / 搬源文件时，`scripts/` 与 `.github/` 里硬写的路径没人替你改（RFC-359 一天内两处，2026-09-11）
+
+编译器管不到纯字符串。删一个源文件之后，下面两类引用会**各自以不同的方式**咬人：
+
+1. **CI 独有的 step 读硬写清单** → 推上去才红。`scripts/rfc359-p0-mutations.ts` 的 `sourceFiles`
+   指纹清单里写着刚被删的 `platform/persistence/sqliteCommittedEventStore.ts`，脚本开跑第一件事
+   `sourceHashes()` 直接 ENOENT 退 1。本地 typecheck、全量 `bun test` 全绿——那条 lane（真
+   PostgreSQL）本地根本不跑。
+2. **workflow 的 `paths:` 触发器指着旧路径** → **永远不红**，只是覆盖面凭空消失。
+   `maintenance-soak-nightly.yml` 还指着合一前的 `platform/persistence/sqlite/maintenanceRunStore.ts`，
+   而文件早合成了 `platform/persistence/maintenanceRunStore.ts`；于是改真正那份文件时夜跑静默
+   不触发。这一类比红危险得多，因为没有任何信号。
+
+**已落守卫**（`packages/backend/tests/test-suite-policy.test.ts`）：`.github/workflows/*.yml` 与
+`scripts/*.ts` 里所有**带引号的字面仓内路径**必须真实存在。只认引号内的字面量——注释散文里
+出现的同形路径不算（`scripts/depcheck.ts` 的注释就写着一个「会去找但并不存在」的 tsconfig 路径，
+第一版正则被它绊过一次）。另有 `rfc359-w14-p0-mutation-verdict` 专盯那份指纹清单。
+
+**仍要自己做的**：带 `*` 的通配段守卫看不了。移动目录时顺手 `grep -rn '<旧目录>' .github scripts`。
+
 ## 给 eslint 的文件清单里混进**已删除的路径**，它一条都不 lint 还退 0（RFC-359 实撞，2026-09-11）
 
 删文件的那种提交最容易撞：习惯性用 `git status --porcelain | awk '{print $2}'` 拼出「本次改动的

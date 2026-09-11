@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1802,
+    "backendFiles": 1800,
     "frontendFiles": 622,
     "legacyFiles": 602,
-    "moduleFiles": 1200,
-    "productionFiles": 2579,
+    "moduleFiles": 1198,
+    "productionFiles": 2577,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24973
+    "symbolsIncludingFileRoots": 24965
   },
   "entries": [
     {
@@ -132315,66 +132315,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts#OwnerRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "OwnerRow",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts#snapshot",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "snapshot",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts#SqliteTaskOwnershipStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteTaskOwnershipStore",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts#staleOwner",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "staleOwner",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
       "removeAfterWave": null,
@@ -135320,30 +135260,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "withOwnedTaskWrite",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipTransactionStore.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipTransactionStore.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipTransactionStore.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipTransactionStore.ts#TaskOwnershipStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "TaskOwnershipStore",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -189465,18 +189381,6 @@
       "status": "legacy-target",
       "symbol": "mapTaskRepoRow",
       "targetContext": "source-control",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#markTaskExecutionShutdownSurvivor",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "markTaskExecutionShutdownSurvivor",
-      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -300375,5 +300279,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:71ab776d7b73a218a02ed80cb0187c6ac098bbcf7d6affdac08838ab7f731b33"
+  "sourceDigest": "sha256:1ba6d91a3c29774fb97ee697cf23c5329e4ada1d4994f8f9d5c387f06016f97c"
 }

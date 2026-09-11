@@ -243,7 +243,7 @@ async function approveResponseLossDriftFixture(input: {
   expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
   const unresolved = h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).get()!
-  const owner = h.module.ownership.read(h.db, h.taskId)!
+  const owner = (await h.module.ownershipFor(h.db).read(h.taskId))!
   await closeOutcomeUnknownAndRelease(h.db, {
     token: h.context.token,
     intentId: `intent-${h.taskId}`,
@@ -444,7 +444,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       .select({ id: taskExecutionEffects.id })
       .from(taskExecutionEffects)
       .get()!
-    const owner = h.module.ownership.read(h.db, h.taskId)!
+    const owner = (await h.module.ownershipFor(h.db).read(h.taskId))!
     await closeOutcomeUnknownAndRelease(h.db, {
       token: h.context.token,
       intentId: `intent-${h.taskId}`,

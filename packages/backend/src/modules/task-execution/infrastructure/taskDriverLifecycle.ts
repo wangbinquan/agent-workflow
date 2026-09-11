@@ -93,22 +93,20 @@ function startOwnerHeartbeat(
   const key = ownershipTokenKey(token)
   const existing = ownerHeartbeatTimers.get(key)
   if (existing !== undefined) clearInterval(existing)
+  // RFC-359：心跳走中立归属持久化（`taskExecutionModule.ownershipFor(db)`），与
+  // `postgresqlTaskDriverLifecycle.ts` 的这一段逐字同形——失败即 abort 并记一条被围栏的告警。
   const timer = setInterval(() => {
-    try {
-      taskExecutionModule.ownership.heartbeat({
-        db,
-        token,
-        now: Date.now(),
-        leaseMs: DEFAULT_OWNERSHIP_LEASE_MS,
+    void taskExecutionModule
+      .ownershipFor(db)
+      .heartbeat({ token, now: Date.now(), leaseMs: DEFAULT_OWNERSHIP_LEASE_MS })
+      .catch((error: unknown) => {
+        controller.abort('task-execution-stale-owner')
+        log.warn('durable task owner heartbeat was fenced', {
+          taskId: token.taskId,
+          epoch: token.epoch,
+          error: error instanceof Error ? error.message : String(error),
+        })
       })
-    } catch (error) {
-      controller.abort('task-execution-stale-owner')
-      log.warn('durable task owner heartbeat was fenced', {
-        taskId: token.taskId,
-        epoch: token.epoch,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
   }, DEFAULT_OWNERSHIP_HEARTBEAT_MS)
   timer.unref?.()
   ownerHeartbeatTimers.set(key, timer)

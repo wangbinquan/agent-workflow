@@ -155,7 +155,7 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
   await settleGeneration(1, { operation: 'second-request' }, 63)
 
   database.update(tasks).set({ status: 'done', finishedAt: 65 }).where(eq(tasks.id, taskId)).run()
-  const owner = module.ownership.read(database, taskId)!
+  const owner = (await module.ownershipFor(database).read(taskId))!
   await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
     token: owned.token,
     intentId: intent.intentId,

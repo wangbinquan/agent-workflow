@@ -6,7 +6,6 @@ import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { TaskClaimGate } from './application/taskClaimGate'
 import { SqliteTaskExecutionEffectStore } from './infrastructure/sqliteTaskExecutionEffect'
 import { SqliteTaskExecutionIntentStore } from './infrastructure/sqliteTaskExecutionIntent'
-import { SqliteTaskOwnershipStore } from './infrastructure/sqliteTaskOwnership'
 import { DrizzleTaskOwnershipPersistence } from './infrastructure/taskOwnershipPersistence'
 import { InMemoryTaskRuntimeRegistry } from './infrastructure/inMemoryTaskRuntimeRegistry'
 import type { RuntimeStopTicket } from './infrastructure/inMemoryTaskRuntimeRegistry'
@@ -16,6 +15,7 @@ import {
   type OwnershipToken,
 } from './domain/ownership'
 import type { TaskExecutionPersistence } from './application/ports/taskExecutionPersistence'
+import type { TaskOwnershipPersistence } from './application/ports/taskOwnershipPersistence'
 
 export const DEFAULT_OWNERSHIP_LEASE_MS = 60_000
 export const DEFAULT_OWNERSHIP_HEARTBEAT_MS = 15_000
@@ -30,12 +30,22 @@ export class TaskExecutionModule {
   readonly moduleId = ulid()
   readonly claimGate: TaskClaimGate
   readonly runtimeRegistry: InMemoryTaskRuntimeRegistry
-  readonly ownership = new SqliteTaskOwnershipStore()
   readonly intents = new SqliteTaskExecutionIntentStore()
-  readonly effects = new SqliteTaskExecutionEffectStore(this.ownership)
+  readonly effects = new SqliteTaskExecutionEffectStore()
   // RFC-359 W7：终态维护认领不再挂在这里。删除 / 归档 / workspace-GC 三条路径与两个 provider
   // 的组合根共用 `DrizzleTerminalMaintenancePersistence`（`createTerminalMaintenanceStore(db)`），
   // 因此这个进程级单例不再需要一个 bun:sqlite 专属的同步 store 成员。
+
+  /**
+   * RFC-359 —— 归属写面**只有一份**：`DrizzleTaskOwnershipPersistence`，两个引擎共用。
+   * 此前这里还挂着一个 bun:sqlite 专属的同步 `SqliteTaskOwnershipStore` 进程级单例（签名吃
+   * `DbClient`、方法同步返回），`services/task.ts` 与 `taskDriverLifecycle.ts` 各自从它取
+   * `read` / `revokeExact` / `markRecoveryRequired` / `heartbeat`。同一件事两份实现，正是本 RFC
+   * 要消灭的形态；现在统一从这里按库取中立那份（PG 侧的驱动生命周期本来就是这个形状）。
+   */
+  ownershipFor(db: ProviderNeutralDatabase): TaskOwnershipPersistence {
+    return new DrizzleTaskOwnershipPersistence(db)
+  }
 
   constructor(readonly daemonGeneration: string) {
     this.claimGate = new TaskClaimGate(daemonGeneration)
@@ -60,7 +70,7 @@ export class TaskExecutionModule {
   }): Promise<ClaimedTaskExecution> {
     const permit = this.claimGate.enter()
     try {
-      const token = await new DrizzleTaskOwnershipPersistence(input.db).claimPendingIntent({
+      const token = await this.ownershipFor(input.db).claimPendingIntent({
         intentId: input.intentId,
         identity: createWorkerIdentity({
           ownerId: ulid(),

@@ -447,8 +447,8 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 55,
-      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。"
+      "baseline": 54,
+      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。"
     },
     {
       "id": "rfc359-w5-provider-pair-conformance",
@@ -811,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5299,
+      "baseline": 5295,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -832,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4762,
+      "baseline": 4759,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -867,12 +867,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24973,
+      "baseline": 24965,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:71ab776d7b73a218a02ed80cb0187c6ac098bbcf7d6affdac08838ab7f731b33",
+    "sourceDigest": "sha256:1ba6d91a3c29774fb97ee697cf23c5329e4ada1d4994f8f9d5c387f06016f97c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c16ff9f4e23593f9fa7c54f733f7855a37831b92",
-    "contentDigest": "sha256:39ff7587e5af6a0b3c7cd9c972187327a008c2545a529171240c8a9489b8e20c",
+    "currentSnapshotSha": "a92b7a8c3662730e310df13c5dd4a46b787fb036",
+    "contentDigest": "sha256:8843fc95775af3c977fca0f93a8817b35e2c02b259bb10e28566ec5c0273344b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
