@@ -284,7 +284,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
       },
       now: NOW,
     })
-    const claimed = module.claim({ db, intentId: intent.intentId, now: NOW })
+    const claimed = await module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
     const opening = await prepareOpenOperation({ db, taskId })
     const prepared = opening.prepared
@@ -355,7 +355,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
       },
       now: NOW,
     })
-    const claimed = module.claim({ db, intentId: intent.intentId, now: NOW })
+    const claimed = await module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
     const opening = await prepareOpenOperation({ db, taskId })
     const prepared = opening.prepared
@@ -475,7 +475,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       },
       now: NOW,
     })
-    const claimed = module.claim({ db, intentId: intent.intentId, now: NOW })
+    const claimed = await module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
     const ownerBefore = db
       .select()
@@ -687,7 +687,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       },
       now: NOW,
     })
-    const claimed = module.claim({ db, intentId: launch.intentId, now: NOW + 1 })
+    const claimed = await module.claim({ db, intentId: launch.intentId, now: NOW + 1 })
     module.claimGate.leave(claimed.permit)
 
     await expect(
@@ -811,7 +811,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     const ids = seedDecisionNodes(db, taskId)
     const module = createTaskExecutionTestModule('daemon-rfc333-pre-drive')
     const decision = dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))
-    const claimed = module.claim({ db, intentId: decision.continuationRef, now: NOW + 1 })
+    const claimed = await module.claim({ db, intentId: decision.continuationRef, now: NOW + 1 })
     module.claimGate.leave(claimed.permit)
     const events: string[] = []
     const executor: GateWorkspaceRollbackExecutor = {
@@ -898,7 +898,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       },
       now: NOW,
     })
-    const claimed = module.claim({ db, intentId: submitted.intentId, now: NOW + 1 })
+    const claimed = await module.claim({ db, intentId: submitted.intentId, now: NOW + 1 })
     module.claimGate.leave(claimed.permit)
     const executor: GateWorkspaceRollbackExecutor = {
       async loadValidatedPlan() {

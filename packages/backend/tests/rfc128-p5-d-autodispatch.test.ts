@@ -278,7 +278,7 @@ describe('RFC-333 clarify decision transaction', () => {
     ).toMatchObject({ sealedAt: expect.any(Number), dispatchedAt: null })
 
     const module = createTaskExecutionTestModule(`daemon-${ulid()}`)
-    const claimed = module.claim({ db, intentId: intent.id })
+    const claimed = await module.claim({ db, intentId: intent.id })
     module.claimGate.leave(claimed.permit)
     const context = {
       taskId,
@@ -342,7 +342,7 @@ describe('RFC-333 clarify decision transaction', () => {
       .where(eq(collaborationGateOperations.id, operation.id))
     const intent = (await db.select().from(taskExecutionIntents))[0]!
     const module = createTaskExecutionTestModule(`daemon-${ulid()}`)
-    const claimed = module.claim({ db, intentId: intent.id })
+    const claimed = await module.claim({ db, intentId: intent.id })
     module.claimGate.leave(claimed.permit)
     const step = createGateContinuationPreDriveStep({
       db,

@@ -30,20 +30,18 @@
 >    `transitionNodeRunStatusTx` / `cancelOpenNodeRunsTx` / `transitionHumanGateTaskTx`，
 >    以及 `sqliteTaskOwnership.ts` 的 `claimPendingIntent` / `withOwnedTaskTx` / `revokeExactTx`）。
 >    **所以 AC-6 的真正前置是把 RFC-333 那条人工门参与者链也搬到中立事务**，不是再多合几对。
-> 3.5. **同步事务面收口 —— 根那一刀 2026-09-11 已落地**（plan §5p）。账本
->    `SYNC_TRANSACTION_DEBT` **4 → 1 个文件**，只剩 `sqliteTaskOwnership.ts: 2`
->    （`claimPendingIntent` 与 `withOwnedTaskTx`，后者仍被同步的 `revokeExactTx` 一族与
->    `taskDriverLifecycle.ts` 的同步认领用着）。`sqlite/taskLifecycle.ts` 与
->    `sqliteTaskExecutionEffect.ts` / `sqliteTaskExecutionIntent.ts` 均已归零。
->    **写序列一个字没改**——`taskLifecycleWriteSequence` 本就是中立 program，换的只是解释器。
->    **⚠️ 本笔带了六份一次性 `allowGrowth`（N1 账本因新增中立孪生与 public 导出增长），
->    下一笔提交必须退役**（`git show HEAD:architecture/ledger-baselines.json | grep -c allowGrowth`）。
->    **注入点的教训**（已落 `docs/dev-gotchas.md`）：并发回归判据不要从外面包 db 代理拦
->    `db.transaction`——统一原语不走它，旧注入器**一次都不触发**，用例照样绿却什么都没验。
->    注入点要做进被测代码内部（`setTaskStatus.beforeCas` / `cancelTask.beforeStatusCas`，生产不传）。
->    **另一条实测**：`cancelTask` 与 `cancel-transition-starved` 只在 SQLite 路径上，
->    PG 走另一份 762 行的 `postgresqlChildTaskLifecycleParticipant`——取消这一对**尚未合一**，
->    想用「两条真连接」在 PG 上写并发判据的话要先合它。
+> 3.5. ~~**同步事务面收口**~~ ✅ **2026-09-11 清零**：账本 `SYNC_TRANSACTION_DEBT`
+>    **4 个文件 → 0**，全仓 `src/` 里 `dbTxSync(` / `withOwnedTaskTx(` 调用点一个不剩。
+>    四刀依次是 `sqliteTaskExecutionIntent`（夹具平移）→ `sqliteTaskExecutionEffect`（同上 +
+>    `onSettledTx` 改走具名变体）→ `sqlite/taskLifecycle`（根刀，写序列一字未改、只换解释器）→
+>    `sqliteTaskOwnership`（`withOwnedTaskWrite` + `claim` 走中立归属持久化）。
+>    **注意「账本清零 ≠ `DbTxSync` 没人用」**：35 个文件仍按它定型**同步孪生**的签名
+>    （`writeTaskStatusTx` / `transitionNodeRunStatusTx` / RFC-333 人工门参与者一族）。
+>    账本数的是调用点——那才是「只有一个 provider 能走」的路；同步孪生本身还活着、
+>    还被别人的同步大事务用着，**退役它们是下一件事，也正是 AC-6 的真正前置**（见第 3 条）。
+>    **两条注入点的教训**（已落 `docs/dev-gotchas.md`）：并发回归判据不要从外面包 db 代理拦
+>    `db.transaction`（统一原语不走它，旧注入器一次都不触发、用例照样绿却什么都没验）；
+>    换事务原语只搬形态、**不要顺手改写检查**（孪生的写检查 / CAS 判据 / 错误类型要逐项对照）。
 > 4. **重复 burn-down 剩 15 组**（机械扫描器见 plan §5k）。下一个靶心是
 >    `services/capabilityTemplates.ts`（506 行）↔ `code-capability/application/capabilityTemplateOperations.ts`
 >    （388 行）——**同一域的两套实现**，共享 `rowFromInput` / `mergeableSnapshot` / `digest` 等一批

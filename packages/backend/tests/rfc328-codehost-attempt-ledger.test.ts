@@ -92,7 +92,7 @@ async function fixture(
       payload: { v: 1 },
     },
   })
-  const claim = module.claim({ db, intentId: intent.intentId })
+  const claim = await module.claim({ db, intentId: intent.intentId })
   module.claimGate.leave(claim.permit)
   const context = createTaskExecutionContext({
     intentId: intent.intentId,
@@ -479,7 +479,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
         advanceOperationGeneration: true,
       }),
     )
-    const claim = h.module.claim({ db: h.db, intentId: manualIntentId })
+    const claim = await h.module.claim({ db: h.db, intentId: manualIntentId })
     h.module.claimGate.leave(claim.permit)
     const nextNodeRunId = `${h.taskId}-code-host-node-generation-1`
     h.db

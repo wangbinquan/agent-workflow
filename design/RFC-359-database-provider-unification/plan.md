@@ -5645,6 +5645,38 @@ interpretation」的用法。
   （`rfc097-task-status-cas` / `rfc300-terminal-workspace-policy` / `retry-cascade-kind-matrix`），
   哪一天根那一刀落地，这三处都要一起看。
 
+## 5q. 同步事务面**清零**（W8 收尾：`sqliteTaskOwnership` 的最后两笔）
+
+`SYNC_TRANSACTION_DEBT` **1 → 0**。全仓 `src/` 里 `dbTxSync(` / `withOwnedTaskTx(` 的调用点
+**一个不剩**，账本自开账以来第一次见底。四刀的顺序与手法：
+
+| 刀 | 文件 | 手法 |
+| --- | --- | --- |
+| 1 | `sqliteTaskExecutionIntent.ts` | src 零调用方，15 处夹具平移到中立 `DrizzleTaskExecutionIntentPersistence` |
+| 2 | `sqliteTaskExecutionEffect.ts` | 同上（18 处）；两处 `onSettledTx` 按真实意图分头处理——断言那条改走具名变体 `settleCodeHostNode`，夹具那条平铺 |
+| 3 | `sqlite/taskLifecycle.ts` | 根刀：**写序列一字未改**，只把 `driveSyncProgram` 换成 `driveAsyncProgram`、事务边界换成中立原语 |
+| 4 | `sqliteTaskOwnership.ts` | `withOwnedTaskTx` src 零调用方（1 处夹具改走中立 `withOwnedTaskWrite`）；`claimPendingIntent` 由组合根 `TaskExecutionModule.claim` 改走中立 `DrizzleTaskOwnershipPersistence` |
+
+第 4 刀的两笔各代表一类，值得分开记：
+
+- **`withOwnedTaskTx`** 是「前三刀的副产品」——生命周期与 effect 两处换掉之后它自动零调用方，
+  只剩一处夹具挡着。**每清掉一个上游调用点，都要回头看一眼下游还剩谁**，这一类销账几乎是白送的。
+- **`claimPendingIntent`** 是真正的生产路径（SQLite driver attach）。两份实现的判据逐条相同
+  （intent 必须 pending、任务不在终态维护认领里、owner 转移表裁决、epoch/revision 递增），
+  中立那份把事务换成 `databaseSessionFor(db).serializable`——每任务至多一个活跃 owner、
+  每任务至多一条 pending·claimed intent 都是跨行谓词，SERIALIZABLE 是对的形态。
+  代价是 `TaskExecutionModule.claim` 从同步变 async：生产唯一调用方
+  （`taskDriverLifecycle.ts`）本就在 async 里，28 处夹具按调用点补 await。
+
+### 清零**不等于**同步孪生退役了
+
+账本数的是**调用点**（`dbTxSync(` / `withOwnedTaskTx(`）——那才是「只有一个 provider 能走」的路。
+`DbTxSync` 这个**类型**仍被 35 个文件用来给同步孪生定型（`writeTaskStatusTx` /
+`transitionNodeRunStatusTx` / `cancelOpenNodeRunsTx` / RFC-333 的人工门参与者一族）。
+它们还活着、还被别人的同步大事务用着，**退役它们是下一件事**——而且正是 AC-6 的真正前置：
+根刀落地后复测，机械迁移 138 个文件仍有 137 个被 `DbClient` 形参挡住，整棵 `src/` 放宽实验的残留
+只从 92 条降到 90 条，剩下的窄标注全在这批同步孪生上（§5n / STATE 第 3 条）。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

@@ -159,7 +159,22 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   //     `await` 就完；中立孪生 `DrizzleTaskOwnershipPersistence.claimPendingIntent` 已经在跑
   //     PostgreSQL 的 daemon。挡住它的是 ~30 处 `module.claim(...)` 测试直调（含
   //     `expect(() => …).toThrow` 要翻成 `await expect(…).rejects`）。
-  'modules/task-execution/infrastructure/sqliteTaskOwnership.ts: 2',
+  // RFC-359 W8 销账：`sqliteTaskOwnership.ts: 2 → 0`，**同步事务面至此清零**。
+  //   · `withOwnedTaskTx` —— src 调用方早已归零（生命周期与 effect 两处都换成了中立的
+  //     `withOwnedTaskWrite`），挡着它的只有一处夹具；两者体内逐行等价（同一条 owner fence
+  //     条件 UPDATE），差别只在事务边界与 CAS 判据的形态。
+  //   · `claimPendingIntent` —— 组合根 `TaskExecutionModule.claim` 改走中立的
+  //     `DrizzleTaskOwnershipPersistence.claimPendingIntent`。两份实现的判据逐条相同
+  //     （intent 必须 pending、任务不在终态维护认领里、owner 转移表裁决、epoch/revision 递增），
+  //     中立那份把事务换成 `databaseSessionFor(db).serializable`——每任务至多一个活跃 owner、
+  //     每任务至多一条 pending·claimed intent 都是跨行谓词，SERIALIZABLE 是对的形态。
+  //     代价是 `claim` 从同步变 async：生产唯一调用方 `taskDriverLifecycle.ts` 本就在 async 里，
+  //     28 处夹具按调用点补 await。
+  //
+  // 账本清零**不等于** `DbTxSync` 这个类型没人用了：35 个文件仍按它定型同步孪生的签名
+  // （`writeTaskStatusTx` / `transitionNodeRunStatusTx` / RFC-333 的人工门参与者一族）。
+  // 本账本数的是**调用点**（`dbTxSync(` / `withOwnedTaskTx(`），那才是「只有一个 provider 能走」
+  // 的路。同步孪生本身还活着、还被别人的同步大事务用着，退役它们是另一件事。
   // RFC-359 W7 销账：`sqliteTerminalMaintenance.ts: 5` + `systemWorkspaceGc.ts: 1` +
   // `taskArchive.ts: 1` + `taskDelete.ts: 1` —— 终态维护认领的三条消费路径（删除 / 归档 /
   // workspace-GC）迁到 `databaseSessionFor(db).transaction(...)` + 中立参与者

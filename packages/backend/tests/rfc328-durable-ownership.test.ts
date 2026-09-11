@@ -33,6 +33,7 @@ import {
 } from '@/modules/task-execution/domain/ownership'
 import { DrizzleTaskExecutionRecoveryPersistence } from '@/modules/task-execution/infrastructure/taskExecutionRecovery'
 import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
+import { withOwnedTaskWrite } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
 import {
   aggregateEffectOutcome,
@@ -196,7 +197,7 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
       intentId: 'intent-owner-1',
       now: 10,
     })
-    const claimed = module.claim({ db: database, intentId: submitted.intentId, now: 11 })
+    const claimed = await module.claim({ db: database, intentId: submitted.intentId, now: 11 })
     module.claimGate.leave(claimed.permit)
 
     expect(() => module.claim({ db: database, intentId: submitted.intentId, now: 12 })).toThrow(
@@ -214,19 +215,22 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
       expectedRevision: before.revision,
       now: 13,
     })
-    expect(() =>
-      module.ownership.withOwnedTaskTx({
+    // RFC-359：围栏走**中立**的 `withOwnedTaskWrite`（`taskOwnershipPersistence.ts`）。
+    // 同步孪生 `withOwnedTaskTx` 的 src 调用方已经清零（生命周期与 effect 两处都换了），
+    // 挡着它的就只有这一处夹具；两者体内逐行等价（同一条 owner fence 条件 UPDATE），
+    // 差别只有事务边界与 CAS 判据的形态。
+    await expect(
+      withOwnedTaskWrite({
         db: database,
         token: claimed.token,
         now: 14,
-        run: (tx) =>
-          tx
+        run: async (tx) =>
+          await tx
             .update(tasks)
             .set({ errorSummary: 'stale-write' })
-            .where(eq(tasks.id, 'task-owner'))
-            .run(),
+            .where(eq(tasks.id, 'task-owner')),
       }),
-    ).toThrow(expect.objectContaining({ code: 'task-execution-stale-owner' }))
+    ).rejects.toEqual(expect.objectContaining({ code: 'task-execution-stale-owner' }))
     expect(database.select({ value: tasks.errorSummary }).from(tasks).get()?.value).toBeNull()
 
     const revoked = module.ownership.read(database, 'task-owner')!
@@ -247,7 +251,7 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
       intentId: 'intent-owner-2',
       now: 16,
     })
-    const successor = module.claim({ db: database, intentId: nextIntent.intentId, now: 17 })
+    const successor = await module.claim({ db: database, intentId: nextIntent.intentId, now: 17 })
     module.claimGate.leave(successor.permit)
     expect(successor.token.epoch).toBe(claimed.token.epoch + 1)
   })
@@ -264,7 +268,7 @@ describe('RFC-328 exact-token runtime registry', () => {
       request: continuation('task-stop-first'),
       intentId: 'intent-stop-first',
     })
-    const first = module.claim({ db: database, intentId: firstIntent.intentId })
+    const first = await module.claim({ db: database, intentId: firstIntent.intentId })
     const firstTicket = module.runtimeRegistry.requestStop(first.token, 'cancel-before-attach')
     const firstController = new AbortController()
     expect(
@@ -283,7 +287,7 @@ describe('RFC-328 exact-token runtime registry', () => {
       request: continuation('task-attach-first'),
       intentId: 'intent-attach-first',
     })
-    const second = module.claim({ db: database, intentId: secondIntent.intentId })
+    const second = await module.claim({ db: database, intentId: secondIntent.intentId })
     const secondController = new AbortController()
     expect(
       module.runtimeRegistry.tryAttach({
@@ -311,7 +315,7 @@ describe('RFC-328 exact-token runtime registry', () => {
       request: continuation('task-module-dispose'),
       intentId: 'intent-module-dispose',
     })
-    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const claim = await module.claim({ db: database, intentId: intent.intentId })
     const controller = new AbortController()
     expect(
       module.runtimeRegistry.tryAttach({
@@ -344,7 +348,7 @@ describe('RFC-328 exact-token runtime registry', () => {
       request: continuation('task-module-pause'),
       intentId: 'intent-module-pause',
     })
-    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const claim = await module.claim({ db: database, intentId: intent.intentId })
     const controller = new AbortController()
     expect(
       module.runtimeRegistry.tryAttach({
@@ -385,7 +389,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       request: continuation('task-local-generation', 'resume', 7),
       intentId: 'intent-local-generation',
     })
-    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const claim = await module.claim({ db: database, intentId: intent.intentId })
     module.claimGate.leave(claim.permit)
     const context = createTaskExecutionContext({
       db: database,
@@ -439,7 +443,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       request: continuation('task-probe-stop-window'),
       intentId: 'intent-probe-stop-window',
     })
-    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const claim = await module.claim({ db: database, intentId: intent.intentId })
     module.claimGate.leave(claim.permit)
     const pathJson = canonicalJson(rootPath('task-probe-stop-window'))
     const family = operationFamilyKey({
@@ -509,7 +513,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       request: continuation('task-effect'),
       intentId: 'intent-effect',
     })
-    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const claim = await module.claim({ db: database, intentId: intent.intentId })
     module.claimGate.leave(claim.permit)
     const pathJson = canonicalJson(rootPath('task-effect'))
     const family = operationFamilyKey({
@@ -620,7 +624,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       request: continuation('task-unknown'),
       intentId: 'intent-unknown',
     })
-    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const claim = await module.claim({ db: database, intentId: intent.intentId })
     module.claimGate.leave(claim.permit)
     const pathJson = canonicalJson(rootPath('task-unknown'))
     const firstFamily = operationFamilyKey({
@@ -752,7 +756,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         )
         .run()
     })
-    const manualClaim = module.claim({
+    const manualClaim = await module.claim({
       db: database,
       intentId: 'intent-unknown-manual',
       now: 32,
@@ -794,7 +798,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       request: continuation('task-parallel-effects'),
       intentId: 'intent-parallel-effects',
     })
-    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const claim = await module.claim({ db: database, intentId: intent.intentId })
     module.claimGate.leave(claim.permit)
     const slotPath = rootPath('task-parallel-effects')
     const slotPathJson = canonicalJson(slotPath)
@@ -883,7 +887,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
       intentId: 'intent-gate-old-claim',
       now: 100,
     })
-    const claim = oldModule.claim({ db: database, intentId: launch.intentId, now: 101 })
+    const claim = await oldModule.claim({ db: database, intentId: launch.intentId, now: 101 })
     oldModule.claimGate.leave(claim.permit)
     const successor = await submitIntent(database, {
       admissionMode: 'successor-after-claimed',
@@ -966,7 +970,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
         request: continuation(input.taskId),
         intentId: `${input.taskId}-intent`,
       })
-      const claim = oldModule.claim({ db: database, intentId: intent.intentId })
+      const claim = await oldModule.claim({ db: database, intentId: intent.intentId })
       oldModule.claimGate.leave(claim.permit)
       const pathJson = canonicalJson(rootPath(input.taskId))
       const effect = await effectsOf(database).prepareAndAcquire({
@@ -1017,7 +1021,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
       request: continuation('task-remote-unknown'),
       intentId: 'task-remote-unknown-intent',
     })
-    const remoteClaim = oldModule.claim({ db: database, intentId: remoteIntent.intentId })
+    const remoteClaim = await oldModule.claim({ db: database, intentId: remoteIntent.intentId })
     oldModule.claimGate.leave(remoteClaim.permit)
     const remotePathJson = canonicalJson(rootPath('task-remote-unknown'))
     const remoteEffect = await effectsOf(database).prepareAndAcquire({
@@ -1164,7 +1168,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
         request: continuation(spec.taskId),
         intentId: `${spec.taskId}-intent`,
       })
-      const claim = oldModule.claim({ db: database, intentId: intent.intentId })
+      const claim = await oldModule.claim({ db: database, intentId: intent.intentId })
       oldModule.claimGate.leave(claim.permit)
       const pathJson = canonicalJson(rootPath(spec.taskId))
       const family = operationFamilyKey({
@@ -1426,7 +1430,7 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       request: continuation('task-archive-ledger'),
       intentId: 'intent-archive-ledger',
     })
-    const owned = module.claim({ db: database, intentId: intent.intentId, now: 60 })
+    const owned = await module.claim({ db: database, intentId: intent.intentId, now: 60 })
     module.claimGate.leave(owned.permit)
     const pathJson = canonicalJson(rootPath('task-archive-ledger'))
     const family = operationFamilyKey({

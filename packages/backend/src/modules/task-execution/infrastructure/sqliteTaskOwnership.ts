@@ -13,29 +13,19 @@
 // 调用方（合一前的 SQLite 恢复流程与 43 行端口适配器）都没有了。RFC-359 W10 又去掉了
 // `revokeExact` 的事务包装（单语句 CAS 本就原子，理由写在该方法上）。
 
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import {
-  taskExecutionIntents,
-  taskExecutionMaintenanceMembers,
-  taskExecutionOwners,
-} from '@/db/schema'
-import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
+import { taskExecutionOwners } from '@/db/schema'
+import { type DbTxSync } from '@/db/txSync'
 import type { TaskOwnershipStore } from './taskOwnershipTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import {
   assertOwnershipToken,
-  assertWorkerIdentity,
-  createOwnedTaskTx,
-  createOwnershipToken,
-  decideOwnerTransition,
   ownershipTuple,
   refreshOwnershipToken,
-  type OwnedTaskTx,
   type OwnerSnapshot,
   type OwnershipToken,
   type OwnershipTuple,
-  type WorkerIdentity,
 } from '../domain/ownership'
 
 type OwnerRow = typeof taskExecutionOwners.$inferSelect
@@ -57,141 +47,6 @@ function staleOwner(message: string): TaskExecutionError {
 }
 
 export class SqliteTaskOwnershipStore implements TaskOwnershipStore {
-  claimPendingIntent(input: {
-    db: DbClient
-    intentId: string
-    identity: WorkerIdentity
-    now: number
-    leaseMs: number
-  }): OwnershipToken {
-    assertWorkerIdentity(input.identity)
-    if (!Number.isFinite(input.leaseMs) || input.leaseMs <= 0) {
-      throw new Error('ownership lease must be positive')
-    }
-    const claimed = dbTxSync(input.db, (tx) => {
-      const intent = tx
-        .select({
-          id: taskExecutionIntents.id,
-          taskId: taskExecutionIntents.taskId,
-          state: taskExecutionIntents.state,
-        })
-        .from(taskExecutionIntents)
-        .where(eq(taskExecutionIntents.id, input.intentId))
-        .get()
-      if (intent === undefined || intent.state !== 'pending') {
-        throw new TaskExecutionError(
-          'task-execution-owner-conflict',
-          `intent '${input.intentId}' is not pending`,
-        )
-      }
-      const maintenance = tx
-        .select({ claimId: taskExecutionMaintenanceMembers.claimId })
-        .from(taskExecutionMaintenanceMembers)
-        .where(
-          and(
-            eq(taskExecutionMaintenanceMembers.taskId, intent.taskId),
-            isNull(taskExecutionMaintenanceMembers.releasedAt),
-          ),
-        )
-        .get()
-      if (maintenance !== undefined) {
-        throw new TaskExecutionError(
-          'task-terminal-maintenance-conflict',
-          `task '${intent.taskId}' is claimed by terminal maintenance`,
-          { claimRef: maintenance.claimId },
-        )
-      }
-
-      const old = tx
-        .select()
-        .from(taskExecutionOwners)
-        .where(eq(taskExecutionOwners.taskId, intent.taskId))
-        .get()
-      const transition = decideOwnerTransition({
-        current: old?.state ?? 'absent',
-        operation: 'initial-claim',
-      })
-      if (transition === null) {
-        throw new TaskExecutionError(
-          old?.state === 'recovery-required'
-            ? 'task-execution-recovery-required'
-            : 'task-execution-owner-conflict',
-          `task '${intent.taskId}' already has owner state '${old?.state ?? 'unknown'}'`,
-        )
-      }
-      const epoch = (old?.epoch ?? 0) + 1
-      const revision = (old?.revision ?? 0) + 1
-      const leaseUntil = input.now + input.leaseMs
-      if (old === undefined) {
-        tx.insert(taskExecutionOwners)
-          .values({
-            taskId: intent.taskId,
-            ownerId: input.identity.ownerId,
-            daemonGeneration: input.identity.daemonGeneration,
-            epoch,
-            state: 'claimed',
-            leaseUntil,
-            revision,
-            lastHeartbeatAt: input.now,
-            recoveryCode: null,
-            recoveryProofDigest: null,
-            updatedAt: input.now,
-          })
-          .run()
-      } else {
-        const updated = tx
-          .update(taskExecutionOwners)
-          .set({
-            ownerId: input.identity.ownerId,
-            daemonGeneration: input.identity.daemonGeneration,
-            epoch,
-            state: 'claimed',
-            leaseUntil,
-            revision,
-            lastHeartbeatAt: input.now,
-            recoveryCode: null,
-            recoveryProofDigest: null,
-            updatedAt: input.now,
-          })
-          .where(
-            and(
-              eq(taskExecutionOwners.taskId, intent.taskId),
-              eq(taskExecutionOwners.state, 'released'),
-              eq(taskExecutionOwners.revision, old.revision),
-            ),
-          )
-          .returning({ revision: taskExecutionOwners.revision })
-          .get()
-        if (updated === undefined) throw staleOwner(`task '${intent.taskId}' owner claim lost`)
-      }
-      const intentClaim = tx
-        .update(taskExecutionIntents)
-        .set({
-          state: 'claimed',
-          claimedEpoch: epoch,
-          claimedAt: input.now,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionIntents.id, input.intentId),
-            eq(taskExecutionIntents.state, 'pending'),
-          ),
-        )
-        .returning({ id: taskExecutionIntents.id })
-        .get()
-      if (intentClaim === undefined) throw staleOwner(`intent '${input.intentId}' claim lost`)
-      return { taskId: intent.taskId, epoch, leaseUntil, revision }
-    })
-    return createOwnershipToken({
-      taskId: claimed.taskId,
-      identity: input.identity,
-      epoch: claimed.epoch,
-      leaseUntil: claimed.leaseUntil,
-      ownerRevision: claimed.revision,
-    })
-  }
-
   heartbeat(input: {
     db: DbClient
     token: OwnershipToken
@@ -228,41 +83,6 @@ export class SqliteTaskOwnershipStore implements TaskOwnershipStore {
       token: input.token,
       leaseUntil: row.leaseUntil,
       ownerRevision: row.revision,
-    })
-  }
-
-  withOwnedTaskTx<T>(input: {
-    db: DbClient
-    token: OwnershipToken
-    now: number
-    run: (tx: DbTxSync, owned: OwnedTaskTx) => T
-  }): T {
-    assertOwnershipToken(input.token)
-    return dbTxSync(input.db, (tx) => {
-      const fenced = tx
-        .update(taskExecutionOwners)
-        .set({
-          revision: sql`${taskExecutionOwners.revision} + 1`,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, input.token.taskId),
-            eq(taskExecutionOwners.ownerId, input.token.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
-            eq(taskExecutionOwners.epoch, input.token.epoch),
-            eq(taskExecutionOwners.state, 'claimed'),
-          ),
-        )
-        .returning({ revision: taskExecutionOwners.revision })
-        .get()
-      if (fenced === undefined) {
-        throw staleOwner(`task '${input.token.taskId}' mutation was fenced by a newer owner`)
-      }
-      return input.run(
-        tx,
-        createOwnedTaskTx({ token: input.token, revision: fenced.revision }),
-      ) as NotPromise<T>
     })
   }
 

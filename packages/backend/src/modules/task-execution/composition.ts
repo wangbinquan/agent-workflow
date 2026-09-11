@@ -1,12 +1,13 @@
 // RFC-328 — the daemon-owned task-execution composition root.
 
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { TaskClaimGate } from './application/taskClaimGate'
 import { SqliteTaskExecutionEffectStore } from './infrastructure/sqliteTaskExecutionEffect'
 import { SqliteTaskExecutionIntentStore } from './infrastructure/sqliteTaskExecutionIntent'
 import { SqliteTaskOwnershipStore } from './infrastructure/sqliteTaskOwnership'
+import { DrizzleTaskOwnershipPersistence } from './infrastructure/taskOwnershipPersistence'
 import { InMemoryTaskRuntimeRegistry } from './infrastructure/inMemoryTaskRuntimeRegistry'
 import type { RuntimeStopTicket } from './infrastructure/inMemoryTaskRuntimeRegistry'
 import {
@@ -41,16 +42,25 @@ export class TaskExecutionModule {
     this.runtimeRegistry = new InMemoryTaskRuntimeRegistry(this.claimGate)
   }
 
-  claim(input: {
-    db: DbClient
+  /**
+   * RFC-359 —— 认领走**中立**归属持久化（`DrizzleTaskOwnershipPersistence`），不再经同步 store。
+   * 那是同步事务面最后一个 `dbTxSync` 调用点；两份实现的判据逐条相同
+   * （intent 必须 pending、任务不在终态维护认领里、owner 转移表裁决、epoch/revision 递增），
+   * 中立那份把事务形态换成 `databaseSessionFor(db).serializable`——每任务至多一个活跃 owner、
+   * 每任务至多一条 pending·claimed intent 都是跨行谓词，沿用 SERIALIZABLE 是对的。
+   *
+   * 代价是本方法从同步变成 async：生产唯一调用方 `taskDriverLifecycle.ts` 本来就在 async 里，
+   * 夹具按调用点补 await。
+   */
+  async claim(input: {
+    db: ProviderNeutralDatabase
     intentId: string
     now?: number
     leaseMs?: number
-  }): ClaimedTaskExecution {
+  }): Promise<ClaimedTaskExecution> {
     const permit = this.claimGate.enter()
     try {
-      const token = this.ownership.claimPendingIntent({
-        db: input.db,
+      const token = await new DrizzleTaskOwnershipPersistence(input.db).claimPendingIntent({
         intentId: input.intentId,
         identity: createWorkerIdentity({
           ownerId: ulid(),

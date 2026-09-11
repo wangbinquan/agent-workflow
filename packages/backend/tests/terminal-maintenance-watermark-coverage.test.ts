@@ -105,7 +105,7 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
     request: continuation(taskId),
     intentId: `intent-${taskId}`,
   })
-  const owned = module.claim({ db: database, intentId: intent.intentId, now: 60 })
+  const owned = await module.claim({ db: database, intentId: intent.intentId, now: 60 })
   module.claimGate.leave(owned.permit)
 
   const slotPath = rootPath(taskId)
@@ -243,7 +243,7 @@ describe('terminal maintenance retained-watermark coverage', () => {
       })
       // Left claimed on purpose: the execution plane is not quiescent, so the
       // terminal maintenance store rejects the claim with a transient conflict.
-      const owned = module.claim({ db: database, intentId: intent.intentId, now: 60 })
+      const owned = await module.claim({ db: database, intentId: intent.intentId, now: 60 })
       module.claimGate.leave(owned.permit)
       database
         .update(tasks)
