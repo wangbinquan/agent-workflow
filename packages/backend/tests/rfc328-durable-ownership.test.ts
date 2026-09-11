@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { submitCanonicalTaskExecutionIntent } from '@/modules/task-execution/infrastructure/taskContinuationAdmission'
 import {
   nodeRuns,
   nodeRunOutputs,
@@ -726,16 +727,23 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       slotPath: rootPath('task-unknown'),
       operationGeneration: 1,
     })
-    dbTxSync(database, (tx) => {
-      module.intents.submitTx({
+    // RFC-359：同步的 `SqliteTaskExecutionIntentStore.submitTx` 随本波退役——它在 src 侧唯一
+    // 的调用方是 `sqliteTaskExecutionIntentAdmission.ts`，而后者已随同步人工门链一起删除。
+    // 这条判据要的是「准入与决定改绑同一笔事务同生共死」，与解释无关；中立孪生
+    // `submitCanonicalTaskExecutionIntent` 的入参逐字相同（intentId / now 提成位置参数）。
+    await databaseSessionFor(database).transaction(async (tx) => {
+      await submitCanonicalTaskExecutionIntent(
         tx,
-        request: continuation('task-unknown', 'retry-node', 1),
-        intentId: 'intent-unknown-manual',
-        replayAuthorizationId: 'authorization-1',
-        authorizationScopeJson,
-        now: 31,
-      })
-      tx.update(taskExecutionLineageOperationRecords)
+        {
+          request: continuation('task-unknown', 'retry-node', 1),
+          replayAuthorizationId: 'authorization-1',
+          authorizationScopeJson,
+        },
+        'intent-unknown-manual',
+        31,
+      )
+      await tx
+        .update(taskExecutionLineageOperationRecords)
         .set({
           decisionState: 'actor-replay-authorized',
           replayAuthorizationId: 'authorization-1',

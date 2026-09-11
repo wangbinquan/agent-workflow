@@ -20,7 +20,6 @@ import type { ResourceCatalogOwnedAclType } from '../application/ports/providerR
 import { createResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import {
-  canEditAccess,
   canGovernAccess,
   canViewAccess,
   resolveAccessFrom,
@@ -139,15 +138,6 @@ export function canEditResource(
   row: AclRow,
 ): Promise<boolean> {
   return applicationsFor(db).authorization.canEditResource(actor, type, row)
-}
-
-export function canEditResourceInTx(
-  tx: DbTxSync,
-  actor: Actor,
-  type: AclResourceType,
-  row: AclRow,
-): boolean {
-  return canEditAccess(resolveResourceAccessForInTx(tx, actor, type, row))
 }
 
 export function canGovernResource(actor: Actor, row: AclRow): boolean {

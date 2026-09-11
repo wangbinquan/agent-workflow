@@ -407,6 +407,21 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **`resetRouteMetaRegistry()` 会毒化同进程里后续每一个建 app 的测试（2026-09-11 实撞，CI 看不见）**：
+  **复现**：`bun test tests/rfc305-architecture-lock.test.ts tests/rfc104-builtin-readonly.test.ts`
+  → 17 fail，全是 `resource-catalog.export-agent-package.v1: declared operation has no mounted binding`
+  （`platform/operations/catalog.ts:719`，由 `mountApi` 的 `assertOperationCatalogClosed` 抛）。
+  两个文件**各自单跑都全绿**。去掉 `rfc305` 的 `afterEach(() => resetRouteMetaRegistry())` 也照样红，
+  所以毒来自 `beforeEach` 的清空 + 紧接着那次 `createApp`：路由 meta 是**模块 import 期**注册的，
+  一旦 `REGISTRY.clear()`，后来的 `createApp` 只会补回它自己挂载的那一部分，import 期注册的声明
+  （如 exports 这一族）永远回不来，于是下一个建 app 的文件当场撞「声明了但没挂载」。
+  **波及面**：`grep -rn "resetRouteMetaRegistry" tests` 共 15 个测试文件在 hook 里清空它，任何一个
+  排在建 app 的测试前面都可能触发。**CI 现在看不见**是因为分片把它们分开了（`rfc104` 在 shard 2、
+  `rfc305-architecture-lock` 不在），而 bun 的分片内文件序又不稳定——这是一颗会随机引爆的雷。
+  **建议处置**：让 `resetRouteMetaRegistry()` 恢复到 **import 期快照**而不是清空（模块加载时存一份
+  baseline），需要它「真的空」的少数用例改用显式的 `resetRouteMetaRegistryToEmpty()`；同批把上面那条
+  复现命令加成一条守卫。**不在本轮做**：它跨 15 个测试文件的既有假设，应当自己一刀。
+
 - ⏳ **CI 上「跑满取消预算」的那条用例耗时随分片内排位放大 60 倍，根因未归因（RFC-359 实测，2026-09-11）**：
   `tests/retry-cascade-kind-matrix.test.ts` 的
   `child cancel CAS starvation fails retry closed without rollback or mint` 要把生产的取消预算打满

@@ -2,12 +2,12 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 4744,
+    "architectureExceptions": 4737,
     "backgroundJobs": 335,
-    "crossContextImports": 5279,
+    "crossContextImports": 5271,
     "facades": 322,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24952,
+    "moduleSymbolOwners": 24944,
     "mutationEntrypoints": 1730,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 979,
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1796,
+    "backendProductionFiles": 1793,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -119,10 +119,10 @@
       },
       {
         "context": "task-execution",
-        "files": 300
+        "files": 297
       }
     ],
-    "moduleFiles": 1194,
+    "moduleFiles": 1191,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -158,5 +158,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f895262ca065c1f019694e548a7a9ece41ee2cd03a6073e3511fe102d4bd1c8d"
+  "sourceDigest": "sha256:4270f842ab5ffe8b5e2a2961ad0f0754761c3a7ae5e8f631cc1b82c645d584c4"
 }

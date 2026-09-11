@@ -2,6 +2,41 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 本轮进展（2026-09-11 晚，同步孪生退役 5 刀）
+>
+> 上一段交接说「同步事务面账本清零 ≠ `DbTxSync` 没人用，退役同步孪生才是 AC-6 的真正前置」。
+> 本轮就按那条往下走，**方法固定为一句话**：对每个同步孪生先问「**src 侧还有调用方吗**」。
+> 答案几乎总是「没有」——它们的宿主早就被前几波迁走了，只剩夹具挡着。已落 5 笔（各自一个提交）：
+>
+> | 提交 | 退役的东西 | 关键判据怎么处理 |
+> | --- | --- | --- |
+> | `9a29602cb` | `taskLifecycleEventParticipant.ts`（3 个同步 append）+ public 再导出 | `rfc359-w16` 那条「同步解释保持同步返回」锁的是**实现机制**，随机制删；承重的「同一事务内 companion→append→返回、外层抛错全回滚」在同文件的双引擎判据里逐条对应 |
+> | `c16ff9f4e` | `collaborationCommittedEventParticipant.ts` / `sqliteCommittedEventStore.ts` / `sqlite/existingTransactionScope.ts` / `legacy/mcpRuntimeTestTransitions.ts` | `rfc341` 那条「legacy 期不落行 / shadow 期原子追加 / 重放幂等 / 改 payload 必拒」是**产品行为**，改走中立追加口并搬进 `describeEachProvider`（AC-6 +1）；`rfc305` 两条锁的是桥自己的机制，随桥删 |
+> | `a92b7a8c3` | （流水线修复）`scripts/rfc359-p0-mutations.ts` 的指纹清单 + `maintenance-soak-nightly.yml` 的 `paths:` | 新增守卫：workflows / scripts 里**带引号的字面仓内路径**必须存在（两半都做过变异验证） |
+> | `a3e4482a1` | `sqliteTaskOwnership.ts` + `taskOwnershipTransactionStore.ts`；死码 `markTaskExecutionShutdownSurvivor` | 组合根改出 `ownershipFor(db)` 工厂返回中立持久化；`rfc294Canonical` 的 `daemon-shutdown` 权威**改指新实现而不是删条目**（删了普查直接报 `control subtype is empty`） |
+> | `3652cd50b` | `sqliteTaskExecutionEffect.ts` + 端口；`sqliteTaskExecutionIntentAdmission.ts` + `composition/continuationAdmission.ts` + public 的 `submitTaskContinuationTx` | 三处夹具改用同文件已有的 `effectsOf(db)`；准入判据改走 `submitTaskContinuationInTransaction`（签名逐字相同） |
+>
+> **账本刻度**：`PROVIDER_NAMED_FILE_DEBT` **55 → 51**（AC-12）；
+> 带 `DbTxSync` 类型的 src 文件 **32 → 23**；`UNCONSUMED_PUBLIC_SYMBOL_DEBT` **141 → 137**。
+>
+> **本轮踩的坑（都已落 `docs/dev-gotchas.md`）**：
+> - 给 eslint 的文件清单混进**已删除路径**→ 它一条都不 lint 还退 0，CI 才红。用
+>   `git status --porcelain | grep -vE '^ ?D' | awk '{print $NF}'`（`$NF` 不是 `$2`，重命名项是三段）。
+> - 删 / 搬源文件时 `scripts/` 与 `.github/` 里**硬写的路径**没人替你改：一种只在 CI 独有的 lane
+>   里以 ENOENT 冒出来，另一种（workflow `paths:` 触发器）**永远不红、只是覆盖面消失**。
+> - `ciwatch` 查 CI 要用**完整 SHA**：`head_sha=<短 sha>` 查不到 run，会一直「no CI run yet」。
+>
+> **⚠️ 一条未归因的 CI 耗时放大（已进 `docs/audit-backlog.md`）**：
+> `retry-cascade-kind-matrix` 里「跑满取消预算」那条（9 笔完整取消事务）在 CI 上耗时**随它在分片里
+> 排第几位放大 60 倍**——第 87 位 58ms，第 60 位同一提交两次 5166ms（红）/ 3797ms（绿）。
+> 本机稳定 0.14s，已排除代码回归 / 事件循环饥饿 / 前置 pragma 泄漏 / 整段前缀复跑。
+> 已给它和姊妹用例显式 60s 预算（承重判据仍是 `cancelCasAttempts === 8`），**根因仍未归因**。
+>
+> **下一刀建议**：剩下的 23 个 `DbTxSync` 文件**没有零消费者的孤岛了**，都要真迁移。
+> 最大的一簇在 resource-catalog：`composition/resourceAcl.ts`（18 个消费者）→
+> `sqliteAclReadRepository.ts` / `sqliteResourceGrantRepository.ts` 的五个 `*InTx` 读法，
+> 它们的中立异步孪生**同名同参**就在隔壁（`aclReadRepository.ts`），差的只是调用方要补 `await`。
+
 > ## 🔜 RFC-359 下一刀该做什么（2026-09-11 交接，按「先做哪个」排序）
 >
 > 干净基线：**`ea6ef5acc` CI 42/42 全绿、零失败**。40P01 死锁已由**每文件一库**结构性消除。

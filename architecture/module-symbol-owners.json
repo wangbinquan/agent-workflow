@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1796,
+    "backendFiles": 1793,
     "frontendFiles": 622,
     "legacyFiles": 602,
-    "moduleFiles": 1194,
-    "productionFiles": 2573,
+    "moduleFiles": 1191,
+    "productionFiles": 2570,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24952
+    "symbolsIncludingFileRoots": 24944
   },
   "entries": [
     {
@@ -83848,18 +83848,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#canEditResourceInTx",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "canEditResourceInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#canGovernResource",
       "removeAfterWave": "W4-C",
       "status": "current-module",
@@ -116151,18 +116139,6 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/application/ports/taskExecutionIntentStore.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionIntentStore.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "application",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts#$file",
       "removeAfterWave": null,
@@ -132183,54 +132159,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#encodedIntentPayload",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "encodedIntentPayload",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#MAX_INTENT_PAYLOAD_BYTES",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "MAX_INTENT_PAYLOAD_BYTES",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#SqliteTaskExecutionIntentStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteTaskExecutionIntentStore",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#$file",
       "removeAfterWave": null,
@@ -133556,30 +133484,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "taskExecutionIntentTerminalSequence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTransactionStore.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTransactionStore.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTransactionStore.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTransactionStore.ts#TaskExecutionIntentStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "TaskExecutionIntentStore",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -300122,5 +300026,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f895262ca065c1f019694e548a7a9ece41ee2cd03a6073e3511fe102d4bd1c8d"
+  "sourceDigest": "sha256:4270f842ab5ffe8b5e2a2961ad0f0754761c3a7ae5e8f631cc1b82c645d584c4"
 }

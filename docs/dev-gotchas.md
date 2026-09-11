@@ -1204,6 +1204,16 @@ bun 的 `test` / `beforeAll` / `beforeEach` 默认超时都是 **5s**，而 fixt
 必须排除在替换面之外**；否则量到的是自己制造的噪声，还会把结论引到完全相反的方向
 （当时差点据此把「76 个文件用 `dbTxSync`」写进交接，实际是 4 个文件 7 个调用点）。
 
+## 按 SHA 查 CI 必须用**完整 40 位**，短 sha 查出来是空列表（2026-09-11 实撞）
+
+`gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>"` 的 `head_sha` **不做前缀匹配**。
+传短 sha（`3652cd50b`）返回的是**空的 `workflow_runs`**，不是错误——于是盯 CI 的循环会一直打印
+「还没有 run」，看起来像 CI 没被触发，实际 run 早就在跑。先 `git rev-parse <短 sha>` 再查。
+
+同一处还有两个已记录的坑一起犯才安全：①要 `select(.name=="CI")`，否则 `.workflow_runs[0]`
+可能是别的 workflow（`git-protocols-e2e` 只有 1 个 job，它的绿会被误当成 CI 的绿）；
+②要看 **job 数**（满配 42）——被 supersede 取消的 run 也会报 `success`，但 job 数不对。
+
 ## 删 / 搬源文件时，`scripts/` 与 `.github/` 里硬写的路径没人替你改（RFC-359 一天内两处，2026-09-11）
 
 编译器管不到纯字符串。删一个源文件之后，下面两类引用会**各自以不同的方式**咬人：

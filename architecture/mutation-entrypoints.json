@@ -41330,7 +41330,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f895262ca065c1f019694e548a7a9ece41ee2cd03a6073e3511fe102d4bd1c8d",
+  "sourceDigest": "sha256:4270f842ab5ffe8b5e2a2961ad0f0754761c3a7ae5e8f631cc1b82c645d584c4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41442,7 +41442,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 163,
+      "durableWriterSites": 162,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -42790,22 +42790,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "writeFence"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionIntents"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "submitTx",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "taskExecutionIntents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#160:taskExecutionIntents",
-        "line": 160,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#SqliteTaskExecutionIntentStore",
-        "requiredBrandedProof": "CanonicalContinuationRequest",
-        "revisionPredicate": "expected-task-revision-and-active-intent-unique",
-        "symbol": "SqliteTaskExecutionIntentStore"
       },
       {
         "allowedTables": [
