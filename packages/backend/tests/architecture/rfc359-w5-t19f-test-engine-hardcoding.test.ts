@@ -63,7 +63,6 @@ const CORPUS_FILES: readonly string[] = enumerateTestSources()
  */
 export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'agents.test.ts: 2',
-  'api-tasks-alerts-visibility.test.ts: 1',
   'architecture/rfc329-mcp-surface-guard.test.ts: 1',
   'architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts: 2',
   'auth-routes.test.ts: 1',
@@ -197,10 +196,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'plugins-http.test.ts: 1',
   'repo-batch-import-gc.test.ts: 2',
   'repo-batch-import-retry.test.ts: 7',
-  'repos-path-allowlist.test.ts: 1',
   'repos.test.ts: 1',
   'rerun-prior-output-e2e.test.ts: 1',
-  'resource-by-id-resolve.test.ts: 1',
   'resume-multi-repo-rollback.test.ts: 1',
   'resume-task-idempotent.test.ts: 1',
   'retry-cascade-kind-matrix.test.ts: 1',
@@ -309,7 +306,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc193-wrapper-review.test.ts: 1',
   'rfc199-start-task-workflow-race.test.ts: 1',
   'rfc199-workflow-revision.test.ts: 6',
-  'rfc199-workflow-validate-draft.test.ts: 1',
   'rfc201-mcp-exact-operation.test.ts: 1',
   'rfc201-plugin-exact-operation.test.ts: 1',
   'rfc202-lifecycle-exits.test.ts: 5',
@@ -469,7 +465,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc307-demo-seed.test.ts: 1',
   'rfc309-template-merge-migration.test.ts: 1',
   'rfc309-template-upstream-wiring.test.ts: 1',
-  'rfc310-config-create-contract.test.ts: 1',
   'rfc310-digital-employee-authoring.test.ts: 5',
   'rfc310-digital-employee-conflict-system-mock-e2e.test.ts: 1',
   'rfc310-digital-employee-human-review-system-mock-e2e.test.ts: 1',
@@ -477,7 +472,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc310-digital-employee-writer-cutover.test.ts: 1',
   'rfc310-employee-workspace-delivery.test.ts: 1',
   'rfc310-employee-workspace-repository-freshness.test.ts: 1',
-  'rfc310-pr1b-config-routes-errors.test.ts: 1',
   'rfc310-pr3-journey.test.ts: 1',
   'rfc310-pr3-upload-security.test.ts: 3',
   'rfc310-pr4-execution-host.test.ts: 1',
@@ -492,7 +486,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc311-badge-counts.test.ts: 3',
   'rfc311-branch-started-at-maintenance.test.ts: 2',
   'rfc311-maintenance-boot-tick.test.ts: 4',
-  // W12：新增两条真实 bun:sqlite statement observer SQL/CPU 机制回归，仅此引擎提供同步仪表。
   'rfc311-perf-foundation.test.ts: 10',
   'rfc311-repos-page.test.ts: 1',
   'rfc311-retention-sweep.test.ts: 1',
@@ -533,7 +526,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc328-codehost-attempt-ledger.test.ts: 1',
   'rfc328-durable-ownership.test.ts: 1',
   'rfc329-workgroup-pending.test.ts: 3',
-  'rfc330-case-list-membership-scope.test.ts: 1',
   'rfc330-case-members-ws-gate.test.ts: 1',
   'rfc330-employee-case-access.test.ts: 1',
   'rfc330-migration-backfill.test.ts: 1',
@@ -555,7 +547,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-auth-provider-contract.test.ts: 2',
   'rfc349-auth-token-audit-provider.test.ts: 1',
   'rfc349-boolean-expression-parity.test.ts: 1',
-  'rfc349-call-workgroup-frozen-contract.test.ts: 1',
   'rfc349-collaboration-runtime-mechanics.test.ts: 1',
   'rfc349-daemon-provider-core.test.ts: 1',
   'rfc349-database-migration-coordinator.integration.test.ts: 3',
@@ -576,7 +567,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-postgresql-daemon-system-identity.test.ts: 1',
   'rfc349-postgresql-logical-migration.integration.test.ts: 1',
   'rfc349-provider-search-case-parity.test.ts: 1',
-  'rfc349-rest-launch-ownership.test.ts: 1',
   'rfc349-safety-backup-off-thread-verify.test.ts: 1',
   'rfc349-source-control-provider-adapters.test.ts: 2',
   'rfc349-sqlite-logical-source.test.ts: 3',
@@ -599,38 +589,20 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc358-intent-graph-validation.test.ts: 1',
   'rfc359-database-transaction.test.ts: 1',
   'rfc359-engine-capabilities.test.ts: 1',
-  // T19h mechanisms read the actual immutable SQLite prefix before any head
-  // migration. The upgrade/restore files also select real PostgreSQL cases by
-  // default; this records the native sources and readonly SQLite witness.
   'rfc359-t19h-generation-upgrade.test.ts: 4',
   'rfc359-t19h-logical-backup-restore.test.ts: 1',
   'rfc359-t19h-postgresql-upgrade.integration.test.ts: 1',
-  // 原同步资源包提交必须在返回前写完并可回滚；这条真 SQLite 机制判据照样精确入账。
   'rfc359-w14-agent-commit-sequence.test.ts: 1',
-  // 四条原生同步 companion/CAS/回滚判据共用一处构库；十条公共写入行为仍跑双引擎。
   'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
-  'rfc359-w25-task-page-bounded-prefix.test.ts: 1', // Native SQLite fallback non-consumption witness; behavior cases use both providers.
-  'rfc359-w36-skill-operation-state-query.test.ts: 1', // Native immediate-get return witness; three query behavior cases use both providers.
+  'rfc359-w25-task-page-bounded-prefix.test.ts: 1',
+  'rfc359-w36-skill-operation-state-query.test.ts: 1',
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
-  // RFC-359 W8：这一格**不是**本守卫要防的那种债，但照样入账，因为判据是纯文本、不该为它开洞。
-  // `rfc359-w8-logical-source-conformance.test.ts` 整份判据都跑在 `describeEachProvider` 里
-  // （两个引擎各一遍）；这条 `new Database(` 在它 SQLite 能力分支的**里面**——`openSqliteLogicalSource`
-  // 按**路径**开只读连接，而「冻结窗漏进一个写手、围栏必须点名」这条判据非得有第二条写连接不可，
-  // PostgreSQL 那一支根本没有「文件」这个概念（它的围栏守的是活跃生成代）。
-  // 用别名 / 动态 import 把它藏过文本判据是本文件注释亲口点名的绕法，所以宁可占一格。
   'rfc359-w8-logical-source-conformance.test.ts: 1',
-  // RFC-359 W8：与上一格同形——整份判据跑在 `describeEachProvider` 里（两个引擎各一遍），
-  // 这条 `new Database(` 在它 SQLite 能力分支的**里面**：本对拍要「把本引擎的迁移器**从零**跑一遍」，
-  // SQLite 侧的「从零」就是一个全新内存库，PostgreSQL 侧对应的是再开一个一次性库。
-  // 判据是纯文本、不该为它开洞，所以照样占一格。
   'rfc359-w8-migrator-conformance.test.ts: 1',
   'routes-memories-patch.test.ts: 1',
   'routes-memories.test.ts: 1',
-  'routes-memory-distill-job-detail.test.ts: 1',
-  'routes-memory-distill-jobs.test.ts: 1',
   'routes-session.test.ts: 1',
-  'routes-task-feedback.test.ts: 1',
   'routes/mcps-probe.test.ts: 1',
   'runner-injected-memories.test.ts: 1',
   'runner-inventory-integration.test.ts: 1',
@@ -644,7 +616,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'runtime-routes.test.ts: 1',
   'runtime-session-lease.test.ts: 1',
   'scheduled-task-scheduler.test.ts: 1',
-  'scheduled-tasks-acl.test.ts: 1',
   'scheduled-tasks-crud.test.ts: 1',
   'scheduled-tasks-run-now.test.ts: 2',
   'scheduled-tasks-ws.test.ts: 1',
@@ -698,7 +669,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'wg-readonly-claim-and-pause-reason.test.ts: 1',
   'workflows.test.ts: 2',
   'workgroup-host-output-isolation.test.ts: 1',
-  'worktree-files-acl.test.ts: 1',
   'worktree-files-proxy.test.ts: 1',
   'ws-auth-multi-token.test.ts: 1',
   'ws-repo-imports.test.ts: 1',

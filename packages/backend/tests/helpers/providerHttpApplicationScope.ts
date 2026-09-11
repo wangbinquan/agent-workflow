@@ -1,4 +1,10 @@
-// RFC-359 AC-6 —— 双引擎 HTTP 应用的**作用域**：一份实现，18 个用例文件共用。
+// RFC-359 AC-6 —— 双引擎 HTTP 应用的**作用域**：一份实现，两类调用方共用。
+//
+// 一类是**已经双引擎、各自抄了一份生命周期**的 18 个文件（下面详述）；另一类是**还写死 SQLite
+// 的单引擎 HTTP 用例**——`rfc359-w5-t19f-test-engine-hardcoding` 账本上那几百行的大头就是它们，
+// 迁移动作固定三步：`createInMemoryDb(MIGRATIONS)` 换成 `scope.harness.db`、`createApp({…})` 换成
+// `(await scope.open()).app`、外层 `describe` 换成本函数。迁移时唯一需要动脑的是 bun:sqlite 专有的
+// 同步终结符（`.run()` / `.get()` / `.all()`）——它们在中立面上没有对应物，得改写成 await 的语句。
 //
 // 为什么存在：`createProviderHttpApplication` 只负责「按 harness 选中的 provider 装一个真应用」，
 // 而每个用例文件还要各自再写一遍**生命周期**——建一个专属的 app home、存/还 `AGENT_WORKFLOW_HOME`、

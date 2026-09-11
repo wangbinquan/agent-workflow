@@ -5,37 +5,32 @@
 //   - GET /api/memory-distill-jobs/:id/session    multi-attempt grouping +
 //                                                 capture-failed marker handling
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/runtime'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   daemonToken: string
   userToken: string
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const user = await createUser(db, {
     username: 'alice',
     displayName: 'Alice',
@@ -52,80 +47,85 @@ function authed(token: string, url: string, init: RequestInit = {}): Request {
   return new Request(`http://localhost${url}`, { ...init, headers })
 }
 
-function seedJob(db: DbClient): string {
+async function seedJob(db: ProviderNeutralDatabase): Promise<string> {
   const id = ulid()
-  db.insert(memoryDistillJobs)
-    .values({
-      id,
-      debounceKey: 'k',
-      sourceKind: 'feedback',
-      sourceEventId: 'tf-1',
-      taskId: null,
-      scopeResolvedJson: '{"agentIds":[],"workflowId":null,"repoId":null,"includeGlobal":true}',
-      status: 'done',
-      attempts: 0,
-      nextRunAt: Date.now(),
-      createdAt: Date.now(),
-      opencodeSessionId: 'sess-1',
-      userPromptMd: 'prompt',
-      exitCode: 0,
-      stderrExcerpt: 'note',
-    })
-    .run()
+  await db.insert(memoryDistillJobs).values({
+    id,
+    debounceKey: 'k',
+    sourceKind: 'feedback',
+    sourceEventId: 'tf-1',
+    taskId: null,
+    scopeResolvedJson: '{"agentIds":[],"workflowId":null,"repoId":null,"includeGlobal":true}',
+    status: 'done',
+    attempts: 0,
+    nextRunAt: Date.now(),
+    createdAt: Date.now(),
+    opencodeSessionId: 'sess-1',
+    userPromptMd: 'prompt',
+    exitCode: 0,
+    stderrExcerpt: 'note',
+  })
   return id
 }
 
-describe('routes /api/memory-distill-jobs/:id (RFC-043)', () => {
-  let h: Harness
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'routes /api/memory-distill-jobs/:id (RFC-043)',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-distill-detail-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+    })
 
-  test('regular user → 403 on detail + session endpoints', async () => {
-    const id = seedJob(h.db)
-    const a = await h.app.fetch(
-      authed(h.userToken, `/api/memory-distill-jobs/${id}`, { method: 'GET' }),
-    )
-    expect(a.status).toBe(403)
-    const b = await h.app.fetch(
-      authed(h.userToken, `/api/memory-distill-jobs/${id}/session`, { method: 'GET' }),
-    )
-    expect(b.status).toBe(403)
-  })
+    test('regular user → 403 on detail + session endpoints', async () => {
+      const id = await seedJob(h.db)
+      const a = await h.app.fetch(
+        authed(h.userToken, `/api/memory-distill-jobs/${id}`, { method: 'GET' }),
+      )
+      expect(a.status).toBe(403)
+      const b = await h.app.fetch(
+        authed(h.userToken, `/api/memory-distill-jobs/${id}/session`, { method: 'GET' }),
+      )
+      expect(b.status).toBe(403)
+    })
 
-  test('admin GET /:id returns job + siblings + sourceEvents + dedupSnapshot + candidates', async () => {
-    const id = seedJob(h.db)
-    const res = await h.app.fetch(
-      authed(h.daemonToken, `/api/memory-distill-jobs/${id}`, { method: 'GET' }),
-    )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      job: { id: string; opencodeSessionId: string | null }
-      siblings: unknown[]
-      sourceEvents: unknown[]
-      dedupSnapshot: unknown[]
-      candidates: unknown[]
-    }
-    expect(body.job.id).toBe(id)
-    expect(body.job.opencodeSessionId).toBe('sess-1')
-    expect(body.sourceEvents).toHaveLength(1)
-    expect(body.candidates).toHaveLength(0)
-  })
+    test('admin GET /:id returns job + siblings + sourceEvents + dedupSnapshot + candidates', async () => {
+      const id = await seedJob(h.db)
+      const res = await h.app.fetch(
+        authed(h.daemonToken, `/api/memory-distill-jobs/${id}`, { method: 'GET' }),
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        job: { id: string; opencodeSessionId: string | null }
+        siblings: unknown[]
+        sourceEvents: unknown[]
+        dedupSnapshot: unknown[]
+        candidates: unknown[]
+      }
+      expect(body.job.id).toBe(id)
+      expect(body.job.opencodeSessionId).toBe('sess-1')
+      expect(body.sourceEvents).toHaveLength(1)
+      expect(body.candidates).toHaveLength(0)
+    })
 
-  test('admin GET /:id on missing job → 404', async () => {
-    const res = await h.app.fetch(
-      authed(h.daemonToken, '/api/memory-distill-jobs/nope/cap', { method: 'GET' }),
-    )
-    expect(res.status).toBe(404)
-  })
+    test('admin GET /:id on missing job → 404', async () => {
+      const res = await h.app.fetch(
+        authed(h.daemonToken, '/api/memory-distill-jobs/nope/cap', { method: 'GET' }),
+      )
+      expect(res.status).toBe(404)
+    })
 
-  test('GET /:id/session groups events by attempt_index and excludes capture-failed marker from tree', async () => {
-    const id = seedJob(h.db)
-    // attempt 0: 1 real event
-    h.db
-      .insert(memoryDistillEvents)
-      .values({
+    test('GET /:id/session groups events by attempt_index and excludes capture-failed marker from tree', async () => {
+      const id = await seedJob(h.db)
+      // attempt 0: 1 real event
+      await h.db.insert(memoryDistillEvents).values({
         distillJobId: id,
         attemptIndex: 0,
         sessionId: 'sess-A',
@@ -140,11 +140,8 @@ describe('routes /api/memory-distill-jobs/:id (RFC-043)', () => {
           timestamp: 10,
         }),
       })
-      .run()
-    // attempt 1: capture-failed marker only
-    h.db
-      .insert(memoryDistillEvents)
-      .values({
+      // attempt 1: capture-failed marker only
+      await h.db.insert(memoryDistillEvents).values({
         distillJobId: id,
         attemptIndex: 1,
         sessionId: 'sess-B',
@@ -153,35 +150,35 @@ describe('routes /api/memory-distill-jobs/:id (RFC-043)', () => {
         kind: DISTILL_CAPTURE_FAILED_KIND,
         payload: '{"reason":"opencode-db-not-found"}',
       })
-      .run()
-    const res = await h.app.fetch(
-      authed(h.daemonToken, `/api/memory-distill-jobs/${id}/session`, { method: 'GET' }),
-    )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      attempts: Array<{
-        attemptIndex: number
-        captureFailed: boolean
-        tree: unknown | null
-        rootSessionId: string | null
-      }>
-    }
-    expect(body.attempts).toHaveLength(2)
-    expect(body.attempts[0]?.attemptIndex).toBe(0)
-    expect(body.attempts[0]?.captureFailed).toBe(false)
-    expect(body.attempts[0]?.tree).not.toBeNull()
-    expect(body.attempts[1]?.attemptIndex).toBe(1)
-    expect(body.attempts[1]?.captureFailed).toBe(true)
-    expect(body.attempts[1]?.tree).toBeNull()
-  })
+      const res = await h.app.fetch(
+        authed(h.daemonToken, `/api/memory-distill-jobs/${id}/session`, { method: 'GET' }),
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        attempts: Array<{
+          attemptIndex: number
+          captureFailed: boolean
+          tree: unknown | null
+          rootSessionId: string | null
+        }>
+      }
+      expect(body.attempts).toHaveLength(2)
+      expect(body.attempts[0]?.attemptIndex).toBe(0)
+      expect(body.attempts[0]?.captureFailed).toBe(false)
+      expect(body.attempts[0]?.tree).not.toBeNull()
+      expect(body.attempts[1]?.attemptIndex).toBe(1)
+      expect(body.attempts[1]?.captureFailed).toBe(true)
+      expect(body.attempts[1]?.tree).toBeNull()
+    })
 
-  test('GET /:id/session on job with zero captured events returns attempts:[]', async () => {
-    const id = seedJob(h.db)
-    const res = await h.app.fetch(
-      authed(h.daemonToken, `/api/memory-distill-jobs/${id}/session`, { method: 'GET' }),
-    )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { attempts: unknown[] }
-    expect(body.attempts).toHaveLength(0)
-  })
-})
+    test('GET /:id/session on job with zero captured events returns attempts:[]', async () => {
+      const id = await seedJob(h.db)
+      const res = await h.app.fetch(
+        authed(h.daemonToken, `/api/memory-distill-jobs/${id}/session`, { method: 'GET' }),
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { attempts: unknown[] }
+      expect(body.attempts).toHaveLength(0)
+    })
+  },
+)

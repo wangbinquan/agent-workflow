@@ -2,7 +2,7 @@ import type { Hono } from 'hono'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import {
   composePostgresqlApplication,
   type PostgresqlApplicationInput,
@@ -28,6 +28,12 @@ export type ProviderHttpApplicationInput = Pick<
 
 export interface ProviderHttpApplication {
   readonly app: Hono
+  /**
+   * The very `SecretBox` the composed application was built with. Fixtures that seed
+   * encrypted rows (OIDC client secrets, stored tokens) must encrypt with *this* box,
+   * not a freshly keyed one — a second box decrypts to garbage against the same rows.
+   */
+  readonly secretBox: SecretBox
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
   readonly taskExecution:
     | Readonly<{ provider: 'sqlite' }>
@@ -195,7 +201,13 @@ export async function createProviderHttpApplication(
         workspace: postgresqlApplication.runtime.workspaceMaintenance,
       })
     }
-    return Object.freeze({ app: application.app, repositoryWorkspaceStore, dispose, taskExecution })
+    return Object.freeze({
+      app: application.app,
+      secretBox,
+      repositoryWorkspaceStore,
+      dispose,
+      taskExecution,
+    })
   } catch (error) {
     try {
       await dispose()

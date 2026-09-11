@@ -8,21 +8,22 @@
 // Mirrors `tests/tasks-visibility.test.ts` but targets the two RFC-053
 // routes explicitly.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { taskCollaborators, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   aliceToken: string
   bobToken: string
@@ -31,15 +32,9 @@ interface Harness {
   bobTaskId: string
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
 
   const alice = await createUser(db, {
     username: 'alice',
@@ -110,62 +105,82 @@ async function post(app: Hono, token: string, path: string): Promise<Response> {
   return app.request(path, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
 }
 
-describe('RFC-053 — GET /api/tasks/:id/alerts visibility gate', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-053 — GET /api/tasks/:id/alerts visibility gate',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    tempPrefix: 'aw-tasks-alerts-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
 
-  test('admin → 200', async () => {
-    const r = await get(h.app, h.aliceToken, `/api/tasks/${h.bobTaskId}/alerts`)
-    expect(r.status).toBe(200)
-  })
+    test('admin → 200', async () => {
+      const r = await get(h.app, h.aliceToken, `/api/tasks/${h.bobTaskId}/alerts`)
+      expect(r.status).toBe(200)
+    })
 
-  test('owner (bob) → 200', async () => {
-    const r = await get(h.app, h.bobToken, `/api/tasks/${h.bobTaskId}/alerts`)
-    expect(r.status).toBe(200)
-  })
+    test('owner (bob) → 200', async () => {
+      const r = await get(h.app, h.bobToken, `/api/tasks/${h.bobTaskId}/alerts`)
+      expect(r.status).toBe(200)
+    })
 
-  test('collaborator (carol) → 200', async () => {
-    const r = await get(h.app, h.carolToken, `/api/tasks/${h.bobTaskId}/alerts`)
-    expect(r.status).toBe(200)
-  })
+    test('collaborator (carol) → 200', async () => {
+      const r = await get(h.app, h.carolToken, `/api/tasks/${h.bobTaskId}/alerts`)
+      expect(r.status).toBe(200)
+    })
 
-  // RFC-285 B1：外人 404 与不存在同形（旧 403 task-not-visible 退役）。
-  test('outsider (dave) → 404 task-not-found（B1 同形）', async () => {
-    const r = await get(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}/alerts`)
-    expect(r.status).toBe(404)
-    const body = (await r.json()) as { code: string }
-    expect(body.code).toBe('task-not-found')
-  })
-})
+    // RFC-285 B1：外人 404 与不存在同形（旧 403 task-not-visible 退役）。
+    test('outsider (dave) → 404 task-not-found（B1 同形）', async () => {
+      const r = await get(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}/alerts`)
+      expect(r.status).toBe(404)
+      const body = (await r.json()) as { code: string }
+      expect(body.code).toBe('task-not-found')
+    })
+  },
+)
 
-describe('RFC-053 — POST /api/tasks/:id/diagnose visibility gate', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-053 — POST /api/tasks/:id/diagnose visibility gate',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    tempPrefix: 'aw-tasks-alerts-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
 
-  test('admin → 200', async () => {
-    const r = await post(h.app, h.aliceToken, `/api/tasks/${h.bobTaskId}/diagnose`)
-    expect(r.status).toBe(200)
-  })
+    test('admin → 200', async () => {
+      const r = await post(h.app, h.aliceToken, `/api/tasks/${h.bobTaskId}/diagnose`)
+      expect(r.status).toBe(200)
+    })
 
-  test('owner (bob) → 200', async () => {
-    const r = await post(h.app, h.bobToken, `/api/tasks/${h.bobTaskId}/diagnose`)
-    expect(r.status).toBe(200)
-  })
+    test('owner (bob) → 200', async () => {
+      const r = await post(h.app, h.bobToken, `/api/tasks/${h.bobTaskId}/diagnose`)
+      expect(r.status).toBe(200)
+    })
 
-  test('collaborator (carol) → 200', async () => {
-    const r = await post(h.app, h.carolToken, `/api/tasks/${h.bobTaskId}/diagnose`)
-    expect(r.status).toBe(200)
-  })
+    test('collaborator (carol) → 200', async () => {
+      const r = await post(h.app, h.carolToken, `/api/tasks/${h.bobTaskId}/diagnose`)
+      expect(r.status).toBe(200)
+    })
 
-  // RFC-285 B1：同上——写型入口的外人同样 404 同形。
-  test('outsider (dave) → 404 task-not-found（B1 同形）', async () => {
-    const r = await post(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}/diagnose`)
-    expect(r.status).toBe(404)
-    const body = (await r.json()) as { code: string }
-    expect(body.code).toBe('task-not-found')
-  })
-})
+    // RFC-285 B1：同上——写型入口的外人同样 404 同形。
+    test('outsider (dave) → 404 task-not-found（B1 同形）', async () => {
+      const r = await post(h.app, h.daveToken, `/api/tasks/${h.bobTaskId}/diagnose`)
+      expect(r.status).toBe(404)
+      const body = (await r.json()) as { code: string }
+      expect(body.code).toBe('task-not-found')
+    })
+  },
+)

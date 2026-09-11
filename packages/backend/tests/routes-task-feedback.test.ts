@@ -3,23 +3,24 @@
 // Covers: visibility gate (RFC-285 B1: invisible ≡ missing, both 404), valid POST → 201 + distill job created,
 // invalid body → 422, permission gating.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 import { memoryDistillJobs, tasks, taskCollaborators, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { TaskFeedback } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   daemonToken: string
   adminToken: string
@@ -28,15 +29,9 @@ interface Harness {
   taskId: string
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const admin = await createUser(db, {
     username: 'alice',
     displayName: 'Alice',
@@ -104,102 +99,112 @@ function authed(token: string, url: string, init: RequestInit = {}): Request {
   return new Request(`http://localhost${url}`, { ...init, headers })
 }
 
-describe('routes-task-feedback', () => {
-  let h: Harness
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'routes-task-feedback',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-task-feedback-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+    })
 
-  test('owner POSTs a feedback note → 201 + distill job enqueued', async () => {
-    const res = await h.app.fetch(
-      authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: '  always confirm migration safety  ' }),
-      }),
-    )
-    expect(res.status).toBe(201)
-    const j = (await res.json()) as { feedback: TaskFeedback; distillJobId: string }
-    expect(j.feedback.bodyMd).toBe('always confirm migration safety') // trim
-    expect(j.feedback.authorUserId).toBeTruthy()
-    expect(j.distillJobId).toBeTruthy()
-    const jobs = h.db.select().from(memoryDistillJobs).all()
-    expect(jobs.length).toBe(1)
-    expect(jobs[0]!.debounceKey).toBe(`${h.taskId}:feedback`)
-  })
+    test('owner POSTs a feedback note → 201 + distill job enqueued', async () => {
+      const res = await h.app.fetch(
+        authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: '  always confirm migration safety  ' }),
+        }),
+      )
+      expect(res.status).toBe(201)
+      const j = (await res.json()) as { feedback: TaskFeedback; distillJobId: string }
+      expect(j.feedback.bodyMd).toBe('always confirm migration safety') // trim
+      expect(j.feedback.authorUserId).toBeTruthy()
+      expect(j.distillJobId).toBeTruthy()
+      const jobs = await h.db.select().from(memoryDistillJobs)
+      expect(jobs.length).toBe(1)
+      expect(jobs[0]!.debounceKey).toBe(`${h.taskId}:feedback`)
+    })
 
-  test('owner GETs the feedback list (own task)', async () => {
-    await h.app.fetch(
-      authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: 'note' }),
-      }),
-    )
-    const res = await h.app.fetch(authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`))
-    expect(res.status).toBe(200)
-    const j = (await res.json()) as { items: TaskFeedback[] }
-    expect(j.items.length).toBe(1)
-  })
+    test('owner GETs the feedback list (own task)', async () => {
+      await h.app.fetch(
+        authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: 'note' }),
+        }),
+      )
+      const res = await h.app.fetch(authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`))
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as { items: TaskFeedback[] }
+      expect(j.items.length).toBe(1)
+    })
 
-  // RFC-285 B1：外人 404 与不存在同形（旧 403 退役），并 oracle 消除——
-  // 归一 id 后与真不存在的响应体逐字节相等。
-  test('outsider POST → 404 task-not-found（B1 同形 + byte-oracle）', async () => {
-    const res = await h.app.fetch(
-      authed(h.outsiderToken, `/api/tasks/${h.taskId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: 'note' }),
-      }),
-    )
-    expect(res.status).toBe(404)
-    const missingId = 't_does_not_exist'
-    const missing = await h.app.fetch(
-      authed(h.outsiderToken, `/api/tasks/${missingId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: 'note' }),
-      }),
-    )
-    expect(missing.status).toBe(404)
-    const normalize = (s: string, id: string): string => s.replaceAll(id, '<ID>')
-    expect(normalize(await res.text(), h.taskId)).toBe(normalize(await missing.text(), missingId))
-  })
+    // RFC-285 B1：外人 404 与不存在同形（旧 403 退役），并 oracle 消除——
+    // 归一 id 后与真不存在的响应体逐字节相等。
+    test('outsider POST → 404 task-not-found（B1 同形 + byte-oracle）', async () => {
+      const res = await h.app.fetch(
+        authed(h.outsiderToken, `/api/tasks/${h.taskId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: 'note' }),
+        }),
+      )
+      expect(res.status).toBe(404)
+      const missingId = 't_does_not_exist'
+      const missing = await h.app.fetch(
+        authed(h.outsiderToken, `/api/tasks/${missingId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: 'note' }),
+        }),
+      )
+      expect(missing.status).toBe(404)
+      const normalize = (s: string, id: string): string => s.replaceAll(id, '<ID>')
+      expect(normalize(await res.text(), h.taskId)).toBe(normalize(await missing.text(), missingId))
+    })
 
-  test('admin sees all tasks even when not a collaborator', async () => {
-    const res = await h.app.fetch(
-      authed(h.adminToken, `/api/tasks/${h.taskId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: 'admin note' }),
-      }),
-    )
-    expect(res.status).toBe(201)
-  })
+    test('admin sees all tasks even when not a collaborator', async () => {
+      const res = await h.app.fetch(
+        authed(h.adminToken, `/api/tasks/${h.taskId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: 'admin note' }),
+        }),
+      )
+      expect(res.status).toBe(201)
+    })
 
-  test('missing taskId returns 404', async () => {
-    const res = await h.app.fetch(
-      authed(h.adminToken, `/api/tasks/t_does_not_exist/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: 'note' }),
-      }),
-    )
-    expect(res.status).toBe(404)
-  })
+    test('missing taskId returns 404', async () => {
+      const res = await h.app.fetch(
+        authed(h.adminToken, `/api/tasks/t_does_not_exist/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: 'note' }),
+        }),
+      )
+      expect(res.status).toBe(404)
+    })
 
-  test('empty body → 422', async () => {
-    const res = await h.app.fetch(
-      authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: '   ' }),
-      }),
-    )
-    expect(res.status).toBe(422)
-  })
+    test('empty body → 422', async () => {
+      const res = await h.app.fetch(
+        authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: '   ' }),
+        }),
+      )
+      expect(res.status).toBe(422)
+    })
 
-  test('body > 4000 → 422', async () => {
-    const res = await h.app.fetch(
-      authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: 'x'.repeat(4001) }),
-      }),
-    )
-    expect(res.status).toBe(422)
-  })
-})
+    test('body > 4000 → 422', async () => {
+      const res = await h.app.fetch(
+        authed(h.ownerToken, `/api/tasks/${h.taskId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({ bodyMd: 'x'.repeat(4001) }),
+        }),
+      )
+      expect(res.status).toBe(422)
+    })
+  },
+)

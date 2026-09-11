@@ -9,19 +9,20 @@
 // facets 与条目同口径。**红→绿对**：把 sqliteRuntimeStore.listCasesPage 的 membership 条件删掉，
 // 或让 adapter 重新对 shared 返回空页，本文件立刻红。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { employeeCaseMembers, employeeCases, employeeContextRecords } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 interface Actor {
@@ -29,7 +30,11 @@ interface Actor {
   token: string
 }
 
-async function mkUser(db: DbClient, username: string, role: 'admin' | 'user'): Promise<Actor> {
+async function mkUser(
+  db: ProviderNeutralDatabase,
+  username: string,
+  role: 'admin' | 'user',
+): Promise<Actor> {
   const user = await createUser(db, {
     username,
     displayName: username,
@@ -41,7 +46,7 @@ async function mkUser(db: DbClient, username: string, role: 'admin' | 'user'): P
 }
 
 async function seedCase(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   ownerUserId: string | null,
   state: 'active' | 'blocked' | 'terminal' = 'active',
 ): Promise<string> {
@@ -86,7 +91,7 @@ async function seedCase(
 }
 
 async function seedMember(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   caseId: string,
   userId: string,
   role: 'collaborator' | 'observer',
@@ -119,15 +124,9 @@ function ids(page: CatalogPage): string[] {
   return page.items.map((item) => item.id).sort()
 }
 
-async function buildHarness() {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc330-case-list-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope) {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const owner = await mkUser(db, 'l-owner', 'user')
   const member = await mkUser(db, 'l-member', 'user')
   const stranger = await mkUser(db, 'l-stranger', 'user')
@@ -156,55 +155,67 @@ async function buildHarness() {
   }
 }
 
-describe('RFC-330 缺口 1 —— 案例成员进统一任务列表的 mine / shared', () => {
-  test('成员的 shared = 别人发起且拉了我的案例（含无主案例），mine 再加上自己发起的', async () => {
-    const h = await buildHarness()
-    const shared = await listCases(h.app, h.member.token, 'shared')
-    expect(ids(shared)).toEqual([h.sharedCase, h.observedCase, h.orphanCase].sort())
-    const mine = await listCases(h.app, h.member.token, 'mine')
-    expect(ids(mine)).toEqual([h.sharedCase, h.observedCase, h.orphanCase, h.memberOwnCase].sort())
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-330 缺口 1 —— 案例成员进统一任务列表的 mine / shared',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-case-list-',
+  },
+  (scope) => {
+    test('成员的 shared = 别人发起且拉了我的案例（含无主案例），mine 再加上自己发起的', async () => {
+      const h = await buildHarness(scope)
+      const shared = await listCases(h.app, h.member.token, 'shared')
+      expect(ids(shared)).toEqual([h.sharedCase, h.observedCase, h.orphanCase].sort())
+      const mine = await listCases(h.app, h.member.token, 'mine')
+      expect(ids(mine)).toEqual(
+        [h.sharedCase, h.observedCase, h.orphanCase, h.memberOwnCase].sort(),
+      )
+    })
 
-  test('facets 与条目同口径（shared 只数成员案例）', async () => {
-    const h = await buildHarness()
-    const shared = await listCases(h.app, h.member.token, 'shared')
-    // sharedCase blocked → attention；observedCase terminal → finished；orphanCase active → active
-    expect(shared.facets).toEqual({ all: 3, active: 1, attention: 1, finished: 1 })
-    const mine = await listCases(h.app, h.member.token, 'mine')
-    expect(mine.facets).toEqual({ all: 4, active: 2, attention: 1, finished: 1 })
-  })
+    test('facets 与条目同口径（shared 只数成员案例）', async () => {
+      const h = await buildHarness(scope)
+      const shared = await listCases(h.app, h.member.token, 'shared')
+      // sharedCase blocked → attention；observedCase terminal → finished；orphanCase active → active
+      expect(shared.facets).toEqual({ all: 3, active: 1, attention: 1, finished: 1 })
+      const mine = await listCases(h.app, h.member.token, 'mine')
+      expect(mine.facets).toEqual({ all: 4, active: 2, attention: 1, finished: 1 })
+    })
 
-  test('发起人：mine 有自己的全部案例，shared 不含自己发起的', async () => {
-    const h = await buildHarness()
-    const mine = await listCases(h.app, h.owner.token, 'mine')
-    expect(ids(mine)).toEqual([h.ownCase, h.sharedCase, h.observedCase].sort())
-    const shared = await listCases(h.app, h.owner.token, 'shared')
-    expect(ids(shared)).toEqual([])
-  })
+    test('发起人：mine 有自己的全部案例，shared 不含自己发起的', async () => {
+      const h = await buildHarness(scope)
+      const mine = await listCases(h.app, h.owner.token, 'mine')
+      expect(ids(mine)).toEqual([h.ownCase, h.sharedCase, h.observedCase].sort())
+      const shared = await listCases(h.app, h.owner.token, 'shared')
+      expect(ids(shared)).toEqual([])
+    })
 
-  test('既非发起人也非成员的人两档都为空；普通用户的 all 降成 mine', async () => {
-    const h = await buildHarness()
-    expect(ids(await listCases(h.app, h.stranger.token, 'mine'))).toEqual([])
-    expect(ids(await listCases(h.app, h.stranger.token, 'shared'))).toEqual([])
-    expect(ids(await listCases(h.app, h.stranger.token, 'all'))).toEqual([])
-    const memberAll = await listCases(h.app, h.member.token, 'all')
-    expect(ids(memberAll)).toEqual(ids(await listCases(h.app, h.member.token, 'mine')))
-  })
+    test('既非发起人也非成员的人两档都为空；普通用户的 all 降成 mine', async () => {
+      const h = await buildHarness(scope)
+      expect(ids(await listCases(h.app, h.stranger.token, 'mine'))).toEqual([])
+      expect(ids(await listCases(h.app, h.stranger.token, 'shared'))).toEqual([])
+      expect(ids(await listCases(h.app, h.stranger.token, 'all'))).toEqual([])
+      const memberAll = await listCases(h.app, h.member.token, 'all')
+      expect(ids(memberAll)).toEqual(ids(await listCases(h.app, h.member.token, 'mine')))
+    })
 
-  test('tasks:read:all（admin）的 all 看到全部案例，shared 仍按成员制', async () => {
-    const h = await buildHarness()
-    const all = await listCases(h.app, h.admin.token, 'all')
-    expect(ids(all)).toEqual(
-      [h.ownCase, h.sharedCase, h.observedCase, h.orphanCase, h.memberOwnCase].sort(),
-    )
-    expect(ids(await listCases(h.app, h.admin.token, 'shared'))).toEqual([])
-  })
+    test('tasks:read:all（admin）的 all 看到全部案例，shared 仍按成员制', async () => {
+      const h = await buildHarness(scope)
+      const all = await listCases(h.app, h.admin.token, 'all')
+      expect(ids(all)).toEqual(
+        [h.ownCase, h.sharedCase, h.observedCase, h.orphanCase, h.memberOwnCase].sort(),
+      )
+      expect(ids(await listCases(h.app, h.admin.token, 'shared'))).toEqual([])
+    })
 
-  test('view / 状态筛选在成员制之上继续生效', async () => {
-    const h = await buildHarness()
-    const attention = await listCases(h.app, h.member.token, 'shared', '&view=attention')
-    expect(ids(attention)).toEqual([h.sharedCase])
-    const finished = await listCases(h.app, h.member.token, 'shared', '&view=finished')
-    expect(ids(finished)).toEqual([h.observedCase])
-  })
-})
+    test('view / 状态筛选在成员制之上继续生效', async () => {
+      const h = await buildHarness(scope)
+      const attention = await listCases(h.app, h.member.token, 'shared', '&view=attention')
+      expect(ids(attention)).toEqual([h.sharedCase])
+      const finished = await listCases(h.app, h.member.token, 'shared', '&view=finished')
+      expect(ids(finished)).toEqual([h.observedCase])
+    })
+  },
+)
