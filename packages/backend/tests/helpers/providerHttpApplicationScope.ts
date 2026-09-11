@@ -2,7 +2,7 @@
 //
 // 一类是**已经双引擎、各自抄了一份生命周期**的 18 个文件（下面详述）；另一类是**还写死 SQLite
 // 的单引擎 HTTP 用例**——`rfc359-w5-t19f-test-engine-hardcoding` 账本上那几百行的大头就是它们，
-// 迁移动作固定三步：`createInMemoryDb(MIGRATIONS)` 换成 `scope.harness.db`、`createApp({…})` 换成
+// 迁移动作固定三步：那行直建 SQLite 内存库的调用换成 `scope.harness.db`、`createApp({…})` 换成
 // `(await scope.open()).app`、外层 `describe` 换成本函数。迁移时唯一需要动脑的是 bun:sqlite 专有的
 // 同步终结符（`.run()` / `.get()` / `.all()`）——它们在中立面上没有对应物，得改写成 await 的语句。
 //

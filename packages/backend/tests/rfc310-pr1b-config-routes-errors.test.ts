@@ -108,11 +108,10 @@ describeEachProviderHttpApplication(
       })
       expect(created.status).toBe(201)
       const { id } = (await created.json()) as { id: string }
-      h.db
+      await h.db
         .update(developmentAdapterDefinitions)
         .set({ visibility: 'public' })
         .where(eq(developmentAdapterDefinitions.id, id))
-        .run()
       const ordinary = await createUser(h.db, {
         username: 'ordinary-310',
         displayName: 'Ordinary',

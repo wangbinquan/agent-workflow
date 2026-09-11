@@ -530,4 +530,38 @@ describe('repository test-suite policy', () => {
       [],
     )
   })
+
+  // RFC-359 AC-6 —— 双引擎用例里不得残留 bun:sqlite 专有的同步终结符。
+  //
+  // 为什么这条测试存在：`.run()` / `.get()` / `.all()` 是 bun:sqlite 的**同步**终结符。同一条
+  // 语句在 provider 中立面上返回的是一个 promise，写成 `db.insert(...).values(...).run()` 就是
+  // 一次没人 await 的写——SQLite 上同步落库、看不出问题，PostgreSQL 上行还没落，后面的 HTTP
+  // 请求先到，于是 409 / 外键 23503。它**不会稳定复现**：本机赢了这个竞态就是绿的，CI 上输了
+  // 才红（commit 93b5c6409 的 `routes-memory-distill-jobs` 与 `rfc310-pr1b-config-routes-errors`
+  // 就是这么把 main 推红的）。所以判据放在源代码层。
+  //
+  // 范围限定在**走共用 HTTP 作用域**（`describeEachProviderHttpApplication`）的用例上：那是
+  // AC-6 正在批量迁入的那批，今天是干净的零，于是可以零容忍。更早那批直接用
+  // `describeEachProvider` 的文件里仍有存量同步终结符（多数是 await 过的、不致命），它们
+  // 归 `rfc359-w5-t19f` 那条只降不升的账本管，不在这里一次性摊开。
+  test('provider HTTP tests carry no bun:sqlite-only sync terminals', () => {
+    const offenders: string[] = []
+    for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
+      // 守卫自身写着这些终结符的字面量（正则与提示文案里），不能把自己扫进去。
+      if (file === import.meta.path) continue
+      const source = readFileSync(file, 'utf8')
+      if (!source.includes('describeEachProviderHttpApplication')) continue
+      const hits = source.match(/\.(?:run|get|all)\(\)/g) ?? []
+      if (hits.length > 0) {
+        offenders.push(`${toPortableRelativePath(relative(REPO_ROOT, file))}: ${hits.length}`)
+      }
+    }
+    expect(
+      offenders.sort(),
+      '共用 HTTP 作用域的用例里出现了 bun:sqlite 专有的同步终结符（`.run()` / `.get()` / `.all()`）。' +
+        '它们在中立面上返回 promise：不 await 就是一次悬空的写（PostgreSQL 上行还没落，' +
+        '下一步就读不到），await 了也只是把 SQLite 的写法带进了中立面。改成 await 的语句：' +
+        '写用 `await db.insert(...).values(...)`，读用 `const [row] = await db.select()...`。',
+    ).toEqual([])
+  })
 })

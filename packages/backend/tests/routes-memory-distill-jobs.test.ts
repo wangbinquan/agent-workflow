@@ -34,26 +34,24 @@ async function buildHarness(
   return { db, app, daemonToken: DAEMON_TOKEN, userToken }
 }
 
-function seedJob(
+async function seedJob(
   db: ProviderNeutralDatabase,
   status: 'pending' | 'running' | 'done' | 'failed' | 'canceled' = 'pending',
-): string {
+): Promise<string> {
   const id = ulid()
-  db.insert(memoryDistillJobs)
-    .values({
-      id,
-      debounceKey: 'k',
-      sourceKind: 'clarify',
-      sourceEventId: 'c1',
-      taskId: null,
-      scopeResolvedJson: '{}',
-      status,
-      attempts: status === 'failed' ? 3 : 0,
-      nextRunAt: Date.now(),
-      lastError: status === 'failed' ? 'boom' : null,
-      createdAt: Date.now(),
-    })
-    .run()
+  await db.insert(memoryDistillJobs).values({
+    id,
+    debounceKey: 'k',
+    sourceKind: 'clarify',
+    sourceEventId: 'c1',
+    taskId: null,
+    scopeResolvedJson: '{}',
+    status,
+    attempts: status === 'failed' ? 3 : 0,
+    nextRunAt: Date.now(),
+    lastError: status === 'failed' ? 'boom' : null,
+    createdAt: Date.now(),
+  })
   return id
 }
 
@@ -80,7 +78,7 @@ describeEachProviderHttpApplication(
     })
 
     test('regular user → 403 on list, retry, cancel', async () => {
-      const id = seedJob(h.db, 'failed')
+      const id = await seedJob(h.db, 'failed')
       for (const path of [
         '/api/memory-distill-jobs',
         `/api/memory-distill-jobs/${id}/retry`,
@@ -94,9 +92,9 @@ describeEachProviderHttpApplication(
     })
 
     test('admin list + status filter', async () => {
-      seedJob(h.db, 'pending')
-      seedJob(h.db, 'failed')
-      seedJob(h.db, 'done')
+      await seedJob(h.db, 'pending')
+      await seedJob(h.db, 'failed')
+      await seedJob(h.db, 'done')
       const all = await h.app.fetch(
         authed(h.daemonToken, '/api/memory-distill-jobs', { method: 'GET' }),
       )
@@ -110,8 +108,8 @@ describeEachProviderHttpApplication(
     })
 
     test('retry only allowed on failed rows', async () => {
-      const failed = seedJob(h.db, 'failed')
-      const pending = seedJob(h.db, 'pending')
+      const failed = await seedJob(h.db, 'failed')
+      const pending = await seedJob(h.db, 'pending')
       const ok = await h.app.fetch(
         authed(h.daemonToken, `/api/memory-distill-jobs/${failed}/retry`, { method: 'POST' }),
       )
@@ -123,8 +121,8 @@ describeEachProviderHttpApplication(
     })
 
     test('cancel only allowed on pending rows', async () => {
-      const pending = seedJob(h.db, 'pending')
-      const running = seedJob(h.db, 'running')
+      const pending = await seedJob(h.db, 'pending')
+      const running = await seedJob(h.db, 'running')
       const ok = await h.app.fetch(
         authed(h.daemonToken, `/api/memory-distill-jobs/${pending}/cancel`, { method: 'POST' }),
       )

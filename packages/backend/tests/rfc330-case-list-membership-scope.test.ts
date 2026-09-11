@@ -51,42 +51,36 @@ async function seedCase(
   state: 'active' | 'blocked' | 'terminal' = 'active',
 ): Promise<string> {
   const id = ulid()
-  await db
-    .insert(employeeCases)
-    .values({
-      id,
-      name: `case-${id.slice(-6)}`,
-      employeeId: 'employee-1',
-      employeeRevision: 1,
-      typeId: 'development',
-      typeRevision: 10,
-      primaryContextId: `context-${id}`,
-      executionPolicyRevision: 1,
-      ownerUserId,
-      state,
-      ...(state === 'terminal' ? { terminalKind: 'completed' } : {}),
-      revision: 1,
-      writerGeneration: 1,
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    .run()
+  await db.insert(employeeCases).values({
+    id,
+    name: `case-${id.slice(-6)}`,
+    employeeId: 'employee-1',
+    employeeRevision: 1,
+    typeId: 'development',
+    typeRevision: 10,
+    primaryContextId: `context-${id}`,
+    executionPolicyRevision: 1,
+    ownerUserId,
+    state,
+    ...(state === 'terminal' ? { terminalKind: 'completed' } : {}),
+    revision: 1,
+    writerGeneration: 1,
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
   // 列表查询 inner join 主上下文（`listCasesPage` 用它做全文过滤）：没有这一行案例根本不出现。
-  await db
-    .insert(employeeContextRecords)
-    .values({
-      id: `context-${id}`,
-      caseId: id,
-      typeId: 'development',
-      schemaVersion: 1,
-      currentRevision: 1,
-      lifecycleState: state === 'terminal' ? 'terminal' : 'active',
-      stateJson: '{}',
-      artifactRefsJson: '[]',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    .run()
+  await db.insert(employeeContextRecords).values({
+    id: `context-${id}`,
+    caseId: id,
+    typeId: 'development',
+    schemaVersion: 1,
+    currentRevision: 1,
+    lifecycleState: state === 'terminal' ? 'terminal' : 'active',
+    stateJson: '{}',
+    artifactRefsJson: '[]',
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
   return id
 }
 
@@ -99,7 +93,6 @@ async function seedMember(
   await db
     .insert(employeeCaseMembers)
     .values({ caseId, userId, role, addedBy: 'seed', addedAt: NOW })
-    .run()
 }
 
 interface CatalogPage {
