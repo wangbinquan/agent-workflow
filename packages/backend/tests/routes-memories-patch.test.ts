@@ -5,25 +5,26 @@
 // touch any node_runs.injected_memories_json column (historical inject
 // snapshots are frozen; admin edits only affect future inject reads).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, memoryScopeMoveEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Memory } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   daemonToken: string
   adminUserId: string
@@ -31,15 +32,9 @@ interface Harness {
   regularUserToken: string
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const admin = await createUser(db, {
     username: 'alice',
     displayName: 'Alice',
@@ -73,339 +68,359 @@ function authed(token: string, init: RequestInit & { url: string }): Request {
   return new Request(`http://localhost${init.url}`, { ...init, headers })
 }
 
-describe('PATCH /api/memories/:id — RFC-045', () => {
-  let h: Harness
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'PATCH /api/memories/:id — RFC-045',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-mem-patch-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+    })
 
-  test('regular user → 403 permission-denied', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 't',
-      bodyMd: 'b',
+    test('regular user → 403 permission-denied', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 't',
+        bodyMd: 'b',
+      })
+      const res = await h.app.fetch(
+        authed(h.regularUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({ title: 'nope' }),
+        }),
+      )
+      expect(res.status).toBe(403)
     })
-    const res = await h.app.fetch(
-      authed(h.regularUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'nope' }),
-      }),
-    )
-    expect(res.status).toBe(403)
-  })
 
-  test('admin happy path → 200 + version bump + changedFields', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'orig',
-      bodyMd: 'body',
+    test('admin happy path → 200 + version bump + changedFields', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 'orig',
+        bodyMd: 'body',
+      })
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({ title: 'renamed', tags: ['x', 'y'] }),
+        }),
+      )
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as { memory: Memory; changedFields: string[] }
+      expect(j.memory.title).toBe('renamed')
+      expect(j.memory.tags).toEqual(['x', 'y'])
+      expect(j.memory.version).toBe(2)
+      expect(new Set(j.changedFields)).toEqual(new Set(['title', 'tags']))
     })
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'renamed', tags: ['x', 'y'] }),
-      }),
-    )
-    expect(res.status).toBe(200)
-    const j = (await res.json()) as { memory: Memory; changedFields: string[] }
-    expect(j.memory.title).toBe('renamed')
-    expect(j.memory.tags).toEqual(['x', 'y'])
-    expect(j.memory.version).toBe(2)
-    expect(new Set(j.changedFields)).toEqual(new Set(['title', 'tags']))
-  })
 
-  test('empty patch body → 422 invalid-body', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 't',
-      bodyMd: 'b',
+    test('empty patch body → 422 invalid-body', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 't',
+        bodyMd: 'b',
+      })
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({}),
+        }),
+      )
+      expect(res.status).toBe(422)
+      const j = (await res.json()) as { code: string }
+      expect(j.code).toBe('invalid-body')
     })
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({}),
-      }),
-    )
-    expect(res.status).toBe(422)
-    const j = (await res.json()) as { code: string }
-    expect(j.code).toBe('invalid-body')
-  })
 
-  test('unknown id → 404 memory-not-found', async () => {
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: '/api/memories/01HXX-nonexistent',
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'x' }),
-      }),
-    )
-    expect(res.status).toBe(404)
-    const j = (await res.json()) as { code: string }
-    expect(j.code).toBe('memory-not-found')
-  })
+    test('unknown id → 404 memory-not-found', async () => {
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: '/api/memories/01HXX-nonexistent',
+          method: 'PATCH',
+          body: JSON.stringify({ title: 'x' }),
+        }),
+      )
+      expect(res.status).toBe(404)
+      const j = (await res.json()) as { code: string }
+      expect(j.code).toBe('memory-not-found')
+    })
 
-  test('rejected row → 409 memory-terminal-status', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'doomed',
-      bodyMd: 'b',
+    test('rejected row → 409 memory-terminal-status', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 'doomed',
+        bodyMd: 'b',
+      })
+      await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'reject' }, 'admin')
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({ title: 'no' }),
+        }),
+      )
+      expect(res.status).toBe(409)
+      const j = (await res.json()) as { code: string }
+      expect(j.code).toBe('memory-terminal-status')
     })
-    await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'reject' }, 'admin')
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'no' }),
-      }),
-    )
-    expect(res.status).toBe(409)
-    const j = (await res.json()) as { code: string }
-    expect(j.code).toBe('memory-terminal-status')
-  })
 
-  test('archived row PATCH succeeds (status preserved)', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'agent',
-      scopeId: 'agent-a',
-      title: 'orig',
-      bodyMd: 'b',
+    test('archived row PATCH succeeds (status preserved)', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'agent',
+        scopeId: 'agent-a',
+        title: 'orig',
+        bodyMd: 'b',
+      })
+      await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'approve' }, 'admin')
+      await memoryCatalogOf(h.db).commands.archive(seed.id)
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({ title: 'edited while archived' }),
+        }),
+      )
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as { memory: Memory }
+      expect(j.memory.status).toBe('archived')
+      expect(j.memory.title).toBe('edited while archived')
     })
-    await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'approve' }, 'admin')
-    await memoryCatalogOf(h.db).commands.archive(seed.id)
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'edited while archived' }),
-      }),
-    )
-    expect(res.status).toBe(200)
-    const j = (await res.json()) as { memory: Memory }
-    expect(j.memory.status).toBe('archived')
-    expect(j.memory.title).toBe('edited while archived')
-  })
 
-  test('generic PATCH rejects a complete scope move payload and leaves scope/version unchanged', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'agent',
-      scopeId: 'agent-a',
-      title: 't',
-      bodyMd: 'b',
+    test('generic PATCH rejects a complete scope move payload and leaves scope/version unchanged', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'agent',
+        scopeId: 'agent-a',
+        title: 't',
+        bodyMd: 'b',
+      })
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({ scopeType: 'global', scopeId: null, title: 'smuggled' }),
+        }),
+      )
+      expect(res.status).toBe(422)
+      const after = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'GET',
+        }),
+      )
+      const body = (await after.json()) as { memory: Memory }
+      expect(body.memory).toMatchObject({
+        scopeType: 'agent',
+        scopeId: 'agent-a',
+        title: 't',
+        version: seed.version,
+      })
     })
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ scopeType: 'global', scopeId: null, title: 'smuggled' }),
-      }),
-    )
-    expect(res.status).toBe(422)
-    const after = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'GET',
-      }),
-    )
-    const body = (await after.json()) as { memory: Memory }
-    expect(body.memory).toMatchObject({
-      scopeType: 'agent',
-      scopeId: 'agent-a',
-      title: 't',
-      version: seed.version,
-    })
-  })
 
-  test('idempotent re-save → 200 + changedFields=[] + version unchanged', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'same',
-      bodyMd: 'same body',
+    test('idempotent re-save → 200 + changedFields=[] + version unchanged', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 'same',
+        bodyMd: 'same body',
+      })
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({ title: 'same', bodyMd: 'same body' }),
+        }),
+      )
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as { memory: Memory; changedFields: string[] }
+      expect(j.changedFields).toEqual([])
+      expect(j.memory.version).toBe(seed.version)
     })
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'same', bodyMd: 'same body' }),
-      }),
-    )
-    expect(res.status).toBe(200)
-    const j = (await res.json()) as { memory: Memory; changedFields: string[] }
-    expect(j.changedFields).toEqual([])
-    expect(j.memory.version).toBe(seed.version)
-  })
 
-  test('RFC-046 invariant: PATCH does NOT touch node_runs.injected_memories_json', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'orig',
-      bodyMd: 'b',
-    })
-    await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'approve' }, 'admin')
-
-    // Seed a fake node_runs row carrying an injected_memories_json snapshot
-    // that includes a record of the memory at its v1 state. PATCHing the
-    // memory must NOT rewrite this historical column.
-    const workflowId = ulid()
-    await h.db.insert(workflows).values({
-      id: workflowId,
-      name: 'wf-test',
-      description: '',
-      definition: '{}',
-      version: 1,
-      schemaVersion: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    const taskId = ulid()
-    await h.db.insert(tasks).values({
-      id: taskId,
-      name: 'task-rfc045-test',
-      workflowId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/aw-test',
-      worktreePath: '/tmp/aw-test-wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/test',
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    const nodeRunId = ulid()
-    const snapshotJsonBefore = JSON.stringify([
-      {
-        id: seed.id,
-        version: 1,
+    test('RFC-046 invariant: PATCH does NOT touch node_runs.injected_memories_json', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
         scopeType: 'global',
         scopeId: null,
         title: 'orig',
         bodyMd: 'b',
-        tags: [],
-        sourceKind: 'manual',
-        approvedAt: Date.now(),
-      },
-    ])
-    await h.db.insert(nodeRuns).values({
-      id: nodeRunId,
-      taskId,
-      nodeId: 'n1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'done',
-      injectedMemoriesJson: snapshotJsonBefore,
-    })
+      })
+      await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'approve' }, 'admin')
 
-    // PATCH the memory's title + body — every field a runtime injector
-    // would care about.
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'edited', bodyMd: 'edited body' }),
-      }),
-    )
-    expect(res.status).toBe(200)
-
-    const rows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))) as Array<{
-      injectedMemoriesJson: string | null
-    }>
-    expect(rows.length).toBe(1)
-    // Byte-equal: the historical snapshot is frozen by RFC-046 design.
-    expect(rows[0]!.injectedMemoriesJson).toBe(snapshotJsonBefore)
-  })
-})
-
-describe('POST /api/memories/:id/move — RFC-342', () => {
-  let h: Harness
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-  })
-
-  test('trusted route identity moves a candidate and persists its audit receipt', async () => {
-    const agentId = ulid()
-    await h.db.insert(agents).values({
-      id: agentId,
-      name: `route-move-agent-${agentId.slice(-6)}`,
-      description: '',
-      ownerUserId: h.adminUserId,
-      visibility: 'private',
-      aclRevision: 0,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'move me',
-      bodyMd: 'body',
-    })
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}/move`,
-        method: 'POST',
-        body: JSON.stringify({
-          expectedVersion: seed.version,
-          scopeType: 'agent',
-          scopeId: agentId,
-        }),
-      }),
-    )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { memory: Memory; moved: boolean }
-    expect(body).toMatchObject({
-      moved: true,
-      memory: { scopeType: 'agent', scopeId: agentId, version: seed.version + 1 },
-    })
-    const events = await h.db
-      .select()
-      .from(memoryScopeMoveEvents)
-      .where(eq(memoryScopeMoveEvents.memoryId, seed.id))
-    expect(events).toEqual([
-      expect.objectContaining({
-        actorUserId: h.adminUserId,
-        actorSource: 'session',
-        fromScopeType: 'global',
-        toScopeType: 'agent',
-        toScopeId: agentId,
-      }),
-    ])
-  })
-
-  test('wire schema rejects injected Actor/permission snapshots', async () => {
-    const seed = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'do not trust payload identity',
-      bodyMd: 'body',
-    })
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}/move`,
-        method: 'POST',
-        body: JSON.stringify({
-          expectedVersion: seed.version,
+      // Seed a fake node_runs row carrying an injected_memories_json snapshot
+      // that includes a record of the memory at its v1 state. PATCHing the
+      // memory must NOT rewrite this historical column.
+      const workflowId = ulid()
+      await h.db.insert(workflows).values({
+        id: workflowId,
+        name: 'wf-test',
+        description: '',
+        definition: '{}',
+        version: 1,
+        schemaVersion: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      const taskId = ulid()
+      await h.db.insert(tasks).values({
+        id: taskId,
+        name: 'task-rfc045-test',
+        workflowId,
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/aw-test',
+        worktreePath: '/tmp/aw-test-wt',
+        baseBranch: 'main',
+        branch: 'agent-workflow/test',
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      const nodeRunId = ulid()
+      const snapshotJsonBefore = JSON.stringify([
+        {
+          id: seed.id,
+          version: 1,
           scopeType: 'global',
           scopeId: null,
-          actor: {
-            user: { id: h.adminUserId, role: 'admin' },
-            permissions: ['resource-acl:bypass'],
-          },
+          title: 'orig',
+          bodyMd: 'b',
+          tags: [],
+          sourceKind: 'manual',
+          approvedAt: Date.now(),
+        },
+      ])
+      await h.db.insert(nodeRuns).values({
+        id: nodeRunId,
+        taskId,
+        nodeId: 'n1',
+        iteration: 0,
+        retryIndex: 0,
+        reviewIteration: 0,
+        status: 'done',
+        injectedMemoriesJson: snapshotJsonBefore,
+      })
+
+      // PATCH the memory's title + body — every field a runtime injector
+      // would care about.
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}`,
+          method: 'PATCH',
+          body: JSON.stringify({ title: 'edited', bodyMd: 'edited body' }),
         }),
-      }),
-    )
-    expect(res.status).toBe(422)
-    expect(await h.db.select().from(memoryScopeMoveEvents)).toEqual([])
-  })
-})
+      )
+      expect(res.status).toBe(200)
+
+      const rows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))) as Array<{
+        injectedMemoriesJson: string | null
+      }>
+      expect(rows.length).toBe(1)
+      // Byte-equal: the historical snapshot is frozen by RFC-046 design.
+      expect(rows[0]!.injectedMemoriesJson).toBe(snapshotJsonBefore)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'POST /api/memories/:id/move — RFC-342',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-mem-patch-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+    })
+
+    test('trusted route identity moves a candidate and persists its audit receipt', async () => {
+      const agentId = ulid()
+      await h.db.insert(agents).values({
+        id: agentId,
+        name: `route-move-agent-${agentId.slice(-6)}`,
+        description: '',
+        ownerUserId: h.adminUserId,
+        visibility: 'private',
+        aclRevision: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 'move me',
+        bodyMd: 'body',
+      })
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}/move`,
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: seed.version,
+            scopeType: 'agent',
+            scopeId: agentId,
+          }),
+        }),
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { memory: Memory; moved: boolean }
+      expect(body).toMatchObject({
+        moved: true,
+        memory: { scopeType: 'agent', scopeId: agentId, version: seed.version + 1 },
+      })
+      const events = await h.db
+        .select()
+        .from(memoryScopeMoveEvents)
+        .where(eq(memoryScopeMoveEvents.memoryId, seed.id))
+      expect(events).toEqual([
+        expect.objectContaining({
+          actorUserId: h.adminUserId,
+          actorSource: 'session',
+          fromScopeType: 'global',
+          toScopeType: 'agent',
+          toScopeId: agentId,
+        }),
+      ])
+    })
+
+    test('wire schema rejects injected Actor/permission snapshots', async () => {
+      const seed = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 'do not trust payload identity',
+        bodyMd: 'body',
+      })
+      const res = await h.app.fetch(
+        authed(h.adminUserToken, {
+          url: `/api/memories/${encodeURIComponent(seed.id)}/move`,
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: seed.version,
+            scopeType: 'global',
+            scopeId: null,
+            actor: {
+              user: { id: h.adminUserId, role: 'admin' },
+              permissions: ['resource-acl:bypass'],
+            },
+          }),
+        }),
+      )
+      expect(res.status).toBe(422)
+      expect(await h.db.select().from(memoryScopeMoveEvents)).toEqual([])
+    })
+  },
+)

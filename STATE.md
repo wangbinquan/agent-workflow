@@ -2,60 +2,68 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 本轮进展（2026-09-12，AC-6 迁移 21 份 + **它当天抓出的三条 PG 缺陷已修**）
+> ## 📌 RFC-359 本轮进展（2026-09-12，AC-6 账本 **625 → 586**，含三条已修 PG 缺陷）
 >
-> ### 这一轮最值得记的一件事
+> ### 一句话
 >
-> **「把一个单引擎用例改成双引擎」本身就是一次审计。** `rfc109-sync-route.test.ts` 只是从写死
-> SQLite 改成 `describeEachProviderHttpApplication`，**一行产品代码都没动**，当天红出三条
-> PostgreSQL 专有缺陷——没有一条是靠读代码发现的。三条都已修 + 带回归防护，详见
-> `design/RFC-359-database-provider-unification/plan.md` §5u：
+> **「把单引擎用例改成双引擎」本身就是一次审计**——这一轮的三条 PG 缺陷、两条能力不对称、
+> 四次「用例还在跑但测的已经不是原来那件事」，**没有一条是靠读代码发现的**，全是迁移当天测出来的。
 >
-> 1. **lineage 列为 NULL 的任务，其 continuation 在 PG 上全部死锁**。派生请求的一侧对 NULL
->    以任务自身为根派生作用域，准入那一侧却拿派生后的值去比**原始列**（`'task-x' !== null`
->    永真），于是 sync-workflow / resume / retry 每一次都 409 `task-continuation-stale`，
->    **没有任何推进办法**。修法：两侧共用 `canonicalTaskLineageScope`。
-> 2. **内置工作流在 PG 上被预览成「工作流已删除」**（PG 不看 `workflows.builtin`，可启动性
->    授权把它挡下，异常被兜成 `workflow-deleted`）。
+> ### 已修的三条 PostgreSQL 缺陷（`rfc109-sync-route` 改双引擎当天红出来，产品代码一行没动）
+>
+> 1. **lineage 列为 NULL 的任务，其 continuation 在 PG 上全部死锁**。派生请求那侧对 NULL 以任务
+>    自身为根派生作用域，准入那侧却拿派生后的值去比**原始列**（`'task-x' !== null` 永真），
+>    于是 sync-workflow / resume / retry 每次都 409 `task-continuation-stale`，**没有任何推进办法**。
+>    修法：两侧共用 `canonicalTaskLineageScope`。
+> 2. **内置工作流在 PG 上被预览成「工作流已删除」**（PG 不看 `workflows.builtin`）。
 > 3. **预览说能同步、按钮必然 409**（PG 预览看进程内活跃表，动作看持久化状态）。
 >
-> ②③ 的判据落进 `domain/workflowSyncPreview.ts` 两个 provider 共用；legacy `services/task.ts`
-> 经 `public/participants.ts` 取（直接 import 模块内部会被 `RFC-317 T22` 当场拦下）。
+> ②③ 的判据落进 `domain/workflowSyncPreview.ts` 两个 provider 共用。详见 plan §5u。
 >
-> ### AC-6 进度与工具
+> ### 记账：三条「不是还没迁，是今天迁不了」
 >
-> `rfc359-w5-test-engine-hardcoding` 账本 **625 → 604**（本轮迁 21 份 HTTP 用例）。迁移动作已
-> 固定成三步，写在 `tests/helpers/providerHttpApplicationScope.ts` 抬头：
-> `createInMemoryDb` 那行 → `scope.harness.db`；`createApp({…})` → `(await scope.open()).app`；
-> 外层 `describe` → `describeEachProviderHttpApplication`。作用域新增两个口子：
-> `createProviderHttpApplication` 暴露它实际装进应用的 `SecretBox`（夹具要 seed 加密行时必须用
-> 同一个盒子），`open({ config })` 把守护进程配置并进作用域现建的那份 config（自建 app home
-> 写 config 会被整份绕开——`plantuml-proxy` 迁移时实测）。
+> | 项 | 实质 | 在哪 |
+> | --- | --- | --- |
+> | 无 secretBox 部署 | `AppDeps.secretBox` 可选、`PostgresqlApplicationInput.secretBox` **必填**——这个部署形态在 PG 上按构造不存在 | plan §5v |
+> | PG 的 `task-active` 删除闸门 | 产品判据同形，但测试注入项 `__setActiveTaskForTesting` 只有 SQLite 那侧读 ⇒ **PG 侧这条闸门零覆盖** | plan §5z |
+> | WebSocket 两个文件 | 底下是 `composeSqliteRealtimeRuntime` / PG 双声明，**登记在册的成对实现**，要先合这一对 | plan §5z |
 >
-> **迁移时唯一要动脑的**：bun:sqlite 专有的同步终结符 `.run()` / `.get()` / `.all()`。它们在中立面
-> 上返回 promise，不 await 就是一次悬空的写——SQLite 同步落库看不出问题，PG 上行还没落、下一步
-> 就读不到。**这类红不稳定复现**（本机赢了竞态就是绿的，CI 输了才红，`93b5c6409` 就是这么把 main
-> 推红的），所以已加源代码层守卫 `test-suite-policy`「provider HTTP tests carry no
-> bun:sqlite-only sync terminals」（零容忍，已变异验证）。更早那批直接用 `describeEachProvider`
-> 的文件仍有 157 处存量，归 `rfc359-w5-t19f` 账本管。
+> 三条都**显式留成单引擎并在块内写明理由**，没有用条件 skip（`test-suite-policy` 盯的就是静默弱化）。
+>
+> ### ⚠️ 迁移工具的坑：会**静默丢掉** `createApp` 的多行选项
+>
+> 批量脚本按单行正则扫选项键，而 `runtimeDiagnosticTestDependencies` 这类测试注入依赖的值是**跨行
+> 对象字面量** ⇒ 被静默丢掉，迁出来的应用少装一份依赖。`rfc135-runtimes-status` 因此探测打到真机
+> PATH、hang 用例超时（**这次是红的所以被抓住；下一次可能是绿的**）。已审计本轮此前所有迁移文件，
+> 只出现过 `secretBox` / `daemonInfoPath` 两种且都已显式接上——**没有文件因此少装依赖**。
+> 两条 pre-flight 已写进 `docs/dev-gotchas.md`：**迁移前逐字核对 `createApp` 选项**、
+> **迁移前先 `grep describeEachProvider`**（后者不查会造出 `[postgresql] > … > [sqlite]` 交叉积）。
+>
+> ### 剩余 runway（实测，不是估计）
+>
+> 仍是单引擎的 HTTP 用例文件 **93 个**，其中**只有约 25 个**带非标准 `createApp` 选项；
+> 真正卡住的是 `AppDeps` 独有的那批注入缝（`runtimeDiagnosticTestDependencies` ×4 /
+> `webhookDispatcher` ×3 / `mcpRuntimeTestDependencies` ×2 / `intentTestDependencies` ×2 …），
+> **`PostgresqlApplicationInput` 上一个都没有**——这是与 secretBox 同类的能力不对称，
+> 意味着「一个 provider 的依赖能被打桩、另一个不能」，要补得改生产装配面，是独立一刀。
+> **其余约 70 个是 plain 的，用现有作用域就能迁**，这是下一个人最省力的入口。
+>
+> ### 作用域这一轮长出来的口子（都是「问装配要，别自己造」）
+>
+> `secretBox`（加密列夹具必须用应用那个盒子）/ `open({ config })`（守护进程配置）/
+> `processConcurrencyScope`（池的 key 按 provider 不同）/ `bootstrap` 直通（测 bootstrap 流程）。
+> 迁移三步固定写在 `tests/helpers/providerHttpApplicationScope.ts` 抬头。
 >
 > ### 顺带修掉的一条 CI 不稳定
 >
-> `eachProvider` 的 PG `beforeEach` 快照回滚吃的是 bun 默认 5s hook 预算（`beforeAll`/`afterAll`
-> 早就各自显式给了 60s/90s），CI 一忙就偶发
-> 「a beforeEach/afterEach hook timed out」——2026-09-11 real-PostgreSQL 泳道就是这么红的。
-> 已给 `databaseCount × 30s`。
+> `eachProvider` 的 PG `beforeEach` 快照回滚吃 bun 默认 5s hook 预算（`beforeAll`/`afterAll` 早就
+> 显式给了 60s/90s），CI 一忙就偶发「hook timed out」且**记在随机某个用例头上**。已给
+> `databaseCount × 30s`。⚠️ 改 `eachProvider.ts` 必须连带跑
+> `rfc359-w31-provider-fixture-registration` 与 `rfc359-w39-provider-harness-lifecycle-diagnostics`
+> ——它们把 `registerPostgresql` 的**源码文本**取出来 `new Function` 重新求值，新增模块级常量在那个
+> 作用域里是 ReferenceError（本轮因此推红过一次）。
 >
-> ### 还没做的两件（都在 plan §5u 写明了前置）
->
-> - **退役 `rfc328_tasks_lineage_after_insert`**：SQLite 有这条兜底触发器、PG 一个触发器都没有，
->   于是非生产写入者在两个引擎上落出不同的行（上面第 1 条 bug 的温床）。应用层现在对 NULL 容忍，
->   退役的前置条件已具备。
-> - **`syncWorkflow` 的墓碑工作树判据**：PG 比 SQLite 严一档（多一条 `workspacePrunedAt !== null`）。
->   收敛要走 `shared` 的 `taskWorkspacePhase` 单一事实源，而那个函数要 `hasRepoPrepRow`，
->   得先给两侧的读补上这一列。
-
-> ## 📌 RFC-359 本轮进展（2026-09-11 晚，同步孪生退役 9 刀 + 3 条守卫）
+> ## 📌 RFC-359 上一段（2026-09-11 晚，同步孪生退役 9 刀 + 3 条守卫）
 >
 > 上一段交接说「同步事务面账本清零 ≠ `DbTxSync` 没人用，退役同步孪生才是 AC-6 的真正前置」。
 > 本轮就按那条往下走，**方法固定为一句话**：对每个同步孪生先问「**src 侧还有调用方吗**」。
