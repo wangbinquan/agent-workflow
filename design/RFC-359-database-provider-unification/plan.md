@@ -5483,7 +5483,16 @@ sqlite/taskLifecycle.ts  setTaskStatus / trySetTaskStatus      ← 根，25 + 2 
 不是「技术钉死」，而是「只有测试夹具还挂着」。下刀前先对每一笔问一句「src 侧还有调用方吗」，
 零调用方的先摘，剩下的才是真要改解释器的。
 
-### 债 3（`sqliteTaskExecutionEffect.ts` 的两笔）**试过了，撞在一处真能力差异上**
+### 债 3（`sqliteTaskExecutionEffect.ts` 的两笔）**已销账**（用户 2026-09-11 裁决后落地）
+
+先记结论：`SYNC_TRANSACTION_DEBT` **3 → 2 个文件**，`sqliteTaskExecutionEffect.ts` 从 583 行缩到
+**180 行**（`prepareAndAcquire` / `settle` 连同它们的 `withOwnedTaskTx`、端口声明与随之变死的
+`boundedReceipt` / `isEffectFenceConflict` 一并删除）。顺带 `rfc359-w8-unnormalized-unique-insert`
+账本 19 → 18（那三处「先查存在再插唯一键表」全在被删的两个方法里）。
+
+下面是撞墙与裁决的经过，保留原文，因为它给出了一条可复用的判断方法。
+
+### （经过）先按 §5o 的方法走，前半段成立、后半段撞墙
 
 按上面那条方法先问「src 侧还有调用方吗」：`prepareAndAcquire` / `settle` 也是零——生产走
 `TaskExecutionPersistence['effects']`，即中立的 `DrizzleTaskExecutionEffectPersistence`
@@ -5501,14 +5510,18 @@ sqlite/taskLifecycle.ts  setTaskStatus / trySetTaskStatus      ← 根，25 + 2 
 **具名变体**表达的——`settleCodeHostNode({ settlement, … })` 就是「结算 + node_run 投影同事务」
 那一个。也就是说方向不是「把裸 tx 回调加回来」，而是问：那两条用例真正要锁的是什么？
 
-- 若锁的是**产品行为**「投影与结算同生共死」，就该改用已有的具名变体去锁（`settleCodeHostNode`），
-  用例的意图不变、判据反而更贴生产路径；
-- 若锁的是**机制**「`onSettledTx` 这个钩子存在且在同一笔事务里」，那它锁的是即将退役的实现细节，
-  应当随实现一起走。
+**裁决（用户 2026-09-11）：改用已有具名变体去锁。** 逐条落地后发现两处的真实意图并不相同：
 
-两种读法对应两种改法，而它改的是**一条既有回归判据的意图**，不是实现细节——按仓规矩
-（测试注释要写清「为什么这条测试存在」）**先确认再动**，本刀因此停在这里并回退。
-`prepareAndAcquire` 那侧单独迁没有意义——账本按**文件**计数，`settle` 留着这一笔就还占一格。
+- 第一处**真的**在断言「投影与结算同生共死」。改走 `settleCodeHostNode`，投影对象从一个只为测试
+  存在的 `errorSummary` 字符串，换成**真实的 node_run 终态**——判据比原来更贴生产路径。
+- 第二处**根本不是断言**，只是夹具：把任务推到 `done` 好让下面的归档用例有料可归。它平铺成
+  结算之后的一笔普通写即可。
+
+**方法本身值得记住**：撞到「中立端口没有某个逃逸口」时，先分辨那条用例锁的是**产品行为**还是
+**实现机制**。前者总能用端口已有的具名能力重新表达（而且通常更贴生产）；后者锁的是即将退役的
+细节，应当随实现一起走。两处混在同一个符号上，是这一笔看起来像「能力缺口」的唯一原因。
+
+### （历史）撞墙当时的判断
 
 ### 一条必须先想清楚的语义变化
 

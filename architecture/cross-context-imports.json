@@ -15337,23 +15337,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:307db8d2e46869ffd462",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionEffectFences",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "taskExecutionEffectFences",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateOperationJournal.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/humanGateOperationJournal.ts",
       "fromSymbol": "$file",
@@ -81398,9 +81381,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4788,
+    "architectureExceptions": 4787,
     "implementationSccs": 0,
-    "observedEdges": 5327,
+    "observedEdges": 5326,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -97279,22 +97262,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/isolatedAgentRun.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#persistIsoNodeTree"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#$file",
-      "id": "import:307db8d2e46869ffd462",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "taskExecutionEffectFences",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionEffectFences"
     },
     {
       "edgeKind": "value",
@@ -167178,7 +167145,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2d4203258fd3814faffa87e9df3d9c22ee928b8d4543b6045bc9f960175be186",
+  "sourceDigest": "sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

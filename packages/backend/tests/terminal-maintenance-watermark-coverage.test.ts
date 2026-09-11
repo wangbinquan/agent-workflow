@@ -18,6 +18,7 @@
 //    making `finalizeClaimedWorkspace` throw at a task-terminal event. The
 //    legacy SQLite path (systemWorkspaceGc.ts) classified it as 'busy'.
 
+import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { describe, expect, test } from 'bun:test'
@@ -115,9 +116,12 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
     effectKind: 'repository',
     stableActionOrdinal: 'two-generation-fixture',
   })
-  const settleGeneration = (generation: number, request: unknown, now: number): void => {
-    const prepared = module.effects.prepareAndAcquire({
-      db: database,
+  const settleGeneration = async (
+    generation: number,
+    request: unknown,
+    now: number,
+  ): Promise<void> => {
+    const prepared = await effectsOf(database).prepareAndAcquire({
       token: owned.token,
       intentId: intent.intentId,
       operationKey: 'root:two-generation-fixture',
@@ -136,8 +140,7 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
       resourceKeys: ['repository:two-generation-fixture'],
       now,
     })
-    module.effects.settle({
-      db: database,
+    await effectsOf(database).settle({
       token: owned.token,
       effectId: prepared.effectId,
       attemptId: prepared.attemptId,
@@ -148,8 +151,8 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
       now: now + 1,
     })
   }
-  settleGeneration(0, { operation: 'first-request' }, 61)
-  settleGeneration(1, { operation: 'second-request' }, 63)
+  await settleGeneration(0, { operation: 'first-request' }, 61)
+  await settleGeneration(1, { operation: 'second-request' }, 63)
 
   database.update(tasks).set({ status: 'done', finishedAt: 65 }).where(eq(tasks.id, taskId)).run()
   const owner = module.ownership.read(database, taskId)!
@@ -195,6 +198,20 @@ function submitIntent(
   input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
 ): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
   return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
+}
+
+/**
+ * RFC-359 —— effect 准备 / 结算走**中立**持久化。
+ *
+ * 原来这里调的是 `<module>.effects.prepareAndAcquire(...)` / `.settle(...)`，那是
+ * `SqliteTaskExecutionEffectStore` 里两处 `withOwnedTaskTx`（账本
+ * `rfc359-sync-transaction-highwater` 的一条）。它们 src 侧零调用方——生产走
+ * `TaskExecutionPersistence['effects']`，即中立的 `DrizzleTaskExecutionEffectPersistence`
+ * （`gateContinuationEffectPersistence.ts` 的两处 await 就是它）；挡着它们的只有测试夹具。
+ * 两侧入参逐字相同（只少一个 `db`）、返回结构相同，所以夹具是**平移**不是改写。
+ */
+function effectsOf(db: ProviderNeutralDatabase): DrizzleTaskExecutionEffectPersistence {
+  return new DrizzleTaskExecutionEffectPersistence(db)
 }
 
 describe('terminal maintenance retained-watermark coverage', () => {

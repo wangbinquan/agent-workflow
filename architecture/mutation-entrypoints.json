@@ -41459,7 +41459,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2d4203258fd3814faffa87e9df3d9c22ee928b8d4543b6045bc9f960175be186",
+  "sourceDigest": "sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41569,7 +41569,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 184,
+      "durableWriterSites": 171,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -42927,216 +42927,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffects",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#113:taskExecutionEffects",
-        "line": 113,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffects"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "prepareAndAcquire",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffects",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#343:taskExecutionEffects",
-        "line": 343,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "prepareAndAcquire",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#370:taskExecutionLineageOperationRecords",
-        "line": 370,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectAttempts"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "prepareAndAcquire",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectAttempts",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#426:taskExecutionEffectAttempts",
-        "line": 426,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectFences"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "prepareAndAcquire",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectFences",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#447:taskExecutionEffectFences",
-        "line": 447,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectAttempts"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "prepareAndAcquire",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectAttempts",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#464:taskExecutionEffectAttempts",
-        "line": 464,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffects"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "prepareAndAcquire",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffects",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#473:taskExecutionEffects",
-        "line": 473,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectAttempts"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "settle",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectAttempts",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#529:taskExecutionEffectAttempts",
-        "line": 529,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectFences"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "settle",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectFences",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#553:taskExecutionEffectFences",
-        "line": 553,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectAttempts"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "settle",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectAttempts",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#596:taskExecutionEffectAttempts",
-        "line": 596,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectFences"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "settle",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectFences",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#614:taskExecutionEffectFences",
-        "line": 614,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffects"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "settle",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffects",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#630:taskExecutionEffects",
-        "line": 630,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "settle",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#675:taskExecutionLineageOperationRecords",
-        "line": 675,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "settle",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#695:taskExecutionLineageOperationRecords",
-        "line": 695,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#83:taskExecutionEffects",
+        "line": 83,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

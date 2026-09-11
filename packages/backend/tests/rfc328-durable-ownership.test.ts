@@ -128,6 +128,20 @@ function submitIntent(
   return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
 }
 
+/**
+ * RFC-359 —— effect 准备 / 结算走**中立**持久化。
+ *
+ * 原来这里调的是 `<module>.effects.prepareAndAcquire(...)` / `.settle(...)`，那是
+ * `SqliteTaskExecutionEffectStore` 里两处 `withOwnedTaskTx`（账本
+ * `rfc359-sync-transaction-highwater` 的一条）。它们 src 侧零调用方——生产走
+ * `TaskExecutionPersistence['effects']`，即中立的 `DrizzleTaskExecutionEffectPersistence`
+ * （`gateContinuationEffectPersistence.ts` 的两处 await 就是它）；挡着它们的只有测试夹具。
+ * 两侧入参逐字相同（只少一个 `db`）、返回结构相同，所以夹具是**平移**不是改写。
+ */
+function effectsOf(db: ProviderNeutralDatabase): DrizzleTaskExecutionEffectPersistence {
+  return new DrizzleTaskExecutionEffectPersistence(db)
+}
+
 describe('RFC-328 ownership domain and durable owner adapter', () => {
   test('continuation admission compares migrated lineage JSON semantically', async () => {
     const database = db()
@@ -434,8 +448,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       effectKind: 'code-host-mutation',
       stableActionOrdinal: 'pipeline-retry',
     })
-    const prepared = module.effects.prepareAndAcquire({
-      db: database,
+    const prepared = await effectsOf(database).prepareAndAcquire({
       token: claim.token,
       intentId: intent.intentId,
       operationKey: 'pipeline-retry',
@@ -454,8 +467,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       resourceKeys: ['code-host:gitlab:pipeline:17'],
       now: 40,
     })
-    module.effects.settle({
-      db: database,
+    await effectsOf(database).settle({
       token: claim.token,
       effectId: prepared.effectId,
       attemptId: prepared.attemptId,
@@ -506,8 +518,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       effectKind: 'repository',
       stableActionOrdinal: 'publish-main',
     })
-    const prepared = module.effects.prepareAndAcquire({
-      db: database,
+    const prepared = await effectsOf(database).prepareAndAcquire({
       token: claim.token,
       intentId: intent.intentId,
       operationKey: 'root:publish-main',
@@ -536,26 +547,45 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         .sort(),
     ).toEqual(['repository:origin/main', 'workspace:/tmp/worktree'])
 
-    module.effects.settle({
-      db: database,
-      token: claim.token,
-      effectId: prepared.effectId,
-      attemptId: prepared.attemptId,
-      state: 'succeeded',
-      applicationEvidence: 'applied',
-      retryAuthority: 'none',
-      receiptJson: '{"ok":true}',
-      now: 21,
-      onSettledTx: (tx) => {
-        tx.update(tasks)
-          .set({ errorSummary: 'projection-committed' })
-          .where(eq(tasks.id, 'task-effect'))
-          .run()
+    // RFC-359：这条断言锁的是「投影与结算同生共死」。原来用 `onSettledTx` 传一个裸 tx 回调，
+    // 自己拼一笔合成的投影写——那是 `SqliteTaskExecutionEffectStore` 的内部形状，中立端口
+    // **故意**没有这个逃逸口：它把同事务投影表达成**具名变体**。所以改用已有的具名变体
+    // `settleCodeHostNode` 去锁同一条性质，判据反而更贴生产路径（投影的是真实的 node_run 终态，
+    // 不是一个只为测试存在的 `errorSummary` 字符串）。
+    await database
+      .insert(nodeRuns)
+      .values({
+        id: 'run-effect-projection',
+        taskId: 'task-effect',
+        nodeId: 'n1',
+        status: 'running',
+      })
+      .run()
+    await effectsOf(database).settleCodeHostNode({
+      settlement: {
+        token: claim.token,
+        effectId: prepared.effectId,
+        attemptId: prepared.attemptId,
+        state: 'succeeded',
+        applicationEvidence: 'applied',
+        retryAuthority: 'none',
+        receiptJson: '{"ok":true}',
+        now: 21,
+      },
+      projection: {
+        nodeRunId: 'run-effect-projection',
+        status: 'done',
+        reason: 'effect-settled',
+        finishedAt: 21,
       },
     })
-    expect(database.select({ value: tasks.errorSummary }).from(tasks).get()?.value).toBe(
-      'projection-committed',
-    )
+    expect(
+      database
+        .select({ status: nodeRuns.status })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, 'run-effect-projection'))
+        .get()?.status,
+    ).toBe('done')
     expect(
       database
         .select({ state: taskExecutionEffects.state })
@@ -599,9 +629,8 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       effectKind: 'outbound-mutation',
       stableActionOrdinal: 'first',
     })
-    const prepare = (ordinal: string, key: string) =>
-      module.effects.prepareAndAcquire({
-        db: database,
+    const prepare = async (ordinal: string, key: string) =>
+      await effectsOf(database).prepareAndAcquire({
         token: claim.token,
         intentId: intent.intentId,
         operationKey: key,
@@ -627,8 +656,8 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         retryAuthority: 'none' as const,
         resourceKeys: ['provider-object:shared'],
       })
-    const winner = prepare('first', 'first')
-    expect(() => prepare('second', 'second')).toThrow()
+    const winner = await prepare('first', 'first')
+    await expect(prepare('second', 'second')).rejects.toThrow()
     expect(
       database
         .select({ id: taskExecutionEffectAttempts.id })
@@ -636,8 +665,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         .where(eq(taskExecutionEffectAttempts.state, 'acting'))
         .all(),
     ).toHaveLength(1)
-    module.effects.settle({
-      db: database,
+    await effectsOf(database).settle({
       token: claim.token,
       effectId: winner.effectId,
       attemptId: winner.attemptId,
@@ -730,8 +758,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       now: 32,
     })
     module.claimGate.leave(manualClaim.permit)
-    const replay = module.effects.prepareAndAcquire({
-      db: database,
+    const replay = await effectsOf(database).prepareAndAcquire({
       token: manualClaim.token,
       intentId: 'intent-unknown-manual',
       operationKey: 'first',
@@ -771,13 +798,12 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     module.claimGate.leave(claim.permit)
     const slotPath = rootPath('task-parallel-effects')
     const slotPathJson = canonicalJson(slotPath)
-    const prepare = (input: {
+    const prepare = async (input: {
       ordinal: string
       candidateId: string
       resourceKeys: readonly string[]
     }) =>
-      module.effects.prepareAndAcquire({
-        db: database,
+      await effectsOf(database).prepareAndAcquire({
         token: claim.token,
         intentId: intent.intentId,
         operationKey: `root:${input.ordinal}`,
@@ -801,7 +827,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         resourceKeys: input.resourceKeys,
       })
 
-    prepare({
+    await prepare({
       ordinal: 'agent-node-a',
       candidateId: 'agent',
       resourceKeys: [
@@ -809,7 +835,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         'workspace:/tmp/worktree/iso-node-a',
       ],
     })
-    prepare({
+    await prepare({
       ordinal: 'script-node-b',
       candidateId: 'script',
       resourceKeys: [
@@ -825,7 +851,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         .all(),
     ).toHaveLength(2)
 
-    prepare({
+    await prepare({
       ordinal: 'merge-node-c',
       candidateId: 'merge-c',
       resourceKeys: [
@@ -833,7 +859,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         'workspace:/tmp/worktree/shared-merge-root',
       ],
     })
-    expect(() =>
+    await expect(
       prepare({
         ordinal: 'merge-node-d',
         candidateId: 'merge-d',
@@ -842,7 +868,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
           'workspace:/tmp/worktree/shared-merge-root',
         ],
       }),
-    ).toThrow(expect.objectContaining({ code: 'task-execution-resource-conflict' }))
+    ).rejects.toEqual(expect.objectContaining({ code: 'task-execution-resource-conflict' }))
   })
 })
 
@@ -943,8 +969,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
       const claim = oldModule.claim({ db: database, intentId: intent.intentId })
       oldModule.claimGate.leave(claim.permit)
       const pathJson = canonicalJson(rootPath(input.taskId))
-      const effect = oldModule.effects.prepareAndAcquire({
-        db: database,
+      const effect = await effectsOf(database).prepareAndAcquire({
         token: claim.token,
         intentId: intent.intentId,
         operationKey: `${input.taskId}:process:agent`,
@@ -995,8 +1020,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
     const remoteClaim = oldModule.claim({ db: database, intentId: remoteIntent.intentId })
     oldModule.claimGate.leave(remoteClaim.permit)
     const remotePathJson = canonicalJson(rootPath('task-remote-unknown'))
-    const remoteEffect = oldModule.effects.prepareAndAcquire({
-      db: database,
+    const remoteEffect = await effectsOf(database).prepareAndAcquire({
       token: remoteClaim.token,
       intentId: remoteIntent.intentId,
       operationKey: 'task-remote-unknown:mr.approve',
@@ -1150,8 +1174,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
         stableActionOrdinal: spec.action,
       })
       const request = requestHash({ provider: 'gitlab', action: spec.action })
-      const effect = oldModule.effects.prepareAndAcquire({
-        db: database,
+      const effect = await effectsOf(database).prepareAndAcquire({
         token: claim.token,
         intentId: intent.intentId,
         operationKey: `${spec.taskId}:${spec.action}`,
@@ -1412,8 +1435,7 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       effectKind: 'repository',
       stableActionOrdinal: 'archive-fixture',
     })
-    const effect = module.effects.prepareAndAcquire({
-      db: database,
+    const effect = await effectsOf(database).prepareAndAcquire({
       token: owned.token,
       intentId: intent.intentId,
       operationKey: 'root:archive-fixture',
@@ -1432,8 +1454,7 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       resourceKeys: ['repository:archive-fixture'],
       now: 61,
     })
-    module.effects.settle({
-      db: database,
+    await effectsOf(database).settle({
       token: owned.token,
       effectId: effect.effectId,
       attemptId: effect.attemptId,
@@ -1442,13 +1463,15 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       retryAuthority: 'none',
       receiptJson: '{"ok":true}',
       now: 62,
-      onSettledTx: (tx) => {
-        tx.update(tasks)
-          .set({ status: 'done', finishedAt: 62 })
-          .where(eq(tasks.id, 'task-archive-ledger'))
-          .run()
-      },
     })
+    // RFC-359：这处 `onSettledTx` 原本只是**夹具**——把任务推到 done 好让下面的归档用例有料可归，
+    // 它不断言任何同事务性质（那条断言在上面的 `settleCodeHostNode` 用例里）。所以直接平铺成
+    // 结算之后的一笔普通写。
+    await database
+      .update(tasks)
+      .set({ status: 'done', finishedAt: 62 })
+      .where(eq(tasks.id, 'task-archive-ledger'))
+      .run()
     const owner = module.ownership.read(database, 'task-archive-ledger')!
     await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
       token: owned.token,

@@ -349,7 +349,7 @@
       "id": "rfc359-sync-transaction-surface",
       "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
       "symbol": "SYNC_TRANSACTION_DEBT",
-      "baseline": 3,
+      "baseline": 2,
       "why": "RFC-359：还在用 bun:sqlite **同步**事务面（`dbTxSync` / `withOwnedTaskTx`）的文件数，按逐文件调用点清点、只降不升。这条面 PostgreSQL 上不存在，所以每一个调用点都是一条「只有一个 provider 能走」的路——正是 RFC-359 要消灭的形态。剩余合一工作不是 N 个独立的 pair 合并，而是把这些调用点迁到已有的中立原语（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。基线是**文件数** 28（调用点合计 72）；账本正文逐文件记着各自的调用点数，逐字相等。 RFC-359 W4-D28b：`sqliteOwnedTaskMutation.ts`（2 处 `dbTxSync` + 2 处 `withOwnedTaskTx`）整份退役，5 处调用点迁到中立的 `withTaskExecutionWrite` + `fenceTaskWrite`，30 → 29（调用点 81 → 77）。 RFC-359 W4-D28b 第二刀：runtime 注册表两份 provider 实现合成一份中立实现，`sqliteRuntimeRegistryPersistence.ts`（5 处 `dbTxSync`）随之退役，29 → 28（调用点 77 → 72）。"
     },
     {
@@ -762,7 +762,7 @@
       "id": "rfc359-w8-unnormalized-unique-insert",
       "file": "packages/backend/tests/architecture/rfc359-w8-t29-unnormalized-unique-insert.test.ts",
       "symbol": "UNNORMALIZED_UNIQUE_INSERT_DEBT",
-      "baseline": 19,
+      "baseline": 18,
       "why": "RFC-359 W8：事务作用域内插入唯一键表、且所在文件没有唯一键归一的站点。判据的预言力集中在 **READ COMMITTED opener + 读前无锁**那一档——SERIALIZABLE 下「读同一张表再插它」由 SIREAD 谓词锁兜住（实测 20/20），真正危险的是「读 A 表算序号、插 B 表」。账本因此额外输出 opener / openerSerializes / serializedBeforeRead 三个诊断字段（不进判据），红了能一眼看出落在哪一档。 RFC-359 W57：`taskContinuationAdmission.ts` 那条销账（23505 现已归一成 task-continuation-conflict），20 → 19。"
     },
     {
@@ -811,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5327,
+      "baseline": 5326,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -832,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4788,
+      "baseline": 4787,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -867,12 +867,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25019,
+      "baseline": 25016,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2d4203258fd3814faffa87e9df3d9c22ee928b8d4543b6045bc9f960175be186",
+    "sourceDigest": "sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "66e998a3e2103215ddc9c3a60ad5f9610f3d7fa3",
-    "contentDigest": "sha256:3c25bb5e5c1337266daf6a010e82f6fe60b604f3a71fc373d0a8eb5f55377311",
+    "currentSnapshotSha": "38ecfe53ad251fd144335bd6b3c56b4df70b2916",
+    "contentDigest": "sha256:88309e129148f16c6bfdcb00219e3d9b3719b25dd80e1c450984c2af8ff780c8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

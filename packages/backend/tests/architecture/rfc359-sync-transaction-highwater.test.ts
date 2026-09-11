@@ -117,13 +117,18 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // driver 释放序列（`taskDriverRelease.ts`）走端口落到两个引擎共用的
   // `effectQuiescence.ts#closeOutcomeUnknownAndRelease`；只剩三处测试直调，已改指中立那份。
   //
-  // 剩下的 2 笔（`prepareAndAcquire` / `settle` 的 `withOwnedTaskTx`）**不是技术钉死**：
-  // W10 删掉 `sqliteGateContinuationEffectStep.ts` 之后 src 侧已经零调用方（生产走
-  // `taskExecutionEffectPersistence.ts` 的中立实现）。挡住它们的是 **53 处测试直调**
-  // （`rfc328-durable-ownership` / `rfc359-t7-owner-fences` / `rfc359-t7b-driver-release-settles-effects`
-  // / `rfc359-w8-*` / `terminal-maintenance-watermark-coverage`）：改异步要把那 53 处连同各自的
-  // 同步夹具函数一起翻成 async，属另一刀。
-  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 2',
+  // RFC-359 W8 销账：`sqliteTaskExecutionEffect.ts: 2 → 0` —— `prepareAndAcquire` / `settle`
+  // 连同它们的 `withOwnedTaskTx` 与端口声明一并删除（文件 583 → 180 行）。它们 src 侧一直零调用方
+  // （生产走 `TaskExecutionPersistence['effects']`，即中立的 `DrizzleTaskExecutionEffectPersistence`），
+  // 挡着的只有测试夹具——实际 **18 处 / 2 个文件**（上一版注释记的「53 处」已过期）。
+  // 两侧入参逐字相同（只少一个 `db`）、返回结构相同，所以夹具是**平移**。
+  //
+  // 一处不是平移、需要判断的：`rfc328-durable-ownership` 有两处传 `onSettledTx`（裸 tx 回调，
+  // 把一笔投影写挂进同一笔结算事务）。中立端口**故意**没有这个逃逸口——它把同事务投影表达成
+  // **具名变体**。两处按各自真实意图分别处置（用户 2026-09-11 裁决）：
+  //   · 真在断言「投影与结算同生共死」的那条，改走已有的具名变体 `settleCodeHostNode`，
+  //     投影从一个只为测试存在的 `errorSummary` 字符串换成真实的 node_run 终态——更贴生产路径；
+  //   · 另一处只是**夹具**（把任务推到 done 好让归档用例有料可归），平铺成结算之后的一笔普通写。
   // RFC-359 W8 销账：`sqliteTaskExecutionIntent.ts: 1 → 0` —— `submit` 的 `dbTxSync` 连同方法
   // 本身删除。它 src 侧一直是零调用方（生产准入走 `submitTx` + `taskContinuationAdmission.ts` /
   // `DrizzleTaskExecutionIntentPersistence`），挡着的只有测试夹具；实际清点是 **15 处 / 4 个文件**

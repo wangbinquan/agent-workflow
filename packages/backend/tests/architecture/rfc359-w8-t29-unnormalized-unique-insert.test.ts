@@ -498,12 +498,6 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *     :814 taskCollaborators。why —— `withPostgresqlTaskAggregateTransaction`（事务头对 task 行
  *       取 `for update`），且插入前先整体 `delete` 同任务的成员行。removeWhen —— 那两条前提任一
  *       消失时重判。
- *   modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3（RFC-359 W10 起；开账时 5）
- *     taskExecutionEffects / taskExecutionEffectAttempts / taskExecutionLineageOperationRecords ×3。
- *     why —— 同步事务面（`dbTxSync`）为主，PG 上不可达。
- *     ⚠️ **这个数字在缩**：该文件正被同步面退役那一刀改动（落账当天从 6 掉到 5），红了先看是不是
- *     同步面又退了一处——那是收敛，把数字改小即可。
- *     removeWhen —— 随同步面退役（`rfc359-sync-transaction-highwater` 归零）整份消失。
  *   （已销账，RFC-359 W57）modules/task-execution/infrastructure/taskContinuationAdmission.ts
  *     开账时记的是 1（:147 taskExecutionIntents，部分唯一索引
  *     `idx_task_execution_intents_pending_task`），why 写的是「**已实测不可达**」——理由是
@@ -558,7 +552,10 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // RFC-359 W10 销账：5 → 3 —— 同步的 `closeOutcomeUnknownAndRelease`（生产零调用方，清算只剩
   // `effectQuiescence.ts` 那一份中立实现）随本波删除，它体内那两处「先查存在、再插入唯一键表」
   // 一并消失。
-  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3',
+  // RFC-359 W8 销账：`sqliteTaskExecutionEffect.ts: 3 → 0` —— 那三处都在 `prepareAndAcquire` /
+  // `settle` 里，两个方法连同它们的 `withOwnedTaskTx` 已整体删除（生产零调用方，见
+  // `rfc359-sync-transaction-highwater` 同批注释）。中立实现 `taskExecutionEffectPersistence.ts`
+  // 的对应写法本来就在 SERIALIZABLE 里读改写，不落进本账本。
   'modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1',
   'platform/events/committed/appendProgram.ts: 2',
   'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 1',

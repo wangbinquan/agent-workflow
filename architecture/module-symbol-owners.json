@@ -6,7 +6,7 @@
     "moduleFiles": 1205,
     "productionFiles": 2586,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25019
+    "symbolsIncludingFileRoots": 25016
   },
   "entries": [
     {
@@ -132504,42 +132504,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#boundedReceipt",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "boundedReceipt",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#isEffectFenceConflict",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isEffectFenceConflict",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#MAX_EFFECT_RECEIPT_BYTES",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "MAX_EFFECT_RECEIPT_BYTES",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -300932,5 +300896,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2d4203258fd3814faffa87e9df3d9c22ee928b8d4543b6045bc9f960175be186"
+  "sourceDigest": "sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38"
 }

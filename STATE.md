@@ -45,12 +45,14 @@
 >    平移到中立 `DrizzleTaskExecutionIntentPersistence.submit` 后方法与端口声明一并删除，
 >    账本 `SYNC_TRANSACTION_DEBT` **4 → 3 个文件**。**下刀前先对每一笔问「src 侧还有调用方吗」**
 >    ——账本上的数字里有一部分不是技术钉死，只是测试夹具还挂着。
->    **债 3（`sqliteTaskExecutionEffect.ts`）已试过、撞墙并回退**：它同样是 src 零调用方 +
->    18 处测试夹具，但其中两处传 `onSettledTx`（把投影写挂进同一笔结算事务），
->    中立端口**故意**没有这个逃逸口，它把同事务投影表达成**具名变体**（`settleCodeHostNode`）。
->    所以问题不是「把裸 tx 回调加回来」，而是那两条用例究竟在锁什么：锁产品行为就改用具名变体，
->    锁 `onSettledTx` 这个钩子本身就随实现一起退役。**改的是既有回归判据的意图，先确认再动**
->    （plan §5o 有细节）。
+>    **债 3（`sqliteTaskExecutionEffect.ts`）2026-09-11 已销账**（用户裁决：改用已有具名变体去锁）：
+>    `prepareAndAcquire` / `settle` 连同 `withOwnedTaskTx`、端口声明与随之变死的两个助手一并删除，
+>    文件 583 → 180 行；18 处测试夹具平移到中立 `DrizzleTaskExecutionEffectPersistence`。
+>    两处 `onSettledTx` 按各自真实意图分头处理——真在断言「投影与结算同生共死」的那条改走
+>    `settleCodeHostNode`（投影换成真实 node_run 终态，更贴生产），另一处本就只是夹具、平铺成普通写。
+>    顺带 `rfc359-w8-unnormalized-unique-insert` 19 → 18。
+>    **方法记一条**：撞到「中立端口没有某个逃逸口」时先分辨那条用例锁的是**产品行为**还是**实现机制**
+>    ——前者总能用端口已有的具名能力重新表达，后者随实现一起退役。
 >    **语义变化要先想清楚**：`dbTxSync` 是同步、BEGIN..COMMIT 之间无人能插进来；换成显式边界的
 >    async 事务后有了让渡窗口，护栏见 `databaseTransaction.ts` 头注释三条（尤其「事务体只 await
 >    数据库操作」）。落完之后 `DbClient` 放宽与 AC-6 剩余迁移会**跟着一起塌下来，三件是一件事**。

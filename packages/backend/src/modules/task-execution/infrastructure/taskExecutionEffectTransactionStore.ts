@@ -102,8 +102,6 @@ export interface TaskExecutionEffectStore {
     readonly executionLineageId: string
     readonly operationFamilyKey: string
   }): CodeHostAttemptPlan
-  prepareAndAcquire(input: PrepareEffectAttemptInput): PreparedEffectAttempt
-  settle(input: SettleEffectAttemptInput): void
   // RFC-359 W8：静默清算的同步副本已退役。`resolveQuiescedManagedProcesses` /
   // `closeRecoveredOutcomeUnknownAndRelease` 只剩 `effectQuiescence.ts` 那一份中立实现
   // （两个 provider 共用，经 `TaskExecutionEffectPersistence` 端口暴露）；同步 store 上的
