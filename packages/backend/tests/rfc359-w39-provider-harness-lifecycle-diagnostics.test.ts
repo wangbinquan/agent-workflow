@@ -142,6 +142,7 @@ function actualRegistration(options: harness.DescribeEachProviderOptions = {}) {
     },
     POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS: 60_000,
     POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS: 90_000,
+    POSTGRESQL_DATABASE_RESET_TIMEOUT_MS: 30_000,
     beforeAll: (...args: unknown[]) => hooks.push({ name: 'beforeAll', args }),
     beforeEach: (...args: unknown[]) => hooks.push({ name: 'beforeEach', args }),
     afterEach: (...args: unknown[]) => hooks.push({ name: 'afterEach', args }),
@@ -339,9 +340,11 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
 
   test('actual unbound hooks keep memoization and wait for initialization before close', async () => {
     const control = actualRegistration()
+    // `beforeEach` 恒带第二个实参（超时预算）：它做的是对真库的整库快照恢复，bun 的默认
+    // 5s hook 预算撑不住，与库数无关（`beforeAll` / `afterAll` 则沿用「单库用默认」的老约定）。
     expect(control.hooks.map((hook) => [hook.name, hook.args.length])).toEqual([
       ['beforeAll', 1],
-      ['beforeEach', 1],
+      ['beforeEach', 2],
       ['afterEach', 1],
       ['afterAll', 1],
     ])
