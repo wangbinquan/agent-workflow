@@ -5988,3 +5988,25 @@ file:line 锚点，`rfc359-w5-t19d` 的成对覆盖账本**当场从 10 vs 6 变
 数「对某侧适配器的引用」的，一句注释也算一次。这不是账本的错，也不该靠改账本掩盖：注释改成
 不写死那个 token（给出 `grep -rn processConcurrencyScope src/` 让人自己查），账本回到原值。
 **写注释时提到某侧适配器的文件名，会让成对覆盖数失真**——提这一嘴，免得下一个人也撞。
+
+## 5x. AC-6：`beforeAll` 一族的迁移形态（W58，`rfc310-pr6-evidence-read`）
+
+账本 598 → 597。这一个文件值得单独记，因为它代表**一整类**还没迁的文件的形态。
+
+原文件的结构是「整个文件共用一份自建内存库 + 一个 `beforeAll` seed + `afterAll` 里
+`db.$client.close()`」。接双引擎时这三件事都不成立：
+
+1. **`beforeAll` 里读不到 `scope.harness.db`**。harness 明确只在 test 体内（`beforeEach` 之后）
+   给库——`eachProvider.ts` 的 getter 直接抛
+   「ProviderHarness 只能在 test 体内读取」。这不是限制，是语义：**库每个用例前重置**，
+   `beforeAll` seed 的数据第一条用例跑完就没了。所以 seed 必须搬进 `beforeEach`。
+2. **`afterAll` 里不能关库**。库归 harness 所有，用例自己关它会把后面的用例一起带走。整段删掉。
+3. **app home 不是模块加载时那个**。原文件在 import 之前就 `process.env.AGENT_WORKFLOW_HOME =
+   HOME`（为了 `Paths.root`），然后夹具往 `join(HOME, 'evidence')` 写证据文件。而作用域装配的
+   应用用的是**它现建的那个 appHome**，于是路由一路 404、夹具自己却一切正常。
+   修法：`const opened = await scope.open()` 之后往 `join(opened.appHome, 'evidence')` 写。
+   模块级的 `HOME` 保留——它只为 import 期的 `Paths.root` 存在。
+
+另外这个文件里第一个 describe 是**纯函数**（`readEvidenceFileRange` 配一个 `blobPath` 桩），
+不碰库也不碰应用，保持普通 `describe`：包进双引擎壳只是白起两套应用。
+**「一个文件里哪些 describe 该进壳」按它是否真的触达 db / app 判断，不是整文件一刀切。**

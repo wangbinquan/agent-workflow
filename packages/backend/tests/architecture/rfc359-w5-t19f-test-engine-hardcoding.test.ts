@@ -464,7 +464,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc310-pr3-upload-security.test.ts: 3',
   'rfc310-pr4-execution-host.test.ts: 1',
   'rfc310-pr4-profile-identity.test.ts: 1',
-  'rfc310-pr6-evidence-read.test.ts: 1',
   'rfc310-pr6-pipeline-adapter.test.ts: 1',
   'rfc310-pr7b-handover.test.ts: 1',
   'rfc310-pr9-cutover.test.ts: 3',
