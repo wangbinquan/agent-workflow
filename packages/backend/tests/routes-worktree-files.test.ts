@@ -8,14 +8,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import { worktreeFileResponseSchema, worktreeTreeResponseSchema } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -24,19 +22,6 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function req(app: Hono, path: string): Promise<Response> {
   return await app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
@@ -125,13 +110,17 @@ describe('GET /api/tasks/:id/worktree-tree', () => {
     })
   })
 
-  test('422 on path traversal (..)', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db, { worktreePath: root })
-    const res = await req(app, `/api/tasks/${taskId}/worktree-tree?path=../etc`)
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('worktree-path-traversal')
+  // RFC-359 AC-6：本文件最后一处直接建库就在这条上。路径穿越的拒绝与库无关，但它要走完整条
+  // 装配（路由挂载 + 校验顺序 + 错误体），「与库无关」得由两个引擎各跑一遍来证明。
+  registerProviderApplication('provider cases 1b', (buildApp, seedTask) => {
+    test('422 on path traversal (..)', async () => {
+      const { db, app } = buildApp()
+      const taskId = await seedTask(db, { worktreePath: root })
+      const res = await req(app, `/api/tasks/${taskId}/worktree-tree?path=../etc`)
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { code: string }
+      expect(body.code).toBe('worktree-path-traversal')
+    })
   })
 
   registerProviderApplication('provider cases 2', (buildApp, seedTask) => {

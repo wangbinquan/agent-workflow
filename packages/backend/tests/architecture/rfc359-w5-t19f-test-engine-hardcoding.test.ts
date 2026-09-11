@@ -63,7 +63,6 @@ const CORPUS_FILES: readonly string[] = enumerateTestSources()
  */
 export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'agents.test.ts: 2',
-  'api-code-routes.test.ts: 1',
   'api-tasks-alerts-visibility.test.ts: 1',
   'architecture/rfc329-mcp-surface-guard.test.ts: 1',
   'architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts: 2',
@@ -430,7 +429,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc276-readonly-script-stall-regression.test.ts: 1',
   'rfc278-legacy-schema-reconciliation.test.ts: 2',
   'rfc279-database-redundancy-cleanup.test.ts: 1',
-  'rfc280-startup-verification-route.test.ts: 1',
   'rfc282-b2-resolve-injection.test.ts: 2',
   'rfc282-d1-acl-inline-convergence.test.ts: 2',
   'rfc282-d2-granted-ids-single-source.test.ts: 1',
@@ -627,16 +625,12 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // SQLite 侧的「从零」就是一个全新内存库，PostgreSQL 侧对应的是再开一个一次性库。
   // 判据是纯文本、不该为它开洞，所以照样占一格。
   'rfc359-w8-migrator-conformance.test.ts: 1',
-  'routes-clarify.test.ts: 1',
-  'routes-cross-clarify.test.ts: 1',
-  'routes-inventory.test.ts: 1',
   'routes-memories-patch.test.ts: 1',
   'routes-memories.test.ts: 1',
   'routes-memory-distill-job-detail.test.ts: 1',
   'routes-memory-distill-jobs.test.ts: 1',
   'routes-session.test.ts: 1',
   'routes-task-feedback.test.ts: 1',
-  'routes-worktree-files.test.ts: 1',
   'routes/mcps-probe.test.ts: 1',
   'runner-injected-memories.test.ts: 1',
   'runner-inventory-integration.test.ts: 1',

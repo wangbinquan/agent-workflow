@@ -10,10 +10,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -26,23 +23,10 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 afterEach(() => {
   resetBroadcastersForTests()
 })
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 const auth = { authorization: `Bearer ${TOKEN}` }
 
@@ -58,10 +42,12 @@ describe('RFC-304 — reading the capability matrix', () => {
     })
   })
 
-  test('without a bearer token it is refused', async () => {
-    const { app } = buildApp()
-    const res = await app.request('/api/code/matrix/group%2Fproject')
-    expect(res.status).toBe(401)
+  registerProviderApplication((buildApp) => {
+    test('without a bearer token it is refused', async () => {
+      const { app } = await buildApp()
+      const res = await app.request('/api/code/matrix/group%2Fproject')
+      expect(res.status).toBe(401)
+    })
   })
 })
 describe('RFC-304 T61 — the troubleshooting chain over HTTP', () => {
@@ -123,9 +109,11 @@ describe('RFC-304 T61 — the troubleshooting chain over HTTP', () => {
     })
   })
 
-  test('without a bearer token it is refused', async () => {
-    const { app } = buildApp()
-    expect((await app.request('/api/code/deliveries?projectId=p')).status).toBe(401)
+  registerProviderApplication((buildApp) => {
+    test('without a bearer token it is refused', async () => {
+      const { app } = await buildApp()
+      expect((await app.request('/api/code/deliveries?projectId=p')).status).toBe(401)
+    })
   })
 })
 describe('RFC-304 — listing work items', () => {
@@ -173,9 +161,11 @@ describe('RFC-304 — listing work items', () => {
     })
   })
 
-  test('without a bearer token it is refused', async () => {
-    const { app } = buildApp()
-    expect((await app.request('/api/code/work-items')).status).toBe(401)
+  registerProviderApplication((buildApp) => {
+    test('without a bearer token it is refused', async () => {
+      const { app } = await buildApp()
+      expect((await app.request('/api/code/work-items')).status).toBe(401)
+    })
   })
 })
 
@@ -229,9 +219,11 @@ describe('RFC-307 — the stage graph over HTTP', () => {
     })
   })
 
-  test('without a bearer token it is refused', async () => {
-    const { app } = buildApp()
-    expect((await app.request('/api/code/capabilities/mr-review/graph')).status).toBe(401)
+  registerProviderApplication((buildApp) => {
+    test('without a bearer token it is refused', async () => {
+      const { app } = await buildApp()
+      expect((await app.request('/api/code/capabilities/mr-review/graph')).status).toBe(401)
+    })
   })
 })
 

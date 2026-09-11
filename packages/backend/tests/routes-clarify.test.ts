@@ -11,12 +11,9 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
@@ -37,7 +34,6 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const QUESTION = {
   id: 'qdb',
@@ -48,18 +44,6 @@ const QUESTION = {
     { label: 'Postgres', description: '', recommended: false, recommendationReason: '' },
     { label: 'MySQL', description: '', recommended: false, recommendationReason: '' },
   ],
-}
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
 }
 
 async function req(app: Hono, path: string, init?: RequestInit): Promise<Response> {
@@ -227,81 +211,87 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
   // RFC-132 PR-B (universal deferred model): the quick channel now AUTO-DISPATCHES for EVERY task
   // (no legacy immediate mint). The response is the autodispatch shape ({ kind:'autodispatch',
   // roundKind, reruns }); the server-sealed labels + answered flip persist on the round.
-  test('valid submission seals labels, marks round answered, auto-dispatches a rerun', async () => {
-    const { db, app } = buildApp()
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
-    const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        answers: [
-          {
-            questionId: 'qdb',
-            selectedOptionIndices: [1],
-            selectedOptionLabels: ['<<malicious>>'],
-            customText: '',
-          },
-        ],
-      }),
+  registerProviderApplication((buildApp, seedSession) => {
+    test('valid submission seals labels, marks round answered, auto-dispatches a rerun', async () => {
+      const { db, app } = await buildApp()
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
+      const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: [
+            {
+              questionId: 'qdb',
+              selectedOptionIndices: [1],
+              selectedOptionLabels: ['<<malicious>>'],
+              customText: '',
+            },
+          ],
+        }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        ok: boolean
+        kind: string
+        roundKind: string
+        reruns: Array<{ nodeRunId: string }>
+      }
+      expect(body.ok).toBe(true)
+      expect(body.kind).toBe('autodispatch')
+      expect(body.roundKind).toBe('self')
+      // the auto-dispatched self continuation rerun
+      expect((body.reruns[0]?.nodeRunId ?? '').length).toBeGreaterThan(0)
+      // server-sealed labels (client forgery defended) + answered flip persist on the round.
+      const round = (
+        await db
+          .select()
+          .from(clarifyRounds)
+          .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+          .limit(1)
+      )[0]
+      expect(round?.status).toBe('answered')
+      const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+      expect(answers[0]?.selectedOptionLabels).toEqual(['MySQL'])
     })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      ok: boolean
-      kind: string
-      roundKind: string
-      reruns: Array<{ nodeRunId: string }>
-    }
-    expect(body.ok).toBe(true)
-    expect(body.kind).toBe('autodispatch')
-    expect(body.roundKind).toBe('self')
-    // the auto-dispatched self continuation rerun
-    expect((body.reruns[0]?.nodeRunId ?? '').length).toBeGreaterThan(0)
-    // server-sealed labels (client forgery defended) + answered flip persist on the round.
-    const round = (
-      await db
-        .select()
-        .from(clarifyRounds)
-        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
-        .limit(1)
-    )[0]
-    expect(round?.status).toBe('answered')
-    const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
-    expect(answers[0]?.selectedOptionLabels).toEqual(['MySQL'])
   })
 
-  test('If-Match header optimistic lock: mismatched iteration returns ConflictError (409)', async () => {
-    const { db, app } = buildApp()
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
-    const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'If-Match': '99' },
-      body: JSON.stringify({
-        answers: [
-          {
-            questionId: 'qdb',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: [],
-            customText: '',
-          },
-        ],
-      }),
+  registerProviderApplication((buildApp, seedSession) => {
+    test('If-Match header optimistic lock: mismatched iteration returns ConflictError (409)', async () => {
+      const { db, app } = await buildApp()
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
+      const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'If-Match': '99' },
+        body: JSON.stringify({
+          answers: [
+            {
+              questionId: 'qdb',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+          ],
+        }),
+      })
+      expect(res.status).toBe(409)
+      const body = (await res.json()) as { code: string }
+      expect(body.code).toBe('clarify-iteration-mismatch')
     })
-    expect(res.status).toBe(409)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('clarify-iteration-mismatch')
   })
 
-  test('schema-invalid payload returns 422 with clarify-answers-invalid', async () => {
-    const { db, app } = buildApp()
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
-    const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers: 'not-an-array' }),
+  registerProviderApplication((buildApp, seedSession) => {
+    test('schema-invalid payload returns 422 with clarify-answers-invalid', async () => {
+      const { db, app } = await buildApp()
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
+      const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: 'not-an-array' }),
+      })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { code: string }
+      expect(body.code).toBe('clarify-answers-invalid')
     })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('clarify-answers-invalid')
   })
 
   // RFC-023 directive iteration — the POST body now carries an optional
@@ -310,86 +300,92 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
   // into the session row so a later prompt assembly can act on it. Locks the
   // wire format that the frontend two-button footer relies on.
   describe('POST /answers — directive iteration', () => {
-    test('omitted directive defaults to "continue" on the persisted session', async () => {
-      const { db, app } = buildApp()
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
-      const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          answers: [
-            {
-              questionId: 'qdb',
-              selectedOptionIndices: [0],
-              selectedOptionLabels: [],
-              customText: '',
-            },
-          ],
-        }),
+    registerProviderApplication((buildApp, seedSession) => {
+      test('omitted directive defaults to "continue" on the persisted session', async () => {
+        const { db, app } = await buildApp()
+        const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
+        const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            answers: [
+              {
+                questionId: 'qdb',
+                selectedOptionIndices: [0],
+                selectedOptionLabels: [],
+                customText: '',
+              },
+            ],
+          }),
+        })
+        expect(res.status).toBe(200)
+        // RFC-132 PR-B: directive persists on the round via the seal (autodispatch path).
+        const round = (
+          await db
+            .select()
+            .from(clarifyRounds)
+            .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+            .limit(1)
+        )[0]
+        expect(round?.directive).toBe('continue')
       })
-      expect(res.status).toBe(200)
-      // RFC-132 PR-B: directive persists on the round via the seal (autodispatch path).
-      const round = (
-        await db
-          .select()
-          .from(clarifyRounds)
-          .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
-          .limit(1)
-      )[0]
-      expect(round?.directive).toBe('continue')
     })
 
-    test('explicit directive="stop" round-trips to the session row', async () => {
-      const { db, app } = buildApp()
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
-      const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          directive: 'stop',
-          answers: [
-            {
-              questionId: 'qdb',
-              selectedOptionIndices: [0],
-              selectedOptionLabels: [],
-              customText: '',
-            },
-          ],
-        }),
+    registerProviderApplication((buildApp, seedSession) => {
+      test('explicit directive="stop" round-trips to the session row', async () => {
+        const { db, app } = await buildApp()
+        const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
+        const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            directive: 'stop',
+            answers: [
+              {
+                questionId: 'qdb',
+                selectedOptionIndices: [0],
+                selectedOptionLabels: [],
+                customText: '',
+              },
+            ],
+          }),
+        })
+        expect(res.status).toBe(200)
+        // RFC-132 PR-B: 'stop' round-trips onto the round via the seal (autodispatch path).
+        const round = (
+          await db
+            .select()
+            .from(clarifyRounds)
+            .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+            .limit(1)
+        )[0]
+        expect(round?.directive).toBe('stop')
       })
-      expect(res.status).toBe(200)
-      // RFC-132 PR-B: 'stop' round-trips onto the round via the seal (autodispatch path).
-      const round = (
-        await db
-          .select()
-          .from(clarifyRounds)
-          .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
-          .limit(1)
-      )[0]
-      expect(round?.directive).toBe('stop')
     })
 
-    test('unknown directive value returns 422 (schema enum guard)', async () => {
-      const { db, app } = buildApp()
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
-      const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          directive: 'maybe',
-          answers: [
-            {
-              questionId: 'qdb',
-              selectedOptionIndices: [0],
-              selectedOptionLabels: [],
-              customText: '',
-            },
-          ],
-        }),
+    registerProviderApplication((buildApp, seedSession) => {
+      test('unknown directive value returns 422 (schema enum guard)', async () => {
+        const { db, app } = await buildApp()
+        const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
+        const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            directive: 'maybe',
+            answers: [
+              {
+                questionId: 'qdb',
+                selectedOptionIndices: [0],
+                selectedOptionLabels: [],
+                customText: '',
+              },
+            ],
+          }),
+        })
+        expect(res.status).toBe(422)
+        const body = (await res.json()) as { code: string }
+        expect(body.code).toBe('clarify-answers-invalid')
       })
-      expect(res.status).toBe(422)
-      const body = (await res.json()) as { code: string }
-      expect(body.code).toBe('clarify-answers-invalid')
     })
   })
 })

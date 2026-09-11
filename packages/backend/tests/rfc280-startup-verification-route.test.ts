@@ -6,16 +6,13 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type {
   StartupVerificationRecord,
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { getStartupVerification } from '../src/services/execution/startupVerificationRead'
 import type { ProviderNeutralDatabase } from '../src/db/query'
@@ -29,19 +26,6 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 const RECORD: StartupVerificationRecord = {
   declared: {
@@ -165,16 +149,18 @@ describe('getStartupVerification (RFC-280 T3)', () => {
     })
   })
 
-  test('route serves the record over HTTP with token auth', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, JSON.stringify(RECORD))
-    const res = await app.request(
-      `/api/tasks/${taskId}/node-runs/${nodeRunId}/startup-verification`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } },
-    )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { available: boolean }
-    expect(body.available).toBe(true)
+  registerProviderApplication((buildApp, seed) => {
+    test('route serves the record over HTTP with token auth', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, JSON.stringify(RECORD))
+      const res = await app.request(
+        `/api/tasks/${taskId}/node-runs/${nodeRunId}/startup-verification`,
+        { headers: { Authorization: `Bearer ${TOKEN}` } },
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { available: boolean }
+      expect(body.available).toBe(true)
+    })
   })
 })
 

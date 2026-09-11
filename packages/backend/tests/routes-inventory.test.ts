@@ -6,11 +6,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   RuntimeInventoryResponse,
@@ -28,19 +25,6 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function req(app: Hono, path: string): Promise<Response> {
   return app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
@@ -335,12 +319,14 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
     })
   })
 
-  test('404 when node_run does not belong to the task', async () => {
-    const { db, app } = buildApp()
-    const { taskId } = await seed(db)
-    const otherId = ulid()
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${otherId}/inventory`)
-    expect(res.status).toBe(404)
+  registerProviderApplication((buildApp, seed) => {
+    test('404 when node_run does not belong to the task', async () => {
+      const { db, app } = await buildApp()
+      const { taskId } = await seed(db)
+      const otherId = ulid()
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${otherId}/inventory`)
+      expect(res.status).toBe(404)
+    })
   })
 
   registerProviderApplication((buildApp, seed) => {

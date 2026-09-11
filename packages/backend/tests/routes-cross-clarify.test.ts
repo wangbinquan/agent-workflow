@@ -21,13 +21,10 @@
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
@@ -41,7 +38,6 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const Q1: ClarifyQuestion = {
   id: 'q1',
@@ -52,18 +48,6 @@ const Q1: ClarifyQuestion = {
     { label: 'Cluster reuse', description: '', recommended: false, recommendationReason: '' },
     { label: 'Simplicity', description: '', recommended: false, recommendationReason: '' },
   ],
-}
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
 }
 
 async function req(app: Hono, path: string, init?: RequestInit): Promise<Response> {
@@ -288,108 +272,114 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
   // never auto-dispatched). So a 'continue' answer reruns the QUESTIONER
   // (cross-clarify-questioner-rerun) and mints NO designer — "let the upstream revise" is now an
   // explicit board reassign, not an implicit designer-scope. The response is the autodispatch shape.
-  test('directive=continue auto-dispatches the questioner rerun (no designer)', async () => {
-    const { db, app } = buildApp()
-    const { taskId, intermediaryNodeRunId: crossClarifyNodeRunId } =
-      await seedCrossClarifySession(db)
-    const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        answers: [
-          {
-            questionId: 'q1',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: [],
-            customText: '',
-          },
-        ],
-        directive: 'continue',
-      }),
+  registerProviderApplication((buildApp, seedTask, seedCrossClarifySession) => {
+    test('directive=continue auto-dispatches the questioner rerun (no designer)', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, intermediaryNodeRunId: crossClarifyNodeRunId } =
+        await seedCrossClarifySession(db)
+      const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+          ],
+          directive: 'continue',
+        }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { ok: boolean; kind: string; roundKind: string }
+      expect(body.kind).toBe('autodispatch')
+      expect(body.roundKind).toBe('cross')
+      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      // The asker (questioner) re-runs; RFC-162 creates no designer entry → no designer rerun.
+      expect(
+        runs.some(
+          (r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun',
+        ),
+      ).toBe(true)
+      expect(
+        runs.some((r) => r.nodeId === 'designer' && r.rerunCause === 'cross-clarify-answer'),
+      ).toBe(false)
     })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { ok: boolean; kind: string; roundKind: string }
-    expect(body.kind).toBe('autodispatch')
-    expect(body.roundKind).toBe('cross')
-    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-    // The asker (questioner) re-runs; RFC-162 creates no designer entry → no designer rerun.
-    expect(
-      runs.some(
-        (r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun',
-      ),
-    ).toBe(true)
-    expect(
-      runs.some((r) => r.nodeId === 'designer' && r.rerunCause === 'cross-clarify-answer'),
-    ).toBe(false)
   })
 
-  test('directive=stop auto-dispatches the questioner stop rerun (no designer)', async () => {
-    const { db, app } = buildApp()
-    const { taskId, intermediaryNodeRunId: crossClarifyNodeRunId } =
-      await seedCrossClarifySession(db)
-    const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        answers: [
-          {
-            questionId: 'q1',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: [],
-            customText: '',
-          },
-        ],
-        directive: 'stop',
-      }),
+  registerProviderApplication((buildApp, seedTask, seedCrossClarifySession) => {
+    test('directive=stop auto-dispatches the questioner stop rerun (no designer)', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, intermediaryNodeRunId: crossClarifyNodeRunId } =
+        await seedCrossClarifySession(db)
+      const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+          ],
+          directive: 'stop',
+        }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { kind: string; roundKind: string }
+      expect(body.kind).toBe('autodispatch')
+      expect(body.roundKind).toBe('cross')
+      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      // stop → the questioner re-runs (with the STOP anchor); NO designer rerun.
+      expect(
+        runs.some(
+          (r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun',
+        ),
+      ).toBe(true)
+      expect(
+        runs.some((r) => r.nodeId === 'designer' && r.rerunCause === 'cross-clarify-answer'),
+      ).toBe(false)
+      // 'stop' persists onto the round.
+      const round = (
+        await db
+          .select()
+          .from(clarifyRounds)
+          .where(eq(clarifyRounds.intermediaryNodeRunId, crossClarifyNodeRunId))
+          .limit(1)
+      )[0]
+      expect(round?.directive).toBe('stop')
     })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { kind: string; roundKind: string }
-    expect(body.kind).toBe('autodispatch')
-    expect(body.roundKind).toBe('cross')
-    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-    // stop → the questioner re-runs (with the STOP anchor); NO designer rerun.
-    expect(
-      runs.some(
-        (r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun',
-      ),
-    ).toBe(true)
-    expect(
-      runs.some((r) => r.nodeId === 'designer' && r.rerunCause === 'cross-clarify-answer'),
-    ).toBe(false)
-    // 'stop' persists onto the round.
-    const round = (
-      await db
-        .select()
-        .from(clarifyRounds)
-        .where(eq(clarifyRounds.intermediaryNodeRunId, crossClarifyNodeRunId))
-        .limit(1)
-    )[0]
-    expect(round?.directive).toBe('stop')
   })
 
   // RFC-132 PR-B: the unified quick channel honors If-Match via autoDispatchClarifyRound, which throws
   // the shared 'clarify-iteration-mismatch' (not the cross-specific code) — the single path.
-  test('If-Match header mismatch → 409 clarify-iteration-mismatch', async () => {
-    const { db, app } = buildApp()
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await seedCrossClarifySession(db)
-    const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'If-Match': '99' },
-      body: JSON.stringify({
-        answers: [
-          {
-            questionId: 'q1',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: [],
-            customText: '',
-          },
-        ],
-        directive: 'continue',
-      }),
+  registerProviderApplication((buildApp, seedTask, seedCrossClarifySession) => {
+    test('If-Match header mismatch → 409 clarify-iteration-mismatch', async () => {
+      const { db, app } = await buildApp()
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+      const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'If-Match': '99' },
+        body: JSON.stringify({
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+          ],
+          directive: 'continue',
+        }),
+      })
+      expect(res.status).toBe(409)
+      const body = (await res.json()) as { code: string }
+      expect(body.code).toBe('clarify-iteration-mismatch')
     })
-    expect(res.status).toBe(409)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('clarify-iteration-mismatch')
   })
 })
 
