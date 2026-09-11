@@ -407,6 +407,25 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **PG 上并发续跑的输家偶尔拿到裸驱动错误而不是 `task-continuation-conflict`（2026-09-11 第三次，仍未归因）**：
+  `tests/rfc359-w8-t29-unique-insert-conflict.test.ts` 的
+  「同一个任务上两次并发续跑 [postgresql] > 输的一方拿到 task-continuation-conflict，不是驱动层的唯一键错误」
+  在 CI 上**间歇性**红，收到的是
+  `Error[not-unique-violation]:Failed query: insert into "agent_workflow"."task_execution_intents" …`。
+  该用例的注释记载 2026-09-10 已红过两次、两次都靠猜（第一次猜错一轮），本次是第三次
+  （`7a4fda4fa` 的 ubuntu shard 8/8）。
+  **已确认不是当次改动引起**：那一笔只动测试文件与一个 fixture，没碰准入 / 分类器 / 事务原语。
+  **已排除 / 已查明的**：①映射链本身是通的——用真表造一次 23505 走同一条 drizzle 路径，
+  `postgresqlUniqueViolationConstraint` 能读到 `cause.errno='23505'` 与 `constraint=workflows_pkey`；
+  ②catch 就贴在那条 insert 上（`taskContinuationAdmission.ts:177-200`），不是范围太窄；
+  ③本机按 PG-only 连跑 8 次复现不出来。
+  **剩下的两个可能**（下次 CI 日志即可判定）：那条裸错误其实是 **40001/40P01**（SERIALIZABLE 的
+  SSI 冲突在 insert 处抛出，`serializable()` 的重试次数耗尽后原样抛），或者是 23505 但 cause 链在
+  某一层断了。**已做的处置**：把判据的失败输出从「verdict + 截断 message」扩成**整条 cause 链**的
+  `name/code/errno/constraint`（每层一段，最多 8 层，与两个分类器的遍历深度一致），并用真驱动错误
+  验证过输出形态（PG 为 `{0:Error/… | 1:PostgresError/code=ERR_POSTGRES_SERVER_ERROR/errno=23505/constraint=workflows_pkey}`）。
+  判据一个字没改，只是让下一次失败自带证据。**不要在归因前动准入或分类器。**
+
 - ⏳ **`resetRouteMetaRegistry()` 会毒化同进程里后续每一个建 app 的测试（2026-09-11 实撞，CI 看不见）**：
   **复现**：`bun test tests/rfc305-architecture-lock.test.ts tests/rfc104-builtin-readonly.test.ts`
   → 17 fail，全是 `resource-catalog.export-agent-package.v1: declared operation has no mounted binding`

@@ -6,7 +6,6 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
-import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hono } from 'hono'
@@ -15,11 +14,7 @@ import { ulid } from 'ulid'
 import { worktreeFileResponseSchema, worktreeTreeResponseSchema } from '@agent-workflow/shared'
 import { tasks, workflows } from '../src/db/schema'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createProviderHttpApplication,
-  type ProviderHttpApplication,
-} from './helpers/providerHttpApplication'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -202,6 +197,9 @@ describe('GET /api/tasks/:id/worktree-file', () => {
 })
 
 // RFC359 W50: borrow the selected provider database and await the complete app lifetime.
+// RFC-359 AC-6：生命周期走共用的 `describeEachProviderHttpApplication`（`tests/helpers/`）。
+// 本文件的用例体是**同步**取 app 的（`buildApp()` 不 await），所以这里把 `open()` 放进自己的
+// `beforeEach`，再把结果以同步闭包交出去——形态与合并前逐字相同。
 function registerProviderApplication(
   name: string,
   register: (
@@ -209,39 +207,15 @@ function registerProviderApplication(
     seedTaskForCase: typeof seedTask,
   ) => void,
 ): void {
-  describeEachProvider(name, (harness) => {
-    describe('application lifetime', () => {
-      let application: ProviderHttpApplication | undefined
-      let appHome: string | undefined
-      let restoreHome: (() => void) | undefined
+  describeEachProviderHttpApplication(
+    name,
+    { token: TOKEN, opencodeVersion: '1.14.25', dbVersion: 1, tempPrefix: 'rfc359-w50-http-' },
+    (scope) => {
+      let app: Hono | undefined
       beforeEach(async () => {
-        application = undefined
-        appHome = undefined
-        restoreHome = undefined
-        const previousHome = process.env.AGENT_WORKFLOW_HOME
-        appHome = mkdtempSync(join(tmpdir(), 'rfc359-w50-http-'))
-        restoreHome = () => {
-          if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-          else process.env.AGENT_WORKFLOW_HOME = previousHome
-        }
-        process.env.AGENT_WORKFLOW_HOME = appHome
-        application = await createProviderHttpApplication(harness, {
-          token: TOKEN,
-          configPath: join(appHome, 'config.json'),
-          opencodeVersion: '1.14.25',
-          dbVersion: 1,
-          appHome,
-        })
+        app = (await scope.open()).app
       })
-      afterEach(async () => {
-        try {
-          await application?.dispose()
-        } finally {
-          restoreHome?.()
-          if (appHome !== undefined) rmSync(appHome, { recursive: true, force: true })
-        }
-      })
-      register(() => ({ db: harness.db, app: application!.app }), seedTaskForProvider)
-    })
-  })
+      register(() => ({ db: scope.harness.db, app: app! }), seedTaskForProvider)
+    },
+  )
 }

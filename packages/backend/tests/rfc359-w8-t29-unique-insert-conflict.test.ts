@@ -104,7 +104,35 @@ function rejectionShape(reason: unknown): string {
   // `''` = 是唯一冲突但驱动没报名字；非空串 = 约束名 / 列清单。
   const target = postgresqlUniqueViolationConstraint(reason)
   const verdict = target === undefined ? 'not-unique-violation' : `unique:${target || '<unnamed>'}`
-  return `${String(named?.name ?? 'unknown')}[${verdict}]:${String(named?.message ?? reason).slice(0, 160)}`
+  // 2026-09-11 第三次红（`7a4fda4fa` 的 ubuntu shard 8/8）：只报 verdict + 截断的 message 仍然
+  // **不足以归因**——看不出那条裸错误到底是 23505 还是 40001/40P01，也看不出 cause 链在哪一层断的。
+  // 本机连跑 8 次复现不出来，所以下次只有 CI 日志一次机会。这里把**整条 cause 链**的
+  // `name/code/errno/constraint` 一并带出来（每层一段，最多 8 层——与两个分类器的遍历深度一致）。
+  // 判据一个字没改，只是让失败自带证据。
+  return `${String(named?.name ?? 'unknown')}[${verdict}]${causeChain(reason)}:${String(
+    named?.message ?? reason,
+  ).slice(0, 160)}`
+}
+
+/** 逐层导出 cause 链上的判别字段——两个分类器（唯一冲突 / 序列化冲突）看的就是这几个字段。 */
+function causeChain(reason: unknown): string {
+  const parts: string[] = []
+  let current: unknown = reason
+  for (let depth = 0; depth < 8 && current !== null && typeof current === 'object'; depth += 1) {
+    const node = current as {
+      readonly name?: unknown
+      readonly code?: unknown
+      readonly errno?: unknown
+      readonly constraint?: unknown
+      readonly cause?: unknown
+    }
+    parts.push(
+      `${depth}:${String(node.name ?? '?')}/code=${String(node.code ?? '-')}` +
+        `/errno=${String(node.errno ?? '-')}/constraint=${String(node.constraint ?? '-')}`,
+    )
+    current = node.cause
+  }
+  return `{${parts.join(' | ')}}`
 }
 
 /** `Promise.allSettled` 的结果归一成可排序的字符串数组（成功侧由调用方给形状）。 */
