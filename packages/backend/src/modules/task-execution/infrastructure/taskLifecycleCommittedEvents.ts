@@ -1,8 +1,8 @@
 // RFC-359 —— task-lifecycle committed event 的**一份**形状 + 中立 append。
 //
-// 事件的 payload / identity / consumers 形状是纯函数（`*CommittedEventInput`），同步的 dbTxSync
-// 参与者（`taskLifecycleEventParticipant.ts`，过渡期保留给尚未迁移的同步调用方）与这里的
-// `DatabaseTransaction` 版本共用同一份形状——两个引擎、两种事务形态，事件内容只有一个定义。
+// 事件的 payload / identity / consumers 形状是纯函数（`*CommittedEventInput`），append 只有
+// `DatabaseTransaction` 这一份中立形态——两个引擎共用同一个定义。曾经并存的同步 dbTxSync 参与者
+// （`taskLifecycleEventParticipant.ts`）已随最后一个同步调用方一起退役。
 
 import type { TaskStatus } from '@agent-workflow/shared'
 

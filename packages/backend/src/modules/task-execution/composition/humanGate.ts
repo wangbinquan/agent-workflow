@@ -8,7 +8,6 @@
 // 同样提交后发事件），只是两个引擎共用同一份。
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DbTxSync } from '@/db/txSync'
 import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
 import {
   parkTaskAtHumanGate,
@@ -19,7 +18,6 @@ import {
   settleManualQuestionParkObligations as settleManualQuestionParkObligationsInternal,
   type ManualQuestionParkSettleResult,
 } from '../application/parkManualQuestions'
-import type { TaskExecutionEffectStore } from '../infrastructure/taskExecutionEffectTransactionStore'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import { assertTaskExecutionContext } from '../application/taskExecutionContext'
 import { DatabaseHumanGateTaskLifecyclePersistence } from '../infrastructure/humanGateTaskLifecyclePersistence'

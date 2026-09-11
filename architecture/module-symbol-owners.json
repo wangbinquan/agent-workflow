@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1807,
+    "backendFiles": 1806,
     "frontendFiles": 622,
     "legacyFiles": 604,
-    "moduleFiles": 1203,
-    "productionFiles": 2584,
+    "moduleFiles": 1202,
+    "productionFiles": 2583,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25010
+    "symbolsIncludingFileRoots": 25002
   },
   "entries": [
     {
@@ -134467,54 +134467,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts#appendTaskCreatedCommittedEventTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "appendTaskCreatedCommittedEventTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts#appendTaskLifecycleTransitionCommittedEventTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "appendTaskLifecycleTransitionCommittedEventTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleEventParticipant.ts#appendTaskNodeStatusesCommittedEventTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "appendTaskNodeStatusesCommittedEventTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#$file",
       "removeAfterWave": null,
@@ -136851,45 +136803,6 @@
       "signatureDigest": "sha256:b723c34ddee3cbacedbaf9bca7cd65e4b634bdce9f059a805f9f9b7a742490fd",
       "status": "current-module",
       "symbol": "appendTaskCreatedCommittedEvent",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#appendTaskCreatedCommittedEventTx",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:00099e182895bbd2ca19b7f4bb9f6c47b93de363803a05c3cf7acab20d7a707a",
-      "status": "current-module",
-      "symbol": "appendTaskCreatedCommittedEventTx",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#appendTaskLifecycleTransitionCommittedEventTx",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:9cee888a3aa48cf26e1cae2fb3818a494adf40dd6c166ccf220a51d143087ff4",
-      "status": "current-module",
-      "symbol": "appendTaskLifecycleTransitionCommittedEventTx",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#appendTaskNodeStatusesCommittedEventTx",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:ccb63a605f73d33eed8267033803ed65e71c003b4eb8fdff5a1e963359acf591",
-      "status": "current-module",
-      "symbol": "appendTaskNodeStatusesCommittedEventTx",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -152691,18 +152604,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "writeTaskStatusAsync",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#WriteTaskStatusTxInput",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "WriteTaskStatusTxInput",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -300826,5 +300727,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8a7264fc26f45e0aa5bbdc9393988eb410f8afe5cf9313567188ad0d83407ad3"
+  "sourceDigest": "sha256:5fe3edda2fe6dfd420eef571325b186dfdd367444780928baf90052e6dadbb8a"
 }

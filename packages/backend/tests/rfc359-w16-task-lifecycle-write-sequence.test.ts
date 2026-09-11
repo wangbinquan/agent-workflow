@@ -1,7 +1,14 @@
 // RFC-359 W16: preserve the two real lifecycle writers while sharing their
 // CAS -> companion -> committed-event sequence. These cases first ran against
-// the separate implementations; native transactions remain synchronous, and
-// provider transactions observe uncommitted rows only through their own tx.
+// the separate implementations; both writers now drive the shared sequence
+// asynchronously, and a transaction observes its own uncommitted rows only
+// through its own tx.
+//
+// RFC-359：本文件此前还锁过「同一个 program 用 `driveSyncProgram` 解释时保持同步返回」。
+// 那条判据锁的是**实现机制**，而 `taskLifecycleWriteSequence` 的同步解释随
+// `appendTaskLifecycleTransitionCommittedEventTx`（整个 `taskLifecycleEventParticipant.ts`）
+// 一起退役——生产侧再没有同步调用方。通用的「一份 program 两种解释」契约仍由
+// `tests/rfc359-committed-append-program-conformance.test.ts` 看守。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
@@ -17,20 +24,13 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import type { TaskNodeChangeV1 } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
-import { appendTaskLifecycleTransitionCommittedEventTx } from '@/modules/task-execution/infrastructure/taskLifecycleEventParticipant'
-import { taskLifecycleWriteSequence } from '@/modules/task-execution/infrastructure/taskLifecycleWriteSequence'
 import { writeTaskRuntimeLifecycleInTx } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { setTaskStatus } from '@/platform/persistence/sqlite/taskLifecycle'
-import {
-  driveSyncProgram,
-  executeTransactionStepSync,
-} from '@/platform/persistence/transactionProgram'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { MIGRATIONS } from './migration-freeze'
@@ -112,7 +112,7 @@ const writeInput = (taskId: string) =>
     previousErrorSummary: 'previous-error',
   }) satisfies Parameters<typeof writeTaskRuntimeLifecycleInTx>[1]
 
-describe('RFC-359 lifecycle native synchronous contract', () => {
+describe('RFC-359 lifecycle native writer contract', () => {
   let db: DbClient
 
   beforeEach(async () => {
@@ -226,68 +226,6 @@ describe('RFC-359 lifecycle native synchronous contract', () => {
       }),
     ).rejects.toBe(sentinel)
     expect(publications).toBe(0)
-    expect(await taskRow(db, 'native')).toEqual(before)
-    expect(await durableRows(db)).toEqual({ events: [], heads: [], deliveries: [] })
-  })
-
-  test('shared program completes the native companion and real append before returning to its transaction', async () => {
-    const before = await taskRow(db, 'native')
-    const sentinel = new Error('native shared companion rollback')
-    const order: string[] = []
-    const initial = [INITIAL]
-    expect(() =>
-      dbTxSync(db, (tx) => {
-        const result = driveSyncProgram(
-          taskLifecycleWriteSequence(
-            tx,
-            {
-              ...writeInput('native'),
-              extra: {
-                workflowSnapshot: '{"nodes":[]}',
-                workflowVersion: 2,
-                refClosureJson: '{"items":[]}',
-                workgroupConfigJson: '{"dw":{"phase":"executing"}}',
-              },
-              nodeChanges: initial,
-              onTransitionTx(companionTx, transition, collector) {
-                order.push('companion')
-                expect(companionTx).toBe(tx)
-                expect(transition).toEqual({ from: 'running', to: 'done' })
-                expect(
-                  companionTx.select().from(tasks).where(eq(tasks.id, 'native')).get(),
-                ).toMatchObject({
-                  status: 'done',
-                  workflowSnapshot: '{"nodes":[]}',
-                  workflowVersion: 2,
-                  refClosureJson: '{"items":[]}',
-                  workgroupConfigJson: '{"dw":{"phase":"executing"}}',
-                })
-                companionTx
-                  .update(tasks)
-                  .set({ name: 'same-transaction' })
-                  .where(eq(tasks.id, 'native'))
-                  .run()
-                collector.addNodeChanges([ADDED])
-              },
-            },
-            (appendTx, input) => {
-              order.push('append')
-              expect(appendTx).toBe(tx)
-              expect(input.nodeChanges).toEqual([INITIAL, ADDED])
-              return appendTaskLifecycleTransitionCommittedEventTx(appendTx, input)
-            },
-          ),
-          executeTransactionStepSync,
-        )
-        order.push('returned')
-        expect(result).not.toBeInstanceOf(Promise)
-        expect(result).toMatchObject({ lifecycleEventRevision: 5 })
-        expect(tx.select().from(committedEvents).all()).toHaveLength(1)
-        throw sentinel
-      }),
-    ).toThrow(sentinel)
-    expect(order).toEqual(['companion', 'append', 'returned'])
-    expect(initial).toEqual([INITIAL])
     expect(await taskRow(db, 'native')).toEqual(before)
     expect(await durableRows(db)).toEqual({ events: [], heads: [], deliveries: [] })
   })

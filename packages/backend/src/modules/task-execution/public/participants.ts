@@ -78,15 +78,14 @@ import {
   transitionTerminalMaintenanceClaimTx as transitionTerminalMaintenanceClaimTxInternal,
 } from '../infrastructure/terminalMaintenanceClaim'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
+// RFC-359：bun:sqlite 专属的三个**同步**参与者（`appendTask{Created,LifecycleTransition,
+// NodeStatuses}CommittedEventTx`）随最后一个同步调用方退役，`taskLifecycleEventParticipant.ts`
+// 整文件删除。事件形状本来就只有一份，在 `taskLifecycleCommittedEvents.ts`；两个引擎共用的中立
+// 异步形态从这里出去。
 import {
-  appendTaskCreatedCommittedEventTx as appendTaskCreatedCommittedEventTxInternal,
-  appendTaskLifecycleTransitionCommittedEventTx as appendTaskLifecycleTransitionCommittedEventTxInternal,
-  appendTaskNodeStatusesCommittedEventTx as appendTaskNodeStatusesCommittedEventTxInternal,
+  appendTaskCreatedCommittedEvent as appendTaskCreatedCommittedEventInternal,
   type TaskCommittedEventIdentity,
-} from '../infrastructure/taskLifecycleEventParticipant'
-// RFC-359 W10 —— 上面那三个是 bun:sqlite 专属的**同步**参与者（`dbTxSync` 体内用）。事务迁到中立
-// 原语的调用方要的是两个引擎共用的这一份，同样从 public 合同出去，legacy 层不必伸手进模块内部。
-import { appendTaskCreatedCommittedEvent as appendTaskCreatedCommittedEventInternal } from '../infrastructure/taskLifecycleCommittedEvents'
+} from '../infrastructure/taskLifecycleCommittedEvents'
 import { setNodeRunStatusTx as setNodeRunStatusInTransactionInternal } from '../infrastructure/nodeRunLifecycleTransition'
 // RFC-359 —— 下面三个是上面那批同步原子的**中立异步孪生**（`DatabaseTransaction` 上的形态）。
 // 生命周期写事务从 bun:sqlite 专属同步面搬走之后，`onTransitionTx` 回调里的参与者都要用这一侧。
@@ -253,16 +252,12 @@ export const taskExecutionRequestHash = taskExecutionRequestHashInternal
 export const canonicalTaskExecutionJson = canonicalTaskExecutionJsonInternal
 export const decodeLineageSlotPath = decodeLineageSlotPathInternal
 export const encodeLineageSlotPath = encodeLineageSlotPathInternal
-export const appendTaskCreatedCommittedEventTx = appendTaskCreatedCommittedEventTxInternal
 export const appendTaskCreatedCommittedEvent = appendTaskCreatedCommittedEventInternal
 export const setNodeRunStatusInTransaction = setNodeRunStatusInTransactionInternal
 export const revokeExactOwnerInTransaction = revokeExactOwnerInTransactionInternal
 export const terminalizeTaskExecutionIntentsInTransaction =
   terminalizeTaskExecutionIntentsInTransactionInternal
 export const submitTaskContinuationInTransaction = submitTaskContinuationInTransactionInternal
-export const appendTaskLifecycleTransitionCommittedEventTx =
-  appendTaskLifecycleTransitionCommittedEventTxInternal
-export const appendTaskNodeStatusesCommittedEventTx = appendTaskNodeStatusesCommittedEventTxInternal
 export const createExclusiveDaemonLockProof = createExclusiveDaemonLockProofInternal
 export const createVerifiedOutcomeUnknownClosure = createVerifiedOutcomeUnknownClosureInternal
 export const createVerifiedStopProof = createVerifiedStopProofInternal

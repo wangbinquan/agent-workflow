@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 851,
+    "consumers": 847,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1064,
+    "methods": 1063,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20513,
-    "symbols": 988
+    "recursiveFields": 20481,
+    "symbols": 984
   },
   "entries": [
     {
@@ -144097,9 +144097,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:86387a8edd22fae69c92"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.nodeChanges",
           "type": "readonly TaskNodeChangeV1[]"
         },
@@ -144240,225 +144238,6 @@
       "transaction": "own-tx",
       "unresolvedTypeRefs": [
         "BaseSQLiteDatabase",
-        "Exclude",
-        "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 32,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:0631f2968bfc8de312a2"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "operations",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.continuationHandoff",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.errorSummary.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.errorSummary.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.identity.causationRef.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.identity.causationRef.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.identity.correlationRef.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.identity.correlationRef.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.identity.eventGroupId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.identity.eventGroupOrdinal",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.identity.operationRef",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lifecycleRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
-          "fieldPath": "$call.$parameter:input.nodeChanges",
-          "type": "readonly TaskNodeChangeV1[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.occurredAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.previousStatus",
-          "type": "z.infer<typeof TaskStatusSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.sourceTerminationEffectRef.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.sourceTerminationEffectRef.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
-          "fieldPath": "$call.$parameter:input.status",
-          "type": "z.infer<typeof TaskStatusSchema>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
-          "fieldPath": "$call.$parameter:input.taskId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.workspacePruneClaim",
-          "type": "TaskLifecycleTransitionedPayloadV1['workspacePruneClaim']"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:tx",
-          "type": "Parameters<Parameters<DbClient['transaction']>[0]>[0]"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
-          "fieldPath": "$call.$return.$variant:0.aggregate.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
-          "fieldPath": "$call.$return.$variant:0.aggregate.kind",
-          "type": "(typeof COMMITTED_EVENT_AGGREGATE_KINDS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.aggregate.seq",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.deliveryMode",
-          "type": "Exclude<CommittedEventCutoverMode, 'legacy'>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.eventGroupId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.eventGroupOrdinal",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.eventId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.family",
-          "type": "(typeof COMMITTED_EVENT_FAMILIES)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.payloadDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.producer",
-          "type": "(typeof COMMITTED_EVENT_PRODUCERS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:0.producerEpoch",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$variant:1",
-          "type": "null"
-        }
-      ],
-      "file": "packages/backend/src/modules/task-execution/public/operations.ts",
-      "id": "public:task-execution:operations:appendTaskLifecycleTransitionCommittedEventTx",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:560a1e09f5734a6a931cef7ea865594168de32abdc570fcff1cac78533a6804f"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/operations.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:0631f2968bfc8de312a2",
-          "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:1f1a80fc5a558cdc297ee36c3ea40def2d6fbc7d4a7e8b20a6fee90370f0743d",
-      "status": "target-context-current-surface",
-      "symbol": "appendTaskLifecycleTransitionCommittedEventTx",
-      "transaction": "own-tx",
-      "unresolvedTypeRefs": [
         "Exclude",
         "z.infer"
       ],
@@ -145592,123 +145371,6 @@
       "signatureDigest": "sha256:b723c34ddee3cbacedbaf9bca7cd65e4b634bdce9f059a805f9f9b7a742490fd",
       "status": "target-context-current-surface",
       "symbol": "appendTaskCreatedCommittedEvent",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:appendTaskCreatedCommittedEventTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#appendTaskCreatedCommittedEventTx",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:00099e182895bbd2ca19b7f4bb9f6c47b93de363803a05c3cf7acab20d7a707a",
-      "status": "target-context-current-surface",
-      "symbol": "appendTaskCreatedCommittedEventTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:appendTaskLifecycleTransitionCommittedEventTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#appendTaskLifecycleTransitionCommittedEventTx",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:9cee888a3aa48cf26e1cae2fb3818a494adf40dd6c166ccf220a51d143087ff4",
-      "status": "target-context-current-surface",
-      "symbol": "appendTaskLifecycleTransitionCommittedEventTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:appendTaskNodeStatusesCommittedEventTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#appendTaskNodeStatusesCommittedEventTx",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:ccb63a605f73d33eed8267033803ed65e71c003b4eb8fdff5a1e963359acf591",
-      "status": "target-context-current-surface",
-      "symbol": "appendTaskNodeStatusesCommittedEventTx",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -152931,8 +152593,7 @@
         }
       ],
       "publicTypeConsumerIds": [
-        "public:task-execution:operations:appendTaskLifecycleTransitionCommittedEvent",
-        "public:task-execution:operations:appendTaskLifecycleTransitionCommittedEventTx"
+        "public:task-execution:operations:appendTaskLifecycleTransitionCommittedEvent"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -162278,7 +161939,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8a7264fc26f45e0aa5bbdc9393988eb410f8afe5cf9313567188ad0d83407ad3",
+  "sourceDigest": "sha256:5fe3edda2fe6dfd420eef571325b186dfdd367444780928baf90052e6dadbb8a",
   "targetContexts": [
     "collaboration",
     "development-automation",

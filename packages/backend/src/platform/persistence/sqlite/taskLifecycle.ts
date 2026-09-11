@@ -62,7 +62,6 @@ import type { TaskExecutionContextRef } from '@/modules/task-execution/public/co
 import {
   assertTaskExecutionContext,
   appendTaskLifecycleTransitionCommittedEvent,
-  appendTaskLifecycleTransitionCommittedEventTx,
   currentTaskExecutionContext,
   fenceTaskWrite,
   transitionNodeRunStatusInTx,
@@ -78,11 +77,7 @@ import {
   type TaskLifecycleWriteExtra,
   type TaskLifecycleWriteInput,
 } from '@/modules/task-execution/infrastructure/taskLifecycleWriteSequence'
-import {
-  driveAsyncProgram,
-  driveSyncProgram,
-  executeTransactionStepSync,
-} from '@/platform/persistence/transactionProgram'
+import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import {
@@ -510,28 +505,6 @@ export async function resolveTerminalWorkspacePruneDecision(
     )
     return { prune: false }
   }
-}
-
-interface WriteTaskStatusTxInput {
-  readonly tx: DbTxSync
-  readonly taskId: string
-  readonly from: TaskStatus
-  readonly to: TaskStatus
-  readonly allowedFrom: readonly TaskStatus[]
-  readonly extra?: TaskStatusUpdateExtra
-  readonly now: number
-  readonly reason: string
-  readonly isRevival: boolean
-  readonly workspacePruneDecision: TerminalWorkspacePruneDecision
-  readonly previousErrorSummary: string | null
-  readonly nodeChanges?: readonly TaskNodeChangeV1[]
-  readonly committedEventIdentity?: Partial<TaskCommittedEventIdentity>
-  readonly sourceTerminationEffectRef?: string | null
-  readonly onTransitionTx?: (
-    tx: DbTxSync,
-    transition: { from: TaskStatus; to: TaskStatus },
-    collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
-  ) => void
 }
 
 /**

@@ -20,7 +20,6 @@ import {
   committedEvents,
   tasks,
 } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/prepareClarifyGateOpen'
 import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
