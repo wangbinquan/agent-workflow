@@ -13,14 +13,7 @@ import type { Hono } from 'hono'
 
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createProviderHttpApplication,
-  type ProviderHttpApplication,
-} from './helpers/providerHttpApplication'
-import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
-import { tmpdir as fixtureTmpDirectory } from 'node:os'
-import { join as joinFixturePath } from 'node:path'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -228,48 +221,19 @@ describe('RFC-307 — the stage graph over HTTP', () => {
 })
 
 // RFC-359 W49: keep native fixtures while running the original selected calls on each provider.
+// RFC-359 AC-6：生命周期走共用的 `describeEachProviderHttpApplication`（`tests/helpers/`），
+// 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>) => void,
 ): void {
-  describeEachProvider('provider', (harness) => {
-    describe('application lifetime', () => {
-      let application: ProviderHttpApplication | undefined
-      let ownedHome: string | undefined
-      let previousHome: string | undefined
-      let homeAssigned = false
-      async function buildApp() {
-        ownedHome = createFixtureDirectory(
-          joinFixturePath(fixtureTmpDirectory(), 'rfc359-w49-api-code-routes-'),
-        )
-        previousHome = process.env.AGENT_WORKFLOW_HOME
-        process.env.AGENT_WORKFLOW_HOME = ownedHome
-        homeAssigned = true
-        const appHome = ownedHome
-        application = await createProviderHttpApplication(harness, {
-          token: TOKEN,
-          configPath: joinFixturePath(appHome, 'config.json'),
-          opencodeVersion: '1.15.0',
-          dbVersion: 1,
-          appHome,
-        })
-        return { db: harness.db, app: application.app }
-      }
-      afterEach(async () => {
-        try {
-          await application?.dispose()
-        } finally {
-          application = undefined
-          if (homeAssigned) {
-            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-            else process.env.AGENT_WORKFLOW_HOME = previousHome
-          }
-          homeAssigned = false
-          if (ownedHome !== undefined)
-            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
-          ownedHome = undefined
-        }
-      })
-      register(buildApp)
-    })
-  })
+  describeEachProviderHttpApplication(
+    'provider',
+    {
+      token: TOKEN,
+      opencodeVersion: '1.15.0',
+      dbVersion: 1,
+      tempPrefix: 'rfc359-w49-api-code-routes-',
+    },
+    (scope) => register(async () => ({ db: scope.harness.db, app: (await scope.open()).app })),
+  )
 }

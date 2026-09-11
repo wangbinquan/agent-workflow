@@ -92,13 +92,26 @@ async function waitDead(pid: number, timeoutMs = 5_000): Promise<boolean> {
   return !pidAlive(pid)
 }
 
+/**
+ * 等到 pid 文件**有可解析的内容**，而不只是「存在」。
+ *
+ * 「存在」不是就绪信号：`writeFileSync` 先把目标截成 0 字节再写内容，读者可能落进那个零长度
+ * 窗口，`readGrandchildPid` 于是解出 NaN。macOS CI 分片实撞过（`c458572e5` 的 shard 1/6）。
+ * 产出侧已经改成「写临时文件再 rename」的原子落盘；这里同批收紧就绪判据，让这条链两头都不
+ * 依赖时序——将来任何人把产出侧改回非原子写，这里也不会变成随机红。
+ */
 async function waitForFile(path: string, timeoutMs = 5_000): Promise<boolean> {
+  const readable = (): boolean => {
+    if (!existsSync(path)) return false
+    const pid = Number.parseInt(readFileSync(path, 'utf8').trim(), 10)
+    return Number.isInteger(pid) && pid > 0
+  }
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    if (existsSync(path)) return true
+    if (readable()) return true
     await Bun.sleep(25)
   }
-  return existsSync(path)
+  return readable()
 }
 
 function readGrandchildPid(pidFile: string): number {

@@ -20,7 +20,7 @@
 //   bun run stubborn-opencode.ts run --agent NAME --format json ... -- "<prompt>"
 
 import process from 'node:process'
-import { writeFileSync } from 'node:fs'
+import { renameSync, writeFileSync } from 'node:fs'
 
 const SELF_DESTRUCT_MS = 60_000
 
@@ -47,7 +47,12 @@ const grandchild = Bun.spawn({
 
 const pidFile = process.env.STUBBORN_OPENCODE_GRANDCHILD_PID_FILE
 if (pidFile !== undefined && pidFile.length > 0) {
-  writeFileSync(pidFile, String(grandchild.pid))
+  // 原子落盘：`writeFileSync` 会先把目标截成 0 字节再写内容，读者用「文件存在」当就绪信号时
+  // 会撞上那个零长度窗口，读出 NaN。macOS CI 分片上实撞过一次（`c458572e5` 的 shard 1/6：
+  // `readGrandchildPid` 断言 `Number.isInteger(pid) && pid > 0` 为 false）。
+  // 先写临时文件再 rename——同一文件系统上的 rename 是原子的，读者只可能看到「还没有」或「完整」。
+  writeFileSync(`${pidFile}.tmp`, String(grandchild.pid))
+  renameSync(`${pidFile}.tmp`, pidFile)
 }
 
 // Emit one parseable line so the runner's stdout pump sees activity.
