@@ -777,10 +777,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1739,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 根那一刀一次性豁免：1736 → 1739。新增三个**中立异步孪生**的写入口——`withOwnedTaskWrite`（owner fence 的条件 UPDATE）、`writeTaskStatusAsync`（同一个 `taskLifecycleWriteSequence` program 换异步解释器）、`cancelOpenNodeRuns`（逐行走共用的节点转移表）。同步那三个保留——RFC-333 的人工门参与者挂在别人的同步大事务上，要的就是同步解释。等同步面清零、同步孪生随之删除时这三格会还回来。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -794,10 +791,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 272,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-359 根那一刀一次性豁免：271 → 272。`setTaskStatus` 的写事务从 bun:sqlite 专属的 `dbTxSync` 换成中立的 `databaseSessionFor(db).transaction`；旧那笔不计入本账本（它走 drizzle 的 `db.transaction`），新那笔计入，于是净增一格。事务**数量没变**，只是形态换了。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -818,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5332,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 根那一刀一次性豁免：5326 → 5334。`platform/persistence/sqlite/taskLifecycle.ts` 与 `services/task.ts` 改用中立参与者（`appendTaskLifecycleTransitionCommittedEvent` / `transitionNodeRunStatusInTx` / `withOwnedTaskWrite` / `revokeExactOwnerInTransaction` / `terminalizeTaskExecutionIntentsInTransaction` / `submitTaskContinuationInTransaction`），全部经 task-execution 的 **public 合同**出去（与既有的 `setNodeRunStatusInTransaction` 同一姿势），不是新的内部直取。边按 (file, specifier, targetSymbol) 计数，换孪生即换符号，故净增。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -842,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4793,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 根那一刀一次性豁免：4787 → 4795。与上一条同一批边的例外登记，数量一一对应。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -859,10 +847,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 989,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 根那一刀一次性豁免：984 → 990。task-execution 的 public 合同补上四个中立孪生（`appendTaskLifecycleTransitionCommittedEvent` / `transitionNodeRunStatusInTx` / `withOwnedTaskWrite` / `revokeExactOwnerInTransaction` / `terminalizeTaskExecutionIntentsInTransaction` / `submitTaskContinuationInTransaction`）。同步那批仍在合同上——两侧并存正是「一个 program 两种解释」的现状，同步面清零时会一起收。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -883,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25022,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 根那一刀一次性豁免：25016 → 25022。上一条那批符号的归属登记，数量一一对应。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -903,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0e90a64732e3c9fe1f79382b6cfa24a29ac57b59",
-    "contentDigest": "sha256:cb9ff08b5c5eb958c2f1737be4b037cf8db4dc6fb36dad499cdc98d5b08babb1",
+    "currentSnapshotSha": "14eb1fb990a82004cd6223a148335cc5a8c649ed",
+    "contentDigest": "sha256:f2f4b2ce79eadb548881c124ac1739293939c6ae8ee1f667a9142f9ccdbd9878",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

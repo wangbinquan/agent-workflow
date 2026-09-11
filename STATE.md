@@ -23,7 +23,13 @@
 >    142 个文件里 **138 个**的报错指向「测试拿到中立库、被调用的生产函数还标着 `DbClient`」，
 >    只有 4 个能独立落地。整棵 `src/` 做放宽实验（排除 `db/client.ts` 与 `db/txSync.ts`）后
 >    只剩 **92 条错 / ~12 个文件**，全部落在 `SYNC_TRANSACTION_DEBT` 那 4 个文件及其调用闭包上。
->    **`DbClient` 标注绝大多数是纯过窄、白送；AC-6 不是「一个个迁」，是等下面那一刀。**
+>    **`DbClient` 标注绝大多数是纯过窄、白送；AC-6 不是「一个个迁」，是等同步事务面清零。**
+>    **2026-09-11 根那一刀落地后复测：没怎么松动**——机械迁移 138 个文件仍有 **137 个**被
+>    `DbClient` 形参挡住；整棵 `src/` 放宽实验的残留从 92 条只降到 **90 条**。原因是剩下的窄标注
+>    不在生命周期写事务上，而在**故意保留的同步孪生**（`DbTxSync` 一族：`writeTaskStatusTx` /
+>    `transitionNodeRunStatusTx` / `cancelOpenNodeRunsTx` / `transitionHumanGateTaskTx`，
+>    以及 `sqliteTaskOwnership.ts` 的 `claimPendingIntent` / `withOwnedTaskTx` / `revokeExactTx`）。
+>    **所以 AC-6 的真正前置是把 RFC-333 那条人工门参与者链也搬到中立事务**，不是再多合几对。
 > 3.5. **同步事务面收口 —— 根那一刀 2026-09-11 已落地**（plan §5p）。账本
 >    `SYNC_TRANSACTION_DEBT` **4 → 1 个文件**，只剩 `sqliteTaskOwnership.ts: 2`
 >    （`claimPendingIntent` 与 `withOwnedTaskTx`，后者仍被同步的 `revokeExactTx` 一族与
