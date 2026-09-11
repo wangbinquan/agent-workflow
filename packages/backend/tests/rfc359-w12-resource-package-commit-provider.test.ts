@@ -27,6 +27,7 @@ import {
   skillVersions,
   users,
   workflows,
+  workgroups,
 } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
@@ -215,6 +216,56 @@ danglingCallRefs: []
             },
           ],
           rootRef: 'local:package-mcp',
+        }),
+      ),
+    },
+  ])
+}
+
+function workgroupPackage(revision: number): Uint8Array {
+  return encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: package-group
+  type: workgroup
+  name: package-group
+resources:
+  - slug: package-group
+    type: workgroup
+    name: package-group
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'workgroup-create',
+              slug: 'package-group',
+              payload: {
+                name: 'package-group',
+                description: `group revision ${revision}`,
+                instructions: 'collaborate',
+                mode: 'free_collab',
+                outputContract: 'files',
+                switches: { shareOutputs: true, directMessages: false, blackboard: true },
+                maxRounds: 3,
+                completionGate: false,
+                members: [],
+                leaderDisplayName: null,
+              },
+            },
+          ],
+          rootRef: 'local:package-group',
         }),
       ),
     },
@@ -829,6 +880,52 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       receipt,
     )
     expect(await harness.db.select().from(workflows).where(eq(workflows.id, id)).get()).toEqual(row)
+  })
+
+  test('workgroup package create and replay persist the same row and receipt on both engines', async () => {
+    const f = await fixture()
+    const { catalog } = f.compose()
+    const bytes = workgroupPackage(1)
+    const prepared = await previewWith(catalog, f, bytes)
+    const decision = { localSlug: 'package-group', action: 'new' as const }
+    const receipt = await applyWith(catalog, f, bytes, prepared.previewToken, decision)
+    if (receipt.root === undefined) throw new Error('package Workgroup root missing')
+    const id = receipt.root.resourceId
+    const row = await harness.db.select().from(workgroups).where(eq(workgroups.id, id)).get()
+    if (row === undefined) throw new Error('package Workgroup row missing')
+    expect(row).toMatchObject({
+      id,
+      name: 'package-group',
+      description: 'group revision 1',
+      instructions: 'collaborate',
+      mode: 'free_collab',
+      maxRounds: 3,
+      completionGate: false,
+      ownerUserId: OWNER,
+      visibility: 'private',
+      version: 1,
+    })
+    // 三个开关在库里是三列，不是一个 JSON——两个引擎都要逐列落对。
+    expect({
+      shareOutputs: row.shareOutputs,
+      directMessages: row.directMessages,
+      blackboard: row.blackboard,
+    }).toEqual({ shareOutputs: true, directMessages: false, blackboard: true })
+    expect(receipt.applied).toEqual([
+      {
+        opId: 'op-1',
+        resourceType: 'workgroup',
+        resourceId: id,
+        action: 'create',
+        name: 'package-group',
+      },
+    ])
+    expect(await applyWith(f.compose().catalog, f, bytes, prepared.previewToken, decision)).toEqual(
+      receipt,
+    )
+    expect(await harness.db.select().from(workgroups).where(eq(workgroups.id, id)).get()).toEqual(
+      row,
+    )
   })
 
   test('mcp package create and replay persist the same row and receipt on both engines', async () => {

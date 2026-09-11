@@ -5785,13 +5785,25 @@ compose 方式与 `main.ts:235/250` 同源），但它**只覆盖 agent / skill 
 `commit{Agent,Skill,Mcp,Plugin,Workflow,Workgroup}PackageMutation` 是**逐 kind 一条臂**，
 没对拍的 kind 等于两侧各写一份、谁漂了都看不出来。
 
-本轮补了 **workflow 与 mcp** 两条（落行 + 回执 + 重放幂等三件一起看）。做了变异验证：把
-`postgresqlResourcePackageMutationArms.ts#commitPostgresqlWorkflowPackageMutation` 的 create 臂
-写坏一个字段，**只有 `[postgresql]` 那条新用例红**、其余 11 条全绿——证明新覆盖真的打到了分叉那条臂上。
+本轮补了 **workflow / mcp / workgroup** 三条（落行 + 回执 + 重放幂等三件一起看）。
+每条都做了变异验证——把对应的 PG 臂写坏一个字段，**只有 `[postgresql]` 那一条新用例红**、
+其余全绿，证明新覆盖真的打到了分叉那条臂上：
 
-**还缺 plugin 与 workgroup 两条**：前者要给两侧 compose 装一个真的 plugin 安装器
-（现在 PG 那侧的夹具对 plugin 直接 throw），后者要带 `humanMemberMappings`。补完这两条，
-「合完还等价」才有可验证的基线；在那之前不要动 3000 : 3200 行里的任何一面。
+| kind | 变异点 | 结果 |
+| --- | --- | --- |
+| workflow | `commitPostgresqlWorkflowPackageMutation` 的 create 臂改写 `description` | 只红 `[postgresql] workflow` |
+| workgroup | 同文件 workgroup 臂的 `blackboard: candidate.switches.blackboard` 取反 | 只红 `[postgresql] workgroup` |
+
+**还缺 plugin 一条，且它有一个明确的前置**：两侧现在用的**不是同一个安装器**——legacy 侧
+`services/bundle/legacyResourcePackageMutationDependencies.ts:115` 直接绑真实的
+`@/services/pluginInstaller#installPlugin`，而 PG 侧的 `composePostgresqlResourcePackageProvider`
+收一个注入的 `PostgresqlResourcePackagePluginInstaller`。`composeSqliteResourcePackageProvider`
+的依赖只有 `{ db, appHome }`（`resourcePackageOperations.ts:114`），**没有注入口**，所以夹具没法让
+两侧跑同一个安装器，对拍没有意义。
+**前置**：给 SQLite 那侧补一个与 PG 同形的安装器注入口（生产默认仍绑真实安装器），再写 plugin 对拍。
+那是一处真的生产改动，应当与合并同批规划，不要为了一条测试单独塞。
+
+补完 plugin，「合完还等价」才有可验证的基线；在那之前不要动 3000 : 3200 行里的任何一面。
 
 写 fixture 时会撞到的两处（已实撞）：①`manifest.requirements` 与 `collectBundleRequirements(bundle)`
 做的是 **`JSON.stringify` 逐字比对**，所以 YAML 里的键序必须与 collector 的返回对象一致
