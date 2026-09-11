@@ -48,9 +48,7 @@ import {
 } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import {
   createLegacySqliteNodeRunOperations,
-  mintLegacySqliteNodeRunInTx,
   type LegacySqliteNodeRunDatabase,
-  type LegacySqliteNodeRunTransaction,
 } from '@/modules/task-execution/infrastructure/legacySqliteNodeRunOperations'
 export { nextRetryIndex }
 
@@ -229,14 +227,9 @@ export async function mintNodeRun(
   return await createLegacySqliteNodeRunOperations(db).lifecycle.mint(args)
 }
 
-/**
- * RFC-326 — the transactional body of `mintNodeRun`, for callers that already
- * hold a `dbTxSync` (the review decision mints its re-run rows together with the
- * rows it archives and retires). Same retire-then-insert pair, same values.
- */
-export function mintNodeRunTx(tx: LegacySqliteNodeRunTransaction, args: MintNodeRunArgs): string {
-  return mintLegacySqliteNodeRunInTx(tx, args)
-}
+// RFC-359：`mintNodeRunTx`（`dbTxSync` 体内的同步铸行）退役——生产侧零调用方。要在自己的事务里
+// 铸行的调用方走中立的 `createNodeRunMintParticipantInTx(tx)`（同一个 `nodeRunMintProgram`，
+// 异步解释）；`mintNodeRun` 这条独立入口不变。
 
 /** Provider-selected mint entry used by daemon/application composition. */
 export async function mintNodeRunWith(

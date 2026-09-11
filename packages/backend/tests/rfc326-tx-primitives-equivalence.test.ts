@@ -25,7 +25,9 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { nodeRuns, taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { transitionNodeRunStatus, transitionNodeRunStatusTx } from '../src/services/lifecycle'
-import { mintNodeRun, mintNodeRunTx, type MintNodeRunArgs } from '../src/services/nodeRunMint'
+import { mintNodeRun, type MintNodeRunArgs } from '../src/services/nodeRunMint'
+import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { hasActingMembership } from '../src/services/taskCollab'
 import { DomainError } from '../src/util/errors'
 
@@ -227,7 +229,11 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
   })
 })
 
-describe('RFC-326 AC-19 — mintNodeRun ≡ mintNodeRunTx (including retired merge states)', () => {
+// RFC-359：原判据比的是 `mintNodeRun`（异步入口）≡ `mintNodeRunTx`（`dbTxSync` 体内的同步孪生）。
+// 同步那一面随本波退役，但**「独立入口铸行」与「在调用方事务里铸行」结果必须一致**这条产品行为
+// 依然承重——只是后者现在由中立的 `createNodeRunMintParticipantInTx(tx)` 承担（同一个
+// `nodeRunMintProgram`，异步解释）。判据一条没少：新行、被退役的同代旧行、以及同样的拒绝。
+describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retired merge states)', () => {
   const args: MintNodeRunArgs = {
     taskId: TASK,
     nodeId: 'doc',
@@ -253,7 +259,9 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ mintNodeRunTx (including retired mer
     const [a, b] = await pair()
 
     const idA = await mintNodeRun(a, args)
-    const idB = dbTxSync(b, (tx) => mintNodeRunTx(tx, args))
+    const idB = await databaseSessionFor(b).transaction(
+      async (tx) => await createNodeRunMintParticipantInTx(tx).mint(args),
+    )
     expect(idA).not.toBe(idB) // fresh ULIDs — everything else must match
 
     const rowsA = normalised(a, idA)
@@ -285,7 +293,9 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ mintNodeRunTx (including retired mer
       ea = err
     }
     try {
-      dbTxSync(b, (tx) => mintNodeRunTx(tx, bad))
+      await databaseSessionFor(b).transaction(
+        async (tx) => await createNodeRunMintParticipantInTx(tx).mint(bad),
+      )
     } catch (err) {
       eb = err
     }
@@ -363,14 +373,15 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
     expect(twin.match(/\.update\(nodeRuns\)/g)?.length ?? 0).toBe(1)
   })
 
-  test('mintNodeRun delegates to mintNodeRunTx and inserts nothing itself', () => {
+  // RFC-359：同步孪生 `mintNodeRunTx` 已退役（生产零调用方），所以这里只剩「入口本身不写行」
+  // 这一半。要在自己的事务里铸行的调用方走中立的 `createNodeRunMintParticipantInTx(tx)`。
+  test('mintNodeRun delegates to the lifecycle port and inserts nothing itself', () => {
     const src = readFileSync(resolve(SRC, 'nodeRunMint.ts'), 'utf8')
     const body = bodyOf(src, 'export async function mintNodeRun(')
     expect(body).toContain('createLegacySqliteNodeRunOperations(db).lifecycle.mint(args)')
     expect(body).not.toContain('.insert(nodeRuns)')
-    // No new raw `.transaction(` site (s10 ledger) — the wrapper goes through dbTxSync.
+    // No raw `.transaction(` site here (s10 ledger): the write boundary lives in the port.
     expect(body).not.toContain('.transaction(')
-    const twin = bodyOf(src, 'export function mintNodeRunTx(')
-    expect(twin).toContain('mintLegacySqliteNodeRunInTx(tx, args)')
+    expect(src).not.toContain('export function mintNodeRunTx(')
   })
 })

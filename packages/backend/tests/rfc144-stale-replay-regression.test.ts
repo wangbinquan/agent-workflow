@@ -725,23 +725,11 @@ describe('RFC-144 deriveFrontier — abandoned 分桶（穷举 switch 的新格�
 })
 
 describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
-  test('SQLite mint participant：同一 reserved tx 内先 abandon superseded rows 再 insert（D12/P1-1）', () => {
-    const nativeSrc = readFileSync(
-      join(
-        BACKEND_SRC,
-        'modules',
-        'task-execution',
-        'infrastructure',
-        'sqliteNodeRunMintParticipant.ts',
-      ),
-      'utf-8',
-    )
-    // RFC-359 W47 moves the writes into a shared program; the reserved tx and
-    // synchronous runner must still reach that program before checking its order.
-    expect(nativeSrc).toContain("import { nodeRunMintProgram } from './nodeRunMintParticipant'")
-    expect(nativeSrc).toMatch(
-      /return driveSyncProgram\(\s*nodeRunMintProgram\(tx, input, \(query\) => query\.all\(\)\),\s*executeTransactionStepSync,?\s*\)/,
-    )
+  // RFC-359：原来这条还先读 `sqliteNodeRunMintParticipant.ts`，钉「同步 runner 必须先走到共享
+  // program」。同步那个参与者随本波退役（生产侧只有一层零调用方的转发），于是只剩中立那份——
+  // 它本来就是两个引擎唯一在跑的实现，判据的承重部分（**同一笔事务内先 abandon 同代旧行、再
+  // insert 新行**）一个字没变。顺带钉住事务内工厂确实驱动的是同一个 program。
+  test('node-run mint participant：同一 reserved tx 内先 abandon superseded rows 再 insert（D12/P1-1）', () => {
     const src = readFileSync(
       join(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'nodeRunMintParticipant.ts'),
       'utf-8',
@@ -752,6 +740,11 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
     expect(participantAt).toBeGreaterThan(-1)
     expect(abandonAt).toBeGreaterThan(participantAt)
     expect(insertAt).toBeGreaterThan(abandonAt)
+    // 事务内工厂驱动的必须是上面这同一个 program，而不是自己再抄一份写序列。
+    const factoryAt = src.indexOf('export function createNodeRunMintParticipantInTx(')
+    expect(factoryAt).toBeGreaterThan(-1)
+    expect(src.slice(factoryAt)).toContain('nodeRunMintProgram(tx, input,')
+    expect(src.slice(factoryAt)).not.toContain('.insert(nodeRuns)')
   })
 
   test('taskQuestionDispatch：同步 tx 内 mint 前同参 abandon（RFC-120 原子 claim+mint 通道）', () => {

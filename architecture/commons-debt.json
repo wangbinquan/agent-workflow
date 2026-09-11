@@ -3797,13 +3797,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:a73175bcef53d3c87f9c",
         "import:d20a79fb6d290a383a6a"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunDatabase",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunTransaction"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunDatabase"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/nodeRunMint.ts"
@@ -3822,13 +3820,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:0043c7b1d86621e252ef",
         "import:347be0261a5ef45eba81"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#mintLegacySqliteNodeRunInTx"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/nodeRunMint.ts"
@@ -8796,15 +8792,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:846983338d5dc0d9e1f96f5efc0bca4c6c797185a7414d414395c52a8c2bb7ce",
+    "sourceDigest": "sha256:c9cd969aa33d792adf9352225539af1175d3bdaf011be67e9ee59e0794d4cee2",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "94dda3b37f02ec6cba35d107aeeb46ee79744330",
-    "contentDigest": "sha256:1bb278110352fb57a10d1d37b750bb0a9579efd74674ef2b271170fa5eeaf46a",
+    "currentSnapshotSha": "9b85c84af4e68e04a3a9e637aa47ea6a8ddfaa10",
+    "contentDigest": "sha256:dfd0909050bfd827a0aa9e9dc1f854537c8e97cc105788d8e67122b53d27339d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

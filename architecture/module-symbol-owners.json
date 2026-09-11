@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1790,
+    "backendFiles": 1789,
     "frontendFiles": 622,
     "legacyFiles": 602,
-    "moduleFiles": 1188,
-    "productionFiles": 2567,
+    "moduleFiles": 1187,
+    "productionFiles": 2566,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24937
+    "symbolsIncludingFileRoots": 24931
   },
   "entries": [
     {
@@ -128150,30 +128150,6 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunTransaction",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "LegacySqliteNodeRunTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#mintLegacySqliteNodeRunInTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "mintLegacySqliteNodeRunInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#$file",
@@ -132056,42 +132032,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createSqliteChildExecutionLaunchOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteNodeRunMintParticipantInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#SqliteNodeRunMintParticipantInTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteNodeRunMintParticipantInTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -172302,18 +172242,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "MintNodeRunOverrides",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/nodeRunMint.ts",
-      "id": "owner:packages/backend/src/services/nodeRunMint.ts#mintNodeRunTx",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "mintNodeRunTx",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -299941,5 +299869,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:846983338d5dc0d9e1f96f5efc0bca4c6c797185a7414d414395c52a8c2bb7ce"
+  "sourceDigest": "sha256:c9cd969aa33d792adf9352225539af1175d3bdaf011be67e9ee59e0794d4cee2"
 }

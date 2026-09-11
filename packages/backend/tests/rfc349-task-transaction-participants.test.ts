@@ -9,10 +9,9 @@ import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { nodeRuns, taskCollaborators, tasks, users } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createSqliteNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { createTaskAuthorizationParticipantInTx } from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -156,22 +155,27 @@ describe('RFC-349 task transaction participants', () => {
   // 动手权只认 owner/collaborator）已搬到真在跑的中立实现上，并且两个引擎各跑一遍：
   // `tests/rfc359-w10-task-authorization-conformance.test.ts`。
 
-  test('replacement mint and superseded-merge retirement commit atomically', () => {
+  // RFC-359：SQLite 这一半此前驱动同步的 `sqliteNodeRunMintParticipant.ts`（已随本波退役，
+  // 生产侧只有 `services/nodeRunMint.ts#mintNodeRunTx` 一层零调用方的转发）。判据锁的是
+  // **铸行与退役同笔提交**，与解释无关；改走中立参与者之后，本用例的两半（SQLite / PostgreSQL）
+  // 现在是同一个形状、同一个 `nodeRunMintProgram`。
+  test('replacement mint and superseded-merge retirement commit atomically', async () => {
     const db = seedTask()
-    dbTxSync(db, (tx) => {
-      const mint = createSqliteNodeRunMintParticipantInTx(tx)
-      mint.mint({
+    await databaseSessionFor(db).transaction(async (tx) => {
+      const mint = createNodeRunMintParticipantInTx(tx)
+      await mint.mint({
         id: '01RFC349000000000000000001',
         taskId: TASK_ID,
         nodeId: 'review-node',
         status: 'awaiting_review',
         cause: 'initial',
       })
-      tx.update(nodeRuns)
+      await tx
+        .update(nodeRuns)
         .set({ mergeState: 'pending-merge' })
         .where(eq(nodeRuns.id, '01RFC349000000000000000001'))
         .run()
-      mint.mint({
+      await mint.mint({
         id: '01RFC349000000000000000002',
         taskId: TASK_ID,
         nodeId: 'review-node',

@@ -83,8 +83,8 @@
       "id": "rfc294-capability-compatibility-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CAPABILITY_COMPATIBILITY_DEBT",
-      "baseline": 20,
-      "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。 RFC-359 W4-D24：租约那条能力兼容债随实现合一销账，22→21。"
+      "baseline": 19,
+      "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。 RFC-359 W4-D24：租约那条能力兼容债随实现合一销账，22→21。 RFC-359：`sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx` 随同步铸行链退役（`nodeRunMintProgram` 的同步解释器，src 侧唯一到达路径是零调用方的 `mintNodeRunTx`），20 → 19。"
     },
     {
       "id": "rfc294-cross-context-pilot-debt",
@@ -447,8 +447,8 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 50,
-      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。"
+      "baseline": 49,
+      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。 RFC-359：`sqliteNodeRunMintParticipant.ts` 退役——它只是 `nodeRunMintProgram` 的同步解释器，src 侧唯一的到达路径是 `mintLegacySqliteNodeRunInTx` → `services/nodeRunMint.ts#mintNodeRunTx`，而后者生产零调用方；事务内铸行的调用方本来就走中立的 `createNodeRunMintParticipantInTx`，50 → 49。"
     },
     {
       "id": "rfc359-w5-provider-pair-conformance",
@@ -776,7 +776,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1730,
+      "baseline": 1729,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -811,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5267,
+      "baseline": 5261,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -832,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4733,
+      "baseline": 4727,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -867,12 +867,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24937,
+      "baseline": 24931,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:846983338d5dc0d9e1f96f5efc0bca4c6c797185a7414d414395c52a8c2bb7ce",
+    "sourceDigest": "sha256:c9cd969aa33d792adf9352225539af1175d3bdaf011be67e9ee59e0794d4cee2",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "94dda3b37f02ec6cba35d107aeeb46ee79744330",
-    "contentDigest": "sha256:bec1260b2570cd11656ebfb62dc91bec2e25c28bfd515c06d6466e8e897710a9",
+    "currentSnapshotSha": "9b85c84af4e68e04a3a9e637aa47ea6a8ddfaa10",
+    "contentDigest": "sha256:f0bd06e40ddbbdf5c59e66138b9f24f0822e7ec145d28f2749c95627a59158ba",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

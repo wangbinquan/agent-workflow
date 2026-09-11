@@ -2750,7 +2750,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0043c7b1d86621e252ef",
         "import:0286a8646b2f927c7d60",
         "import:0517477bb309799f3c94",
         "import:058b994ce80ccee0a668",
@@ -2765,7 +2764,6 @@
         "import:9af46ae42a33dda547cf",
         "import:9e22458e484593ea92db",
         "import:a28f35b0356915075c36",
-        "import:a73175bcef53d3c87f9c",
         "import:a91c35e499c872aef8f7",
         "import:b7d3eebe685a3561fc45",
         "import:ca6046281bee8fcde23a",
@@ -2789,7 +2787,6 @@
         "generateEnvelopeNonce",
         "loadRunEnvelopeNonce",
         "mintNodeRun",
-        "mintNodeRunTx",
         "mintNodeRunWith",
         "resolveFrozenRuntime",
         "resolveFrozenRuntimeWith",
@@ -6748,5 +6745,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:846983338d5dc0d9e1f96f5efc0bca4c6c797185a7414d414395c52a8c2bb7ce"
+  "sourceDigest": "sha256:c9cd969aa33d792adf9352225539af1175d3bdaf011be67e9ee59e0794d4cee2"
 }

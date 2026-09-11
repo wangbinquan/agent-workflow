@@ -207,23 +207,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "fromPath": "packages/backend/src/services/nodeRunMint.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:0043c7b1d86621e252ef",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#mintLegacySqliteNodeRunInTx",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "toSymbol": "mintLegacySqliteNodeRunInTx",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workflows/workflowApplication.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/application/workflows/workflowApplication.ts",
       "fromSymbol": "$file",
@@ -831,23 +814,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#users",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "users",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:01e0af03fea970caa910",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/transactionProgram.ts#executeTransactionStepSync",
-      "toPath": "packages/backend/src/platform/persistence/transactionProgram.ts",
-      "toSymbol": "executeTransactionStepSync",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -18682,23 +18648,6 @@
       "toPath": "packages/backend/src/modules/intent/composition/maintenance.ts",
       "toSymbol": "composePostgresqlIntentMaintenanceSnapshotQueries",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3bc49df3b9b97e9832ff",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "DbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -51700,23 +51649,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "fromPath": "packages/backend/src/services/nodeRunMint.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a73175bcef53d3c87f9c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunTransaction",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "toSymbol": "LegacySqliteNodeRunTransaction",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/user.ts#$file",
       "fromPath": "packages/backend/src/cli/user.ts",
       "fromSymbol": "$file",
@@ -52103,23 +52035,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#codeWorkRounds",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "codeWorkRounds",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a8c364d33629e77fb5f7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/transactionProgram.ts#driveSyncProgram",
-      "toPath": "packages/backend/src/platform/persistence/transactionProgram.ts",
-      "toSymbol": "driveSyncProgram",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -73424,23 +73339,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ea9dec8cf5172fd4498d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "DbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#$file",
@@ -80463,9 +80361,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4733,
+    "architectureExceptions": 4727,
     "implementationSccs": 0,
-    "observedEdges": 5267,
+    "observedEdges": 5261,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -80536,22 +80434,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/nodeRunMint.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "id": "import:0043c7b1d86621e252ef",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRunOperations",
-      "syntax": "static-import",
-      "targetSymbol": "mintLegacySqliteNodeRunInTx",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#mintLegacySqliteNodeRunInTx"
     },
     {
       "edgeKind": "value",
@@ -81128,22 +81010,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#users"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
-      "id": "import:01e0af03fea970caa910",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/transactionProgram",
-      "syntax": "static-import",
-      "targetSymbol": "executeTransactionStepSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/transactionProgram.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/transactionProgram.ts#executeTransactionStepSync"
     },
     {
       "edgeKind": "value",
@@ -99880,22 +99746,6 @@
       "toContext": "intent",
       "toFile": "packages/backend/src/modules/intent/composition/maintenance.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/maintenance.ts#composePostgresqlIntentMaintenanceSnapshotQueries"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#$file",
-      "id": "import:3bc49df3b9b97e9832ff",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "DbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
       "edgeKind": "value",
@@ -134700,22 +134550,6 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/nodeRunMint.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "id": "import:a73175bcef53d3c87f9c",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRunOperations",
-      "syntax": "static-import",
-      "targetSymbol": "LegacySqliteNodeRunTransaction",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunTransaction"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/user.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/user.ts#$file",
       "id": "import:a750ab47e77a5a32d43d",
@@ -135176,22 +135010,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#codeWorkRounds"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
-      "id": "import:a8c364d33629e77fb5f7",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/transactionProgram",
-      "syntax": "static-import",
-      "targetSymbol": "driveSyncProgram",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/transactionProgram.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/transactionProgram.ts#driveSyncProgram"
     },
     {
       "edgeKind": "value",
@@ -157466,22 +157284,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
-      "id": "import:ea9dec8cf5172fd4498d",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "DbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts",
@@ -165283,7 +165085,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:846983338d5dc0d9e1f96f5efc0bca4c6c797185a7414d414395c52a8c2bb7ce",
+  "sourceDigest": "sha256:c9cd969aa33d792adf9352225539af1175d3bdaf011be67e9ee59e0794d4cee2",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

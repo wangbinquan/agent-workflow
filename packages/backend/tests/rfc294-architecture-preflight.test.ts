@@ -1601,7 +1601,6 @@ const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
   'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#createNodeRunLifecycleParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts: constructs RuntimeSessionLeaseToken outside owner factory',
-  'modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#createWorkgroupHostLedgerParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx: factory is outside capability owner',
