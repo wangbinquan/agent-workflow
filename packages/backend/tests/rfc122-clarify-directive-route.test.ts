@@ -10,21 +10,15 @@
 // persistence, non-asking-node → 422, invalid directive → 422, missing task → 404,
 // contract-registry registration.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { tasks, workflows } from '../src/db/schema'
 import { getNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import {
-  createProviderHttpApplication,
-  type ProviderHttpApplication,
-} from './helpers/providerHttpApplication'
-import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
-import { tmpdir as fixtureTmpDirectory } from 'node:os'
-import { join as joinFixturePath } from 'node:path'
+import type { ProviderHarness } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
 const AUTH = { Authorization: `Bearer ${TOKEN}` }
@@ -187,6 +181,9 @@ describe('RFC-122 clarify-directive route', () => {
 })
 
 // RFC-359 W50: keep native registrations while the selected calls use the complete provider application.
+// RFC-359 AC-6：生命周期走共用的 `describeEachProviderHttpApplication`（`tests/helpers/`）。
+// 合并前这一份把 `config.json` 放在**另一个**临时目录里；共用作用域统一放进本次的 app home——
+// 两者都是用完即删的临时目录，本文件没有任何判据读它，形态差别对用例不可见。
 function registerProviderApplication(
   register: (
     harness: ProviderHarness,
@@ -194,53 +191,19 @@ function registerProviderApplication(
     seedTaskFixture: typeof seedTask,
   ) => void,
 ): void {
-  describeEachProvider('provider', (harness) => {
-    describe('application lifetime', () => {
-      let application: ProviderHttpApplication | undefined
-      let ownedHome: string | undefined
-      let ownedConfigDirectory: string | undefined
-      let previousHome: string | undefined
-      let homeAssigned = false
-      async function makeApp(db: ProviderNeutralDatabase): Promise<Hono> {
-        if (db !== harness.db) throw new Error('provider fixture database mismatch')
-        ownedHome = createFixtureDirectory(joinFixturePath(fixtureTmpDirectory(), 'aw-cd-home-'))
-        previousHome = process.env.AGENT_WORKFLOW_HOME
-        process.env.AGENT_WORKFLOW_HOME = ownedHome
-        homeAssigned = true
-        ownedConfigDirectory = createFixtureDirectory(
-          joinFixturePath(fixtureTmpDirectory(), 'aw-cd-cfg-'),
-        )
-        const appHome = ownedHome
-        application = await createProviderHttpApplication(harness, {
-          token: TOKEN,
-          configPath: joinFixturePath(ownedConfigDirectory, 'config.json'),
-          opencodeVersion: '1.14.25',
-          dbVersion: 1,
-          appHome,
-        })
-        return application.app
-      }
-      afterEach(async () => {
-        try {
-          await application?.dispose()
-        } finally {
-          application = undefined
-          if (homeAssigned) {
-            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-            else process.env.AGENT_WORKFLOW_HOME = previousHome
-          }
-          homeAssigned = false
-          if (ownedConfigDirectory !== undefined)
-            removeFixtureDirectory(ownedConfigDirectory, { recursive: true, force: true })
-          ownedConfigDirectory = undefined
-          if (ownedHome !== undefined)
-            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
-          ownedHome = undefined
-        }
-      })
-      register(harness, makeApp, (db, taskId) => seedTask(db, taskId, providerTaskLineage))
-    })
-  })
+  describeEachProviderHttpApplication(
+    'provider',
+    { token: TOKEN, opencodeVersion: '1.14.25', dbVersion: 1, tempPrefix: 'aw-cd-home-' },
+    (scope) =>
+      register(
+        scope.harness,
+        async (db) => {
+          if (db !== scope.harness.db) throw new Error('provider fixture database mismatch')
+          return (await scope.open()).app
+        },
+        (db, taskId) => seedTask(db, taskId, providerTaskLineage),
+      ),
+  )
 }
 
 function providerTaskLineage(id: string) {

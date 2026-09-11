@@ -11,6 +11,15 @@
 //   · 按需建（用例体内 `await scope.open()`）；
 //   · `beforeEach` 里建（把 `open()` 放进自己的 `beforeEach`）。
 // 无论哪种，清理都由本作用域的 `afterEach` 统一负责。
+//
+// **14/18 已接上；剩下 4 份是有意保留的**，因为它们的生命周期**真的不一样**，硬塞进来只会给这个
+// 作用域加上只有一个调用方用的旋钮：
+//   · `inventory-in-flight-fallback` —— app home 由外部给定（不建也不删临时目录、不动
+//     `AGENT_WORKFLOW_HOME`）；
+//   · `rfc234-config-intent-runtime` / `skills-import-zip-http` —— 经各自的 `buildWithPorts`
+//     端口装配，应用不是由 `createProviderHttpApplication` 直接建的；
+//   · `repos` —— 生命周期挂在自己的 `prepareFixture` 上。
+// 它们要接进来，得先把上面那几件事本身也统一掉，那是另一刀。
 
 import { afterEach, describe } from 'bun:test'
 
