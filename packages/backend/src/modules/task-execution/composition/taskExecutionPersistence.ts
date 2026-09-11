@@ -32,7 +32,10 @@ import {
   createTaskRecoveryOperations,
   repairRuntimeSessionLeaseAfterOrphanReapTx,
 } from '../infrastructure/taskRecoveryOperations'
-import { terminalizeTaskExecutionIntentsInTx } from '../infrastructure/taskExecutionIntentTerminalPersistence'
+import {
+  terminalizeTaskExecutionIntentsInTx,
+  terminalizeTaskExecutionIntentsUncheckedInTx,
+} from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from '../infrastructure/runtimeSessionLeaseOperations'
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
@@ -112,8 +115,11 @@ function createSqliteRecoveryAdministration(db: DbClient) {
           errorSummary: input.failureCode,
           errorMessage: input.errorMessage,
         },
+        // RFC-359：这条历来走**宽**判据（同步孪生 `terminalizeTaskExecutionIntentsTx` 就是
+        // `'unchecked'`）。换事务原语只搬形态、不改判据——`rfc359-w17-boot-orphan-terminalization`
+        // 的 skip-intent / skip-record 两条锁的正是「SQLite 侧宽」这条既有行为。
         onTransitionTx: async (tx) =>
-          await terminalizeTaskExecutionIntentsInTx(tx, {
+          await terminalizeTaskExecutionIntentsUncheckedInTx(tx, {
             taskId: input.taskId,
             state: 'failed',
             failureCode: input.failureCode,

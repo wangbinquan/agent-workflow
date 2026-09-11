@@ -275,21 +275,29 @@ async function seedLiveChildForCallRow(
 }
 
 /** Keep one task moving between cancelable states before every task-cancel CAS. */
-function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): DbClient {
-  let nextStatus: 'awaiting_human' | 'awaiting_review' = 'awaiting_review'
-  return new Proxy(db, {
-    get(target, property) {
-      const value = Reflect.get(target, property, target)
-      if (property !== 'transaction' || typeof value !== 'function') return value
-      return (...args: unknown[]) => {
-        onAttempt()
-        const status = nextStatus
-        nextStatus = status === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
-        db.update(tasks).set({ status }).where(eq(tasks.id, taskId)).run()
-        return Reflect.apply(value, target, args)
-      }
-    },
-  }) as DbClient
+/**
+ * 让子任务在每一次 task-cancel CAS 之前换一次可取消状态，于是那笔 CAS 永远赢不了。
+ *
+ * RFC-359：注入点做进被测代码内部（`retryNode` 的 `childCancelBeforeStatusCas` → `cancelTask` 的
+ * `beforeStatusCas` → `setTaskStatus` 的 `beforeCas`，生产都不传），不再从外面包 db 代理拦
+ * `db.transaction`——统一事务原语不走它，旧注入器**一次都不触发**，用例照样绿却一个并发场景都没验
+ * （`docs/dev-gotchas.md` 有完整复盘）。
+ *
+ * 目标状态是**读当前值再翻**，不是固定轮换：搅动与 CAS 之间不再隔着事务边界，
+ * 固定轮换会与 CAS 的期望值对上号，几轮之后反而让 CAS 赢了。
+ */
+function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): () => void {
+  return () => {
+    const current = db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get()?.status
+    if (current !== 'awaiting_review' && current !== 'awaiting_human') return
+    onAttempt()
+    const next = current === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
+    db.update(tasks).set({ status: next }).where(eq(tasks.id, taskId)).run()
+  }
 }
 
 describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
@@ -436,48 +444,28 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       .where(eq(nodeRuns.id, callRow.id))
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
 
-    let taskUpdateCount = 0
-    const flakyDb = new Proxy(h.db, {
-      get(target, prop) {
-        if (prop === 'transaction') {
-          return ((
-            callback: (tx: Parameters<Parameters<DbClient['transaction']>[0]>[0]) => unknown,
-          ) =>
-            target.transaction((tx) =>
-              callback(
-                new Proxy(tx, {
-                  get(txTarget, txProp) {
-                    const value = Reflect.get(txTarget, txProp, txTarget)
-                    if (txProp !== 'update' || typeof value !== 'function') return value
-                    return (table: unknown) => {
-                      if (table === tasks) {
-                        taskUpdateCount += 1
-                        // #1 = retry ownership CAS; #2 = child cancellation;
-                        // #3 = fail-close.
-                        if (taskUpdateCount === 2) {
-                          throw new Error('injected child cancel write failure')
-                        }
-                      }
-                      return Reflect.apply(value, txTarget, [table]) as unknown
-                    }
-                  },
-                }),
-              ),
-            )) as DbClient['transaction']
-        }
-        const value = Reflect.get(target, prop, target) as unknown
-        return typeof value === 'function' ? value.bind(target) : value
-      },
-    }) as DbClient
+    // RFC-359 W8：注入点做进被测代码内部（`retryNode.childCancelBeforeStatusCas`，生产不传），
+    // 不再包 db 代理拦 `db.transaction`——统一事务原语不走它，旧注入器一次都不触发，
+    // 用例照样绿却什么都没验（`docs/dev-gotchas.md` 有完整复盘）。
+    // 判据不变：子任务取消这一笔写失败时，retry 必须 fail-closed 成 `retry-child-cancel-failed`，
+    // 且不回滚、不 mint、不留 pending 任务。
+    let childCancelAttempts = 0
+    const childCancelBeforeStatusCas = (): void => {
+      childCancelAttempts += 1
+      if (childCancelAttempts === 1) {
+        throw new Error('injected child cancel write failure')
+      }
+    }
 
     await expect(
-      retryNode(flakyDb, taskId, callRow.id, {
+      retryNode(h.db, taskId, callRow.id, {
         cascade: false,
+        childCancelBeforeStatusCas,
         deps: {
-          db: flakyDb,
-          schedulerDriver: createTaskExecutionTestTopology({ db: flakyDb, driver: 'real' })
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(flakyDb),
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },
@@ -509,18 +497,19 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       .where(eq(nodeRuns.id, callRow.id))
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
     let cancelCasAttempts = 0
-    const starvingDb = starveTaskCancelCas(h.db, childId, () => {
+    const childCancelBeforeStatusCas = starveTaskCancelCas(h.db, childId, () => {
       cancelCasAttempts += 1
     })
 
     await expect(
-      retryNode(starvingDb, taskId, callRow.id, {
+      retryNode(h.db, taskId, callRow.id, {
         cascade: false,
+        childCancelBeforeStatusCas,
         deps: {
-          db: starvingDb,
-          schedulerDriver: createTaskExecutionTestTopology({ db: starvingDb, driver: 'real' })
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(starvingDb),
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },
@@ -528,20 +517,16 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
     // Four earlier ownership / intent transactions (retry status CAS, intent claim,
-    // the pre-cancel status write, releaseAfterStop) also cross the same injected
-    // `db.transaction` boundary; the child itself still exhausts all eight
-    // cancellation attempts. RFC-359 T7b moved the managed-process quiescence
-    // step onto the unified explicit-BEGIN primitive, which this proxy cannot
-    // see (13 → 12)。**RFC-359 W8 又挪走一笔**（`platform/persistence/sqlite/taskLifecycle.ts`
-    // 的两处 `withOwnedTaskTx` 转成中立异步事务原语，同步事务面 4 → 2），代理同样看不见，
-    // 12 → 11：现在是「子任务 8 次 + 3 笔更早的事务」。
+    // RFC-359 W8：注入点从「包 db 代理拦 `db.transaction`」挪进被测代码内部
+    // （`retryNode.childCancelBeforeStatusCas` → `cancelTask.beforeStatusCas` →
+    // `setTaskStatus.beforeCas`）。这个计数因此**从含噪变成精确**：
+    // 代理时代它顺带数进了几笔与子任务取消无关的事务（retry 的归属 CAS、intent 认领、
+    // 取消前的状态写、releaseAfterStop……），数字一路从 13 → 12 → 11 地随「哪些事务走统一原语」往下掉；
+    // 现在钩子只在**子任务那笔取消 CAS 之前**触发，于是它就等于子任务的取消尝试次数本身。
     //
-    // **承重的不是这个数**：子任务耗尽八次取消尝试、以及下面那几条（父任务 failed +
-    // `retry-child-cancel-failed`、子任务未被取消、node_run 留下 "queued for retry"）才是本条锁的行为。
-    // 这个计数是附带观测量，会随「哪些事务走统一原语」而降——它降是**收敛的信号**，
-    // 但降到 8 以下就说明子任务的取消尝试本身少了，那才是真回归。
-    expect(cancelCasAttempts).toBe(11)
-    expect(cancelCasAttempts).toBeGreaterThanOrEqual(8)
+    // **承重的正是这个数**（不再是附带观测量）：8 = `services/task.ts` 里 `attempts++ >= 8` 的预算被
+    // 耗尽。少于 8 说明子任务的取消尝试变少了——那是真回归；多于 8 说明钩子被无关路径触发了。
+    expect(cancelCasAttempts).toBe(8)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(parent.status).toBe('failed')

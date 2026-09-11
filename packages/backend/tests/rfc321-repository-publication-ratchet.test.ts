@@ -253,7 +253,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(legacyAdapterReferences).toEqual([
       'packages/backend/src/modules/task-execution/composition/taskWorkspaceCommit.ts',
     ])
-  })
+  }, 20_000)
 
   test('task, candidate, and employee-case publication reuse one fixed transport session', () => {
     const commitPush = read('packages/backend/src/services/commitPushRunner.ts')

@@ -6088,7 +6088,17 @@ export async function retryNode(
   db: LegacySqliteTaskDatabase,
   taskId: string,
   nodeRunId: string,
-  opts: { cascade?: boolean; deps: StartTaskDeps },
+  opts: {
+    cascade?: boolean
+    deps: StartTaskDeps
+    /**
+     * RFC-359 —— 级联取消子任务时的注入点，直接透传给 `cancelTask`。**生产从不传**；
+     * 只有锁「子任务取消 CAS 被持续挤掉 / 写失败时，retry 必须 fail-closed 成
+     * `retry-child-cancel-failed`」的那条回归判据传。理由同 `cancelTask.beforeStatusCas`：
+     * 注入点跟着实现走，换事务原语不会再让判据静默失效。
+     */
+    childCancelBeforeStatusCas?: () => void | Promise<void>
+  },
 ): Promise<Task> {
   const cascade = opts.cascade !== false
   const task = await getTask(db, taskId)
@@ -6359,7 +6369,12 @@ export async function retryNode(
       // pending row and never reset/mint after a partially failed cancellation set.
       for (const childTaskId of affectedChildTaskIds) {
         try {
-          await cancelTask(db, childTaskId, { cascadeFromParent: true })
+          await cancelTask(db, childTaskId, {
+            cascadeFromParent: true,
+            ...(opts.childCancelBeforeStatusCas === undefined
+              ? {}
+              : { beforeStatusCas: opts.childCancelBeforeStatusCas }),
+          })
         } catch (err) {
           if (
             (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
