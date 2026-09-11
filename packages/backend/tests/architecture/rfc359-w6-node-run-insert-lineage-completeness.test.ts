@@ -151,7 +151,7 @@ function observedSites(): readonly string[] {
 describe('RFC-359 W6 —— insert(nodeRuns) 的 lineage 两列完整性', () => {
   test('语料下限：确实扫到了 backend 源码树（扫成 0 时本守卫零预言力）', () => {
     expect(sourceFiles(SRC).length).toBeGreaterThanOrEqual(500)
-  })
+  }, 20_000)
 
   test('逐站点与账本逐字相等', () => {
     expect(

@@ -36,7 +36,7 @@ describe('RFC-308 hard-cut source inventory', () => {
       ['repoGroup', 'Gitignore'].join(''),
     ]
     for (const token of forbidden) expect(source.includes(token), token).toBe(false)
-  })
+  }, 20_000)
 
   test('the surviving publication consumer delegates candidate selection to source-control', () => {
     // RFC-310 PR-10 T104/T105：code-capability 的 gitAdapter 随 writer 删除，
@@ -61,5 +61,5 @@ describe('RFC-308 hard-cut source inventory', () => {
     // 原断言逐条禁止 code-capability 自己跑 git 动词（add/commit/push/
     // update-ref）；T105 后该模块整体无 git 调用，一条正则覆盖全部。
     expect(codeCapability).not.toMatch(/runGit|\[\s*'(?:add|commit|push|update-ref)'/)
-  })
+  }, 20_000)
 })

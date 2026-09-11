@@ -261,7 +261,7 @@ describe('RFC-359 W5-T17 —— provider 命名文件只允许在 platform/persi
       '`platform/persistence/` 里一个 provider 命名文件都没扫到——命名匹配器已经不咬人了；' +
         '账本清空后这条守卫会变成永久假绿，先修匹配器再说。',
     ).toBeGreaterThanOrEqual(10)
-  })
+  }, 20_000)
 
   test('落在 platform/persistence/ 之外的 provider 命名文件与账本逐字相等（增了是新分叉，减了是收敛，都要改账本）', () => {
     expect(

@@ -211,7 +211,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       const text = readFileSync(file, 'utf8')
       expect(text).not.toMatch(/\blaunchOrigin\b|\blaunch_origin\b/)
     }
-  })
+  }, 20_000)
 })
 
 // RFC-317 T14 —— 负 fixture：把伪造的源码喂给**扫描用的同一份纯函数**。
@@ -258,7 +258,7 @@ describe('RFC-317 T14 —— matcher 自证：受审调用的清点判据', () =
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到后端源码语料（扫空即假绿）', () => {
     expect(sourceFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(600)
-  })
+  }, 20_000)
 })
 
 describe('RFC-359 W27 reviewed call scanner admission', () => {

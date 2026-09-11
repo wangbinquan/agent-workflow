@@ -366,9 +366,12 @@ describe('BatchImportDialog (RFC-033)', () => {
         }),
       }),
     )
-    await new Promise((r) => setTimeout(r, 0))
-    const row = screen.getByTestId('batch-import-row-r1')
-    expect(row.getAttribute('data-row-status')).toBe('done')
+    // 等到状态真的翻过去，而不是赌「一个宏任务 tick 够了」。WS 消息落到 React 状态要经过
+    // 派发 → setState → effect 冲刷，CI 的负载机上不止一个 tick（2026-09-11 隔壁那条同形用例
+    // 就是这么红的：DOM 里行还停在 queued）。`waitFor` 会一直轮询到断言成立或超时。
+    await waitFor(() => {
+      expect(screen.getByTestId('batch-import-row-r1').getAttribute('data-row-status')).toBe('done')
+    })
   })
 
   test('batch.completed flips state and enables "again" button', async () => {
@@ -386,9 +389,10 @@ describe('BatchImportDialog (RFC-033)', () => {
         }),
       }),
     )
-    await new Promise((r) => setTimeout(r, 0))
     // "again" button only shows when state === completed
-    expect(screen.getByText(/再来一批|Import more/)).toBeTruthy()
+    // 同上：用会重试的 `findByText`，不要在一个宏任务 tick 之后直接 `getByText`。
+    // 2026-09-11 CI ubuntu frontend shard 1/3 实撞——按钮没出现，DOM 里 batch 还停在初始快照。
+    expect(await screen.findByText(/再来一批|Import more/)).toBeTruthy()
   })
 
   test('failed-row editor is in-dialog, exclusive, cancellable, and restores row focus', async () => {

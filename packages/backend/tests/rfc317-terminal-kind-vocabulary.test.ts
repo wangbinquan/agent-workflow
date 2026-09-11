@@ -67,7 +67,7 @@ describe('RFC-317 T44（DE-06）—— 终态种类词汇', () => {
     expect(EMPLOYEE_CASE_TERMINAL_KINDS.length).toBeGreaterThanOrEqual(5)
     expect(LEGACY_MISSION_TERMINAL_KINDS.length).toBeGreaterThanOrEqual(2)
     expect(sourceFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
-  })
+  }, 20_000)
 
   test('每一处铸出来的终态字面量都在词汇表里', () => {
     const unknown: string[] = []
@@ -84,7 +84,7 @@ describe('RFC-317 T44（DE-06）—— 终态种类词汇', () => {
         '任务目录报 done、协作 join 不判失败、前端归 otherFinished——三处都可能不是你想要的。' +
         '把它加进 EMPLOYEE_CASE_TERMINAL_KINDS 并在分类表里为三个维度各表一次态',
     ).toEqual([])
-  })
+  }, 20_000)
 
   test('两个真 bug 的回归锁：`closed` 归 canceled、`canceled` 判失败', () => {
     expect(

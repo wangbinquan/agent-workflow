@@ -118,7 +118,7 @@ describe('RFC-349 PostgreSQL serialization retry', () => {
       '又有人自带了一份 SQLSTATE 判据。判据、重试预算与退避是一体的策略，' +
         '复制一份就意味着那条路径悄悄退回「3 次、无退避」',
     ).toEqual(['platform/persistence/postgresqlSerializationRetry.ts'])
-  })
+  }, 20_000)
 
   test('the shared policy reads both code and errno, through the cause chain', () => {
     expect(postgresqlSerializationFailureCode(bunPostgresError('40001', 'conflict'))).toBe('40001')

@@ -868,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25023,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 一次性豁免：25022 → 25023。修 d432ba40e 的红时新增一个符号 `terminalizeTaskExecutionIntentsUncheckedInTx`——它是同步孪生 `terminalizeTaskExecutionIntentsTx`（`unchecked` 写检查）的中立异步对等物。根那一刀误把两个调用点换成了**严格**版（`require-returned-rows`），收紧了 boot-orphan 终结与取消级联的既有语义，`rfc359-w17-boot-orphan-terminalization` 的两条 skip 判据当场红；这个符号就是把语义搬回原样的载体。同步那份退役时它会与之一起收，届时这一格还回来。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -888,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d432ba40e8088726a8c3c5cec7fe101f1ab2d8bf",
-    "contentDigest": "sha256:9f70bcded4d437798695b83748129bdcd6acc6050830b2c88c5924f6aa54f918",
+    "currentSnapshotSha": "333fbeaaf79f1f407f4f0df0c048934d7aa4d163",
+    "contentDigest": "sha256:88cc4178f4537b02da584ee7c974c5ae21a29934bae447e0961657a49e3bfa14",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

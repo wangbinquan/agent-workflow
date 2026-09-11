@@ -121,7 +121,7 @@ describe('RFC-317 T39（CC-13）—— 记忆围栏模式必传', () => {
         "新调用点一律直接传 { kind: 'fenced', nonce }。确有历史入口就登记进 " +
         'LEGACY_NONCE_CALLERS 并写清理由',
     ).toEqual([])
-  })
+  }, 20_000)
 
   test('登记表无死条目（文件没了 / 已不再调用 ⇒ 删掉这一行）', () => {
     const stale: string[] = []

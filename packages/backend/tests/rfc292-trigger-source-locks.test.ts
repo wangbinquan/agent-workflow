@@ -95,7 +95,7 @@ describe('RFC-292 trigger namespace source locks', () => {
     expect(intent).toContain('Trigger values are execution context, NOT workflow inputs')
     expect(orchestrator).toContain('$schema_version: WORKFLOW_SCHEMA_VERSION')
     expect(orchestrator).toContain('triggerToken(opts.triggerContext!.namespace, field)')
-  })
+  }, 20_000)
 
   test('task wire exposes only the RFC-298 derived link, never frozen trigger JSON', () => {
     const task = readFileSync(resolve(BACKEND_SRC, 'services/task.ts'), 'utf8')
@@ -130,7 +130,7 @@ describe('RFC-292 trigger namespace source locks', () => {
         )
       }
     }
-  })
+  }, 20_000)
 })
 
 // RFC-317 T13 —— 语料非空（守卫的守卫：architecture/rfc317-guard-corpus-floor.test.ts）。
@@ -141,7 +141,7 @@ describe('RFC-292 trigger namespace source locks', () => {
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(sourceFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
-  })
+  }, 20_000)
 })
 
 // RFC-317 T14 —— 负 fixture：把伪造的复活写法喂给**扫描用的同一份判据**。

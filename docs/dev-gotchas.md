@@ -1133,6 +1133,41 @@ new Proxy(db, { get: (t, p) => (p === 'transaction' ? (...a) => { sabotage(); re
 （`rfc097-task-status-cas` / `rfc300-terminal-workspace-policy` / `retry-cascade-kind-matrix`），
 生命周期写事务哪天真切过去，这三处要一起看。
 
+## 「run 成功」不等于「CI 绿」——先看它**跑了几个 job**（2026-09-11 实撞，把红当成了绿）
+
+共享 main 上并发 push 会取消在途的 run，这条仓里早有记载。2026-09-11 又以另一种形态撞了一次，
+而且更隐蔽：我推 `14eb1fb99`，随即（约一分钟内）推了 `d432ba40e`。前者的 run 被取消在**排队阶段**，
+于是它只留下**一个 job**，而那一个 job 的结论是 `success`；run 级 `conclusion` 也是 `success`。
+监控脚本按「非成功 job 数 == 0」判绿，于是把一次**根本没跑**的 run 报成了全绿。
+真相是 `d432ba40e` 的 run 才是那笔改动的第一次真验证——当场 5 条红。
+
+**判绿至少要两个量**：`conclusion == "success"` **且** job 数与正常值相当（本仓满配 **42**）。
+只看结论、或只看「非成功 job 数」，一个被取消在排队阶段的 run 会稳定伪装成绿。
+
+```
+R=$(gh api "repos/<owner>/<repo>/actions/runs?head_sha=$SHA&per_page=10" --jq '.workflow_runs[0].id')
+gh api "repos/<owner>/<repo>/actions/runs/$R/jobs?per_page=100" \
+  --jq '"jobs=\([.jobs[]]|length) nonsuccess=\([.jobs[]|select(.conclusion!="success")]|length)"'
+```
+
+**推论**：**别在上一笔的 CI 出结果之前推下一笔**。等一轮的成本是几分钟；不等的成本是「一笔未经验证
+的改动进了主干、而你以为它绿过」——本次那笔正好还误收紧了一处生产语义（见下一条）。
+
+## 换事务原语只搬形态，**不要顺手改写检查**（RFC-359 实撞，2026-09-11）
+
+同一个写序列往往有**宽 / 严两种写检查**并存，而且是**故意**的。本仓的例子：
+`terminalizeTaskExecutionIntentsTx`（同步孪生）用 `'unchecked'`，中立的 `…InTx` 用
+`'require-returned-rows'`。boot-orphan 终结与取消级联历来走宽判据——被别的写者/触发器挡掉一行时
+照样收尾，而不是抛 `task-continuation-stale`。
+
+把这两处的事务换成中立原语时顺手用了严格版，语义当场收紧，
+`rfc359-w17-boot-orphan-terminalization` 的 skip-intent / skip-record 两条（它们锁的正是
+「SQLite 侧宽、PostgreSQL 侧严」这条既有差异）直接红。
+
+**规律**：搬事务形态时，**孪生的每一个行为旋钮都要逐项对照**（写检查、CAS 判据、错误类型），
+缺哪个就补哪个中立对等物，不要拿手边最近的那个替。差异本身该不该收敛是**另一件事**——
+要收就两个引擎一起收，并同时改那些锁着差异的判据的意图。
+
 ## 钩子的预算必须**大于它体内 await 的那个 deadline**（2026-09-11 一天内两条 CI 红都是这个）
 
 bun 的 `test` / `beforeAll` / `beforeEach` 默认超时都是 **5s**，而 fixture 里常常 await 一个

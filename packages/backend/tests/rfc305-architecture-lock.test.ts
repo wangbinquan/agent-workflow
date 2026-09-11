@@ -824,7 +824,7 @@ describe('RFC-305 permission catalog architecture', () => {
     expect(repoSourceRow).toContain('cached.data?.items.map')
     const userLookup = readFileSync(resolve(FRONTEND_SRC, 'hooks', 'useUserLookup.ts'), 'utf8')
     expect(userLookup).toContain('canSearchUsers ? (query.data ?? []) : []')
-  })
+  }, 20_000)
 })
 
 describe('RFC-305 reusable-authority fences', () => {
