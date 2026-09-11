@@ -6010,3 +6010,22 @@ file:line 锚点，`rfc359-w5-t19d` 的成对覆盖账本**当场从 10 vs 6 变
 另外这个文件里第一个 describe 是**纯函数**（`readEvidenceFileRange` 配一个 `blobPath` 桩），
 不碰库也不碰应用，保持普通 `describe`：包进双引擎壳只是白起两套应用。
 **「一个文件里哪些 describe 该进壳」按它是否真的触达 db / app 判断，不是整文件一刀切。**
+
+## 5y. AC-6 第五批（W58）：作用域补 `bootstrap` 直通；请求时读文件的路由不需要各建应用
+
+账本 597 → 594（`daemon-info-route` / `rfc221-bootstrap-auth` / `rfc221-account-auth-policy`）。
+
+两个可复用的迁移结论：
+
+- **`bootstrap: 'required'` 要直通**。`rfc221-bootstrap-auth` 测的是「还没有管理员」这个状态，
+  它原本靠 `createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })` 造出来；harness 默认会把
+  `auth_login_policy` 标成已 bootstrap，不直通这个选项整条判据就没了（会静默变成「已 bootstrap
+  的库上测 bootstrap 流程」，几条 401/403 判据全部失去意义）。作用域现在把它转给
+  `describeEachProvider`。
+- **请求时才读文件的路由，不需要为每个被测状态各建一个应用**。`daemon-info-route` 原本
+  `makeApp(daemonInfoPath)` 三次、每次指一个不同的临时文件。而
+  `routes/daemon.ts` 是在 handler 里才 `readDaemonInfo(...)`，所以装配一次、装配后**写不写**
+  `<appHome>/.daemon.info` 就是「文件在 / 文件不在」两种状态。少起两套应用。
+
+另：`rfc221` 两个文件里的 `.get()` / `.all()` 读回断言改成 await 的语句
+（`const [row] = await db.select()…` / `await db.select()…`）——`test-suite-policy` 那条守卫盯的形态。

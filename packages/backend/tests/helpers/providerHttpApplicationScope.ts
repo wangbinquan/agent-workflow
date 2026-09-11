@@ -29,7 +29,11 @@
 
 import { afterEach, describe } from 'bun:test'
 
-import { describeEachProvider, type ProviderHarness } from './eachProvider'
+import {
+  describeEachProvider,
+  type DescribeEachProviderOptions,
+  type ProviderHarness,
+} from './eachProvider'
 import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
@@ -42,6 +46,11 @@ export type ProviderHttpApplicationOptions = Omit<
 > & {
   /** `mkdtemp` 前缀；出现在临时目录名里，便于把泄漏的目录归到具体用例文件。 */
   readonly tempPrefix: string
+  /**
+   * 直通 `describeEachProvider` 的同名选项：`'required'` 时 harness **不**把
+   * `auth_login_policy` 标成已 bootstrap。测 bootstrap 流程本身（还没有管理员）的用例要它。
+   */
+  readonly bootstrap?: DescribeEachProviderOptions['bootstrap']
 }
 
 export interface OpenedProviderHttpApplication extends ProviderHttpApplication {
@@ -72,56 +81,61 @@ export function describeEachProviderHttpApplication(
   options: ProviderHttpApplicationOptions,
   register: (scope: ProviderHttpApplicationScope) => void,
 ): void {
-  describeEachProvider(name, (harness) => {
-    describe('application lifetime', () => {
-      let application: ProviderHttpApplication | undefined
-      let ownedHome: string | undefined
-      let previousHome: string | undefined
-      let homeAssigned = false
+  const { bootstrap } = options
+  describeEachProvider(
+    name,
+    (harness) => {
+      describe('application lifetime', () => {
+        let application: ProviderHttpApplication | undefined
+        let ownedHome: string | undefined
+        let previousHome: string | undefined
+        let homeAssigned = false
 
-      async function closeCurrent(): Promise<void> {
-        try {
-          await application?.dispose()
-        } finally {
-          application = undefined
-          if (homeAssigned) {
-            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-            else process.env.AGENT_WORKFLOW_HOME = previousHome
+        async function closeCurrent(): Promise<void> {
+          try {
+            await application?.dispose()
+          } finally {
+            application = undefined
+            if (homeAssigned) {
+              if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+              else process.env.AGENT_WORKFLOW_HOME = previousHome
+            }
+            homeAssigned = false
+            if (ownedHome !== undefined) {
+              const { rmSync } = await import('node:fs')
+              rmSync(ownedHome, { recursive: true, force: true })
+            }
+            ownedHome = undefined
           }
-          homeAssigned = false
-          if (ownedHome !== undefined) {
-            const { rmSync } = await import('node:fs')
-            rmSync(ownedHome, { recursive: true, force: true })
-          }
-          ownedHome = undefined
         }
-      }
 
-      afterEach(closeCurrent)
+        afterEach(closeCurrent)
 
-      register({
-        harness,
-        async open(overrides) {
-          await closeCurrent()
-          const { mkdtempSync } = await import('node:fs')
-          const { tmpdir } = await import('node:os')
-          const { join } = await import('node:path')
-          const appHome = mkdtempSync(join(tmpdir(), options.tempPrefix))
-          ownedHome = appHome
-          previousHome = process.env.AGENT_WORKFLOW_HOME
-          process.env.AGENT_WORKFLOW_HOME = appHome
-          homeAssigned = true
-          const { tempPrefix: _tempPrefix, ...applicationInput } = options
-          const opened = await createProviderHttpApplication(harness, {
-            ...applicationInput,
-            ...(overrides?.config === undefined ? {} : { config: overrides.config }),
-            configPath: join(appHome, 'config.json'),
-            appHome,
-          })
-          application = opened
-          return Object.freeze({ ...opened, appHome })
-        },
+        register({
+          harness,
+          async open(overrides) {
+            await closeCurrent()
+            const { mkdtempSync } = await import('node:fs')
+            const { tmpdir } = await import('node:os')
+            const { join } = await import('node:path')
+            const appHome = mkdtempSync(join(tmpdir(), options.tempPrefix))
+            ownedHome = appHome
+            previousHome = process.env.AGENT_WORKFLOW_HOME
+            process.env.AGENT_WORKFLOW_HOME = appHome
+            homeAssigned = true
+            const { tempPrefix: _tempPrefix, bootstrap: _bootstrap, ...applicationInput } = options
+            const opened = await createProviderHttpApplication(harness, {
+              ...applicationInput,
+              ...(overrides?.config === undefined ? {} : { config: overrides.config }),
+              configPath: join(appHome, 'config.json'),
+              appHome,
+            })
+            application = opened
+            return Object.freeze({ ...opened, appHome })
+          },
+        })
       })
-    })
-  })
+    },
+    bootstrap === undefined ? {} : { bootstrap },
+  )
 }
