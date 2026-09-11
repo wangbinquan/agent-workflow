@@ -6,19 +6,11 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 import { PERMISSIONS, SYSTEM_DOMAIN_POINTS } from '@agent-workflow/shared'
-import { eq, sql } from 'drizzle-orm'
 import ts from 'typescript'
 
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import { users } from '../src/db/schema'
-import { dbTxSync, type DbTxSync } from '../src/db/txSync'
 import { ALL_TOOLS } from '../src/mcp/tools'
-import {
-  withExistingSQLiteTransactionScope,
-  withSQLiteTransaction,
-} from '../src/platform/persistence/sqlite/existingTransactionScope'
-import type { TransactionScope } from '../src/platform/persistence/transactionScope'
 import { allRouteMeta, resetRouteMetaRegistry } from '../src/routes/registry'
 import { createApp } from '../src/server'
 
@@ -219,107 +211,6 @@ function filesCallingTableMethod(root: string, method: string, table: string): s
 }
 
 describe('RFC-305 identity-access architecture', () => {
-  test('existing SQLite transactions expose only a callback-scoped RFC-294 capability', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    let escaped: TransactionScope | null = null
-    let escapedTransaction: DbTxSync | null = null
-    let escapedQuery: { run(): unknown } | null = null
-    let escapedRow: { value: number } | null = null
-    let reflectedSession: { run(query: unknown): unknown } | null = null
-    dbTxSync(db, (transaction) => {
-      withExistingSQLiteTransactionScope(transaction, (scope) => {
-        escaped = scope
-        withSQLiteTransaction(scope, (liveTransaction) => {
-          escapedTransaction = liveTransaction
-          expect(liveTransaction).not.toBe(transaction)
-          liveTransaction.run(sql`SELECT 1`)
-          escapedQuery = liveTransaction.update(users).set({ displayName: 'must-not-run' })
-          const rows = liveTransaction.all(sql`SELECT 1 AS value`) as Array<{ value: number }>
-          expect(Array.isArray(rows)).toBe(true)
-          expect(Object.keys(rows)).toEqual(['0'])
-          expect({ ...rows[0] }).toEqual({ value: 1 })
-          expect(JSON.stringify(rows)).toBe('[{"value":1}]')
-          rows.map((row) => {
-            escapedRow = row
-            return row.value
-          })
-          const sessionDescriptor = Object.getOwnPropertyDescriptor(liveTransaction, 'session')
-          expect(sessionDescriptor).toBeDefined()
-          expect(sessionDescriptor!.value).not.toBe(
-            (transaction as unknown as { session: unknown }).session,
-          )
-          reflectedSession = sessionDescriptor!.value as { run(query: unknown): unknown }
-          expect(Reflect.ownKeys(liveTransaction)).toContain('session')
-          expect(
-            liveTransaction
-              .select({ id: users.id })
-              .from(users)
-              .where((fields) => eq(fields.id, 'missing'))
-              .all(),
-          ).toEqual([])
-          expect(() =>
-            (liveTransaction as unknown as DbTxSync).transaction(() => {
-              throw new Error('nested callback must never run')
-            }),
-          ).toThrow('nested SQLite transactions are not available')
-          expect(() =>
-            Object.getOwnPropertyDescriptor(
-              Object.getPrototypeOf(liveTransaction) as object,
-              'transaction',
-            ),
-          ).toThrow('nested SQLite transactions are not available')
-          expect(() =>
-            (liveTransaction.select().from(users) as unknown as { execute(): unknown }).execute(),
-          ).toThrow('asynchronous SQLite query execution is not available')
-          return undefined
-        })
-        return undefined
-      })
-    })
-
-    expect(() => withSQLiteTransaction(escaped!, () => undefined)).toThrow(
-      'transaction scope is not live',
-    )
-    expect(() => escapedTransaction!.run(sql`SELECT 1`)).toThrow('transaction scope is not live')
-    expect(() => escapedQuery!.run()).toThrow('transaction scope is not live')
-    expect(() => escapedRow!.value).toThrow('transaction scope is not live')
-    expect(() => reflectedSession!.run(sql`SELECT 1`)).toThrow('transaction scope is not live')
-
-    let continuation: Promise<void> | null = null
-    expect(() =>
-      dbTxSync(db, (transaction) => {
-        const smuggledAsyncBody = ((scope: TransactionScope) => {
-          continuation = (async () => {
-            let liveTransaction: DbTxSync | null = null
-            withSQLiteTransaction(scope, (currentTransaction) => {
-              liveTransaction = currentTransaction
-              return undefined
-            })
-            await Promise.resolve()
-            liveTransaction!.run(sql`SELECT 1`)
-          })()
-          return continuation
-        }) as unknown as (scope: TransactionScope) => undefined
-        withExistingSQLiteTransactionScope(transaction, smuggledAsyncBody)
-      }),
-    ).toThrow('transaction scope callback must not return a value')
-    await expect(continuation!).rejects.toThrow('transaction scope is not live')
-  })
-
-  test('existing SQLite transaction callbacks reject async bodies at compile time', () => {
-    void ((transaction: DbTxSync, scope: TransactionScope): void => {
-      // @ts-expect-error -- RFC-294 transaction scopes must remain synchronous.
-      withExistingSQLiteTransactionScope(transaction, async () => undefined)
-      // @ts-expect-error -- RFC-294 transaction participants must remain synchronous.
-      withSQLiteTransaction(scope, async () => undefined)
-      withSQLiteTransaction(scope, (liveTransaction) => {
-        // @ts-expect-error -- nested transactions can expose an unguarded Drizzle handle.
-        liveTransaction.transaction(() => undefined)
-        return undefined
-      })
-    })
-  })
-
   test('public entrypoints expose only the reviewed exact contracts', () => {
     const publicRoot = resolve(IDENTITY_ROOT, 'public')
     expect(

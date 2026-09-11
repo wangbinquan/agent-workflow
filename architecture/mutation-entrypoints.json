@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1737,
+    "entries": 1733,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17565,52 +17565,6 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#deletePreparedMcpRuntimeTestsInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#deletePreparedMcpRuntimeTestsInTx",
-      "symbol": "deletePreparedMcpRuntimeTestsInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionOwnerRuntimeTestsInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionOwnerRuntimeTestsInTx",
-      "symbol": "transitionOwnerRuntimeTestsInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -31222,52 +31176,6 @@
     },
     {
       "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/existingTransactionScope.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/existingTransactionScope.ts#claims",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/existingTransactionScope.ts#claims",
-      "symbol": "claims",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/existingTransactionScope.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/existingTransactionScope.ts#createLiveTransactionView",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/existingTransactionScope.ts#createLiveTransactionView",
-      "symbol": "createLiveTransactionView",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
         "audit": true,
         "authority": "internal-family",
         "authorization": false,
@@ -41488,7 +41396,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5fe3edda2fe6dfd420eef571325b186dfdd367444780928baf90052e6dadbb8a",
+  "sourceDigest": "sha256:71ab776d7b73a218a02ed80cb0187c6ac098bbcf7d6affdac08838ab7f731b33",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

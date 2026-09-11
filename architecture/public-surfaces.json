@@ -6,7 +6,7 @@
     "methods": 1063,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20481,
-    "symbols": 984
+    "symbols": 980
   },
   "entries": [
     {
@@ -4695,126 +4695,6 @@
       "unresolvedTypeRefs": [
         "z.infer"
       ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "id": "public:collaboration:participants:appendHumanGateDecisionCommittedEventTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:de5874eaa62adec534ad9a970072b7c45258ed6538c35ecba558662e7c4a840d",
-      "status": "target-context-current-surface",
-      "symbol": "appendHumanGateDecisionCommittedEventTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "id": "public:collaboration:participants:appendQuestionDispatchCommittedEventTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendQuestionDispatchCommittedEventTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:3b8a8e4260eb7ecdd5e4f716c4e2b0e9c4e49892020ccf182453dda90f3f9645",
-      "status": "target-context-current-surface",
-      "symbol": "appendQuestionDispatchCommittedEventTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "id": "public:collaboration:participants:appendReviewCommentsChangedCommittedEventTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewCommentsChangedCommittedEventTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:c7820f2d70894c1b21c7d7bd6c30af4bc5a2f983e0266e3c2d5ac2358c21199c",
-      "status": "target-context-current-surface",
-      "symbol": "appendReviewCommentsChangedCommittedEventTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "id": "public:collaboration:participants:appendReviewSelectionChangedCommittedEventTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewSelectionChangedCommittedEventTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:cf8f878e6a9e266690b82871b4e3991fb1ce27ea390c5f40b2bf83d5fab5af15",
-      "status": "target-context-current-surface",
-      "symbol": "appendReviewSelectionChangedCommittedEventTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -161939,7 +161819,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5fe3edda2fe6dfd420eef571325b186dfdd367444780928baf90052e6dadbb8a",
+  "sourceDigest": "sha256:71ab776d7b73a218a02ed80cb0187c6ac098bbcf7d6affdac08838ab7f731b33",
   "targetContexts": [
     "collaboration",
     "development-automation",

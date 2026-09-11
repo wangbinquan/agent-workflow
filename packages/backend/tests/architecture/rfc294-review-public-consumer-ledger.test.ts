@@ -105,22 +105,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
     removeAfterWave: 'W4',
   },
   { id: 'public:collaboration:participants:HumanGateOpenParticipantResult', removeAfterWave: 'W4' },
-  {
-    id: 'public:collaboration:participants:appendHumanGateDecisionCommittedEventTx',
-    removeAfterWave: 'W4',
-  },
-  {
-    id: 'public:collaboration:participants:appendQuestionDispatchCommittedEventTx',
-    removeAfterWave: 'W4',
-  },
-  {
-    id: 'public:collaboration:participants:appendReviewCommentsChangedCommittedEventTx',
-    removeAfterWave: 'W4',
-  },
-  {
-    id: 'public:collaboration:participants:appendReviewSelectionChangedCommittedEventTx',
-    removeAfterWave: 'W4',
-  },
   { id: 'public:collaboration:queries:REVIEW_ANCHOR_CANDIDATE_LIMIT', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:REVIEW_ANCHOR_CONTEXT_CHARS', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:REVIEW_ANCHOR_DEFAULT_BUDGET_CHARS', removeAfterWave: 'W4' },

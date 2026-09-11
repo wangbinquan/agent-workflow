@@ -466,7 +466,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc303-verified-ingress.test.ts: 1',
   'rfc304-capability-templates.test.ts: 4',
   'rfc304-template-upstream.test.ts: 1',
-  'rfc305-architecture-lock.test.ts: 2',
+  'rfc305-architecture-lock.test.ts: 1',
   'rfc305-guest-access.test.ts: 1',
   'rfc305-script-grant-http.test.ts: 1',
   'rfc305-user-access-integration.test.ts: 1',

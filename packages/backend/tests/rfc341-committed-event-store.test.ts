@@ -9,7 +9,6 @@ import {
   committedEventFamilyCutovers,
   committedEvents,
 } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   appendCommittedEvent,
@@ -17,10 +16,7 @@ import {
 } from '@/platform/events/committed/append'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
-import {
-  appendCommittedEventTx,
-  changeCommittedEventCutoverTx,
-} from '@/platform/persistence/sqliteCommittedEventStore'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   committedEventGroupId,
   type AppendCommittedEventInput,
@@ -67,22 +63,25 @@ function eventInput(input: {
   }
 }
 
-function cutover(
-  db: ReturnType<typeof createInMemoryDb>,
+/** The preflight case instruments bun:sqlite statements, so it stays on one engine;
+ *  the writes themselves still go through the neutral append/cutover port. */
+async function sqliteCutover(
+  session: ReturnType<typeof databaseSessionFor>,
   expectedMode: 'legacy' | 'shadow',
   expectedEpoch: number,
   mode: 'shadow' | 'dispatchable',
-): void {
-  dbTxSync(db, (tx) =>
-    changeCommittedEventCutoverTx(tx, {
-      producer: 'collaboration',
-      family: 'review',
-      expectedMode,
-      expectedEpoch,
-      mode,
-      changedAt: NOW + expectedEpoch,
-      changeRef: `test:${mode}`,
-    }),
+): Promise<void> {
+  await session.transaction(
+    async (tx) =>
+      await changeCommittedEventCutover(tx, {
+        producer: 'collaboration',
+        family: 'review',
+        expectedMode,
+        expectedEpoch,
+        mode,
+        changedAt: NOW + expectedEpoch,
+        changeRef: `test:${mode}`,
+      }),
   )
 }
 
@@ -130,43 +129,11 @@ describe('RFC-341 committed-event store', () => {
     expect(route).toContain('/api/event-center/committed-deliveries/:eventId/:consumerId/retry')
   })
 
-  test('keeps legacy inert, appends shadow atomically and rejects conflicting replay', async () => {
-    const db = createLegacyStoreDb()
-    const legacy = dbTxSync(db, (tx) =>
-      appendCommittedEventTx(tx, eventInput({ operation: 'legacy' })),
-    )
-    expect(legacy.eventRef).toBeNull()
-    expect(db.select().from(committedEvents).all()).toEqual([])
-
-    cutover(db, 'legacy', 1, 'shadow')
-    const input = eventInput({ operation: 'shadow' })
-    const first = dbTxSync(db, (tx) => appendCommittedEventTx(tx, input))
-    expect(first.eventRef).toMatchObject({
-      family: 'review',
-      aggregate: { id: 'review-1', seq: 1 },
-      deliveryMode: 'shadow',
-      producerEpoch: 2,
-    })
-    const replay = dbTxSync(db, (tx) => appendCommittedEventTx(tx, input))
-    expect(replay.eventRef).toEqual(first.eventRef)
-    expect(db.select().from(committedEvents).all()).toHaveLength(1)
-    expect(
-      await createCommittedEventDeliveryPersistence(db).claimNext({
-        workerId: 'worker',
-        now: NOW + 100,
-      }),
-    ).toBeNull()
-    expect(() =>
-      dbTxSync(db, (tx) =>
-        appendCommittedEventTx(tx, eventInput({ operation: 'shadow', value: 'different' })),
-      ),
-    ).toThrow('conflicts with immutable event')
-  })
-
   test('preflights an idle queue without reserving the writer and rechecks due work in the claim transaction', async () => {
     const db = createLegacyStoreDb()
-    cutover(db, 'legacy', 1, 'shadow')
-    cutover(db, 'shadow', 2, 'dispatchable')
+    const session = databaseSessionFor(db)
+    await sqliteCutover(session, 'legacy', 1, 'shadow')
+    await sqliteCutover(session, 'shadow', 2, 'dispatchable')
 
     const persistence = createCommittedEventDeliveryPersistence(db)
     const idleRecording = recordStatements(db.$client)
@@ -183,8 +150,9 @@ describe('RFC-341 committed-event store', () => {
       idleRecording.selects().filter((row) => row.sql.includes('committed_event_deliveries')),
     ).toHaveLength(1)
 
-    const appended = dbTxSync(db, (tx) =>
-      appendCommittedEventTx(tx, eventInput({ operation: 'preflight-then-claim' })),
+    const appended = await session.transaction(
+      async (tx) =>
+        await appendCommittedEvent(tx, eventInput({ operation: 'preflight-then-claim' })),
     )
     const dueRecording = recordStatements(db.$client)
     const dueClaim = await (async () => {
@@ -203,6 +171,47 @@ describe('RFC-341 committed-event store', () => {
 })
 
 describeEachProvider('RFC-341 committed-event store', (harness) => {
+  // RFC-359：这条判据此前钉在 SQLite 上（`dbTxSync` + `appendCommittedEventTx`）。它锁的是
+  // **产品行为**——legacy 期不落行、shadow 期原子追加、同一 operationRef 重放幂等、改了 payload
+  // 的重放必须被拒——与引擎无关，改走中立追加口后两个引擎各跑一遍。
+  test('keeps legacy inert, appends shadow atomically and rejects conflicting replay', async () => {
+    const db = await createProviderLegacyStoreDb(harness)
+    const legacy = await harness.session.transaction(
+      async (tx) => await appendCommittedEvent(tx, eventInput({ operation: 'legacy' })),
+    )
+    expect(legacy.eventRef).toBeNull()
+    expect(await db.select().from(committedEvents).all()).toEqual([])
+
+    await cutoverForProvider(harness, 'legacy', 1, 'shadow')
+    const input = eventInput({ operation: 'shadow' })
+    const first = await harness.session.transaction(
+      async (tx) => await appendCommittedEvent(tx, input),
+    )
+    expect(first.eventRef).toMatchObject({
+      family: 'review',
+      aggregate: { id: 'review-1', seq: 1 },
+      deliveryMode: 'shadow',
+      producerEpoch: 2,
+    })
+    const replay = await harness.session.transaction(
+      async (tx) => await appendCommittedEvent(tx, input),
+    )
+    expect(replay.eventRef).toEqual(first.eventRef)
+    expect(await db.select().from(committedEvents).all()).toHaveLength(1)
+    expect(
+      await createCommittedEventDeliveryPersistence(db).claimNext({
+        workerId: 'worker',
+        now: NOW + 100,
+      }),
+    ).toBeNull()
+    await expect(
+      harness.session.transaction(
+        async (tx) =>
+          await appendCommittedEvent(tx, eventInput({ operation: 'shadow', value: 'different' })),
+      ),
+    ).rejects.toThrow('conflicts with immutable event')
+  })
+
   test('claims only current dispatchable epoch and preserves per-consumer aggregate FIFO', async () => {
     const db = await createProviderLegacyStoreDb(harness)
     await cutoverForProvider(harness, 'legacy', 1, 'shadow')

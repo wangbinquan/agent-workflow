@@ -1204,6 +1204,26 @@ bun 的 `test` / `beforeAll` / `beforeEach` 默认超时都是 **5s**，而 fixt
 必须排除在替换面之外**；否则量到的是自己制造的噪声，还会把结论引到完全相反的方向
 （当时差点据此把「76 个文件用 `dbTxSync`」写进交接，实际是 4 个文件 7 个调用点）。
 
+## 给 eslint 的文件清单里混进**已删除的路径**，它一条都不 lint 还退 0（RFC-359 实撞，2026-09-11）
+
+删文件的那种提交最容易撞：习惯性用 `git status --porcelain | awk '{print $2}'` 拼出「本次改动的
+文件」喂给 `bunx eslint`，清单里于是混进了 `D` 开头的、磁盘上已经不存在的路径。eslint 解析不到
+这个文件就**整轮 bail**——不报错、不 lint 任何一个文件、退出码 0。自查脚本再 `grep -c "warning "`
+自然是 0，看起来一片干净。
+
+推上去 CI 在干净 checkout 上照实跑，`--max-warnings 0` 当场红出 8 条 `no-unused-vars`——全是
+删函数以后悬空的 import。一次白跑的 CI + 一次红主干。
+
+**做法**：拼清单时先把删除项滤掉，再滤掉不归自己的包：
+
+```
+git status --porcelain | grep -vE '^ ?D' | awk '{print $NF}' | grep -E '\.(ts|tsx)$'
+```
+
+`$NF` 而不是 `$2`：重命名项是 `R  old -> new` 三段，`$2` 会取到 `old`（同样不存在）。
+**验证自查真的跑了**：eslint 正常跑完会打印 `✖ N problems` 或什么都不打印但**进程有输出行数**；
+最稳的是故意留一个 unused 变量试一次，确认它能红——「脚本退 0」本身不是证据。
+
 ## 重跑普查前先 `prettier --write`，顺序反了当场红（RFC-359 实撞，2026-09-11）
 
 `architecture-census.ts` 把 `packages/*/src/**` 的内容摘成 `sourceDigest`。先跑普查、再格式化源文件，
