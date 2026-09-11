@@ -5716,6 +5716,74 @@ composition 绑定、`public/participants` 转出、`services/humanGateCompositi
 `humanGateNodeProjectionMember` 消费者白名单、以及普查的七份清单。**删代码比加代码更容易漏账本**
 ——四本里有三本是「它被列在名单上」而不是「它调用了谁」，grep 调用点找不到它们。
 
+## 5s. 同步孪生退役收尾（W8 第二批，9 刀）＋「删文件」三条守卫
+
+§5r 之后照同一条方法往下扫：**对每个同步孪生先问「src 侧还有调用方吗」**。答案几乎总是「没有」
+——宿主早被前几波迁走，只剩夹具挡着。一天里落了 9 刀，`DbTxSync` 的 src 文件面从 **32 → 14**
+（去掉注释后的真实引用 62 处），`PROVIDER_NAMED_FILE_DEBT` 从 **55 → 49**。
+
+| 退役的东西 | 判据怎么处理 |
+| --- | --- |
+| `taskLifecycleEventParticipant.ts`（3 个同步 append） | `rfc359-w16` 那条「同步解释保持同步返回」锁机制，随机制删 |
+| `collaborationCommittedEventParticipant` / `sqliteCommittedEventStore` / `sqlite/existingTransactionScope` / `legacy/mcpRuntimeTestTransitions` | `rfc341` 的 cutover 判据是产品行为，改走中立追加口并**搬进 `describeEachProvider`**；`rfc305` 两条锁桥自己的机制，随桥删 |
+| `sqliteTaskOwnership` + 端口；死码 `markTaskExecutionShutdownSurvivor` | 组合根出 `ownershipFor(db)` 工厂 |
+| `sqliteTaskExecutionEffect` / `sqliteTaskExecutionIntent` / `sqliteTaskExecutionIntentAdmission` + 各自端口与转发层 | 夹具改用中立持久化 / 中立准入口，入参逐字相同 |
+| `sqliteTerminalizeExecutionIntent`；`humanGateTaskLifecycleTransaction` | w17 的 describe 搬进双引擎（变异验证过）；`HumanGateTaskTransition` 的**重复第二份定义**收成一份 |
+| `sqliteNodeRunMintParticipant` + `mintLegacySqliteNodeRunInTx` + `mintNodeRunTx` | `rfc349` 那条用例的两半现在同形同 program；`rfc144` 源码锁**加强一格** |
+
+### 三件值得单独记下的事
+
+**① 权威搬家 ≠ 权威消失。** 删 `markTaskExecutionShutdownSurvivor` 时把 `rfc294Canonical` 的
+`daemon-shutdown` 条目一起删了，普查当场报 `control subtype is empty` 且**不出产物**。
+正解是**改指新实现**（`DrizzleTaskExecutionShutdownOperations`，写点与 CAS 判据逐条未变）。
+同形状的还有 `gate-control`（§5r 已有先例）。**删控制权威前先问「这件事还有人做吗」**。
+
+**② 守卫指路比守卫拦路更值钱。** `HumanGateTaskTransition` 收成一份时，第一版让 legacy 生命周期层
+直接 import 模块 infrastructure，被 `RFC-317 T22`（legacy 不得 import 模块内部）当场拦下；
+按它指的方向改走 `public/types` 才过。**那一拦正是它存在的意义**，不要绕过它改账本。
+
+**③ 判据「锁机制」与「锁产品行为」要拆开，而且拆完常常能顺带 +1 双引擎覆盖。** 本批三条
+（`rfc341` cutover、`rfc359-w17` boot companion、`rfc349` 原子铸行）拆完都从单引擎变成双引擎，
+`rfc359-w5-test-engine-hardcoding` 因此 635 → 634。
+
+### 「删文件」的三条守卫（同一个类一天栽三次，各堵一半）
+
+| 形态 | 症状 | 守卫 |
+| --- | --- | --- |
+| `scripts/*.ts` 里硬写的源文件清单 | 只在 CI 独有的 lane 里 ENOENT | `rfc359-w14-p0-mutation-verdict`「指纹清单里的路径都还在」 |
+| workflow `paths:` 触发器指着旧路径 | **永远不红**，只是覆盖面静默消失 | `test-suite-policy`「workflows / scripts 里带引号的字面仓内路径都存在」 |
+| 测试在**模块顶层** `readFileSync(resolve(base,'x.ts'))` | typecheck 看不见（不是 import）；不长成完整字面量，上一条捞不到 | `test-suite-policy`「模块作用域读的源码路径都存在」 |
+
+第三条要静态求值 `resolve`/`join` 的字面量拼接（`import.meta.dir` 取文件所在目录），并有两条
+**被真实语料逼出来的**收窄：只认第一段就是绝对路径的拼接（`resolve('a','b')` 落到 cwd，那是测试
+自己造的临时文件）、`expect(...)` 词法作用域内的读一律跳过（`expect(() => readFileSync(旧位置))
+.toThrow()` 是迁位判据的标准写法）。三条都做过变异验证。
+
+**三条都不在 `tests/architecture/` 下**，按主题挑波及面也捞不到——任何删 / 搬源文件的提交，推之前
+单独跑 `bun test tests/rfc359-w14-p0-mutation-verdict.test.ts tests/test-suite-policy.test.ts`。
+
+## 5t. 下一波：resource-catalog 的两条聚合适配器分叉（**未开工，需单独计划**）
+
+同步孪生退役到这里就停了：剩下的 14 个 `DbTxSync` 文件**没有零消费者孤岛**，全部落在
+resource-catalog 的两条 `legacy*` ↔ `postgresql*` 分叉上。实测行数（2026-09-11）：
+
+| 分叉 | PG 侧 | legacy 侧 |
+| --- | --- | --- |
+| intent apply | `postgresqlIntentApplyResourceParticipants`(467) + `…ResourcePorts`(1556) + `…ArtifactOwners`(285) = **2308** | `legacyIntentApplyResourceParticipants`(1062) + `composition/legacyIntentApplyResourceDependencies`(144) + 注入的聚合写手 ≈ **1500** |
+| 资源包导入 | `postgresqlResourcePackageMutationParticipants`(1405) + `…MutationArms`(1572) = **2977** | `legacyResourcePackageMutationParticipants`(1275) + `services/bundle/legacyResourcePackageMutationDependencies`(216) + `sqlite/legacyResourcePackageCommit`(796) + `…BundleApply`(652) + `…BundleLower`(324) = **3263** |
+
+注：`postgresqlResourcePackageArtifacts.ts` 已更名合并为中立的 `resourcePackageArtifacts.ts`，
+账本注释里的旧数字（489 行那一项）已过期。两条分叉**共用**那 ~1500 行注入的聚合写手
+（agent / workflow / workgroup / skill / mcp / plugin），求和时不要重复计。
+
+**为什么不能照前面那样一刀切**：前 9 刀能成立的前提是「同步那面零生产调用方」。这两条分叉
+**两面都在生产里跑**（`main.ts:235/250` 按 provider 分别装配），删任何一面都是真行为变更。
+
+**建议的第一步（不是合并，是建对拍）**：`POST /api/resource-packages/commit` 的双引擎对拍。
+上游 parse / preview / closure / secretInputs / export 全是共用的中立代码，fork 点只在
+`services/resourcePackage/executionAdapter.ts` 的 `apply`；两侧 compose 方式已在 `main.ts` 写全。
+先有对拍再谈合并——否则 3000 : 3200 行的两份实现无从验证「合完还等价」。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

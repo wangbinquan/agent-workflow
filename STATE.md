@@ -2,40 +2,57 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 本轮进展（2026-09-11 晚，同步孪生退役 5 刀）
+> ## 📌 RFC-359 本轮进展（2026-09-11 晚，同步孪生退役 9 刀 + 3 条守卫）
 >
 > 上一段交接说「同步事务面账本清零 ≠ `DbTxSync` 没人用，退役同步孪生才是 AC-6 的真正前置」。
 > 本轮就按那条往下走，**方法固定为一句话**：对每个同步孪生先问「**src 侧还有调用方吗**」。
-> 答案几乎总是「没有」——它们的宿主早就被前几波迁走了，只剩夹具挡着。已落 5 笔（各自一个提交）：
+> 答案几乎总是「没有」——它们的宿主早被前几波迁走，只剩夹具挡着。
 >
-> | 提交 | 退役的东西 | 关键判据怎么处理 |
+> | 提交 | 退役的东西 | 判据怎么处理 |
 > | --- | --- | --- |
-> | `9a29602cb` | `taskLifecycleEventParticipant.ts`（3 个同步 append）+ public 再导出 | `rfc359-w16` 那条「同步解释保持同步返回」锁的是**实现机制**，随机制删；承重的「同一事务内 companion→append→返回、外层抛错全回滚」在同文件的双引擎判据里逐条对应 |
-> | `c16ff9f4e` | `collaborationCommittedEventParticipant.ts` / `sqliteCommittedEventStore.ts` / `sqlite/existingTransactionScope.ts` / `legacy/mcpRuntimeTestTransitions.ts` | `rfc341` 那条「legacy 期不落行 / shadow 期原子追加 / 重放幂等 / 改 payload 必拒」是**产品行为**，改走中立追加口并搬进 `describeEachProvider`（AC-6 +1）；`rfc305` 两条锁的是桥自己的机制，随桥删 |
-> | `a92b7a8c3` | （流水线修复）`scripts/rfc359-p0-mutations.ts` 的指纹清单 + `maintenance-soak-nightly.yml` 的 `paths:` | 新增守卫：workflows / scripts 里**带引号的字面仓内路径**必须存在（两半都做过变异验证） |
-> | `a3e4482a1` | `sqliteTaskOwnership.ts` + `taskOwnershipTransactionStore.ts`；死码 `markTaskExecutionShutdownSurvivor` | 组合根改出 `ownershipFor(db)` 工厂返回中立持久化；`rfc294Canonical` 的 `daemon-shutdown` 权威**改指新实现而不是删条目**（删了普查直接报 `control subtype is empty`） |
-> | `3652cd50b` | `sqliteTaskExecutionEffect.ts` + 端口；`sqliteTaskExecutionIntentAdmission.ts` + `composition/continuationAdmission.ts` + public 的 `submitTaskContinuationTx` | 三处夹具改用同文件已有的 `effectsOf(db)`；准入判据改走 `submitTaskContinuationInTransaction`（签名逐字相同） |
+> | `9a29602cb` | `taskLifecycleEventParticipant.ts`（3 个同步 append）+ public 再导出 | 「同步解释保持同步返回」锁的是**实现机制**，随机制删；承重的事务内顺序 + 回滚在双引擎判据里逐条对应 |
+> | `c16ff9f4e` | `collaborationCommittedEventParticipant` / `sqliteCommittedEventStore` / `sqlite/existingTransactionScope` / `legacy/mcpRuntimeTestTransitions`（各整文件） | `rfc341` 的 cutover 判据是**产品行为**，改走中立追加口并搬进 `describeEachProvider`；`rfc305` 两条锁的是桥自己的机制，随桥删 |
+> | `a92b7a8c3` | （流水线）p0-mutations 指纹清单 + 夜跑 `paths:` | 新增守卫①②（见下） |
+> | `a3e4482a1` | `sqliteTaskOwnership` + 端口；死码 `markTaskExecutionShutdownSurvivor` | 组合根出 `ownershipFor(db)`；`rfc294Canonical` 的 `daemon-shutdown` 权威**改指新实现而不是删条目**（删了普查直接报 `control subtype is empty`） |
+> | `3652cd50b` | `sqliteTaskExecutionEffect` + 端口；`sqliteTaskExecutionIntentAdmission` + `composition/continuationAdmission` + public 的 `submitTaskContinuationTx` | 夹具改用同文件已有的 `effectsOf(db)`；准入判据改走 `submitTaskContinuationInTransaction`（签名逐字相同） |
+> | `94dda3b37` | `sqliteTaskExecutionIntent` + 两个端口；零消费者的 `canEditResourceInTx` | 夹具改走 `submitCanonicalTaskExecutionIntent` |
+> | `c4965ab5b` | `sqliteTerminalizeExecutionIntent` + 转发层；`humanGateTaskLifecycleTransaction`（含**重复第二份** `HumanGateTaskTransition` 定义与零实现接口） | w17 那个 describe **搬进 `describeEachProvider`**（做过变异验证：epoch 6→7 两引擎各红一条）；联合收成一份走 `public/types`——先写成直接 import 模块内部，被 `RFC-317 T22` 当场拦下，按它指的方向改走 public 才过 |
+> | `9fbfdf284` | `sqliteNodeRunMintParticipant` + `mintLegacySqliteNodeRunInTx` + `mintNodeRunTx` | `rfc349` 那条用例的两半（SQLite / PG）**现在是同一形状同一 program**；`rfc326` AC-19 的等价判据改成「独立入口 ≡ 在调用方事务里铸行」；`rfc144` 源码锁**加强一格**（新增钉事务内工厂不得自己抄 insert） |
+> | `feb3ab46c` | `legacySqliteTransportMechanisms` 的 `dbTxSync` / `LegacySqliteTaskTransaction` 转出；`legacySqliteTaskDatabase` 的同名别名 | w47「一个 program 两种解释」的同步一面改由判据自己用公共驱动器组装，不再依赖生产里的同步参与者 |
 >
-> **账本刻度**：`PROVIDER_NAMED_FILE_DEBT` **55 → 51**（AC-12）；
-> 带 `DbTxSync` 类型的 src 文件 **32 → 23**；`UNCONSUMED_PUBLIC_SYMBOL_DEBT` **141 → 137**。
+> **账本刻度**：`PROVIDER_NAMED_FILE_DEBT` **55 → 49**（AC-12）；带 `DbTxSync` 的 src 文件
+> **32 → 14**（去注释后的真实引用 62 处）；`UNCONSUMED_PUBLIC_SYMBOL_DEBT` **141 → 137**；
+> `rfc294-capability-compatibility-debt` **20 → 19**；AC-6 的 `test-engine-hardcoding` **635 → 634**。
 >
-> **本轮踩的坑（都已落 `docs/dev-gotchas.md`）**：
-> - 给 eslint 的文件清单混进**已删除路径**→ 它一条都不 lint 还退 0，CI 才红。用
->   `git status --porcelain | grep -vE '^ ?D' | awk '{print $NF}'`（`$NF` 不是 `$2`，重命名项是三段）。
-> - 删 / 搬源文件时 `scripts/` 与 `.github/` 里**硬写的路径**没人替你改：一种只在 CI 独有的 lane
->   里以 ENOENT 冒出来，另一种（workflow `paths:` 触发器）**永远不红、只是覆盖面消失**。
-> - `ciwatch` 查 CI 要用**完整 SHA**：`head_sha=<短 sha>` 查不到 run，会一直「no CI run yet」。
+> ### 🛡 「删文件」三条守卫（今天同一个类栽了三次，各堵一半）
 >
-> **⚠️ 一条未归因的 CI 耗时放大（已进 `docs/audit-backlog.md`）**：
-> `retry-cascade-kind-matrix` 里「跑满取消预算」那条（9 笔完整取消事务）在 CI 上耗时**随它在分片里
-> 排第几位放大 60 倍**——第 87 位 58ms，第 60 位同一提交两次 5166ms（红）/ 3797ms（绿）。
-> 本机稳定 0.14s，已排除代码回归 / 事件循环饥饿 / 前置 pragma 泄漏 / 整段前缀复跑。
-> 已给它和姊妹用例显式 60s 预算（承重判据仍是 `cancelCasAttempts === 8`），**根因仍未归因**。
+> | 形态 | 症状 | 守卫 |
+> | --- | --- | --- |
+> | `scripts/*.ts` 里硬写的源文件清单 | 只在 CI 独有的 lane 里 ENOENT | `rfc359-w14-p0-mutation-verdict` |
+> | workflow `paths:` 触发器指着旧路径 | **永远不红**，只是覆盖面静默消失 | `test-suite-policy`「字面仓内路径都存在」 |
+> | 测试在**模块顶层** `readFileSync(resolve(base,'x.ts'))` | typecheck 看不见；不长成完整字面量 | `test-suite-policy`「模块作用域读的源码路径都存在」（`99c7c7822`） |
 >
-> **下一刀建议**：剩下的 23 个 `DbTxSync` 文件**没有零消费者的孤岛了**，都要真迁移。
-> 最大的一簇在 resource-catalog：`composition/resourceAcl.ts`（18 个消费者）→
-> `sqliteAclReadRepository.ts` / `sqliteResourceGrantRepository.ts` 的五个 `*InTx` 读法，
-> 它们的中立异步孪生**同名同参**就在隔壁（`aclReadRepository.ts`），差的只是调用方要补 `await`。
+> **三条都不在 `tests/architecture/` 下**，按主题挑波及面也捞不到。**任何删 / 搬源文件的提交，
+> 推之前单独跑这两个文件**（两秒）：
+> `bun test tests/rfc359-w14-p0-mutation-verdict.test.ts tests/test-suite-policy.test.ts`
+>
+> ### 其它落进 `docs/dev-gotchas.md` 的坑
+> - 给 eslint 的清单混进**已删除路径** → 它一条都不 lint 还退 0（用 `grep -vE '^ ?D'` + `$NF`）。
+> - 按 SHA 查 CI 必须用**完整 40 位**：`head_sha=<短 sha>` 返回空列表而不是错误。
+> - triage 大扫时 `fail` 与 `error` 两个计数都要对上——bun 把模块顶层的 ENOENT 印成
+>   `# Unhandled error between tests`，既不带 `(fail)` 也不带 `error:`，只在汇总行多一个 `1 error`。
+>
+> ### ⚠️ 两条未归因、已进 `docs/audit-backlog.md` 的雷
+> 1. `retry-cascade-kind-matrix` 跑满取消预算那条，CI 耗时**随分片内排位放大 60 倍**（第 87 位 58ms，
+>    第 60 位同一提交两次 5166ms 红 / 3797ms 绿）。已排除代码回归 / 事件循环饥饿 / 前置 pragma 泄漏 /
+>    整段前缀复跑。已给显式 60s 预算，承重判据 `cancelCasAttempts === 8` 原样保留。
+> 2. `resetRouteMetaRegistry()` 毒化同进程后续每个建 app 的测试（15 个测试文件在 hook 里调它），
+>    CI 因分片把它们分开而一直看不见。复现：`bun test tests/rfc305-architecture-lock.test.ts
+>    tests/rfc104-builtin-readonly.test.ts` → 17 fail，各自单跑全绿。
+>
+> **下一刀**：剩下 14 个 `DbTxSync` 文件**没有零消费者孤岛了**，全部落在 resource-catalog 的
+> `legacy*` ↔ `postgresql*` 聚合适配器分叉上（intent-apply 与 resource-package 两条，账本自己
+> 写明「3000:2400 行，一刀合不完」）。那是下一波，要单独立计划。
 
 > ## 🔜 RFC-359 下一刀该做什么（2026-09-11 交接，按「先做哪个」排序）
 >
