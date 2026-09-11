@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5258,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5259,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-8：准入耗尽 SERIALIZABLE 重试后仍是 40001 时，原先把裸驱动错误抛给用户（SQLite 上同一场竞争回 409、PostgreSQL 回 500）。新增唯一的翻译点 `taskExecutionIntentPersistence.ts#admissionSerializationConflict` 与它到 `platform/persistence/postgresqlSerializationRetry` 的那条 import 边，三本账各 +1。一次性；下一笔提交退役。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -832,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4724,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4725,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-8：准入耗尽 SERIALIZABLE 重试后仍是 40001 时，原先把裸驱动错误抛给用户（SQLite 上同一场竞争回 409、PostgreSQL 回 500）。新增唯一的翻译点 `taskExecutionIntentPersistence.ts#admissionSerializationConflict` 与它到 `platform/persistence/postgresqlSerializationRetry` 的那条 import 边，三本账各 +1。一次性；下一笔提交退役。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -867,12 +873,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24930,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24931,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-8：准入耗尽 SERIALIZABLE 重试后仍是 40001 时，原先把裸驱动错误抛给用户（SQLite 上同一场竞争回 409、PostgreSQL 回 500）。新增唯一的翻译点 `taskExecutionIntentPersistence.ts#admissionSerializationConflict` 与它到 `platform/persistence/postgresqlSerializationRetry` 的那条 import 边，三本账各 +1。一次性；下一笔提交退役。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9b6991462df9f0383ceb8c80c6c641aeccac979c19ac1b1493d789fce427c69d",
+    "sourceDigest": "sha256:b11a395708707f5005a75acd844cf2b1c9429b9038c505114102b8fb49e3f4c4",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f3cbe2b38af965a8daf68f66ba955106d3c8c971",
-    "contentDigest": "sha256:ff13b911592ba4fdcd5eeee29a8113466f92ffe126aa8bde62b7b329987b7427",
+    "currentSnapshotSha": "4dd4dc86fec1c9dce4b25a8bd61a28068715d85f",
+    "contentDigest": "sha256:07291e2eb366e35094b2773863c2e757d2bf90692bd1a8e0478fa29e61af00a0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

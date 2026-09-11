@@ -424,7 +424,16 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   某一层断了。**已做的处置**：把判据的失败输出从「verdict + 截断 message」扩成**整条 cause 链**的
   `name/code/errno/constraint`（每层一段，最多 8 层，与两个分类器的遍历深度一致），并用真驱动错误
   验证过输出形态（PG 为 `{0:Error/… | 1:PostgresError/code=ERR_POSTGRES_SERVER_ERROR/errno=23505/constraint=workflows_pkey}`）。
-  判据一个字没改，只是让下一次失败自带证据。**不要在归因前动准入或分类器。**
+  **2026-09-11 已归因并修复**：下一轮 CI（`4dd4dc86f` 的同一个分片）带着新证据红出来，cause 链是
+  `1:PostgresError/code=ERR_POSTGRES_SERVER_ERROR/errno=40001` —— 是 **SSI 序列化冲突**，不是唯一冲突。
+  `serializable()` 会退避重试 10 次，正常情况下重试后的那一遍就在「活跃 intent 检查」上拿到领域
+  错误；预算耗尽时原先把 40001 原样抛出去，于是同一场竞争 SQLite 回 409、PostgreSQL 回 500。
+  修法：准入的两个入口统一经
+  `taskExecutionIntentPersistence.ts#admissionSerializationConflict` 收口，把幸存的 40001/40P01 翻成
+  `task-continuation-conflict`，原始驱动错误保留在 `cause` 上。判据在
+  `tests/rfc359-w8-t29-admission-serialization-conflict.test.ts`（含两个入口都收口的源码锁；
+  两处变异各验过）。**本机复现不出「必然耗尽」**（PG-only 连跑 8 次、并发提到 8 路都只见领域错误），
+  所以那条并发判据本身仍留在两个引擎上守着竞争，不用它来验翻译。
 
 - ⏳ **`resetRouteMetaRegistry()` 会毒化同进程里后续每一个建 app 的测试（2026-09-11 实撞，CI 看不见）**：
   **复现**：`bun test tests/rfc305-architecture-lock.test.ts tests/rfc104-builtin-readonly.test.ts`
