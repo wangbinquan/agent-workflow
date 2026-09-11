@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1063,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20481,
+    "recursiveFields": 20485,
     "symbols": 979
   },
   "entries": [
@@ -154622,45 +154622,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:terminalizeTaskExecutionIntentsTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#terminalizeTaskExecutionIntentsTx",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:f5319495123163bc6af21d4078eb0564eefa2dedb7a01780c1bc6ac7ebaf5541",
-      "status": "target-context-current-surface",
-      "symbol": "terminalizeTaskExecutionIntentsTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
         "import:a2dbfc22e728a721484a"
       ],
@@ -156855,6 +156816,66 @@
       "signatureDigest": "sha256:b12c6d89ffd4602d413f4cff09c478dc40b0542a6b54487cafcbab38bb97d461",
       "status": "target-context-current-surface",
       "symbol": "childLaunchAdmissionIssue",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:d7c6c9e4d7eeeb5702ed"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0",
+          "type": "'park-review'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1",
+          "type": "'park-human'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2",
+          "type": "'release-review'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3",
+          "type": "'release-human'"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:HumanGateTaskTransition",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:d7c6c9e4d7eeeb5702ed",
+          "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:06b68e051d9d80a3b8c4687e9ad98806546942d1fa411c008e2d220f63f5fe5a",
+      "status": "target-context-current-surface",
+      "symbol": "HumanGateTaskTransition",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -161780,7 +161801,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4270f842ab5ffe8b5e2a2961ad0f0754761c3a7ae5e8f631cc1b82c645d584c4",
+  "sourceDigest": "sha256:846983338d5dc0d9e1f96f5efc0bca4c6c797185a7414d414395c52a8c2bb7ce",
   "targetContexts": [
     "collaboration",
     "development-automation",

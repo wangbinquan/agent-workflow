@@ -2,11 +2,10 @@
 // CAS/companion order while both transaction mechanisms share physical steps.
 // These cases run against the original writers before the refactor. Existing
 // companion-record fields are opaque data; no domain decisions are exercised.
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
 import { eq, sql } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   committedEventFamilyCutovers,
@@ -16,13 +15,13 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { terminalizeTaskExecutionIntentsTx } from '@/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent'
-import { DrizzleTaskExecutionIntentTerminalPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
+import {
+  DrizzleTaskExecutionIntentTerminalPersistence,
+  terminalizeTaskExecutionIntentsUncheckedInTx,
+} from '@/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
 const ID = 'boot-orphan'
 const INPUT_NOW = 1_700_000_000_200
@@ -348,60 +347,62 @@ describeEachProvider(
   },
 )
 
-describe('RFC-359 native boot companion remains synchronous', () => {
-  let db: DbClient
+// RFC-359：同步孪生 `terminalizeTaskExecutionIntentsTx`（`sqliteTerminalizeExecutionIntent.ts`）
+// 已退役——它在 src 侧从来只有转出、没有调用方，生产的启动收割走的是中立的
+// `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，与它逐字同义）。
+// 原来这一段叫「native boot companion remains synchronous」，锁的是**实现机制**（同步返回
+// `void`、跑在调用方的 `dbTxSync` 体里）；机制退役，判据跟着搬到中立口上，并且从只验 SQLite
+// 变成两个引擎各跑一遍。承重的三件事一件没少：**按 epoch 选行**（6 选不中、7 选得中）、
+// **完整行投影**（intent 与 replay 决定都落到终态形状）、**与调用方事务同生共死**。
+describeEachProvider('RFC-359 boot companion writes inside the caller transaction', (harness) => {
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    await seed(db, 'claimed')
-  })
-  afterEach(() => {
-    db.$client.close()
+    await seed(harness.db, 'claimed')
   })
 
-  test('returns void after physical writes and preserves epoch selection and complete row projection', async () => {
-    const before = await snapshot(db)
-    const result = dbTxSync(db, (tx) =>
-      terminalizeTaskExecutionIntentsTx({
-        tx,
-        taskId: ID,
-        state: 'failed',
-        failureCode: FAILURE,
-        now: INPUT_NOW,
-        claimedOwnerEpoch: 6,
-      }),
+  test('selects by epoch, projects complete rows and stays invisible until the caller commits', async () => {
+    const before = await snapshot(harness.db)
+    // epoch 6 选不中这条 claimed=7 的 intent：一行都不该动。
+    await harness.session.transaction(
+      async (tx) =>
+        await terminalizeTaskExecutionIntentsUncheckedInTx(tx, {
+          taskId: ID,
+          state: 'failed',
+          failureCode: FAILURE,
+          now: INPUT_NOW,
+          claimedOwnerEpoch: 6,
+        }),
     )
-    expect(result).toBeUndefined()
-    expect(await snapshot(db)).toEqual(before)
-    const committed = dbTxSync(db, (tx) => {
-      const value: void = terminalizeTaskExecutionIntentsTx({
-        tx,
+    expect(await snapshot(harness.db)).toEqual(before)
+
+    await harness.session.transaction(async (tx) => {
+      await terminalizeTaskExecutionIntentsUncheckedInTx(tx, {
         taskId: ID,
         state: 'failed',
         failureCode: FAILURE,
         now: INPUT_NOW,
         claimedOwnerEpoch: 7,
       })
-      expect(tx.select().from(taskExecutionIntents).get()).toEqual(terminalIntent(before.intent))
-      expect(tx.select().from(taskExecutionLineageOperationRecords).get()).toEqual(
+      // 同一笔事务里读得到自己的写入。
+      expect(await tx.select().from(taskExecutionIntents).get()).toEqual(
+        terminalIntent(before.intent),
+      )
+      expect(await tx.select().from(taskExecutionLineageOperationRecords).get()).toEqual(
         terminalRecord(before.record),
       )
-      return value
     })
-    expect(committed).toBeUndefined()
-    const after = await snapshot(db)
+    const after = await snapshot(harness.db)
     expect(after.task).toEqual(before.task)
     expect(after.intent).toEqual(terminalIntent(before.intent))
     expect(after.record).toEqual(terminalRecord(before.record))
     expect(after.events).toEqual([])
   })
 
-  test('an outer synchronous transaction rolls back all companion rows and retains its error', async () => {
-    const before = await snapshot(db)
+  test('an outer transaction rolls back all companion rows and retains its error', async () => {
+    const before = await snapshot(harness.db)
     const sentinel = new Error('outer boot recovery transaction failed')
-    expect(() =>
-      dbTxSync(db, (tx) => {
-        terminalizeTaskExecutionIntentsTx({
-          tx,
+    await expect(
+      harness.session.transaction(async (tx) => {
+        await terminalizeTaskExecutionIntentsUncheckedInTx(tx, {
           taskId: ID,
           state: 'failed',
           failureCode: FAILURE,
@@ -409,7 +410,7 @@ describe('RFC-359 native boot companion remains synchronous', () => {
         })
         throw sentinel
       }),
-    ).toThrow(sentinel)
-    expect(await snapshot(db)).toEqual(before)
+    ).rejects.toBe(sentinel)
+    expect(await snapshot(harness.db)).toEqual(before)
   })
 })

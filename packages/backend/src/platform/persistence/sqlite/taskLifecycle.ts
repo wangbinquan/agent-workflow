@@ -569,11 +569,9 @@ export async function cancelOpenNodeRuns(args: {
   return rows
 }
 
-export type HumanGateTaskTransition =
-  | 'park-review'
-  | 'park-human'
-  | 'release-review'
-  | 'release-human'
+// RFC-359：联合的唯一定义在 `modules/task-execution/infrastructure/humanGateTaskTransition.ts`
+// （human-gate 跃迁本身归那一层）；这里只把它转出去，`services/lifecycle.ts` 的 import 路径不动。
+export type { HumanGateTaskTransition } from '@/modules/task-execution/public/types'
 
 /**
  * CAS-strict task status write. `allowedFrom` is the explicit legal-source

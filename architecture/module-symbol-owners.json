@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1793,
+    "backendFiles": 1790,
     "frontendFiles": 622,
     "legacyFiles": 602,
-    "moduleFiles": 1191,
-    "productionFiles": 2570,
+    "moduleFiles": 1188,
+    "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24944
+    "symbolsIncludingFileRoots": 24937
   },
   "entries": [
     {
@@ -119571,18 +119571,6 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/composition/intentTerminalization.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/intentTerminalization.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/nodeExecution.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/nodeExecution.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -127815,47 +127803,23 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts#HumanGateTaskLifecycle",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "HumanGateTaskLifecycle",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts#HumanGateTaskTransition",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "HumanGateTaskTransition",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskTransition.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskTransition.ts#$file",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskTransition.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskTransition.ts#HumanGateTaskTransition",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HumanGateTaskTransition",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -132296,30 +132260,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "taskAccessRow",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#terminalizeTaskExecutionIntentsTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "terminalizeTaskExecutionIntentsTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -136956,19 +136896,6 @@
       "signatureDigest": "sha256:74379db5cbee55c77db1acfcbace1717f869e091ce640cb84d783b3637c53f4e",
       "status": "current-module",
       "symbol": "terminalizeTaskExecutionIntentsInTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#terminalizeTaskExecutionIntentsTx",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:f5319495123163bc6af21d4078eb0564eefa2dedb7a01780c1bc6ac7ebaf5541",
-      "status": "current-module",
-      "symbol": "terminalizeTaskExecutionIntentsTx",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -151711,18 +151638,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ConcurrentTaskTransition",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#HumanGateTaskTransition",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "HumanGateTaskTransition",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -300026,5 +299941,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4270f842ab5ffe8b5e2a2961ad0f0754761c3a7ae5e8f631cc1b82c645d584c4"
+  "sourceDigest": "sha256:846983338d5dc0d9e1f96f5efc0bca4c6c797185a7414d414395c52a8c2bb7ce"
 }

@@ -614,7 +614,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w14-agent-commit-sequence.test.ts: 1',
   // 四条原生同步 companion/CAS/回滚判据共用一处构库；十条公共写入行为仍跑双引擎。
   'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
-  'rfc359-w17-boot-orphan-terminalization.test.ts: 1',
   'rfc359-w25-task-page-bounded-prefix.test.ts: 1', // Native SQLite fallback non-consumption witness; behavior cases use both providers.
   'rfc359-w36-skill-operation-state-query.test.ts: 1', // Native immediate-get return witness; three query behavior cases use both providers.
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',

@@ -29,7 +29,6 @@ import type {
   AcceptHumanGateDecisionInput,
   AcceptedHumanGateDecision,
 } from '../application/acceptHumanGateDecision'
-import { terminalizeTaskExecutionIntentsTx as terminalizeTaskExecutionIntentsTxInternal } from '../composition/intentTerminalization'
 import {
   buildCodeHostRecoveryDescriptor as buildCodeHostRecoveryDescriptorInternal,
   classifyCodeHostProbeResponse as classifyCodeHostProbeResponseInternal,
@@ -241,7 +240,6 @@ export const withTaskExecutionWrite = withTaskExecutionWriteInternal
 export const humanGateNodeProjectionFence = humanGateNodeProjectionFenceInternal
 export const humanGateNodeProjectionMember = humanGateNodeProjectionMemberInternal
 export const isLegacyTaskGateContinuationPayload = isLegacyTaskGateContinuationPayloadInternal
-export const terminalizeTaskExecutionIntentsTx = terminalizeTaskExecutionIntentsTxInternal
 export const buildCodeHostRecoveryDescriptor = buildCodeHostRecoveryDescriptorInternal
 export const classifyCodeHostProbeResponse = classifyCodeHostProbeResponseInternal
 export const codeHostRecoveryBaseUrlDigest = codeHostRecoveryBaseUrlDigestInternal

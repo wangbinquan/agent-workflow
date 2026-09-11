@@ -165,7 +165,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
-  'modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts',
   'services/bundle/postgresqlApply.ts',
 ]
 

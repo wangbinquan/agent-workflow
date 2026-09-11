@@ -5,6 +5,13 @@ import type { Actor } from '@/auth/actor'
 
 export type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
 
+/**
+ * RFC-359：human-gate 的四条跃迁边。此前有**两份逐字相同的定义**——`humanGateTaskLifecycleTransaction.ts`
+ * （连同一个零实现、零消费者的 `HumanGateTaskLifecycle` 接口，随同步人工门链退役）与 legacy
+ * 生命周期层自己那份。现在只有一份，在模块内，legacy 层按 exact public 合同消费它。
+ */
+export type { HumanGateTaskTransition } from '../infrastructure/humanGateTaskTransition'
+
 export type {
   SourceTerminationFence,
   SourceTerminationSnapshot,

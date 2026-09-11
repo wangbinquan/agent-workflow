@@ -6,7 +6,8 @@ import { nodeRuns, runtimeSessionLeases, tasks } from '../../src/db/schema'
 import { dbTxSync } from '../../src/db/txSync'
 import type { TaskRecoveryOperations } from '../../src/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createTaskRecoveryOperations } from '../../src/modules/task-execution/infrastructure/taskRecoveryOperations'
-import { terminalizeTaskExecutionIntentsTx } from '../../src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent'
+import { terminalizeTaskExecutionIntentsUncheckedInTx } from '../../src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
+import { databaseSessionFor } from '../../src/platform/persistence/databaseTransaction'
 
 const TERMINAL_RUN_STATUSES = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 
@@ -15,8 +16,9 @@ const TERMINAL_RUN_STATUSES = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
   return createTaskRecoveryOperations(db, {
     async interruptBootOrphanTask(input) {
-      return dbTxSync(db, (tx) => {
-        const interrupted = tx
+      // RFC-359：同步孪生 `terminalizeTaskExecutionIntentsTx` 退役，这条夹具跟着搬到中立事务口。
+      return await databaseSessionFor(db).transaction(async (tx) => {
+        const interrupted = await tx
           .update(tasks)
           .set({
             status: 'interrupted',
@@ -28,8 +30,7 @@ export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
           .returning({ id: tasks.id })
           .all()
         if (interrupted.length !== 1) return false
-        terminalizeTaskExecutionIntentsTx({
-          tx,
+        await terminalizeTaskExecutionIntentsUncheckedInTx(tx, {
           taskId: input.taskId,
           state: 'failed',
           failureCode: input.failureCode,

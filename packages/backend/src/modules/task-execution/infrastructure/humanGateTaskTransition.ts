@@ -24,11 +24,21 @@ import type { DatabaseTransaction } from '@/platform/persistence/databaseTransac
 import { ConcurrentTaskTransition } from '@/platform/persistence/sqlite/taskLifecycle'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
-import type { HumanGateTaskTransition } from './humanGateTaskLifecycleTransaction'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
   type TaskCommittedEventIdentity,
 } from './taskLifecycleCommittedEvents'
+
+/**
+ * RFC-359：这个联合此前有**两份逐字相同的定义**——`humanGateTaskLifecycleTransaction.ts`（连同一个
+ * 全仓零实现、零消费者的 `HumanGateTaskLifecycle` 接口）与 `platform/persistence/sqlite/taskLifecycle.ts`。
+ * 前者随同步人工门链退役；这里是唯一一份，legacy 生命周期层从本文件取。
+ */
+export type HumanGateTaskTransition =
+  | 'park-review'
+  | 'park-human'
+  | 'release-review'
+  | 'release-human'
 
 export type TransitionHumanGateTaskInput = Readonly<{
   taskId: string
