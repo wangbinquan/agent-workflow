@@ -12,6 +12,7 @@ import type {
 } from '@agent-workflow/shared'
 import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from './legacySqliteSessionStore'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
@@ -107,7 +108,10 @@ export function assertBootstrapComplete(db: DbClient): AuthLoginPolicy {
 }
 
 export async function updateAuthLoginPolicy(
-  db: DbClient,
+  // RFC-359：函数体早已是中立的（`databaseSessionFor(db).transaction` + await 的 select），
+  // 只有入参类型还钉在 SQLite 上——那把这三个夹具挡在了双引擎用例之外。同文件里真正同步的
+  // 那几个（`getAuthLoginPolicy` / `isBootstrapRequired` 用 `.get()`）没动。
+  db: ProviderNeutralDatabase,
   patch: UpdateAuthLoginPolicyBody,
   now: number = Date.now(),
 ): Promise<AuthLoginPolicy> {
@@ -163,7 +167,7 @@ export async function updateAuthLoginPolicy(
 }
 
 export async function setPasswordLoginEnabled(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   enabled: boolean,
   now: number = Date.now(),
 ): Promise<AuthLoginPolicy> {
@@ -171,7 +175,7 @@ export async function setPasswordLoginEnabled(
 }
 
 export async function setOidcDefaultRole(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   role: OidcDefaultRole,
   now: number = Date.now(),
 ): Promise<AuthLoginPolicy> {

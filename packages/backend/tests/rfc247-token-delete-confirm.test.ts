@@ -14,22 +14,24 @@
 // change is a UX regression rather than a security improvement.
 
 import { describe, expect, test } from 'bun:test'
-import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
+
 import type { Hono } from 'hono'
 import { createPat } from './helpers/auth/patStore'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents } from '../src/db/schema'
 import { assertTokenDeleteConfirm } from '../src/services/deleteConfirm'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 
+// RFC-359 AC-6：两个引擎各跑一遍。
 describe('RFC-247 assertTokenDeleteConfirm — the rule itself', () => {
   test('a PAT must echo the exact name', () => {
     expect(() => assertTokenDeleteConfirm({}, 'nightly-audit', 'schedule', 'pat')).toThrow(
@@ -57,7 +59,7 @@ describe('RFC-247 assertTokenDeleteConfirm — the rule itself', () => {
 })
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   userId: string
   ownedAgentId: string
@@ -65,8 +67,8 @@ interface Harness {
   sessionToken: string
 }
 
-async function harness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })
+async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
   const user = await createUser(db, {
     username: 'alice',
     displayName: 'Alice',
@@ -80,14 +82,7 @@ async function harness(): Promise<Harness> {
     ownerUserId: user.id,
     visibility: 'private',
   })
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc247-delete-confirm-config.json',
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    secretBox: createSecretBoxFromKey(randomBytes(32)),
-  })
+  const app = (await scope.open()).app
   const { token: patToken } = await createPat({
     db,
     userId: user.id,
@@ -109,75 +104,85 @@ async function del(app: Hono, token: string, path: string, body?: unknown): Prom
   })
 }
 
-describe('RFC-247 T20 — DELETE /api/memories/:id over a token', () => {
-  test('without the title it is refused, and the row survives', async () => {
-    const h = await harness()
-    const memory = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'agent',
-      scopeId: h.ownedAgentId,
-      title: 'never delete me blindly',
-      bodyMd: 'body',
-      tags: [],
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 T20 — DELETE /api/memories/:id over a token',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-token-del-',
+  },
+  (scope) => {
+    test('without the title it is refused, and the row survives', async () => {
+      const h = await harness(scope)
+      const memory = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'agent',
+        scopeId: h.ownedAgentId,
+        title: 'never delete me blindly',
+        bodyMd: 'body',
+        tags: [],
+      })
+
+      const refused = await del(h.app, h.patToken, `/api/memories/${memory.id}?confirm=true`)
+      expect(refused.status).toBe(422)
+      expect(((await refused.json()) as { code: string }).code).toBe('delete-confirm-required')
+
+      const mismatched = await del(h.app, h.patToken, `/api/memories/${memory.id}?confirm=true`, {
+        confirm: 'some other title',
+      })
+      expect(mismatched.status).toBe(422)
+      expect(((await mismatched.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
+
+      // Still there after both refusals.
+      const still = await h.app.request(`/api/memories/${memory.id}`, {
+        headers: { Authorization: `Bearer ${h.sessionToken}` },
+      })
+      expect(still.status).toBe(200)
     })
 
-    const refused = await del(h.app, h.patToken, `/api/memories/${memory.id}?confirm=true`)
-    expect(refused.status).toBe(422)
-    expect(((await refused.json()) as { code: string }).code).toBe('delete-confirm-required')
+    test('with the exact title it goes through', async () => {
+      const h = await harness(scope)
+      const memory = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'agent',
+        scopeId: h.ownedAgentId,
+        title: 'delete me deliberately',
+        bodyMd: 'body',
+        tags: [],
+      })
+      const ok = await del(h.app, h.patToken, `/api/memories/${memory.id}?confirm=true`, {
+        confirm: 'delete me deliberately',
+      })
+      expect(ok.status).toBe(200)
+    })
 
-    const mismatched = await del(h.app, h.patToken, `/api/memories/${memory.id}?confirm=true`, {
-      confirm: 'some other title',
+    test('a SESSION delete still needs only the existing query flag', async () => {
+      // Locks the non-regression: the web flow did not gain a typing step.
+      const h = await harness(scope)
+      const memory = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 'a long title a human should not have to retype',
+        bodyMd: 'body',
+        tags: [],
+      })
+      const ok = await del(h.app, h.sessionToken, `/api/memories/${memory.id}?confirm=true`)
+      expect(ok.status).toBe(200)
     })
-    expect(mismatched.status).toBe(422)
-    expect(((await mismatched.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
 
-    // Still there after both refusals.
-    const still = await h.app.request(`/api/memories/${memory.id}`, {
-      headers: { Authorization: `Bearer ${h.sessionToken}` },
+    test('the pre-existing ?confirm=true gate still applies to sessions', async () => {
+      // RFC-247 added a rule; it did not remove one.
+      const h = await harness(scope)
+      const memory = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'global',
+        scopeId: null,
+        title: 'guarded either way',
+        bodyMd: 'body',
+        tags: [],
+      })
+      const refused = await del(h.app, h.sessionToken, `/api/memories/${memory.id}`)
+      expect(refused.status).toBe(422)
+      expect(((await refused.json()) as { code: string }).code).toBe('confirm-required')
     })
-    expect(still.status).toBe(200)
-  })
-
-  test('with the exact title it goes through', async () => {
-    const h = await harness()
-    const memory = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'agent',
-      scopeId: h.ownedAgentId,
-      title: 'delete me deliberately',
-      bodyMd: 'body',
-      tags: [],
-    })
-    const ok = await del(h.app, h.patToken, `/api/memories/${memory.id}?confirm=true`, {
-      confirm: 'delete me deliberately',
-    })
-    expect(ok.status).toBe(200)
-  })
-
-  test('a SESSION delete still needs only the existing query flag', async () => {
-    // Locks the non-regression: the web flow did not gain a typing step.
-    const h = await harness()
-    const memory = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'a long title a human should not have to retype',
-      bodyMd: 'body',
-      tags: [],
-    })
-    const ok = await del(h.app, h.sessionToken, `/api/memories/${memory.id}?confirm=true`)
-    expect(ok.status).toBe(200)
-  })
-
-  test('the pre-existing ?confirm=true gate still applies to sessions', async () => {
-    // RFC-247 added a rule; it did not remove one.
-    const h = await harness()
-    const memory = await memoryCatalogOf(h.db).commands.createManual({
-      scopeType: 'global',
-      scopeId: null,
-      title: 'guarded either way',
-      bodyMd: 'body',
-      tags: [],
-    })
-    const refused = await del(h.app, h.sessionToken, `/api/memories/${memory.id}`)
-    expect(refused.status).toBe(422)
-    expect(((await refused.json()) as { code: string }).code).toBe('confirm-required')
-  })
-})
+  },
+)

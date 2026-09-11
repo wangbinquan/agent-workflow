@@ -5918,3 +5918,43 @@ legacy `services/task.ts` 经 `public/participants.ts` 取用（RFC-317 T22 边�
 **「把一个单引擎用例改成双引擎」本身就是一次审计**，而且成本极低——三条缺陷都不是靠读代码
 发现的，是迁移当天测出来的。AC-6 剩下的量（`rfc359-w5-test-engine-hardcoding` 账本 604 行）
 应当按「先迁行为面最厚的文件」排序，而不是按最好迁的排序。
+
+## 5v. AC-6 第二批 secretBox 文件（W58）：一条装配合同的不对称
+
+`createProviderHttpApplication` 暴露 `SecretBox` 之后，19 个带 `secretBox` 的单引擎 HTTP 文件
+解锁。本批迁了 5 个（账本 604 → 600）。迁移当天两个引擎**一起**红出来的两条（都是迁移姿势
+问题，不是 provider 分叉，但值得记下形态）：
+
+- **加密列夹具必须用应用那个盒子**。`rfc220-oauth2-callback-route` 用自己 `randomBytes(32)` 新
+  建的盒子去写 OIDC provider 的 `client_secret`（加密列），而回调链上应用用的是作用域装进去的
+  那一个——解出来是乱码，5 条用例全红。修法：`const { app, secretBox } = await scope.open()`。
+- **守护进程配置必须并进作用域现建的那份 config**。`rfc247-mcp-transport` 自建 app home 写
+  `mcpSurfaceEnabled: false`，而应用读的是作用域的 config，开关整份被绕开——「关掉开关应当拒绝」
+  的两条用例拿到 200。修法：`scope.open({ config: { mcpSurfaceEnabled: … } })`。
+  （同一形态此前在 `plantuml-proxy` 上撞过一次，`open({ config })` 这个口子就是那次加的。）
+
+### 真正的发现：**「没有 secretBox 的部署」这个状态只在 SQLite 侧存在**
+
+`rfc221-login-policy-routes` 有一条判据专测「部署没有密钥 ⇒ 公开 OIDC 路由 fail closed
+（503 `oidc-not-configured`）」。它原本**故意不给** `createApp` 传 `secretBox`。
+
+这条接不进双引擎，原因不是迁移姿势，是**两侧的装配合同不对称**：
+
+| | `secretBox` |
+| --- | --- |
+| `AppDeps`（SQLite 侧 `createApp` / `composeSqliteApplicationDeps`） | `SecretBox \| undefined` |
+| `PostgresqlApplicationInput`（`composePostgresqlApplication`） | `SecretBox`，**必填** |
+
+也就是说「无密钥部署」在 PostgreSQL 上按构造不存在——PG 守护进程根本组装不起来。这不是
+bug（PG 部署一定有密钥），但它是**一条没有写明的能力差**：同一份产品在两个 provider 上可达的
+部署形态不同。处置：那一条判据显式留在单引擎 `createApp` 上并在块内注明理由，**不是**「还没迁」。
+要收敛的话得先决定「PG 是否也支持无密钥部署」——那是产品决定，不是重构，本 RFC 不替它做主。
+
+### 顺带清掉的两处测试夹具类型债
+
+`memoryCatalogOf` 与 `updateAuthLoginPolicy` / `setPasswordLoginEnabled` / `setOidcDefaultRole`
+的入参此前写的是 `DbClient`，而它们的函数体**早就是中立的**（前者把 db 转手交给两个收
+`ProviderNeutralDatabase` 的 composer，后三者走 `databaseSessionFor(db).transaction` + await 的
+select）。纯类型债，却把这些夹具挡在双引擎用例之外。已改成 `ProviderNeutralDatabase`；
+同文件里真正同步的那几个（`getAuthLoginPolicy` / `isBootstrapRequired` 用 `.get()`）没动。
+20 个消费者文件全部跑过（227 pass / 0 fail）。

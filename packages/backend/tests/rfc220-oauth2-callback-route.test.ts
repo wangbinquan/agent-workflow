@@ -12,22 +12,24 @@
 // stamp users.last_login_at, otherwise the user directory reports "Never
 // signed in" for accounts that have authenticated through SSO.
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
+
 import { eq } from 'drizzle-orm'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import type { SecretBox } from '../src/auth/secretBox'
 import { ne } from 'drizzle-orm'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import type { Hono } from 'hono'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import { clearPendingFlows } from '../src/auth/oidc/flow'
 import { setOidcDefaultRole } from './helpers/auth/loginPolicy'
 import { userIdentities, userSessions, users } from '../src/db/schema'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // Nothing listens here — discovery probes fail with an instant connection
 // refusal, keeping the suite offline and fast.
 const DEAD_ISSUER = 'http://127.0.0.1:1'
@@ -82,24 +84,22 @@ afterAll(() => idp.stop(true))
 const IDP = `http://127.0.0.1:${idp.port}`
 
 interface Harness {
-  db: DbClient
-  app: ReturnType<typeof createApp>
+  db: ProviderNeutralDatabase
+  app: Hono
   providerId: string
+  secretBox: SecretBox
 }
 
-async function buildHarness(overrides?: Record<string, unknown>): Promise<Harness> {
+async function buildHarness(
+  scope: ProviderHttpApplicationScope,
+  overrides?: Record<string, unknown>,
+): Promise<Harness> {
   clearEndpointCaches()
   clearPendingFlows()
-  const db = createInMemoryDb(MIGRATIONS)
-  const secretBox = createSecretBoxFromKey(randomBytes(32))
-  const app = createApp({
-    token: 'daemon-token',
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-    secretBox,
-  })
+  const db = scope.harness.db
+  // 必须用**应用实际装进去的那个盒子**：provider 的 client secret 是加密列，另起一个新钥匙的
+  // 盒子写进去，回调链上应用那侧解出来就是乱码（迁移当天两个引擎一起红）。
+  const { app, secretBox } = await scope.open()
   const svc = createOidcProvidersService({ db, secretBox })
   const provider = await svc.create({
     slug: 'pure',
@@ -120,7 +120,7 @@ async function buildHarness(overrides?: Record<string, unknown>): Promise<Harnes
     subjectClaim: 'id',
     ...overrides,
   })
-  return { db, app, providerId: provider.id }
+  return { db, app, providerId: provider.id, secretBox }
 }
 
 async function startLogin(h: Harness): Promise<{ state: string; authorizeUrl: string }> {
@@ -133,162 +133,171 @@ async function startLogin(h: Harness): Promise<{ state: string; authorizeUrl: st
   return (await res.json()) as { state: string; authorizeUrl: string }
 }
 
-describe('RFC-220 S8 — route-level OAuth-only chain', () => {
-  beforeEach(() => {
-    idpState.userinfoBody = {}
-    delete idpState.onUserinfo
-  })
-
-  test('start without any usable endpoint → structured 503 with code AND message', async () => {
-    const h = await buildHarness({
-      authorizationEndpoint: null,
-      tokenEndpoint: null,
-      userinfoEndpoint: null,
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-220 S8 — route-level OAuth-only chain',
+  {
+    token: 'daemon-token',
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-oauth2-cb-',
+  },
+  (scope) => {
+    beforeEach(() => {
+      idpState.userinfoBody = {}
+      delete idpState.onUserinfo
     })
-    const res = await h.app.request('/api/auth/oidc/pure/login/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    })
-    expect(res.status).toBe(503)
-    const body = (await res.json()) as { code: string; message: string }
-    expect(body.code).toBe('oidc-endpoints-unresolved')
-    // message must be a string or the frontend decoder collapses the code
-    expect(typeof body.message).toBe('string')
-  })
 
-  test('start with manual endpoints: authorizeUrl comes from the manual authorize', async () => {
-    const h = await buildHarness()
-    const { authorizeUrl, state } = await startLogin(h)
-    expect(authorizeUrl.startsWith(`${IDP}/oauth/authorize?`)).toBe(true)
-    expect(state.length).toBeGreaterThan(10)
-    const url = new URL(authorizeUrl)
-    expect(url.searchParams.get('client_id')).toBe('client-1')
-    expect(url.searchParams.get('code_challenge_method')).toBe('S256')
-  })
-
-  test('access-token-only callback: provisioning + identity + session + redirect', async () => {
-    const h = await buildHarness({ emailClaim: 'mail' })
-    idpState.userinfoBody = {
-      id: 42, // subjectClaim: 'id' — numeric platform id
-      login: 'zhang',
-      sig: '我爱写代码',
-      email: 'ignored-standard@corp.test',
-      mail: 'zhang@corp.test',
-      // note: NO email_verified field — trustEmailVerified covers it
-    }
-    const { state } = await startLogin(h)
-    const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
-    expect(res.status).toBe(302)
-    const location = res.headers.get('location')!
-    expect(location).toContain('#aw_session=')
-
-    // identity persisted under the CONFIGURED subject namespace
-    const identities = await h.db.select().from(userIdentities)
-    expect(identities.length).toBe(1)
-    expect(identities[0]!.subject).toBe('42')
-    expect(identities[0]!.email).toBe('zhang@corp.test')
-    expect(identities[0]!.emailVerified).toBe(1) // trustEmailVerified applied
-    expect(identities[0]!.preferredSnapshot).toBe('zhang 我爱写代码')
-
-    // auto-provisioned user: composed presented name + derived username
-    const userRows = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
-    expect(userRows[0]!.displayName).toBe('zhang 我爱写代码')
-    expect(userRows[0]!.email).toBe('zhang@corp.test')
-    expect(userRows[0]!.status).toBe('active')
-    expect(userRows[0]!.role).toBe('guest')
-    const firstSessions = await h.db
-      .select()
-      .from(userSessions)
-      .where(eq(userSessions.userId, identities[0]!.userId))
-    expect(firstSessions).toHaveLength(1)
-    expect(userRows[0]!.lastLoginAt).toBe(firstSessions[0]!.createdAt)
-
-    // second login with a changed IdP-side signature refreshes the name (D7)
-    idpState.userinfoBody = {
-      ...idpState.userinfoBody,
-      sig: '换个签名',
-      mail: 'zhang.next@corp.test',
-    }
-    const second = await startLogin(h)
-    const res2 = await h.app.request(`/api/auth/oidc/pure/callback?code=def&state=${second.state}`)
-    expect(res2.status).toBe(302)
-    const refreshed = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
-    expect(refreshed[0]!.displayName).toBe('zhang 换个签名')
-    expect(refreshed[0]!.email).toBe('zhang.next@corp.test')
-    expect((await h.db.select().from(userIdentities))[0]!.email).toBe('zhang.next@corp.test')
-    const allSessions = await h.db
-      .select()
-      .from(userSessions)
-      .where(eq(userSessions.userId, identities[0]!.userId))
-    expect(allSessions).toHaveLength(2)
-    expect(refreshed[0]!.lastLoginAt).toBe(
-      Math.max(...allSessions.map((session) => session.createdAt)),
-    )
-    expect(refreshed[0]!.role).toBe('guest')
-    // same account, no dup (createApp seeds a __system__ row — exclude it)
-    const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
-    expect(humans.length).toBe(1)
-  })
-
-  test('configured regular-user preset applies only to newly auto-provisioned identities', async () => {
-    const h = await buildHarness()
-    await setOidcDefaultRole(h.db, 'user')
-    idpState.userinfoBody = { id: 84, login: 'configured-user' }
-    const { state } = await startLogin(h)
-    const response = await h.app.request(
-      `/api/auth/oidc/pure/callback?code=configured&state=${state}`,
-    )
-    expect(response.status).toBe(302)
-    const identity = (await h.db.select().from(userIdentities))[0]!
-    const created = await h.db.select().from(users).where(eq(users.id, identity.userId))
-    expect(created[0]!.role).toBe('user')
-  })
-
-  test('mid-callback subjectClaim change → 400 friendly page + ZERO side effects', async () => {
-    const h = await buildHarness()
-    idpState.userinfoBody = { id: 42, login: 'zhang' }
-    const { state } = await startLogin(h)
-    // The userinfo handler runs after the route read the provider row and
-    // before the identity write — exactly the TOCTOU window the write-time
-    // recheck closes. No identities exist yet, so the PATCH-side lock allows
-    // the change; only the write-time gate can catch this interleaving.
-    idpState.onUserinfo = async () => {
-      const svc = createOidcProvidersService({
-        db: h.db,
-        secretBox: createSecretBoxFromKey(randomBytes(32)),
+    test('start without any usable endpoint → structured 503 with code AND message', async () => {
+      const h = await buildHarness(scope, {
+        authorizationEndpoint: null,
+        tokenEndpoint: null,
+        userinfoEndpoint: null,
       })
-      await svc.patch(h.providerId, { subjectClaim: null })
-    }
-    const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
-    expect(res.status).toBe(400)
-    const html = await res.text()
-    expect(html).toContain('configuration changed')
-    // zero side effects: no user beyond the seeded __system__, no identity
-    const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
-    expect(humans.length).toBe(0)
-    expect((await h.db.select().from(userIdentities)).length).toBe(0)
-  })
-
-  test('D8 post_json userinfo: full chain against an IdP that ONLY accepts the JSON-body POST', async () => {
-    const h = await buildHarness({
-      userinfoEndpoint: `${IDP}/api/user-post`,
-      userinfoRequestStyle: 'post_json',
+      const res = await h.app.request('/api/auth/oidc/pure/login/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+      expect(res.status).toBe(503)
+      const body = (await res.json()) as { code: string; message: string }
+      expect(body.code).toBe('oidc-endpoints-unresolved')
+      // message must be a string or the frontend decoder collapses the code
+      expect(typeof body.message).toBe('string')
     })
-    idpState.userinfoBody = { id: 77, login: 'poster' }
-    const { state } = await startLogin(h)
-    const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
-    expect(res.status).toBe(302)
-    const identities = await h.db.select().from(userIdentities)
-    expect(identities.length).toBe(1)
-    expect(identities[0]!.subject).toBe('77')
-  })
 
-  test('no userinfo configured (subjectClaim mode) → 400 userinfo-unavailable page', async () => {
-    const h = await buildHarness({ userinfoEndpoint: null })
-    const { state } = await startLogin(h)
-    const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
-    expect(res.status).toBe(400)
-    expect(await res.text()).toContain('no userinfo endpoint is configured')
-  })
-})
+    test('start with manual endpoints: authorizeUrl comes from the manual authorize', async () => {
+      const h = await buildHarness(scope)
+      const { authorizeUrl, state } = await startLogin(h)
+      expect(authorizeUrl.startsWith(`${IDP}/oauth/authorize?`)).toBe(true)
+      expect(state.length).toBeGreaterThan(10)
+      const url = new URL(authorizeUrl)
+      expect(url.searchParams.get('client_id')).toBe('client-1')
+      expect(url.searchParams.get('code_challenge_method')).toBe('S256')
+    })
+
+    test('access-token-only callback: provisioning + identity + session + redirect', async () => {
+      const h = await buildHarness(scope, { emailClaim: 'mail' })
+      idpState.userinfoBody = {
+        id: 42, // subjectClaim: 'id' — numeric platform id
+        login: 'zhang',
+        sig: '我爱写代码',
+        email: 'ignored-standard@corp.test',
+        mail: 'zhang@corp.test',
+        // note: NO email_verified field — trustEmailVerified covers it
+      }
+      const { state } = await startLogin(h)
+      const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
+      expect(res.status).toBe(302)
+      const location = res.headers.get('location')!
+      expect(location).toContain('#aw_session=')
+
+      // identity persisted under the CONFIGURED subject namespace
+      const identities = await h.db.select().from(userIdentities)
+      expect(identities.length).toBe(1)
+      expect(identities[0]!.subject).toBe('42')
+      expect(identities[0]!.email).toBe('zhang@corp.test')
+      expect(identities[0]!.emailVerified).toBe(1) // trustEmailVerified applied
+      expect(identities[0]!.preferredSnapshot).toBe('zhang 我爱写代码')
+
+      // auto-provisioned user: composed presented name + derived username
+      const userRows = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
+      expect(userRows[0]!.displayName).toBe('zhang 我爱写代码')
+      expect(userRows[0]!.email).toBe('zhang@corp.test')
+      expect(userRows[0]!.status).toBe('active')
+      expect(userRows[0]!.role).toBe('guest')
+      const firstSessions = await h.db
+        .select()
+        .from(userSessions)
+        .where(eq(userSessions.userId, identities[0]!.userId))
+      expect(firstSessions).toHaveLength(1)
+      expect(userRows[0]!.lastLoginAt).toBe(firstSessions[0]!.createdAt)
+
+      // second login with a changed IdP-side signature refreshes the name (D7)
+      idpState.userinfoBody = {
+        ...idpState.userinfoBody,
+        sig: '换个签名',
+        mail: 'zhang.next@corp.test',
+      }
+      const second = await startLogin(h)
+      const res2 = await h.app.request(
+        `/api/auth/oidc/pure/callback?code=def&state=${second.state}`,
+      )
+      expect(res2.status).toBe(302)
+      const refreshed = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
+      expect(refreshed[0]!.displayName).toBe('zhang 换个签名')
+      expect(refreshed[0]!.email).toBe('zhang.next@corp.test')
+      expect((await h.db.select().from(userIdentities))[0]!.email).toBe('zhang.next@corp.test')
+      const allSessions = await h.db
+        .select()
+        .from(userSessions)
+        .where(eq(userSessions.userId, identities[0]!.userId))
+      expect(allSessions).toHaveLength(2)
+      expect(refreshed[0]!.lastLoginAt).toBe(
+        Math.max(...allSessions.map((session) => session.createdAt)),
+      )
+      expect(refreshed[0]!.role).toBe('guest')
+      // same account, no dup (createApp seeds a __system__ row — exclude it)
+      const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
+      expect(humans.length).toBe(1)
+    })
+
+    test('configured regular-user preset applies only to newly auto-provisioned identities', async () => {
+      const h = await buildHarness(scope)
+      await setOidcDefaultRole(h.db, 'user')
+      idpState.userinfoBody = { id: 84, login: 'configured-user' }
+      const { state } = await startLogin(h)
+      const response = await h.app.request(
+        `/api/auth/oidc/pure/callback?code=configured&state=${state}`,
+      )
+      expect(response.status).toBe(302)
+      const identity = (await h.db.select().from(userIdentities))[0]!
+      const created = await h.db.select().from(users).where(eq(users.id, identity.userId))
+      expect(created[0]!.role).toBe('user')
+    })
+
+    test('mid-callback subjectClaim change → 400 friendly page + ZERO side effects', async () => {
+      const h = await buildHarness(scope)
+      idpState.userinfoBody = { id: 42, login: 'zhang' }
+      const { state } = await startLogin(h)
+      // The userinfo handler runs after the route read the provider row and
+      // before the identity write — exactly the TOCTOU window the write-time
+      // recheck closes. No identities exist yet, so the PATCH-side lock allows
+      // the change; only the write-time gate can catch this interleaving.
+      idpState.onUserinfo = async () => {
+        const svc = createOidcProvidersService({ db: h.db, secretBox: h.secretBox })
+        await svc.patch(h.providerId, { subjectClaim: null })
+      }
+      const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
+      expect(res.status).toBe(400)
+      const html = await res.text()
+      expect(html).toContain('configuration changed')
+      // zero side effects: no user beyond the seeded __system__, no identity
+      const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
+      expect(humans.length).toBe(0)
+      expect((await h.db.select().from(userIdentities)).length).toBe(0)
+    })
+
+    test('D8 post_json userinfo: full chain against an IdP that ONLY accepts the JSON-body POST', async () => {
+      const h = await buildHarness(scope, {
+        userinfoEndpoint: `${IDP}/api/user-post`,
+        userinfoRequestStyle: 'post_json',
+      })
+      idpState.userinfoBody = { id: 77, login: 'poster' }
+      const { state } = await startLogin(h)
+      const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
+      expect(res.status).toBe(302)
+      const identities = await h.db.select().from(userIdentities)
+      expect(identities.length).toBe(1)
+      expect(identities[0]!.subject).toBe('77')
+    })
+
+    test('no userinfo configured (subjectClaim mode) → 400 userinfo-unavailable page', async () => {
+      const h = await buildHarness(scope, { userinfoEndpoint: null })
+      const { state } = await startLogin(h)
+      const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
+      expect(res.status).toBe(400)
+      expect(await res.text()).toContain('no userinfo endpoint is configured')
+    })
+  },
+)
