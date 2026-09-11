@@ -5958,3 +5958,33 @@ bug（PG 部署一定有密钥），但它是**一条没有写明的能力差**�
 select）。纯类型债，却把这些夹具挡在双引擎用例之外。已改成 `ProviderNeutralDatabase`；
 同文件里真正同步的那几个（`getAuthLoginPolicy` / `isBootstrapRequired` 用 `.get()`）没动。
 20 个消费者文件全部跑过（227 pass / 0 fail）。
+
+## 5w. AC-6 第三批（W58）：并发池的 scope key 按 provider 不同——判据不能自己猜
+
+账本 600 → 598（`rfc324-acl-wire-contract` / `rfc266-concurrency-hot-apply`）。
+
+`rfc266` 迁过去当天 **只有 PostgreSQL 侧红三条**（「PUT /api/config 应当当场改两个守护进程池的
+容量」）。查下来**不是产品缺陷**，是判据自己猜错了 key：
+
+`getNodePoolSemaphore(daemonScope, kind, capacity)` 的池注册表是一张按 `daemonScope` 键的
+WeakMap，而这个 scope **按 provider 不同**：
+
+| | `processConcurrencyScope` |
+| --- | --- |
+| SQLite | `db`（运行时参与者 + `composeLegacyConfigConcurrencyHotApply(deps.db)`） |
+| PostgreSQL | `provider.runtime`（`cli/postgresqlDaemonApplication.ts` 的两处） |
+
+两侧**各自内部一致**——配置路由与任务引擎用的是同一个 key，所以热应用在两个 provider 上都正确。
+不一致的是用例：它直接拿 `harness.db` 当 key，那只在 SQLite 上碰巧等于真 key，在 PG 上取到的是
+另一个命名空间里的**空池**，于是判据静默失效（池永远是新建的，容量当然不变）。
+
+处置：`createProviderHttpApplication` 暴露 `processConcurrencyScope`——**问装配要 key，不要自己
+构造**。这是给「检查守护进程级单例」这类判据的通用口子，不止这一个用例。
+
+### 一条测量口径的提醒（本轮实撞）
+
+给这个口子写注释时，顺手按本仓规矩写了 `sqliteTaskExecutionRuntimeParticipants.ts:77` 这样的
+file:line 锚点，`rfc359-w5-t19d` 的成对覆盖账本**当场从 10 vs 6 变成 11 vs 6**——它是按**文本**
+数「对某侧适配器的引用」的，一句注释也算一次。这不是账本的错，也不该靠改账本掩盖：注释改成
+不写死那个 token（给出 `grep -rn processConcurrencyScope src/` 让人自己查），账本回到原值。
+**写注释时提到某侧适配器的文件名，会让成对覆盖数失真**——提这一嘴，免得下一个人也撞。

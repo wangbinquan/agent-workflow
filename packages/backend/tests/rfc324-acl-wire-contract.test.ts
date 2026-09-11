@@ -13,18 +13,19 @@
 // AC-16（bypass 判定不变）的完整证明在 rfc324-access-policy-equivalence 的穷举里；
 // 这里补一条 HTTP 层的对照，确认那条纯函数结论真的接到了端点上。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 interface Principal {
@@ -42,7 +43,7 @@ interface AclBody {
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   owner: Principal
   alice: Principal
@@ -51,15 +52,9 @@ interface Harness {
   agentId: string
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc324-wire-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const mk = async (username: string, role: 'user' | 'manager'): Promise<Principal> => {
     const user = await createUser(db, {
       username,
@@ -72,19 +67,16 @@ async function buildHarness(): Promise<Harness> {
   }
   const owner = await mk('owner', 'user')
   const agentId = ulid()
-  await db
-    .insert(agents)
-    .values({
-      id: agentId,
-      name: `rfc324-wire-${agentId.slice(-6)}`,
-      description: 'seeded',
-      ownerUserId: owner.id,
-      visibility: 'private',
-      aclRevision: 0,
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    .run()
+  await db.insert(agents).values({
+    id: agentId,
+    name: `rfc324-wire-${agentId.slice(-6)}`,
+    description: 'seeded',
+    ownerUserId: owner.id,
+    visibility: 'private',
+    aclRevision: 0,
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
   return {
     db,
     app,
@@ -123,138 +115,148 @@ async function putAcl(h: Harness, token: string, body: unknown): Promise<Respons
   })
 }
 
-describe('RFC-324 —— /acl 契约', () => {
-  test('GET：grants 带档位；canManage 与 canEdit 是两个独立的答案', async () => {
-    const h = await buildHarness()
-    const put = await putAcl(h, h.owner.token, {
-      grants: [
-        { userId: h.alice.id, level: 'read' },
-        { userId: h.bob.id, level: 'write' },
-      ],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: 0,
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-324 —— /acl 契约',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-acl-wire-',
+  },
+  (scope) => {
+    test('GET：grants 带档位；canManage 与 canEdit 是两个独立的答案', async () => {
+      const h = await buildHarness(scope)
+      const put = await putAcl(h, h.owner.token, {
+        grants: [
+          { userId: h.alice.id, level: 'read' },
+          { userId: h.bob.id, level: 'write' },
+        ],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: 0,
+      })
+      expect(put.status).toBe(200)
+
+      const asOwner = await readAcl(h, h.owner.token)
+      expect(asOwner.grants.map((g) => [g.user.id, g.level]).sort()).toEqual(
+        [
+          [h.alice.id, 'read'],
+          [h.bob.id, 'write'],
+        ].sort(),
+      )
+      expect(asOwner).not.toHaveProperty('users') // 旧字段被删除，不是并存
+      expect(asOwner.canManage).toBe(true)
+      expect(asOwner.canEdit).toBe(true)
+
+      const asReader = await readAcl(h, h.alice.token)
+      expect(asReader.canEdit, 'read 档改不动内容').toBe(false)
+      expect(asReader.canManage, 'read 档更改不动授权').toBe(false)
+
+      const asEditor = await readAcl(h, h.bob.token)
+      expect(asEditor.canEdit, 'write 档能改内容').toBe(true)
+      expect(asEditor.canManage, '但改不了授权——这正是两个字段分开的意义').toBe(false)
     })
-    expect(put.status).toBe(200)
 
-    const asOwner = await readAcl(h, h.owner.token)
-    expect(asOwner.grants.map((g) => [g.user.id, g.level]).sort()).toEqual(
-      [
-        [h.alice.id, 'read'],
-        [h.bob.id, 'write'],
-      ].sort(),
-    )
-    expect(asOwner).not.toHaveProperty('users') // 旧字段被删除，不是并存
-    expect(asOwner.canManage).toBe(true)
-    expect(asOwner.canEdit).toBe(true)
+    test('PUT：grants 是全量替换，未列出的人被撤销', async () => {
+      const h = await buildHarness(scope)
+      await putAcl(h, h.owner.token, {
+        grants: [
+          { userId: h.alice.id, level: 'write' },
+          { userId: h.bob.id, level: 'write' },
+        ],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: 0,
+      })
+      const afterFirst = await readAcl(h, h.owner.token)
+      expect(afterFirst.grants.length).toBe(2)
 
-    const asReader = await readAcl(h, h.alice.token)
-    expect(asReader.canEdit, 'read 档改不动内容').toBe(false)
-    expect(asReader.canManage, 'read 档更改不动授权').toBe(false)
-
-    const asEditor = await readAcl(h, h.bob.token)
-    expect(asEditor.canEdit, 'write 档能改内容').toBe(true)
-    expect(asEditor.canManage, '但改不了授权——这正是两个字段分开的意义').toBe(false)
-  })
-
-  test('PUT：grants 是全量替换，未列出的人被撤销', async () => {
-    const h = await buildHarness()
-    await putAcl(h, h.owner.token, {
-      grants: [
-        { userId: h.alice.id, level: 'write' },
-        { userId: h.bob.id, level: 'write' },
-      ],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: 0,
+      await putAcl(h, h.owner.token, {
+        grants: [{ userId: h.alice.id, level: 'read' }],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: afterFirst.aclRevision,
+      })
+      const afterSecond = await readAcl(h, h.owner.token)
+      expect(afterSecond.grants.map((g) => [g.user.id, g.level])).toEqual([[h.alice.id, 'read']])
+      expect(
+        await readAcl(h, h.bob.token).catch(() => null),
+        'bob 被撤销后连 ACL 都读不到',
+      ).toBeNull()
     })
-    const afterFirst = await readAcl(h, h.owner.token)
-    expect(afterFirst.grants.length).toBe(2)
 
-    await putAcl(h, h.owner.token, {
-      grants: [{ userId: h.alice.id, level: 'read' }],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: afterFirst.aclRevision,
+    test('降档立刻生效：write → read 之后，本人读回的 canEdit 就是 false', async () => {
+      const h = await buildHarness(scope)
+      await putAcl(h, h.owner.token, {
+        grants: [{ userId: h.alice.id, level: 'write' }],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: 0,
+      })
+      expect((await readAcl(h, h.alice.token)).canEdit).toBe(true)
+
+      const current = await readAcl(h, h.owner.token)
+      await putAcl(h, h.owner.token, {
+        grants: [{ userId: h.alice.id, level: 'read' }],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: current.aclRevision,
+      })
+      expect((await readAcl(h, h.alice.token)).canEdit, '降档不能只改数据库不改判定').toBe(false)
     })
-    const afterSecond = await readAcl(h, h.owner.token)
-    expect(afterSecond.grants.map((g) => [g.user.id, g.level])).toEqual([[h.alice.id, 'read']])
-    expect(
-      await readAcl(h, h.bob.token).catch(() => null),
-      'bob 被撤销后连 ACL 都读不到',
-    ).toBeNull()
-  })
 
-  test('降档立刻生效：write → read 之后，本人读回的 canEdit 就是 false', async () => {
-    const h = await buildHarness()
-    await putAcl(h, h.owner.token, {
-      grants: [{ userId: h.alice.id, level: 'write' }],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: 0,
+    test('AC-5 转移 owner：前任自动落 read 档，不是 write', async () => {
+      const h = await buildHarness(scope)
+      const before = await readAcl(h, h.owner.token)
+      const res = await putAcl(h, h.owner.token, {
+        ownerUserId: h.alice.id,
+        expectedResourceId: h.agentId,
+        expectedAclRevision: before.aclRevision,
+      })
+      expect(res.status).toBe(200)
+
+      const after = (await res.json()) as AclBody
+      expect(after.ownerUserId).toBe(h.alice.id)
+      const previous = after.grants.find((g) => g.user.id === h.owner.id)
+      expect(previous, '前任 owner 必须留在名单里，否则他会把自己锁在外面').toBeDefined()
+      expect(previous!.level, '转移不该顺带发一份编辑权——那是新 owner 的决定').toBe('read')
     })
-    expect((await readAcl(h, h.alice.token)).canEdit).toBe(true)
 
-    const current = await readAcl(h, h.owner.token)
-    await putAcl(h, h.owner.token, {
-      grants: [{ userId: h.alice.id, level: 'read' }],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: current.aclRevision,
+    test('AC-6 档位变更也走 aclRevision CAS：陈旧请求 409', async () => {
+      const h = await buildHarness(scope)
+      const base = await readAcl(h, h.owner.token)
+      const first = await putAcl(h, h.owner.token, {
+        grants: [{ userId: h.alice.id, level: 'read' }],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: base.aclRevision,
+      })
+      expect(first.status).toBe(200)
+
+      // 一个停在编辑态的面板拿着旧 revision 想把 alice 升成 write：必须被拒。
+      const stale = await putAcl(h, h.owner.token, {
+        grants: [{ userId: h.alice.id, level: 'write' }],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: base.aclRevision,
+      })
+      expect(stale.status).toBe(409)
+      expect(((await stale.json()) as { code: string }).code).toBe('acl-revision-conflict')
+      expect((await readAcl(h, h.alice.token)).canEdit, '被 CAS 拒绝的升档不得落库').toBe(false)
     })
-    expect((await readAcl(h, h.alice.token)).canEdit, '降档不能只改数据库不改判定').toBe(false)
-  })
 
-  test('AC-5 转移 owner：前任自动落 read 档，不是 write', async () => {
-    const h = await buildHarness()
-    const before = await readAcl(h, h.owner.token)
-    const res = await putAcl(h, h.owner.token, {
-      ownerUserId: h.alice.id,
-      expectedResourceId: h.agentId,
-      expectedAclRevision: before.aclRevision,
+    test('旧 wire 被删除：带 userIds 的请求是 422，不是"当作没写"', async () => {
+      const h = await buildHarness(scope)
+      const res = await putAcl(h, h.owner.token, {
+        userIds: [h.alice.id],
+        expectedResourceId: h.agentId,
+        expectedAclRevision: 0,
+      })
+      expect(res.status, '静默忽略比报错更糟：调用方以为授权成功了').toBe(422)
+      expect((await readAcl(h, h.owner.token)).grants).toEqual([])
     })
-    expect(res.status).toBe(200)
 
-    const after = (await res.json()) as AclBody
-    expect(after.ownerUserId).toBe(h.alice.id)
-    const previous = after.grants.find((g) => g.user.id === h.owner.id)
-    expect(previous, '前任 owner 必须留在名单里，否则他会把自己锁在外面').toBeDefined()
-    expect(previous!.level, '转移不该顺带发一份编辑权——那是新 owner 的决定').toBe('read')
-  })
-
-  test('AC-6 档位变更也走 aclRevision CAS：陈旧请求 409', async () => {
-    const h = await buildHarness()
-    const base = await readAcl(h, h.owner.token)
-    const first = await putAcl(h, h.owner.token, {
-      grants: [{ userId: h.alice.id, level: 'read' }],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: base.aclRevision,
+    test('AC-16 bypass 判定不变：manager 对别人的私有资源仍是 canManage + canEdit', async () => {
+      const h = await buildHarness(scope)
+      const asManager = await readAcl(h, h.manager.token)
+      expect(asManager.canManage).toBe(true)
+      expect(asManager.canEdit).toBe(true)
+      // 且它不需要任何 grant 行——这正是「bypass 不受档位约束」的含义。
+      expect(asManager.grants).toEqual([])
     })
-    expect(first.status).toBe(200)
-
-    // 一个停在编辑态的面板拿着旧 revision 想把 alice 升成 write：必须被拒。
-    const stale = await putAcl(h, h.owner.token, {
-      grants: [{ userId: h.alice.id, level: 'write' }],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: base.aclRevision,
-    })
-    expect(stale.status).toBe(409)
-    expect(((await stale.json()) as { code: string }).code).toBe('acl-revision-conflict')
-    expect((await readAcl(h, h.alice.token)).canEdit, '被 CAS 拒绝的升档不得落库').toBe(false)
-  })
-
-  test('旧 wire 被删除：带 userIds 的请求是 422，不是"当作没写"', async () => {
-    const h = await buildHarness()
-    const res = await putAcl(h, h.owner.token, {
-      userIds: [h.alice.id],
-      expectedResourceId: h.agentId,
-      expectedAclRevision: 0,
-    })
-    expect(res.status, '静默忽略比报错更糟：调用方以为授权成功了').toBe(422)
-    expect((await readAcl(h, h.owner.token)).grants).toEqual([])
-  })
-
-  test('AC-16 bypass 判定不变：manager 对别人的私有资源仍是 canManage + canEdit', async () => {
-    const h = await buildHarness()
-    const asManager = await readAcl(h, h.manager.token)
-    expect(asManager.canManage).toBe(true)
-    expect(asManager.canEdit).toBe(true)
-    // 且它不需要任何 grant 行——这正是「bypass 不受档位约束」的含义。
-    expect(asManager.grants).toEqual([])
-  })
-})
+  },
+)
