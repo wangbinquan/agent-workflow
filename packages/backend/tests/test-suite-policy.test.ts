@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { relative, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { toPortableRelativePath } from '@/util/platformExec'
 
@@ -410,6 +410,91 @@ describe('repository test-suite policy', () => {
       'utf8',
     )
     expect(source.match(/^\s+- 'e2e\/harness\.ts'$/gm)).toHaveLength(2)
+  })
+
+  // 为什么存在：测试在**模块顶层**用 `readFileSync(resolve(<literal-rooted>, 'x.ts'))` 读源文件时，
+  // 那条路径既不是 import（typecheck 看不见），也不长成一个完整的字面量（上面那条只认带引号的
+  // 整条路径，捞不到 `resolve(base, 'x.ts')` 这种分段拼法）。2026-09-11 实撞：删
+  // `sqliteNodeRunMintParticipant.ts` 后 `rfc359-w47-node-run-mint-program.test.ts` 在文件顶层读它，
+  // 本机全量扫只在汇总行多一个 `1 error`（bun 印成 `# Unhandled error between tests`，既无
+  // `(fail)` 也无 `error:` 前缀），推上去两个分片才红。
+  //
+  // 这里把 `resolve(...)` / `join(...)` 的**字面量拼接**静态求值（`import.meta.dir` 取文件所在目录，
+  // 模块作用域里由字面量拼出来的 const 参与求值），再看 `readFileSync` 的第一参数落到哪个文件。
+  // 只判**带扩展名、且在仓库内**的路径；运行时才生成的路径拼不出来（根不是字面量），自然不进判据。
+  test('every source path a test reads at module scope still exists', () => {
+    const missing: string[] = []
+    for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
+      const text = readFileSync(file, 'utf8')
+      if (!text.includes('readFileSync(')) continue
+      const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+      const bindings = new Map<string, string>()
+
+      const literalPath = (node: ts.Node): string | null => {
+        if (ts.isStringLiteralLike(node)) return node.text
+        if (ts.isIdentifier(node)) return bindings.get(node.text) ?? null
+        if (
+          ts.isPropertyAccessExpression(node) &&
+          node.name.text === 'dir' &&
+          ts.isMetaProperty(node.expression)
+        ) {
+          return dirname(file)
+        }
+        if (
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          (node.expression.text === 'resolve' || node.expression.text === 'join')
+        ) {
+          const parts: string[] = []
+          for (const argument of node.arguments) {
+            const part = literalPath(argument)
+            if (part === null) return null
+            parts.push(part)
+          }
+          // `resolve('a','b')` 会落到 **cwd**——那是测试自己在临时目录里造的文件，不是源码路径。
+          // 只认第一段就是绝对路径的拼接（`import.meta.dir` 或绝对字面量起头）。
+          if (parts.length === 0 || !isAbsolute(parts[0]!)) return null
+          return resolve(...parts)
+        }
+        return null
+      }
+
+      const visit = (node: ts.Node, insideExpect = false): void => {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+          const value = literalPath(node.initializer)
+          if (value !== null) bindings.set(node.name.text, value)
+        }
+        // `expect(() => readFileSync(old)).toThrow()` 是**故意读一个不该存在的路径**（迁位判据的
+        // 标准写法：旧位置必须真的没了）。那不是过期路径，不能报。
+        const expectScope =
+          insideExpect ||
+          (ts.isCallExpression(node) &&
+            ts.isIdentifier(node.expression) &&
+            node.expression.text === 'expect')
+        if (
+          !insideExpect &&
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === 'readFileSync' &&
+          node.arguments[0] !== undefined
+        ) {
+          const target = literalPath(node.arguments[0])
+          if (
+            target !== null &&
+            target.startsWith(REPO_ROOT) &&
+            /\.[a-z0-9]{1,5}$/i.test(target) &&
+            !existsSync(target)
+          ) {
+            missing.push(`${relative(REPO_ROOT, file)} reads ${relative(REPO_ROOT, target)}`)
+          }
+        }
+        ts.forEachChild(node, (child) => {
+          visit(child, expectScope)
+        })
+      }
+      visit(source)
+    }
+    expect(missing.sort()).toEqual([])
   })
 
   // 为什么存在：workflow 的 `paths:` 触发器与 `scripts/**` 里硬写的源文件清单都是**纯字符串**，
