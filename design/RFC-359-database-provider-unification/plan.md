@@ -5538,7 +5538,48 @@ async 事务后就有了事件循环让渡窗口，护栏是 `databaseTransactio
 3. AC-6 的剩余迁移——本刀实测：对整份积压跑一遍机械迁移，142 个文件里 **138 个**的报错指向
    `DbClient` 形参，只有 4 个能独立落地。**这三件事是一件事，别分开推。**
 
-## 5p. `setTaskStatus` 切到中立事务：**做完了、又整刀退回**（W8，附可复用补丁）
+## 5p. `setTaskStatus` 切到中立事务：**已落地**（W8；曾整刀退回一次，见下）
+
+`SYNC_TRANSACTION_DEBT` **2 → 1 个文件**（只剩 `sqliteTaskOwnership.ts: 2`）。
+`sqlite/taskLifecycle.ts` 的两笔同步事务归零：`setTaskStatus` / `trySetTaskStatus` 的写事务从
+`dbTxSync` / `withOwnedTaskTx` 换成 `databaseSessionFor(db).transaction` / `withOwnedTaskWrite`。
+
+**写序列一个字没改**——`taskLifecycleWriteSequence` 本来就是 provider 中立的 transaction program，
+换的只是解释器（`driveAsyncProgram`）与事件追加的异步形态。同步那份保留：RFC-333 的人工门参与者
+挂在别人的同步大事务上，要的就是同步解释，这正是它头注释说的
+「caller chooses synchronous or asynchronous interpretation」。
+
+### 卡住过的那一条，用**内部注入点**解决（用户 2026-09-11 裁决）
+
+整刀曾因 `review-cancel-concurrency` 的 parent-cascade starvation 退回一次：它靠「包 db 代理拦
+`db.transaction`」模拟外部竞争写者，而统一原语三处同时塌（不走 `db.transaction`；SQLite 上 tx 就是
+db 对象本身；写者被串行化）。
+
+先试过「两条真连接（仅 PG）」，**前提不成立**：`cancelTask` 与 `cancel-transition-starved` 这条
+重试/饥饿语义**只在 SQLite 路径**上——SQLite 的 `children.cancel` 转发 `services/task.ts` 的
+`cancelTask`，PostgreSQL 走另一份 762 行的 `postgresqlChildTaskLifecycleParticipant`（没有 starvation
+概念）。取消这一对还没合一，PG 上没有可测的目标。
+
+最终按用户裁决走**内部注入点**：`setTaskStatus` 增加 `beforeCas?: () => void | Promise<void>`，
+落在它**自己那次读与 CAS 之间**——那是「别的写者在窗口里把行挪走」唯一能被确定性注入的位置；
+`cancelTask` 增加同形的 `beforeStatusCas` 并**透传给级联的子任务取消**（判据锁的正是子任务那笔）。
+生产从不传。判据一字未改（仍是 `cancel-transition-starved` + `attempts >= 8`），变异实测转红
+（去掉 `await args.beforeCas?.()` 那一行，该用例立刻失败）。
+
+**为什么注入点必须做进来**：它跟着实现走，换事务原语不会再让判据静默失效。而旧的代理注入器在新
+原语下**一次都不触发**——用例照样绿却一个并发场景都没验（`docs/dev-gotchas.md` 有完整复盘）。
+
+### 顺带
+
+- `withOwnedTaskWrite` 落在**中立**模块 `taskOwnershipPersistence.ts`，不是 `sqliteTaskOwnership.ts`
+  ——放后者会被 `rfc349-provider-cutover` 正确判成一条新的 provider-specific 依赖。
+- `taskExecutionModule` 从 `public/operations` 这条窄合同上退役（它此前唯一的消费者就是被换掉的
+  `ownership.withOwnedTaskTx`）；需要进程级单例的调用方走 `public/participants`。
+- 六份 N1 账本因新增中立孪生与 public 导出而增长，各带一次性 `allowGrowth`，**下一笔提交必须退役**。
+
+### （历史）曾整刀退回的那一次
+
+
 
 按 §5o 的执行说明把根那一刀（`sqlite/taskLifecycle.ts` 的两笔）真做了一遍。生产侧**全部完成**，
 typecheck 干净，`sqlite/taskLifecycle.ts` 的同步事务调用点 **2 → 0**。卡住的不是生产代码，

@@ -6,7 +6,7 @@
     "moduleFiles": 1205,
     "productionFiles": 2586,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25016
+    "symbolsIncludingFileRoots": 25022
   },
   "entries": [
     {
@@ -135654,6 +135654,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#withOwnedTaskWrite",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withOwnedTaskWrite",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipTransactionStore.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipTransactionStore.ts#$file",
@@ -137486,6 +137498,19 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#revokeExactOwnerInTransaction",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:30648fe67907d4c9e0802359ac948f7fd5922f1be8c3ad83228e38d4e2a40953",
+      "status": "current-module",
+      "symbol": "revokeExactOwnerInTransaction",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#runWithTaskExecutionContext",
       "removeAfterWave": null,
       "signatureDigest": "sha256:31172d2dd5db22a1beaf056f2ec1e52f50a988f806e66a09f122e8eebf5981dc",
@@ -137517,6 +137542,19 @@
       "signatureDigest": "sha256:59bf38e770d5ffe8e095ecd40599ca185ac59872742eace604974cd155f5d649",
       "status": "current-module",
       "symbol": "setNodeRunStatusInTransaction",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#submitTaskContinuationInTransaction",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:cbdecdaef4ad09c2e2de17689d9abb736a13d7b8b60661afe20606905d46712d",
+      "status": "current-module",
+      "symbol": "submitTaskContinuationInTransaction",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -137634,6 +137672,19 @@
       "signatureDigest": "sha256:bc78b566fe12a2f410c881d648fb2c50385fd485e4b60872b741f33d9666b7d8",
       "status": "current-module",
       "symbol": "TaskWorkspaceCommitPublishResult",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#terminalizeTaskExecutionIntentsInTransaction",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:74379db5cbee55c77db1acfcbace1717f869e091ce640cb84d783b3637c53f4e",
+      "status": "current-module",
+      "symbol": "terminalizeTaskExecutionIntentsInTransaction",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -152469,6 +152520,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#cancelOpenNodeRuns",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "cancelOpenNodeRuns",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#cancelOpenNodeRunsTx",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -152749,6 +152812,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "WorkspacePruneCause",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#writeTaskStatusAsync",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "writeTaskStatusAsync",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -190689,10 +190764,10 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#submitContinuationIntentTx",
+      "id": "owner:packages/backend/src/services/task.ts#submitContinuationIntentInTx",
       "removeAfterWave": "W4-E4a",
       "status": "legacy-target",
-      "symbol": "submitContinuationIntentTx",
+      "symbol": "submitContinuationIntentInTx",
       "targetContext": "intent",
       "targetLayer": "application"
     },
@@ -300896,5 +300971,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38"
+  "sourceDigest": "sha256:5fd7943e40e69c5cec623b86696e06d6eb4b71dad15ba2792af9e8eab62a6a12"
 }

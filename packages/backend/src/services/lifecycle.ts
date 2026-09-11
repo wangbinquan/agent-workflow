@@ -8,6 +8,7 @@ export {
   TERMINAL_TASK_STATUSES,
   abandonSupersededMergeStates,
   assertNodeRunSourceTerminationAdmission,
+  cancelOpenNodeRuns,
   cancelOpenNodeRunsTx,
   isTerminalTaskStatus,
   registerTerminalWorkspacePrunePolicy,

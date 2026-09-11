@@ -69,20 +69,33 @@ async function rowOf(id: string) {
   return (await db.select().from(tasks).where(eq(tasks.id, id)))[0]!
 }
 
+/**
+ * 真并发模拟：返回一个 db 代理，在 helper **正要进入那笔原子事务**的瞬间（SELECT + 双闸校验
+ * 已完成）先同步执行竞争写者，再放行事务——其 `WHERE status = from` 谓词必然 miss。
+ * bun:sqlite 全同步（.run() 立即落库），时序 100% 确定。
+ *
+ * RFC-359：拦截点要认两种事务形态。旧的 `dbTxSync` 走 drizzle 的 `db.transaction(...)`；
+ * 统一原语 `databaseSessionFor(db).transaction(...)` 不走它，而是自己发
+ * `db.run(sql.raw('BEGIN IMMEDIATE'))`（`platform/persistence/databaseTransaction.ts`）。
+ * 只拦 `transaction` 的旧写法在新原语下**一次都不会触发**，竞争写者不发生、CAS 照常成功，
+ * 判据于是静默变成「没有并发」——所以这里两种都拦，谁先来算谁。
+ */
 function dbWithCompetingWriter(real: DbClient, sabotage: () => void): DbClient {
   let fired = false
+  const fire = (): void => {
+    if (fired) return
+    fired = true
+    sabotage()
+  }
   return new Proxy(real, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver) as unknown
-      if (prop === 'transaction' && typeof value === 'function') {
+      // `transaction`：drizzle 的事务包装（`dbTxSync` 那条路）。
+      // `run`：统一事务原语开事务发的第一条语句就是 `BEGIN IMMEDIATE`；helper 在此之前
+      // 只 `select`，所以「第一次 run」与「事务即将开始」是同一个时刻。
+      if ((prop === 'transaction' || prop === 'run') && typeof value === 'function') {
         return (...args: unknown[]) => {
-          if (!fired) {
-            fired = true
-            // setTaskStatus now owns a transaction that includes its Event
-            // Center outbox write. Race immediately before that transaction so
-            // the status CAS still proves the prune claim cannot tear.
-            sabotage()
-          }
+          fire()
           return (value as (...inner: unknown[]) => unknown).apply(target, args)
         }
       }

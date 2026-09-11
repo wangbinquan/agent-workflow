@@ -41,10 +41,13 @@ import {
   assertVerifiedStopProof,
   assertVerifiedTakeoverProof,
   assertWorkerIdentity,
+  createOwnedTaskTx,
   createOwnershipToken,
   decideOwnerTransition,
   refreshOwnershipToken,
+  type OwnedTaskTx,
   type OwnerSnapshot,
+  type OwnershipToken,
 } from '../domain/ownership'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 
@@ -111,6 +114,54 @@ async function hasUnresolvedEffects(tx: DatabaseTransaction, taskId: string): Pr
  * `sqliteTaskOwnership.ts#revokeExactTx` 一条路，PostgreSQL 侧只能在
  * `postgresqlSourceTerminationParticipant.ts` 里再抄一份 inline CAS。
  */
+/**
+ * RFC-359 —— `withOwnedTaskTx` 的**中立异步孪生**。
+ *
+ * 体内与同步那份逐行等价：一条 owner 行上的条件 UPDATE（精确 owner 元组 + `state='claimed'`，
+ * revision +1）作围栏，命中后把事务句柄与 `OwnedTaskTx` 交给回调。差别只有两处，都是形态而非语义：
+ *   · 事务边界从 `dbTxSync`（bun:sqlite 专属同步面）换成 `databaseSessionFor(db).transaction`
+ *     （显式 BEGIN，两个引擎共用）；
+ *   · CAS 判据从 `.get() === undefined` 换成中立的「取回行数为 0」。
+ *
+ * 事务体因此可以 `await`，也就有了事件循环让渡窗口——护栏见
+ * `platform/persistence/databaseTransaction.ts` 头注释三条，其中最要紧的一条是
+ * **事务体只 await 数据库操作**。这里的回调由 `setTaskStatus` 传入，链路上只有库写。
+ */
+export async function withOwnedTaskWrite<T>(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly token: OwnershipToken
+  readonly now: number
+  readonly run: (tx: DatabaseTransaction, owned: OwnedTaskTx) => T | Promise<T>
+}): Promise<T> {
+  assertOwnershipToken(input.token)
+  return await databaseSessionFor(input.db).transaction(async (tx) => {
+    const fenced = await tx
+      .update(taskExecutionOwners)
+      .set({
+        revision: sql`${taskExecutionOwners.revision} + 1`,
+        updatedAt: input.now,
+      })
+      .where(
+        and(
+          eq(taskExecutionOwners.taskId, input.token.taskId),
+          eq(taskExecutionOwners.ownerId, input.token.ownerId),
+          eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
+          eq(taskExecutionOwners.epoch, input.token.epoch),
+          eq(taskExecutionOwners.state, 'claimed'),
+        ),
+      )
+      .returning({ revision: taskExecutionOwners.revision })
+    const revision = fenced[0]?.revision
+    if (revision === undefined) {
+      throw new TaskExecutionError(
+        'task-execution-stale-owner',
+        `task '${input.token.taskId}' mutation was fenced by a newer owner`,
+      )
+    }
+    return await input.run(tx, createOwnedTaskTx({ token: input.token, revision }))
+  })
+}
+
 export async function revokeExactOwnerInTx(
   tx: DatabaseTransaction,
   input: {

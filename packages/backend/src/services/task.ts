@@ -99,7 +99,6 @@ import {
   workgroupTaskState,
   type SQL,
   type LegacySqliteTaskDatabase,
-  type LegacySqliteTaskTransaction,
   type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
@@ -136,9 +135,7 @@ import {
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
   fenceTaskWrite,
-  submitTaskContinuationTx,
   taskExecutionModule,
-  terminalizeTaskExecutionIntentsTx,
   withTaskExecutionWrite,
   type OwnershipToken,
   type RuntimeStopTicket as TaskDriverStopTicket,
@@ -152,11 +149,16 @@ import {
   setNodeRunStatus,
   setTaskStatus,
   transitionTaskStatusByEvent,
-  cancelOpenNodeRunsTx,
+  cancelOpenNodeRuns,
 } from '@/services/lifecycle'
 // RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 `@/services/lifecycle`
 // 上同名的 bun:sqlite 专属**同步**版按名字区分开。
-import { setNodeRunStatusInTransaction } from '@/modules/task-execution/public/participants'
+import {
+  revokeExactOwnerInTransaction,
+  setNodeRunStatusInTransaction,
+  submitTaskContinuationInTransaction,
+  terminalizeTaskExecutionIntentsInTransaction,
+} from '@/modules/task-execution/public/participants'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
@@ -324,8 +326,13 @@ function continuationSource(
  * admission CAS.  The caller supplies a stable id before entering the
  * transaction so a lost CAS cannot leak an orphan wake or side effect.
  */
-function submitContinuationIntentTx(input: {
-  tx: LegacySqliteTaskTransaction
+/**
+ * RFC-359 —— 续跑 intent 的准入参与者，跑在**中立**事务句柄上。
+ * 与 `submitTaskContinuationTx`（bun:sqlite 专属同步面）是同一套判据的两种解释；
+ * `setTaskStatus` 的写事务搬到显式边界之后，这里的 `onTransitionTx` 回调用的是这一侧。
+ */
+async function submitContinuationIntentInTx(input: {
+  tx: DatabaseTransaction
   taskId: string
   intentId: string
   kind: TaskExecutionIntentKind
@@ -334,8 +341,8 @@ function submitContinuationIntentTx(input: {
   payload: Readonly<Record<string, unknown>>
   now: number
   advanceOperationGeneration: boolean
-}): void {
-  submitTaskContinuationTx(input.tx, input)
+}): Promise<void> {
+  await submitTaskContinuationInTransaction(input.tx, input)
 }
 
 /** RFC-097 (audit S-8/S-23): is an in-process scheduler loop attached to this
@@ -4214,6 +4221,17 @@ export async function cancelTask(
     cascadeFromParent?: boolean
     /** Internal exact parent id for the structured stop cause. */
     cascadeParentTaskId?: string
+    /**
+     * RFC-359 —— 取消 CAS 之前的注入点。**生产从不传**；只有锁「CAS 被别的生命周期写者持续挤掉
+     * 时必须报 starved、而不是把失败当成功」的那条回归判据传。
+     *
+     * 为什么注入点要做进来、而不是像以前那样从外面包一层 db 代理：统一事务原语
+     * （`databaseSessionFor(db).transaction`）不走 drizzle 的 `db.transaction`，SQLite 上事务句柄
+     * 就是 db 对象本身，而且它会串行化写者——旧的代理注入器在新原语下**一次都不触发**，
+     * 用例照样绿但一个并发场景都没验（`docs/dev-gotchas.md` 有完整复盘）。注入点跟着实现走，
+     * 换事务原语不会再让判据静默失效。
+     */
+    beforeStatusCas?: () => void | Promise<void>
   } = {},
 ): Promise<Task> {
   // Bun SQLite can do this preflight synchronously, preserving the legacy
@@ -4267,6 +4285,8 @@ export async function cancelTask(
             taskId: id,
             to: 'canceled',
             allowedFrom: CANCELABLE_TASK_STATUSES,
+            // 注入点透传到真正的读→CAS 窗口里（`setTaskStatus` 自己再读一次定 `from`）。
+            ...(opts.beforeStatusCas === undefined ? {} : { beforeCas: opts.beforeStatusCas }),
             extra: {
               finishedAt: now,
               errorSummary: 'canceled by user',
@@ -4275,12 +4295,12 @@ export async function cancelTask(
                   ? 'canceled-by-parent-cascade'
                   : 'no active scheduler at cancel time',
             },
-            onTransitionTx: (tx, _transition, collector) => {
+            onTransitionTx: async (tx, _transition, collector) => {
               // Once terminal control revokes the worker epoch, that worker is
               // intentionally unable to stamp its own final node status. The
               // same control transaction therefore owns the node projection;
               // later stale callbacks can only lose their CAS/fence.
-              candidateCanceledNodeRuns = cancelOpenNodeRunsTx({
+              candidateCanceledNodeRuns = await cancelOpenNodeRuns({
                 tx,
                 taskId: id,
                 finishedAt: now,
@@ -4300,7 +4320,7 @@ export async function cancelTask(
                       : 'canceled-by-user',
                 })),
               )
-              const owner = tx
+              const owner = await tx
                 .select()
                 .from(taskExecutionOwners)
                 .where(eq(taskExecutionOwners.taskId, id))
@@ -4312,8 +4332,7 @@ export async function cancelTask(
                   daemonGeneration: owner.daemonGeneration,
                   epoch: owner.epoch,
                 })
-                taskExecutionModule.ownership.revokeExactTx({
-                  tx,
+                await revokeExactOwnerInTransaction(tx, {
                   owner: {
                     taskId: owner.taskId,
                     ownerId: owner.ownerId,
@@ -4325,8 +4344,7 @@ export async function cancelTask(
                   recoveryCode: 'terminal-control-cancel',
                 })
               }
-              terminalizeTaskExecutionIntentsTx({
-                tx,
+              await terminalizeTaskExecutionIntentsInTransaction(tx, {
                 taskId: id,
                 state: 'canceled',
                 failureCode:
@@ -4419,7 +4437,12 @@ export async function cancelTask(
   // bounded by maxInvocationDepth; already-terminal children are idempotent.
   for (const childId of committed.childIds) {
     try {
-      await cancelTask(db, childId, { cascadeFromParent: true, cascadeParentTaskId: id })
+      await cancelTask(db, childId, {
+        cascadeFromParent: true,
+        cascadeParentTaskId: id,
+        // 级联进子任务时把注入点一起带下去——那条回归判据锁的正是**子任务**的 CAS 被挤掉。
+        ...(opts.beforeStatusCas === undefined ? {} : { beforeStatusCas: opts.beforeStatusCas }),
+      })
     } catch (err) {
       if (
         (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
@@ -4598,9 +4621,9 @@ export async function resumeTaskWithAtomicSideEffects(
   id: string,
   deps: StartTaskDeps,
   onClaimTx: (
-    tx: LegacySqliteTaskTransaction,
+    tx: DatabaseTransaction,
     transition: { from: TaskStatus; to: TaskStatus },
-  ) => void,
+  ) => void | Promise<void>,
 ): Promise<Task> {
   return resumeKick(db, id, deps, {
     intentKind: 'gate-continuation',
@@ -4646,7 +4669,7 @@ export async function resumeDynamicWorkflowExecution(
     // admission CAS: a lost CAS / failed worktree preflight leaves the gate
     // open and the decision retryable; a standalone phase write would strand
     // the task in 'executing'/'generating' while still awaiting_review.
-    onClaimTx: (tx) => setDwStateTx(tx, id, swap.dw),
+    onClaimTx: async (tx) => await setDwStateTx(tx, id, swap.dw),
   })
 }
 
@@ -4685,12 +4708,12 @@ async function resumeKick(
      */
     worktreePreflight?: boolean
     onClaimTx?: (
-      tx: LegacySqliteTaskTransaction,
+      tx: DatabaseTransaction,
       transition: {
         from: TaskStatus
         to: TaskStatus
       },
-    ) => void
+    ) => void | Promise<void>
   },
 ): Promise<Task> {
   const task = await getTask(db, id)
@@ -4760,9 +4783,9 @@ async function resumeKick(
         failedNodeId: null,
         ...opts.extra,
       },
-      onTransitionTx: (tx, transition) => {
-        opts.onClaimTx?.(tx, transition)
-        submitContinuationIntentTx({
+      onTransitionTx: async (tx, transition) => {
+        await opts.onClaimTx?.(tx, transition)
+        await submitContinuationIntentInTx({
           tx,
           taskId: id,
           intentId,
@@ -5513,8 +5536,8 @@ async function retryRepoPreparation(
       errorMessage: null,
       failedNodeId: null,
     },
-    onTransitionTx: (tx) =>
-      submitContinuationIntentTx({
+    onTransitionTx: async (tx) =>
+      await submitContinuationIntentInTx({
         tx,
         taskId: task.id,
         intentId,
@@ -6293,8 +6316,8 @@ export async function retryNode(
       allowTerminal: true,
       extra: { finishedAt: null, errorSummary: null, errorMessage: null, failedNodeId: null },
       reason: 'retryNode',
-      onTransitionTx: (tx) =>
-        submitContinuationIntentTx({
+      onTransitionTx: async (tx) =>
+        await submitContinuationIntentInTx({
           tx,
           taskId,
           intentId,

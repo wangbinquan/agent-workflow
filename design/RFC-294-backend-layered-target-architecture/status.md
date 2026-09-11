@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:5fd7943e40e69c5cec623b86696e06d6eb4b71dad15ba2792af9e8eab62a6a12`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4787 |
+| `architectureExceptions` | 4793 |
 | `backgroundJobs` | 335 |
-| `crossContextImports` | 5326 |
+| `crossContextImports` | 5332 |
 | `facades` | 322 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25016 |
-| `mutationEntrypoints` | 1736 |
+| `moduleSymbolOwners` | 25022 |
+| `mutationEntrypoints` | 1739 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 984 |
-| `transactionExternalEffects` | 271 |
+| `publicSurfaces` | 989 |
+| `transactionExternalEffects` | 272 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3180 |
-| legacy-inbound | 1427 |
+| legacy-outbound | 3181 |
+| legacy-inbound | 1432 |
 | infrastructure-external | 280 |
 | offered-consumption | 160 |
 | off-dag-offered | 88 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3180 |
-| legacy-inbound | 1427 |
+| legacy-outbound | 3181 |
+| legacy-inbound | 1432 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 81 |
 | no-circular | 6 |
@@ -227,8 +227,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2440 |
-| W4-E1 | 817 |
+| W9 | 2443 |
+| W4-E1 | 820 |
 | W4-C | 399 |
 | W4-E0 | 216 |
 | W4 | 193 |
@@ -253,7 +253,7 @@
 | context | 数量 |
 | --- | --- |
 | resource-catalog | 249 |
-| task-execution | 209 |
+| task-execution | 214 |
 | collaboration | 126 |
 | identity-access | 62 |
 | system-operations | 62 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 984）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 989）
 
 | context | 数量 |
 | --- | --- |

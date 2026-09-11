@@ -310,10 +310,18 @@ describe('RFC-333 T2 canonical continuation authority lock', () => {
     )
 
     expect(bridge).toContain("export * from '@/modules/task-execution/public/participants'")
+    // RFC-359：`setTaskStatus` 的写事务搬到中立的显式边界之后，resume 准入的 `onTransitionTx`
+    // 回调拿到的是 `DatabaseTransaction`，因此走的是同一套判据的**异步孪生**
+    // （`submitTaskContinuationInTransaction`）。本判据锁的东西没变——「legacy resume helper
+    // 必须经 public 合同抵达 RFC-328 的准入参与者，而不是自己拼一份」——只是锚点跟着实现走。
+    // 同步那份仍在（`sqliteTaskExecutionIntentAdmission.ts` 的事务内参与者用它），所以两条都锁。
     expect(participants).toContain(
       'export const submitTaskContinuationTx = submitTaskContinuationTxInternal',
     )
-    expect(task).toContain('submitTaskContinuationTx(input.tx, input)')
+    expect(participants).toContain(
+      'export const submitTaskContinuationInTransaction = submitTaskContinuationInTransactionInternal',
+    )
+    expect(task).toContain('await submitTaskContinuationInTransaction(input.tx, input)')
     expect(task.match(/intentKind: 'gate-continuation'/g)?.length).toBe(2)
     expect(submit).toContain('return await persistence.submitContinuation(input)')
   })

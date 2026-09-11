@@ -193,7 +193,16 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // 经 `legacyHumanGateTaskLifecycle.ts` 装配、在别人的 `dbTxSync` 体内被当参与者调用。
   // 也就是说 `writeTaskStatusTx` 一改异步，要同时翻掉「6 条转移回调链」和「人工门参与者端口」
   // 两条互不相干的链，外加同步的 `appendTaskLifecycleTransitionCommittedEventTx`——属另一刀。
-  'platform/persistence/sqlite/taskLifecycle.ts: 2',
+  // RFC-359 W8 销账：`sqlite/taskLifecycle.ts: 2 → 0` —— `setTaskStatus` / `trySetTaskStatus` 的
+  // 写事务从 `dbTxSync` / `withOwnedTaskTx` 换成 `databaseSessionFor(db).transaction` /
+  // `withOwnedTaskWrite`。**写序列一个字没改**：`taskLifecycleWriteSequence` 本来就是 provider
+  // 中立的 transaction program（头注释：caller chooses synchronous or asynchronous interpretation），
+  // 这里换的只是解释器（`driveAsyncProgram`）与事件追加的异步形态。同步那份保留——RFC-333 的
+  // 人工门参与者挂在别人的同步大事务上，它要的就是同步解释。
+  // 级联：`services/task.ts` 四处 `onTransitionTx` 回调改用中立参与者
+  // （`cancelOpenNodeRuns` / `revokeExactOwnerInTransaction` /
+  // `terminalizeTaskExecutionIntentsInTransaction` / `submitTaskContinuationInTransaction`），
+  // `setDwStateTx` 随其唯一生产调用方放宽到中立句柄。
   // RFC-359 W10 销账：`services/task.ts: 3 → 0`（整行退出账本）——
   //   · 仓库准备重试前的那笔 `withOwnedTaskTx({ run: () => undefined })` 本来就**没有事务体**、
   //     只是围栏，换成 `withTaskExecutionWrite` + `fenceTaskWrite`（同一次 owner CAS，同一个

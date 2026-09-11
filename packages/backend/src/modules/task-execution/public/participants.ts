@@ -89,6 +89,11 @@ import {
 // 原语的调用方要的是两个引擎共用的这一份，同样从 public 合同出去，legacy 层不必伸手进模块内部。
 import { appendTaskCreatedCommittedEvent as appendTaskCreatedCommittedEventInternal } from '../infrastructure/taskLifecycleCommittedEvents'
 import { setNodeRunStatusTx as setNodeRunStatusInTransactionInternal } from '../infrastructure/nodeRunLifecycleTransition'
+// RFC-359 —— 下面三个是上面那批同步原子的**中立异步孪生**（`DatabaseTransaction` 上的形态）。
+// 生命周期写事务从 bun:sqlite 专属同步面搬走之后，`onTransitionTx` 回调里的参与者都要用这一侧。
+import { revokeExactOwnerInTx as revokeExactOwnerInTransactionInternal } from '../infrastructure/taskOwnershipPersistence'
+import { terminalizeTaskExecutionIntentsInTx as terminalizeTaskExecutionIntentsInTransactionInternal } from '../infrastructure/taskExecutionIntentTerminalPersistence'
+import { submitTaskContinuation as submitTaskContinuationInTransactionInternal } from '../infrastructure/taskContinuationAdmission'
 
 declare const workerIdentityBrand: unique symbol
 declare const ownershipTokenBrand: unique symbol
@@ -253,6 +258,10 @@ export const encodeLineageSlotPath = encodeLineageSlotPathInternal
 export const appendTaskCreatedCommittedEventTx = appendTaskCreatedCommittedEventTxInternal
 export const appendTaskCreatedCommittedEvent = appendTaskCreatedCommittedEventInternal
 export const setNodeRunStatusInTransaction = setNodeRunStatusInTransactionInternal
+export const revokeExactOwnerInTransaction = revokeExactOwnerInTransactionInternal
+export const terminalizeTaskExecutionIntentsInTransaction =
+  terminalizeTaskExecutionIntentsInTransactionInternal
+export const submitTaskContinuationInTransaction = submitTaskContinuationInTransactionInternal
 export const appendTaskLifecycleTransitionCommittedEventTx =
   appendTaskLifecycleTransitionCommittedEventTxInternal
 export const appendTaskNodeStatusesCommittedEventTx = appendTaskNodeStatusesCommittedEventTxInternal

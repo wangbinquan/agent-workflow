@@ -24,39 +24,20 @@
 >    只有 4 个能独立落地。整棵 `src/` 做放宽实验（排除 `db/client.ts` 与 `db/txSync.ts`）后
 >    只剩 **92 条错 / ~12 个文件**，全部落在 `SYNC_TRANSACTION_DEBT` 那 4 个文件及其调用闭包上。
 >    **`DbClient` 标注绝大多数是纯过窄、白送；AC-6 不是「一个个迁」，是等下面那一刀。**
-> 3.5. **同步事务面收口 —— 最高优先级。根那一刀 2026-09-11 已经做完又整刀退回，
->    diff 存在 `design/RFC-359-database-provider-unification/settaskstatus-cutover.patch`（868 行），
->    `git apply` 即可接着走（plan §5p 是完整复盘）**。生产侧全部落地、typecheck 干净、
->    `sqlite/taskLifecycle.ts` 同步事务调用点 2 → 0；卡住的是**三份并发回归用例的注入手法**
->    ——它们靠「包 db 代理拦 `db.transaction`」模拟外部并发写者，而统一原语不走 `db.transaction`
->    （自己发 `BEGIN IMMEDIATE`）、SQLite 上 tx 就是 db 对象本身、而且会串行化写者。
->    其中五条已修好（补丁里带着），第六条
->    （`review-cancel-concurrency` 的 parent-cascade starvation）要改这条回归判据的表达方式，
->    **属于「改既有判据意图」，先确认再动**。**最阴的一点**：只拦 `db.transaction` 的注入器在新
->    原语下**静默失效**——用例照样绿，但一个并发场景都没验。全仓这样的注入器有 3 处，
->    根那一刀落地时要一起看。以下是原有的踩点记录：账本
->    `SYNC_TRANSACTION_DEBT` 现值 **7 个调用点 / 4 个文件**，但它们是**一棵树**不是七件事，
->    根在 `sqlite/taskLifecycle.ts` 的 `setTaskStatus`。**好消息是中立解释器与中立写序列都已在仓里**
->    （`transactionProgram.ts` 的 `driveAsyncProgram` + `taskLifecycleWriteSequence.ts`
->    「caller chooses synchronous or asynchronous interpretation」），要写的不是新机器、是新解释。
->    工作量集中在 `services/task.ts` 的四处 `onTransitionTx` 回调（`cancelOpenNodeRunsTx` /
->    `submitContinuationIntentTx`）。**2026-09-11 已顺手销掉其中一笔**：
->    `sqliteTaskExecutionIntent.ts` 的 `submit()` src 侧零调用方，挡着的只有 15 处测试夹具，
->    平移到中立 `DrizzleTaskExecutionIntentPersistence.submit` 后方法与端口声明一并删除，
->    账本 `SYNC_TRANSACTION_DEBT` **4 → 3 个文件**。**下刀前先对每一笔问「src 侧还有调用方吗」**
->    ——账本上的数字里有一部分不是技术钉死，只是测试夹具还挂着。
->    **债 3（`sqliteTaskExecutionEffect.ts`）2026-09-11 已销账**（用户裁决：改用已有具名变体去锁）：
->    `prepareAndAcquire` / `settle` 连同 `withOwnedTaskTx`、端口声明与随之变死的两个助手一并删除，
->    文件 583 → 180 行；18 处测试夹具平移到中立 `DrizzleTaskExecutionEffectPersistence`。
->    两处 `onSettledTx` 按各自真实意图分头处理——真在断言「投影与结算同生共死」的那条改走
->    `settleCodeHostNode`（投影换成真实 node_run 终态，更贴生产），另一处本就只是夹具、平铺成普通写。
->    顺带 `rfc359-w8-unnormalized-unique-insert` 19 → 18。
->    **方法记一条**：撞到「中立端口没有某个逃逸口」时先分辨那条用例锁的是**产品行为**还是**实现机制**
->    ——前者总能用端口已有的具名能力重新表达，后者随实现一起退役。
->    **语义变化要先想清楚**：`dbTxSync` 是同步、BEGIN..COMMIT 之间无人能插进来；换成显式边界的
->    async 事务后有了让渡窗口，护栏见 `databaseTransaction.ts` 头注释三条（尤其「事务体只 await
->    数据库操作」）。落完之后 `DbClient` 放宽与 AC-6 剩余迁移会**跟着一起塌下来，三件是一件事**。
->    量它的时候别把 `db/txSync.ts` 一起替换——`DbTxSync` 会塌成 `never`，噪声百余条（本刀实撞）。
+> 3.5. **同步事务面收口 —— 根那一刀 2026-09-11 已落地**（plan §5p）。账本
+>    `SYNC_TRANSACTION_DEBT` **4 → 1 个文件**，只剩 `sqliteTaskOwnership.ts: 2`
+>    （`claimPendingIntent` 与 `withOwnedTaskTx`，后者仍被同步的 `revokeExactTx` 一族与
+>    `taskDriverLifecycle.ts` 的同步认领用着）。`sqlite/taskLifecycle.ts` 与
+>    `sqliteTaskExecutionEffect.ts` / `sqliteTaskExecutionIntent.ts` 均已归零。
+>    **写序列一个字没改**——`taskLifecycleWriteSequence` 本就是中立 program，换的只是解释器。
+>    **⚠️ 本笔带了六份一次性 `allowGrowth`（N1 账本因新增中立孪生与 public 导出增长），
+>    下一笔提交必须退役**（`git show HEAD:architecture/ledger-baselines.json | grep -c allowGrowth`）。
+>    **注入点的教训**（已落 `docs/dev-gotchas.md`）：并发回归判据不要从外面包 db 代理拦
+>    `db.transaction`——统一原语不走它，旧注入器**一次都不触发**，用例照样绿却什么都没验。
+>    注入点要做进被测代码内部（`setTaskStatus.beforeCas` / `cancelTask.beforeStatusCas`，生产不传）。
+>    **另一条实测**：`cancelTask` 与 `cancel-transition-starved` 只在 SQLite 路径上，
+>    PG 走另一份 762 行的 `postgresqlChildTaskLifecycleParticipant`——取消这一对**尚未合一**，
+>    想用「两条真连接」在 PG 上写并发判据的话要先合它。
 > 4. **重复 burn-down 剩 15 组**（机械扫描器见 plan §5k）。下一个靶心是
 >    `services/capabilityTemplates.ts`（506 行）↔ `code-capability/application/capabilityTemplateOperations.ts`
 >    （388 行）——**同一域的两套实现**，共享 `rowFromInput` / `mergeableSnapshot` / `digest` 等一批

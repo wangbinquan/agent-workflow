@@ -173,12 +173,17 @@ describe('RFC-359 lifecycle native synchronous contract', () => {
       allowedFrom: ['running'],
       now: NOW,
       reason: 'native-companion',
-      onTransitionTx(tx, transition, collector) {
+      // RFC-359：`setTaskStatus` 的写事务已经搬到中立的显式边界，`onTransitionTx` 因此收到的是
+      // `DatabaseTransaction`——判据一字未改，只是每条语句都要 await（同步 drizzle 面上
+      // `.get()` / `.all()` 直接返回值，中立面上返回的是 thenable）。
+      async onTransitionTx(tx, transition, collector) {
         order.push('companion')
         expect(transition).toEqual({ from: 'running', to: 'done' })
-        expect(tx.select().from(tasks).where(eq(tasks.id, 'native')).get()?.status).toBe('done')
-        expect(tx.select().from(committedEvents).all()).toEqual([])
-        tx.update(tasks).set({ name: 'companion-written' }).where(eq(tasks.id, 'native')).run()
+        expect((await tx.select().from(tasks).where(eq(tasks.id, 'native')).get())?.status).toBe(
+          'done',
+        )
+        expect(await tx.select().from(committedEvents)).toEqual([])
+        await tx.update(tasks).set({ name: 'companion-written' }).where(eq(tasks.id, 'native'))
         collector.addNodeChanges([ADDED])
       },
       deferCommittedEventPublication(refs) {

@@ -5193,7 +5193,6 @@
       "canonicalImportEdgeIds": [
         "import:0a9581d0aef59eb57717",
         "import:11f9a6b4d8215cb0324a",
-        "import:716be69ae2cd0c0f70ea",
         "import:a91bbed82d5c693d154c"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
@@ -7231,11 +7230,13 @@
       "introducedByRFC": "RFC-359 W16",
       "removeAfterWave": "RFC-359 W12：完成公共 setTaskStatus 的同步 companion 调用迁移后退役 native 兼容入口及该入边",
       "canonicalImportEdgeIds": [
+        "import:f15b35ffea1ef3860a82",
         "import:fa0ae241ddff7878ff46"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteExtra"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteExtra",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteInput"
       ],
       "canonicalFacadeIds": []
     },
@@ -8795,15 +8796,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38",
+    "sourceDigest": "sha256:5fd7943e40e69c5cec623b86696e06d6eb4b71dad15ba2792af9e8eab62a6a12",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "38ecfe53ad251fd144335bd6b3c56b4df70b2916",
-    "contentDigest": "sha256:3fd9c66853bd3f5e45dfa28db21452b920642d81e3f9cab4c69d3786ace78287",
+    "currentSnapshotSha": "0e90a64732e3c9fe1f79382b6cfa24a29ac57b59",
+    "contentDigest": "sha256:25af2db165a0e84ca91f9cff19050b7fdd8e14a7e5aa6a18f54e537c99ea9f1a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

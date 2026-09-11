@@ -433,10 +433,14 @@ test('W8 判不合 · children 是两台引擎：SQLite 转发 services/task，P
     resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
     'utf8',
   )
+  // 锚点从函数**签名**起算会被选项对象的文档注释推开（RFC-359 给 `beforeStatusCas` 加注释时实撞：
+  // 1200 字窗口一下就不够了）。改从**函数体开始**起算——判据要的是「进门第一件事就是同步读」，
+  // 与签名有多长无关。
   const cancelBody = cancelTaskSource.slice(
     cancelTaskSource.indexOf('export async function cancelTask('),
   )
-  expect(cancelBody.slice(0, 1_200)).toContain('.all()[0]')
+  const cancelStatements = cancelBody.slice(cancelBody.indexOf('): Promise<Task> {'))
+  expect(cancelStatements.slice(0, 600)).toContain('.all()[0]')
 })
 
 test('W8 判不合 · activity 读的是两个不同的 registry：进程级单例 vs 注入的 executionModule', () => {

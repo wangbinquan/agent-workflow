@@ -14,6 +14,7 @@
 // G3 grep-locks (rfc217-architecture-locks.test.ts) keep gate-field literals
 // and retired-slot accesses out of every other module.
 
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import {
   DwStateSchema,
   perCardInputDescriptionBudget,
@@ -263,11 +264,19 @@ export async function setPauseReason(
     .where(eq(workgroupTaskState.taskId, taskId))
 }
 
-export function setDwStateTx(tx: DbTxSync, taskId: string, dw: DwState): void {
-  tx.update(workgroupTaskState)
+// RFC-359 —— 事务内写数字员工状态。签名从 bun:sqlite 专属的 `DbTxSync` 放宽到中立句柄：
+// 唯一的生产调用方是 `services/task.ts` 里 resume 准入 CAS 的 `onClaimTx`，而那笔写事务已经
+// 搬到 `databaseSessionFor(db).transaction`。名字保持 `…Tx`（本仓 `…Tx` 表示「吃事务句柄」，
+// 中立的 `setNodeRunStatusTx` 同款），facade 符号表因此不动。
+export async function setDwStateTx(
+  tx: DatabaseTransaction,
+  taskId: string,
+  dw: DwState,
+): Promise<void> {
+  await tx
+    .update(workgroupTaskState)
     .set({ dwStateJson: JSON.stringify(DwStateSchema.parse(dw)), updatedAt: Date.now() })
     .where(eq(workgroupTaskState.taskId, taskId))
-    .run()
 }
 
 export async function setDwState(db: DbClient, taskId: string, dw: DwState): Promise<void> {

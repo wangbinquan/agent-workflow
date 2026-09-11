@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 30,
-    "transactionCallbacks": 271
+    "transactionCallbacks": 272
   },
   "entries": [
     {
@@ -2990,6 +2990,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#transaction:137",
+      "line": 137,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#withOwnedTaskWrite",
+      "status": "clear",
+      "symbol": "withOwnedTaskWrite",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#transaction:551",
@@ -3263,13 +3275,13 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#dbTxSync:880",
-      "line": 880,
+      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transaction:969",
+      "line": 969,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setTaskStatus",
       "status": "clear",
       "symbol": "setTaskStatus",
       "targetContext": "platform",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
@@ -3323,7 +3335,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3189b56f5f9966aebd172e3367b67987b6c602f82306a51161a279d2533f7c38",
+  "sourceDigest": "sha256:5fd7943e40e69c5cec623b86696e06d6eb4b71dad15ba2792af9e8eab62a6a12",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4436,9 +4448,9 @@
         "effectKind": "workspace-prepare",
         "file": "packages/backend/src/services/task.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/task.ts#5649:workspace-prepare",
+        "id": "task-effect:packages/backend/src/services/task.ts#5672:workspace-prepare",
         "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 5649,
+        "line": 5672,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "recoveryClass": "local-probe-or-actor",

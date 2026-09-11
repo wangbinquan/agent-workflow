@@ -51,16 +51,22 @@ import {
 import { nodeRuns, tasks } from '@/db/schema'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
+import { type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import {
   assertTaskExecutionContext,
+  appendTaskLifecycleTransitionCommittedEvent,
   appendTaskLifecycleTransitionCommittedEventTx,
   currentTaskExecutionContext,
   fenceTaskWrite,
-  taskExecutionModule,
+  transitionNodeRunStatusInTx,
+  withOwnedTaskWrite,
   withTaskExecutionWrite,
 } from '@/modules/task-execution/public/operations'
 import type {
@@ -70,8 +76,10 @@ import type {
 import {
   taskLifecycleWriteSequence,
   type TaskLifecycleWriteExtra,
+  type TaskLifecycleWriteInput,
 } from '@/modules/task-execution/infrastructure/taskLifecycleWriteSequence'
 import {
+  driveAsyncProgram,
   driveSyncProgram,
   executeTransactionStepSync,
 } from '@/platform/persistence/transactionProgram'
@@ -581,6 +589,68 @@ function writeTaskStatusTx(input: WriteTaskStatusTxInput): Readonly<{
   return { revision: result.lifecycleEventRevision, eventRef: result.eventRef }
 }
 
+/**
+ * RFC-359 —— 同一个写序列的**异步解释**。
+ *
+ * `taskLifecycleWriteSequence` 本来就是 provider 中立的 transaction program，它的头注释写得很直白：
+ * 「The caller owns the transaction and chooses synchronous or asynchronous interpretation.」
+ * 所以这里不是第二台机器，只是换一个解释器（`driveAsyncProgram`）与一个异步的事件追加
+ * （`appendTaskLifecycleTransitionCommittedEvent`，中立版，`humanGateTaskTransition.ts` 与
+ * PostgreSQL 路由早就在用）。同步那份**保留**——RFC-333 的人工门参与者挂在别人的同步大事务上，
+ * 它要的就是同步解释。
+ */
+async function writeTaskStatusAsync(
+  input: TaskLifecycleWriteInput<DatabaseTransaction> & {
+    readonly tx: DatabaseTransaction
+    readonly allowedFrom: readonly TaskStatus[]
+    readonly reason: string
+  },
+): Promise<Readonly<{ revision: number; eventRef: CommittedEventRef | null }>> {
+  const result = await driveAsyncProgram(
+    taskLifecycleWriteSequence(
+      input.tx,
+      input,
+      async (tx, event) =>
+        await appendTaskLifecycleTransitionCommittedEvent(tx, {
+          ...event,
+          sourceTerminationEffectRef: event.sourceTerminationEffectRef ?? null,
+        }),
+    ),
+    async (step) => await step(),
+  )
+  if (result === null) {
+    throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
+  }
+  return { revision: result.lifecycleEventRevision, eventRef: result.eventRef }
+}
+
+/**
+ * RFC-359 —— `cancelOpenNodeRunsTx` 的中立异步孪生。判据一字不差：同一张
+ * `allowedFromStatusesForEvent({ kind: 'mark-canceled' })` 的可取消状态集，逐行走共用的
+ * 节点转移表（中立的 `transitionNodeRunStatusInTx`）。
+ */
+export async function cancelOpenNodeRuns(args: {
+  readonly tx: DatabaseTransaction
+  readonly taskId: string
+  readonly finishedAt: number
+  readonly errorMessage: string
+}): Promise<Array<{ id: string; nodeId: string }>> {
+  const cancelableStatuses = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
+  const rows = await args.tx
+    .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, args.taskId), inArray(nodeRuns.status, [...cancelableStatuses])))
+  for (const row of rows) {
+    await transitionNodeRunStatusInTx({
+      tx: args.tx,
+      nodeRunId: row.id,
+      event: { kind: 'mark-canceled', reason: args.errorMessage },
+      extra: { finishedAt: args.finishedAt, errorMessage: args.errorMessage },
+    })
+  }
+  return rows
+}
+
 export type HumanGateTaskTransition =
   | 'park-review'
   | 'park-human'
@@ -721,10 +791,10 @@ export async function setTaskStatus(args: {
    * would otherwise tear if resume loses or preflight fails.
    */
   onTransitionTx?: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     transition: { from: TaskStatus; to: TaskStatus },
     collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
-  ) => void
+  ) => void | Promise<void>
   /**
    * RFC-328 exact durable worker authority.  Control/maintenance callers omit
    * this and enter through their own revision/proof gateways; a scheduler
@@ -740,6 +810,16 @@ export async function setTaskStatus(args: {
   deferCommittedEventPublication?: (eventRefs: readonly CommittedEventRef[]) => void
   /** RFC-207 — injectable clock for the run-time accounting (test determinism). */
   now?: number
+  /**
+   * RFC-359 —— **读→CAS 窗口**里的注入点。本函数先读一次状态定出 `from`，再在写事务里以
+   * `WHERE status = from` 做 CAS；这个回调恰好落在两者之间，是「别的生命周期写者在窗口里
+   * 把行挪走」这件事唯一能被确定性注入的位置。**生产从不传**，只有锁 CAS 失败语义的回归判据传。
+   *
+   * 为什么注入点必须做进来：统一事务原语不走 drizzle 的 `db.transaction`、SQLite 上事务句柄
+   * 就是 db 对象本身、而且它会串行化写者——从外面包 db 代理的老办法在新原语下**一次都不触发**，
+   * 用例照样绿却一个并发场景都没验（`docs/dev-gotchas.md` 有完整复盘）。
+   */
+  beforeCas?: () => void | Promise<void>
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   const rows = await args.db
@@ -848,8 +928,16 @@ export async function setTaskStatus(args: {
     args.to,
   )
   let committedEventRef: CommittedEventRef | null = null
-  const commitTransition = (tx: DbTxSync): void => {
-    const committed = writeTaskStatusTx({
+  // RFC-359 —— 写事务从 bun:sqlite 专属的同步面（`dbTxSync` / `withOwnedTaskTx`）搬到中立的
+  // 显式边界。写序列本身一个字没改：`taskLifecycleWriteSequence` 是同一个 program，
+  // 这里换的只是解释器（见 `writeTaskStatusAsync` 的注释）。
+  //
+  // 代价是事务体里出现了事件循环让渡窗口，护栏见 `platform/persistence/databaseTransaction.ts`
+  // 头注释三条。最要紧的一条是**事务体只 await 数据库操作**：本函数体内除写序列外只有
+  // `onTransitionTx` 一个外部回调，它的四个生产实现（`services/task.ts`）也只做库写。
+  // 新增回调时这条要继续守住。
+  const commitTransition = async (tx: DatabaseTransaction): Promise<void> => {
+    const committed = await writeTaskStatusAsync({
       tx,
       taskId: args.taskId,
       from,
@@ -867,17 +955,18 @@ export async function setTaskStatus(args: {
     })
     committedEventRef = committed.eventRef
   }
+  await args.beforeCas?.()
   const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
   if (executionContext !== undefined) {
     assertTaskExecutionContext(executionContext, args.taskId)
-    taskExecutionModule.ownership.withOwnedTaskTx({
+    await withOwnedTaskWrite({
       db: args.db,
       token: executionContext.token,
       now,
-      run: (tx) => commitTransition(tx),
+      run: async (tx) => await commitTransition(tx),
     })
   } else {
-    dbTxSync(args.db, commitTransition)
+    await databaseSessionFor(args.db).transaction(commitTransition)
   }
   const committedEventRefs = committedEventRef === null ? [] : [committedEventRef]
   if (args.deferCommittedEventPublication === undefined) {
@@ -903,10 +992,10 @@ export async function trySetTaskStatus(args: {
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
   onTransitionTx?: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     transition: { from: TaskStatus; to: TaskStatus },
     collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
-  ) => void
+  ) => void | Promise<void>
   executionContext?: TaskExecutionContextRef
   committedEventIdentity?: Partial<TaskCommittedEventIdentity>
   sourceTerminationEffectRef?: string | null
@@ -942,10 +1031,10 @@ export async function transitionTaskStatusByEvent(args: {
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
   onTransitionTx?: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     transition: { from: TaskStatus; to: TaskStatus },
     collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
-  ) => void
+  ) => void | Promise<void>
   executionContext?: TaskExecutionContextRef
   committedEventIdentity?: Partial<TaskCommittedEventIdentity>
   sourceTerminationEffectRef?: string | null

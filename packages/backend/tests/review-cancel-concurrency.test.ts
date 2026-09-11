@@ -318,24 +318,30 @@ function observeDbSelect(db: DbClient, onSelect: () => void): DbClient {
 }
 
 /** Make the first canceled task UPDATE lose to running→awaiting_human. */
+/**
+ * RFC-359 —— 两个注入器都要认**统一事务原语**的形状。
+ *
+ * 旧的 `dbTxSync` 走 drizzle 的 `db.transaction(cb)`，于是注入点是「拦 `transaction`、
+ * 把回调拿到的 `tx` 再包一层」。统一原语 `databaseSessionFor(db).transaction(...)` 不走它：
+ * 它自己发 `db.run(sql.raw('BEGIN IMMEDIATE'))`，而且在 SQLite 上**事务句柄就是 db 本身**
+ * （`createSqliteDatabaseSession`：`const tx = db as unknown as DatabaseTransaction`）。
+ * 两条推论，注入器照此改写：
+ *   · 事务边界的信号从「`transaction` 被调用」变成「`run` 收到一条 BEGIN」；
+ *   · 事务内的语句就走 db 这一层，所以直接包 `db.update` 就能拦到 CAS，不必再包 tx。
+ * 只拦 `transaction` 的旧写法在新原语下一次都不触发——注入不发生、判据静默变成「没有并发」。
+ */
+
 function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): DbClient {
   let lost = false
-  const wrapBuilder = (
-    tx: Parameters<Parameters<DbClient['transaction']>[0]>[0],
-    builder: object,
-    taskUpdate: boolean,
-    cancelUpdate: boolean,
-  ): object => {
-    const proxy: object = new Proxy(builder, {
+  const wrapBuilder = (builder: object, taskUpdate: boolean, cancelUpdate: boolean): object =>
+    new Proxy(builder, {
       get(target, property) {
-        if (property === 'all' && taskUpdate && cancelUpdate && !lost) {
+        if ((property === 'all' || property === 'then') && taskUpdate && cancelUpdate && !lost) {
           return (...args: unknown[]) => {
             lost = true
             onLost()
-            // The lifecycle writer is now transactional. Move the row through
-            // the raw tx immediately before its CAS so the target UPDATE loses
-            // while its companion outbox write remains absent.
-            tx.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId)).run()
+            // 在目标 UPDATE 的 CAS 之前把行挪走：CAS 必然 miss，而它的伴随 outbox 写也不该出现。
+            db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId)).run()
             const method = Reflect.get(target, property, target) as (...inner: unknown[]) => unknown
             return Reflect.apply(method, target, args)
           }
@@ -350,65 +356,54 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
             args[0] !== null &&
             (args[0] as { status?: unknown }).status === 'canceled'
           return typeof next === 'object' && next !== null
-            ? wrapBuilder(tx, next, taskUpdate, cancelUpdate || armsCancel)
+            ? wrapBuilder(next, taskUpdate, cancelUpdate || armsCancel)
             : next
         }
       },
     })
-    return proxy
-  }
 
   return new Proxy(db, {
     get(target, property) {
       const value = Reflect.get(target, property, target)
-      if (property !== 'transaction' || typeof value !== 'function') return value
-      return (...args: unknown[]) => {
-        const callback = args[0] as (
-          tx: Parameters<Parameters<DbClient['transaction']>[0]>[0],
-        ) => unknown
-        return Reflect.apply(value, target, [
-          (tx: Parameters<Parameters<DbClient['transaction']>[0]>[0]) => {
-            const wrappedTx = new Proxy(tx, {
-              get(txTarget, txProperty) {
-                const txValue = Reflect.get(txTarget, txProperty, txTarget)
-                if (txProperty !== 'update' || typeof txValue !== 'function') return txValue
-                return (...updateArgs: unknown[]) =>
-                  wrapBuilder(
-                    tx,
-                    Reflect.apply(txValue, txTarget, updateArgs) as object,
-                    updateArgs[0] === tasks,
-                    false,
-                  )
-              },
-            })
-            return callback(wrappedTx)
-          },
-          ...args.slice(1),
-        ])
+      if (property !== 'update' || typeof value !== 'function') {
+        return typeof value === 'function'
+          ? (value as (...inner: unknown[]) => unknown).bind(target)
+          : value
       }
+      return (...updateArgs: unknown[]) =>
+        wrapBuilder(
+          Reflect.apply(value, target, updateArgs) as object,
+          updateArgs[0] === tasks,
+          false,
+        )
     },
   }) as DbClient
 }
 
-/** Keep one task moving between cancelable states before every task-cancel CAS. */
-function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): DbClient {
-  let nextStatus: 'awaiting_human' | 'awaiting_review' = 'awaiting_review'
-  return new Proxy(db, {
-    get(target, property) {
-      const value = Reflect.get(target, property, target)
-      if (property !== 'transaction' || typeof value !== 'function') return value
-      return (...args: unknown[]) => {
-        // Every lifecycle CAS opens a transaction. Churn the target immediately
-        // before each boundary so a child cancellation can never win its
-        // read→CAS window, while the transaction itself remains production-real.
-        onAttempt()
-        const status = nextStatus
-        nextStatus = status === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
-        db.update(tasks).set({ status }).where(eq(tasks.id, taskId)).run()
-        return Reflect.apply(value, target, args)
-      }
-    },
-  }) as DbClient
+/**
+ * 让目标任务在每一次 task-cancel CAS 之前换一次可取消状态，于是那笔 CAS 永远赢不了。
+ *
+ * RFC-359：注入点**做进被测代码内部**（`cancelTask` 的 `beforeStatusCas`，生产从不传），
+ * 不再从外面包 db 代理。原因写在 `docs/dev-gotchas.md`：统一事务原语不走 drizzle 的
+ * `db.transaction`、SQLite 上事务句柄就是 db 对象本身、而且它会串行化写者——旧的代理注入器
+ * 在新原语下**一次都不触发**，用例照样绿却一个并发场景都没验。
+ *
+ * 「换到另一个状态」是**读当前值再翻**，不是固定轮换：搅动与 CAS 之间不再隔着事务边界，
+ * 固定轮换会与 CAS 的期望值对上号，几轮之后反而让 CAS 赢了。
+ */
+function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): () => void {
+  return () => {
+    const current = db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get()?.status
+    // 只搅动仍可取消的目标；父任务先落终态之后就不再动它。
+    if (current !== 'awaiting_review' && current !== 'awaiting_human') return
+    onAttempt()
+    const next = current === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
+    db.update(tasks).set({ status: next }).where(eq(tasks.id, taskId)).run()
+  }
 }
 
 // RFC-285 B6①：service 签名新增作者校验 authz——本文件既有用例全走 owner 旁路
@@ -843,11 +838,11 @@ describe('review mutation vs task cancellation linearization', () => {
       invocationDepth: 1,
     })
     let cancelCasAttempts = 0
-    const starvingDb = starveTaskCancelCas(h.db, childId, () => {
+    const beforeStatusCas = starveTaskCancelCas(h.db, childId, () => {
       cancelCasAttempts += 1
     })
 
-    await expect(cancelTask(starvingDb, h.taskId)).rejects.toMatchObject({
+    await expect(cancelTask(h.db, h.taskId, { beforeStatusCas })).rejects.toMatchObject({
       code: 'cancel-transition-starved',
     })
 

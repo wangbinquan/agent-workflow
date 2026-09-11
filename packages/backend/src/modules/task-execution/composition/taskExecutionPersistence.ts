@@ -34,7 +34,6 @@ import {
 } from '../infrastructure/taskRecoveryOperations'
 import { terminalizeTaskExecutionIntentsInTx } from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from '../infrastructure/runtimeSessionLeaseOperations'
-import { terminalizeTaskExecutionIntentsTx } from '../infrastructure/sqliteTerminalizeExecutionIntent'
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 
@@ -113,9 +112,8 @@ function createSqliteRecoveryAdministration(db: DbClient) {
           errorSummary: input.failureCode,
           errorMessage: input.errorMessage,
         },
-        onTransitionTx: (tx) =>
-          terminalizeTaskExecutionIntentsTx({
-            tx,
+        onTransitionTx: async (tx) =>
+          await terminalizeTaskExecutionIntentsInTx(tx, {
             taskId: input.taskId,
             state: 'failed',
             failureCode: input.failureCode,
