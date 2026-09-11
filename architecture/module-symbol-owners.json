@@ -6,7 +6,7 @@
     "moduleFiles": 1187,
     "productionFiles": 2566,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24931
+    "symbolsIncludingFileRoots": 24930
   },
   "entries": [
     {
@@ -128252,18 +128252,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "LegacySqliteTaskDatabase",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskTransaction",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "LegacySqliteTaskTransaction",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -299869,5 +299857,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c9cd969aa33d792adf9352225539af1175d3bdaf011be67e9ee59e0794d4cee2"
+  "sourceDigest": "sha256:9b6991462df9f0383ceb8c80c6c641aeccac979c19ac1b1493d789fce427c69d"
 }

@@ -1245,6 +1245,16 @@ bun test tests/rfc359-w14-p0-mutation-verdict.test.ts tests/test-suite-policy.te
 （第二次实撞：删 `sqliteTerminalizeExecutionIntent.ts`，两条守卫本机都能红，但我只跑了
 `tests/architecture/` 与主题波及面，于是四个 CI job 替我发现。）
 
+**第三次实撞给的是另一条**：删 `sqliteNodeRunMintParticipant.ts` 后，
+`tests/rfc359-w47-node-run-mint-program.test.ts` 在**模块顶层** `readFileSync` 它——这既不是
+import（typecheck 看不见）、也不在那两条守卫的扫描面里（它们只看 `.github/` 与 `scripts/`）。
+本机那轮 428 文件的大扫已经报了这条 ENOENT，**是我 triage 时漏读的**：bun 把它印成
+`# Unhandled error between tests`，既不带 `(fail)` 也不带 `error:` 前缀，于是
+`grep -E "^\(fail\)|^error:"` 一条都捞不到，只在汇总行里多出一个孤零零的 `1 error`。
+**triage 大扫的固定姿势**：`fail` 与 `error` 两个计数都要对上，并且显式
+`grep -nE "Unhandled error|ENOENT|Cannot find module"` 扫一遍——汇总行里的 `error` 计数不为 0
+就一定要找到它是谁。
+
 ## 给 eslint 的文件清单里混进**已删除的路径**，它一条都不 lint 还退 0（RFC-359 实撞，2026-09-11）
 
 删文件的那种提交最容易撞：习惯性用 `git status --porcelain | awk '{print $2}'` 拼出「本次改动的

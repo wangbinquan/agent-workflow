@@ -10,6 +10,7 @@ import {
   driveSyncProgram,
   executeTransactionStepSync,
   transactionStep,
+  type TransactionProgramStep,
 } from '@/platform/persistence/transactionProgram'
 
 type Mode = 'sync' | 'async'
@@ -61,10 +62,6 @@ const scenarios: readonly Scenario[] = [
 ]
 
 const infrastructure = resolve(import.meta.dir, '../src/modules/task-execution/infrastructure')
-const nativeSource = readFileSync(
-  resolve(infrastructure, 'sqliteNodeRunMintParticipant.ts'),
-  'utf8',
-)
 const neutralSource = readFileSync(resolve(infrastructure, 'nodeRunMintParticipant.ts'), 'utf8')
 
 /** Remove only type syntax/imports; do not print or reconstruct the runtime function tree. */
@@ -293,11 +290,32 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
     ports,
     'typeof nodeRunMintProgram === "function" ? nodeRunMintProgram : undefined',
   )
-  const factory = evaluate(
-    mode === 'sync' ? nativeSource : neutralSource,
-    { ...ports, nodeRunMintProgram: shared },
-    mode === 'sync' ? 'createSqliteNodeRunMintParticipantInTx' : 'createNodeRunMintParticipantInTx',
-  )
+  // RFC-359：生产里那个**同步**铸行参与者（`sqliteNodeRunMintParticipant.ts`）已退役——它在 src
+  // 侧唯一的到达路径是零调用方的 `mintNodeRunTx`。本判据锁的从来不是那个文件，而是
+  // **同一个 `nodeRunMintProgram` 在两种解释下终结契约一致**；异步那一面仍取生产工厂，
+  // 同步那一面改由本判据自己用公共驱动器组装（`driveSyncProgram` + `executeTransactionStepSync`，
+  // 与其余仍在跑同步解释的生产调用方同一对）。两面驱动的是同一个 `shared` program。
+  const factory =
+    mode === 'sync'
+      ? (handle: unknown) => ({
+          mint(value: unknown) {
+            return driveSyncProgram(
+              (
+                shared as (
+                  tx: unknown,
+                  input: unknown,
+                  run: (q: unknown) => unknown,
+                ) => Generator<TransactionProgramStep, unknown, unknown>
+              )(handle, value, (query: unknown) => (query as { all(): unknown }).all()),
+              executeTransactionStepSync,
+            )
+          },
+        })
+      : evaluate(
+          neutralSource,
+          { ...ports, nodeRunMintProgram: shared },
+          'createNodeRunMintParticipantInTx',
+        )
   if (typeof factory !== 'function') throw new Error('missing actual mint factory')
   const participant: unknown = factory(tx)
   if (
