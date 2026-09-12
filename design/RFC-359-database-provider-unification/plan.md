@@ -6864,3 +6864,16 @@ describe 里，跑出 `[postgresql] > application lifetime > … > [postgresql] 
 
 **规律**：看到「同一段夹具在一个文件里出现三次以上」，先提注册器再迁，比逐份改省一个数量级，
 而且提完之后 native 那条路往往就自己空了——`删除优于 deprecate` 在这里是自动发生的。
+
+
+## 5ba. `inventory-in-flight-fallback`：账本上那一条是**纯死代码**（553 → 551 的最后一格）
+
+这个文件早已全量走 `registerProviderApplication`（provider 注册器），但模块级还留着一个
+自建 SQLite 的 `buildApp()`——**一个调用方都没有**：所有用例用的是注册器回调里同名的**参数**
+（shadowing）。账本上那一条因此不是「还没迁」，是**没人清掉的残留**。
+
+连同 `Omit<ReturnType<typeof buildApp>, 'db'>` 那处类型推导（它是唯一还引用它的地方）
+一起改成显式形状，函数删除。
+
+**规律**：账本上剩下的条目里，有一部分是这种——**shadowing 把死代码藏住了**。
+迁移前先 grep 一遍「这个 `createInMemoryDb` 到底是谁在用」，可能根本不用迁，删掉即可。

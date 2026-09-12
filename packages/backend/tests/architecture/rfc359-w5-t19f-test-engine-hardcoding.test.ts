@@ -95,7 +95,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'intent-agent-branch-ports.test.ts: 1',
   'intent-mcp-oauth.test.ts: 1',
   'intent-privileged-node-capability.test.ts: 1',
-  'inventory-in-flight-fallback.test.ts: 1',
   'lifecycle-property.test.ts: 1',
   'lifecycle-repair-harness.ts: 1',
   'lifecycle-transitions-current.test.ts: 1',

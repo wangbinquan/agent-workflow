@@ -21,9 +21,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { runRootFor } from '../src/services/runtime/opencode/inventory'
 import type {
@@ -40,19 +38,6 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function req(app: Hono, path: string): Promise<Response> {
   return app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
@@ -412,9 +397,9 @@ describe('RFC-062 grep guard', () => {
 // RFC-359 W49: keep native fixtures while running the original selected calls on each provider.
 function registerProviderApplication(
   register: (
-    buildProviderApp: () => Promise<
-      Omit<ReturnType<typeof buildApp>, 'db'> & { db: ProviderNeutralDatabase }
-    >,
+    // RFC-359 AC-6 —— 模块级那个自建 SQLite 的 `buildApp` 已无调用方（所有用例都在注册器的
+    // 回调里用同名参数），随之删除；这里改写显式形状，不再从它推导。
+    buildProviderApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
     seedForCase: typeof seed,
   ) => void,
 ): void {
