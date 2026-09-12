@@ -4714,3 +4714,22 @@ Received: "failed"
 
 **不要混淆**：`docs/dev-gotchas.md:3213` 记过 `workflow-matrix` 的另外两条
 （「耗尽重试预算」「超时套用到每次重试」）是已知 CI-only 时序放大，那两条与本条不是同一个用例。
+
+## 并发点燃意图回合在 PostgreSQL 上会撞死锁（2026-09-12 观察，未决）
+
+迁 `rfc234-intent-routes` 到双引擎时，`[postgresql]` 侧偶发看到 dispatcher 日志：
+
+```
+WARN [intentDispatcher] intent-turn-fire-failed sessionId=… err="deadlock detected"
+WARN [intentDispatcher] intent-turn-fire-failed sessionId=… err="session vanished"
+```
+
+出现在「连续 POST 三次 `/api/intent-sessions`、每次顺带点燃一次回合」的场景。
+给那条用例补了数据集静止屏障之后不再出现（用例本身的判据与它无关）。
+
+**待办**：单独查一次「并发点燃多个意图回合时，PG 上两笔事务的加锁顺序是什么」。
+dispatcher 目前的处置是 warn + 把该回合记失败（自己的重试域），所以不影响用例判据；
+但生产上多个用户同时开会话是常态，值得确认这是可接受的降级还是需要调整加锁顺序。
+SQLite 单写者天然不会暴露这条路径——这正是「合一之后才看得见」的那类。
+
+发现经过见 `design/RFC-359-database-provider-unification/plan.md` §5bo。

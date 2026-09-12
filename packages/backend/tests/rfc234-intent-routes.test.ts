@@ -4,18 +4,19 @@
 //  admin read-only audit, in-flight 409, and the route-boundary error codes
 //  `intent-invalid` / `invalid-json` (named here for route-error-code-coverage).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { Hono } from 'hono'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { agents, intentSessions } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -26,15 +27,21 @@ import {
 } from '../src/services/systemAgentRun'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-let db: DbClient
-let root: string
-let app: ReturnType<typeof createApp>
+// RFC-359 AC-6 —— 原来是**模块级** beforeEach/afterEach（对整文件生效，混两种引擎必错，
+// pre-flight 的 MODULE-LEVEL-HARNESS）+ 两个普通 describe。整段钩子上提进注册面。
+//
+// 关键判据：`runTurn` 是**逐请求**取的（`src/modules/intent/inbound/intentSessionRoutes.ts`
+// 在 `dispatchIntentTurn(...)` 入参里现取 `deps.runTurn`），**不是**装载期捕获。所以文件里
+// 那两处「换一套 stub 重建应用」可以直接塌成「换 `currentRunFn` 目标」——不必重开应用
+// （重开会换掉 app home，把用例中途写进去的东西一起丢掉）。
+let db: ProviderNeutralDatabase
+let app: Hono
 let ownerToken: string
 let strangerToken: string
 let managerToken: string
 let strangerUserId: string
+let currentRunFn: ((opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>) | undefined
 
 const CHANGESET = JSON.stringify({
   $schema_version: 1,
@@ -134,20 +141,25 @@ async function waitForCondition(until: () => boolean): Promise<void> {
   throw new Error('condition timed out')
 }
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+const SCOPE_OPTIONS = {
+  token: DAEMON_TOKEN,
+  opencodeVersion: null,
+  dbVersion: 1,
+  tempPrefix: 'rfc234-intent-routes-',
+  intentTestDependencies: {
+    runFn: (opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> => {
+      if (currentRunFn === undefined) throw new Error('rfc234 runFn not installed')
+      return currentRunFn(opts)
+    },
+  },
+} as const
+
+async function setUp(scope: ProviderHttpApplicationScope): Promise<void> {
+  db = scope.harness.db
   await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
-  root = mkdtempSync(join(tmpdir(), 'rfc234-intent-routes-'))
-  process.env.AGENT_WORKFLOW_HOME = root
-  app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: join(root, 'config.json'),
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    intentTestDependencies: { runFn: stubRun('changeset') },
-  })
+  currentRunFn = stubRun('changeset')
+  app = (await scope.open()).app
   const owner = await createUser(db, {
     username: 'owner',
     displayName: 'Owner',
@@ -170,13 +182,13 @@ beforeEach(async () => {
   ownerToken = (await createSession({ db, userId: owner.id })).token
   strangerToken = (await createSession({ db, userId: stranger.id })).token
   managerToken = (await createSession({ db, userId: manager.id })).token
-})
-afterEach(() => {
-  delete process.env.AGENT_WORKFLOW_HOME
-  rmSync(root, { recursive: true, force: true })
-})
+}
 
-describe('intent session routes', () => {
+describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (scope) => {
+  beforeEach(async () => {
+    await setUp(scope)
+  })
+
   test('stubbed end-to-end: create → draft+slots → commit → resource lands', async () => {
     const created = await req(ownerToken, '/api/intent-sessions', {
       method: 'POST',
@@ -235,11 +247,13 @@ describe('intent session routes', () => {
       commits: Array<{ draftId: string }>
     }
     expect(settledDetail.commits[0]?.draftId).toBe(detail.currentDraft.id)
-    const agentRow = db
-      .select()
-      .from(agents)
-      .where(eq(agents.id, receipt.applied[0]?.resourceId ?? ''))
-      .get()
+    // 中立面没有 bun:sqlite 的同步终结符：查询回数组，取第一行。
+    const agentRow = (
+      await db
+        .select()
+        .from(agents)
+        .where(eq(agents.id, receipt.applied[0]?.resourceId ?? ''))
+    )[0]
     expect(agentRow?.name).toBe('auditor')
     expect(agentRow?.ownerUserId).not.toBeNull()
   })
@@ -384,20 +398,12 @@ describe('intent session routes', () => {
     })
     let calls = 0
     const changesetRun = stubRun('changeset')
-    app = createApp({
-      token: DAEMON_TOKEN,
-      configPath: join(root, 'config.json'),
-      opencodeVersion: null,
-      dbVersion: 1,
-      db,
-      intentTestDependencies: {
-        runFn: async (opts) => {
-          calls += 1
-          if (calls === 1) await firstBlocked
-          return changesetRun(opts)
-        },
-      },
-    })
+    // 换 stub 即可（`runTurn` 逐请求取），不必重建应用。
+    currentRunFn = async (opts) => {
+      calls += 1
+      if (calls === 1) await firstBlocked
+      return changesetRun(opts)
+    }
 
     const created = await req(ownerToken, '/api/intent-sessions', {
       method: 'POST',
@@ -554,10 +560,10 @@ describe('intent session routes', () => {
     )
 
     // Simulate an in-flight turn and assert the structural 409.
-    db.update(intentSessions)
+    await db
+      .update(intentSessions)
       .set({ inFlightTurnId: ulid() })
       .where(eq(intentSessions.id, session.id))
-      .run()
     const blocked = await req(ownerToken, `/api/intent-sessions/${session.id}/messages`, {
       method: 'POST',
       body: JSON.stringify({ message: 'more' }),
@@ -667,12 +673,28 @@ describe('intent session routes', () => {
   })
 
   test('v22 additive keyset page returns canonical journey and preserves legacy array', async () => {
+    // RFC-359 AC-6 —— 建完三条之后**等它们的回合各自落定**，再翻页。
+    //
+    // 为什么需要：POST 会顺带点燃一次意图回合，而那次回合会回写会话行
+    // （`updatedAt` / `journey`），正是 keyset 游标排序依赖的列。SQLite 上这些写同 tick
+    // 落盘、翻页时早已静止；PostgreSQL 是真往返，**回写会落在两次翻页之间**，于是第二页
+    // 少一条（实测 3 次里红 1 次）。keyset 分页在数据集并发变动时本来就会漂——
+    // 本用例要钉的是「分页形态」，不是「并发下的稳定性」，所以补因果屏障让数据集静止。
+    const createdIds: string[] = []
     for (const message of ['page-a', 'page-b', 'page-c']) {
       const created = await req(ownerToken, '/api/intent-sessions', {
         method: 'POST',
         body: JSON.stringify({ message }),
       })
       expect(created.status).toBe(201)
+      createdIds.push(((await created.json()) as { id: string }).id)
+    }
+    for (const id of createdIds) {
+      await pollDetail(
+        ownerToken,
+        id,
+        (d) => (d as { session: { inFlight: boolean } }).session.inFlight === false,
+      )
     }
 
     const legacy = await req(ownerToken, '/api/intent-sessions')
@@ -726,10 +748,13 @@ describe('intent session routes', () => {
       (value) => (value as { session: { inFlight: boolean } }).session.inFlight === false,
     )
 
-    db.update(intentSessions)
+    await db
+
+      .update(intentSessions)
+
       .set({ inFlightTurnId: ulid() })
+
       .where(eq(intentSessions.id, session.id))
-      .run()
     const blocked = await req(ownerToken, `/api/intent-sessions/${session.id}/archive`, {
       method: 'POST',
     })
@@ -738,10 +763,13 @@ describe('intent session routes', () => {
       (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]?.status,
     ).toBe('active')
 
-    db.update(intentSessions)
+    await db
+
+      .update(intentSessions)
+
       .set({ inFlightTurnId: null })
+
       .where(eq(intentSessions.id, session.id))
-      .run()
     expect(
       (await req(DAEMON_TOKEN, `/api/intent-sessions/${session.id}/archive`, { method: 'POST' }))
         .status,
@@ -770,20 +798,12 @@ describe('intent session routes', () => {
   })
 
   test('v22 mount suggestions resolve actor-safe candidates and decide atomically', async () => {
-    app = createApp({
-      token: DAEMON_TOKEN,
-      configPath: join(root, 'config.json'),
-      opencodeVersion: null,
-      dbVersion: 1,
-      db,
-      intentTestDependencies: {
-        runFn: stubQuestionsWithRequests([
-          { resourceType: 'agent', name: 'mount-one', reason: 'first dependency' },
-          { resourceType: 'agent', name: 'mount-two', reason: 'second dependency' },
-          { resourceType: 'agent', name: 'missing-agent', reason: 'optional dependency' },
-        ]),
-      },
-    })
+    // 同上：换 stub，不重建应用。
+    currentRunFn = stubQuestionsWithRequests([
+      { resourceType: 'agent', name: 'mount-one', reason: 'first dependency' },
+      { resourceType: 'agent', name: 'mount-two', reason: 'second dependency' },
+      { resourceType: 'agent', name: 'missing-agent', reason: 'optional dependency' },
+    ])
     const ids: Record<string, string> = {}
     for (const name of ['mount-one', 'mount-two']) {
       const created = await req(ownerToken, '/api/agents', {
@@ -1107,7 +1127,11 @@ describe('intent session routes', () => {
 // RFC-348 D4 — `hint` is a closed enum of INTENT_RESOURCE_TYPES (it used to be a
 // free-text string the doc never rendered). A roster value is accepted; anything
 // else is rejected at the route boundary (422) instead of being silently stored.
-describe('intent session hint (RFC-348)', () => {
+describeEachProviderHttpApplication('intent session hint (RFC-348)', SCOPE_OPTIONS, (scope) => {
+  beforeEach(async () => {
+    await setUp(scope)
+  })
+
   test('roster value is accepted, free text is rejected with 422', async () => {
     const ok = await req(ownerToken, '/api/intent-sessions', {
       method: 'POST',

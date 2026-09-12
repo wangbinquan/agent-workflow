@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 541**；反睡眠清零 + 两个组合根签名对齐）
+> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 539**；反睡眠清零 + 两个组合根签名对齐）
 >
 > 接着下面那段做。这一段没有新的产品缺陷，主线是**把两个组合根的装配签名对齐**，
 > 以及**把负向断言从墙钟改成因果屏障**。
@@ -111,14 +111,29 @@
 >    处置是整段钩子上提进注册面。**注意 pre-flight 对这个文件同时报了 `PURE-DESCRIBE(别包)`，
 >    那条在这里是误导**——判据看的是块内有没有碰库，而 setup 全在模块级钩子里。
 >    两个标记同时出现时 `MODULE-LEVEL-HARNESS` 优先。
->    **剩 `rfc234-intent-routes`**（1126 行 / 两个 describe / 三处 `createApp`，其中两处在用例
->    中途换 stub 重建应用）。**那个判据已经先查掉了**：`runTurn` 是**逐请求取**的
->    （`src/modules/intent/inbound/intentSessionRoutes.ts:149` 在 `dispatchIntentTurn(...)`
->    入参里现取），与 `mountRuntimesRoutes` 装载期就取 `smokeRuntime` 正相反。
->    **所以那两处「重建应用」可以直接塌成换 `currentRunFn` 目标，不必重开**
->    （重开会换掉 app home）。
+>    **`rfc234-intent-routes` 也迁完了**（plan §5bo）：`runTurn` 逐请求取 ⇒ 两处「重建应用」
+>    直接塌成换 `currentRunFn` 目标，不重开。
 >
-> 3. 原第 2 条的形态调查（保留）：
+>    **它照出一条只在 SQLite 上成立的判据**：keyset 分页那条用例建三条会话后立刻翻页，
+>    而 `POST /api/intent-sessions` 会顺带点燃回合、**回写游标排序依赖的列**。SQLite 同 tick
+>    落盘所以翻页时早静止，PG 是真往返、回写落在两次翻页之间 ⇒ 第二页少一条（3 次红 1 次）。
+>    不是产品缺陷（keyset 在数据集变动时本就会漂），补数据集静止屏障即可。
+>    **规律：「数据集静止」是很多用例的隐含前提，它在 SQLite 上免费、在 PG 上不是。**
+>    看到「建若干行 → 立刻查询/翻页/统计」，先问「建的过程会不会触发异步回写」。
+>
+> 3. ~~`repos.test.ts`~~ **已完成**：它其实**早就双引擎**了（自己手抄了一份 application
+>    lifetime，用 `describeEachProvider` + `createProviderHttpApplication`），残留是旁边一个
+>    **只跑 SQLite** 的 `registerNativeApplication`，而那个注册器只服务**一条**不碰库的 401 用例。
+>    并进 provider 注册面、删掉整个 native 路径即可（401 现在两个引擎各跑一遍，junit 里数得到 2 条）。
+>    **判据**：看到「同一文件里 provider 注册面与 native 注册面并存」，先看 native 那边到底还测
+>    什么——常常只剩一两条不碰库的门禁用例，并过去就能整段删。
+>
+>    下一批（都不需要新口子）：`rfc234-config-intent-runtime`(195 行，多一个 WRITES-OWN-CONFIG，
+>    用 `open({config})`) / `rfc310-digital-employee-writer-cutover`(191 行，有 SYNC-TERMINAL 要改
+>    await)。两个都报 NESTED-EACHPROVIDER——**那不是拦路灯**，处置是「只包 HTTP 那个 describe」。
+>    HTTP 形状的欠债还剩 **43 个文件**。
+>
+> 4. 原第 2 条的形态调查（保留）：
 >    它们**不是**路由依赖类型上的字段（`grep`：`server.ts` 各 8 / 3 处，PG 根 **0** 处），
 >    而是被 `server.ts` 以条件展开喂进**模块装配**（`server.ts:2014-2023` / `:2750-2752`）。
 >    所以形态更接近 `buildScheduleLaunch`（转发进一个被装配的服务），不是

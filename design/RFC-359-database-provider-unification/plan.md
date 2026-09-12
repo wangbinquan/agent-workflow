@@ -7377,3 +7377,56 @@ sweep 跑到 W29 那一批时，源码已经是新的、而 W29 的摘要我还�
    `rfc223-pr1-impl-gate` 的 `[postgresql]` 在那一批里 **5393ms 超时**（bun 默认 5s），
    隔离重跑 3/3 全绿。那不是「flaky 可以忽略」，那是**我自己制造的 CPU 争抢**——
    但它和真 flake 在日志里长得一模一样，事后无法区分。**sweep 期间保持机器安静。**
+
+## 5bo. `rfc234-intent-routes` 迁完，顺带照出一条「只在 SQLite 上成立」的分页判据
+
+意图路由那一簇最后一个文件（1126 行 / 两个 describe / 三处 `createApp`）。
+按 §5bn 先查掉的判据（`runTurn` 逐请求取），那两处「换 stub 重建应用」**直接塌成换
+`currentRunFn` 目标**——不重开应用，于是 app home 与中途写进去的东西都保得住。
+模块级钩子照 §5bn 上提进注册面。文件里三处 `.run()` / 一处 `.get()` 同步终结符一并改成 await。
+
+### 照出来的：keyset 分页那条用例的前提「数据集静止」只在 SQLite 上自动成立
+
+`v22 additive keyset page returns canonical journey and preserves legacy array` 建三条会话、
+`limit=2` 翻两页，断言第二页恰好 1 条。迁到 PG 后 **3 次里红 1 次**，第二页回 0 条
+（三条会话确实都在——同一用例里 `?cursor=legacy-client-value` 那条断言 3 条是过的）。
+
+成因：`POST /api/intent-sessions` 会顺带点燃一次意图回合，而那次回合**回写会话行**
+（`updatedAt` / `journey`）——正是 keyset 游标排序依赖的列。SQLite 上这些写同 tick 落盘，
+翻页时数据集早已静止；PostgreSQL 是真往返，**回写落在两次翻页之间**，游标于是漂掉一条。
+
+**这不是产品缺陷**：keyset 分页在数据集并发变动时本来就会漂，这是它的已知取舍；
+而本用例要钉的是**分页形态**（页大小 / nextCursor / 两页不重叠），不是并发下的稳定性。
+处置是补因果屏障——建完三条之后逐个 `pollDetail` 等到 `inFlight === false` 再翻页。
+补完 4/4 全绿。
+
+**规律（本轮第二次遇到同型）**：**「数据集静止」是很多用例的隐含前提，而它在 SQLite 上
+是免费的、在 PostgreSQL 上不是。** 迁移时看到「建若干行 → 立刻查询/翻页/统计」的形状，
+先问一句「建的过程会不会顺带触发异步回写」。会的话，屏障要补在**查询之前**，
+而不是等断言红了再去调超时。
+
+**另记（未处置）**：同一次红里 dispatcher 打了
+`intent-turn-fire-failed … err="deadlock detected"`（PostgreSQL 死锁）与 `err="session vanished"`。
+补完屏障后不再出现。**那是 dispatcher 自己的重试域**（它 warn 一下、把该回合记失败），
+与本用例的判据无关，但「并发点燃意图回合会在 PG 上撞死锁」值得单独查一次，已记进
+`docs/audit-backlog.md`。
+
+### 账本 541 → 540
+
+## 5bp. `repos.test.ts`：残留不在「还没迁的那半」，而在「只服务一条用例的 native 注册器」
+
+这个文件**早就双引擎**——它自己手抄了一份 application lifetime
+（`describeEachProvider` + `createProviderHttpApplication` + 自建 app home 与 dispose 顺序，
+正是共用作用域要取代的那 18 份拷贝之一）。账本里那 1 个调用点在旁边：一个**只跑 SQLite**
+的 `registerNativeApplication`，自建内存库 + 自建应用。
+
+它服务几条用例？**一条**——`all /api/repos/* require token`（不碰库，只验无 token ⇒ 401）。
+并进 provider 注册面，整个 native 注册器连同它的建库/建应用一起删掉。
+401 现在两个引擎各跑一遍（junit 里 `name="all /api/repos/* require token"` 数得到 2 条）。
+
+**判据**：看到「同一文件里 provider 注册面与 native 注册面并存」，别假设 native 那边是
+「还没迁完的一半」。**先看它到底还测什么**——常常只剩一两条不碰库的门禁用例（401 / 404 /
+参数校验），并过去就能整段删，而不是去给它补一套双引擎装配。
+
+（顺带：本文件仍是那 18 份手抄 lifetime 之一，没有换成
+`describeEachProviderHttpApplication`——那是独立的一刀，与本轮账本无关。）

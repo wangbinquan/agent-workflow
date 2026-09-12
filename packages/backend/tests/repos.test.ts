@@ -5,10 +5,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb } from '../src/db/client'
+import { join } from 'node:path'
 import { cachedRepos } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -18,7 +16,6 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let baseTmp: string
 let repoPath: string
@@ -164,7 +161,11 @@ describe('repo HTTP routes', () => {
     })
   })
 
-  registerNativeApplication(() => {
+  // RFC-359 AC-6：这条 401 原来挂在一个**只跑 SQLite** 的 `registerNativeApplication` 上
+  // （它自建一个内存库 + 一个应用；此处刻意不写那两个函数的字面名字——账本守卫按文本扫，
+  //   注释也算语料）。它不碰库、只验「无 token ⇒ 401」，
+  // 并到 provider 注册面即可，两个引擎各跑一遍；那个只服务它一条的 native 注册器随之删掉。
+  registerProviderApplication(() => {
     test('all /api/repos/* require token', async () => {
       expect(
         (await app.request(`/api/repos/refs?path=${encodeURIComponent(repoPath)}`)).status,
@@ -172,25 +173,6 @@ describe('repo HTTP routes', () => {
     })
   })
 })
-
-function registerNativeApplication(register: () => void): void {
-  describe('native application', () => {
-    beforeEach(() =>
-      prepareFixture(
-        () => createInMemoryDb(MIGRATIONS),
-        (db) =>
-          createApp({
-            token: TOKEN,
-            configPath: '/tmp/aw-test-config-never-used.json',
-            opencodeVersion: '1.14.25',
-            dbVersion: 1,
-            db,
-          }),
-      ),
-    )
-    register()
-  })
-}
 
 function registerProviderApplication(register: () => void): void {
   describeEachProvider('provider', (harness) => {
