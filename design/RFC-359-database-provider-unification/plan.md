@@ -6473,3 +6473,97 @@ floating promise 的 stack 没有调用方。用 `--preload` 包住 `Database.pr
 
 迁移脚本因此加了一条：**源码锁 describe 一律不包**——它们一行 DB 都不碰，而且正文里的
 正则 / 模板串带花括号，naive 的括号配平会走丢（这正是它此前报 `unbalanced` 的原因）。
+
+
+## 5al. 账本 568 → 567：`rfc310-pr3-upload-security`，以及 `.all()` 的**姊妹坑**
+
+迁移本身只有两件事：去掉同步终结符、别自建 app home（该文件此前用模块级 `beforeEach` 建了一个
+并写 `AGENT_WORKFLOW_HOME`——而 `scope.open()` 随后会**再覆盖一次**，于是
+`join(appHome, 'evidence', …)` 断言的是一个应用从没写过的目录）。改用 `opened.appHome`。
+
+其中一个 describe 不打 HTTP（走 `previewDeps` + `sessions.createUpload`），但**仍然要
+`open()`**：被测的落盘走 `Paths.root`，也就是 `AGENT_WORKFLOW_HOME`——不 open 的话那个变量
+指向的是真实用户目录。顺带把一条 `db.insert(...)` 补上了 `await`。
+
+### `.all()` 的姊妹坑：去掉终结符会把断言悄悄变成「断言 builder 对象」
+
+`expect(db.select().from(x)).toHaveLength(0)` —— 原来 `.all()` 让它同步拿到数组；去掉之后
+断言的是 **query builder 本身**。`toHaveLength` 碰巧会红（builder 没有 length），但
+`toBeTruthy()` / `not.toBeNull()` 这类**会静静地绿**——用例还在跑，测的已经不是那回事。
+
+已加零容忍守卫（`test-suite-policy`）：共用 HTTP 作用域的用例里，
+`expect(` 后面直接跟未 await 的 `db|tx.select|insert|update|delete(` 一律红。已变异验证。
+这条与既有的「不得出现 `.run()` / `.get()` / `.all()`」是**一对**：前者管「别用同步终结符」，
+后者管「去掉之后别忘了 await」。
+
+### 查过了：`backup.test.ts` **不能**简单迁——不是懒，是前提不成立
+
+第一眼它像个好目标：`POST /api/backup` 在两个 provider 上确实是**两套实现**（SQLite 是
+VACUUM INTO + 打 tar、PostgreSQL 走 `postgresqlAdminBackupCoordinator` /
+`createPostgresqlProviderBackup`），而今天只有 SQLite 那半有用例。
+
+但读了实现之后结论相反：`createPostgresqlProviderBackup` 要求
+**「已核验的在用 PostgreSQL generation」**——generation 指针、完成态的迁移操作
+（`accepting-writes` / `finalized`，且 `logicalBackupDigest` / `legacyArchiveDigest` 都在），
+否则直接抛 `postgresql-backup-generation`。而共用 HTTP 夹具**刻意不提供** daemon 迁移准入
+（`createProviderHttpApplication` 里四个 admission 钩子都是 `unexpectedAdmission`，见那份
+文件的头注）。
+
+所以这不是「PG 缺一半功能」，是**夹具形态不匹配**：PG 备份只对走完迁移的部署有意义，
+要测它得先有一个能立出在用 generation 的夹具，那是另一刀（也是真正值得做的一刀——
+今天 PG 备份路径确实零覆盖）。记进 backlog，别硬把它塞进共用 HTTP 作用域。
+
+
+## 5am. 第三个真缺陷：同名并发创建在 PostgreSQL 上从 409 退化成 500（账本 567 → 566）
+
+迁 `agents.test.ts` 时 PG 侧红一条：`RFC-223 maps a same-owner create race to one stable 409
+conflict` 拿到的不是 `{ code: 'agent-name-in-use', status: 409 }`，而是一个裸的
+`DrizzleQueryError`。
+
+### 根因：Bun 的 PostgreSQL 驱动把 SQLSTATE 放在 `errno`，不是 `code`
+
+探针打出来的错误链：
+
+```
+DrizzleQueryError                     // 没有 code/constraint
+└─ PostgresError
+     code:       'ERR_POSTGRES_SERVER_ERROR'   ← Bun 自己的标签
+     errno:      '23505'                       ← 真正的 SQLSTATE
+     constraint: 'agents_owner_name_unique'
+```
+
+`isOwnerScopedNameConflict`（legacy 三个资源门面 **agent / skill / workgroup** 共用的冲突分类器）
+只读 `structured?.code === '23505'`，于是在真 PG 上**恒 false**；SQLite 那半的正则
+（`UNIQUE constraint failed`）也对不上 PG 的 `duplicate key value violates unique constraint`。
+净效果：同名并发创建在 SQLite 上是干净的 409，在 PostgreSQL 上是 500。
+
+**这个坑本仓踩过第二次**——`postgresqlUniqueViolationConstraint` 的注释里白纸黑字记着
+「`isPostgresqlUniqueViolation` 此前只看 `code`，在真 PG 上恒 false ⇒ 并发同名拿 500 而非 409」。
+第一次修的是能力矩阵那份，**这份手写的副本没跟上**。
+
+所以修法不是再手写一遍 errno 匹配，而是让分类器**复用那份唯一真值来源**
+（`postgresqlUniqueViolationConstraint`）。一处修好，agent / skill / workgroup 三个门面一起好。
+
+回归测试 `rfc359-owner-name-conflict-parity.test.ts`：双引擎各造一次真实唯一冲突，
+断言分类器给出同一个结论；负向用**另一个索引**（主键）上的唯一冲突，确保不会把「id 撞了」
+读成「同名已存在」。已变异验证（撤掉修复，PG 那半当场红）。
+
+**规律（已在别处踩过，这里第三次）**：同一条判据出现两份实现时，修好的那份不会自动传染给
+另一份。`docs/dev-gotchas.md` 里凡是写着「此前只看 X，在真 PG 上恒 false」的教训，
+都该顺手 grep 一遍**还有谁在手写同一条判据**。
+
+### `agents.test.ts`：顺手清掉两个 SQLite-only 的服务层 describe
+
+文件里原有两个 `describe('agent service')` 用模块级 `initializeNativeServiceDb()` 自建 SQLite 库，
+测的用例（重名拒绝、被工作流引用时拒删）与既有的 `describeEachProvider` 块**不重复**——
+也就是说这些判据此前只在 SQLite 上成立过。改成 `describeEachProvider`，
+那个 native 夹具随之整个删掉，文件销账。
+
+**并且：正是这一步把上面那个 500 照了出来。** 如果只迁 HTTP 那个 describe（pre-flight 的
+NESTED-EACHPROVIDER 提示的最小动作），这条缺陷会继续躺着。
+
+### pre-flight 的 NESTED-EACHPROVIDER 不是拦路灯
+
+`agents.test.ts` 证明了：绝大多数这类文件里，既有的 `describeEachProvider` 是**服务层**用例、
+`createApp` 只在某一个 HTTP describe 里，处置是**只包那一个 describe**，其余原样——
+整文件包才会交叉积。标签文案已改成这个意思。

@@ -1,3 +1,5 @@
+import { postgresqlUniqueViolationConstraint } from '@/platform/persistence/capabilities'
+
 interface StructuredConstraintError {
   readonly code?: unknown
   readonly constraint?: unknown
@@ -34,6 +36,13 @@ function errorMessage(error: unknown): string {
  * Provider-neutral conflict classifier for the legacy classic-resource
  * facades. SQLite and PostgreSQL expose different error metadata, but callers
  * receive the same owner/name conflict result.
+ *
+ * RFC-359 —— PostgreSQL 那半此前**恒 false**：这里只读 `code`，而 Bun 的驱动把 SQLSTATE 放在
+ * **`errno`**（`code` 是它自己的 `ERR_POSTGRES_SERVER_ERROR`）。于是同名并发创建在 SQLite 上
+ * 是干净的 409 `agent-name-in-use`，在 PostgreSQL 上是一个裸的 `DrizzleQueryError` 直接抛到
+ * 路由层。判据改成复用 `postgresqlUniqueViolationConstraint`——那是本仓 23505 的**唯一**真值来源
+ * （它的注释里记着同一个坑：「此前只看 `code`，在真 PG 上恒 false ⇒ 并发同名拿 500 而非 409」）。
+ * 别在这里再手写一份 errno/code 匹配。
  */
 export function isOwnerScopedNameConflict(
   error: unknown,
@@ -54,6 +63,11 @@ export function isOwnerScopedNameConflict(
       message.includes(input.indexName) ||
       message.includes(`${input.table}.name`)
 
+    // PostgreSQL：SQLSTATE 在 `errno`，`code` 是 Bun 自己的标签——统一走那份唯一判据。
+    const postgresqlConstraint = postgresqlUniqueViolationConstraint(candidate)
+    if (postgresqlConstraint !== undefined) {
+      return postgresqlConstraint === input.indexName || exactTarget
+    }
     if (code === '23505') return exactTarget
     if (
       code === 'SQLITE_CONSTRAINT_UNIQUE' ||

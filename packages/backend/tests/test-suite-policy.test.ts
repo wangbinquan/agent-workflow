@@ -564,4 +564,31 @@ describe('repository test-suite policy', () => {
         '写用 `await db.insert(...).values(...)`，读用 `const [row] = await db.select()...`。',
     ).toEqual([])
   })
+
+  // RFC-359 —— 上一条的**姊妹坑**：把 `.all()` / `.get()` 去掉之后，原来靠它同步取值的那些
+  // `expect(...)` 变成了在断言一个 **query builder 对象**。`toHaveLength(0)` 这种碰巧会红
+  // （builder 没有 length），`toBeTruthy()` / `not.toBeNull()` 这类**会静静地绿**——
+  // 用例还在跑，测的已经不是那回事了。rfc310-pr3-upload-security 迁移时实撞一次。
+  test('provider HTTP tests never assert on an un-awaited query builder', () => {
+    const offenders: string[] = []
+    const pattern =
+      /expect\(\s*(?!await\b)(?:[\w$]+\.)?(?:db|tx|transaction)\s*\.(?:select|insert|update|delete)\(/
+    for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
+      if (file === import.meta.path) continue
+      const source = readFileSync(file, 'utf8')
+      if (!source.includes('describeEachProviderHttpApplication')) continue
+      source.split('\n').forEach((line, index) => {
+        if (pattern.test(line)) {
+          offenders.push(
+            `${toPortableRelativePath(relative(REPO_ROOT, file))}:${String(index + 1)}`,
+          )
+        }
+      })
+    }
+    expect(
+      offenders.sort(),
+      '有 `expect(db.select()...)` 这样的断言少了 `await`：断言的是 builder 对象本身，不是行。' +
+        '中立面上查询只有 await 之后才会执行——写成 `expect(await db.select()...)`。',
+    ).toEqual([])
+  })
 })

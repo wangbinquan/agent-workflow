@@ -4661,3 +4661,19 @@ TestingLibraryElementError: Unable to find an element by: [data-testid="mission-
 
 **待办**：下次再现时记下 job id 与相位，攒够两三次再判是 runner 争用还是 git 首次调用
 （全局配置解析 / 目录扫描）的固有慢。**不要以「重跑就过了」结案。**
+
+## PostgreSQL 备份路径今天零覆盖（2026-09-12，RFC-359 查证）
+
+`POST /api/backup` 在两个 provider 上是两套实现：SQLite 走 `services/backup` 的
+VACUUM INTO + tar；PostgreSQL 走 `postgresqlAdminBackupCoordinator` /
+`createPostgresqlProviderBackup`（逻辑导出 + 契约校验）。**只有 SQLite 那半有用例**
+（`packages/backend/tests/backup.test.ts`）。
+
+不能靠把那个用例迁上共用双引擎作用域来补：`createPostgresqlProviderBackup` 要求
+**已核验的在用 PostgreSQL generation**——generation 指针 + 完成态迁移操作
+（`accepting-writes` / `finalized`，`logicalBackupDigest` 与 `legacyArchiveDigest` 俱在），
+否则抛 `postgresql-backup-generation`。而共用 HTTP 夹具刻意不提供 daemon 迁移准入
+（`tests/helpers/providerHttpApplication.ts` 的四个 admission 钩子都是 `unexpectedAdmission`）。
+
+**待办**：立一个能造出「在用 PG generation」的夹具，再给 PG 备份补正向 + 失败路径覆盖。
+在那之前，PG 备份的任何改动都没有网。

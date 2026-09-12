@@ -18,7 +18,11 @@ for f in "$@"; do
   r=""
   grep -q "describeEachProviderHttpApplication" "$f" && r="$r ALREADY-MIGRATED"
   # 注意：与上一条是**两个不同判据** —— 这条排除的是「已经部分双引擎」的文件
-  grep -qE "describeEachProvider\(" "$f" && r="$r NESTED-EACHPROVIDER(交叉积)"
+  # 注意这**不是**拦路灯：它只是说「整文件包会交叉积」。绝大多数这类文件里，既有的
+  # `describeEachProvider` 是**服务层**用例、`createApp` 只在某一个 HTTP describe 里
+  # （agents.test.ts 即是），处置是**只包那一个 describe**，其余原样。少数是前几波留下的
+  # 「双引擎新半 + SQLite 旧半」并存，得先判旧半还测不测得到新东西，再决定迁还是删。
+  grep -qE "describeEachProvider\(" "$f" && r="$r NESTED-EACHPROVIDER(别整文件包,只包 HTTP 那个 describe)"
   grep -qE "\.run\(\)|\.get\(\)|\.all\(\)" "$f" && r="$r SYNC-TERMINAL"
   # 语料按实撞补：任何吃 `StartTaskDeps` / `LegacySqliteTaskDatabase` 的入口都算——它们的 `db`
   # 是 bun:sqlite 专有类型，中立句柄传不进去（`wakeHumanGateContinuation` 2026-09-12 实撞）。

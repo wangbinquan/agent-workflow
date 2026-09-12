@@ -2,16 +2,17 @@
 // In-memory SQLite via createInMemoryDb — no daemon spawn needed.
 
 import { buildActor } from '../src/auth/actor'
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import {
   createAgent,
   deleteAgent,
@@ -32,19 +33,13 @@ const T6_ACTOR = buildActor({
 })
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-async function buildHarness(): Promise<{ db: DbClient; app: Hono }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function buildHarness(
+  scope: ProviderHttpApplicationScope,
+): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+  const db = scope.harness.db
   await seedTestDefaultOpencodeRuntime(db)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
+  return { db, app: (await scope.open()).app }
 }
 
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
@@ -90,12 +85,6 @@ function servicePayload(name: string): Parameters<typeof createAgent>[1] {
   }
 }
 
-let db: DbClient
-
-function initializeNativeServiceDb() {
-  db = createInMemoryDb(MIGRATIONS)
-}
-
 describeEachProvider('agent service provider create/read', (harness) => {
   let db: ProviderNeutralDatabase
   beforeEach(() => {
@@ -132,8 +121,11 @@ describeEachProvider('agent service provider create/read', (harness) => {
   })
 })
 
-describe('agent service', () => {
-  beforeEach(initializeNativeServiceDb)
+describeEachProvider('agent service provider duplicate-name', (harness) => {
+  let db: ProviderNeutralDatabase
+  beforeEach(() => {
+    db = harness.db
+  })
 
   test('create rejects duplicate name', async () => {
     await createAgent(db, {
@@ -295,8 +287,11 @@ describeEachProvider('agent service provider update/delete', (harness) => {
   })
 })
 
-describe('agent service', () => {
-  beforeEach(initializeNativeServiceDb)
+describeEachProvider('agent service provider referenced-delete', (harness) => {
+  let db: ProviderNeutralDatabase
+  beforeEach(() => {
+    db = harness.db
+  })
 
   test('delete refuses when a workflow references the agent', async () => {
     const created = await createAgent(db, {
@@ -474,171 +469,181 @@ describe('agent service', () => {
   })
 })
 
-describe('agent HTTP routes', () => {
-  let app: Hono
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'agent HTTP routes',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-agents-http-',
+  },
+  (scope) => {
+    let app: Hono
 
-  beforeEach(async () => {
-    ;({ app } = await buildHarness())
-  })
-
-  test('POST /api/agents creates and returns 201', async () => {
-    const res = await req(app, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify(samplePayload('a1')),
+    beforeEach(async () => {
+      ;({ app } = await buildHarness(scope))
     })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as Record<string, unknown>
-    expect(body.name).toBe('a1')
-    expect(body.outputs).toEqual(['out1', 'out2'])
-    expect(typeof body.id).toBe('string')
-  })
 
-  test('POST rejects invalid name with 422 + standard error schema', async () => {
-    const res = await req(app, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify({ ...samplePayload('Bad Name!'), name: 'Bad Name!' }),
-    })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as Record<string, unknown>
-    expect(body.ok).toBe(false)
-    expect(body.code).toBe('agent-invalid')
-  })
-
-  test('GET /api/agents lists; GET /:id 200; legacy name URL 404', async () => {
-    const createdRes = await req(app, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify(samplePayload('a1')),
-    })
-    const created = (await createdRes.json()) as { id: string; name: string }
-    await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a2')) })
-
-    const list = (await (await req(app, '/api/agents')).json()) as Array<{ name: string }>
-    expect(list.map((a) => a.name).sort()).toEqual(['a1', 'a2'])
-
-    const got = await req(app, `/api/agents/${created.id}`)
-    expect(got.status).toBe(200)
-    expect(((await got.json()) as { name: string }).name).toBe('a1')
-
-    const legacy = await req(app, '/api/agents/a1')
-    expect(legacy.status).toBe(404)
-    const miss = await req(app, '/api/agents/not-an-id')
-    expect(miss.status).toBe(404)
-    const missBody = (await miss.json()) as Record<string, unknown>
-    expect(missBody.code).toBe('agent-not-found')
-  })
-
-  test('PUT partial update preserves other fields; 404 on missing', async () => {
-    const created = (await (
-      await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
-    const res = await req(app, `/api/agents/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'updated',
-        expectedUpdatedAt: created.updatedAt,
-        expectedAclRevision: created.aclRevision ?? 0,
-      }),
-    })
-    expect(res.status).toBe(200)
-    const updated = (await res.json()) as Record<string, unknown>
-    expect(updated.description).toBe('updated')
-    expect(updated.outputs).toEqual(['out1', 'out2'])
-
-    const miss = await req(app, '/api/agents/nope', {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'x',
-        expectedUpdatedAt: 0,
-        expectedAclRevision: 0,
-      }),
-    })
-    expect(miss.status).toBe(404)
-  })
-
-  test('DELETE returns 204 and the agent is gone', async () => {
-    const created = (await (
-      await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
-    // RFC-222 (D5): DELETE now requires a { confirm } body echoing the name.
-    const delRes = await req(app, `/api/agents/${created.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({
-        confirm: 'a1',
-        expectedUpdatedAt: created.updatedAt,
-        expectedAclRevision: created.aclRevision ?? 0,
-      }),
-    })
-    expect(delRes.status).toBe(204)
-    const after = await req(app, `/api/agents/${created.id}`)
-    expect(after.status).toBe(404)
-  })
-
-  test('DELETE requires the mutation revision fence', async () => {
-    const created = (await (
-      await req(app, '/api/agents', {
+    test('POST /api/agents creates and returns 201', async () => {
+      const res = await req(app, '/api/agents', {
         method: 'POST',
-        body: JSON.stringify(samplePayload('delete-without-fence')),
+        body: JSON.stringify(samplePayload('a1')),
       })
-    ).json()) as { id: string }
-    const res = await req(app, `/api/agents/${created.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ confirm: 'delete-without-fence' }),
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.name).toBe('a1')
+      expect(body.outputs).toEqual(['out1', 'out2'])
+      expect(typeof body.id).toBe('string')
     })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('agent-delete-invalid')
-  })
 
-  test('POST /:id/rename keeps the same detail URL', async () => {
-    const created = (await (
-      await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
-    const res = await req(app, `/api/agents/${created.id}/rename`, {
-      method: 'POST',
-      body: JSON.stringify({
-        newName: 'a2',
-        expectedUpdatedAt: created.updatedAt,
-        expectedAclRevision: created.aclRevision ?? 0,
-      }),
-    })
-    expect(res.status).toBe(200)
-    expect(((await res.json()) as { name: string }).name).toBe('a2')
-    const oldNameUrl = await req(app, '/api/agents/a1')
-    expect(oldNameUrl.status).toBe(404)
-    const renamed = await req(app, `/api/agents/${created.id}`)
-    expect(renamed.status).toBe(200)
-  })
-
-  test('same-name rename still enforces the exact mutation revision', async () => {
-    const created = (await (
-      await req(app, '/api/agents', {
+    test('POST rejects invalid name with 422 + standard error schema', async () => {
+      const res = await req(app, '/api/agents', {
         method: 'POST',
-        body: JSON.stringify(samplePayload('same-name-fence')),
+        body: JSON.stringify({ ...samplePayload('Bad Name!'), name: 'Bad Name!' }),
       })
-    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
-    const changed = await req(app, `/api/agents/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'new revision',
-        expectedUpdatedAt: created.updatedAt,
-        expectedAclRevision: created.aclRevision ?? 0,
-      }),
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.ok).toBe(false)
+      expect(body.code).toBe('agent-invalid')
     })
-    expect(changed.status).toBe(200)
 
-    const staleNoOp = await req(app, `/api/agents/${created.id}/rename`, {
-      method: 'POST',
-      body: JSON.stringify({
-        newName: 'same-name-fence',
-        expectedUpdatedAt: created.updatedAt,
-        expectedAclRevision: created.aclRevision ?? 0,
-      }),
+    test('GET /api/agents lists; GET /:id 200; legacy name URL 404', async () => {
+      const createdRes = await req(app, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify(samplePayload('a1')),
+      })
+      const created = (await createdRes.json()) as { id: string; name: string }
+      await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a2')) })
+
+      const list = (await (await req(app, '/api/agents')).json()) as Array<{ name: string }>
+      expect(list.map((a) => a.name).sort()).toEqual(['a1', 'a2'])
+
+      const got = await req(app, `/api/agents/${created.id}`)
+      expect(got.status).toBe(200)
+      expect(((await got.json()) as { name: string }).name).toBe('a1')
+
+      const legacy = await req(app, '/api/agents/a1')
+      expect(legacy.status).toBe(404)
+      const miss = await req(app, '/api/agents/not-an-id')
+      expect(miss.status).toBe(404)
+      const missBody = (await miss.json()) as Record<string, unknown>
+      expect(missBody.code).toBe('agent-not-found')
     })
-    expect(staleNoOp.status).toBe(409)
-    expect(((await staleNoOp.json()) as { code: string }).code).toBe('resource-operation-stale')
-  })
 
-  test('all /api/agents/* require token', async () => {
-    const res = await app.request('/api/agents')
-    expect(res.status).toBe(401)
-  })
-})
+    test('PUT partial update preserves other fields; 404 on missing', async () => {
+      const created = (await (
+        await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+      ).json()) as { id: string; updatedAt: number; aclRevision?: number }
+      const res = await req(app, `/api/agents/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'updated',
+          expectedUpdatedAt: created.updatedAt,
+          expectedAclRevision: created.aclRevision ?? 0,
+        }),
+      })
+      expect(res.status).toBe(200)
+      const updated = (await res.json()) as Record<string, unknown>
+      expect(updated.description).toBe('updated')
+      expect(updated.outputs).toEqual(['out1', 'out2'])
+
+      const miss = await req(app, '/api/agents/nope', {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'x',
+          expectedUpdatedAt: 0,
+          expectedAclRevision: 0,
+        }),
+      })
+      expect(miss.status).toBe(404)
+    })
+
+    test('DELETE returns 204 and the agent is gone', async () => {
+      const created = (await (
+        await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+      ).json()) as { id: string; updatedAt: number; aclRevision?: number }
+      // RFC-222 (D5): DELETE now requires a { confirm } body echoing the name.
+      const delRes = await req(app, `/api/agents/${created.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+          confirm: 'a1',
+          expectedUpdatedAt: created.updatedAt,
+          expectedAclRevision: created.aclRevision ?? 0,
+        }),
+      })
+      expect(delRes.status).toBe(204)
+      const after = await req(app, `/api/agents/${created.id}`)
+      expect(after.status).toBe(404)
+    })
+
+    test('DELETE requires the mutation revision fence', async () => {
+      const created = (await (
+        await req(app, '/api/agents', {
+          method: 'POST',
+          body: JSON.stringify(samplePayload('delete-without-fence')),
+        })
+      ).json()) as { id: string }
+      const res = await req(app, `/api/agents/${created.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirm: 'delete-without-fence' }),
+      })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('agent-delete-invalid')
+    })
+
+    test('POST /:id/rename keeps the same detail URL', async () => {
+      const created = (await (
+        await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+      ).json()) as { id: string; updatedAt: number; aclRevision?: number }
+      const res = await req(app, `/api/agents/${created.id}/rename`, {
+        method: 'POST',
+        body: JSON.stringify({
+          newName: 'a2',
+          expectedUpdatedAt: created.updatedAt,
+          expectedAclRevision: created.aclRevision ?? 0,
+        }),
+      })
+      expect(res.status).toBe(200)
+      expect(((await res.json()) as { name: string }).name).toBe('a2')
+      const oldNameUrl = await req(app, '/api/agents/a1')
+      expect(oldNameUrl.status).toBe(404)
+      const renamed = await req(app, `/api/agents/${created.id}`)
+      expect(renamed.status).toBe(200)
+    })
+
+    test('same-name rename still enforces the exact mutation revision', async () => {
+      const created = (await (
+        await req(app, '/api/agents', {
+          method: 'POST',
+          body: JSON.stringify(samplePayload('same-name-fence')),
+        })
+      ).json()) as { id: string; updatedAt: number; aclRevision?: number }
+      const changed = await req(app, `/api/agents/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'new revision',
+          expectedUpdatedAt: created.updatedAt,
+          expectedAclRevision: created.aclRevision ?? 0,
+        }),
+      })
+      expect(changed.status).toBe(200)
+
+      const staleNoOp = await req(app, `/api/agents/${created.id}/rename`, {
+        method: 'POST',
+        body: JSON.stringify({
+          newName: 'same-name-fence',
+          expectedUpdatedAt: created.updatedAt,
+          expectedAclRevision: created.aclRevision ?? 0,
+        }),
+      })
+      expect(staleNoOp.status).toBe(409)
+      expect(((await staleNoOp.json()) as { code: string }).code).toBe('resource-operation-stale')
+    })
+
+    test('all /api/agents/* require token', async () => {
+      const res = await app.request('/api/agents')
+      expect(res.status).toBe(401)
+    })
+  },
+)

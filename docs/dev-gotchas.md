@@ -6425,3 +6425,30 @@ Database.prototype.prepare = function (...args) {
   try { return original.apply(this, args) } catch (e) { console.error('SQL: ' + String(args[0])); throw e }
 }
 ```
+
+## 同一条判据有两份实现时，修好的那份不会传染给另一份（2026-09-12，同一个坑第二次）
+
+`postgresqlUniqueViolationConstraint` 的注释里写着：「`isPostgresqlUniqueViolation` 此前只看
+`code`，在真 PG 上恒 false ⇒ 并发同名拿 500 而非 409」。那次只修了能力矩阵里的那一份。
+
+`isOwnerScopedNameConflict`（legacy 三个资源门面 agent / skill / workgroup 共用的冲突分类器）
+是**手写的第二份**，判据一模一样、坏法也一模一样，直到 RFC-359 把 `agents.test.ts` 迁上双引擎
+才暴露：同名并发创建在 SQLite 上 409、在 PostgreSQL 上 500。
+
+**Bun 的 PostgreSQL 驱动把 SQLSTATE 放在 `errno`**，`code` 是它自己的
+`ERR_POSTGRES_SERVER_ERROR`：
+
+```
+DrizzleQueryError                 // 没有 code / constraint
+└─ PostgresError
+     code:       'ERR_POSTGRES_SERVER_ERROR'
+     errno:      '23505'                      ← 真正的 SQLSTATE
+     constraint: 'agents_owner_name_unique'
+```
+
+**处置**：修复后**顺手 grep 还有谁在手写同一条判据**，把它们都改成复用唯一真值来源，
+而不是各自再补一次 errno。本仓目前 23505 的唯一真值来源是
+`src/platform/persistence/capabilities.ts` 的 `postgresqlUniqueViolationConstraint`。
+
+**看错误形态的手法**：写一个临时 `describeEachProvider` 用例故意撞一次约束，把
+`error.cause` 链逐层打出 `{ctor, code, errno, constraint, table, message}`——比猜字段快得多。

@@ -10,7 +10,7 @@
 // ⑥真实 gitBaselineReader 链路：二进制 already-present 对拍、symlink/目录/
 // mode 漂移 blocked；⑦preview 只读——不 claim、不落 plan。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -23,13 +23,16 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
+import type { ProviderNeutralDatabase } from '@/db/query'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, developmentRepositoryUploadPlans } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 import { runGit } from '../src/util/git'
 import { MISSION_UPLOAD_MAX_BYTES } from '../src/routes/missionInputUploads'
@@ -45,41 +48,26 @@ import type { UploadSessionPersistence } from '../src/modules/development-automa
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-let appHome: string
-let previousAppHome: string | undefined
-
-beforeEach(() => {
-  previousAppHome = process.env.AGENT_WORKFLOW_HOME
-  appHome = mkdtempSync(join(tmpdir(), 'aw-upsec-home-'))
-  process.env.AGENT_WORKFLOW_HOME = appHome
-})
-
-afterEach(() => {
-  if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-  else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-  rmSync(appHome, { recursive: true, force: true })
-})
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
+  /**
+   * 应用**真正在用**的 app home（`scope.open()` 现建并写进 `AGENT_WORKFLOW_HOME`）。
+   * 别再自建一个：合一前那份模块级 `beforeEach` 建的 home 会被 `open()` 覆盖掉，
+   * 于是 `join(appHome, 'evidence', …)` 断言的是一个应用从没写过的目录。
+   */
+  appHome: string
   tokenA: string
   tokenB: string
   userA: string
   userB: string
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const opened = await scope.open()
+  const app = opened.app
   const a = await createUser(db, {
     username: 'alice-310',
     displayName: 'Alice',
@@ -94,7 +82,15 @@ async function buildHarness(): Promise<Harness> {
   })
   const sa = await createSession({ db, userId: a.id })
   const sb = await createSession({ db, userId: b.id })
-  return { db, app, tokenA: sa.token, tokenB: sb.token, userA: a.id, userB: b.id }
+  return {
+    db,
+    app,
+    appHome: opened.appHome,
+    tokenA: sa.token,
+    tokenB: sb.token,
+    userA: a.id,
+    userB: b.id,
+  }
 }
 
 function authed(token: string, init: RequestInit = {}): RequestInit {
@@ -114,176 +110,190 @@ async function uploadBytes(
   return h.app.request('/api/code/mission-input-uploads', init)
 }
 
-describe('rfc310 pr3 upload security — HTTP surface', () => {
-  test('upload routes create the selected app-home evidence store on the first request', async () => {
-    const h = await buildHarness()
-    const evidenceRoot = join(appHome, 'evidence')
-    const content = 'lazy evidence'
-    const digest = createHash('sha256').update(content).digest('hex')
-    const blobPath = join(evidenceRoot, 'blobs', digest.slice(0, 2), digest)
-    // Other development participants may create the shared evidence
-    // directories at composition time. The upload-owned content must still be
-    // absent until its first request and land in the selected app home.
-    expect(existsSync(blobPath)).toBe(false)
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'rfc310 pr3 upload security — HTTP surface',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc310-pr3-',
+  },
+  (scope) => {
+    test('upload routes create the selected app-home evidence store on the first request', async () => {
+      const h = await buildHarness(scope)
+      const evidenceRoot = join(h.appHome, 'evidence')
+      const content = 'lazy evidence'
+      const digest = createHash('sha256').update(content).digest('hex')
+      const blobPath = join(evidenceRoot, 'blobs', digest.slice(0, 2), digest)
+      // Other development participants may create the shared evidence
+      // directories at composition time. The upload-owned content must still be
+      // absent until its first request and land in the selected app home.
+      expect(existsSync(blobPath)).toBe(false)
 
-    const uploaded = await uploadBytes(h, h.tokenA, content)
-    expect(uploaded.status).toBe(201)
-    expect(existsSync(blobPath)).toBe(true)
-  })
-
-  test('unauthenticated requests are rejected before any byte lands', async () => {
-    const h = await buildHarness()
-    const res = await h.app.request('/api/code/mission-input-uploads', {
-      method: 'POST',
-      body: 'x',
+      const uploaded = await uploadBytes(h, h.tokenA, content)
+      expect(uploaded.status).toBe(201)
+      expect(existsSync(blobPath)).toBe(true)
     })
-    expect(res.status).toBe(401)
-  })
 
-  test('oversize body → upload-too-large; empty body → upload-empty', async () => {
-    const h = await buildHarness()
-    const big = new Uint8Array(MISSION_UPLOAD_MAX_BYTES + 1)
-    const tooLarge = await uploadBytes(h, h.tokenA, big)
-    expect(tooLarge.status).toBe(422)
-    expect(((await tooLarge.json()) as { code: string }).code).toBe('upload-too-large')
-
-    const empty = await uploadBytes(h, h.tokenA, new Uint8Array(0))
-    expect(empty.status).toBe(422)
-    expect(((await empty.json()) as { code: string }).code).toBe('upload-empty')
-  })
-
-  test('binary bytes land byte-identical in the blob pool — no transcoding, no newline normalization', async () => {
-    const h = await buildHarness()
-    // NUL、CRLF、孤立 CR、0x80-0xFF——任何 utf8 归一都会破坏其一。
-    const payload = new Uint8Array([0x00, 0x0d, 0x0a, 0x0d, 0x80, 0xff, 0xfe, 0x41])
-    const expectedSha = createHash('sha256').update(payload).digest('hex')
-    const res = await uploadBytes(h, h.tokenA, payload, { 'x-upload-name': 'blob.bin' })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { uploadRef: string; sha256: string; bytes: number }
-    expect(body.sha256).toBe(expectedSha)
-    expect(body.bytes).toBe(payload.byteLength)
-    const blobPath = join(appHome, 'evidence', 'blobs', expectedSha.slice(0, 2), expectedSha)
-    expect(new Uint8Array(readFileSync(blobPath))).toEqual(payload)
-  })
-
-  test('upload idempotency key replays to the same ref (no unrecognizable duplicate rows)', async () => {
-    const h = await buildHarness()
-    const first = (await (
-      await uploadBytes(h, h.tokenA, 'same content', { 'x-upload-idempotency-key': 'retry-key-1' })
-    ).json()) as { uploadRef: string }
-    const replay = (await (
-      await uploadBytes(h, h.tokenA, 'same content', { 'x-upload-idempotency-key': 'retry-key-1' })
-    ).json()) as { uploadRef: string }
-    expect(replay.uploadRef).toBe(first.uploadRef)
-  })
-
-  test('DELETE: foreign refs 404 the same as missing; own pending deletes', async () => {
-    const h = await buildHarness()
-    const mine = (await (await uploadBytes(h, h.tokenA, 'mine')).json()) as { uploadRef: string }
-    const foreign = await h.app.request(
-      `/api/code/mission-input-uploads/${mine.uploadRef}`,
-      authed(h.tokenB, { method: 'DELETE' }),
-    )
-    expect(foreign.status).toBe(404)
-    expect(((await foreign.json()) as { code: string }).code).toBe('upload-not-found')
-    const missing = await h.app.request(
-      '/api/code/mission-input-uploads/does-not-exist',
-      authed(h.tokenB, { method: 'DELETE' }),
-    )
-    expect(missing.status).toBe(404)
-    const own = await h.app.request(
-      `/api/code/mission-input-uploads/${mine.uploadRef}`,
-      authed(h.tokenA, { method: 'DELETE' }),
-    )
-    expect(own.status).toBe(200)
-  })
-
-  test('launch/preview enforce the server-side actor: a forged actorUserId cannot reach foreign uploads', async () => {
-    const h = await buildHarness()
-    const alicesRef = (await (await uploadBytes(h, h.tokenA, 'secret doc')).json()) as {
-      uploadRef: string
-    }
-    // Bob 的 token + body 里伪造 alice 的 actorUserId：server 覆盖 → 404 同形。
-    const launch = await h.app.request(
-      '/api/code/missions',
-      authed(h.tokenB, {
+    test('unauthenticated requests are rejected before any byte lands', async () => {
+      const h = await buildHarness(scope)
+      const res = await h.app.request('/api/code/mission-input-uploads', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          idempotencyKey: 'idem-forged-actor-1', // gitleaks:allow（幂等/去重键测试值，非凭据）
-          repositoryId: 'repo-1',
-          repositoryGroupId: null,
-          submission: {
-            kind: 'direct',
-            title: 'steal',
-            body: null,
-            uploads: [{ uploadRef: alicesRef.uploadRef, repositoryTargetPath: 'docs/x.md' }],
-          },
-          delivery: { kind: 'create-merge-request' },
-          requestedEmployee: null,
-          requestedPolicy: null,
-          actorUserId: h.userA,
-        }),
-      }),
-    )
-    expect(launch.status).toBe(404)
-    expect(((await launch.json()) as { code: string }).code).toBe('upload-not-found')
+        body: 'x',
+      })
+      expect(res.status).toBe(401)
+    })
 
-    const preview = await h.app.request(
-      '/api/code/missions/direct-input/preview',
-      authed(h.tokenB, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          repositoryId: 'repo-1',
-          repositoryGroupId: null,
-          uploads: [{ uploadRef: alicesRef.uploadRef, repositoryTargetPath: 'docs/x.md' }],
-          requestedEmployee: null,
-          requestedPolicy: null,
-          actorUserId: h.userA,
-        }),
-      }),
-    )
-    expect(preview.status).toBe(404)
-    expect(((await preview.json()) as { code: string }).code).toBe('upload-not-found')
-  })
+    test('oversize body → upload-too-large; empty body → upload-empty', async () => {
+      const h = await buildHarness(scope)
+      const big = new Uint8Array(MISSION_UPLOAD_MAX_BYTES + 1)
+      const tooLarge = await uploadBytes(h, h.tokenA, big)
+      expect(tooLarge.status).toBe(422)
+      expect(((await tooLarge.json()) as { code: string }).code).toBe('upload-too-large')
 
-  test('traversal / normalization adversarial matrix is rejected at the schema layer', async () => {
-    const h = await buildHarness()
-    const mine = (await (await uploadBytes(h, h.tokenA, 'payload')).json()) as {
-      uploadRef: string
-    }
-    const evil = [
-      '../escape.md',
-      '/etc/passwd',
-      'a//b.md',
-      'a/./b.md',
-      'a/../b.md',
-      'C:\\windows\\evil',
-      '..\\escape.md',
-      'docs\\evil.md',
-      'x\0y',
-    ]
-    for (const target of evil) {
-      const res = await h.app.request(
+      const empty = await uploadBytes(h, h.tokenA, new Uint8Array(0))
+      expect(empty.status).toBe(422)
+      expect(((await empty.json()) as { code: string }).code).toBe('upload-empty')
+    })
+
+    test('binary bytes land byte-identical in the blob pool — no transcoding, no newline normalization', async () => {
+      const h = await buildHarness(scope)
+      // NUL、CRLF、孤立 CR、0x80-0xFF——任何 utf8 归一都会破坏其一。
+      const payload = new Uint8Array([0x00, 0x0d, 0x0a, 0x0d, 0x80, 0xff, 0xfe, 0x41])
+      const expectedSha = createHash('sha256').update(payload).digest('hex')
+      const res = await uploadBytes(h, h.tokenA, payload, { 'x-upload-name': 'blob.bin' })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as { uploadRef: string; sha256: string; bytes: number }
+      expect(body.sha256).toBe(expectedSha)
+      expect(body.bytes).toBe(payload.byteLength)
+      const blobPath = join(h.appHome, 'evidence', 'blobs', expectedSha.slice(0, 2), expectedSha)
+      expect(new Uint8Array(readFileSync(blobPath))).toEqual(payload)
+    })
+
+    test('upload idempotency key replays to the same ref (no unrecognizable duplicate rows)', async () => {
+      const h = await buildHarness(scope)
+      const first = (await (
+        await uploadBytes(h, h.tokenA, 'same content', {
+          'x-upload-idempotency-key': 'retry-key-1',
+        })
+      ).json()) as { uploadRef: string }
+      const replay = (await (
+        await uploadBytes(h, h.tokenA, 'same content', {
+          'x-upload-idempotency-key': 'retry-key-1',
+        })
+      ).json()) as { uploadRef: string }
+      expect(replay.uploadRef).toBe(first.uploadRef)
+    })
+
+    test('DELETE: foreign refs 404 the same as missing; own pending deletes', async () => {
+      const h = await buildHarness(scope)
+      const mine = (await (await uploadBytes(h, h.tokenA, 'mine')).json()) as { uploadRef: string }
+      const foreign = await h.app.request(
+        `/api/code/mission-input-uploads/${mine.uploadRef}`,
+        authed(h.tokenB, { method: 'DELETE' }),
+      )
+      expect(foreign.status).toBe(404)
+      expect(((await foreign.json()) as { code: string }).code).toBe('upload-not-found')
+      const missing = await h.app.request(
+        '/api/code/mission-input-uploads/does-not-exist',
+        authed(h.tokenB, { method: 'DELETE' }),
+      )
+      expect(missing.status).toBe(404)
+      const own = await h.app.request(
+        `/api/code/mission-input-uploads/${mine.uploadRef}`,
+        authed(h.tokenA, { method: 'DELETE' }),
+      )
+      expect(own.status).toBe(200)
+    })
+
+    test('launch/preview enforce the server-side actor: a forged actorUserId cannot reach foreign uploads', async () => {
+      const h = await buildHarness(scope)
+      const alicesRef = (await (await uploadBytes(h, h.tokenA, 'secret doc')).json()) as {
+        uploadRef: string
+      }
+      // Bob 的 token + body 里伪造 alice 的 actorUserId：server 覆盖 → 404 同形。
+      const launch = await h.app.request(
+        '/api/code/missions',
+        authed(h.tokenB, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            idempotencyKey: 'idem-forged-actor-1', // gitleaks:allow（幂等/去重键测试值，非凭据）
+            repositoryId: 'repo-1',
+            repositoryGroupId: null,
+            submission: {
+              kind: 'direct',
+              title: 'steal',
+              body: null,
+              uploads: [{ uploadRef: alicesRef.uploadRef, repositoryTargetPath: 'docs/x.md' }],
+            },
+            delivery: { kind: 'create-merge-request' },
+            requestedEmployee: null,
+            requestedPolicy: null,
+            actorUserId: h.userA,
+          }),
+        }),
+      )
+      expect(launch.status).toBe(404)
+      expect(((await launch.json()) as { code: string }).code).toBe('upload-not-found')
+
+      const preview = await h.app.request(
         '/api/code/missions/direct-input/preview',
-        authed(h.tokenA, {
+        authed(h.tokenB, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             repositoryId: 'repo-1',
             repositoryGroupId: null,
-            uploads: [{ uploadRef: mine.uploadRef, repositoryTargetPath: target }],
+            uploads: [{ uploadRef: alicesRef.uploadRef, repositoryTargetPath: 'docs/x.md' }],
             requestedEmployee: null,
             requestedPolicy: null,
-            actorUserId: null,
+            actorUserId: h.userA,
           }),
         }),
       )
-      expect(res.status).toBe(422)
-    }
-  })
-})
+      expect(preview.status).toBe(404)
+      expect(((await preview.json()) as { code: string }).code).toBe('upload-not-found')
+    })
+
+    test('traversal / normalization adversarial matrix is rejected at the schema layer', async () => {
+      const h = await buildHarness(scope)
+      const mine = (await (await uploadBytes(h, h.tokenA, 'payload')).json()) as {
+        uploadRef: string
+      }
+      const evil = [
+        '../escape.md',
+        '/etc/passwd',
+        'a//b.md',
+        'a/./b.md',
+        'a/../b.md',
+        'C:\\windows\\evil',
+        '..\\escape.md',
+        'docs\\evil.md',
+        'x\0y',
+      ]
+      for (const target of evil) {
+        const res = await h.app.request(
+          '/api/code/missions/direct-input/preview',
+          authed(h.tokenA, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              repositoryId: 'repo-1',
+              repositoryGroupId: null,
+              uploads: [{ uploadRef: mine.uploadRef, repositoryTargetPath: target }],
+              requestedEmployee: null,
+              requestedPolicy: null,
+              actorUserId: null,
+            }),
+          }),
+        )
+        expect(res.status).toBe(422)
+      }
+    })
+  },
+)
 
 // ——— 真实 gitBaselineReader 链路（命令层，走真 git 仓库） ———
 
@@ -325,7 +335,10 @@ async function mkRealRepo(binary: Uint8Array): Promise<string> {
   return repoPath
 }
 
-function previewDeps(db: DbClient): { deps: LaunchDeps; sessions: UploadSessionPersistence } {
+function previewDeps(db: ProviderNeutralDatabase): {
+  deps: LaunchDeps
+  sessions: UploadSessionPersistence
+} {
   const sessions = createUploadSessionPersistence(db)
   return {
     sessions,
@@ -345,102 +358,113 @@ function previewDeps(db: DbClient): { deps: LaunchDeps; sessions: UploadSessionP
   }
 }
 
-describe('rfc310 pr3 upload security — real git baseline chain', () => {
-  test('dispositions come from the frozen HEAD: binary already-present, symlink/dir/mode-drift blocked; preview never claims', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const binary = new Uint8Array([0x00, 0x0d, 0x0a, 0x80, 0xff])
-    const repoPath = await mkRealRepo(binary)
-    db.insert(cachedRepos)
-      .values({
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'rfc310 pr3 upload security — real git baseline chain',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc310-pr3-',
+  },
+  (scope) => {
+    test('dispositions come from the frozen HEAD: binary already-present, symlink/dir/mode-drift blocked; preview never claims', async () => {
+      const db = scope.harness.db
+      // 这一块不打 HTTP，但仍要 `open()`：被测的上传落盘走 `Paths.root`，也就是
+      // `AGENT_WORKFLOW_HOME`——不 open 的话那个变量指向的是**真实用户目录**。
+      const appHome = (await scope.open()).appHome
+      const binary = new Uint8Array([0x00, 0x0d, 0x0a, 0x80, 0xff])
+      const repoPath = await mkRealRepo(binary)
+      await db.insert(cachedRepos).values({
         id: 'repo-real',
         urlHash: 'deadbeef',
         localPath: repoPath,
         lastFetchedAt: 0,
         createdAt: 0,
       })
-      .run()
-    const { deps, sessions } = previewDeps(db)
+      const { deps, sessions } = previewDeps(db)
 
-    const mkUp = async (name: string, bytes: Uint8Array) => {
-      const tmp = join(appHome, name)
-      writeFileSync(tmp, bytes)
-      return (
-        await sessions.createUpload({
-          actorUserId: 'u-1',
-          originalName: name,
-          bytes: bytes.byteLength,
-          sha256: createHash('sha256').update(bytes).digest('hex'),
-          blobRef: createHash('sha256').update(bytes).digest('hex'),
-          idempotencyKey: null,
-          now: Date.now(),
-        })
-      ).id
-    }
-    const sameBinary = await mkUp('same.bin', binary)
-    const fresh = await mkUp('fresh.md', new TextEncoder().encode('new\n'))
-    const ontoSymlink = await mkUp('l.md', new TextEncoder().encode('x'))
-    const ontoDir = await mkUp('d.md', new TextEncoder().encode('x'))
-    const sameShellRegular = await mkUp('run.sh', new TextEncoder().encode('#!/bin/sh\n'))
+      const mkUp = async (name: string, bytes: Uint8Array) => {
+        const tmp = join(appHome, name)
+        writeFileSync(tmp, bytes)
+        return (
+          await sessions.createUpload({
+            actorUserId: 'u-1',
+            originalName: name,
+            bytes: bytes.byteLength,
+            sha256: createHash('sha256').update(bytes).digest('hex'),
+            blobRef: createHash('sha256').update(bytes).digest('hex'),
+            idempotencyKey: null,
+            now: Date.now(),
+          })
+        ).id
+      }
+      const sameBinary = await mkUp('same.bin', binary)
+      const fresh = await mkUp('fresh.md', new TextEncoder().encode('new\n'))
+      const ontoSymlink = await mkUp('l.md', new TextEncoder().encode('x'))
+      const ontoDir = await mkUp('d.md', new TextEncoder().encode('x'))
+      const sameShellRegular = await mkUp('run.sh', new TextEncoder().encode('#!/bin/sh\n'))
 
-    const preview = await previewDirectInput(deps, {
-      repositoryId: 'repo-real',
-      repositoryGroupId: null,
-      uploads: [
-        { uploadRef: sameBinary, repositoryTargetPath: 'binary.bin' },
-        { uploadRef: fresh, repositoryTargetPath: 'newdir/new.md' },
-        { uploadRef: ontoSymlink, repositoryTargetPath: 'link.md' },
-        { uploadRef: ontoDir, repositoryTargetPath: 'docs' },
-        // 同 bytes 但 baseline 是 executable、upload 默认 regular ⇒ mode 漂移 blocked。
-        { uploadRef: sameShellRegular, repositoryTargetPath: 'run.sh' },
-      ],
-      requestedEmployee: { id: 'emp-1', revision: 1 },
-      requestedPolicy: null,
-      actorUserId: 'u-1',
-    })
-    expect(preview.baseline.sha).toMatch(/^[0-9a-f]{40}$/)
-    expect(preview.dispositions.map((d) => d.disposition)).toEqual([
-      'already-present',
-      'create',
-      'blocked',
-      'blocked',
-      'blocked',
-    ])
-    expect(preview.dispositions[2]!.blockedReason).toBe('target-unsupported-entry')
-    expect(preview.dispositions[3]!.blockedReason).toBe('target-is-directory')
-    expect(preview.dispositions[4]!.blockedReason).toBe('target-exists-with-different-content')
-
-    // preview 只读：不 claim、不落 plan。
-    expect((await sessions.getUpload(sameBinary))!.state).toBe('pending')
-    expect(db.select().from(developmentRepositoryUploadPlans).all()).toHaveLength(0)
-    rmSync(repoPath, { recursive: true, force: true })
-  })
-
-  test('missing cached repo resolves to baseline-reader-not-wired (no default-branch guessing)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { deps, sessions } = previewDeps(db)
-    const ref = (
-      await sessions.createUpload({
-        actorUserId: 'u-1',
-        originalName: 'a.md',
-        bytes: 1,
-        sha256: 'a'.repeat(64),
-        blobRef: 'a'.repeat(64),
-        idempotencyKey: null,
-        now: Date.now(),
-      })
-    ).id
-    try {
-      await previewDirectInput(deps, {
-        repositoryId: 'repo-unknown',
+      const preview = await previewDirectInput(deps, {
+        repositoryId: 'repo-real',
         repositoryGroupId: null,
-        uploads: [{ uploadRef: ref, repositoryTargetPath: 'a.md' }],
+        uploads: [
+          { uploadRef: sameBinary, repositoryTargetPath: 'binary.bin' },
+          { uploadRef: fresh, repositoryTargetPath: 'newdir/new.md' },
+          { uploadRef: ontoSymlink, repositoryTargetPath: 'link.md' },
+          { uploadRef: ontoDir, repositoryTargetPath: 'docs' },
+          // 同 bytes 但 baseline 是 executable、upload 默认 regular ⇒ mode 漂移 blocked。
+          { uploadRef: sameShellRegular, repositoryTargetPath: 'run.sh' },
+        ],
         requestedEmployee: { id: 'emp-1', revision: 1 },
         requestedPolicy: null,
         actorUserId: 'u-1',
       })
-      throw new Error('should have thrown')
-    } catch (error) {
-      expect((error as { code?: string }).code).toBe('baseline-reader-not-wired')
-    }
-  })
-})
+      expect(preview.baseline.sha).toMatch(/^[0-9a-f]{40}$/)
+      expect(preview.dispositions.map((d) => d.disposition)).toEqual([
+        'already-present',
+        'create',
+        'blocked',
+        'blocked',
+        'blocked',
+      ])
+      expect(preview.dispositions[2]!.blockedReason).toBe('target-unsupported-entry')
+      expect(preview.dispositions[3]!.blockedReason).toBe('target-is-directory')
+      expect(preview.dispositions[4]!.blockedReason).toBe('target-exists-with-different-content')
+
+      // preview 只读：不 claim、不落 plan。
+      expect((await sessions.getUpload(sameBinary))!.state).toBe('pending')
+      expect(await db.select().from(developmentRepositoryUploadPlans)).toHaveLength(0)
+      rmSync(repoPath, { recursive: true, force: true })
+    })
+
+    test('missing cached repo resolves to baseline-reader-not-wired (no default-branch guessing)', async () => {
+      const db = scope.harness.db
+      const { deps, sessions } = previewDeps(db)
+      const ref = (
+        await sessions.createUpload({
+          actorUserId: 'u-1',
+          originalName: 'a.md',
+          bytes: 1,
+          sha256: 'a'.repeat(64),
+          blobRef: 'a'.repeat(64),
+          idempotencyKey: null,
+          now: Date.now(),
+        })
+      ).id
+      try {
+        await previewDirectInput(deps, {
+          repositoryId: 'repo-unknown',
+          repositoryGroupId: null,
+          uploads: [{ uploadRef: ref, repositoryTargetPath: 'a.md' }],
+          requestedEmployee: { id: 'emp-1', revision: 1 },
+          requestedPolicy: null,
+          actorUserId: 'u-1',
+        })
+        throw new Error('should have thrown')
+      } catch (error) {
+        expect((error as { code?: string }).code).toBe('baseline-reader-not-wired')
+      }
+    })
+  },
+)

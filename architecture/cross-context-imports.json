@@ -72268,6 +72268,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/application/ownerScopedName.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/application/ownerScopedName.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e6c3a756696321df8b3c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/capabilities.ts#postgresqlUniqueViolationConstraint",
+      "toPath": "packages/backend/src/platform/persistence/capabilities.ts",
+      "toSymbol": "postgresqlUniqueViolationConstraint",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
@@ -80463,9 +80480,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4733,
+    "architectureExceptions": 4734,
     "implementationSccs": 0,
-    "observedEdges": 5267,
+    "observedEdges": 5268,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -156266,6 +156283,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/application/ownerScopedName.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/application/ownerScopedName.ts#$file",
+      "id": "import:e6c3a756696321df8b3c",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/capabilities",
+      "syntax": "static-import",
+      "targetSymbol": "postgresqlUniqueViolationConstraint",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/capabilities.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/capabilities.ts#postgresqlUniqueViolationConstraint"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
@@ -165283,7 +165316,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7c4ad83a0e36585f51886d6c9c4cc27e3f8f6866b383ab0908121dccb58c6868",
+  "sourceDigest": "sha256:1b5e8674ceef52216f9f694df4e813366e77ef1b4a14e3d116dd882b1368d97a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
