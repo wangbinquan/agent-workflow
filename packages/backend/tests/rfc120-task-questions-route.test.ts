@@ -6,11 +6,7 @@
 // 404, missing targetNodeId → 422.
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { eq } from 'drizzle-orm'
 import {
   clarifyRounds,
@@ -21,13 +17,11 @@ import {
   workflows,
 } from '../src/db/schema'
 import { listTaskQuestions } from '../src/services/taskQuestions'
-import { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import type { ProviderHarness } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const AUTH = { Authorization: `Bearer ${TOKEN}` }
 
 const SNAPSHOT = JSON.stringify({
@@ -42,17 +36,6 @@ const SNAPSHOT = JSON.stringify({
   edges: [],
   outputs: [],
 })
-
-function makeApp(db: DbClient): Hono {
-  process.env.AGENT_WORKFLOW_HOME = mkdtempSync(join(tmpdir(), 'aw-tq-home-'))
-  return createApp({
-    token: TOKEN,
-    configPath: join(mkdtempSync(join(tmpdir(), 'aw-tq-cfg-')), 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-}
 
 async function seedTask(
   db: ProviderNeutralDatabase,
@@ -231,49 +214,52 @@ describe('RFC-120 /api/tasks/:id/questions routes', () => {
       expect(moved.filter((e) => e.roleKind === 'designer')).toHaveLength(1)
       expect(moved.find((e) => e.roleKind === 'designer')!.effectiveTargetNodeId).toBe('fixer')
     })
-  })
 
-  test('stage toggles; cross-task entry → 404; missing task → 404', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = makeApp(db)
-    await seedTask(db, 'task-c')
-    await seedSelfAnswered(db, 'task-c')
-    await seedTask(db, 'task-d')
+    // RFC-359 AC-6：本文件最后一处单引擎残留。它原来自建 `createInMemoryDb` + 模块级的
+    // **同步** `makeApp`，紧挨着已迁的那一批——同名 `makeApp`（模块级同步 / 注入的异步）
+    // 让它看起来像已经在作用域里了。现在改吃注入的那三个。
+    test('stage toggles; cross-task entry → 404; missing task → 404', async () => {
+      const db = harness.db
+      const app = await makeApp(db)
+      await seedTask(db, 'task-c')
+      await seedSelfAnswered(db, 'task-c')
+      await seedTask(db, 'task-d')
 
-    const list = (await (
-      await app.request('/api/tasks/task-c/questions', { headers: AUTH })
-    ).json()) as Array<{ id: string }>
-    const entryId = list[0]!.id
+      const list = (await (
+        await app.request('/api/tasks/task-c/questions', { headers: AUTH })
+      ).json()) as Array<{ id: string }>
+      const entryId = list[0]!.id
 
-    // RFC-134 D10（Codex R2-F4/R3-F7）：fixture 条目已 dispatched —— stage 一个已下发行
-    // 现在被服务端原子 CAS 拒（409），不再留下脏 staged 戳（此前这里的 200 正是被堵上的缺口）。
-    const stagedDispatched = await app.request(`/api/tasks/task-c/questions/${entryId}/stage`, {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ staged: true }),
+      // RFC-134 D10（Codex R2-F4/R3-F7）：fixture 条目已 dispatched —— stage 一个已下发行
+      // 现在被服务端原子 CAS 拒（409），不再留下脏 staged 戳（此前这里的 200 正是被堵上的缺口）。
+      const stagedDispatched = await app.request(`/api/tasks/task-c/questions/${entryId}/stage`, {
+        method: 'POST',
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({ staged: true }),
+      })
+      expect(stagedDispatched.status).toBe(409)
+      // 未下发行照常可 stage（正路径接线保留）：解除 fixture 的 dispatch 戳后再 stage。
+      await db
+        .update(taskQuestions)
+        .set({ dispatchedAt: null, dispatchedBy: null, triggerRunId: null })
+        .where(eq(taskQuestions.id, entryId))
+      const stageRes = await app.request(`/api/tasks/task-c/questions/${entryId}/stage`, {
+        method: 'POST',
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({ staged: true }),
+      })
+      expect(stageRes.status).toBe(200)
+
+      // entry belongs to task-c, not task-d → 404
+      const crossTask = await app.request(`/api/tasks/task-d/questions/${entryId}/confirm`, {
+        method: 'POST',
+        headers: AUTH,
+      })
+      expect(crossTask.status).toBe(404)
+
+      const missingTask = await app.request('/api/tasks/nope/questions', { headers: AUTH })
+      expect(missingTask.status).toBe(404)
     })
-    expect(stagedDispatched.status).toBe(409)
-    // 未下发行照常可 stage（正路径接线保留）：解除 fixture 的 dispatch 戳后再 stage。
-    await db
-      .update(taskQuestions)
-      .set({ dispatchedAt: null, dispatchedBy: null, triggerRunId: null })
-      .where(eq(taskQuestions.id, entryId))
-    const stageRes = await app.request(`/api/tasks/task-c/questions/${entryId}/stage`, {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ staged: true }),
-    })
-    expect(stageRes.status).toBe(200)
-
-    // entry belongs to task-c, not task-d → 404
-    const crossTask = await app.request(`/api/tasks/task-d/questions/${entryId}/confirm`, {
-      method: 'POST',
-      headers: AUTH,
-    })
-    expect(crossTask.status).toBe(404)
-
-    const missingTask = await app.request('/api/tasks/nope/questions', { headers: AUTH })
-    expect(missingTask.status).toBe(404)
   })
 })
 

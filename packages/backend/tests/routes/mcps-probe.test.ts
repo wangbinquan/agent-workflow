@@ -10,17 +10,13 @@
 //     and persisted so the UI can render it).
 //   - Auth: requests without bearer return 401 (same as RFC-028 routes).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { __setProbeOptionsForTesting } from '../../src/routes/mcps'
 import type { OpenClientFn, ProbedMcpClient } from '../../src/services/mcpProbe'
-import { createApp } from '../../src/server'
 import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { describeEachProviderHttpApplication } from '../helpers/providerHttpApplicationScope'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 const TOKEN = 'rfc030-token-fixture'
 
 function makeFakeClient(opts: { failTools?: boolean } = {}): ProbedMcpClient {
@@ -42,18 +38,6 @@ function makeFakeClient(opts: { failTools?: boolean } = {}): ProbedMcpClient {
 
 function fakeOpener(client: ProbedMcpClient): OpenClientFn {
   return async () => ({ client, handshakeMs: 5 })
-}
-
-function buildHarness(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
 }
 
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
@@ -235,7 +219,12 @@ registerProviderApplication('POST /api/mcps/:id/probe', (buildHarness) => {
   })
 })
 
-describe('auth', () => {
+// RFC-359 AC-6：这两条原来是本文件最后一处单引擎残留——它们调的是**模块级**的
+// `buildHarness`（自建 `createInMemoryDb`），而其余三个 describe 早已改吃
+// `registerProviderApplication` 传进来的同名形参。同名遮蔽让这处残留看起来
+// 像「已经迁过了」。改成同样走共用作用域之后，模块级那个连同它的
+// `createInMemoryDb` 一起删掉。
+registerProviderApplication('auth', (buildHarness) => {
   test('GET /api/mcps/probes returns 401 without token', async () => {
     const { app } = buildHarness()
     const r = await app.request('/api/mcps/probes')

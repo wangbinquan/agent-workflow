@@ -7061,3 +7061,58 @@ RFC 自己的判据（同一 fixture 抄三遍就抽）抽成 `tests/helpers/sti
 - workflows frameGate 对 `workflow.deleted` 恒返 true ⇒ `rfc099` 转红 ✅
 - repo-import `channelKeyOf` 收成常量（跨批次串台）⇒ `ws-repo-imports` 转红 ✅
 - workflows frameGate 末尾恒返 true（私有 update 漏出）⇒ `rfc152` 两条转红 ✅
+
+## 5bg. 「已迁完」的文件里还剩 3 条账本残留——两条是同名遮蔽，一条是两个组合根的签名不对称
+
+pre-flight 把 55 个 HTTP 形状的欠债文件过了一遍，其中 3 个同时报
+`ALREADY-MIGRATED` **却仍有账本条目**。逐个看完，是三种不同的东西：
+
+### ① `routes/mcps-probe.test.ts`：同名遮蔽让残留看起来像已迁
+
+文件里有一个**模块级** `function buildHarness()`（自建 `createInMemoryDb`），而三个
+已迁的 describe 吃的是 `registerProviderApplication` **传进来的同名形参**
+`buildHarness`。同名遮蔽之下，`grep buildHarness` 看到一片调用点，完全看不出哪些走
+作用域、哪些走模块级那个。真正还用着模块级版本的只有最后那个 `describe('auth')`
+的两条 401 用例——它们连 DB 都不碰，迁进作用域是纯机械动作。
+
+### ② `rfc120-task-questions-route.test.ts`：同名遮蔽的第二例，而且两个同名函数**签名还不同**
+
+同样的形状，但更阴：模块级 `makeApp(db)` 是**同步**的、注入的 `makeApp(db)` 是
+**异步**的。那条残留用例写 `const app = makeApp(db)`（没有 `await`）——在已迁的那批里
+这行会拿到一个 Promise 而当场炸，正因为它吃的是模块级那个同步版本才一直绿着。
+**规律**：迁移留下的同名注入函数，若与被取代的模块级函数**签名不同**，那个差异本身
+就是「谁还没迁」的指纹——`await` 的有无比 grep 更能定位残留。
+
+### ③ `rfc221-login-policy-routes.test.ts`：不是残留，是两个组合根的签名不对称
+
+这条留在单引擎是对的，但账本里原来记的**理由不准**。按源码重新对账：
+
+- `server.ts:2540` 的 SQLite 根：`deps.secretBox === undefined ? null : …`，
+  所以 `oidcProviders === null` **只在没传 secretBox 时**出现；
+- `postgresqlDaemonApplication.ts:618` 无条件构造它（`secretBox` 是必填入参）；
+- **但关键一条是** `cli/start.ts:1435` 在**选 provider 之前**就 `createSecretBox(...)`
+  （源码注释原话 "needed by either selected composition"）——所以**两个引擎的真实部署
+  都必定带 secretBox**。
+
+也就是说：`oidcProviders === null` 及其背后那两个 503（`routes/oidc-auth.ts:120,176`）
+**在生产上两个引擎都到不了**。原记载「该状态在 PG 上按构造不存在」容易被读成
+「PG 缺了 SQLite 有的能力」，**不是**——没有任何用户可见的能力差，差的只是两个组合根的
+**装配签名**（SQLite 根收 `secretBox?`，PG 根收 `secretBox`）。
+
+正解是把 SQLite 根也收成必填、删掉 null 分支与那两个 503，这条用例连同最后一条账本
+残留一起消失。**没有在本轮做**：要改 47 个测试文件的 `createApp` 入参、并动生产路由
+分支，独立一刀更安全。已把准确理由写进用例注释，别再按旧记载理解。
+
+### 账本：550 → 548
+
+①② 各减一条。③ 不减（它该留着）。
+
+### 顺带记一个下一刀会撞上的同类不对称
+
+`scheduled-tasks-run-now` 的 HTTP describe 要注入 `buildScheduleLaunch` 桩（免得
+run-now 真去 spawn opencode）。**SQLite 根有这个可选覆盖口**（`server.ts:822`
+`buildScheduleLaunch?`，`:2625` 处 `deps.buildScheduleLaunch ?? …`），
+**PG 根没有**（`postgresqlDaemonApplication.ts:1294` 直接取
+`taskExecutionProvider.trigger.buildScheduleLaunch`）。这与 ③ 同类：不是产品能力差，
+是**装配签名不对称**，而它恰好挡住一个 AC-6 迁移。处置方向是给 PG 根补上同形的可选
+覆盖（默认值不变），让两个根的合同对齐——**不是**给测试加一个只有 PG 走的特例分支。

@@ -172,16 +172,27 @@ describeEachProviderHttpApplication(
   },
 )
 
-// RFC-359 AC-6 例外：单引擎。理由见块内注释——被测状态（无 secretBox 的装配）在 PostgreSQL
-// 的组合根上按构造不存在。
+// RFC-359 AC-6 例外：单引擎。被测状态（无 secretBox 的装配）**在两个引擎的生产部署里都
+// 不存在**——这比原来记的「在 PostgreSQL 上按构造不存在」更强，2026-09-12 对账所得。
 describe('RFC-221 login policy routes — no-secret deployment', () => {
   test('public OIDC routes fail closed when runtime support or callback inputs are missing', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    // **故意不给 secretBox**：这条判据测的就是「部署没有密钥 ⇒ OIDC 运行时不可用」这个状态。
-    // 共用 HTTP 作用域装配的应用**总是**带一个 secretBox，接不进去；而
-    // `composePostgresqlApplication` 的入参里 `secretBox` 是**必填**的，这个状态在
-    // PostgreSQL 上按构造就不存在——不是「还没迁」，是两侧的装配合同本来就不对称
-    // （已记进 RFC-359 plan §5u）。所以这一条留在单引擎 `createApp` 上。
+    // **故意不给 secretBox**：这条判据测的就是「装配里没有密钥 ⇒ OIDC 运行时不可用」。
+    //
+    // 为什么只能单引擎（2026-09-12 按源码对账，比 plan §5u 原记载更准）：
+    //   · `server.ts` 的 SQLite 组合根是 `deps.secretBox === undefined ? null : …`，
+    //     所以 `oidcProviders === null` 只在**没传 secretBox** 时出现；
+    //   · `postgresqlDaemonApplication.ts` 无条件构造它（`secretBox` 是必填入参），
+    //     该状态在 PG 侧按构造不存在；
+    //   · 但关键一条是：`cli/start.ts` 在**选 provider 之前**就 `createSecretBox(...)`
+    //     （注释原话 "needed by either selected composition"），所以**两个引擎的真实
+    //     部署都必定带 secretBox**——这个 null 分支（及它背后那两个 503）在生产上
+    //     两边都到不了，不是「PG 缺了 SQLite 有的能力」。
+    //
+    // 也就是说这不是「一个引擎好一个不好」的分叉，而是两个组合根的**装配签名**不对称。
+    // 正解是把 SQLite 根的 `secretBox` 也收成必填、删掉 null 分支与那两个 503，
+    // 那样这条用例连同本文件最后一条账本残留一起消失——但那要改 47 个测试文件的
+    // `createApp` 入参并动生产路由分支，独立一刀，见 plan §5bg。
     const app = createApp({
       token: DAEMON_TOKEN,
       configPath: '/tmp/aw-rfc221-no-secret-config-never-used.json',

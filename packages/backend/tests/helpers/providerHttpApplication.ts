@@ -26,7 +26,15 @@ import type { ProviderDatabaseHarness } from './eachProvider'
 
 export type ProviderHttpApplicationInput = Pick<
   AppDeps,
-  'token' | 'configPath' | 'dbVersion' | 'opencodeVersion' | 'workflowExactOperationHook'
+  | 'token'
+  | 'configPath'
+  | 'dbVersion'
+  | 'opencodeVersion'
+  | 'workflowExactOperationHook'
+  // RFC-359 AC-6：定时任务 run-now 的启动闭包覆盖口。两个组合根现在都收它
+  // （SQLite 根本来就有，PG 根同轮补上），所以这里一个 key 就能同时喂到两侧
+  // ——两个分支都是 `...input` 展开的。
+  | 'buildScheduleLaunch'
 > & {
   readonly appHome: string
   /**

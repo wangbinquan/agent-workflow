@@ -12,9 +12,11 @@ import { resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
+import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { getScheduledTask, runScheduleNow } from './helpers/integrationTriggerResourceBinding'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { createUser } from '../src/services/users'
@@ -211,103 +213,125 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
   })
 })
 
-describe('RFC-159 T7 — run-now route gate', () => {
-  let app: Hono
-  let db: DbClient
-  let bobToken = ''
-  let carolToken = ''
-  let adminToken = ''
-  let schedId = ''
+// RFC-359 AC-6：路由门这一档两个引擎各跑一遍。
+//
+// 唯一需要动的口子是 `buildScheduleLaunch` 桩（免得 run-now 真去 spawn opencode）：
+// SQLite 根本来就有这个可选覆盖，**PG 根没有**，本轮把 PG 根补成同形
+// （`postgresqlDaemonApplication.ts` 的 `input.buildScheduleLaunch ?? …`）——两个组合根
+// 的装配签名对齐，而不是在测试里给 PG 开特例。详见 plan §5bg。
+//
+// 桩要按用例新建（它记录调用），而覆盖口是**注册期**参数，所以这里注册一个转发闭包，
+// 指向 `beforeEach` 每次换掉的那个 `currentLaunch`。
+let currentLaunch: BuildScheduleLaunch | undefined
+describeEachProviderHttpApplication(
+  'RFC-159 T7 — run-now route gate',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    tempPrefix: 'aw-run-now-',
+    buildScheduleLaunch:
+      (owner, schedId) =>
+      async (...args) => {
+        if (currentLaunch === undefined) throw new Error('run-now launch stub not installed')
+        return currentLaunch(owner, schedId)(...args)
+      },
+  },
+  (scope) => {
+    let app: Hono
+    let db: ProviderNeutralDatabase
+    let bobToken = ''
+    let carolToken = ''
+    let adminToken = ''
+    let schedId = ''
 
-  beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    const { build } = stubLaunch()
-    app = createApp({
-      token: DAEMON_TOKEN,
-      configPath: '/tmp/aw-run-now-never-used.json',
-      opencodeVersion: '1.15.0',
-      dbVersion: 1,
-      db,
-      buildScheduleLaunch: build, // inject stub so run-now doesn't spawn opencode
-    })
-    const bob = await createUser(db, {
-      username: 'bob',
-      displayName: 'B',
-      role: 'user',
-      password: 'longEnoughPassword',
-    })
-    const carol = await createUser(db, {
-      username: 'carol',
-      displayName: 'C',
-      role: 'user',
-      password: 'longEnoughPassword',
-    })
-    const admin = await createUser(db, {
-      username: 'admin1',
-      displayName: 'A',
-      role: 'admin',
-      password: 'longEnoughPassword',
-    })
-    const wf = await createWorkflow(
-      db,
-      { name: 'wf', description: '', definition: DEF },
-      { ownerUserId: bob.id, actor: actorFor(bob.id) },
-    )
-    const created = await createScheduledTask(
-      db,
-      {
+    beforeEach(async () => {
+      db = scope.harness.db
+      currentLaunch = stubLaunch().build
+      app = (await scope.open()).app
+      const bob = await createUser(db, {
+        username: 'bob',
+        displayName: 'B',
+        role: 'user',
+        password: 'longEnoughPassword',
+      })
+      const carol = await createUser(db, {
+        username: 'carol',
+        displayName: 'C',
+        role: 'user',
+        password: 'longEnoughPassword',
+      })
+      const admin = await createUser(db, {
+        username: 'admin1',
+        displayName: 'A',
+        role: 'admin',
+        password: 'longEnoughPassword',
+      })
+      const wf = await createWorkflow(
+        db,
+        { name: 'wf', description: '', definition: DEF },
+        { ownerUserId: bob.id, actor: actorFor(bob.id) },
+      )
+      // RFC-359 AC-6：种子改成中立 insert。原来走的
+      // `createScheduledTaskWithIntegrationTriggerResources` 里是
+      // `composeSqliteScheduledTaskRuntime` / `composeSqliteResourceCatalog`——bun:sqlite
+      // 专有，中立句柄传不进去。而本 describe 的被测对象是 **run-now 路由门**
+      // （owner 201 / admin 201 / 陌生人 404 / 坏载荷 422），不是「创建定时任务」那条路；
+      // 用服务层去建种子只是顺手，不是判据的一部分。直接落行既中立又更贴题。
+      schedId = ulid()
+      await db.insert(scheduledTasks).values({
+        id: schedId,
         name: 'nightly',
-        launchKind: 'workflow' as const,
-        launchPayload: {
+        ownerUserId: bob.id,
+        launchKind: 'workflow',
+        launchPayload: JSON.stringify({
           workflowId: wf.id,
           name: 'nightly',
           // RFC-165: wire is URL-only; run-now injects a launch stub so the
           // URL is never resolved — any parseable form works (RFC-287 G5: not file://).
           repoUrl: 'https://git.invalid/placeholder.git',
           inputs: {},
-        },
-        scheduleSpec: SPEC,
+        }),
+        scheduleSpec: JSON.stringify(SPEC),
         enabled: true,
-      },
-      { actor: actorFor(bob.id) },
-    )
-    schedId = created.id
-    bobToken = (await createSession({ db, userId: bob.id })).token
-    carolToken = (await createSession({ db, userId: carol.id })).token
-    adminToken = (await createSession({ db, userId: admin.id })).token
-  })
-
-  async function runNow(token: string): Promise<Response> {
-    return app.request(`/api/scheduled-tasks/${schedId}/run-now`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: '{}',
+      })
+      bobToken = (await createSession({ db, userId: bob.id })).token
+      carolToken = (await createSession({ db, userId: carol.id })).token
+      adminToken = (await createSession({ db, userId: admin.id })).token
     })
-  }
 
-  test('owner → 201 { taskId }', async () => {
-    const res = await runNow(bobToken)
-    expect(res.status).toBe(201)
-    expect(((await res.json()) as { taskId: string }).taskId).toBe(STUB_TASK_ID)
-  })
+    async function runNow(token: string): Promise<Response> {
+      return app.request(`/api/scheduled-tasks/${schedId}/run-now`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+    }
 
-  test('legacy/corrupt launch payload is a structured 422, not a raw Zod 500', async () => {
-    await db
-      .update(scheduledTasks)
-      .set({ launchPayload: '{}' })
-      .where(eq(scheduledTasks.id, schedId))
-    const res = await runNow(bobToken)
-    expect(res.status).toBe(422)
-    expect((await res.json()) as { code: string }).toMatchObject({
-      code: 'schedule-payload-invalid',
+    test('owner → 201 { taskId }', async () => {
+      const res = await runNow(bobToken)
+      expect(res.status).toBe(201)
+      expect(((await res.json()) as { taskId: string }).taskId).toBe(STUB_TASK_ID)
     })
-  })
 
-  test('admin → 201', async () => {
-    expect((await runNow(adminToken)).status).toBe(201)
-  })
+    test('legacy/corrupt launch payload is a structured 422, not a raw Zod 500', async () => {
+      await db
+        .update(scheduledTasks)
+        .set({ launchPayload: '{}' })
+        .where(eq(scheduledTasks.id, schedId))
+      const res = await runNow(bobToken)
+      expect(res.status).toBe(422)
+      expect((await res.json()) as { code: string }).toMatchObject({
+        code: 'schedule-payload-invalid',
+      })
+    })
 
-  test('stranger → 404 (invisible == missing)', async () => {
-    expect((await runNow(carolToken)).status).toBe(404)
-  })
-})
+    test('admin → 201', async () => {
+      expect((await runNow(adminToken)).status).toBe(201)
+    })
+
+    test('stranger → 404 (invisible == missing)', async () => {
+      expect((await runNow(carolToken)).status).toBe(404)
+    })
+  },
+)

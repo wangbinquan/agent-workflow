@@ -32,6 +32,7 @@ import { eq } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
+import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { loadConfig } from '@/config'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
@@ -359,6 +360,17 @@ export interface PostgresqlDaemonApplicationInput {
   readonly sourceWriteWindow?: DatabaseSourceWriteWindow
   readonly databaseMigration: DatabaseMigrationModule
   readonly dbVersion: number
+  /**
+   * RFC-159 / RFC-359 —— 覆盖定时任务 run-now 的启动闭包。生产不传（下面从
+   * `taskExecutionProvider.trigger` 取真的那个），测试注入桩，免得
+   * POST /:id/run-now 真去 spawn 一个 opencode 任务。
+   *
+   * 为什么补这个口子：SQLite 根**早就有**同形的可选覆盖（`server.ts` 的
+   * `buildScheduleLaunch?`，取值处 `deps.buildScheduleLaunch ?? …`），PG 根却没有
+   * ——两个组合根的**装配签名不对称**，而它恰好挡住 `scheduled-tasks-run-now`
+   * 的 AC-6 双引擎迁移。补成同形（默认值不变）比在测试里给 PG 开特例分支干净。
+   */
+  readonly buildScheduleLaunch?: BuildScheduleLaunch
   readonly maintenanceStatus: NonNullable<
     PostgresqlAppCompositionInput['platform']['maintenance']['maintenanceStatus']
   >
@@ -1291,7 +1303,8 @@ export async function composePostgresqlApplication(
     scheduledTasks: Object.freeze({
       identityAccess: integrationIdentityAccess,
       scheduledTaskRuntime,
-      buildScheduleLaunch: taskExecutionProvider.trigger.buildScheduleLaunch,
+      buildScheduleLaunch:
+        input.buildScheduleLaunch ?? taskExecutionProvider.trigger.buildScheduleLaunch,
       getDefaultRuntime: () => loadConfig(input.configPath).defaultRuntime ?? null,
     }),
     webhookEndpoints: Object.freeze({
