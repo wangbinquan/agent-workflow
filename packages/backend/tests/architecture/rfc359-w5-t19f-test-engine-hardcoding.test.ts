@@ -321,7 +321,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc222-task-delete.test.ts: 1',
   'rfc223-import-refs.test.ts: 1',
   'rfc223-owner-transfer.test.ts: 2',
-  'rfc223-pr1-impl-gate.test.ts: 1',
   'rfc223-pr2-refs.test.ts: 2',
   'rfc223-pr3a-consumers.test.ts: 1',
   'rfc223-pr3b-dynamic-token.test.ts: 2',

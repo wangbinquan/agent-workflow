@@ -6142,3 +6142,31 @@ bun 的 **5s 默认用例预算**。
 
 （另一处**确有**预算问题的地方是 `eachProvider` 的 PG `beforeEach` 快照回滚，已单独给
 `databaseCount × 30s`——那一处也是先数清它做什么、再给数字。）
+
+## 5ac. AC-6 第九批（W58）：四个候选只过了一个——记清**三种不同的「过不去」**
+
+账本 583 → 582（`rfc223-pr1-impl-gate`）。另三个各自卡在不同的东西上，区分清楚很重要，因为
+**处置方式完全不同**：
+
+| 文件 | 卡在哪 | 这是什么 | 怎么办 |
+| --- | --- | --- | --- |
+| `rfc099-ws-acl-filter` | `composeTestSqliteRealtimeRuntime` → `composeSqliteRealtimeRuntime` / PG 双声明 | **登记在册的成对实现** | 先合那一对（W4 线） |
+| `rfc218-agent-launch-ports` | `composeSqlite/PostgresqlAgentLaunchResourceOperations` **签名不同**（PG 侧还要 `agents` / `workflowValidation` 两个协作者） | **构造面不对称的成对适配器**（同 plan §6 记的 `ResourcePackageApplyMaintenance`） | 先把端口对齐 |
+| `rfc223-pr3b-dynamic-token` | `resumeDynamicWorkflowExecution` 要 `StartTaskDeps.db: LegacySqliteTaskDatabase` | **legacy 契约上的 SQLite 绑定** | 随 legacy 那条线 |
+
+**顺带一个有用的对照**：`composeSqliteResourceCatalog` / `composePostgresqlResourceCatalog` 看起来
+也是一对，其实两个都只是 `composeResourceCatalogFor`（收 `ProviderNeutralDatabase`）的**类型窄化
+壳**——**不是**两份实现。双引擎用例直接调中立的那个即可，不需要改 src。
+**看见 `composeSqlite*` / `composePostgresql*` 成对出现，先点进去看是不是同一个函数**，
+别一见名字就判定「成对适配器，迁不了」。
+
+**另记**：`rfc223-pr3b-dynamic-token` 除类型问题外，还有一条判据在 PG 上**稳定失败**
+（`generate maps tokens to both frozen ids and execute selects each exact runtime profile`，三次
+跑三次红）。它今天被类型错误挡着跑不完，等上面那条 legacy 绑定解开后**要专门看这一条**——
+稳定失败往往意味着真分叉，不是夹具问题。
+
+### 工具修复
+
+`unwrap.py`（把纯函数 describe 从双引擎壳里取出来的脚本）在跳过「确实要保留」的调用时，
+用 `m.end()-1` 起切会把 **describe 的名字实参一起吃掉**，于是同文件其余 7 个调用全部变成
+`describeEachProviderHttpApplication({…})`（少一个参数）。已修成只替换函数名、保留实参。

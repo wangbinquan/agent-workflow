@@ -21,26 +21,28 @@ import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, mcps, plugins, skills } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   alice: { id: string; token: string }
   bob: { id: string; token: string }
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
   // RFC-224 intentionally rejects OpenCode plugin/dependent-agent saves. This
   // suite predates that product boundary and isolates RFC-223 identity/ACL
   // behavior, so use an explicit non-OpenCode runtime rather than weakening
@@ -49,13 +51,7 @@ async function buildHarness(): Promise<Harness> {
     name: 'rfc223-identity-fixture',
     protocol: 'claude-code',
   })
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc223-pr1-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const app = (await scope.open()).app
   async function mkUser(username: string) {
     const u = await createUser(db, {
       username,
@@ -97,7 +93,7 @@ const AGENT_BODY = {
 
 /** Insert a minimal managed skill row (id + name) owned by `ownerUserId`. */
 async function seedSkill(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   name: string,
   visibility: 'public' | 'private',
@@ -108,7 +104,7 @@ async function seedSkill(
 
 /** Insert a minimal enabled plugin row (id + name) owned by `ownerUserId`. */
 async function seedPlugin(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   name: string,
   ownerUserId: string,
@@ -148,464 +144,535 @@ async function createAgentHttp(
   })
 }
 
-describe('RFC-223 PR-1 P1-1 / RFC-228 — managed Skill identity stays strict', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('an unresolvable managed Skill is rejected and never demoted to project', async () => {
-    const res = await createAgentHttp(h, h.alice.token, {
-      name: 'a1',
-      skills: [{ kind: 'managed', skillId: 'ghost-skill' }],
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-223 PR-1 P1-1 / RFC-228 — managed Skill identity stays strict',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-pr1-gate-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
     })
-    expect(res.status).toBe(422)
-    expect(await res.json()).toMatchObject({
-      code: 'agent-resources-invalid',
-      details: {
-        issues: [{ code: 'skill-not-found', refKind: 'skill', direct: true }],
-      },
-    })
-  })
 
-  test('a managed skill referenced by canonical id stays canonical', async () => {
-    await seedSkill(h.db, 'SKILL_REAL_ID', 'lint', 'public', h.alice.id)
-    const res = await createAgentHttp(h, h.alice.token, {
-      name: 'a2',
-      skills: [{ kind: 'managed', skillId: 'SKILL_REAL_ID' }],
-    })
-    expect(res.status).toBe(201)
-    const a = (await res.json()) as AgentDto
-    expect(a.skills).toEqual([{ kind: 'managed', skillId: 'SKILL_REAL_ID' }])
-  })
-
-  test('a project ref passes through untouched (RFC-178 repo-local skill)', async () => {
-    const res = await createAgentHttp(h, h.alice.token, {
-      name: 'a3',
-      skills: [{ kind: 'project', name: 'repo-local' }],
-    })
-    expect(res.status).toBe(201)
-    const a = (await res.json()) as AgentDto
-    expect(a.skills).toEqual([{ kind: 'project', name: 'repo-local' }])
-  })
-})
-
-describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('referencing a private resource (invisible) → 422 acl-missing-refs, id NEVER persisted', async () => {
-    const m = await createMcpFixture(
-      h.db,
-      {
-        name: 'secret-mcp',
-        description: '',
-        type: 'local',
-        config: { command: ['x'] },
-        enabled: true,
-      },
-      { ownerUserId: h.alice.id },
-    )
-    await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
-    const res = await createAgentHttp(h, h.bob.token, { name: 'wrapper', mcp: [m.id] })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')
-    // and nothing was persisted
-    const fetched = await req(h.app, h.bob.token, '/api/agents/wrapper')
-    expect(fetched.status).toBe(404)
-  })
-
-  test('a grandfathered id re-submitted after it turns private is not mis-flagged as new', async () => {
-    // alice owns a PUBLIC agent `dep`; bob depends on it (stored by id).
-    const depRes = await createAgentHttp(h, h.alice.token, { name: 'dep' })
-    expect(depRes.status).toBe(201)
-    const dep = (await depRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
-    const aRes = await createAgentHttp(h, h.bob.token, {
-      name: 'consumer',
-      dependsOn: [dep.id],
-    })
-    expect(aRes.status).toBe(201)
-    const consumer = (await aRes.json()) as AgentDto
-    expect(consumer.dependsOn).toEqual([dep.id])
-
-    // alice makes `dep` private — bob can no longer view it, but it is grandfathered.
-    await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
-    expect((await req(h.app, h.bob.token, `/api/agents/${dep.id}`)).status).toBe(404)
-
-    // Bob re-saves the same canonical id. The diff recognizes it as an
-    // existing grandfathered reference and does not re-run ACL admission.
-    const put = await req(h.app, h.bob.token, `/api/agents/${consumer.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        dependsOn: [dep.id],
-        expectedUpdatedAt: consumer.updatedAt,
-        expectedAclRevision: consumer.aclRevision ?? 0,
-      }),
-    })
-    expect(put.status).toBe(200)
-    expect(((await put.json()) as AgentDto).dependsOn).toEqual([dep.id])
-  })
-
-  test('adding a genuinely NEW invisible ref on update is still rejected', async () => {
-    const m = await createMcpFixture(
-      h.db,
-      {
-        name: 'other-secret',
-        description: '',
-        type: 'local',
-        config: { command: ['x'] },
-        enabled: true,
-      },
-      { ownerUserId: h.alice.id },
-    )
-    await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
-    const aRes = await createAgentHttp(h, h.bob.token, { name: 'c2' })
-    expect(aRes.status).toBe(201)
-    const agent = (await aRes.json()) as AgentDto
-    const put = await req(h.app, h.bob.token, `/api/agents/${agent.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        mcp: [m.id],
-        expectedUpdatedAt: agent.updatedAt,
-        expectedAclRevision: agent.aclRevision ?? 0,
-      }),
-    })
-    expect(put.status).toBe(422)
-    expect(((await put.json()) as { code: string }).code).toBe('acl-missing-refs')
-  })
-})
-
-describe('RFC-223 PR-1 P2-2 — ACL refusal echoes the INPUT token, never a private name', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('referencing a private mcp BY ID echoes the id, never leaks its name', async () => {
-    const m = await createMcpFixture(
-      h.db,
-      {
-        name: 'top-secret-name',
-        description: '',
-        type: 'local',
-        config: { command: ['x'] },
-        enabled: true,
-      },
-      { ownerUserId: h.alice.id },
-    )
-    await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
-    const res = await createAgentHttp(h, h.bob.token, { name: 'leaker', mcp: [m.id] })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as {
-      code: string
-      message: string
-      details?: { missing?: Array<{ type: string; name: string }> }
-    }
-    expect(body.code).toBe('acl-missing-refs')
-    // Echoes the id the caller supplied — NOT the private mcp's name.
-    expect(body.details?.missing).toEqual([{ type: 'mcp', name: m.id }])
-    expect(body.message).not.toContain('top-secret-name')
-  })
-
-  test('referencing a private mcp echoes the canonical id the caller supplied', async () => {
-    const m = await createMcpFixture(
-      h.db,
-      {
-        name: 'typed-secret',
-        description: '',
-        type: 'local',
-        config: { command: ['x'] },
-        enabled: true,
-      },
-      { ownerUserId: h.alice.id },
-    )
-    await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
-    const res = await createAgentHttp(h, h.bob.token, { name: 'leaker2', mcp: [m.id] })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as {
-      details?: { missing?: Array<{ type: string; name: string }> }
-    }
-    expect(body.details?.missing).toEqual([{ type: 'mcp', name: m.id }])
-  })
-})
-
-describe('RFC-223 PR-1 P2-1 — closure endpoint projects id refs to display NAMES', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('managed skill / mcp / plugin ids render as NAMES, not ULIDs', async () => {
-    await seedSkill(h.db, 'SKID', 'code-review', 'public', h.alice.id)
-    const m = await createMcpFixture(
-      h.db,
-      {
-        name: 'git-mcp',
-        description: '',
-        type: 'local',
-        config: { command: ['x'] },
-        enabled: true,
-      },
-      { ownerUserId: h.alice.id },
-    )
-    await seedPlugin(h.db, 'PLID', 'fmt-plugin', h.alice.id)
-
-    const res = await createAgentHttp(h, h.alice.token, {
-      name: 'leaf',
-      skills: [{ kind: 'managed', skillId: 'SKID' }],
-      mcp: [m.id],
-      plugins: ['PLID'],
-    })
-    expect(res.status).toBe(201)
-    const agent = (await res.json()) as AgentDto
-
-    const closure = await req(h.app, h.alice.token, `/api/agents/${agent.id}/closure`)
-    expect(closure.status).toBe(200)
-    const body = (await closure.json()) as {
-      ok: boolean
-      agents: Array<{ name: string; skills: string[]; mcp: string[]; plugins: string[] }>
-    }
-    const leaf = body.agents.find((a) => a.name === 'leaf')!
-    expect(leaf.skills).toEqual(['code-review'])
-    expect(leaf.mcp).toEqual(['git-mcp'])
-    expect(leaf.plugins).toEqual(['fmt-plugin'])
-    // Explicitly assert no raw ULIDs leaked into the UI projection.
-    expect(leaf.skills).not.toContain('SKID')
-    expect(leaf.mcp).not.toContain(m.id)
-    expect(leaf.plugins).not.toContain('PLID')
-  })
-
-  test('resource refs that become private stay opaque instead of leaking display names', async () => {
-    await seedSkill(h.db, 'PRIVATE_SKILL_ID', 'private-skill-name', 'public', h.alice.id)
-    const mcp = await createMcpFixture(
-      h.db,
-      {
-        name: 'private-mcp-name',
-        description: '',
-        type: 'local',
-        config: { command: ['x'] },
-        enabled: true,
-      },
-      { ownerUserId: h.alice.id },
-    )
-    await h.db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp.id))
-    await seedPlugin(h.db, 'PRIVATE_PLUGIN_ID', 'private-plugin-name', h.alice.id)
-    const created = await createAgentHttp(h, h.bob.token, {
-      name: 'visible-consumer',
-      skills: [{ kind: 'managed', skillId: 'PRIVATE_SKILL_ID' }],
-      mcp: [mcp.id],
-      plugins: ['PRIVATE_PLUGIN_ID'],
-    })
-    expect(created.status).toBe(201)
-    const consumer = (await created.json()) as AgentDto
-
-    await h.db
-      .update(skills)
-      .set({ visibility: 'private' })
-      .where(eq(skills.id, 'PRIVATE_SKILL_ID'))
-    await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, mcp.id))
-    await h.db
-      .update(plugins)
-      .set({ visibility: 'private' })
-      .where(eq(plugins.id, 'PRIVATE_PLUGIN_ID'))
-
-    const closure = await req(h.app, h.bob.token, `/api/agents/${consumer.id}/closure`)
-    expect(closure.status).toBe(200)
-    const raw = await closure.text()
-    expect(raw).not.toContain('private-skill-name')
-    expect(raw).not.toContain('private-mcp-name')
-    expect(raw).not.toContain('private-plugin-name')
-    const body = JSON.parse(raw) as {
-      agents: Array<{ id: string; skills: string[]; mcp: string[]; plugins: string[] }>
-    }
-    expect(body.agents[0]).toMatchObject({
-      id: consumer.id,
-      skills: ['PRIVATE_SKILL_ID'],
-      mcp: [mcp.id],
-      plugins: ['PRIVATE_PLUGIN_ID'],
-    })
-  })
-})
-
-describe('RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency name', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('a private dependency is masked to its opaque id, its name never appears', async () => {
-    // alice owns a PUBLIC agent `hidden-dep`; bob depends on it, then alice hides it.
-    const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-dep' })
-    const dep = (await depRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
-    const parentRes = await createAgentHttp(h, h.bob.token, {
-      name: 'parent',
-      dependsOn: [dep.id],
-    })
-    expect(parentRes.status).toBe(201)
-    const parentAgent = (await parentRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
-
-    const closure = await req(h.app, h.bob.token, `/api/agents/${parentAgent.id}/closure`)
-    expect(closure.status).toBe(200)
-    const raw = await closure.text()
-    // The private dependency's human name must not appear anywhere in the payload.
-    expect(raw).not.toContain('hidden-dep')
-    const body = JSON.parse(raw) as {
-      agents: Array<{
-        id: string
-        name: string
-        ownerUserId: string | null
-        dependsOnIds: string[]
-        description: string
-        masked: boolean
-        missing: boolean
-      }>
-    }
-    // The masked member is identified by its opaque id (no human name, blanked fields).
-    const masked = body.agents.find((a) => a.name === dep.id)
-    expect(masked).toBeDefined()
-    expect(masked?.id).toBe(dep.id)
-    expect(masked?.ownerUserId).toBeNull()
-    expect(masked?.description).toBe('')
-    expect(masked?.masked).toBe(true)
-    expect(masked?.missing).toBe(false)
-    // The parent's dependsOn projection references the opaque id, not a name.
-    const parent = body.agents.find((a) => a.name === 'parent')!
-    expect(parent.dependsOnIds).toEqual([dep.id])
-  })
-
-  test('dangling refs behind a masked dependency are not re-exposed as missing rows', async () => {
-    const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-corrupt-dep' })
-    const dep = (await depRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
-    const parentRes = await createAgentHttp(h, h.bob.token, {
-      name: 'parent-with-masked-child',
-      dependsOn: [dep.id],
-    })
-    const parent = (await parentRes.json()) as AgentDto
-    await h.db
-      .update(agents)
-      .set({
-        dependsOn: JSON.stringify(['secret-dangling-ref']),
-        visibility: 'private',
+    test('an unresolvable managed Skill is rejected and never demoted to project', async () => {
+      const res = await createAgentHttp(h, h.alice.token, {
+        name: 'a1',
+        skills: [{ kind: 'managed', skillId: 'ghost-skill' }],
       })
-      .where(eq(agents.id, dep.id))
-
-    const closure = await req(h.app, h.bob.token, `/api/agents/${parent.id}/closure`)
-    expect(closure.status).toBe(200)
-    const raw = await closure.text()
-    expect(raw).not.toContain('hidden-corrupt-dep')
-    expect(raw).not.toContain('secret-dangling-ref')
-    const body = JSON.parse(raw) as {
-      agents: Array<{ id: string; masked: boolean; missing: boolean }>
-    }
-    expect(body.agents).toContainEqual(
-      expect.objectContaining({ id: dep.id, masked: true, missing: false }),
-    )
-    expect(body.agents.some((agent) => agent.missing)).toBe(false)
-  })
-})
-
-describe('RFC-223 PR-7 — closure preview enforces row and reference ACL', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('a private dependency id returns an opaque preview error and no closure metadata', async () => {
-    const depRes = await createAgentHttp(h, h.alice.token, {
-      name: 'preview-secret-dependency',
-      description: 'preview secret description',
+      expect(res.status).toBe(422)
+      expect(await res.json()).toMatchObject({
+        code: 'agent-resources-invalid',
+        details: {
+          issues: [{ code: 'skill-not-found', refKind: 'skill', direct: true }],
+        },
+      })
     })
-    const dep = (await depRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
 
-    const preview = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'draft', dependsOn: [dep.id] }),
+    test('a managed skill referenced by canonical id stays canonical', async () => {
+      await seedSkill(h.db, 'SKILL_REAL_ID', 'lint', 'public', h.alice.id)
+      const res = await createAgentHttp(h, h.alice.token, {
+        name: 'a2',
+        skills: [{ kind: 'managed', skillId: 'SKILL_REAL_ID' }],
+      })
+      expect(res.status).toBe(201)
+      const a = (await res.json()) as AgentDto
+      expect(a.skills).toEqual([{ kind: 'managed', skillId: 'SKILL_REAL_ID' }])
     })
-    expect(preview.status).toBe(200)
-    const raw = await preview.text()
-    expect(raw).not.toContain('preview-secret-dependency')
-    expect(raw).not.toContain('preview secret description')
-    const body = JSON.parse(raw) as {
-      ok: boolean
-      code: string
-      details: { missing: Array<{ type: string; name: string }> }
-      agents?: unknown
-    }
-    expect(body).toMatchObject({
-      ok: false,
-      code: 'acl-missing-refs',
-      details: { missing: [{ type: 'agent', name: dep.id }] },
+
+    test('a project ref passes through untouched (RFC-178 repo-local skill)', async () => {
+      const res = await createAgentHttp(h, h.alice.token, {
+        name: 'a3',
+        skills: [{ kind: 'project', name: 'repo-local' }],
+      })
+      expect(res.status).toBe(201)
+      const a = (await res.json()) as AgentDto
+      expect(a.skills).toEqual([{ kind: 'project', name: 'repo-local' }])
     })
-    expect(body.agents).toBeUndefined()
-  })
+  },
+)
 
-  test('a private existing draft id is indistinguishable from a missing one', async () => {
-    const depRes = await createAgentHttp(h, h.alice.token, { name: 'preview-private-root' })
-    const dep = (await depRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
-
-    const hidden = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
-      method: 'POST',
-      body: JSON.stringify({ id: dep.id, name: 'draft', dependsOn: [] }),
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-pr1-gate-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
     })
-    const missing = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
-      method: 'POST',
-      body: JSON.stringify({ id: 'missing-agent-id', name: 'draft', dependsOn: [] }),
+
+    test('referencing a private resource (invisible) → 422 acl-missing-refs, id NEVER persisted', async () => {
+      const m = await createMcpFixture(
+        h.db,
+        {
+          name: 'secret-mcp',
+          description: '',
+          type: 'local',
+          config: { command: ['x'] },
+          enabled: true,
+        },
+        { ownerUserId: h.alice.id },
+      )
+      await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
+      const res = await createAgentHttp(h, h.bob.token, { name: 'wrapper', mcp: [m.id] })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')
+      // and nothing was persisted
+      const fetched = await req(h.app, h.bob.token, '/api/agents/wrapper')
+      expect(fetched.status).toBe(404)
     })
-    expect(hidden.status).toBe(404)
-    expect(missing.status).toBe(404)
-    expect(await hidden.text()).toBe(await missing.text())
-  })
-})
 
-describe('RFC-223 PR-1 P1-2 — workgroup members share the same single-pass binding (PR-2 parity)', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
+    test('a grandfathered id re-submitted after it turns private is not mis-flagged as new', async () => {
+      // alice owns a PUBLIC agent `dep`; bob depends on it (stored by id).
+      const depRes = await createAgentHttp(h, h.alice.token, { name: 'dep' })
+      expect(depRes.status).toBe(201)
+      const dep = (await depRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      const aRes = await createAgentHttp(h, h.bob.token, {
+        name: 'consumer',
+        dependsOn: [dep.id],
+      })
+      expect(aRes.status).toBe(201)
+      const consumer = (await aRes.json()) as AgentDto
+      expect(consumer.dependsOn).toEqual([dep.id])
 
-  test('a workgroup member referencing a private agent → 422 acl-missing-refs (id NOT persisted)', async () => {
-    const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-secret' })
-    const dep = (await depRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
-    const res = await req(h.app, h.bob.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'wg1',
-        mode: 'free_collab',
-        members: [{ memberType: 'agent', agentId: dep.id, displayName: 'x' }],
-      }),
+      // alice makes `dep` private — bob can no longer view it, but it is grandfathered.
+      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+      expect((await req(h.app, h.bob.token, `/api/agents/${dep.id}`)).status).toBe(404)
+
+      // Bob re-saves the same canonical id. The diff recognizes it as an
+      // existing grandfathered reference and does not re-run ACL admission.
+      const put = await req(h.app, h.bob.token, `/api/agents/${consumer.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          dependsOn: [dep.id],
+          expectedUpdatedAt: consumer.updatedAt,
+          expectedAclRevision: consumer.aclRevision ?? 0,
+        }),
+      })
+      expect(put.status).toBe(200)
+      expect(((await put.json()) as AgentDto).dependsOn).toEqual([dep.id])
     })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')
-    expect((await req(h.app, h.bob.token, '/api/workgroups/wg1')).status).toBe(404)
-  })
 
-  test('a public agent member is stored by resolved id', async () => {
-    const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-public' })
-    const dep = (await depRes.json()) as AgentDto
-    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
-    const res = await req(h.app, h.bob.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'wg2',
-        mode: 'free_collab',
-        members: [{ memberType: 'agent', agentId: dep.id, displayName: 'x' }],
-      }),
+    test('adding a genuinely NEW invisible ref on update is still rejected', async () => {
+      const m = await createMcpFixture(
+        h.db,
+        {
+          name: 'other-secret',
+          description: '',
+          type: 'local',
+          config: { command: ['x'] },
+          enabled: true,
+        },
+        { ownerUserId: h.alice.id },
+      )
+      await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
+      const aRes = await createAgentHttp(h, h.bob.token, { name: 'c2' })
+      expect(aRes.status).toBe(201)
+      const agent = (await aRes.json()) as AgentDto
+      const put = await req(h.app, h.bob.token, `/api/agents/${agent.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          mcp: [m.id],
+          expectedUpdatedAt: agent.updatedAt,
+          expectedAclRevision: agent.aclRevision ?? 0,
+        }),
+      })
+      expect(put.status).toBe(422)
+      expect(((await put.json()) as { code: string }).code).toBe('acl-missing-refs')
     })
-    expect(res.status).toBe(201)
-    const wg = (await res.json()) as { members: Array<{ agentId: string | null }> }
-    expect(wg.members[0]?.agentId).toBe(dep.id)
-  })
-})
+  },
+)
 
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-223 PR-1 P2-2 — ACL refusal echoes the INPUT token, never a private name',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-pr1-gate-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    test('referencing a private mcp BY ID echoes the id, never leaks its name', async () => {
+      const m = await createMcpFixture(
+        h.db,
+        {
+          name: 'top-secret-name',
+          description: '',
+          type: 'local',
+          config: { command: ['x'] },
+          enabled: true,
+        },
+        { ownerUserId: h.alice.id },
+      )
+      await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
+      const res = await createAgentHttp(h, h.bob.token, { name: 'leaker', mcp: [m.id] })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as {
+        code: string
+        message: string
+        details?: { missing?: Array<{ type: string; name: string }> }
+      }
+      expect(body.code).toBe('acl-missing-refs')
+      // Echoes the id the caller supplied — NOT the private mcp's name.
+      expect(body.details?.missing).toEqual([{ type: 'mcp', name: m.id }])
+      expect(body.message).not.toContain('top-secret-name')
+    })
+
+    test('referencing a private mcp echoes the canonical id the caller supplied', async () => {
+      const m = await createMcpFixture(
+        h.db,
+        {
+          name: 'typed-secret',
+          description: '',
+          type: 'local',
+          config: { command: ['x'] },
+          enabled: true,
+        },
+        { ownerUserId: h.alice.id },
+      )
+      await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
+      const res = await createAgentHttp(h, h.bob.token, { name: 'leaker2', mcp: [m.id] })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as {
+        details?: { missing?: Array<{ type: string; name: string }> }
+      }
+      expect(body.details?.missing).toEqual([{ type: 'mcp', name: m.id }])
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-223 PR-1 P2-1 — closure endpoint projects id refs to display NAMES',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-pr1-gate-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    test('managed skill / mcp / plugin ids render as NAMES, not ULIDs', async () => {
+      await seedSkill(h.db, 'SKID', 'code-review', 'public', h.alice.id)
+      const m = await createMcpFixture(
+        h.db,
+        {
+          name: 'git-mcp',
+          description: '',
+          type: 'local',
+          config: { command: ['x'] },
+          enabled: true,
+        },
+        { ownerUserId: h.alice.id },
+      )
+      await seedPlugin(h.db, 'PLID', 'fmt-plugin', h.alice.id)
+
+      const res = await createAgentHttp(h, h.alice.token, {
+        name: 'leaf',
+        skills: [{ kind: 'managed', skillId: 'SKID' }],
+        mcp: [m.id],
+        plugins: ['PLID'],
+      })
+      expect(res.status).toBe(201)
+      const agent = (await res.json()) as AgentDto
+
+      const closure = await req(h.app, h.alice.token, `/api/agents/${agent.id}/closure`)
+      expect(closure.status).toBe(200)
+      const body = (await closure.json()) as {
+        ok: boolean
+        agents: Array<{ name: string; skills: string[]; mcp: string[]; plugins: string[] }>
+      }
+      const leaf = body.agents.find((a) => a.name === 'leaf')!
+      expect(leaf.skills).toEqual(['code-review'])
+      expect(leaf.mcp).toEqual(['git-mcp'])
+      expect(leaf.plugins).toEqual(['fmt-plugin'])
+      // Explicitly assert no raw ULIDs leaked into the UI projection.
+      expect(leaf.skills).not.toContain('SKID')
+      expect(leaf.mcp).not.toContain(m.id)
+      expect(leaf.plugins).not.toContain('PLID')
+    })
+
+    test('resource refs that become private stay opaque instead of leaking display names', async () => {
+      await seedSkill(h.db, 'PRIVATE_SKILL_ID', 'private-skill-name', 'public', h.alice.id)
+      const mcp = await createMcpFixture(
+        h.db,
+        {
+          name: 'private-mcp-name',
+          description: '',
+          type: 'local',
+          config: { command: ['x'] },
+          enabled: true,
+        },
+        { ownerUserId: h.alice.id },
+      )
+      await h.db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp.id))
+      await seedPlugin(h.db, 'PRIVATE_PLUGIN_ID', 'private-plugin-name', h.alice.id)
+      const created = await createAgentHttp(h, h.bob.token, {
+        name: 'visible-consumer',
+        skills: [{ kind: 'managed', skillId: 'PRIVATE_SKILL_ID' }],
+        mcp: [mcp.id],
+        plugins: ['PRIVATE_PLUGIN_ID'],
+      })
+      expect(created.status).toBe(201)
+      const consumer = (await created.json()) as AgentDto
+
+      await h.db
+        .update(skills)
+        .set({ visibility: 'private' })
+        .where(eq(skills.id, 'PRIVATE_SKILL_ID'))
+      await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, mcp.id))
+      await h.db
+        .update(plugins)
+        .set({ visibility: 'private' })
+        .where(eq(plugins.id, 'PRIVATE_PLUGIN_ID'))
+
+      const closure = await req(h.app, h.bob.token, `/api/agents/${consumer.id}/closure`)
+      expect(closure.status).toBe(200)
+      const raw = await closure.text()
+      expect(raw).not.toContain('private-skill-name')
+      expect(raw).not.toContain('private-mcp-name')
+      expect(raw).not.toContain('private-plugin-name')
+      const body = JSON.parse(raw) as {
+        agents: Array<{ id: string; skills: string[]; mcp: string[]; plugins: string[] }>
+      }
+      expect(body.agents[0]).toMatchObject({
+        id: consumer.id,
+        skills: ['PRIVATE_SKILL_ID'],
+        mcp: [mcp.id],
+        plugins: ['PRIVATE_PLUGIN_ID'],
+      })
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency name',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-pr1-gate-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    test('a private dependency is masked to its opaque id, its name never appears', async () => {
+      // alice owns a PUBLIC agent `hidden-dep`; bob depends on it, then alice hides it.
+      const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-dep' })
+      const dep = (await depRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      const parentRes = await createAgentHttp(h, h.bob.token, {
+        name: 'parent',
+        dependsOn: [dep.id],
+      })
+      expect(parentRes.status).toBe(201)
+      const parentAgent = (await parentRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+
+      const closure = await req(h.app, h.bob.token, `/api/agents/${parentAgent.id}/closure`)
+      expect(closure.status).toBe(200)
+      const raw = await closure.text()
+      // The private dependency's human name must not appear anywhere in the payload.
+      expect(raw).not.toContain('hidden-dep')
+      const body = JSON.parse(raw) as {
+        agents: Array<{
+          id: string
+          name: string
+          ownerUserId: string | null
+          dependsOnIds: string[]
+          description: string
+          masked: boolean
+          missing: boolean
+        }>
+      }
+      // The masked member is identified by its opaque id (no human name, blanked fields).
+      const masked = body.agents.find((a) => a.name === dep.id)
+      expect(masked).toBeDefined()
+      expect(masked?.id).toBe(dep.id)
+      expect(masked?.ownerUserId).toBeNull()
+      expect(masked?.description).toBe('')
+      expect(masked?.masked).toBe(true)
+      expect(masked?.missing).toBe(false)
+      // The parent's dependsOn projection references the opaque id, not a name.
+      const parent = body.agents.find((a) => a.name === 'parent')!
+      expect(parent.dependsOnIds).toEqual([dep.id])
+    })
+
+    test('dangling refs behind a masked dependency are not re-exposed as missing rows', async () => {
+      const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-corrupt-dep' })
+      const dep = (await depRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      const parentRes = await createAgentHttp(h, h.bob.token, {
+        name: 'parent-with-masked-child',
+        dependsOn: [dep.id],
+      })
+      const parent = (await parentRes.json()) as AgentDto
+      await h.db
+        .update(agents)
+        .set({
+          dependsOn: JSON.stringify(['secret-dangling-ref']),
+          visibility: 'private',
+        })
+        .where(eq(agents.id, dep.id))
+
+      const closure = await req(h.app, h.bob.token, `/api/agents/${parent.id}/closure`)
+      expect(closure.status).toBe(200)
+      const raw = await closure.text()
+      expect(raw).not.toContain('hidden-corrupt-dep')
+      expect(raw).not.toContain('secret-dangling-ref')
+      const body = JSON.parse(raw) as {
+        agents: Array<{ id: string; masked: boolean; missing: boolean }>
+      }
+      expect(body.agents).toContainEqual(
+        expect.objectContaining({ id: dep.id, masked: true, missing: false }),
+      )
+      expect(body.agents.some((agent) => agent.missing)).toBe(false)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-223 PR-7 — closure preview enforces row and reference ACL',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-pr1-gate-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    test('a private dependency id returns an opaque preview error and no closure metadata', async () => {
+      const depRes = await createAgentHttp(h, h.alice.token, {
+        name: 'preview-secret-dependency',
+        description: 'preview secret description',
+      })
+      const dep = (await depRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+
+      const preview = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'draft', dependsOn: [dep.id] }),
+      })
+      expect(preview.status).toBe(200)
+      const raw = await preview.text()
+      expect(raw).not.toContain('preview-secret-dependency')
+      expect(raw).not.toContain('preview secret description')
+      const body = JSON.parse(raw) as {
+        ok: boolean
+        code: string
+        details: { missing: Array<{ type: string; name: string }> }
+        agents?: unknown
+      }
+      expect(body).toMatchObject({
+        ok: false,
+        code: 'acl-missing-refs',
+        details: { missing: [{ type: 'agent', name: dep.id }] },
+      })
+      expect(body.agents).toBeUndefined()
+    })
+
+    test('a private existing draft id is indistinguishable from a missing one', async () => {
+      const depRes = await createAgentHttp(h, h.alice.token, { name: 'preview-private-root' })
+      const dep = (await depRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+
+      const hidden = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
+        method: 'POST',
+        body: JSON.stringify({ id: dep.id, name: 'draft', dependsOn: [] }),
+      })
+      const missing = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'missing-agent-id', name: 'draft', dependsOn: [] }),
+      })
+      expect(hidden.status).toBe(404)
+      expect(missing.status).toBe(404)
+      expect(await hidden.text()).toBe(await missing.text())
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-223 PR-1 P1-2 — workgroup members share the same single-pass binding (PR-2 parity)',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-pr1-gate-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    test('a workgroup member referencing a private agent → 422 acl-missing-refs (id NOT persisted)', async () => {
+      const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-secret' })
+      const dep = (await depRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+      const res = await req(h.app, h.bob.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'wg1',
+          mode: 'free_collab',
+          members: [{ memberType: 'agent', agentId: dep.id, displayName: 'x' }],
+        }),
+      })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')
+      expect((await req(h.app, h.bob.token, '/api/workgroups/wg1')).status).toBe(404)
+    })
+
+    test('a public agent member is stored by resolved id', async () => {
+      const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-public' })
+      const dep = (await depRes.json()) as AgentDto
+      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      const res = await req(h.app, h.bob.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'wg2',
+          mode: 'free_collab',
+          members: [{ memberType: 'agent', agentId: dep.id, displayName: 'x' }],
+        }),
+      })
+      expect(res.status).toBe(201)
+      const wg = (await res.json()) as { members: Array<{ agentId: string | null }> }
+      expect(wg.members[0]?.agentId).toBe(dep.id)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
 describe('RFC-223 PR-1 P1-2 — single-pass resolution (source guard)', () => {
   test('the agents + workgroups routes no longer ACL-check refs SEPARATELY from resolution', () => {
     const read = (rel: string): string =>
