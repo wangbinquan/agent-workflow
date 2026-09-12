@@ -6220,3 +6220,38 @@ for (const rc of CASES) {          // 每个资源类型一轮
 它一个就挡着一批要真 scheduler 的用例。那是一刀独立的活，值得单独排。
 
 筛子命令写进了 `STATE.md`，可复跑。
+
+## 5af. 下一刀的具体形状：`createTaskExecutionTestTopology` 中立化（**未开工，已踩点**）
+
+§5ae 指出它一个就挡着约 25 个用例。这里把「怎么做」踩到可以直接排期的程度。
+
+### 为什么不能照字面改
+
+`composeTaskExecutionTestRuntime(db)`（`tests/helpers/taskExecutionTestTopology.ts:66`）直接
+composes SQLite 的那一套：`createSqliteTaskExecutionPersistence` /
+`createSqliteTaskExecutionRuntimeParticipants` / `sqliteMemoryInjectionQueries` /
+`composeSqliteDynamicWorkflowPersistence`。
+
+照字面「加一个 PG 分支」要在测试夹具里把 PG 侧的参与者重新接一遍，而两边的依赖集**差 6 个字段**：
+PG 侧额外要 `taskDagCollaboration` / `childLaunchWorkgroup` / `processConcurrencyScope` /
+`daemonGeneration` / `finalizeWorkspace` / `log`，且 `codeHostConnections` 从可选变必填。
+在夹具里复刻这套接线＝把 `cli/postgresqlDaemonApplication.ts` 抄一遍，**抄错了还不会报错，
+只会让一批用例在 PG 上测了个假拓扑**——正是本轮反复踩的那类坑。
+
+### 该走的路：问装配要，不要重接
+
+`composition/providerRuntime.ts` 里**已经有**两侧共同的选择器
+（`SelectedTaskExecutionProviderRuntimeBase` 暴露 `runtime: TaskExecutionRuntime`，
+里面就有 `schedulerDriver`），daemon 用的就是它；而共用 HTTP 夹具
+`createProviderHttpApplication` 在 PG 分支上**已经把 `taskExecution.selected` 递出来了**。
+
+所以形状应该是：`createTaskExecutionTestTopology` 不再自己 compose，而是**从已装配的应用
+（或同一个 provider-runtime 选择器）取 topology**，再在其上套 `driver: 'real' | 'noop' | 'poison'`
+那层选择。这和本轮已经做过三次的「问装配要 key / 要盒子 / 要 config」是同一个原则
+（§5v / §5w / §5x），也是唯一能保证「测试拓扑 == 生产拓扑」的做法。
+
+### 排期时要注意的两件事
+
+1. `driver: 'noop' | 'poison'` 是**测试专用语义**，要想清楚在「取自装配」的形态下挂在哪一层；
+2. 调用方基数大（约 25 个用例文件），建议先改夹具并让它在 SQLite 上与现状逐字等价（零行为变化），
+   再逐批把用例切到双引擎——**不要一次同时改夹具与用例**，否则红了无从归因。
