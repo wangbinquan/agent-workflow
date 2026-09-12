@@ -6589,8 +6589,34 @@ NESTED-EACHPROVIDER 提示的最小动作），这条缺陷会继续躺着。
 把旧半的 test 整段折进注册器即可，legacy `buildHarness()` 随之整个删掉。
 账本 566 → 562（四个文件）。
 
-### 暂缓：`plugins-http`
+`reviews-version-comments` 是第五个（服务层一组 + 路由一组）。它顺带暴露一件事：
+那个文件的 `seed()` 有两个重载，**无参那条自建 SQLite 库**，而且
+`...(suppliedDb === undefined ? {} : providerTaskLineage(taskId))` 意味着
+**SQLite 那条路径插的任务行是不带血缘列的**。两个调用方都改走 `seedForProvider` 之后，
+无参重载连同那个三元一起退役——血缘列现在总是补齐。账本 562 → 561。
+
+### 暂缓：`plugins-http` 与 `rfc311-task-archive`
 
 它的 provider 夹具把 `appHome` 钉在模块级的 `pluginsDir` 上（插件文件要预先落进去），
 而 legacy 半的 `seedPluginRow` 是**同步**的、provider 半的 `seedProviderPluginRow` 是异步的，
 两边种子不同形。不是不能做，是要先把种子统一，单独一刀。
+
+`rfc311-task-archive` 的形状更特别：一个普通 `describe` 里**嵌着**一个
+`describeEachProvider`。把外层包成双引擎会让内层变成交叉积，得先把内层那块提出来，
+也是单独一刀。
+
+
+## 5ao. 账本 562 → 560：再两个「旧半只在 SQLite 上成立过」的文件
+
+- `reviews-version-comments`（服务层一组 + 路由一组）。顺带暴露一件事：它的 `seed()` 有两个
+  重载，**无参那条自建 SQLite 库**，并且 `...(suppliedDb === undefined ? {} : providerTaskLineage(taskId))`
+  意味着**SQLite 那条路径插的任务行不带血缘列**。两个调用方都改走 `seedForProvider` 之后，
+  无参重载连同那个三元一起退役——血缘列现在总是补齐。
+- `rfc304-capability-templates`：四组服务层 describe（自建 `createInMemoryDb` /
+  `createCrudFixtureDatabase` + `db.$client.close()`）转到 `describeEachProvider`，
+  路由那一组包进共用 HTTP 作用域。`createCrudFixtureDatabase` 与 `MIGRATIONS` 随之删除。
+  **`afterEach(() => db.$client.close())` 必须一起去掉**——库归 harness 所有，用例自己关会
+  把下一条用例的连接也关掉。
+
+`rfc304` 是一个典型：同一个标题下 `describe` 与 `describeEachProvider` **交替出现**，
+是前几波「逐条挑着迁」留下的形状。判据仍是那一条：旧半测的用例新半有没有。

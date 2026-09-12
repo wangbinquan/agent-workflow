@@ -21,10 +21,9 @@
 // That last one is the case the merge newly makes possible and newly makes
 // dangerous, so it gets its own cases at the bottom.
 
+import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import type { createApp } from '../src/server'
 import { capabilityTemplates } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import {
@@ -41,6 +40,7 @@ import { createCapabilityTemplatePersistence } from '../src/modules/code-capabil
 import { SYSTEM_DOMAIN_POINTS, type Permission } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
@@ -49,7 +49,7 @@ import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory
 import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const ROUTE_TOKEN = 'a'.repeat(64)
 const NOW = 1_700_000_000_000
 
 function bindTemplatePersistence<Args extends unknown[], Result>(
@@ -153,13 +153,12 @@ describe('RFC-309 — the permission boundary survives the merge', () => {
   })
 })
 
-describe('RFC-309 — reads redact rather than withhold', () => {
-  let db: DbClient
+describeEachProvider('RFC-309 — reads redact rather than withhold', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
   })
-  afterEach(() => db.$client.close())
 
   test('a non-author sees the template, its params and agents, and NO script bodies', async () => {
     const [row] = await db.select().from(capabilityTemplates)
@@ -181,12 +180,11 @@ describe('RFC-309 — reads redact rather than withhold', () => {
   })
 })
 
-describe('RFC-309 — a redacted reader can still edit the rest', () => {
-  let db: DbClient
+describeEachProvider('RFC-309 — a redacted reader can still edit the rest', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
-  afterEach(() => db.$client.close())
 
   test('re-saving with the SAME scripts is allowed without scripts:author', async () => {
     // The case the merge creates: a group lead changes a prompt on a template
@@ -243,64 +241,66 @@ describe('RFC-309 — a redacted reader can still edit the rest', () => {
   })
 })
 
-describe('RFC-309 — creation, copying and deletion', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createCrudFixtureDatabase()
-  })
-  afterEach(() => db.$client.close())
+describeEachProvider(
+  'RFC-309 — creation, copying and deletion (formerly SQLite-only)',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
 
-  test('a new template is PRIVATE by default', async () => {
-    const row = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
-    expect(row.visibility).toBe('private')
-    expect(row.ownerUserId).toBe('u-author')
-  })
+    test('a new template is PRIVATE by default', async () => {
+      const row = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      expect(row.visibility).toBe('private')
+      expect(row.ownerUserId).toBe('u-author')
+    })
 
-  test('a copy is owned by the copier and private even from a public source', async () => {
-    const source = await createTemplate(
-      db,
-      { ...TEMPLATE_INPUT, visibility: 'public' as const },
-      AUTHOR,
-      NOW,
-    )
-    const copy = await copyTemplate(db, source, NOT_AN_AUTHOR, undefined, NOW + 1)
-    expect(copy.ownerUserId).toBe('u-lead')
-    expect(copy.visibility).toBe('private')
-    // T64 — the link, which after RFC-309 is the ONLY record that these two
-    // came from the same place.
-    expect(copy.upstreamId).toBe(source.id)
-    expect(copy.baseDigest).not.toBeNull()
-  })
+    test('a copy is owned by the copier and private even from a public source', async () => {
+      const source = await createTemplate(
+        db,
+        { ...TEMPLATE_INPUT, visibility: 'public' as const },
+        AUTHOR,
+        NOW,
+      )
+      const copy = await copyTemplate(db, source, NOT_AN_AUTHOR, undefined, NOW + 1)
+      expect(copy.ownerUserId).toBe('u-lead')
+      expect(copy.visibility).toBe('private')
+      // T64 — the link, which after RFC-309 is the ONLY record that these two
+      // came from the same place.
+      expect(copy.upstreamId).toBe(source.id)
+      expect(copy.baseDigest).not.toBeNull()
+    })
 
-  test('copying does NOT require scripts:author', async () => {
-    // The copier receives the scripts unchanged and cannot alter them without
-    // the grant, so the bytes that run as the daemon are still an authorised
-    // author's. Refusing the copy would instead mean a team could not adopt a
-    // template that works.
-    const source = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
-    const copy = await copyTemplate(db, source, NOT_AN_AUTHOR, 'ours', NOW + 1)
-    expect(copy.scriptsJson).toBe(source.scriptsJson)
-  })
+    test('copying does NOT require scripts:author', async () => {
+      // The copier receives the scripts unchanged and cannot alter them without
+      // the grant, so the bytes that run as the daemon are still an authorised
+      // author's. Refusing the copy would instead mean a team could not adopt a
+      // template that works.
+      const source = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      const copy = await copyTemplate(db, source, NOT_AN_AUTHOR, 'ours', NOW + 1)
+      expect(copy.scriptsJson).toBe(source.scriptsJson)
+    })
 
-  test('a copy of a built-in is an ordinary resource', async () => {
-    const source = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
-    await db.update(capabilityTemplates).set({ builtin: true })
-    const builtin = await getTemplateRow(db, source.id)
-    const copy = await copyTemplate(db, builtin!, AUTHOR, 'mine', NOW + 1)
-    // Carrying the flag across would make the copy uneditable, which is the
-    // opposite of why somebody copies a built-in.
-    expect(copy.builtin).toBe(false)
-  })
+    test('a copy of a built-in is an ordinary resource', async () => {
+      const source = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      await db.update(capabilityTemplates).set({ builtin: true })
+      const builtin = await getTemplateRow(db, source.id)
+      const copy = await copyTemplate(db, builtin!, AUTHOR, 'mine', NOW + 1)
+      // Carrying the flag across would make the copy uneditable, which is the
+      // opposite of why somebody copies a built-in.
+      expect(copy.builtin).toBe(false)
+    })
 
-  test('a built-in cannot be edited in place', async () => {
-    const row = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
-    await db.update(capabilityTemplates).set({ builtin: true })
-    const builtin = await getTemplateRow(db, row.id)
-    await expect(
-      updateTemplate(db, builtin!, { ...TEMPLATE_INPUT, name: 'x' }, AUTHOR, NOW + 1),
-    ).rejects.toThrow(/ships with the platform/)
-  })
-})
+    test('a built-in cannot be edited in place', async () => {
+      const row = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      await db.update(capabilityTemplates).set({ builtin: true })
+      const builtin = await getTemplateRow(db, row.id)
+      await expect(
+        updateTemplate(db, builtin!, { ...TEMPLATE_INPUT, name: 'x' }, AUTHOR, NOW + 1),
+      ).rejects.toThrow(/ships with the platform/)
+    })
+  },
+)
 
 describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => {
   describe('fixture lifetime', () => {
@@ -316,18 +316,20 @@ describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => 
   })
 })
 
-describe('RFC-309 — creation, copying and deletion', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createCrudFixtureDatabase()
-  })
-  afterEach(() => db.$client.close())
+describeEachProvider(
+  'RFC-309 — creation, copying and deletion (formerly SQLite-only)',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
 
-  test('two OWNERS may each have one of the same name', async () => {
-    await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
-    await expect(createTemplate(db, PLAIN_INPUT, NOT_AN_AUTHOR, NOW + 1)).resolves.toBeDefined()
-  })
-})
+    test('two OWNERS may each have one of the same name', async () => {
+      await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      await expect(createTemplate(db, PLAIN_INPUT, NOT_AN_AUTHOR, NOW + 1)).resolves.toBeDefined()
+    })
+  },
+)
 
 describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => {
   describe('fixture lifetime', () => {
@@ -454,31 +456,27 @@ describeEachProvider('RFC-309 — the template routes', (harness) => {
   })
 })
 
-describe('RFC-309 — the template routes', () => {
-  const TOKEN = 'a'.repeat(64)
-  let db: DbClient
-  let app: ReturnType<typeof createApp>
+// RFC-359 AC-6：路由面此前只跑 SQLite。
+describeEachProviderHttpApplication(
+  'RFC-309 — the template routes (single-engine half)',
+  {
+    token: ROUTE_TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc304-templates-',
+  },
+  (scope) => {
+    const TOKEN = ROUTE_TOKEN
+    let app: Hono
 
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    app = createApp({
-      token: TOKEN,
-      configPath: '',
-      opencodeVersion: '1.15.0',
-      dbVersion: 1,
-      db,
+    beforeEach(async () => {
+      app = (await scope.open()).app
     })
-  })
-  afterEach(() => db.$client.close())
 
-  const _auth = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }
+    const _auth = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }
 
-  test('without a bearer token every endpoint is refused', async () => {
-    expect((await app.request('/api/capability-templates')).status).toBe(401)
-  })
-})
-
-// RFC-359 W49: the retained CRUD groups reuse their original native constructor.
-function createCrudFixtureDatabase() {
-  return createInMemoryDb(MIGRATIONS)
-}
+    test('without a bearer token every endpoint is refused', async () => {
+      expect((await app.request('/api/capability-templates')).status).toBe(401)
+    })
+  },
+)

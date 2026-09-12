@@ -16,12 +16,12 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
-import { createApp, type AppDeps } from '../src/server'
+import type { createApp } from '../src/server'
+import { type AppDeps } from '../src/server'
 import { getDocVersionDetail } from '../src/services/review'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -29,8 +29,6 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Seed<Database extends ProviderNeutralDatabase = DbClient> {
   db: Database
@@ -43,10 +41,9 @@ interface Seed<Database extends ProviderNeutralDatabase = DbClient> {
   cleanup: () => void
 }
 
-function seed(): Promise<Seed>
-function seed(suppliedDb: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDatabase>>
-async function seed(suppliedDb?: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDatabase>> {
-  const db = suppliedDb ?? createInMemoryDb(MIGRATIONS)
+// RFC-359 AC-6：无参重载（自建 SQLite 内存库）的调用方已经全部改走 `seedForProvider`，
+// 这里只剩「把 harness 的库传进来」这一条路。
+async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDatabase>> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc013-'))
   const appHome = join(tmp, 'home')
   mkdirSync(appHome, { recursive: true })
@@ -78,7 +75,8 @@ async function seed(suppliedDb?: ProviderNeutralDatabase): Promise<Seed<Provider
     status: 'awaiting_review',
     inputs: '{}',
     startedAt: 1,
-    ...(suppliedDb === undefined ? {} : providerTaskLineage(taskId)),
+    // 库总是由 harness 传进来，血缘列因此总是补齐（合一前只有 provider 那条路补）。
+    ...providerTaskLineage(taskId),
   })
   await db.insert(nodeRuns).values({
     id: nodeRunId,
@@ -223,22 +221,6 @@ describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
   })
 })
 
-describe('RFC-013-T2 getDocVersionDetail service', () => {
-  let s: Seed
-  beforeEach(async () => {
-    s = await seed()
-  })
-  afterEach(() => s.cleanup())
-
-  test('returns null when versionId exists but belongs to a different nodeRunId', async () => {
-    // dv_v1 belongs to s.nodeRunId; asking for it under a different runId
-    // must NOT leak the row — otherwise a caller could iterate doc_versions
-    // by brute-forcing the vid.
-    const dv = await getDocVersionDetail(s.db, s.appHome, 'run_someone_else', 'dv_v1')
-    expect(dv).toBeNull()
-  })
-})
-
 describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
   describe('fixture lifetime', () => {
     let s: Seed<ProviderNeutralDatabase>
@@ -246,6 +228,15 @@ describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
       s = await seedForProvider(harness.db)
     })
     afterEach(() => s?.cleanup())
+
+    // RFC-359 AC-6：这条此前只跑 SQLite（自建 `seed()`），判据在双引擎那半里并不存在。
+    test('returns null when versionId exists but belongs to a different nodeRunId', async () => {
+      // dv_v1 belongs to s.nodeRunId; asking for it under a different runId
+      // must NOT leak the row — otherwise a caller could iterate doc_versions
+      // by brute-forcing the vid.
+      const dv = await getDocVersionDetail(s.db, s.appHome, 'run_someone_else', 'dv_v1')
+      expect(dv).toBeNull()
+    })
 
     test('decided versions source comments from commentsJson archive, not the live table', async () => {
       // Production invariant: submitReviewDecision archives comments into
@@ -407,66 +398,6 @@ describeEachProvider(
   },
 )
 
-describe('RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route', () => {
-  let s: Seed
-  let prevHome: string | undefined
-  beforeEach(async () => {
-    s = await seed()
-    // Route's appHomeFor() resolves to Paths.root which honors this env var.
-    prevHome = process.env.AGENT_WORKFLOW_HOME
-    process.env.AGENT_WORKFLOW_HOME = s.appHome
-  })
-  afterEach(() => {
-    if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = prevHome
-    if (s !== undefined) s.cleanup()
-  })
-
-  function app(): ReturnType<typeof createApp> {
-    return createApp({
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: s.db,
-    })
-  }
-
-  test('404 — versionId from a different nodeRunId', async () => {
-    // Keep the parent run valid and visible so this exercises the version/run
-    // ownership fence rather than short-circuiting on an unknown run.
-    await s.db.insert(nodeRuns).values({
-      id: 'run_other',
-      taskId: s.taskId,
-      nodeId: 'rev_other',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_review',
-    })
-    await s.db.insert(docVersions).values({
-      id: 'dv_other',
-      taskId: s.taskId,
-      reviewNodeId: 'rev_other',
-      reviewNodeRunId: 'run_other',
-      sourceNodeId: 'designer',
-      sourcePortName: 'design',
-      versionIndex: 1,
-      reviewIteration: 0,
-      bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
-      decision: 'pending',
-      createdAt: 1,
-    })
-    const res = await app().fetch(
-      new Request(`http://localhost/api/reviews/run_other/versions/dv_v1`, {
-        headers: { Authorization: 'Bearer tok' },
-      }),
-    )
-    expect(res.status).toBe(404)
-    expect(((await res.json()) as { code: string }).code).toBe('review-version-not-found')
-  })
-})
-
 describeEachProvider(
   'RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route',
   (harness) => {
@@ -512,6 +443,44 @@ describeEachProvider(
           else process.env.AGENT_WORKFLOW_HOME = prevHome
           if (s !== undefined) s?.cleanup()
         }
+      })
+
+      // RFC-359 AC-6：这条此前只跑 SQLite（自建 `seed()` + `createApp`），判据在双引擎那半里
+      // 并不存在。折进来时把同步的 `app()` 换成这边的 async 形态。
+      test('404 — versionId from a different nodeRunId', async () => {
+        // Keep the parent run valid and visible so this exercises the version/run
+        // ownership fence rather than short-circuiting on an unknown run.
+        await s.db.insert(nodeRuns).values({
+          id: 'run_other',
+          taskId: s.taskId,
+          nodeId: 'rev_other',
+          iteration: 0,
+          retryIndex: 0,
+          reviewIteration: 0,
+          status: 'awaiting_review',
+        })
+        await s.db.insert(docVersions).values({
+          id: 'dv_other',
+          taskId: s.taskId,
+          reviewNodeId: 'rev_other',
+          reviewNodeRunId: 'run_other',
+          sourceNodeId: 'designer',
+          sourcePortName: 'design',
+          versionIndex: 1,
+          reviewIteration: 0,
+          bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
+          decision: 'pending',
+          createdAt: 1,
+        })
+        const res = await (
+          await app()
+        ).fetch(
+          new Request(`http://localhost/api/reviews/run_other/versions/dv_v1`, {
+            headers: { Authorization: 'Bearer tok' },
+          }),
+        )
+        expect(res.status).toBe(404)
+        expect(((await res.json()) as { code: string }).code).toBe('review-version-not-found')
       })
 
       test('404 — unknown versionId', async () => {
