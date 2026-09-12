@@ -631,7 +631,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'terminal-maintenance-watermark-coverage.test.ts: 2',
   'transition-cas-route-409.test.ts: 2',
   'upgrade-rolling.test.ts: 7',
-  'users-http.test.ts: 1',
   'webhook-trigger-digital-employee-validation.test.ts: 1',
   'webhook-trigger-validation-acl-order.test.ts: 1',
   'wg-readonly-claim-and-pause-reason.test.ts: 1',

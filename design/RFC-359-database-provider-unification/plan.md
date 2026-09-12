@@ -6255,3 +6255,34 @@ PG 侧额外要 `taskDagCollaboration` / `childLaunchWorkgroup` / `processConcur
 1. `driver: 'noop' | 'poison'` 是**测试专用语义**，要想清楚在「取自装配」的形态下挂在哪一层；
 2. 调用方基数大（约 25 个用例文件），建议先改夹具并让它在 SQLite 上与现状逐字等价（零行为变化），
    再逐批把用例切到双引擎——**不要一次同时改夹具与用例**，否则红了无从归因。
+
+## 5ag. 第四条能力不对称：`confirmGate` 的 `assertResumable` 按**部署形态**注入（W58 发现）
+
+账本 579 → 578（`users-http`）。同批 `rfc164-workgroup-room` 迁过去之后 PG 侧**稳定红一条**
+（`上线前加固：confirm 恢复失败时 gate、holder 与消息全部保持可重试`，期望 410 得到 200）。
+查清楚了：**不是 PG 缺陷，是既有的、有明确理由的部署形态差异。**
+
+`confirmGate`（`resource-catalog/infrastructure/workgroupTaskRoomCommands.ts`）在写任何一行之前
+调 `dependencies.continuation.assertResumable`。这个依赖**按部署形态注入**——源码原话是
+「两件按**部署形态**（不是按数据库）分」：
+
+| 部署形态 | `assertResumable` | 用户看到什么 |
+| --- | --- | --- |
+| 单进程（SQLite 部署） | `composeWorkgroupTaskRoomContinuationDriver` 注入真实现，撞一次 `assertWorktreePresentForResume` | 工作树没了 ⇒ **410**，闸门 / holder / 消息随事务回滚，决策可重试 |
+| 多进程 daemon（PG 部署） | `cli/postgresqlDaemonApplication.ts` 注入**空操作**（受理请求的进程未必看得到该任务的工作树、也未必该驱动它） | **200**，改由 daemon 的 `human-gate-continuation` worker 轮询认领 |
+
+同一个请求在两种部署上本来就给不同答案。那条判据锁的是前者，**接不进双引擎**，
+文件原样退回。
+
+### 但这里有一个真的覆盖缺口
+
+**PG 那条「200 + 异步认领」的路径今天没有任何用例覆盖。** 单进程那条有（就是上面这条），
+多进程那条一条都没有。补法是另写一条：确认 200 之后 worker 认领、并最终把任务推进或落回可重试态
+——需要在夹具里把 `human-gate-continuation` worker 跑起来，是独立一条用例，不是把现有这条改双引擎。
+
+### 与前三条的关系
+
+这是本轮记下的第四条「不是还没迁、是迁不了」，而且是**理由最充分**的一条：
+前三条（无 secretBox 部署 / PG 的 `task-active` 测试钩子 / WebSocket 成对适配器）多少还有
+「应该收敛」的余地，这一条是**设计上就该按部署形态分**。记在这里是为了让后来人一眼分清
+「该收敛的分叉」与「本就该不同的部署形态」——把后者也硬掰成一致，反而是错的。
