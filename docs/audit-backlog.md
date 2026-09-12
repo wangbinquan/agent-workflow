@@ -4835,6 +4835,13 @@ Error: e2e/harness: daemon closed with code 1 signal null before printing ready 
 | `c8c944bed` | Backend ubuntu 6/8 | **真缺陷**（`dispatchIntentTurn` fire-and-forget 无网，已修） |
 | `6c033e5ef` | Backend ubuntu 4/8 | 抖动（`rfc189-wg-round` PG，**该提只改了两个 markdown**） |
 | `2d330ace7` | Playwright e2e windows 2/4 | 抖动（`rfc294-human-gate-restart`，**该提零 `src/` 改动**） |
+| `07882bb32` | Backend macos 1/6 | **已修**：`test-suite-policy` 的全语料 AST 扫撞 bun 固定 5s 默认（**该提只改了一个 markdown**） |
+
+**（2026-09-12 续）第 7 红 `07882bb32` 已经查清并修掉**——不是抖动、是**判据自己的预算写错了**：
+全语料 AST 扫（784 个文件）吃 bun 的固定 5000ms 默认，本机 0.81s、macOS 分片 5061ms 撞线。
+已给它和同文件另外四条同形守卫显式预算（`60_000`），判据落进 `docs/dev-gotchas.md`。
+**这条的意义**：7 红里有 **4 条其实是可修的真问题**，只有 3 条是尚未归因的抖动——
+「看起来像随机抖动」的红里，相当一部分是能查清的。
 
 **6 红里 3 条是真问题（都已修），另 3 条与提交内容无关**，且分属**三个不同的**不稳定面：
 PG 并发派单、ubuntu e2e 工作流矩阵、windows e2e 守护进程重启。

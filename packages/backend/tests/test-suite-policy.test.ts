@@ -422,6 +422,14 @@ describe('repository test-suite policy', () => {
   // 这里把 `resolve(...)` / `join(...)` 的**字面量拼接**静态求值（`import.meta.dir` 取文件所在目录，
   // 模块作用域里由字面量拼出来的 const 参与求值），再看 `readFileSync` 的第一参数落到哪个文件。
   // 只判**带扩展名、且在仓库内**的路径；运行时才生成的路径拼不出来（根不是字面量），自然不进判据。
+  // 显式预算（2026-09-12 实撞）：这条判据要对**全部测试语料**（784 个含 `readFileSync(` 的
+  // 文件）逐个跑 `ts.createSourceFile` 做完整 TS 解析——工作量随语料增长，而 bun 的默认超时是
+  // 固定 5000ms。本机 0.81s，macOS 分片上实测 **5061ms** 正好撞线（run 里报
+  // `this test timed out after 5000ms`，主干因此红了一格，而那一提只改了一个 markdown）。
+  //
+  // 这就是本轮反复遇到的「绝对预算 vs 相对工作量」：固定毫秒对着一个会变大的工作量，
+  // 迟早在别人的提交上红。给一个宽裕的显式预算——它仍然抓得住真的挂死（那会是分钟级），
+  // 但不会因为语料多了几个文件或 runner 忙了就翻车。
   test('every source path a test reads at module scope still exists', () => {
     const missing: string[] = []
     for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
@@ -495,7 +503,7 @@ describe('repository test-suite policy', () => {
       visit(source)
     }
     expect(missing.sort()).toEqual([])
-  })
+  }, 60_000)
 
   // 为什么存在：workflow 的 `paths:` 触发器与 `scripts/**` 里硬写的源文件清单都是**纯字符串**，
   // 源文件被删或被搬走时没有任何编译期或本地测试会红。两种都实撞过——
@@ -544,6 +552,10 @@ describe('repository test-suite policy', () => {
   // AC-6 正在批量迁入的那批，今天是干净的零，于是可以零容忍。更早那批直接用
   // `describeEachProvider` 的文件里仍有存量同步终结符（多数是 await 过的、不致命），它们
   // 归 `rfc359-w5-t19f` 那条只降不升的账本管，不在这里一次性摊开。
+  // 这四条与上面那条同理：都要遍历**全部测试语料**做文本/AST 判据，工作量随语料增长，
+  // 而 bun 的默认超时是固定 5000ms。它们目前本机只要 0.09–0.34s，但 macOS 分片上的时序放大
+  // 实测约 6×（上面那条 0.81s 撞到了 5061ms），余量会随语料变大而消失。统一给显式预算——
+  // 真挂死是分钟级，照样抓得住。
   test('provider HTTP tests carry no bun:sqlite-only sync terminals', () => {
     const offenders: string[] = []
     for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
@@ -563,7 +575,7 @@ describe('repository test-suite policy', () => {
         '下一步就读不到），await 了也只是把 SQLite 的写法带进了中立面。改成 await 的语句：' +
         '写用 `await db.insert(...).values(...)`，读用 `const [row] = await db.select()...`。',
     ).toEqual([])
-  })
+  }, 60_000)
 
   // RFC-359 —— 上一条的**姊妹坑**：把 `.all()` / `.get()` 去掉之后，原来靠它同步取值的那些
   // `expect(...)` 变成了在断言一个 **query builder 对象**。`toHaveLength(0)` 这种碰巧会红
@@ -590,7 +602,7 @@ describe('repository test-suite policy', () => {
       '有 `expect(db.select()...)` 这样的断言少了 `await`：断言的是 builder 对象本身，不是行。' +
         '中立面上查询只有 await 之后才会执行——写成 `expect(await db.select()...)`。',
     ).toEqual([])
-  })
+  }, 60_000)
 
   // 2026-09-12 —— `daemon-start` 里两条用例内部 `waitForReady(stdout, 10_000)`，自己却跑在
   // bun 的 **5s 默认预算**上：快机器「daemon 起得够快」就过，慢机器必红（macOS 分片实撞两条）。
@@ -639,7 +651,7 @@ describe('repository test-suite policy', () => {
       '有用例内部等待的上限 >= 它自己的超时预算：那样它只在「被等的东西刚好够快」时绿，' +
         '在慢机器 / 忙分片上必红。给它一个明显大于等待上限的预算（bun 的缺省只有 5s）。',
     ).toEqual([])
-  })
+  }, 60_000)
 
   // 2026-09-12 —— `rfc247-token-audit` 的 AC-20 三条用例原来用
   // `await new Promise((r) => setTimeout(r, 50))` 当「让 fire-and-forget 落库」的手段。
@@ -698,5 +710,5 @@ describe('repository test-suite policy', () => {
         '③ 确实与写入无关（刻意推进时钟之类）⇒ 在上一行写 `// sleep-ok: <理由>` 豁免。' +
         '前两类在 PostgreSQL 的真实往返上必然间歇性红，而且在本机永远是绿的。',
     ).toEqual([])
-  })
+  }, 60_000)
 })

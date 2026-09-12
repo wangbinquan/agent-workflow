@@ -3428,6 +3428,17 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
 - **claude code 在 uid 0 下使用 `bypassPermissions` 可能要求 `IS_SANDBOX==="1"`（精确字符串）**：RFC-276 后该标记由每个 `claude-code` runtime profile 的“Set IS_SANDBOX=1”兼容开关控制，默认关闭；关闭会剥离 daemon 继承值，开启才注入。root 运行且遇到该 CLI 拒绝时显式开启对应 runtime；这个变量只绕过上游 CLI 的容器/root 检查，不启用或证明 OS sandbox。
 - **分离 worktree 里 symlink `node_modules`** 会把 `@agent-workflow/*` 解析回污染的 main → 假 typecheck 错；worktree 里 `bun install` 或信 CI。
 - **CI 按你自己的确切 sha 查**：共享 main 上并发 push 会 cancel 你的 CI run；看含你 commit 的 superseding commit 的绿，按失败测试的 owning commit 归属。Codex `--base` 跨并发 commit 会把他人 diff 卷进复审——pin 到你的父提交（分离 worktree）隔离。
+- **「全语料扫一遍」的守卫必须显式声明超时预算，别吃 bun 的固定 5000ms 默认**（2026-09-12 主干实撞）。
+  `test-suite-policy` 的 `every source path a test reads at module scope still exists` 要对
+  **784 个**含 `readFileSync(` 的测试文件逐个跑 `ts.createSourceFile`（完整 TS 解析）。
+  本机 **0.81s**，macOS 分片上实测 **5061ms** —— 正好撞线，报
+  `this test timed out after 5000ms`，主干红一格；**而那一提只改了一个 markdown 文件**。
+  判据与上一条同源，但方向相反：那条讲「别用固定时长当同步手段」，这条讲
+  **「别用固定预算兜一个会变大的工作量」**——语料只会越来越多，余量只会越来越薄。
+  处置：给这类守卫一个宽裕的显式预算（本仓取 `60_000`）。真挂死是分钟级，照样抓得住；
+  同文件另外四条同形守卫（0.09–0.34s）一并给了预算，免得下一个先撞线。
+  **自查**：写一条「遍历 `listTestFiles()` / 全仓 grep / AST 扫」的守卫时，问一句
+  「这条的耗时会不会随仓库变大」——会，就写预算。
 - **固定 `setTimeout` 等一个「事情会发生」= 墙钟赌博，负载高的 runner 必输**：`memory-distill-scheduler` 的重入用例先关闸、`release()` 后 `await sleep(80)` 再断言 `calls === 2`，对着一个 5ms 间隔的循环。本机连跑 5 次全绿、CI 的 macos shard 上 `Received: 1`（run 30886241395）。**判据是断言的方向**：证明「某事已发生」（正向）必须**轮询到条件成立 + 一个宽松 deadline**。写成固定 sleep 的正向断言迟早会在别人的 PR 上红，而且看起来像别人的锅。
   **勘误（2026-09-12，RFC-359 AC-20）**：本条原写「证明『没有多余发生』（负向）**只能**靠固定等待，无法轮询」——**那句是错的**，照它写就会留下一枚固定 sleep。负向断言的正解是**因果屏障**：让一件**必定会发生、且因果上排在被断言者之后**的事成为谓词，等它成立，再断言那件不该发生的事没发生。三种取材（都已在仓内落地，见 `design/RFC-359-database-provider-unification/plan.md` §5bf）：
   ① **同一条通道上放一帧「有权看见」的控制帧**——`rfc152-ws-frame-gates` 的 memories 三条用例（`fireSupersededThenControl` + 等 `memory.archived`）一直就是这么写的，`rfc099-ws-acl-filter` / `ws-repo-imports` 已对齐；
