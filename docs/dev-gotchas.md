@@ -6527,8 +6527,14 @@ PostgreSQL 是一次真实往返：**本机够、忙分片不够**，CI 的 ubun
 - 负向（「不该写」）：补**因果屏障**——再发一次**已知会写**的请求，等它落库，再断言
   「除它之外没有别的行」。时间不是屏障，因果才是。
 
-判据已写成守卫（`test-suite-policy`：`provider HTTP tests do not sleep to wait for a write`，
-扫 `new Promise(… => setTimeout` 与 `Bun.sleep(`），已变异验证。
+判据已写成守卫（`test-suite-policy`：`provider HTTP tests do not sleep to wait for a write`）
++ 同判据的 pre-flight（`SLEEP-TO-WAIT[L…]`），已变异验证。
+
+**⚠️ 判据必须放过有界轮询**：`for (;;) { if (done) break; if (Date.now() > deadline) break;
+await sleep(50) }` 是**正当形态**——有退出条件也有上界，睡眠只是退避。第一版判据只看
+「有没有 setTimeout」，把这种也算进去，在剩余候选里多报了一倍（20 → 实际 11）。
+收紧成「往上找同一条用例里的循环 + `Date.now() +`」。
+**假阳性在这里的代价不是噪声——是有人照着把一个正当的轮询循环改坏。**
 
 **这条与本文件另一条「负向断言在 PG 上会因为错的理由绿」是同一个根**：
 fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「断言空」的陷阱，

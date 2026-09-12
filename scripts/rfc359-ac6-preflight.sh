@@ -37,8 +37,30 @@ for f in "$@"; do
   # 本机够、忙分片不够——`rfc247-token-audit` 的 AC-20 因此推红一格，而它在本机 3/3 全绿。
   # 迁之前就得换掉：正向用 helpers/eventually 读到为止，负向补因果屏障。
   # 迁完之后由 `test-suite-policy` 的同名守卫兜住（那条只扫已迁的文件）。
-  grep -qE "new Promise\([^)]*\) *=> *setTimeout|Bun\.sleep\(" "$f" &&
-    r="$r SLEEP-TO-WAIT(睡一觉等写入,迁前先换掉)"
+  # **有界轮询不算**（`for (;;) { … if (Date.now() > deadline) break; await sleep }` 是正当
+  # 形态）；判据与 `test-suite-policy` 的同名守卫一致：往上找同一条用例里的循环 + deadline。
+  sleeps=$(python3 - "$f" <<'PYEOF'
+import re, sys
+
+lines = open(sys.argv[1]).read().split(chr(10))
+pattern = re.compile(r"new Promise\([^)]*\)\s*=>\s*setTimeout|Bun\.sleep\(")
+hits = []
+for index, line in enumerate(lines):
+    if not pattern.search(line):
+        continue
+    head = 0
+    for back in range(index - 1, -1, -1):
+        if re.match(r"\s*(?:test|it)\(", lines[back]):
+            head = back
+            break
+    body = chr(10).join(lines[head : index + 1])
+    bounded = re.search(r"\b(?:for|while)\s*\(", body) and re.search(r"Date\.now\(\)\s*\+", body)
+    if not bounded:
+        hits.append(str(index + 1))
+print(','.join(hits))
+PYEOF
+)
+  [ -n "$sleeps" ] && r="$r SLEEP-TO-WAIT[L$sleeps](直线式睡一觉等写入,迁前先换掉)"
   # 「白做的夹具」：某个 describe 挂了 setup 型 beforeEach，正文却**一样都不用**那个 setup
   # 的产物（`rfc264-unicode-names` 三块全是这样——纯 schema 断言，却各建一个 SQLite 库加播
   # 两个用户）。这类不用迁，删掉那行 beforeEach 就够。

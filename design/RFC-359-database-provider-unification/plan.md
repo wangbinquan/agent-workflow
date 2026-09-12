@@ -6941,19 +6941,39 @@ CI 的 ubuntu shard 7/8 红两条（各约 504ms，也就是整条用例跑完�
 **这才是这一格红真正的产出**：靠人记「迁完要 grep 一遍睡眠」是记不住的，我自己就没记住。
 
 
-## 5bd. 那一格红不是孤例：剩余候选里 **20 个**带着同样的睡眠
+## 5bd. 那一格红不是孤例——但第一版统计**多算了一倍**（20 → 11）
 
 §5bc 的守卫只扫**已迁**的文件（判据是「文件里有 `describeEachProviderHttpApplication`」），
-所以它挡得住回潮，挡不住「下一个文件迁进来时带着一个睡眠」。把同一条判据加进 pre-flight
-之后扫一遍剩余候选：**20 个文件命中**（`plugins-http` / `review-state-machine` /
-`rfc099-ws-acl-filter` / `rfc107-url-upload-multipart` / `rfc152-ws-frame-gates` /
-`rfc167-dynamic-workflow-engine` / `rfc218-agent-launch-ports` / `rfc238-mcp-runtime-test-http` /
-`rfc223-pr9-cross-tenant-adversarial` / `rfc234-intent-routes` / `rfc257-webhook-management` /
-`rfc259-github-ingress` 等）。
+挡得住回潮，挡不住「下一个文件迁进来时带着一个睡眠」。把同一条判据加进 pre-flight
+之后扫剩余候选，**第一版报了 20 个**。
 
-也就是说：**照原样迁下去，这一格红还会再撞 20 次**，而且每次都是「本机全绿、CI 偶发红」
-——最难归因的那种。现在 pre-flight 会在动手之前把它标出来（`SLEEP-TO-WAIT`）。
+**这个数字是错的。** 拿 `tasks.test.ts` 逐行看才发现：它那处睡眠在一个**有界轮询**里——
 
-**规律**：一条守卫写完之后，问一句「它扫的范围是不是正好覆盖了问题发生的时机」。
-`test-suite-policy` 那条扫的是「已经迁完的文件」——对回潮有效，对**迁移当下**无效；
-补一条同判据的 pre-flight，两个时机才都盖住。
+```ts
+const deadline = Date.now() + 30_000
+for (;;) {
+  if (row?.status === 'failed' || row?.status === 'done') break
+  if (Date.now() > deadline) break
+  await new Promise((r) => setTimeout(r, 50))   // 退避，不是「睡一觉然后断言」
+}
+```
+
+这是**正当形态**：有退出条件、有上界，睡眠只是退避。危险的是直线式的「睡一觉然后断言」。
+
+判据收紧成「往上找同一条用例里的循环 + `Date.now() +`」，两边（pre-flight 与
+`test-suite-policy`）用同一条。**20 → 11**，也就是说第一版里有 **9 个是假阳性**。
+已用一个把两种形态放在同一文件里的负样本验证：只报直线式那一条。
+
+真正待换的 11 个（带行号）：`plugins-http`(L628,680,761) / `review-state-machine`(L240) /
+`rfc099-ws-acl-filter`(L165,288) / `rfc152-ws-frame-gates`(L142,152,214) /
+`rfc234-intent-routes`(L124,132) / `rfc257-webhook-management`(L643) /
+`rfc259-github-ingress`(L134,191,305) / `rfc355-intent-session-event-callsites`(L72) /
+`runtime-routes-registry`(L694) / `ws`(L115) / `ws-repo-imports`(L79,171)。
+
+### 两条规律
+
+1. **守卫写完要问「它扫的范围是不是正好覆盖了问题发生的时机」。**
+   `test-suite-policy` 那条扫「已迁完的文件」，对回潮有效、对**迁移当下**无效；
+   补一条同判据的 pre-flight，两个时机才都盖住。
+2. **报出来的第一个数字先别信，去看几条。** 第一版判据钝到把合法的退避轮询也算进去，
+   多算了一倍。假阳性在这里的代价不是噪声——是有人照着把一个**正当的轮询循环**改坏。

@@ -653,12 +653,25 @@ describe('repository test-suite policy', () => {
       if (file === import.meta.path) continue
       const source = readFileSync(file, 'utf8')
       if (!source.includes('describeEachProviderHttpApplication')) continue
-      source.split('\n').forEach((line, index) => {
-        if (pattern.test(line)) {
-          offenders.push(
-            `${toPortableRelativePath(relative(REPO_ROOT, file))}:${String(index + 1)}`,
-          )
+      const lines = source.split('\n')
+      lines.forEach((line, index) => {
+        if (!pattern.test(line)) return
+        // **有界轮询不算**：`for (;;) { … if (done) break; if (Date.now() > deadline) break;
+        // await sleep(…) }` 是正当形态——它有退出条件也有上界，睡眠只是退避。危险的是
+        // 直线式的「睡一觉然后断言」。判据：往上找同一条用例里的循环 + deadline。
+        // （`tasks.test.ts` 等任务状态轮询实撞此假阳性，报出来才发现判据太钝。）
+        // `findLast` 要 es2023 的 lib，本仓 target 更低——手写倒着找。
+        let head = 0
+        for (let back = index - 1; back >= 0; back -= 1) {
+          if (/^\s*(?:test|it)\(/.test(lines[back] ?? '')) {
+            head = back
+            break
+          }
         }
+        const body = lines.slice(head, index + 1).join('\n')
+        const bounded = /\b(?:for|while)\s*\(/.test(body) && /Date\.now\(\)\s*\+/.test(body)
+        if (bounded) return
+        offenders.push(`${toPortableRelativePath(relative(REPO_ROOT, file))}:${String(index + 1)}`)
       })
     }
     expect(
