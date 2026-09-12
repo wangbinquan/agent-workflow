@@ -13,15 +13,17 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { assertDeleteConfirm, readDeleteBody } from '../src/services/deleteConfirm'
 import { createUser } from '../src/services/users'
 import { ValidationError } from '../src/util/errors'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ---------------------------------------------------------------------------
 // C-1 — helper unit
@@ -88,20 +90,14 @@ describe('RFC-222 C-1 — readDeleteBody', () => {
 // C-2 / C-3 — endpoint matrix
 // ---------------------------------------------------------------------------
 interface H {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   token: string
 }
-async function harness(): Promise<H> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function harness(scope: ProviderHttpApplicationScope): Promise<H> {
+  const db = scope.harness.db
   await seedTestDefaultOpencodeRuntime(db)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const app = (await scope.open()).app
   const admin = await createUser(db, {
     username: 'root',
     displayName: 'Root',
@@ -118,131 +114,165 @@ async function req(h: H, path: string, init: RequestInit = {}): Promise<Response
   return h.app.request(path, { ...init, headers })
 }
 
-describe('RFC-222 C-2 — agents DELETE confirm matrix', () => {
-  let h: H
-  let agentId: string
-  let agentRevision: { expectedUpdatedAt: number; expectedAclRevision: number }
-  beforeEach(async () => {
-    h = await harness()
-    const created = await req(h, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'secret', instructions: 'x' }),
-    })
-    expect(created.status).toBe(201)
-    const agent = (await created.json()) as { id: string; updatedAt: number; aclRevision?: number }
-    agentId = agent.id
-    agentRevision = {
-      expectedUpdatedAt: agent.updatedAt,
-      expectedAclRevision: agent.aclRevision ?? 0,
-    }
-  })
-
-  test('missing confirm → 422 delete-confirm-required, agent survives', async () => {
-    const res = await req(h, `/api/agents/${agentId}`, { method: 'DELETE' })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-required')
-    expect((await req(h, `/api/agents/${agentId}`)).status).toBe(200)
-  })
-
-  test('wrong confirm → 422 delete-confirm-mismatch, agent survives', async () => {
-    const res = await req(h, `/api/agents/${agentId}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ confirm: 'Secret' }),
-    })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
-    expect((await req(h, `/api/agents/${agentId}`)).status).toBe(200)
-  })
-
-  test('correct confirm → 204, agent gone', async () => {
-    const res = await req(h, `/api/agents/${agentId}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ confirm: 'secret', ...agentRevision }),
-    })
-    expect(res.status).toBe(204)
-    expect((await req(h, `/api/agents/${agentId}`)).status).toBe(404)
-  })
-
-  test('missing resource → 404 before confirm (N-5 order)', async () => {
-    const res = await req(h, '/api/agents/00000000000000000000000000', {
-      method: 'DELETE',
-    })
-    expect(res.status).toBe(404)
-  })
-
-  test('legacy name-addressed path is not resolved implicitly', async () => {
-    expect((await req(h, '/api/agents/secret')).status).toBe(404)
-  })
-})
-
-describe('RFC-222 C-3 — rename TOCTOU caught by name mismatch', () => {
-  test('deleting with the pre-rename name → mismatch (agent survives)', async () => {
-    const h = await harness()
-    const created = await req(h, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'old', instructions: 'x' }),
-    })
-    expect(created.status).toBe(201)
-    const agent = (await created.json()) as {
-      id: string
-      updatedAt: number
-      aclRevision?: number
-    }
-    const id = agent.id
-    await req(h, `/api/agents/${id}/rename`, {
-      method: 'POST',
-      body: JSON.stringify({
-        newName: 'newname',
+// RFC-359 AC-6：两个引擎各跑一遍（同文件的纯函数 describe 保持单跑）。
+describeEachProviderHttpApplication(
+  'RFC-222 C-2 — agents DELETE confirm matrix',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-del-confirm-',
+  },
+  (scope) => {
+    let h: H
+    let agentId: string
+    let agentRevision: { expectedUpdatedAt: number; expectedAclRevision: number }
+    beforeEach(async () => {
+      h = await harness(scope)
+      const created = await req(h, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'secret', instructions: 'x' }),
+      })
+      expect(created.status).toBe(201)
+      const agent = (await created.json()) as {
+        id: string
+        updatedAt: number
+        aclRevision?: number
+      }
+      agentId = agent.id
+      agentRevision = {
         expectedUpdatedAt: agent.updatedAt,
         expectedAclRevision: agent.aclRevision ?? 0,
-      }),
+      }
     })
-    // The dialog opened as "old"; the resource is now "newname".
-    const res = await req(h, `/api/agents/${id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ confirm: 'old' }),
-    })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
-    expect((await req(h, `/api/agents/${id}`)).status).toBe(200)
-  })
-})
 
-describe('RFC-222 C-2 — workflows DELETE (schema path) confirms against row name', () => {
-  test('wrong confirm → 422; correct name → 204', async () => {
-    const h = await harness()
-    const createRes = await req(h, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'wf-alpha',
-        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
-      }),
+    test('missing confirm → 422 delete-confirm-required, agent survives', async () => {
+      const res = await req(h, `/api/agents/${agentId}`, { method: 'DELETE' })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-required')
+      expect((await req(h, `/api/agents/${agentId}`)).status).toBe(200)
     })
-    expect(createRes.status).toBe(201)
-    const created = (await createRes.json()) as { id: string; version: number; name: string }
 
-    const wrong = await req(h, `/api/workflows/${created.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({
-        expectedVersion: created.version,
-        clientMutationId: ulid(),
-        confirm: created.id, // id ≠ name → mismatch
-      }),
+    test('wrong confirm → 422 delete-confirm-mismatch, agent survives', async () => {
+      const res = await req(h, `/api/agents/${agentId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirm: 'Secret' }),
+      })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
+      expect((await req(h, `/api/agents/${agentId}`)).status).toBe(200)
     })
-    expect(wrong.status).toBe(422)
-    expect(((await wrong.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
 
-    const ok = await req(h, `/api/workflows/${created.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({
-        expectedVersion: created.version,
-        clientMutationId: ulid(),
-        confirm: 'wf-alpha',
-      }),
+    test('correct confirm → 204, agent gone', async () => {
+      const res = await req(h, `/api/agents/${agentId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirm: 'secret', ...agentRevision }),
+      })
+      expect(res.status).toBe(204)
+      expect((await req(h, `/api/agents/${agentId}`)).status).toBe(404)
     })
-    expect(ok.status).toBe(204)
-  })
-})
+
+    test('missing resource → 404 before confirm (N-5 order)', async () => {
+      const res = await req(h, '/api/agents/00000000000000000000000000', {
+        method: 'DELETE',
+      })
+      expect(res.status).toBe(404)
+    })
+
+    test('legacy name-addressed path is not resolved implicitly', async () => {
+      expect((await req(h, '/api/agents/secret')).status).toBe(404)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍（同文件的纯函数 describe 保持单跑）。
+describeEachProviderHttpApplication(
+  'RFC-222 C-3 — rename TOCTOU caught by name mismatch',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-del-confirm-',
+  },
+  (scope) => {
+    test('deleting with the pre-rename name → mismatch (agent survives)', async () => {
+      const h = await harness(scope)
+      const created = await req(h, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'old', instructions: 'x' }),
+      })
+      expect(created.status).toBe(201)
+      const agent = (await created.json()) as {
+        id: string
+        updatedAt: number
+        aclRevision?: number
+      }
+      const id = agent.id
+      await req(h, `/api/agents/${id}/rename`, {
+        method: 'POST',
+        body: JSON.stringify({
+          newName: 'newname',
+          expectedUpdatedAt: agent.updatedAt,
+          expectedAclRevision: agent.aclRevision ?? 0,
+        }),
+      })
+      // The dialog opened as "old"; the resource is now "newname".
+      const res = await req(h, `/api/agents/${id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirm: 'old' }),
+      })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
+      expect((await req(h, `/api/agents/${id}`)).status).toBe(200)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍（同文件的纯函数 describe 保持单跑）。
+describeEachProviderHttpApplication(
+  'RFC-222 C-2 — workflows DELETE (schema path) confirms against row name',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-del-confirm-',
+  },
+  (scope) => {
+    test('wrong confirm → 422; correct name → 204', async () => {
+      const h = await harness(scope)
+      const createRes = await req(h, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'wf-alpha',
+          definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+        }),
+      })
+      expect(createRes.status).toBe(201)
+      const created = (await createRes.json()) as { id: string; version: number; name: string }
+
+      const wrong = await req(h, `/api/workflows/${created.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+          expectedVersion: created.version,
+          clientMutationId: ulid(),
+          confirm: created.id, // id ≠ name → mismatch
+        }),
+      })
+      expect(wrong.status).toBe(422)
+      expect(((await wrong.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
+
+      const ok = await req(h, `/api/workflows/${created.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+          expectedVersion: created.version,
+          clientMutationId: ulid(),
+          confirm: 'wf-alpha',
+        }),
+      })
+      expect(ok.status).toBe(204)
+    })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // G-2 — coverage guard: every resource/task DELETE handler is gated

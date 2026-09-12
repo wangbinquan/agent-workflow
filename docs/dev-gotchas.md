@@ -6281,6 +6281,14 @@ grep -n 'createApp(' -A 30 <file> | grep -E '^\s*[0-9]*[-:]?\s*[A-Za-z_$][\w$]*\
 > ⚠️ 这条我自己漏做过一次（2026-09-12，`rfc310-pr7b-handover`）：筛候选时只 grep 了
 > `describeEachProviderHttpApplication`（用来排除**已迁**的），忘了再 grep 一次**不带后缀**的
 > `describeEachProvider`（用来排除**已经部分双引擎**的）。**两个都要 grep，判据不同。**
+>
+> **靠人记必漏，所以这份清单已经脚本化**：`scripts/rfc359-ac6-preflight.sh`。
+> 在 `packages/backend/tests` 下 `sh ../../../scripts/rfc359-ac6-preflight.sh <file...>`，
+> 输出 `CLEAN` 才可以直接上批量迁移；其余每一项都对应本文件或
+> `design/RFC-359-database-provider-unification/plan.md §5u–§5af` 里的一条处置。
+> 它检的是：已迁 / 已部分双引擎（交叉积）/ 同步终结符 / SQLite 绑定的测试基建 /
+> 用例自己关库 / 循环或嵌套 describe / 自建 config / 自建 appHome / route-meta 毒化 /
+> 加密列夹具 / 非标准 `createApp` 选项。
 
 ## 「hook timed out」记在一条 `(unnamed)` 用例头上 = 失败的是 `beforeAll`
 

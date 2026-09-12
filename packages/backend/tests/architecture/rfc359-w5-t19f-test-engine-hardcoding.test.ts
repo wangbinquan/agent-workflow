@@ -316,7 +316,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc220-presented-name-sync.test.ts: 3',
   'rfc221-auth-policy.test.ts: 10',
   'rfc221-login-policy-routes.test.ts: 1',
-  'rfc222-delete-confirm.test.ts: 1',
   'rfc222-task-delete.test.ts: 1',
   'rfc223-import-refs.test.ts: 1',
   'rfc223-owner-transfer.test.ts: 2',
