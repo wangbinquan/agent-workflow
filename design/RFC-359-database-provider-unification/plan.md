@@ -7629,3 +7629,45 @@ app.fetch=?  Bun.serve=?  $client=?
 `rfc152-ws-channel-registry`(6 处) / `rfc312-impl-gate-fixes`(4 处) / `rfc212-revalidation-behavior`(3 处)。
 库归 harness 所有，用例关它在双引擎下本来就不该有（§5x 记过同一条）。
 这三个要先把自持库的生命周期交出去，才谈得上分流——是下一刀。
+
+## 5bv. AC-6 的 530 条里，**80 条是 `migration-*.test.ts`——它们按定义就不该双引擎**（需用户裁决）
+
+把 530 条按「卡在什么」重新分层（可复跑，判据见下）：
+
+| 类别 | 数量 | 说明 |
+| --- | --- | --- |
+| 服务层/其他 | 271 | 其中 **80 条是 `migration-*.test.ts`**（见下） |
+| 卡:任务执行拓扑 | 113 | `createTaskExecutionTestTopology` 一族（§5af 那一刀） |
+| 卡:裸 `$client` | 76 | 用例直接写 bun:sqlite 原生 SQL |
+| 已部分双引擎(残留) | 47 | 文件里已有 `describeEachProvider`，另一半没迁 |
+| HTTP 形状 | 23 | 还剩这些是「省力入口」 |
+
+### 那 80 条 migration 测试测的是**SQLite 迁移链本身**
+
+实测：**57 条用 `pragma_table_info` / `PRAGMA`、29 条查 `sqlite_master`**（有重叠），
+其余的也都是 `createInMemoryDb(MIGRATIONS)` 之后断言「这条迁移把表改成了什么样」。
+`pragma_table_info` 在 PostgreSQL 上**根本不存在**；而即便改写成中立断言，它测的
+「`db/migrations/*.sql` 这条链跑完是什么形状」也**只对 SQLite 成立**——PG 不共享这条链。
+
+**PG 那边不是没覆盖，是另有其人**：`scripts/rfc349-schema-contract.ts` 从 SQLite schema 投影
+生成规范契约（`schema-contract.json` / `.md`），架构测试**逐字节比对**，"schema drift cannot be
+published silently"；另有 `rfc359-t19h-postgresql-migration-sequence` /
+`rfc359-t19h-postgresql-upgrade.integration` 覆盖 PG 自己的迁移序列与升级。
+**所以把这 80 条排除出 AC-6 不会留下 PG 覆盖洞。**
+
+### 但我**没有**自行把它们豁免——因为守卫的设计明确在防这件事
+
+`EXEMPT` 目前只有 **2 条**（harness 自己 + 本守卫），且它自带账本
+`rfc359-w5-test-engine-hardcoding-exempt` baseline=2、**只降不升**，理由原文写着
+「防止豁免退化成空白许可证」。往里塞 80 条正是这条规则要挡的动作。
+
+**需要用户裁决的是判据问题，不是豁免问题**：AC-6 的原文判据是
+「**全量 backend 行为套件**在真 PostgreSQL 上进 push CI」。
+迁移链测试**不是行为套件**，是单引擎的 schema 溯源测试。所以正确的做法应当是
+**把账本的匹配判据收窄**（例如：`migration-*.test.ts` 且加载了 SQLite 迁移链的，
+不计入单引擎欠债），而不是给它们发 80 张豁免票。
+
+两种处置的差别：收窄判据 = 承认「它们从来不在 AC-6 范围内」；发豁免票 = 承认「它们在范围内但我们不做」。
+**前者是对的，但它改变了一个 AC 的口径，所以这一刀我留给用户拍板，没有自行执行。**
+
+裁决之后 AC-6 的真实剩余量是 **450**（530 − 80），其中最大的一块仍是「卡:任务执行拓扑」的 113。
