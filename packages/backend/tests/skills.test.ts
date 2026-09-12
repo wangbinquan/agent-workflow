@@ -7,11 +7,10 @@ import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { type DbClient } from '../src/db/client'
 import { agents, skills } from '../src/db/schema'
-import { createApp } from '../src/server'
 import {
   createManagedSkill,
   deleteSkill,
@@ -42,40 +41,12 @@ const T6_ACTOR = buildActor({
 })
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
   app: Hono
   appHome: string
   cleanup: () => void
-}
-
-function buildHarness(): Harness {
-  const appHome = mkdtempSync(join(tmpdir(), 'aw-skills-'))
-  // Tests need Paths.root to point at our temp dir — set env before importing
-  // any module that captures it lazily (Paths uses getters, so we just need
-  // it set when the route handler runs).
-  const prev = process.env.AGENT_WORKFLOW_HOME
-  process.env.AGENT_WORKFLOW_HOME = appHome
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: join(appHome, 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return {
-    db,
-    app,
-    appHome,
-    cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
-      else process.env.AGENT_WORKFLOW_HOME = prev
-    },
-  }
 }
 
 // RFC-359 W46: use the complete provider application while retaining native fixtures.
@@ -279,16 +250,15 @@ describeProviderSkills('skill service', (buildHarness) => {
   })
 })
 
-describe('skill service (native fixture)', () => {
-  let h: Harness
+// RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
+describeProviderSkills('skill service (formerly native fixture)', (buildHarness) => {
+  let h: ProviderSkillHarness
   let fsOpts: SkillFsOptions
 
   beforeEach(() => {
     h = buildHarness()
     fsOpts = { appHome: h.appHome }
   })
-
-  afterEach(() => h.cleanup())
 
   test('path traversal attempts rejected', async () => {
     const skill = await createManagedSkill(h.db, fsOpts, {
@@ -493,14 +463,14 @@ describeProviderSkills('skill HTTP routes', (buildHarness) => {
   })
 })
 
-describe('skill HTTP routes (native fixture)', () => {
-  let h: Harness
+// RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
+describeProviderSkills('skill HTTP routes (formerly native fixture)', (buildHarness) => {
+  let h: ProviderSkillHarness
   let createHttpSkill: ReturnType<typeof bindSkillHttpHarness>
   beforeEach(() => {
     h = buildHarness()
     createHttpSkill = bindSkillHttpHarness(h)
   })
-  afterEach(() => h.cleanup())
 
   test('DELETE refuses when an agent references the skill', async () => {
     const skill = await createHttpSkill({ name: 'foo' })

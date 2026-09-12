@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 566,
+      "baseline": 562,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5268,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 —— `isOwnerScopedNameConflict` 改成复用 `postgresqlUniqueViolationConstraint`（23505 的唯一真值来源；Bun 的 PG 驱动把 SQLSTATE 放在 `errno`，此前只读 `code` 的判据在真 PG 上恒 false，同名并发从 409 退化成 500），`ownerScopedName.ts` 因此多一条 import。本 commit 一次性放行，下一提退役。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4734,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 —— `isOwnerScopedNameConflict` 改成复用 `postgresqlUniqueViolationConstraint`（23505 的唯一真值来源；Bun 的 PG 驱动把 SQLSTATE 放在 `errno`，此前只读 `code` 的判据在真 PG 上恒 false，同名并发从 409 退化成 500），`ownerScopedName.ts` 因此多一条 import。本 commit 一次性放行，下一提退役。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -891,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f09167367e997969389180ebf8550f9017689c55",
-    "contentDigest": "sha256:f4b3afc12504e29d3752031d0c363ce35633a537b026e5e28ed9f5225042e030",
+    "currentSnapshotSha": "e7fef0f74c3f22fe9a57851f2b5ba2227ded3dc1",
+    "contentDigest": "sha256:5672dc6111f5f27e47a8579c8b7172e40f6102d32d12623ab322f0436f6cda2d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

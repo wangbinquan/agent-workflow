@@ -2,7 +2,55 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 本轮进展（2026-09-12，AC-6 账本 **625 → 581**，含三条已修 PG 缺陷）
+> ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 562**，又照出三条 PG 缺陷）
+>
+> 接着下面那段做。**新发现的三条产品缺陷，全部是把单引擎用例改成双引擎当天红出来的**：
+>
+> 1. **工作树被 GC 回收后，confirm/approve 在 PG 上把任务永久搁浅**。SQLite 那半有预检
+>    （410、闸门与消息随事务回滚、决策可重试），PG 部署注入的是**空操作**，理由写成
+>    「多进程部署看不到工作树」——核对下来那种多机形态今天并不存在（两个部署的
+>    `human-gate-continuation` worker 都跑在同一个 daemon 进程里）。判据收进
+>    `modules/task-execution/application/worktreeResumePreflight.ts` 两个 provider 共用。
+>    plan §5ah（§5ag 保留原文，记我第一次**照抄注释判错**的过程）。
+> 2. **房间的 2.5s 补偿继续 reject 了没人接**（`void continueIfStillParked(...)` 无 `.catch`）。
+>    daemon 里是进程级 unhandled rejection；测试里 bun 报「Unhandled error between tests」，
+>    **计数行照样 `N pass / 0 fail`**，只把退出码变成 1。plan §5ak。
+> 3. **同名并发创建在 PG 上从 409 退化成 500**。Bun 的 PG 驱动把 SQLSTATE 放在 **`errno`**，
+>    `code` 是它自己的 `ERR_POSTGRES_SERVER_ERROR`；`isOwnerScopedNameConflict`（agent /
+>    skill / workgroup 三个门面共用）只读 `code`，在真 PG 上恒 false。**同一个坑本仓第二次**
+>    ——能力矩阵那份早修好了，这份手写副本没跟上。plan §5am。
+>
+> ### 这一段新增的工具与守卫（都已变异验证）
+>
+> - `scripts/source-guard-sweep.ts` —— 「改了 `src/` 哪些测试会被波及」按**谁真的去读本包源码**挑。
+>   `docs/dev-gotchas.md` 原有的两条 grep 挑不全，**这就是本段两次推红 CI 的原因**。
+>   跑法：`AW_TEST_POSTGRESQL_URL=… bun run scripts/source-guard-sweep.ts --run`。
+> - `tests/helpers/eventually.ts` —— 「应答之后才写」的投影用有界轮询读到为止。
+>   **负向断言要补因果屏障**（时间不是屏障），否则在 PG 上会因为「还没来得及写」而绿。
+> - `test-suite-policy` 两条一对：不得用 `.run()/.get()/.all()`；去掉之后不得
+>   `expect(db.select()...)` 少 `await`（后者会静静地绿）。
+> - `scripts/rfc359-ac6-preflight.sh` 补了 `MODULE-LEVEL-HARNESS` / 逐块扫的 `PURE-DESCRIBE` /
+>   `OPAQUE-CREATEAPP-OPTS`，并把 `NESTED-EACHPROVIDER` 的文案改对——它**不是拦路灯**，
+>   处置是「只包 HTTP 那个 describe」。
+>
+> ### 又一类已经清掉：「双引擎新半 + SQLite 旧半」并存
+>
+> 前几波留下一批文件，同一个 HTTP 面上一部分用例已双引擎、另一部分还挂在 legacy 的
+> `buildHarness()` 上——**两半测的不是同一批判据**，旧半里的用例此前只在 SQLite 上成立过。
+> 已收：`agents` / `mcps-http`（顺带把它自带的第 18 份生命周期拷贝换成共用作用域）/
+> `skills` / `cached-repos-http` / `rfc248-repo-groups-http`。判据：看到
+> `describeEachProvider` 与 `createApp` 同处一个文件，先问「旧半测的用例新半有没有」。
+> 暂缓 `plugins-http`（两边种子一同步一异步，要先统一）。
+>
+> ### 下一刀
+>
+> 剩 ~66 个文件，最大的一块是 **PG 侧没有任何测试接缝**（`AppDeps` 上 13 个
+> `webhookDispatcher` / `taskExecutionReadModels` / `*TestDependencies` 之类，
+> `PostgresqlApplicationInput` 上**一个都没有**，22 个文件卡在这里）。其次是
+> `helpers/taskRecoveryOperations` 这层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）。
+> 另记：**PG 备份路径今天零覆盖**且不能靠迁 `backup.test.ts` 来补，见 `docs/audit-backlog.md`。
+
+> ## 📌 RFC-359 本轮进展（2026-09-12 上半场，AC-6 账本 **625 → 581**，含三条已修 PG 缺陷）
 >
 > ### 一句话
 >

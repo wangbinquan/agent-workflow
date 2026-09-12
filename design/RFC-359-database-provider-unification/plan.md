@@ -6567,3 +6567,30 @@ NESTED-EACHPROVIDER 提示的最小动作），这条缺陷会继续躺着。
 `agents.test.ts` 证明了：绝大多数这类文件里，既有的 `describeEachProvider` 是**服务层**用例、
 `createApp` 只在某一个 HTTP describe 里，处置是**只包那一个 describe**，其余原样——
 整文件包才会交叉积。标签文案已改成这个意思。
+
+
+## 5an. 账本 566 → 564：把「双引擎新半 + SQLite 旧半」并存的文件收成一份
+
+前几波留下一种形态：同一个 HTTP 面上，一部分用例已经双引擎、另一部分还挂在 legacy 的
+`buildHarness()`（自建 SQLite 内存库 + `createApp`）上。**两半测的不是同一批判据**——
+旧半里的用例在新半里并不存在，所以它们此前**只在 SQLite 上成立过**。
+
+- `mcps-http`：自带的那份生命周期拷贝（18 份之一）换成共用作用域；四个 legacy describe
+  （POST / PUT / DELETE / rename 各自的另一半）转到同一个双引擎注册器。27 → 42 条。
+- `skills`：两个 `native fixture` describe 转到既有的 `describeProviderSkills`，
+  legacy `buildHarness()` 整个删掉。
+- `agents`（§5am 已述）：正是这一步照出了同名并发 500 的缺陷。
+
+**判据**：看到 `describeEachProvider` 与 `createApp` 在同一个文件里，先问「旧半测的用例
+新半有没有」。有 ⇒ 旧半是重复，删；没有 ⇒ 旧半是**只在 SQLite 上成立过的判据**，必须迁。
+
+同一手法又收了两个：`cached-repos-http`（两组）与 `rfc248-repo-groups-http`（一组）——
+两个文件的 provider 注册器建出的 `h` 与 legacy 的 `Harness` **本来就同形**，
+把旧半的 test 整段折进注册器即可，legacy `buildHarness()` 随之整个删掉。
+账本 566 → 562（四个文件）。
+
+### 暂缓：`plugins-http`
+
+它的 provider 夹具把 `appHome` 钉在模块级的 `pluginsDir` 上（插件文件要预先落进去），
+而 legacy 半的 `seedPluginRow` 是**同步**的、provider 半的 `seedProviderPluginRow` 是异步的，
+两边种子不同形。不是不能做，是要先把种子统一，单独一刀。

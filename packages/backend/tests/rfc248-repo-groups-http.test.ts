@@ -12,11 +12,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
-import { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
@@ -25,7 +24,6 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let cleanupHarness: (() => void) | undefined
 beforeEach(() => {
@@ -38,35 +36,6 @@ afterEach(() => {
 interface Harness {
   db: DbClient
   app: Hono
-}
-
-function buildHarness(): Harness {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-repo-groups-http-'))
-  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
-  const cleanup = () => {
-    rmSync(tmp, { recursive: true, force: true })
-    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-  }
-  cleanupHarness = cleanup
-  const appHome = join(tmp, 'home')
-  try {
-    mkdirSync(appHome, { recursive: true })
-    process.env.AGENT_WORKFLOW_HOME = appHome
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = createApp({
-      token: TOKEN,
-      configPath: join(tmp, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 8,
-      db,
-    })
-    return { db, app }
-  } catch (error) {
-    cleanup()
-    cleanupHarness = undefined
-    throw error
-  }
 }
 
 async function req(app: Hono, path: string, init?: RequestInit): Promise<Response> {
@@ -163,6 +132,52 @@ function registerProviderRepoGroupHttpCases(provider: ProviderHarness): void {
       await application?.dispose()
     } finally {
       cleanup?.()
+    }
+  })
+
+  // RFC-359 AC-6：以下这组此前只跑 SQLite（自建 `buildHarness()`），判据在新半里并不存在
+  // ——也就是说它们从来没在 PostgreSQL 上成立过。折进同一个注册器（`repoNode` / `nodeTree`
+  // 上面已经解构过，这里不再重复声明）。
+  test('POST 建组 → 201，且响应里只有脱敏 URL', async () => {
+    const res = await req(h.app, '/api/repo-groups', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '全栈',
+        nodes: nodeTree(repoNode(appRepo, ''), repoNode(sdkRepo, 'vendor/sdk', { readonly: true })),
+      }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { id: string; flatRepoCount: number; nodes: unknown[] }
+    expect(body.flatRepoCount).toBe(2)
+    expect(body.nodes).toHaveLength(3)
+    expect(JSON.stringify(body)).not.toContain('secret')
+    expect(JSON.stringify(body)).toContain('https://git.example/app.git')
+  })
+
+  test('非法挂载路径 → 422，错误码来自布局层', async () => {
+    const res = await req(h.app, '/api/repo-groups', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'g',
+        nodes: [{ path: '', attachment: null }, repoNode(appRepo, '../escape')],
+      }),
+    })
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { code?: string; error?: { code?: string } }
+    expect(body.code ?? body.error?.code).toBe('mount-path-traversal')
+  })
+
+  test('无认证 → 401（六条路由都在认证门后面）', async () => {
+    for (const [method, path] of [
+      ['GET', '/api/repo-groups'],
+      ['POST', '/api/repo-groups'],
+      ['GET', '/api/repo-groups/x'],
+      ['GET', '/api/repo-groups/x/layout'],
+      ['PUT', '/api/repo-groups/x'],
+      ['DELETE', '/api/repo-groups/x'],
+    ] as const) {
+      const res = await h.app.request(path, { method })
+      expect(res.status).toBe(401)
     }
   })
 
@@ -328,60 +343,4 @@ function registerProviderRepoGroupHttpCases(provider: ProviderHarness): void {
 
 describeEachProvider('RFC-248 /api/repo-groups HTTP', (provider) => {
   describe('complete application lifetime', () => registerProviderRepoGroupHttpCases(provider))
-})
-
-describe('RFC-248 /api/repo-groups HTTP', () => {
-  let h: Harness
-  let appRepo: string
-  let sdkRepo: string
-  beforeEach(async () => {
-    h = buildHarness()
-    appRepo = await seedRepo(h.db, 'app')
-    sdkRepo = await seedRepo(h.db, 'sdk')
-  })
-
-  const { repoNode, nodeTree } = createRepoGroupNodeHelpers()
-
-  test('POST 建组 → 201，且响应里只有脱敏 URL', async () => {
-    const res = await req(h.app, '/api/repo-groups', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: '全栈',
-        nodes: nodeTree(repoNode(appRepo, ''), repoNode(sdkRepo, 'vendor/sdk', { readonly: true })),
-      }),
-    })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { id: string; flatRepoCount: number; nodes: unknown[] }
-    expect(body.flatRepoCount).toBe(2)
-    expect(body.nodes).toHaveLength(3)
-    expect(JSON.stringify(body)).not.toContain('secret')
-    expect(JSON.stringify(body)).toContain('https://git.example/app.git')
-  })
-
-  test('非法挂载路径 → 422，错误码来自布局层', async () => {
-    const res = await req(h.app, '/api/repo-groups', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'g',
-        nodes: [{ path: '', attachment: null }, repoNode(appRepo, '../escape')],
-      }),
-    })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code?: string; error?: { code?: string } }
-    expect(body.code ?? body.error?.code).toBe('mount-path-traversal')
-  })
-
-  test('无认证 → 401（六条路由都在认证门后面）', async () => {
-    for (const [method, path] of [
-      ['GET', '/api/repo-groups'],
-      ['POST', '/api/repo-groups'],
-      ['GET', '/api/repo-groups/x'],
-      ['GET', '/api/repo-groups/x/layout'],
-      ['PUT', '/api/repo-groups/x'],
-      ['DELETE', '/api/repo-groups/x'],
-    ] as const) {
-      const res = await h.app.request(path, { method })
-      expect(res.status).toBe(401)
-    }
-  })
 })

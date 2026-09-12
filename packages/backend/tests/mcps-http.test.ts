@@ -2,36 +2,16 @@
 // Locks status codes (201 / 200 / 204 / 404 / 409 / 422), shape of error
 // bodies (referencedBy on still-referenced delete) and auth (401 without token).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { createApp } from '../src/server'
-import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createProviderHttpApplication,
-  type ProviderHttpApplication,
-} from './helpers/providerHttpApplication'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import {} from './helpers/providerHttpApplication'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'rfc028-token-fixture'
-
-function buildHarness(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
@@ -64,42 +44,36 @@ async function createMcpHttp(
   return (await res.json()) as { id: string; name: string; operationConfigHash: string }
 }
 
-function describeMcpProvider(name: string, register: (getApp: () => Hono) => void) {
-  describeEachProvider(name, (harness) => {
-    // Application-owned work settles before the outer harness resets its database.
-    describe('complete application lifetime', () => {
-      let application: ProviderHttpApplication | undefined
-      let appHome: string | undefined
-      let previousAppHome: string | undefined
+/**
+ * RFC-359 —— 本文件此前自带一份「建 app home / 存还 `AGENT_WORKFLOW_HOME` / 先 dispose 再删目录」
+ * 的生命周期拷贝（那是被共用作用域取代的 18 份之一）。改成直接吃共用作用域，差别只剩临时目录前缀。
+ */
+function describeMcpProvider(
+  name: string,
+  register: (getApp: () => Hono, getDb: () => ProviderNeutralDatabase) => void,
+) {
+  describeEachProviderHttpApplication(
+    name,
+    {
+      token: TOKEN,
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      tempPrefix: 'aw-mcps-http-',
+    },
+    (scope) => {
+      let app: Hono | undefined
       beforeEach(async () => {
-        application = undefined
-        appHome = undefined
-        previousAppHome = process.env.AGENT_WORKFLOW_HOME
-        appHome = mkdtempSync(join(tmpdir(), 'aw-mcps-http-'))
-        process.env.AGENT_WORKFLOW_HOME = appHome
-        application = await createProviderHttpApplication(harness, {
-          token: TOKEN,
-          configPath: '/tmp/aw-test-config-never-used.json',
-          opencodeVersion: '1.14.25',
-          dbVersion: 1,
-          appHome,
-        })
+        app = (await scope.open()).app
       })
-      afterEach(async () => {
-        try {
-          await application?.dispose()
-        } finally {
-          if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-          else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-          if (appHome !== undefined) rmSync(appHome, { recursive: true, force: true })
-        }
-      })
-      register(() => {
-        if (application === undefined) throw new Error('MCP HTTP application is not ready')
-        return application.app
-      })
-    })
-  })
+      register(
+        () => {
+          if (app === undefined) throw new Error('MCP HTTP application is not ready')
+          return app
+        },
+        () => scope.harness.db,
+      )
+    },
+  )
 }
 
 describeMcpProvider('POST /api/mcps', (getApp) => {
@@ -135,10 +109,11 @@ describeMcpProvider('POST /api/mcps', (getApp) => {
   })
 })
 
-describe('POST /api/mcps', () => {
+// RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
+describeMcpProvider('POST /api/mcps (legacy half)', (getApp) => {
   let app: Hono
   beforeEach(() => {
-    ;({ app } = buildHarness())
+    app = getApp()
   })
 
   test('invalid payload → 422 + issues', async () => {
@@ -227,11 +202,13 @@ describeMcpProvider('GET /api/mcps and /api/mcps/:id', (getApp) => {
   })
 })
 
-describe('PUT /api/mcps/:id', () => {
+// RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
+describeMcpProvider('PUT /api/mcps/:id (legacy half)', (getApp, getDb) => {
   let app: Hono
-  let db: DbClient
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    ;({ app, db } = buildHarness())
+    app = getApp()
+    db = getDb()
   })
 
   test('happy path patch description', async () => {
@@ -294,11 +271,13 @@ describe('PUT /api/mcps/:id', () => {
   })
 })
 
-describe('DELETE /api/mcps/:id', () => {
+// RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
+describeMcpProvider('DELETE /api/mcps/:id (legacy half)', (getApp, getDb) => {
   let app: Hono
-  let db: DbClient
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    ;({ app, db } = buildHarness())
+    app = getApp()
+    db = getDb()
   })
 
   test('happy path → 204', async () => {
@@ -358,10 +337,11 @@ describe('DELETE /api/mcps/:id', () => {
   })
 })
 
-describe('POST /api/mcps/:id/rename', () => {
+// RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
+describeMcpProvider('POST /api/mcps/:id/rename (legacy half)', (getApp) => {
   let app: Hono
   beforeEach(() => {
-    ;({ app } = buildHarness())
+    app = getApp()
   })
 
   test('happy path → 200 + new name', async () => {

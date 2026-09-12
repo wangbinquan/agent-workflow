@@ -8,9 +8,9 @@ import { execFileSync } from 'node:child_process'
 import type { Hono } from 'hono'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { type DbClient } from '../src/db/client'
 import { cachedRepos, tasks, workflows, taskRepos } from '../src/db/schema'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -18,16 +18,11 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
-import { createApp } from '../src/server'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { nonInteractiveGitEnv } from '../src/util/git'
-import {
-  composeSqliteRepositoryWorkspaceStore,
-  type RepositoryWorkspaceStore,
-} from '../src/modules/source-control/composition'
+import { type RepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
 
 let cleanupHarness: (() => void) | undefined
@@ -68,38 +63,6 @@ function buildBareRemote(tmp: string): string {
   const bare = join(tmp, 'remote-' + ulid() + '.git')
   git('clone', '--bare', working, bare)
   return remoteUrlFor(bare)
-}
-
-function buildHarness(): Harness {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-cached-repos-http-'))
-  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
-  const cleanup = () => {
-    rmSync(tmp, { recursive: true, force: true })
-    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-  }
-  cleanupHarness = cleanup
-  const appHome = join(tmp, 'home')
-  try {
-    mkdirSync(appHome, { recursive: true })
-    process.env.AGENT_WORKFLOW_HOME = appHome
-    const db = createInMemoryDb(MIGRATIONS)
-    const store = composeSqliteRepositoryWorkspaceStore(db)
-    const app = createApp({
-      token: TOKEN,
-      configPath: join(tmp, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 8,
-      db,
-      repositoryWorkspaceStore: store,
-    })
-    const remoteUrl = buildBareRemote(tmp)
-    return { db, store, app, appHome, remoteUrl }
-  } catch (error) {
-    cleanup()
-    cleanupHarness = undefined
-    throw error
-  }
 }
 
 async function req(app: Hono, path: string, init?: RequestInit): Promise<Response> {
@@ -150,6 +113,63 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
     } finally {
       cleanup?.()
     }
+  })
+
+  // RFC-359 AC-6：以下两组此前只跑 SQLite（自建 `buildHarness()`），判据在新半里并不存在——
+  // 也就是说它们从来没在 PostgreSQL 上成立过。折进同一个注册器。
+  test('GET /api/cached-repos lists cached entries with redacted URL', async () => {
+    await resolveCachedRepo(
+      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
+      { url: h.remoteUrl },
+    )
+    const res = await req(h.app, '/api/cached-repos')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      items: Array<{ urlRedacted: string; defaultBranch: string | null }>
+    }
+    expect(body.items.length).toBe(1)
+    expect(typeof body.items[0]?.urlRedacted).toBe('string')
+    expect(body.items[0]?.defaultBranch).toBe('main')
+  })
+  test('rejects both repoPath and repoUrl at once', async () => {
+    const res = await req(h.app, '/api/tasks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workflowId: 'wf-1',
+        repoPath: '/tmp/repo',
+        baseBranch: 'main',
+        repoUrl: 'git@github.com:foo/bar.git',
+        inputs: {},
+      }),
+    })
+    expect(res.status).toBe(422)
+  })
+
+  test('rejects neither repoPath nor repoUrl', async () => {
+    const res = await req(h.app, '/api/tasks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workflowId: 'wf-1', inputs: {} }),
+    })
+    expect(res.status).toBe(422)
+  })
+
+  test('rejects malformed repoUrl with redacted message', async () => {
+    const res = await req(h.app, '/api/tasks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        workflowId: 'wf-bogus',
+        repoUrl: '/not/a/git/url',
+        inputs: {},
+      }),
+    })
+    // workflow lookup fails first (workflow-not-found) but the URL still goes
+    // through StartTaskSchema; we just care that the response status is non-2xx
+    // and never echoes a secret. The redact-leak test exercises the 4xx body
+    // directly via the schema.
+    expect(res.status).toBeGreaterThanOrEqual(400)
   })
 
   test('GET /api/cached-repos returns [] when empty', async () => {
@@ -262,74 +282,4 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
 
 describeEachProvider('cached-repos HTTP routes (RFC-024 T5)', (provider) => {
   describe('complete application lifetime', () => registerProviderCachedRepoHttpCases(provider))
-})
-
-describe('cached-repos HTTP routes (RFC-024 T5)', () => {
-  let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
-  })
-
-  test('GET /api/cached-repos lists cached entries with redacted URL', async () => {
-    await resolveCachedRepo(
-      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
-      { url: h.remoteUrl },
-    )
-    const res = await req(h.app, '/api/cached-repos')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      items: Array<{ urlRedacted: string; defaultBranch: string | null }>
-    }
-    expect(body.items.length).toBe(1)
-    expect(typeof body.items[0]?.urlRedacted).toBe('string')
-    expect(body.items[0]?.defaultBranch).toBe('main')
-  })
-})
-
-describe('POST /api/tasks URL validation (RFC-024 T5)', () => {
-  let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
-  })
-
-  test('rejects both repoPath and repoUrl at once', async () => {
-    const res = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        workflowId: 'wf-1',
-        repoPath: '/tmp/repo',
-        baseBranch: 'main',
-        repoUrl: 'git@github.com:foo/bar.git',
-        inputs: {},
-      }),
-    })
-    expect(res.status).toBe(422)
-  })
-
-  test('rejects neither repoPath nor repoUrl', async () => {
-    const res = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ workflowId: 'wf-1', inputs: {} }),
-    })
-    expect(res.status).toBe(422)
-  })
-
-  test('rejects malformed repoUrl with redacted message', async () => {
-    const res = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        workflowId: 'wf-bogus',
-        repoUrl: '/not/a/git/url',
-        inputs: {},
-      }),
-    })
-    // workflow lookup fails first (workflow-not-found) but the URL still goes
-    // through StartTaskSchema; we just care that the response status is non-2xx
-    // and never echoes a secret. The redact-leak test exercises the 4xx body
-    // directly via the schema.
-    expect(res.status).toBeGreaterThanOrEqual(400)
-  })
 })
