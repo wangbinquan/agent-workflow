@@ -117,13 +117,20 @@ async function buildHarness(): Promise<Harness> {
 /**
  * Connect, wait for the hello frame, then hand control to `script` (which
  * fires broadcasts and may await conditions on the live `received` array).
- * Frames other than hello accumulate into `received`; a short settle after
- * the script lets stragglers land before the socket closes.
+ * Frames other than hello accumulate into `received`.
+ *
+ * RFC-359 AC-20 —— 这里原本在 script 之后固定睡 150ms「让漏网的帧落地」。
+ * 睡眠不是同步手段：`gatedSubscribe` 起 frameGate 是 fire-and-forget
+ * （`src/ws/registry.ts` 的 `.then(...)`），慢机器上 150ms 一样可能不够。
+ * 现在由 **script 自己建立因果屏障**——播一帧该连接**有权**看见的控制帧、
+ * 等它到达；同一条 socket、同一套 gate 都把它推过来了，说明排在它前面的
+ * 那些（被丢掉的）帧早已判完。本文件 memories 那三条用例一直就是这么写的
+ * （`fireSupersededThenControl` + 等 `memory.archived`），这里只是把
+ * workflows 那条也对齐过来，并删掉那条多余的兜底睡眠。
  */
 async function collectFrames(
   url: string,
   script: (received: Array<Record<string, unknown>>) => Promise<void>,
-  settleMs = 150,
 ): Promise<Array<Record<string, unknown>>> {
   const received: Array<Record<string, unknown>> = []
   const sock = new WebSocket(url)
@@ -139,7 +146,6 @@ async function collectFrames(
     })
   })
   await script(received)
-  await new Promise((r) => setTimeout(r, settleMs))
   sock.close()
   return received
 }
@@ -156,6 +162,7 @@ async function waitUntil(pred: () => boolean, capMs = 1000): Promise<void> {
 describe('RFC-152 — workflows frameGate keeps the deleted-uses-OLD-cache ordering', () => {
   let h: Harness
   let privateWfId = ''
+  let publicWfId = ''
 
   beforeEach(async () => {
     resetBroadcastersForTests()
@@ -168,8 +175,29 @@ describe('RFC-152 — workflows frameGate keeps the deleted-uses-OLD-cache order
       ownerUserId: h.aliceId,
       visibility: 'private',
     })
+    // RFC-359 AC-20 因果屏障用：任何连接都有权看见的公共工作流。
+    publicWfId = ulid()
+    await h.db.insert(workflows).values({
+      id: publicWfId,
+      name: 'public-control-flow',
+      definition: '{}',
+      ownerUserId: h.aliceId,
+      visibility: 'public',
+    })
   })
   afterEach(async () => h.cleanup())
+
+  /** 控制帧：走同一条 socket、同一套 gate，但必定被放行。 */
+  function fireControl(version: number) {
+    workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+      type: 'workflow.updated',
+      workflowId: publicWfId,
+      clientMutationId: ulid(),
+      version,
+      snapshotHash: '0'.repeat(64),
+      updatedAt: 456,
+    })
+  }
 
   function fireUpdated() {
     workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
@@ -207,14 +235,24 @@ describe('RFC-152 — workflows frameGate keeps the deleted-uses-OLD-cache order
   })
 
   test('never-visible stranger connection receives neither update nor deleted', async () => {
-    const frames = await collectFrames(`${h.url}/ws/workflows?token=${h.carolToken}`, async () => {
-      fireUpdated()
-      // Give the (dropped) update time to resolve its gate so the cache
-      // holds false before the delete fires.
-      await new Promise((r) => setTimeout(r, 100))
-      fireDeleted()
-    })
-    expect(frames).toEqual([])
+    const frames = await collectFrames(
+      `${h.url}/ws/workflows?token=${h.carolToken}`,
+      async (received) => {
+        // 1. 私有 update —— 必须被丢掉（并把该连接的可见性缓存钉成 false）。
+        fireUpdated()
+        // 2. 屏障：等一帧有权看见的控制帧到达，才说明上面那帧的 gate 已经判完、
+        //    缓存已经落成 false。这比「睡 100ms」强，而且随机器变慢一起变长。
+        fireControl(11)
+        await waitUntil(() => received.some((f) => f.version === 11))
+        // 3. 私有 delete —— 这才是本 describe 要钉的「delete 吃旧缓存」那一步。
+        fireDeleted()
+        fireControl(12)
+        await waitUntil(() => received.some((f) => f.version === 12))
+      },
+    )
+    // 两帧控制帧都到了（屏障成立），私有工作流的帧一条都没到。
+    expect(frames.map((f) => f.version)).toEqual([11, 12])
+    expect(frames.some((f) => f.workflowId === privateWfId)).toBe(false)
   })
 })
 

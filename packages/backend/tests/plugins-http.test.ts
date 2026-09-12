@@ -20,6 +20,7 @@ import { composePluginServiceBindingForTest, createPlugin } from './helpers/plug
 import { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { stillParkedAfterBarrier } from './helpers/stillParked'
 import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
@@ -624,7 +625,8 @@ describeProviderPluginCases(PROVIDER_PLUGIN_INSTALL_GROUP, (buildHarness) => {
       operationConfigHash: string
     }
     process.env.FAKE_NPM_VERSION = '1.5.0'
-    // Allow some clock advance so installedAt strictly increases.
+    // 这里等的不是某次写入落库，没有可等的谓词（RFC-359 AC-20 §三类分法的第③类）。
+    // sleep-ok: 刻意推进时钟，让 installedAt 严格递增。
     await new Promise((r) => setTimeout(r, 10))
     const r = await req(app, `/api/plugins/${created.id}/upgrade`, {
       method: 'POST',
@@ -677,8 +679,13 @@ describeProviderPluginCases(PROVIDER_PLUGIN_INSTALL_GROUP, (buildHarness) => {
       }).finally(() => {
         updateSettled = true
       })
-      await new Promise((resolve) => setTimeout(resolve, 30))
-      settledBeforeRelease = updateSettled
+      // RFC-359 AC-20：负向断言（此刻这条 PUT 还卡在升级锁后面）改走因果屏障，
+      // 不再睡 30ms——屏障是一趟不走那把锁的 GET 列表。
+      settledBeforeRelease = !(await stillParkedAfterBarrier({
+        settled: () => updateSettled,
+        drive: () => req(app, '/api/plugins'),
+        what: 'plugin PUT behind a running upgrade',
+      }))
     } finally {
       await writeFile(pauseRelease, '')
     }
@@ -758,8 +765,12 @@ describe('/api/plugins install path (native fixture)', () => {
       }).finally(() => {
         aclSettled = true
       })
-      await new Promise((resolve) => setTimeout(resolve, 30))
-      settledBeforeRelease = aclSettled
+      // RFC-359 AC-20：同上，负向断言走屏障而不是固定睡眠。
+      settledBeforeRelease = !(await stillParkedAfterBarrier({
+        settled: () => aclSettled,
+        drive: () => req(app, '/api/plugins'),
+        what: 'plugin ACL PUT behind a running upgrade',
+      }))
     } finally {
       await writeFile(pauseRelease, '')
     }

@@ -7001,3 +7001,63 @@ CI 的 ubuntu shard 7/8 红两条（各约 504ms，也就是整条用例跑完�
 
 **规律**：一个大文件里往往只有一两个 describe 真的打 HTTP。**先只迁那几个**——
 AC-6 要的就是 HTTP 面的双引擎，服务层的转换是另一条线，混在一起做会把一刀拖成十倍。
+
+## 5bf. 那 7 条直线式睡眠全清掉了——三类分法实际落地后，多出来一个新原语
+
+§5bd 只把 7 条挑出来、分了类。这一轮逐条改完，实际处置与当初的猜测有出入：
+
+| 文件:行 | §5bd 的预判 | 实际处置 |
+| --- | --- | --- |
+| `rfc099-ws-acl-filter:288` | 负向断言 ⇒ 因果屏障 | ✅ 屏障。播一帧陌生人**有权**看见的公共工作流，等它到达 |
+| `ws-repo-imports:171` | 负向断言 ⇒ 因果屏障 | ✅ 屏障，而且**是形式化可靠的那种**（见下） |
+| `rfc257-webhook-management:643` | 等写入 ⇒ `eventually` | ✅ `eventuallyAtLeast` |
+| `rfc259-github-ingress:134,191,305` | 等写入 ⇒ `eventually` | ✅ `eventually`；其中 `:191` 是**正负各一半** |
+| `runtime-routes-registry:694` | （未分类） | 🆕 第四类：「证明在飞的请求还卡着」⇒ 新原语 |
+| `plugins-http:680,761` | （未分类） | 🆕 同上 |
+| `plugins-http:628` | 推进时钟 ⇒ `sleep-ok` | ✅ `// sleep-ok:` |
+
+### 屏障有两种，强度不一样——写的时候要说清是哪种
+
+`ws-repo-imports` 那条**是真正的因果关系**：repo-import 频道**没有 frameGate**
+（`src/ws/registry.ts` 只给它 `upgradeGate`），于是 `gatedSubscribe` 走的是**同步**
+`sendJson` 分支——`broadcast()` 一返回，该送的帧就已经在 socket 里了。所以「在跨批次那帧
+之后往本批次再播一帧、等它到」严格蕴含「跨批次那帧若被错误路由，一定已经先到了」。
+那条注释原本写着 "cannot be predicate-driven — keep a short fixed settle"，**写错了**。
+
+`rfc099` / `rfc152` 那两条**只是相对屏障**：workflows 频道**有** frameGate，而
+`gatedSubscribe` 是 fire-and-forget 地起它（`.then(...)`），**跨帧送达无序**。所以
+「后播的帧到了」不能证明「先播的帧已判完」。它仍然远好于固定毫秒——机器越慢，屏障请求
+本身越慢，观察窗口跟着放大，而固定 30ms 在慢机器上是被吃掉的。**但必须在注释里说明它是
+相对屏障**，别让下一个人以为拿到了证明。
+
+### 第四类：「证明一个在飞的请求还卡着」
+
+`plugins-http:680,761` 与 `runtime-routes-registry:694` 是同一个形状：并发互斥用例要断言
+「此刻另一个请求还没走完」。原写法一律「睡 10~30ms 再看 settled 标志」。三处同形 ⇒ 按本
+RFC 自己的判据（同一 fixture 抄三遍就抽）抽成 `tests/helpers/stillParked.ts`：
+**把一趟不走那把锁的请求完整驱过同一个 app**，再读标志；屏障请求自己非 2xx 就直接抛
+——屏障没成立的话，后面那条负向断言是空的。
+
+这三处都还有一个关键性质值得记：**真正的产品契约并不靠这条时序断言**
+（`probeFence` 计数、409 `resource-operation-stale`、缓存被作废，全是确定性断言）。
+时序那半边只负责「当时确实并发」。分清哪半边是契约、哪半边是布景，才知道容许多大的不确定性。
+
+### 改完发现：这个仓里早就有人写对了
+
+`rfc152-ws-frame-gates` 里 memories 的三条用例（`fireSupersededThenControl` + 等
+`memory.archived`）**本来就是**控制帧屏障的写法——播一帧该连接有权看见的，等它到，再断言
+被门掉的那帧不在。同文件的 workflows 那条却在睡 100ms，`collectFrames` 还带一个
+150ms 的兜底 settle。处置是把 workflows 那条**对齐到同文件既有的写法**，并删掉那条兜底。
+
+**规律**：动手改一个形状之前，先在**同一个文件 / 同一个目录**里搜一遍有没有人已经写对了。
+这次的正解不用发明，它就在同一个文件里隔了 80 行。
+
+### 每条屏障都做了变异验证
+
+改完必须回答「这条断言还抓得住回归吗」——屏障换错了会让负向断言**永远绿**。逐条变异
+（改 `src/ws/registry.ts` 让 frameGate 漏帧 / 让 `channelKeyOf` 不分批次）确认全部转红，
+再把源码 revert 干净：
+
+- workflows frameGate 对 `workflow.deleted` 恒返 true ⇒ `rfc099` 转红 ✅
+- repo-import `channelKeyOf` 收成常量（跨批次串台）⇒ `ws-repo-imports` 转红 ✅
+- workflows frameGate 末尾恒返 true（私有 update 漏出）⇒ `rfc152` 两条转红 ✅

@@ -26,6 +26,7 @@ import { agents } from '../src/db/schema'
 import { ulid } from 'ulid'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { stillParkedAfterBarrier } from './helpers/stillParked'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -691,8 +692,16 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       configSettled = true
       return response
     })
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(configSettled).toBe(false)
+    // RFC-359 AC-20：负向断言（config PUT 进不了临界区）改走因果屏障——把一趟
+    // 不走那把锁的 GET /api/runtimes 完整驱过同一个 app，比睡 10ms 强。真正的
+    // 契约仍由下面的 probeFence / lastProbeJson 确定性钉死。
+    expect(
+      await stillParkedAfterBarrier({
+        settled: () => configSettled,
+        drive: () => reqAs(app, DAEMON_TOKEN, '/api/runtimes'),
+        what: 'config PUT at the probe-cache CAS boundary',
+      }),
+    ).toBe(true)
 
     releaseCache.resolve()
     expect((await probePending).status).toBe(200)

@@ -15,6 +15,7 @@ import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import { createSession } from './helpers/auth/sessionStore'
+import { eventually } from './helpers/eventually'
 import { webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
@@ -131,7 +132,12 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
     expect(all[0]?.eventType).toBe('push')
     expect(all[0]?.repoPath).toBe('acme/api')
     expect(all[0]?.streamHint).toBe('acme/api|branch:feature/x')
-    await new Promise((r) => setTimeout(r, 10))
+    // RFC-359 AC-20：派发在应答之后发生，读到为止。
+    await eventually(
+      async () => calls.length,
+      (n) => n >= 1,
+      { what: 'ingress dispatch' },
+    )
     expect(calls.length).toBe(1)
   })
 
@@ -188,7 +194,14 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
     expect(b2.status).toBe('duplicate')
     expect(b2.deliveryId).toBe(id1)
     expect(b2.attemptCount).toBe(2)
-    await new Promise((r) => setTimeout(r, 10))
+    // RFC-359 AC-20：正向半边（第一次投递真的派发了）等到为止；负向半边
+    // （重复投递**没有**再派发一次）的因果屏障就是那个 `duplicate` 应答本身
+    // ——去重判定发生在应答之前，此后不会再冒出一次派发。
+    await eventually(
+      async () => calls.length,
+      (n) => n >= 1,
+      { what: 'first dispatch' },
+    )
     expect(calls.length).toBe(1)
     expect((await rows(db)).length).toBe(1)
   })
@@ -302,7 +315,12 @@ describe('RFC-259 · GitHub 投递 replay（AC-14——实现期自查 P0 回归
     expect(replayRow?.replayedFromDeliveryId).toBe(deliveryId)
     expect(replayRow?.eventUuid).toBeNull() // 绕过去重
     expect(replayRow?.eventType).toBe('pipeline_failed') // 归一化成功 = 事件头重建生效
-    await new Promise((r) => setTimeout(r, 10))
+    // RFC-359 AC-20：重放派发同样在应答之后，读到为止。
+    await eventually(
+      async () => calls.includes(rb.deliveryId),
+      (seen) => seen,
+      { what: 'replay dispatch' },
+    )
     expect(calls).toContain(rb.deliveryId)
   })
 })

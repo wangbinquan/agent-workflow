@@ -261,6 +261,15 @@ describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
       addedBy: h.aliceId,
       addedAt: Date.now(),
     })
+    // RFC-359 AC-20 因果屏障用：一个陌生人**有权**看见的公共工作流。
+    const publicWfId = ulid()
+    await h.db.insert(workflows).values({
+      id: publicWfId,
+      name: 'public-barrier-flow',
+      definition: '{}',
+      ownerUserId: h.aliceId,
+      visibility: 'public',
+    })
     const [owner, grantee, stranger] = await Promise.all([
       connectLiveFrames(`${h.url}/ws/workflows?token=${h.aliceToken}`),
       connectLiveFrames(`${h.url}/ws/workflows?token=${h.carolToken}`),
@@ -284,8 +293,26 @@ describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
 
       expect(owner.frames).toContainEqual(exactFrame)
       expect(grantee.frames).toContainEqual(exactFrame)
-      // Let every async frame-gate promise settle before asserting non-delivery.
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 50))
+
+      // RFC-359 AC-20 —— 断言「某帧没送到」不能靠睡一觉：`gatedSubscribe` 是
+      // fire-and-forget 地起 frameGate（`src/ws/registry.ts` 的 `.then(...)`），
+      // 跨帧送达**无序**，所以别人那两条到了并不代表陌生人这条已判完。
+      // 改成走**陌生人自己这条 socket** 的因果屏障：在私有删除**之后**再播一帧
+      // 他有权看见的公共工作流；他收到它，就说明他这条连接的 gate 管线已经
+      // 把队列里前一帧（私有删除）推过去了。屏障帧和被断言的帧同一条 socket、
+      // 同一套 gate，比固定 50ms 强。
+      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+        type: 'workflow.updated',
+        workflowId: publicWfId,
+        clientMutationId: ulid(),
+        version: 2,
+        snapshotHash: '0'.repeat(64),
+        updatedAt: 456,
+      })
+      await waitUntil(() => stranger.frames.some((frame) => frame.workflowId === publicWfId))
+      // 屏障本身必须真的到了，否则下面那条负向断言是空的。
+      expect(stranger.frames.some((frame) => frame.workflowId === publicWfId)).toBe(true)
+
       expect(stranger.frames.some((frame) => frame.type === 'workflow.deleted')).toBe(false)
       const ownerFrame = owner.frames.find((frame) => frame.type === 'workflow.deleted')
       expect(Object.keys(ownerFrame ?? {}).sort()).toEqual(Object.keys(exactFrame).sort())

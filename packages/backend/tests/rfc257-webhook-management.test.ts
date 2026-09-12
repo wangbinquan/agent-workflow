@@ -12,6 +12,7 @@ import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import { createSession } from './helpers/auth/sessionStore'
+import { eventuallyAtLeast } from './helpers/eventually'
 import {
   webhookDeliveries,
   webhookTriggerFires,
@@ -640,7 +641,8 @@ describe('RFC-257 T9 · 投递观测与重放', () => {
     )[0]
     expect(newRow?.eventUuid).toBeNull() // 规则 3：绕过去重
     expect(newRow?.replayedFromDeliveryId).toBe(good) // 规则 2：指回原行
-    await new Promise((r) => setTimeout(r, 10))
+    // RFC-359 AC-20：派发是应答之后的 fire-and-forget，读到为止、别睡一觉。
+    await eventuallyAtLeast(async () => h.dispatched, 1, 'replay dispatched')
     expect(h.dispatched).toEqual([body.deliveryId])
   })
 })

@@ -164,16 +164,25 @@ describe('/ws/repo-imports/{batchId} (RFC-033)', () => {
       batchId: otherBatch,
       completedAt: '2026-05-17T00:00:01.000Z',
     })
-    // Negative assertion: we must give an *erroneous* cross-batch delivery a
-    // bounded window to (wrongly) arrive before concluding it didn't. Unlike the
-    // positive waits above, this one cannot be predicate-driven — keep a short
-    // fixed settle.
-    await new Promise((r) => setTimeout(r, 50))
+    // RFC-359 AC-20 —— 负向断言改走因果屏障（此前是「睡 50ms 再断言」，注释还
+    // 写着「cannot be predicate-driven」）。本频道**没有 frameGate**
+    // （`src/ws/registry.ts` 的 repo-import 只有 upgradeGate），所以
+    // `gatedSubscribe` 里走的是同步 `sendJson` 分支：`broadcast()` 一返回，
+    // 该送的帧就已经进了 socket。于是在跨批次那帧**之后**、往**本批次**再播一帧，
+    // 等它到达即可——它和被断言的那帧同一条 socket、同一条同步投递路径，
+    // 跨批次帧若真被错误路由，一定排在它前面已经到了。这是因果关系，不是概率。
+    repoImportsBroadcaster.broadcast(REPO_IMPORT_CHANNEL(myBatch), {
+      type: 'batch.completed',
+      batchId: myBatch,
+      completedAt: '2026-05-17T00:00:02.000Z',
+    })
+    await waitUntil(() => hasType(received, 'batch.completed'))
     sock.close()
 
-    // Only the hello frame should be present.
+    // 屏障帧到了（本批次的），跨批次那帧一条都没到。
     const types = received.map((m) => m.type)
-    expect(types).toEqual(['hello'])
+    expect(types).toEqual(['hello', 'batch.completed'])
+    expect(received.some((m) => (m as { batchId?: string }).batchId === otherBatch)).toBe(false)
   })
 
   test('missing token returns 401 (no upgrade)', async () => {
