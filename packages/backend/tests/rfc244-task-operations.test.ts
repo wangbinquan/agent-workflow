@@ -8,8 +8,8 @@ import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { parseTaskOperationsQuery } from '../src/modules/task-execution/infrastructure/taskListPage'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { createUser } from '../src/services/users'
@@ -405,51 +405,58 @@ describe('RFC-244 task operations query', () => {
     })
   })
 
-  test('registered task source returns its normalized page through the unified catalog', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const owner = await createUser(db, {
-      username: 'route-owner',
-      displayName: 'Route Owner',
-      role: 'user',
-      password: 'longEnoughPassword',
-    })
-    await db.insert(workflows).values({
-      id: 'wf-route-rfc244',
-      name: 'Route workflow',
-      definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
-    })
-    await db.insert(tasks).values({
-      ...task('route-task', owner.id),
-      workflowId: 'wf-route-rfc244',
-    })
-    const app = createApp({
+  // RFC-359 AC-6：这条此前只跑 SQLite（自建 `createInMemoryDb` + `createApp`），
+  // 判据在上面三个 `describeEachProvider` 块里并不存在。
+  describeEachProviderHttpApplication(
+    'RFC-244 registered task source through the unified catalog',
+    {
       token: 'a'.repeat(64),
-      configPath: '/tmp/aw-rfc244-route-config-never-used.json',
       opencodeVersion: '1.14.25',
       dbVersion: 1,
-      db,
-    })
-    const token = (await createSession({ db, userId: owner.id })).token
-    const headers = { Authorization: `Bearer ${token}` }
+      tempPrefix: 'aw-rfc244-catalog-',
+    },
+    (scope) => {
+      test('registered task source returns its normalized page through the unified catalog', async () => {
+        const db = scope.harness.db
+        const app = (await scope.open()).app
+        const owner = await createUser(db, {
+          username: 'route-owner',
+          displayName: 'Route Owner',
+          role: 'user',
+          password: 'longEnoughPassword',
+        })
+        await db.insert(workflows).values({
+          id: 'wf-route-rfc244',
+          name: 'Route workflow',
+          definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
+        })
+        await db.insert(tasks).values({
+          ...task('route-task', owner.id),
+          workflowId: 'wf-route-rfc244',
+        })
+        const token = (await createSession({ db, userId: owner.id })).token
+        const headers = { Authorization: `Bearer ${token}` }
 
-    const pageResponse = await app.request('/api/task-catalog?limit=1', { headers })
-    expect(pageResponse.status).toBe(200)
-    const page = TaskCatalogPageSchema.parse(await pageResponse.json())
-    expect(page.sourceIds).toContain('workflow')
-    expect(page.items.map((item) => item.id)).toEqual(['route-task'])
+        const pageResponse = await app.request('/api/task-catalog?limit=1', { headers })
+        expect(pageResponse.status).toBe(200)
+        const page = TaskCatalogPageSchema.parse(await pageResponse.json())
+        expect(page.sourceIds).toContain('workflow')
+        expect(page.items.map((item) => item.id)).toEqual(['route-task'])
 
-    const badResponse = await app.request('/api/task-catalog?limit=101', { headers })
-    expect(badResponse.status).toBe(422)
-    expect((await badResponse.json()) as { code: string }).toMatchObject({
-      code: 'task-page-filter-invalid',
-    })
+        const badResponse = await app.request('/api/task-catalog?limit=101', { headers })
+        expect(badResponse.status).toBe(422)
+        expect((await badResponse.json()) as { code: string }).toMatchObject({
+          code: 'task-page-filter-invalid',
+        })
 
-    const retiredResponse = await app.request('/api/tasks/page?limit=1', { headers })
-    expect(retiredResponse.status).toBe(404)
+        const retiredResponse = await app.request('/api/tasks/page?limit=1', { headers })
+        expect(retiredResponse.status).toBe(404)
 
-    const legacyResponse = await app.request('/api/tasks', { headers })
-    expect(legacyResponse.status).toBe(200)
-    const legacy = (await legacyResponse.json()) as unknown
-    expect(Array.isArray(legacy)).toBe(true)
-  })
+        const legacyResponse = await app.request('/api/tasks', { headers })
+        expect(legacyResponse.status).toBe(200)
+        const legacy = (await legacyResponse.json()) as unknown
+        expect(Array.isArray(legacy)).toBe(true)
+      })
+    },
+  )
 })

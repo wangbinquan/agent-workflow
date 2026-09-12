@@ -6786,3 +6786,26 @@ larger than N`，已变异验证）。细节与两个正则坑进 `docs/dev-gotc
 ### 到这里为止，「自建运行时去凑 `AppDeps`」这个形状在 MCP 面上清干净了
 
 `grep -rn 'composeTaskExecutionTestRuntime' tests/` 剩下的调用方都不再是为了拼 dispatcher。
+
+
+## 5aw. 两个「单引擎 HTTP 混在 describeEachProvider 文件里」的收尾
+
+账本**条目数不变**（两个文件都还剩别的单引擎调用点），但调用点从 5→4 / 4→2：
+
+- `rfc244-task-operations`：三个 `describeEachProvider` 块之外，还直接挂着一条
+  **单引擎的** HTTP 用例（自建 `createInMemoryDb` + `createApp`，测 `/api/task-catalog`）。
+  判据在那三个块里并不存在——单独包成一个 HTTP 注册面。
+- `rfc261-webhook-delivery-pagination`：五个 describe 接上作用域；它的 `configHarness`
+  （模拟「操作者手写的存量 config.json」）改走 `open({ config })`。
+
+### `rfc261` 当场撞了一次交叉积
+
+它的 `describeEachProvider('RFC-261 delivery retention')` **嵌在**一个被我包成 HTTP 注册面的
+describe 里，跑出 `[postgresql] > application lifetime > … > [postgresql] > (unnamed)`。
+那一块是**服务层**的（不打 HTTP），处置是把它**提到与注册面平级**，不是嵌在里面。
+
+这正是 pre-flight `NESTED-EACHPROVIDER` 提示的那件事，只是方向相反：它提醒的是
+「别整文件包」，这里是「包了外层之后，里层那个 provider 注册要先搬出去」。
+两条都写在标签文案里了。
+
+（顺带：`DAY` 原本是那个 describe 的局部常量，搬出去的块也要用，提到模块级。）
