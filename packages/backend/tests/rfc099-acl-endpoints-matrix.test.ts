@@ -32,11 +32,11 @@
 // See design/test-guard-audit-2026-07-21 Top-5 (B5-ACL-cluster) / 逃逸机制③.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   actionTemplates,
   agents,
@@ -62,14 +62,16 @@ import {
   workflowsBroadcaster,
   workgroupsBroadcaster,
 } from '../src/ws/broadcaster'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   alice: { id: string; token: string } // owner (ordinary account)
   /** RFC-304 — a department-layer owner, for resources an ordinary user cannot create. */
@@ -85,15 +87,12 @@ interface Harness {
  * for all eight cases would make the seven that never use it pay for the one
  * that does, on every `beforeEach` — and this file already runs 33 tests.
  */
-async function buildHarness(needsDept = false): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc099-matrix-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(
+  scope: ProviderHttpApplicationScope,
+  needsDept = false,
+): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const mkUser = async (username: string, role: 'admin' | 'user' | 'manager') => {
     const u = await createUser(db, {
       username,
@@ -149,7 +148,7 @@ interface ResourceCase {
    * user cannot create one, so an ordinary-user owner is an unreachable state.
    */
   ownerActor?: 'alice' | 'dept'
-  seed: (db: DbClient, ownerUserId: string) => Promise<{ id: string; name: string }>
+  seed: (db: ProviderNeutralDatabase, ownerUserId: string) => Promise<{ id: string; name: string }>
 }
 
 const now = 1_700_000_000_000
@@ -490,201 +489,224 @@ const CASES: ResourceCase[] = [
 //
 // 新版起真 app，从**框架实际注册的路由表**（`allRouteMeta()`）观察 `/acl` 端点，
 // 与挂载写法无关；再与 `ACL_RESOURCE_TYPES` 和 CASES 三方对齐。
-describe('RFC-099 / RFC-317 T9b ACL endpoint matrix — enrolment（运行时预言）', () => {
-  test('每个 AclResourceType 都有一对真正注册上的 /acl 端点', async () => {
-    const h = await buildHarness()
-    void h
-    const aclPaths = allRouteMeta()
-      .filter((meta) => meta.path.endsWith('/acl'))
-      .map((meta) => `${meta.method} ${meta.path}`)
-    // 语料非空：读到 0 条说明 app 没起来或路由表口径变了，此刻零预言力。
-    expect(
-      aclPaths.length,
-      'allRouteMeta 里读到 0 个 /acl 端点——本用例此刻零预言力',
-    ).toBeGreaterThan(0)
-
-    const basesWithAcl = new Set(
-      allRouteMeta()
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-099 / RFC-317 T9b ACL endpoint matrix — enrolment（运行时预言）',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-acl-matrix-',
+  },
+  (scope) => {
+    test('每个 AclResourceType 都有一对真正注册上的 /acl 端点', async () => {
+      const h = await buildHarness(scope)
+      void h
+      const aclPaths = allRouteMeta()
         .filter((meta) => meta.path.endsWith('/acl'))
-        .map((meta) => meta.path.replace(/\/:[^/]+\/acl$/, '')),
-    )
-    // RFC-324 §7 —— 定时任务也有一对 `/acl` 端点，但它**不是** ACL 资源类型：
-    // 它借用 `resource_grants` 拿两档授权，却没有 visibility / builtin /
-    // owner×name 唯一域，也不进配置包或 Intent。把它塞进 `ACL_RESOURCE_TYPES`
-    // 会给 bundle / intent / name-unique 四个集合各留一个例外分支，所以它由
-    // routes/scheduledTasks.ts 自己挂端点。这里显式扣掉它，而不是把等号放松成
-    // `>=`——放松之后「新增一类却没挂端点」就再也测不出来了。
-    const NON_ACL_TYPE_ACL_BASES = new Set(['/api/scheduled-tasks'])
-    const aclTypeBases = [...basesWithAcl].filter((base) => !NON_ACL_TYPE_ACL_BASES.has(base))
-    expect(
-      [...basesWithAcl].filter((base) => NON_ACL_TYPE_ACL_BASES.has(base)).sort(),
-      '扣除项必须真的挂在路由表上，否则它会变成一个永久的免费槽位',
-    ).toEqual([...NON_ACL_TYPE_ACL_BASES].sort())
-    expect(
-      aclTypeBases.length,
-      `注册上的 /acl 基路径数应等于 ACL 资源类型数；实际基路径=${aclTypeBases.sort().join(', ')}`,
-    ).toBe(ACL_RESOURCE_TYPES.length)
+        .map((meta) => `${meta.method} ${meta.path}`)
+      // 语料非空：读到 0 条说明 app 没起来或路由表口径变了，此刻零预言力。
+      expect(
+        aclPaths.length,
+        'allRouteMeta 里读到 0 个 /acl 端点——本用例此刻零预言力',
+      ).toBeGreaterThan(0)
 
-    // GET 与 PUT 成对，缺一不可。
-    const pairs = new Map<string, Set<string>>()
-    for (const meta of allRouteMeta()) {
-      if (!meta.path.endsWith('/acl')) continue
-      const base = meta.path.replace(/\/:[^/]+\/acl$/, '')
-      if (!pairs.has(base)) pairs.set(base, new Set())
-      pairs.get(base)!.add(meta.method.toUpperCase())
+      const basesWithAcl = new Set(
+        allRouteMeta()
+          .filter((meta) => meta.path.endsWith('/acl'))
+          .map((meta) => meta.path.replace(/\/:[^/]+\/acl$/, '')),
+      )
+      // RFC-324 §7 —— 定时任务也有一对 `/acl` 端点，但它**不是** ACL 资源类型：
+      // 它借用 `resource_grants` 拿两档授权，却没有 visibility / builtin /
+      // owner×name 唯一域，也不进配置包或 Intent。把它塞进 `ACL_RESOURCE_TYPES`
+      // 会给 bundle / intent / name-unique 四个集合各留一个例外分支，所以它由
+      // routes/scheduledTasks.ts 自己挂端点。这里显式扣掉它，而不是把等号放松成
+      // `>=`——放松之后「新增一类却没挂端点」就再也测不出来了。
+      const NON_ACL_TYPE_ACL_BASES = new Set(['/api/scheduled-tasks'])
+      const aclTypeBases = [...basesWithAcl].filter((base) => !NON_ACL_TYPE_ACL_BASES.has(base))
+      expect(
+        [...basesWithAcl].filter((base) => NON_ACL_TYPE_ACL_BASES.has(base)).sort(),
+        '扣除项必须真的挂在路由表上，否则它会变成一个永久的免费槽位',
+      ).toEqual([...NON_ACL_TYPE_ACL_BASES].sort())
+      expect(
+        aclTypeBases.length,
+        `注册上的 /acl 基路径数应等于 ACL 资源类型数；实际基路径=${aclTypeBases.sort().join(', ')}`,
+      ).toBe(ACL_RESOURCE_TYPES.length)
+
+      // GET 与 PUT 成对，缺一不可。
+      const pairs = new Map<string, Set<string>>()
+      for (const meta of allRouteMeta()) {
+        if (!meta.path.endsWith('/acl')) continue
+        const base = meta.path.replace(/\/:[^/]+\/acl$/, '')
+        if (!pairs.has(base)) pairs.set(base, new Set())
+        pairs.get(base)!.add(meta.method.toUpperCase())
+      }
+      const incomplete = [...pairs.entries()]
+        .filter(([, methods]) => !(methods.has('GET') && methods.has('PUT')))
+        .map(([base, methods]) => `${base} → ${[...methods].sort().join(',')}`)
+      expect(incomplete, '每个 ACL 资源都要有 GET+PUT 一对 /acl 端点').toEqual([])
+    })
+
+    test('CASES 覆盖全部 AclResourceType（新增一类而不写行 ⇒ 红）', () => {
+      expect([...CASES.map((c) => c.type)].sort()).toEqual([...ACL_RESOURCE_TYPES].sort())
+    })
+
+    test('CASES 的 base 与真实注册的 /acl 基路径逐条对上', async () => {
+      const h = await buildHarness(scope)
+      void h
+      const registered = new Set(
+        allRouteMeta()
+          .filter((meta) => meta.path.endsWith('/acl'))
+          .map((meta) => meta.path.replace(/\/:[^/]+\/acl$/, '')),
+      )
+      const missing = CASES.map((c) => c.base).filter((base) => !registered.has(base))
+      expect(missing, 'CASES 写的 base 在真实路由表里找不到对应的 /acl 端点').toEqual([])
+    })
+  },
+)
+
+// RFC-359 AC-6：整张 ACL 端点矩阵两个引擎各跑一遍。矩阵是模块层的 `for` 循环产出的一组
+// describe，所以壳套在循环外面——套在循环里会给每个资源类型各起两套应用。
+describeEachProviderHttpApplication(
+  'RFC-099 ACL endpoints matrix',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-acl-matrix-',
+  },
+  (scope) => {
+    for (const rc of CASES) {
+      describe(`RFC-099 ACL endpoints — ${rc.type}`, () => {
+        let h: Harness
+        let key: string
+        /** The actor that owns the seeded row for THIS case. */
+        let owner: Harness['alice']
+
+        beforeEach(async () => {
+          h = await buildHarness(scope, rc.ownerActor === 'dept')
+          owner = rc.ownerActor === 'dept' ? h.dept : h.alice
+          key = rc.keyOf(await rc.seed(h.db, owner.id))
+        })
+
+        const aclPath = (k: string): string => `${rc.base}/${k}/acl`
+        const mutation = (
+          body: Record<string, unknown>,
+          expectedAclRevision = 0,
+        ): Record<string, unknown> => ({
+          ...body,
+          expectedResourceId: key,
+          expectedAclRevision,
+        })
+
+        test('a stranger gets a 404 byte-identical to a non-existent resource (no existence oracle)', async () => {
+          const invisible = await req(h.app, h.carol.token, aclPath(key))
+          const missing = await req(h.app, h.carol.token, aclPath(rc.missingKey))
+          expect(invisible.status).toBe(404)
+          expect(missing.status).toBe(404)
+          // Identical modulo the echoed key, not merely "both 404". The key itself
+          // is attacker-supplied so echoing it reveals nothing; ANY other
+          // difference — a distinct `code`, a "you lack access" phrasing, extra
+          // fields — is precisely the oracle that tells an attacker which private
+          // resources exist. Normalising just the key keeps the assertion strict
+          // about everything else.
+          const normalise = (text: string, k: string): string => text.split(k).join('<KEY>')
+          expect(normalise(await invisible.text(), key)).toBe(
+            normalise(await missing.text(), rc.missingKey),
+          )
+        })
+
+        test('a stranger cannot grant themselves access, and the ACL is unchanged', async () => {
+          const body = JSON.stringify(
+            mutation({ grants: [{ userId: h.carol.id, level: 'read' }], visibility: 'public' }),
+          )
+          const attack = await req(h.app, h.carol.token, aclPath(key), { method: 'PUT', body })
+          // Indistinguishable from the SAME request against an id that does not
+          // exist — which is the actual invariant, and stricter than pinning one
+          // status. Pinning 404 encoded an implementation detail (that the handler
+          // refuses before the method gate does), and it is not true for every
+          // resource: a capability framework's write point is system-domain, so an
+          // ordinary account is turned away at the gate with 403 for ANY id. That
+          // is not a weaker answer — the response does not vary with existence,
+          // which is the whole property. What would be a leak is the two differing.
+          const missing = await req(h.app, h.carol.token, aclPath(rc.missingKey), {
+            method: 'PUT',
+            body,
+          })
+          expect(attack.status).toBe(missing.status)
+          const normalise = (text: string, k: string): string => text.split(k).join('<KEY>')
+          expect(normalise(await attack.clone().text(), key)).toBe(
+            normalise(await missing.text(), rc.missingKey),
+          )
+          // …and it is still a refusal, not a quiet success.
+          expect(attack.status).toBeGreaterThanOrEqual(400)
+
+          // Asserting the status alone would still pass if the handler wrote first
+          // and threw afterwards — re-read as the owner and prove nothing moved.
+          const acl = (await (await req(h.app, owner.token, aclPath(key))).json()) as {
+            ownerUserId: string
+            visibility: string
+            grants: Array<{ user: { id: string }; level: string }>
+          }
+          expect(acl.ownerUserId).toBe(owner.id)
+          expect(acl.visibility).toBe('private')
+          expect(acl.grants).toEqual([])
+          // …and the stranger still cannot see it.
+          expect((await req(h.app, h.carol.token, aclPath(key))).status).toBe(404)
+        })
+
+        test('owner and admin can read the ACL; owner can grant, grantee can read but not manage', async () => {
+          // Positive controls: without these, a handler that refused everyone would
+          // satisfy every negative case above and this matrix would have no teeth.
+          expect((await req(h.app, owner.token, aclPath(key))).status).toBe(200)
+          expect((await req(h.app, h.admin.token, aclPath(key))).status).toBe(200)
+
+          const grant = await req(h.app, owner.token, aclPath(key), {
+            method: 'PUT',
+            body: JSON.stringify(mutation({ grants: [{ userId: h.bob.id, level: 'read' }] })),
+          })
+          expect(grant.status).toBe(200)
+
+          const asBob = (await (await req(h.app, h.bob.token, aclPath(key))).json()) as {
+            ownerUserId: string
+            grants: Array<{ user: { id: string }; level: string }>
+            canManage: boolean
+          }
+          expect(asBob.ownerUserId).toBe(owner.id)
+          // RFC-324 —— 名单带档位；被授权者读得到自己那条，但 canManage 仍是 false。
+          expect(asBob.grants.map((g) => [g.user.id, g.level])).toEqual([[h.bob.id, 'read']])
+          expect(asBob.canManage).toBe(false)
+
+          const bobEscalates = await req(h.app, h.bob.token, aclPath(key), {
+            method: 'PUT',
+            body: JSON.stringify(mutation({ visibility: 'public' }, 1)),
+          })
+          expect(bobEscalates.status).toBe(403)
+
+          // A grant must not make the resource visible to everyone else.
+          expect((await req(h.app, h.carol.token, aclPath(key))).status).toBe(404)
+        })
+
+        test('granting an unknown or system user is refused with a typed 422', async () => {
+          const unknown = await req(h.app, owner.token, aclPath(key), {
+            method: 'PUT',
+            body: JSON.stringify(
+              mutation({ grants: [{ userId: '01HFAKEUSERID0000000000000', level: 'read' }] }),
+            ),
+          })
+          expect(unknown.status).toBe(422)
+          expect(((await unknown.json()) as { code: string }).code).toBe('acl-user-invalid')
+
+          const system = await req(h.app, owner.token, aclPath(key), {
+            method: 'PUT',
+            body: JSON.stringify(mutation({ grants: [{ userId: '__system__', level: 'read' }] })),
+          })
+          expect(system.status).toBe(422)
+        })
+      })
     }
-    const incomplete = [...pairs.entries()]
-      .filter(([, methods]) => !(methods.has('GET') && methods.has('PUT')))
-      .map(([base, methods]) => `${base} → ${[...methods].sort().join(',')}`)
-    expect(incomplete, '每个 ACL 资源都要有 GET+PUT 一对 /acl 端点').toEqual([])
-  })
-
-  test('CASES 覆盖全部 AclResourceType（新增一类而不写行 ⇒ 红）', () => {
-    expect([...CASES.map((c) => c.type)].sort()).toEqual([...ACL_RESOURCE_TYPES].sort())
-  })
-
-  test('CASES 的 base 与真实注册的 /acl 基路径逐条对上', async () => {
-    const h = await buildHarness()
-    void h
-    const registered = new Set(
-      allRouteMeta()
-        .filter((meta) => meta.path.endsWith('/acl'))
-        .map((meta) => meta.path.replace(/\/:[^/]+\/acl$/, '')),
-    )
-    const missing = CASES.map((c) => c.base).filter((base) => !registered.has(base))
-    expect(missing, 'CASES 写的 base 在真实路由表里找不到对应的 /acl 端点').toEqual([])
-  })
-})
-
-for (const rc of CASES) {
-  describe(`RFC-099 ACL endpoints — ${rc.type}`, () => {
-    let h: Harness
-    let key: string
-    /** The actor that owns the seeded row for THIS case. */
-    let owner: Harness['alice']
-
-    beforeEach(async () => {
-      h = await buildHarness(rc.ownerActor === 'dept')
-      owner = rc.ownerActor === 'dept' ? h.dept : h.alice
-      key = rc.keyOf(await rc.seed(h.db, owner.id))
-    })
-
-    const aclPath = (k: string): string => `${rc.base}/${k}/acl`
-    const mutation = (
-      body: Record<string, unknown>,
-      expectedAclRevision = 0,
-    ): Record<string, unknown> => ({
-      ...body,
-      expectedResourceId: key,
-      expectedAclRevision,
-    })
-
-    test('a stranger gets a 404 byte-identical to a non-existent resource (no existence oracle)', async () => {
-      const invisible = await req(h.app, h.carol.token, aclPath(key))
-      const missing = await req(h.app, h.carol.token, aclPath(rc.missingKey))
-      expect(invisible.status).toBe(404)
-      expect(missing.status).toBe(404)
-      // Identical modulo the echoed key, not merely "both 404". The key itself
-      // is attacker-supplied so echoing it reveals nothing; ANY other
-      // difference — a distinct `code`, a "you lack access" phrasing, extra
-      // fields — is precisely the oracle that tells an attacker which private
-      // resources exist. Normalising just the key keeps the assertion strict
-      // about everything else.
-      const normalise = (text: string, k: string): string => text.split(k).join('<KEY>')
-      expect(normalise(await invisible.text(), key)).toBe(
-        normalise(await missing.text(), rc.missingKey),
-      )
-    })
-
-    test('a stranger cannot grant themselves access, and the ACL is unchanged', async () => {
-      const body = JSON.stringify(
-        mutation({ grants: [{ userId: h.carol.id, level: 'read' }], visibility: 'public' }),
-      )
-      const attack = await req(h.app, h.carol.token, aclPath(key), { method: 'PUT', body })
-      // Indistinguishable from the SAME request against an id that does not
-      // exist — which is the actual invariant, and stricter than pinning one
-      // status. Pinning 404 encoded an implementation detail (that the handler
-      // refuses before the method gate does), and it is not true for every
-      // resource: a capability framework's write point is system-domain, so an
-      // ordinary account is turned away at the gate with 403 for ANY id. That
-      // is not a weaker answer — the response does not vary with existence,
-      // which is the whole property. What would be a leak is the two differing.
-      const missing = await req(h.app, h.carol.token, aclPath(rc.missingKey), {
-        method: 'PUT',
-        body,
-      })
-      expect(attack.status).toBe(missing.status)
-      const normalise = (text: string, k: string): string => text.split(k).join('<KEY>')
-      expect(normalise(await attack.clone().text(), key)).toBe(
-        normalise(await missing.text(), rc.missingKey),
-      )
-      // …and it is still a refusal, not a quiet success.
-      expect(attack.status).toBeGreaterThanOrEqual(400)
-
-      // Asserting the status alone would still pass if the handler wrote first
-      // and threw afterwards — re-read as the owner and prove nothing moved.
-      const acl = (await (await req(h.app, owner.token, aclPath(key))).json()) as {
-        ownerUserId: string
-        visibility: string
-        grants: Array<{ user: { id: string }; level: string }>
-      }
-      expect(acl.ownerUserId).toBe(owner.id)
-      expect(acl.visibility).toBe('private')
-      expect(acl.grants).toEqual([])
-      // …and the stranger still cannot see it.
-      expect((await req(h.app, h.carol.token, aclPath(key))).status).toBe(404)
-    })
-
-    test('owner and admin can read the ACL; owner can grant, grantee can read but not manage', async () => {
-      // Positive controls: without these, a handler that refused everyone would
-      // satisfy every negative case above and this matrix would have no teeth.
-      expect((await req(h.app, owner.token, aclPath(key))).status).toBe(200)
-      expect((await req(h.app, h.admin.token, aclPath(key))).status).toBe(200)
-
-      const grant = await req(h.app, owner.token, aclPath(key), {
-        method: 'PUT',
-        body: JSON.stringify(mutation({ grants: [{ userId: h.bob.id, level: 'read' }] })),
-      })
-      expect(grant.status).toBe(200)
-
-      const asBob = (await (await req(h.app, h.bob.token, aclPath(key))).json()) as {
-        ownerUserId: string
-        grants: Array<{ user: { id: string }; level: string }>
-        canManage: boolean
-      }
-      expect(asBob.ownerUserId).toBe(owner.id)
-      // RFC-324 —— 名单带档位；被授权者读得到自己那条，但 canManage 仍是 false。
-      expect(asBob.grants.map((g) => [g.user.id, g.level])).toEqual([[h.bob.id, 'read']])
-      expect(asBob.canManage).toBe(false)
-
-      const bobEscalates = await req(h.app, h.bob.token, aclPath(key), {
-        method: 'PUT',
-        body: JSON.stringify(mutation({ visibility: 'public' }, 1)),
-      })
-      expect(bobEscalates.status).toBe(403)
-
-      // A grant must not make the resource visible to everyone else.
-      expect((await req(h.app, h.carol.token, aclPath(key))).status).toBe(404)
-    })
-
-    test('granting an unknown or system user is refused with a typed 422', async () => {
-      const unknown = await req(h.app, owner.token, aclPath(key), {
-        method: 'PUT',
-        body: JSON.stringify(
-          mutation({ grants: [{ userId: '01HFAKEUSERID0000000000000', level: 'read' }] }),
-        ),
-      })
-      expect(unknown.status).toBe(422)
-      expect(((await unknown.json()) as { code: string }).code).toBe('acl-user-invalid')
-
-      const system = await req(h.app, owner.token, aclPath(key), {
-        method: 'PUT',
-        body: JSON.stringify(mutation({ grants: [{ userId: '__system__', level: 'read' }] })),
-      })
-      expect(system.status).toBe(422)
-    })
-  })
-}
+  },
+)
 
 // RFC-317 T29（ACL-04）—— 「ACL 改完之后还要发哪条广播」由每类资源自己的挂载配置给出。
 //
@@ -712,55 +734,67 @@ const ACL_UPDATE_BROADCASTS: Readonly<
   },
 }
 
-describe('RFC-317 T29 —— ACL 写完之后的广播由各资源自己的 afterUpdate 发出', () => {
-  test('广播表只登记真实存在的 AclResourceType', () => {
-    const unknown = Object.keys(ACL_UPDATE_BROADCASTS).filter(
-      (type) => !ACL_RESOURCE_TYPES.includes(type as (typeof ACL_RESOURCE_TYPES)[number]),
-    )
-    expect(unknown, '表里写了一个不存在的资源类型——改名后这里先红，而不是悄悄不再校验').toEqual([])
-  })
-
-  for (const rc of CASES) {
-    const expected = ACL_UPDATE_BROADCASTS[rc.type]
-    const label = expected === undefined ? '不发广播' : `发 ${expected.frameType}`
-
-    test(`${rc.type}：一次成功的 PUT /acl ${label}`, async () => {
-      const h = await buildHarness(rc.ownerActor === 'dept')
-      const owner = rc.ownerActor === 'dept' ? h.dept : h.alice
-      const key = rc.keyOf(await rc.seed(h.db, owner.id))
-
-      // 两个频道都订上：不在表里的类型必须**两个都不发**，否则「搬回通用挂载器」
-      // 这种回潮只会在恰好被订阅的那个频道上暴露。
-      const frames: Array<{ channel: string; msg: Record<string, unknown> }> = []
-      const stop = [
-        workflowsBroadcaster.subscribe(WORKFLOWS_CHANNEL, (msg) => {
-          frames.push({ channel: WORKFLOWS_CHANNEL, msg: msg as Record<string, unknown> })
-        }),
-        workgroupsBroadcaster.subscribe(WORKGROUPS_CHANNEL, (msg) => {
-          frames.push({ channel: WORKGROUPS_CHANNEL, msg: msg as Record<string, unknown> })
-        }),
-      ]
-      try {
-        const put = await req(h.app, owner.token, `${rc.base}/${key}/acl`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            grants: [{ userId: h.bob.id, level: 'read' as const }],
-            expectedResourceId: key,
-            expectedAclRevision: 0,
-          }),
-        })
-        expect(put.status, 'ACL 写本身要成功，否则下面断言的是「没写成所以没广播」').toBe(200)
-
-        const acl = frames.filter((f) => String(f.msg['type']).endsWith('.acl.updated'))
-        if (expected === undefined) {
-          expect(acl, `${rc.type} 不该在 workflows / workgroups 频道上发 ACL 广播`).toEqual([])
-          return
-        }
-        expect(acl.map((f) => f.channel)).toEqual([expected.channel])
-        expect(acl[0]?.msg).toEqual({ type: expected.frameType, [expected.idKey]: key })
-      } finally {
-        for (const off of stop) off()
-      }
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-317 T29 —— ACL 写完之后的广播由各资源自己的 afterUpdate 发出',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-acl-matrix-',
+  },
+  (scope) => {
+    test('广播表只登记真实存在的 AclResourceType', () => {
+      const unknown = Object.keys(ACL_UPDATE_BROADCASTS).filter(
+        (type) => !ACL_RESOURCE_TYPES.includes(type as (typeof ACL_RESOURCE_TYPES)[number]),
+      )
+      expect(unknown, '表里写了一个不存在的资源类型——改名后这里先红，而不是悄悄不再校验').toEqual(
+        [],
+      )
     })
-  }
-})
+
+    for (const rc of CASES) {
+      const expected = ACL_UPDATE_BROADCASTS[rc.type]
+      const label = expected === undefined ? '不发广播' : `发 ${expected.frameType}`
+
+      test(`${rc.type}：一次成功的 PUT /acl ${label}`, async () => {
+        const h = await buildHarness(scope, rc.ownerActor === 'dept')
+        const owner = rc.ownerActor === 'dept' ? h.dept : h.alice
+        const key = rc.keyOf(await rc.seed(h.db, owner.id))
+
+        // 两个频道都订上：不在表里的类型必须**两个都不发**，否则「搬回通用挂载器」
+        // 这种回潮只会在恰好被订阅的那个频道上暴露。
+        const frames: Array<{ channel: string; msg: Record<string, unknown> }> = []
+        const stop = [
+          workflowsBroadcaster.subscribe(WORKFLOWS_CHANNEL, (msg) => {
+            frames.push({ channel: WORKFLOWS_CHANNEL, msg: msg as Record<string, unknown> })
+          }),
+          workgroupsBroadcaster.subscribe(WORKGROUPS_CHANNEL, (msg) => {
+            frames.push({ channel: WORKGROUPS_CHANNEL, msg: msg as Record<string, unknown> })
+          }),
+        ]
+        try {
+          const put = await req(h.app, owner.token, `${rc.base}/${key}/acl`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              grants: [{ userId: h.bob.id, level: 'read' as const }],
+              expectedResourceId: key,
+              expectedAclRevision: 0,
+            }),
+          })
+          expect(put.status, 'ACL 写本身要成功，否则下面断言的是「没写成所以没广播」').toBe(200)
+
+          const acl = frames.filter((f) => String(f.msg['type']).endsWith('.acl.updated'))
+          if (expected === undefined) {
+            expect(acl, `${rc.type} 不该在 workflows / workgroups 频道上发 ACL 广播`).toEqual([])
+            return
+          }
+          expect(acl.map((f) => f.channel)).toEqual([expected.channel])
+          expect(acl[0]?.msg).toEqual({ type: expected.frameType, [expected.idKey]: key })
+        } finally {
+          for (const off of stop) off()
+        }
+      })
+    }
+  },
+)
