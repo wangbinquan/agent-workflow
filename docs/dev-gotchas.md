@@ -6046,6 +6046,23 @@ for f in chunk-*; do bun test --isolate $(cat $f | tr '\n' ' '); done
 - **分批**：`bun test` 把多个路径当过滤器，一次给上百个会出现「filters did not match any test files」
   然后一个都不跑——它会 exit 0，看起来像跑过了。
 
+**2026-09-12 更新：上面那两条 grep 也还漏，判据已收进 `scripts/source-guard-sweep.ts`。**
+漏的是第三种形态——`tests/rfc359-w29-unstarted-application-composition.test.ts` 用
+`const sourceRoot = resolve(import.meta.dir, '..')` 承接一个常量再 `readFileSync(resolve(sourceRoot, path))`，
+既没有普查 API、也没有 `'..', 'src'` 字面量，两条 grep 都不匹配。于是改
+`cli/postgresqlDaemonApplication.ts` 时本地全绿、CI 两格红（ubuntu shard 8/8、macOS shard 2/6）。
+
+现在直接跑脚本，别再手拼 grep：
+
+```bash
+bun run scripts/source-guard-sweep.ts          # 列名单（223 个）
+bun run scripts/source-guard-sweep.ts --run    # 分批 + --isolate 跑
+```
+
+判据只有一条：**这个测试有没有去读本包 `src/` 下的源码**（普查 API / 实参里的 src 路径 /
+承接成常量的包根路径，三种形态都认），再并上 `tests/architecture/` 全量。历史上推红过的两条
+（`rfc331-task-execution-topology`、`rfc359-w29-…`）都在名单里——这是它的回归判据。
+
 更省事的判据：**新增或移动 `src/` 下的文件**时，波及面按「谁扫源码树」算，不按「谁叫 guard」算。
 新增一条 legacy → 模块内部的 import 尤其要查三处账本：`commons-debt.json` 的 R1、
 `ledger-baselines.json` 的 `rfc294-cross-context-observed-imports`，以及
@@ -6347,3 +6364,64 @@ RFC-359 把 `rfc164-workgroup-room` 迁到双引擎之后，PG 侧稳定红一�
 `scripts/rfc359-ac6-preflight.sh` 现在两条都能提前报（`PURE-DESCRIBE[...]` 逐块判、
 `MODULE-LEVEL-HARNESS`）。**判据必须逐块扫**——按「文件里有 describe」判会对着几乎每个文件报警，
 噪声等于没有。
+
+## 「应答之后才写」的投影：正向断言在 PG 上红，**负向断言在 PG 上会因为错的理由绿**（2026-09-12）
+
+有一批投影是请求应答**之后**才写的 fire-and-forget（`void deps.core.tokenCallAudit.record({…})`
+之于 `/api/*` 中间件是典型）。这个形状两个 provider 完全一样，**可观测时机**却不同：
+bun:sqlite 的写在同一个 tick 内落盘，用例紧接着读得到；PostgreSQL 是一次真实往返，
+用例读在前、写在后。于是同一个文件迁到双引擎之后：
+
+- **正向断言当场红**（`expect(rows.length).toBe(1)` 得到 0）——这个好办，看得见；
+- **负向断言照样绿，但理由是错的**（`expect(await listTokenAudit(db)).toEqual([])` 在 PG 上
+  「空」只是因为还没来得及写）。**这一条才危险**：它把「不该写」和「还没写」混成同一个绿。
+
+处置（两条都不是「给产品加 await」——那等于给每个 PAT 请求加一次库往返）：
+
+- 正向：用 `tests/helpers/eventually.ts` 的 `eventually` / `eventuallyAtLeast` **读到为止**
+  （有界轮询，超时带上最后一次实际值）。**别用裸 `setTimeout`**：睡够了才过的用例在慢机器上
+  就是 flaky，本仓明令「绝不允许『重跑就过了』作为通过依据」。
+- 负向：补一个**因果屏障**——再发一次**已知会写**的请求，等它的行落库，再断言「除它之外没有别的行」。
+  时间不是屏障，因果才是。
+
+**迁移清单里要加一条自查**：这个文件有没有对「计数 / 空集」的断言？有就先问一句
+「它在 PG 上是靠什么保证已经写完了」。
+
+## `Unhandled error between tests` **不进 pass/fail 计数**——`N pass / 0 fail` 也能是红的（2026-09-12 推红一格）
+
+bun 把「测试之间」的 unhandled rejection 单独报成一段 `# Unhandled error between tests`，
+**计数行照样写 `44 pass / 0 fail`**，只把进程退出码变成 1。CI 那一格于是显示失败，而日志里
+一条 `(fail)` 都搜不到——按 `(fail)` 抓失败的习惯在这里会一无所获，只能靠
+`##[error]Process completed with exit code 1` 和往上翻那段 `Unhandled error`。
+
+**本地自查必须看退出码**，不能只看计数：
+
+```bash
+out=$(AW_TEST_POSTGRESQL_URL=… bun test <file> 2>&1); echo "exit=$? unhandled=$(echo "$out" | grep -c 'Unhandled error')"
+```
+
+### 它在双引擎化之后会集中冒出来，原因是同一个
+
+任何**应答之后才跑**的 fire-and-forget（定时器里的补偿、`void f()` 的投影），只要它排在
+SQLite 那半、真正跑起来时引擎已经切到 PostgreSQL，用的还是那个 SQLite 句柄——而
+`currentDatabaseSchemaProvider()` 已经变成 PG 的了，于是渲染出 `agent_workflow.tasks`
+去问 bun:sqlite，当场 `no such table`，没人接。
+
+实撞的那一处是 `workgroupTaskRoomCommands.ts` 里
+`setTimeout(() => void continueIfStillParked(taskId), 2_500)`：单引擎时代它 reject 也无人察觉，
+双引擎化把它照出来了。**这不只是测试问题**——daemon 里同一条路径 reject 同样是进程级
+unhandled rejection。处置是让那一拍自己 `.catch` + `log.warn`（尽力而为的补偿本来就不该
+把进程带下去），并在 `rfc164-workgroup-engine` 的 source-lock 里钉死「那段必须含 `.catch(`」。
+
+**排查手法**（stack 只剩 drizzle 的 `then`，看不出调用方时）：用 `--preload` 打一个探针包住
+`Database.prototype.prepare`，失败时打印 SQL——SQL 的列集合足以定位到具体的 projection 常量，
+再从那个常量反查调用点。比盯 stack 快得多。
+
+```ts
+// /tmp/catch.ts
+import { Database } from 'bun:sqlite'
+const original = Database.prototype.prepare
+Database.prototype.prepare = function (...args) {
+  try { return original.apply(this, args) } catch (e) { console.error('SQL: ' + String(args[0])); throw e }
+}
+```

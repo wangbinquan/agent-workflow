@@ -38,6 +38,7 @@ import { buildClarifyEdges } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
 import type { Actor } from '@/auth/actor'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbClient } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
@@ -157,8 +158,12 @@ export function buildWorkgroupRuntimeConfig(
  * Lazily seed the builtin host workflow row (FK anchor for workgroup tasks).
  * NOT a migration seed — a migration-seeded row would surface in every fresh
  * DB and break empty-fixture expectations; idempotent via onConflictDoNothing.
+ *
+ * RFC-359：形参收成 `ProviderNeutralDatabase`。函数体本来就只有一条带
+ * `onConflictDoNothing` 的 insert（中立面广泛支持），此前写成 bun:sqlite 专有的 `DbClient`
+ * 纯属未收敛——代价是任何想调它的用例都被钉死在 SQLite 上。
  */
-export async function ensureWorkgroupHostWorkflow(db: DbClient): Promise<void> {
+export async function ensureWorkgroupHostWorkflow(db: ProviderNeutralDatabase): Promise<void> {
   await db
     .insert(workflows)
     .values({

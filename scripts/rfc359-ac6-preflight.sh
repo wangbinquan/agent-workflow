@@ -29,6 +29,10 @@ for f in "$@"; do
   grep -qE "writeFileSync\(.*config|applyConfigPatch\(|loadConfig\(" "$f" && r="$r WRITES-OWN-CONFIG(需 open({config}))"
   grep -q "AGENT_WORKFLOW_HOME" "$f" && r="$r OWN-APPHOME(需用 opened.appHome)"
   grep -q "resetRouteMetaRegistry" "$f" && r="$r ROUTE-META-POISON(已知雷)"
+  # `createApp(h.deps)`：选项是个变量，下面那段扫不到任何键，于是 EXTRA-CREATEAPP-OPTS
+  # 会**假阴性**（rfc247-mcp-server 实撞：它的 deps 里有 schedulerDriver /
+  # taskExecutionReadModels / collaborationContext，PG 侧一个都没有）。看不见就要报出来。
+  grep -qE "createApp\([A-Za-z_$][A-Za-z0-9_.$]*\)" "$f" && r="$r OPAQUE-CREATEAPP-OPTS(选项是变量,需人工看)"
   # 模块级 `let h` + 模块级 beforeEach：包 describe 之后钩子看不到 `scope`，当场 ReferenceError
   # （rfc327-memory-filter-and-facets 实撞）。夹具要先上提进 describe 才谈得上迁。
   grep -qE "^(let|var) [A-Za-z_$]+: *Harness|^let h\b" "$f" && r="$r MODULE-LEVEL-HARNESS(夹具需上提)"

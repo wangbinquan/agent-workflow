@@ -12,6 +12,7 @@ import {
   workgroupTaskState,
 } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { createLogger } from '@/util/log'
 import type { WorkgroupTaskRoomCommands } from '../public/commands'
 import {
   ConfigPatchSchema,
@@ -37,6 +38,8 @@ import { assertNoMissingResourceRefs } from './referenceUsability'
 
 /** 事务里认领到的继续意图 id；没有继续执行就是 null。 */
 type AdmittedContinuation = string | null
+
+const log = createLogger('workgroup-room')
 
 export function createWorkgroupTaskRoomCommands(
   dependencies: WorkgroupTaskRoomDependencies,
@@ -825,7 +828,20 @@ export function createWorkgroupTaskRoomCommands(
       if (result.dismissedHumans) {
         // 紧接着一次，外加 2.5s 后一次：慢一拍才提交的 park 也能被接住（形态同合一前）。
         await continueIfStillParked(input.taskId)
-        const late = setTimeout(() => void continueIfStillParked(input.taskId), 2_500)
+        const late = setTimeout(() => {
+          // 这一拍是**尽力而为**的补偿，不是请求的一部分：它在应答之后 2.5s 才跑，失败了也
+          // 没有人在等它的返回。因此必须自己吃掉 rejection——`void` 一个会 reject 的 promise
+          // 会变成进程级 unhandled rejection（daemon 里是一次没人接的崩溃面；测试里 bun 报
+          // 「Unhandled error between tests」，而且**用例计数仍然全绿**、只把退出码变成 1，
+          // RFC-359 AC-6 双引擎化之后当场在 CI 上撞到：SQLite 那半排下的这一拍，等它真的
+          // 跑起来时引擎已经切到 PostgreSQL 了）。
+          void continueIfStillParked(input.taskId).catch((error: unknown) => {
+            log.warn('late dismissed-humans continuation failed (best-effort)', {
+              taskId: input.taskId,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }, 2_500)
         late.unref?.()
       }
       return { changes: result.changes }

@@ -6382,3 +6382,94 @@ pre-flight 把 82 个候选分完之后，**只差机械工作量**的那一档�
 
 **规律**：碰 `postgresqlDaemonApplication.ts` / `server.ts` 的装配体，除 `tests/architecture/`
 之外还要跑 `tests/rfc359-w29-unstarted-application-composition.test.ts`。
+
+
+## 5aj. 账本 569 → 568：`rfc247-token-audit` 暴露「应答之后才写」这一类的**两种**错
+
+迁 `rfc247-token-audit` 时 PG 侧四条红。查清楚**不是产品缺陷**：`/api/*` 中间件写 token 调用审计
+用的是 `void deps.core.tokenCallAudit.record({…})`——**应答之后**的 fire-and-forget。两个 provider
+的代码路径完全一样，差的是**可观测时机**：bun:sqlite 同 tick 落盘，PostgreSQL 是一次真实往返。
+
+**不给产品加 await**：那等于给每个 PAT 请求加一次库往返，与「PostgreSQL 要做到最高性能表现」
+直接冲突。契约是「最终会写一条」，两边都成立。修的是用例。
+
+新增 `tests/helpers/eventually.ts`（`eventually` / `eventuallyAtLeast`）：有界轮询、拿到就返回、
+超时带上最后一次实际值。**不是裸 `setTimeout`**——睡够了才过的用例在慢机器上就是 flaky，
+本仓明令「绝不允许『重跑就过了』作为通过依据」。
+
+### 更要紧的是第二种错：负向断言在 PG 上**因为错的理由绿**
+
+原来那条 `a SESSION call writes nothing` 断言 `expect(await listTokenAudit(db)).toEqual([])`。
+它在 PG 上是绿的——但绿的理由是**还没来得及写**，不是「不该写」。这种绿比红危险：
+它把两件事混成同一个结论，而且迁移时不会有任何信号。
+
+处置是补**因果屏障**：先发 session 调用，再发一次**已知会写**的 PAT 调用，等 PAT 那行落库，
+再断言「除它之外没有别的行」。**时间不是屏障，因果才是。**
+已验证屏障是承重的（把期望改成 `[]` 当场红）。
+
+顺带发现这条判据在生产代码里有**两道**：中间件的 `actor.source !== 'pat'` 与参与者
+`createTokenCallAuditParticipant` 里的同一条。只改一道做变异测试测不出东西——记在这里省下次的时间。
+
+### 迁移 pre-flight 要加的一条自查
+
+**这个文件有没有对「计数 / 空集」的断言？** 有就先回答「它在 PG 上靠什么保证已经写完了」。
+这条没法纯靠 grep 判（`toEqual([])` 太常见、绝大多数与异步投影无关），所以写进清单靠人过一眼，
+不进脚本。
+
+### 迁移脚本本轮再修一处
+
+`createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })` 的**两参形态**此前不认，替换整个漏掉，
+迁完 `tsc` 才报 `Cannot find name 'createInMemoryDb'`。`'ready'` 就是 harness 缺省，直接换
+`scope.harness.db` 等价；`'required'`（还没有管理员那一档）要人工改成作用域的 `bootstrap` 选项，
+所以脚本只放行 `'ready'`。
+
+
+## 5ak. 双引擎化照出的第二个真缺陷：应答之后 2.5s 的补偿继续，reject 了没有人接
+
+`rfc164-workgroup-room` 迁上双引擎（§5ah）之后，CI 的 ubuntu shard 8/8 红了一格，而日志里
+**一条 `(fail)` 都没有**——`44 pass / 0 fail`，只有 `##[error]Process completed with exit code 1`
+和往上翻的一段 `# Unhandled error between tests: SQLiteError: no such table: agent_workflow.tasks`。
+
+**bun 的 unhandled rejection 不进 pass/fail 计数**，只改退出码。这条已单独进
+`docs/dev-gotchas.md`，因为它会让「看计数判绿」的习惯彻底失灵。
+
+### 根因
+
+`workgroupTaskRoomCommands.ts` 的 `updateConfig` 在解散真人之后排了一拍补偿：
+
+```ts
+const late = setTimeout(() => void continueIfStillParked(input.taskId), 2_500)
+```
+
+单引擎时代它 reject 也无人察觉。双引擎化之后：这一拍由 **SQLite 那半**排下，真正跑起来时
+`describeEachProvider` 已经切到 PostgreSQL——`currentDatabaseSchemaProvider()` 变成 PG 的，
+于是那个 SQLite 句柄渲染出 `agent_workflow.tasks` 去问 bun:sqlite，当场 `no such table`，
+`void` 掉的 promise reject，没人接。
+
+**这不只是测试问题**：daemon 里同一条路径 reject 同样是进程级 unhandled rejection。
+尽力而为的补偿本来就不该把进程带下去。已改成自带 `.catch` + `log.warn`。
+
+回归锁放在 `rfc164-workgroup-engine` 既有的 `source locks` describe 里（那段 `setTimeout`
+必须含 `.catch(`）；已变异验证（去掉 `.catch` 当场红）。运行时的锚点是
+`rfc164-workgroup-room` 本身：不改产品时它 3/3 都是 `exit=1`。
+
+### 排查手法（stack 只剩 drizzle 的 `then`）
+
+floating promise 的 stack 没有调用方。用 `--preload` 包住 `Database.prototype.prepare`、
+失败时打印 SQL——**列集合足以定位到具体的 projection 常量**，再反查调用点。已进 gotchas。
+
+### 顺带的一步收敛
+
+`ensureWorkgroupHostWorkflow` 的形参从 bun:sqlite 专有的 `DbClient` 收成
+`ProviderNeutralDatabase`。函数体本来就只有一条带 `onConflictDoNothing` 的 insert
+（中立面广泛支持），此前那个类型纯属未收敛——代价是任何调它的用例都被钉死在 SQLite 上。
+
+### `rfc164-workgroup-engine`：账本条目 8 → 1，**不销账**
+
+九个注册面里八个迁上了双引擎；剩一个（stuck detector S1/S2）吃
+`helpers/taskRecoveryOperations`——夹具用 `dbTxSync` + 同步终结符，是 bun:sqlite 专有的。
+那层夹具中立化是独立一刀，留到 SQLITE-BOUND-INFRA 那一批一起做。另有两个 describe
+保持普通 `describe`：`host snapshot`（纯投影）与 `source locks`（读源码做文本断言）。
+
+迁移脚本因此加了一条：**源码锁 describe 一律不包**——它们一行 DB 都不碰，而且正文里的
+正则 / 模板串带花括号，naive 的括号配平会走丢（这正是它此前报 `unbalanced` 的原因）。

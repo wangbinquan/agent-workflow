@@ -6,7 +6,7 @@
     "moduleFiles": 1188,
     "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24941
+    "symbolsIncludingFileRoots": 24942
   },
   "entries": [
     {
@@ -100280,6 +100280,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#log",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "log",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -299993,5 +300005,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b7f8e1bc95e047c0974e811c23a4934f640ada5e90c5bde93460d2012a8691d6"
+  "sourceDigest": "sha256:7c4ad83a0e36585f51886d6c9c4cc27e3f8f6866b383ab0908121dccb58c6868"
 }
