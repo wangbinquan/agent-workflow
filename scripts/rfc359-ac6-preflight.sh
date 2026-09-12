@@ -33,6 +33,12 @@ for f in "$@"; do
   grep -qE "writeFileSync\(.*config|applyConfigPatch\(|loadConfig\(" "$f" && r="$r WRITES-OWN-CONFIG(需 open({config}))"
   grep -q "AGENT_WORKFLOW_HOME" "$f" && r="$r OWN-APPHOME(需用 opened.appHome)"
   grep -q "resetRouteMetaRegistry" "$f" && r="$r ROUTE-META-POISON(已知雷)"
+  # 「睡一觉等写入」：在 bun:sqlite 上够（同 tick 落盘），在 PostgreSQL 的真实往返上
+  # 本机够、忙分片不够——`rfc247-token-audit` 的 AC-20 因此推红一格，而它在本机 3/3 全绿。
+  # 迁之前就得换掉：正向用 helpers/eventually 读到为止，负向补因果屏障。
+  # 迁完之后由 `test-suite-policy` 的同名守卫兜住（那条只扫已迁的文件）。
+  grep -qE "new Promise\([^)]*\) *=> *setTimeout|Bun\.sleep\(" "$f" &&
+    r="$r SLEEP-TO-WAIT(睡一觉等写入,迁前先换掉)"
   # 「白做的夹具」：某个 describe 挂了 setup 型 beforeEach，正文却**一样都不用**那个 setup
   # 的产物（`rfc264-unicode-names` 三块全是这样——纯 schema 断言，却各建一个 SQLite 库加播
   # 两个用户）。这类不用迁，删掉那行 beforeEach 就够。
