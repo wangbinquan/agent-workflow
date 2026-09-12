@@ -6104,3 +6104,45 @@ file:line 锚点，`rfc359-w5-t19d` 的成对覆盖账本**当场从 10 vs 6 变
 `rfc355-intent-session-event-callsites` / `rfc317-runtime-spawn-capability-guard` /
 `rfc349-execution-contract-postgresql-adapter`）**先别迁**——要么给作用域加一条通用的
 「额外 createApp 依赖」直通口，要么就接受它们留在单引擎。这是个设计决定，不该在批量迁移里顺手做。
+
+## 5ab. AC-6：**用例遗留在途请求**在真库上是「harness 拆库时挂死」，不是用例失败（W58，诊断签名）
+
+账本 586 → 585（`rfc099-membership-attribution`）。这一批本来有三个文件，另两个的经历更值得记。
+
+### 现象
+
+`rfc190-overview-route` 迁完之后**间歇红**：同一组两次跑，一次 3 红一次全绿。红的那次是
+
+```
+(fail) … > resources 各 key == 对应列表接口行数 [20124.59ms]
+  ^ a beforeEach/afterEach hook timed out for this test.
+PostgresError: Connection closed            ← 来自 routes/operationRoute.ts，回滚时
+PostgresError: cannot drop the currently open database (55006)   ← harness afterAll 拆库
+```
+
+**别被表象骗了**：失败记在「某个用例的 hook 超时」上，而真正的事实是
+**上一条用例还有 HTTP 请求在途**，harness 已经往下走去拆这个文件的专属库了。
+
+这是和「没 await 的 `.run()` 写」同一家族：一个没人等的 promise。在同步的内存 SQLite 上无害，
+在带连接池、且**用完就 DROP DATABASE** 的真 PG 上就是这个下场。而且它**不稳定复现**——
+赢了竞态就是绿的。
+
+### 一条走错的路，记下来免得下次再走
+
+我先以为是预算不够（毕竟迁移后每个 `beforeEach` 装配的是**一整个真应用**，而 bun 默认 hook 预算
+只有 5s），就在作用域里加了 `setDefaultTimeout(20_000)`。结果：**同样的 hook 照样超时，只是从
+5s 变成 20s**。这说明预算不是原因，于是把那个改动**撤回**了——没有证据支撑的旋钮不留，
+它只会把真正的挂死延后四倍再报。
+
+（顺带：真需要更大预算的场景是存在的，`eachProvider` 的 PG `beforeEach` 快照回滚就是，
+那一处有实测支撑、已单独给了 `databaseCount × 30s`。区别在于**有没有证据**。）
+
+### 给下一个人的诊断签名
+
+看到下面任意一条，先去找**在途请求 / 没 await 的调用**，不要去调预算：
+- `cannot drop the currently open database`（55006）
+- `Connection closed` / `ERR_POSTGRES_CONNECTION_CLOSED` 且栈里有路由层
+- hook 超时**记在一条与它无关的用例**头上，且同一组反复跑时红的位置会变
+
+`rfc190-overview-route` 与 `rfc099-resource-routes` 因此**原样退回**，不带着间歇红上库。
+它们要迁，得先把那条在途请求揪出来——那是独立一刀，不该混在批量迁移里。

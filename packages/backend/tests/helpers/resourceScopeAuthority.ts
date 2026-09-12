@@ -1,5 +1,5 @@
 import type { Actor } from '../../src/auth/actor'
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import type { MemoryResourceScopeAccessParticipant } from '../../src/modules/memory/application/ports/resourceScopeAccess'
 import type { MemoryScopeAuthority } from '../../src/modules/memory/public/catalog'
@@ -15,7 +15,12 @@ export const TEST_RESOURCE_SCOPE_AUTHORIZATION: MemoryResourceScopeAccessPartici
  * tests may choose the legacy actor projection they are characterizing, but
  * they never cast or serialize the authority handle.
  */
-export function resourceScopeAuthority(db: DbClient, actor: Actor): MemoryScopeAuthority {
+// RFC-359：函数体把 db 直接转手给收 `ProviderNeutralDatabase` 的 `composeIdentityAccess`，
+// 入参写 `DbClient` 是纯类型债——它把这个夹具挡在双引擎用例之外。
+export function resourceScopeAuthority(
+  db: ProviderNeutralDatabase,
+  actor: Actor,
+): MemoryScopeAuthority {
   const identityAccess = composeIdentityAccess(db)
   const context = identityAccess.contexts.fromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },

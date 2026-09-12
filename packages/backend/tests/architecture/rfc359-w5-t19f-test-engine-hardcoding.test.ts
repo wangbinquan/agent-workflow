@@ -234,7 +234,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc098-wrapper-stale-redispatch.test.ts: 1',
   'rfc098-write-lock-registry.test.ts: 2',
   'rfc099-acl-endpoints-matrix.test.ts: 1',
-  'rfc099-membership-attribution.test.ts: 2',
   'rfc099-migration-0045.test.ts: 1',
   'rfc099-resource-acl.test.ts: 1',
   'rfc099-resource-routes.test.ts: 1',
