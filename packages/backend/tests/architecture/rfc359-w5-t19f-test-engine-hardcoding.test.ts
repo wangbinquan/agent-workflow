@@ -370,7 +370,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc258-file-symbols.test.ts: 1',
   'rfc259-github-ingress.test.ts: 1',
   'rfc259-webhook-github-e2e.test.ts: 1',
-  'rfc260-webhook-read-visibility.test.ts: 1',
   'rfc261-webhook-delivery-pagination.test.ts: 4',
   'rfc264-unicode-names.test.ts: 1',
   'rfc266-script-pool-independence.test.ts: 1',

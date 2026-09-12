@@ -6278,6 +6278,10 @@ grep -n 'createApp(' -A 30 <file> | grep -E '^\s*[0-9]*[-:]?\s*[A-Za-z_$][\w$]*\
 同理，**迁移前先 `grep describeEachProvider <file>`**：有的文件已经部分双引擎，外层再包一层会
 造出 `[postgresql] > … > [sqlite]` 的交叉积、两层 harness 互不相干。
 
+> ⚠️ 这条我自己漏做过一次（2026-09-12，`rfc310-pr7b-handover`）：筛候选时只 grep 了
+> `describeEachProviderHttpApplication`（用来排除**已迁**的），忘了再 grep 一次**不带后缀**的
+> `describeEachProvider`（用来排除**已经部分双引擎**的）。**两个都要 grep，判据不同。**
+
 ## 「hook timed out」记在一条 `(unnamed)` 用例头上 = 失败的是 `beforeAll`
 
 bun 把**失败的 `beforeAll`** 报成
