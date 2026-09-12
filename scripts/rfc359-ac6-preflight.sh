@@ -33,6 +33,35 @@ for f in "$@"; do
   grep -qE "writeFileSync\(.*config|applyConfigPatch\(|loadConfig\(" "$f" && r="$r WRITES-OWN-CONFIG(需 open({config}))"
   grep -q "AGENT_WORKFLOW_HOME" "$f" && r="$r OWN-APPHOME(需用 opened.appHome)"
   grep -q "resetRouteMetaRegistry" "$f" && r="$r ROUTE-META-POISON(已知雷)"
+  # 「白做的夹具」：某个 describe 挂了建库的 beforeEach，正文却一次都不碰 db
+  # （`rfc264-unicode-names` 三个 describe 都是这样——纯 schema 断言，却各建一个 SQLite 库
+  # 加播两个用户）。这类根本不用迁，把那行 beforeEach 删掉就够。
+  idle=$(python3 - "$f" <<'PYEOF'
+import re, sys
+
+source = open(sys.argv[1]).read()
+Q = chr(39)
+names = []
+for match in re.finditer("(?m)^describe\\(" + Q + "([^" + Q + "]*)", source):
+    start = source.find('{', match.end())
+    if start < 0:
+        continue
+    depth, i = 0, start
+    while i < len(source):
+        if source[i] == '{':
+            depth += 1
+        elif source[i] == '}':
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    body = source[start : i + 1]
+    if re.search(r"beforeEach\(\s*\w*[Ss]etup", body) and not re.search(r"\bdb\b", body):
+        names.append(match.group(1))
+print(','.join(names))
+PYEOF
+)
+  [ -n "$idle" ] && r="$r IDLE-FIXTURE[$idle](建了库但整块不碰 db,删 beforeEach 即可)"
   # `createApp(h.deps)`：选项是个变量，下面那段扫不到任何键，于是 EXTRA-CREATEAPP-OPTS
   # 会**假阴性**（rfc247-mcp-server 实撞：它的 deps 里有 schedulerDriver /
   # taskExecutionReadModels / collaborationContext，PG 侧一个都没有）。看不见就要报出来。

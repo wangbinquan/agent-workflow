@@ -18,24 +18,19 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users } from '../src/db/schema'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
 import { previewWorkflowYaml } from '../src/services/workflow.yaml'
 import { createWorkgroup, getWorkgroupById, renameWorkgroup } from '../src/services/workgroups'
 import { ulid } from 'ulid'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 4,
   inputs: [],
   nodes: [],
   edges: [],
 }
-
-let db: DbClient
 
 function actor(id: string): Actor {
   return buildActor({
@@ -60,19 +55,9 @@ function seedUserWrite(db: ProviderNeutralDatabase, id: string) {
     .run()
 }
 
-function seedUser(id: string): void {
-  void seedUserWrite(db, id)
-}
-
 async function seedProviderUsers(db: ProviderNeutralDatabase): Promise<void> {
   await seedUserWrite(db, 'alice')
   await seedUserWrite(db, 'bob')
-}
-
-function setupNative() {
-  db = createInMemoryDb(MIGRATIONS)
-  seedUser('alice')
-  seedUser('bob')
 }
 
 function workgroupInput(name: string) {
@@ -109,8 +94,6 @@ describeEachProvider('RFC-264 workflow names', (harness) => {
 })
 
 describe('RFC-264 workflow names', () => {
-  beforeEach(setupNative)
-
   test('illegal names are still refused at the create boundary', () => {
     for (const name of ['_reserved', 'two\nlines', '   ', '审'.repeat(129)]) {
       expect(() => workflowInput(name)).toThrow()
@@ -131,7 +114,6 @@ describeEachProvider('RFC-264 workflow names', (harness) => {
 })
 
 describe('RFC-264 YAML import', () => {
-  beforeEach(setupNative)
   test('a Chinese name previews as the folded value', () => {
     const preview = previewWorkflowYaml(
       ['name: 代码审计流水线', 'description: ""', 'definition:', '  $schema_version: 4'].join('\n'),
@@ -204,8 +186,6 @@ describeEachProvider('RFC-264 workgroup names', (harness) => {
 })
 
 describe('RFC-264 workgroup names', () => {
-  beforeEach(setupNative)
-
   test('illegal names are still refused at the schema boundary', () => {
     for (const name of ['_reserved', 'two\nlines', '   ']) {
       expect(() => workgroupInput(name)).toThrow()

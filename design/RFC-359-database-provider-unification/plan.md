@@ -6877,3 +6877,29 @@ describe 里，跑出 `[postgresql] > application lifetime > … > [postgresql] 
 
 **规律**：账本上剩下的条目里，有一部分是这种——**shadowing 把死代码藏住了**。
 迁移前先 grep 一遍「这个 `createInMemoryDb` 到底是谁在用」，可能根本不用迁，删掉即可。
+
+
+## 5bb. 「白做的夹具」是账本上的第三类残留（551 → 550，并已脚本化）
+
+§5ba 发现「shadowing 藏住的死代码」之后，顺手把整份账本扫了一遍，问的是
+「这个 `createInMemoryDb` 绑定到底有没有调用方」。扫出一个假阳性
+（`beforeEach(setupNative)` 是**裸引用**不是调用，正则要求 `name(` 就漏了），
+但顺着它发现了**第三类残留**：
+
+`rfc264-unicode-names` 的三个 describe 都挂着 `beforeEach(setupNative)`——那个 setup 建一个
+SQLite 库、播两个用户——而三块正文**一次都不碰 `db`**：它们全是纯 schema / 校验断言。
+也就是说那个库每条用例白建一次。删掉那三行 `beforeEach`，`setupNative` / `seedUser` /
+`let db` / `createInMemoryDb` 一路空掉。
+
+**这类根本不用迁，是删。** 判据已加进 pre-flight（`IDLE-FIXTURE[...]`：某个 describe 挂了
+`beforeEach(*setup*)` 但整块不出现 `db`），并用一个刻意造的负样本验证过会报。
+
+### 账本残留的三类，到这里都有了判据
+
+| 类 | 判据 | 处置 |
+| --- | --- | --- |
+| 真·未迁 | pre-flight 的其余标签 | 迁 |
+| shadowing 藏住的死代码（§5ba） | 那个绑定有没有**真正的**调用方（注意裸引用） | 删 |
+| 白做的夹具（本节） | `IDLE-FIXTURE`：建了库但整块不碰 `db` | 删 `beforeEach` |
+
+**先分类再动手**——后两类的成本是前者的十分之一，而且不需要任何双引擎验证。
