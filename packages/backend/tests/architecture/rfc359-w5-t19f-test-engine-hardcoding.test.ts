@@ -457,7 +457,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc314-event-write-batching.test.ts: 1',
   'rfc314-session-view-window.test.ts: 1',
   'rfc317-cross-context-ports.test.ts: 10',
-  'rfc317-runtime-spawn-capability-guard.test.ts: 1',
   'rfc319-fusion-manifest-merge-back.test.ts: 1',
   'rfc319-ssh-repo-access.test.ts: 1',
   'rfc321-repository-publication-system-mock-e2e.test.ts: 1',

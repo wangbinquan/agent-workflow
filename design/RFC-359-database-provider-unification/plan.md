@@ -7116,3 +7116,29 @@ run-now 真去 spawn opencode）。**SQLite 根有这个可选覆盖口**（`ser
 `taskExecutionProvider.trigger.buildScheduleLaunch`）。这与 ③ 同类：不是产品能力差，
 是**装配签名不对称**，而它恰好挡住一个 AC-6 迁移。处置方向是给 PG 根补上同形的可选
 覆盖（默认值不变），让两个根的合同对齐——**不是**给测试加一个只有 PG 走的特例分支。
+
+## 5bh. 我把 main 推红了一次：跑了 `tests/architecture/` 全绿，红的却是 `tests/` 里的那条摘要守卫
+
+`98545e3f8` 给 PG 组合根补 `buildScheduleLaunch` 覆盖口，推上去 macOS shard 3/6 红：
+`rfc359-w29-unstarted-application-composition` 的 daemon 相位**摘要**对不上
+（159 条语句没变，摘要从 `5aa7d919…` 变成 `0f43011a…`）。
+
+**推之前我跑了什么**：`tests/architecture/` 全套 663 条，全绿；改动文件各自的用例，全绿；
+`tsc --noEmit`、`eslint --max-warnings 0`、`prettier`，全过。
+
+**为什么还是漏了**：那条守卫**不在** `tests/architecture/` 下，它在 `tests/` 根目录。
+「改了生产组合根 ⇒ 跑架构守卫」这个联想是对的，但我把「架构守卫」等同于了「那个目录」。
+钉 PG 组合根语句图的守卫恰好是个例外。
+
+**教训（与 §5bd 的第 1 条同源，换了个面孔）**：守卫写完要问「它扫的范围是不是正好覆盖了
+问题发生的时机」；**跑守卫时也要问「我选的这组文件是不是正好覆盖了我改的东西」**。
+按目录选测试是按**位置**选，而风险是按**被依赖面**分布的——两者不重合。
+
+**下次的做法**：改了 `src/cli/postgresqlDaemonApplication.ts` / `src/server.ts` 这类组合根，
+除了 `tests/architecture/`，还必须跑 `scripts/source-guard-sweep.ts`（它正是按「哪些测试
+读了本包 src/」选的，不按目录），或者至少把
+`rfc359-w29-unstarted-application-composition` 显式加进去。
+
+**顺带一条记账更正**：`98545e3f8` 的标题写「账本 550 → 547」是**错的**，实际是 548。
+这条账本的 baseline 数的是**文件条目数**，而 `scheduled-tasks-run-now` 那笔是把同一条目的
+调用点从 2 改成 1，**条目没减**。（这个坑本轮之前就踩过一次，见 §5v。）

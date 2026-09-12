@@ -114,7 +114,7 @@ function resolveRuntimeBinary(
  */
 const STATUS_PROBE_TIMEOUT_MS = 5000
 
-interface RuntimeDiagnosticDependencies {
+export interface RuntimeDiagnosticDependencies {
   smokeRuntime(options: SmokeOptions): Promise<SmokeResult>
   beforeRuntimeProbeCache?(): void | Promise<void>
   probeTimeoutMsForTest?: number

@@ -157612,7 +157612,7 @@
     {
       "currentContext": "legacy",
       "currentLayer": "routes",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/routes/runtimes.ts",
       "id": "owner:packages/backend/src/routes/runtimes.ts#RuntimeDiagnosticDependencies",
       "removeAfterWave": "W4-E4b",
@@ -300005,5 +300005,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6cbe6576534f191d40253ea168b7b7522069308b13c4f5d5256ca75b6ec5181b"
+  "sourceDigest": "sha256:fd2c9932c10b9fc9e02153cf585251f4719f881cb5749f28ee6c7b140d1c3b5e"
 }

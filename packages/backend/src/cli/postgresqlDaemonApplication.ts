@@ -33,6 +33,7 @@ import { eq } from 'drizzle-orm'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import type { RuntimeDiagnosticDependencies } from '@/routes/runtimes'
 import { loadConfig } from '@/config'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
@@ -371,6 +372,15 @@ export interface PostgresqlDaemonApplicationInput {
    * 的 AC-6 双引擎迁移。补成同形（默认值不变）比在测试里给 PG 开特例分支干净。
    */
   readonly buildScheduleLaunch?: BuildScheduleLaunch
+  /**
+   * RFC-284 T26 / RFC-359 —— 运行时诊断的测试注入口（生产两侧都省略）。
+   *
+   * 与 `buildScheduleLaunch` 同理：`RuntimesRouteDependencies`
+   * （`routes/runtimes.ts`）**本来就**声明了这个可选字段，SQLite 根也一直从
+   * `deps` 透传进去；PG 根只是没把它从自己的入参转下去，于是同一批运行时诊断
+   * 用例在 PG 上没法双跑。这里补的是一次纯透传，不改任何默认行为。
+   */
+  readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
   readonly maintenanceStatus: NonNullable<
     PostgresqlAppCompositionInput['platform']['maintenance']['maintenanceStatus']
   >
@@ -1858,6 +1868,9 @@ export async function composePostgresqlApplication(
       configPath: input.configPath,
       runtimeRegistry: core.runtimeRegistry,
       runtimeTests: mcpRuntimeTests,
+      ...(input.runtimeDiagnosticTestDependencies === undefined
+        ? {}
+        : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
     }),
     overview: Object.freeze({
       authorization: Object.freeze({ directAuthority: identityAccess.directAuthority }),

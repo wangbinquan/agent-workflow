@@ -382,6 +382,18 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
   })
 
+  // RFC-359（2026-09-12，第四次）：语句条数仍是 159，摘要再次变化——PG 组合根补了**两个
+  // 可选覆盖口**，都只改了既有语句里的属性取值，没有新增/删除语句：
+  //   · `integration.scheduledTasks.buildScheduleLaunch` 从直接取
+  //     `taskExecutionProvider.trigger.buildScheduleLaunch` 变成
+  //     `input.buildScheduleLaunch ?? …`；
+  //   · `platform.runtimes` 多一条条件展开
+  //     `...(input.runtimeDiagnosticTestDependencies === undefined ? {} : {…})`。
+  // 两者都是**把 SQLite 根早就有的可选覆盖补到 PG 根**（`server.ts` 的
+  // `buildScheduleLaunch?` / `runtimeDiagnosticTestDependencies?`），默认行为逐字不变
+  // ——生产两侧都不传，取的还是原来那个值。理由与账本见 plan §5bg。
+  // 摘要跟着改是对的；**摘要变了而你说不出改了哪一条，才是红**。
+  //
   // RFC-359（2026-09-12，第二次）：语句条数仍是 159，摘要再次变化——`PostgresqlDaemonApplicationRuntime`
   // 多了一个 `collaborationContext: boundCollaborationContext`。它**不是**新装配：那个上下文
   // 早就在同一作用域里建好了，这里只是把它交出来，好让测试夹具把「应用自己建的那一份」给用例
@@ -407,7 +419,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(159)
     expect(digest(restored, pg)).toBe(
-      '5aa7d91983312c1b60410a9e2c19c37db6270056d40808b0774bdc4ef3996eee',
+      '80e58a40d58b3ce2b96de61dc3a91da149ee4dadb42652dc5ae565b0182205bb',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

@@ -35,6 +35,9 @@ export type ProviderHttpApplicationInput = Pick<
   // （SQLite 根本来就有，PG 根同轮补上），所以这里一个 key 就能同时喂到两侧
   // ——两个分支都是 `...input` 展开的。
   | 'buildScheduleLaunch'
+  // 同上：运行时诊断的测试注入口（`RuntimesRouteDependencies` 本来就声明了它，
+  // PG 根同轮补上透传）。运行时诊断那一批用例是 AC-6 runway 上最大的一簇。
+  | 'runtimeDiagnosticTestDependencies'
 > & {
   readonly appHome: string
   /**

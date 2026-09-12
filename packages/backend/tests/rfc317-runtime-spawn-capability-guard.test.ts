@@ -20,21 +20,18 @@
 // 否则将来新加的第四个 spawn 站点会重演同一个洞。
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import type { Hono } from 'hono'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { loadConfig } from '../src/config'
-import { createApp, type RuntimeDiagnosticTestDependencies } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
 
 const CONFORMING: SmokeResult = {
@@ -47,36 +44,16 @@ const CONFORMING: SmokeResult = {
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
-  tmp: string
   /** 每次 smokeRuntime 调用的入参——空数组即「没有 spawn 发生」。 */
   spawns: SmokeOptions[]
 }
 
-async function buildHarness(): Promise<Harness> {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc317-cap-'))
-  const configPath = join(tmp, 'config.json')
-  loadConfig(configPath)
-  const db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
-  const spawns: SmokeOptions[] = []
-  const runtimeDiagnosticTestDependencies: RuntimeDiagnosticTestDependencies = {
-    smokeRuntime: (options: SmokeOptions) => {
-      spawns.push(options)
-      return Promise.resolve(CONFORMING)
-    },
-  }
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath,
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-    runtimeDiagnosticTestDependencies,
-  })
-  return { db, app, tmp, spawns }
-}
+// RFC-359 AC-6：`runtimeDiagnosticTestDependencies` 是**注册期**参数，而 `spawns`
+// 要按用例新建，所以注册一个转发闭包指向 `currentSpawns`；app home / config 全交给
+// 作用域（原来自建 tmp + config.json，迁进来后那份会被整份绕开）。
+let currentSpawns: SmokeOptions[] | undefined
 
 async function post(app: Hono, path: string, body: unknown): Promise<Response> {
   return app.request(path, {
@@ -86,10 +63,33 @@ async function post(app: Hono, path: string, body: unknown): Promise<Response> {
   })
 }
 
-describe('RFC-317 T71 —— spawn 前的 runtime 能力门（findings RT-01）', () => {
-  test('POST /api/runtimes/probe：opencode + isSandbox=true ⇒ 422 且零 spawn', async () => {
-    const h = await buildHarness()
-    try {
+describeEachProviderHttpApplication(
+  'RFC-317 T71 —— spawn 前的 runtime 能力门（findings RT-01）',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc317-cap-',
+    runtimeDiagnosticTestDependencies: {
+      smokeRuntime: (options: SmokeOptions) => {
+        if (currentSpawns === undefined) throw new Error('spawn recorder not installed')
+        currentSpawns.push(options)
+        return Promise.resolve(CONFORMING)
+      },
+    },
+  },
+  (scope) => {
+    async function buildHarness(): Promise<Harness> {
+      const db = scope.harness.db
+      await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+      const spawns: SmokeOptions[] = []
+      currentSpawns = spawns
+      const app = (await scope.open()).app
+      return { db, app, spawns }
+    }
+
+    test('POST /api/runtimes/probe：opencode + isSandbox=true ⇒ 422 且零 spawn', async () => {
+      const h = await buildHarness()
       const res = await post(h.app, '/api/runtimes/probe', {
         protocol: 'opencode',
         binaryPath: '/nonexistent/opencode',
@@ -100,14 +100,10 @@ describe('RFC-317 T71 —— spawn 前的 runtime 能力门（findings RT-01）'
       expect(body.code).toBe('runtime-is-sandbox-unsupported')
       // 状态码本身分不出「拒绝了」与「跑完了才拒绝」——这一条才是要点。
       expect(h.spawns, '能力门必须在 spawn 之前；这里出现调用说明子进程已经起过了').toEqual([])
-    } finally {
-      rmSync(h.tmp, { recursive: true, force: true })
-    }
-  })
+    })
 
-  test('POST /api/runtimes/probe：opencode + extraArgs ⇒ 422 且零 spawn', async () => {
-    const h = await buildHarness()
-    try {
+    test('POST /api/runtimes/probe：opencode + extraArgs ⇒ 422 且零 spawn', async () => {
+      const h = await buildHarness()
       const res = await post(h.app, '/api/runtimes/probe', {
         protocol: 'opencode',
         binaryPath: '/nonexistent/opencode',
@@ -117,14 +113,10 @@ describe('RFC-317 T71 —— spawn 前的 runtime 能力门（findings RT-01）'
       const body = (await res.json()) as { code?: string }
       expect(body.code).toBe('runtime-extra-args-protocol')
       expect(h.spawns).toEqual([])
-    } finally {
-      rmSync(h.tmp, { recursive: true, force: true })
-    }
-  })
+    })
 
-  test('POST /api/runtimes 的预检 smoke 同样在 spawn 前拒绝（保存校验救不了它）', async () => {
-    const h = await buildHarness()
-    try {
+    test('POST /api/runtimes 的预检 smoke 同样在 spawn 前拒绝（保存校验救不了它）', async () => {
+      const h = await buildHarness()
       const res = await post(h.app, '/api/runtimes', {
         name: 'rt-cap-gate',
         protocol: 'opencode',
@@ -137,14 +129,10 @@ describe('RFC-317 T71 —— spawn 前的 runtime 能力门（findings RT-01）'
         h.spawns,
         '预检 smoke 跑在 createRuntime 之前，所以必须自己带门——否则不被接受的参数会先被执行一遍',
       ).toEqual([])
-    } finally {
-      rmSync(h.tmp, { recursive: true, force: true })
-    }
-  })
+    })
 
-  test('声明了该能力的 driver 不受影响：claude-code + isSandbox=true 正常进 spawn', async () => {
-    const h = await buildHarness()
-    try {
+    test('声明了该能力的 driver 不受影响：claude-code + isSandbox=true 正常进 spawn', async () => {
+      const h = await buildHarness()
       const res = await post(h.app, '/api/runtimes/probe', {
         protocol: 'claude-code',
         binaryPath: '/nonexistent/claude',
@@ -156,11 +144,13 @@ describe('RFC-317 T71 —— spawn 前的 runtime 能力门（findings RT-01）'
         '正向路径必须真的到达 smokeRuntime，否则上面三条证明不了「门」只挡该挡的',
       ).toBe(1)
       expect(h.spawns[0]?.isSandbox).toBe(true)
-    } finally {
-      rmSync(h.tmp, { recursive: true, force: true })
-    }
-  })
+    })
+  },
+)
 
+// 下面这些是纯源码扫描（不碰库）——刻意留在普通 describe 里：放进 provider 作用域
+// 只会把同一份 AST 扫描跑两遍，双引擎对它毫无信息量（pre-flight 的 PURE-DESCRIBE）。
+describe('RFC-317 T71 —— spawn 能力门的源码棘轮与 matcher 自证', () => {
   test('源码棘轮：src/routes 下每一处 smokeRuntime( 的同一函数体内必须先有能力门', () => {
     const files = readdirRecursive(ROUTES_DIR).filter((p) => p.endsWith('.ts'))
     expect(files.length, 'src/routes 枚举断了，本条棘轮失去意义').toBeGreaterThan(10)
