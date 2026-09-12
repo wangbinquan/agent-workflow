@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 本轮进展（2026-09-12，AC-6 账本 **625 → 586**，含三条已修 PG 缺陷）
+> ## 📌 RFC-359 本轮进展（2026-09-12，AC-6 账本 **625 → 581**，含三条已修 PG 缺陷）
 >
 > ### 一句话
 >
@@ -41,7 +41,10 @@
 >
 > ### 剩余 runway（实测，不是估计）
 >
-> 仍是单引擎的 HTTP 用例文件 **93 个**，其中**只有约 25 个**带非标准 `createApp` 选项；
+> 仍是单引擎的 HTTP 用例文件 **83 个**（勘误：先前写 93——`grep -l 'createApp('` 会把
+> `expect(src).not.toContain('createApp(')` 这类**源码断言**也数进来，实际有 2 个是这种；
+> 其余差额是此后已迁的。判据用「该文件是否存在一行含 `createApp(` 且不含 `expect`/`toContain`」），
+> 其中**只有约 25 个**带非标准 `createApp` 选项；
 > 真正卡住的是 `AppDeps` 独有的那批注入缝（`runtimeDiagnosticTestDependencies` ×4 /
 > `webhookDispatcher` ×3 / `mcpRuntimeTestDependencies` ×2 / `intentTestDependencies` ×2 …），
 > **`PostgresqlApplicationInput` 上一个都没有**——这是与 secretBox 同类的能力不对称，
