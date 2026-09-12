@@ -20,19 +20,18 @@
 // deferred model); the legacy immediate mint + the flag-based submit split are deleted.
 // The park fixtures below drive the CONTROL channel (seal), mirroring the board flow.
 
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -128,7 +127,8 @@ function mkQ(id: string, title: string): ClarifyQuestion {
  *  prior `done` draft + the questioner's `done` asking run, then open one
  *  cross-clarify session and return its node_run id. */
 async function seedTask(
-  db: DbClient,
+  // RFC-359 —— 形参收成中立面：函数体只有普通 insert，两个 provider 共用一份种子。
+  db: ProviderNeutralDatabase,
   opts: { deferred: boolean; questions?: ClarifyQuestion[]; ownerUserId?: string },
 ): Promise<{ taskId: string; intermediaryNodeRunId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
@@ -196,7 +196,7 @@ async function seedTask(
 /** Seed a DEFERRED task whose designer has TWO sibling cross-clarify nodes
  *  (cc_a/q_a, cc_b/q_b both → DESIGNER) — for the H3 multi-source readiness gate. */
 async function seedTwoSource(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): Promise<{ taskId: string; ccA: string; ccB: string; def: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const nodes: WorkflowNode[] = [
@@ -294,7 +294,7 @@ function ans(qid: string) {
  *  `defaultTargetNodeId` == `designerNodeId` — the exact shape the §18 dispatch mechanics below
  *  used to get for free. Call once per (origin → graph designer) for multi-source fixtures. */
 async function seedDesignerEntries(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   designerNodeId: string,
   actor: { userId: string; role: string },
@@ -1223,895 +1223,919 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 // F — Codex impl-gate folds on the run-scoped layer: H1 (split-round per-origin),
 // M1 (override target gets no Update Directive), H2 (the HTTP release path).
 // ---------------------------------------------------------------------------
-describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
-  const actor = { userId: 'u1', role: 'owner' as const }
-  const TOKEN = 'a'.repeat(64)
-  const AUTH = { Authorization: `Bearer ${TOKEN}` }
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)',
+  {
+    token: 'a'.repeat(64),
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc120-t9-',
+  },
+  (scope) => {
+    const actor = { userId: 'u1', role: 'owner' as const }
+    const TOKEN = 'a'.repeat(64)
+    const AUTH = { Authorization: `Bearer ${TOKEN}` }
 
-  function makeApp(db: DbClient) {
-    process.env.AGENT_WORKFLOW_HOME = mkdtempSync(join(tmpdir(), 'aw-t9-home-'))
-    return createApp({
-      token: TOKEN,
-      configPath: join(mkdtempSync(join(tmpdir(), 'aw-t9-cfg-')), 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
-  }
-
-  async function designerEntries(db: DbClient, taskId: string) {
-    return db
-      .select()
-      .from(taskQuestions)
-      .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
-  }
-
-  test('H1: a round split q1→override / q2→graph-designer is REJECTED per-origin (nothing stamped/minted)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
-      deferred: true,
-      questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
-    })
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: OTHER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 500,
-    })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1'), ans('q2')],
-      directive: 'continue',
-    })
-    // RFC-162: reconcile no longer derives designers. Build the split directly — q1's designer on
-    // OTHER, q2's on DESIGNER (different handler nodes, SAME origin round → a multi-target round).
-    const questioners = await db
-      .select()
-      .from(taskQuestions)
-      .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
-    await reassignTaskQuestion(db, questioners.find((e) => e.questionId === 'q1')!.id, OTHER, actor)
-    await reassignTaskQuestion(
-      db,
-      questioners.find((e) => e.questionId === 'q2')!.id,
-      DESIGNER,
-      actor,
-    )
-    const entries = await designerEntries(db, taskId)
-    const q1Entry = entries.find((e) => e.questionId === 'q1')!
-
-    // dispatching q1 must be rejected: the per-origin guard sees q2 (→ DESIGNER) in the SAME
-    // round targeting a different handler node, even though q2 is outside the requested group.
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [q1Entry.id], actor)
-    } catch (e) {
-      threw = e
+    // 库、应用、app home 都取作用域现建的（作用域自己写 `AGENT_WORKFLOW_HOME` 并在
+    // `afterEach` 还原删除，用例不必也不该再建一个）。
+    async function makeApp() {
+      return (await scope.open()).app
     }
-    expect((threw as { code?: string }).code).toBe('task-question-round-multi-target')
-    // nothing stamped, nothing minted (no partial dispatch)
-    const after = await designerEntries(db, taskId)
-    expect(after.every((e) => e.triggerRunId === null)).toBe(true)
-    const minted = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
-    expect(minted.length).toBe(0)
-  })
 
-  test('M1: the override handoff mints the rerun ON the target (RFC-141: no Update-Directive suppression anymore)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: OTHER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 500,
-    })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
-      directive: 'continue',
-    })
-    // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-    await reassignTaskQuestion(db, entry.id, OTHER, actor)
-    // RFC-131 T4 去借壳: the rerun is minted ON the target OTHER. (RFC-141 removed the run-scoped
-    // Update-Directive suppression this used to drive — OTHER now also sees its own prior output.)
-    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
-  })
-
-  test('M1→RFC-141: the generic priorOutputUpdate is NO LONGER suppressed for an override handoff (source lock)', () => {
-    // The giant runOneNode prompt assembly can't be unit-run (it spawns opencode);
-    // lock at the source so a revert that re-adds the RFC-120 §18 gate goes red.
-    // RFC-141 (user ruling): an override target sees its own prior output as background — the
-    // reassigned Q&A rides `## Clarify Q&A`, and the directive's "feedback above" points at it.
-    const src = readFileSync(
-      join(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
-    expect(src).not.toContain('clarifyQueue?.suppressPriorOutput')
-    expect(src).not.toContain('!suppressPriorOutput')
-  })
-
-  test('H2: full HTTP path — deferred submit parks, POST .../questions/dispatch stamps + mints + releases the gate', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = makeApp(db)
-    // owner = the daemon TOKEN actor (__system__) so the member gate passes.
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
-      deferred: true,
-      ownerUserId: '__system__',
-    })
-    // designer-scoped control seal → parked (entry created, no rerun); simulate the park.
-    const sealed = await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
-    })
-    expect(sealed.roundFullySealed).toBe(true)
-    // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
-    // derives it from scope) — the HTTP dispatch below then stamps + mints + releases it.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(1) // parked
-
-    const entry = (await designerEntries(db, taskId))[0]!
-    const res = await app.request(`/api/tasks/${taskId}/questions/dispatch`, {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ entryIds: [entry.id] }),
-    })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { ok: boolean; reruns: Array<{ nodeRunId: string }> }
-    expect(body.ok).toBe(true)
-    expect(body.reruns.length).toBe(1)
-
-    // entry committed (dispatched_at) + a pending designer frontier rerun + gate released.
-    // trigger_run_id is NOT stamped at dispatch (the scheduler binds it at the rerun).
-    const dispatchedEntry = (await designerEntries(db, taskId))[0]
-    expect(dispatchedEntry?.dispatchedAt).not.toBeNull()
-    expect(dispatchedEntry?.triggerRunId).toBeNull()
-    const pending = await db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.nodeId, DESIGNER),
-          eq(nodeRuns.status, 'pending'),
-        ),
-      )
-    expect(pending.length).toBe(1)
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0) // released
-  })
-
-  test('H2: dispatch route rejects empty entryIds (422)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = makeApp(db)
-    const { taskId } = await seedTask(db, { deferred: true, ownerUserId: '__system__' })
-    const res = await app.request(`/api/tasks/${taskId}/questions/dispatch`, {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ entryIds: [] }),
-    })
-    expect(res.status).toBe(422)
-  })
-
-  // RFC-132 PR-B (universal deferred model): the H1 re-gate ('dispatch rejects a NON-deferred task')
-  // is REMOVED. Every task dispatches through the ONE unified path (route → autoDispatchClarifyRound
-  // → dispatchTaskQuestions); the `deferredQuestionDispatch` flag is vestigial. Double-mint is now
-  // prevented by the SINGLE path (an already-dispatched entry is a no-op), not by a flag gate.
-  test('PR-B: the unified quick channel dispatches the designer on any task — exactly one rerun, no double-mint', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: false })
-    // The unified quick channel seals + auto-dispatches the QUESTIONER (autoDispatch never
-    // auto-dispatches designers — they ride the board's 批量下发, RFC-162 reconcile derives none).
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
-      actor,
-    })
-    // RFC-162: the designer handler is ADDED by a reassign, then dispatched through the SAME
-    // unified dispatchTaskQuestions the board uses — exactly one rerun, no double-mint.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-    await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    // the designer entry is dispatched (stamped) → the designer rerun minted EXACTLY once.
-    expect((await designerEntries(db, taskId))[0]?.dispatchedAt).not.toBeNull()
-    const designerReruns = await db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.nodeId, DESIGNER),
-          eq(nodeRuns.rerunCause, 'cross-clarify-answer'),
-        ),
-      )
-    expect(designerReruns.length).toBe(1)
-    // a naive re-dispatch of the already-dispatched entry is a no-op (no double-mint) — the single
-    // path's own in-flight/dispatched gate, not a deferred-flag rejection.
-    const before = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
-    await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
-    expect(after).toBe(before)
-  })
-
-  test('read-side phase: pending→staged pre-dispatch, processing (dispatched, queued) → awaiting_confirm after the run BINDS + finishes', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
-      directive: 'continue',
-    })
-    // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const phaseOf = async () =>
-      (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase
-
-    // Pre-dispatch: NOT processing — the task is parked, the row is pending.
-    expect(await phaseOf()).toBe('pending')
-    const entry = (await designerEntries(db, taskId))[0]!
-    await stageTaskQuestion(db, entry.id, true, actor)
-    expect(await phaseOf()).toBe('staged')
-
-    // Dispatch → dispatched_at set, trigger_run_id still NULL (queued) → processing.
-    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    const runId = result.reruns[0]!.nodeRunId
-    expect(await phaseOf()).toBe('processing')
-
-    await bindTriggerRun(db, [entry.id], runId)
-    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(runId)
-    expect(await phaseOf()).toBe('processing') // bound, but run not done yet
-
-    // Run finishes done + output → awaiting_confirm.
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-    await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'result', content: 'x' })
-    expect(await phaseOf()).toBe('awaiting_confirm')
-  })
-
-  test('M1(re-gate): reassign allowed pre-dispatch (NULL trigger) but rejected post-dispatch (stamped)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: OTHER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 500,
-    })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
-    })
-    // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-
-    // pre-dispatch (dispatched_at NULL) → reassign allowed; RFC-162 re-targets the designer
-    // row's defaultTargetNodeId (override stays null).
-    await reassignTaskQuestion(db, entry.id, OTHER, actor)
-    expect((await designerEntries(db, taskId))[0]?.defaultTargetNodeId).toBe(OTHER)
-
-    // dispatch stamps trigger_run_id.
-    await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-
-    // post-dispatch → reassign rejected (reopen is the post-dispatch path).
-    let threw: unknown = null
-    try {
-      await reassignTaskQuestion(db, entry.id, DESIGNER, actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('task-question-already-dispatched')
-  })
-
-  test('H1(final): a process-retry of the dispatched run resolves awaiting_confirm (not stuck on the failed anchor); confirm works', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
-      directive: 'continue',
-    })
-    // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    const anchorRunId = result.reruns[0]!.nodeRunId
-    const anchorRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, anchorRunId)))[0]!
-
-    await bindTriggerRun(db, [entry.id], anchorRunId)
-    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(anchorRunId)
-
-    const phaseOf = async () =>
-      (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase
-
-    // The bound run FAILS → still processing (D3), confirm would reject.
-    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, anchorRunId))
-    expect(await phaseOf()).toBe('processing')
-
-    // The scheduler mints a technical process-retry (same node + iteration, cause
-    // 'process-retry', fresh ULID > anchor) which succeeds with output.
-    const retryId = ulid()
-    await db.insert(nodeRuns).values({
-      id: retryId,
-      taskId,
-      nodeId: DESIGNER,
-      status: 'done',
-      retryIndex: 1,
-      iteration: anchorRow.iteration,
-      rerunCause: 'process-retry',
-      startedAt: Date.now(),
-    })
-    await db.insert(nodeRunOutputs).values({ nodeRunId: retryId, portName: 'result', content: 'x' })
-
-    // The entry resolves through the LINEAGE → awaiting_confirm (not stuck).
-    expect(await phaseOf()).toBe('awaiting_confirm')
-    // confirm now works.
-    await confirmTaskQuestion(db, entry.id, actor)
-    expect(await phaseOf()).toBe('done')
-  })
-
-  test('H2(re-gate): a fresh process-retry STILL carries the External Feedback (lineage select, not == run id)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
-      directive: 'continue',
-    })
-    // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    const attempt1 = result.reruns[0]!.nodeRunId
-    const a1Row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, attempt1)))[0]!
-
-    await bindTriggerRun(db, [entry.id], attempt1)
-    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(attempt1)
-    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, attempt1))
-
-    // The scheduler mints a FRESH process-retry (different id, same node+iteration).
-    const attempt2 = ulid()
-    await db.insert(nodeRuns).values({
-      id: attempt2,
-      taskId,
-      nodeId: DESIGNER,
-      status: 'pending',
-      retryIndex: 1,
-      iteration: a1Row.iteration,
-      rerunCause: 'process-retry',
-      startedAt: null,
-    })
-
-    // Codex H2 re-gate: the retry's rerun REBINDS the question to attempt2 (the unified queue
-    // injector's lineage-select rebind — trigger_run_id follows the fresh process-retry).
-    await bindTriggerRun(db, [entry.id], attempt2)
-    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(attempt2)
-  })
-
-  test('H3(re-gate): a mixed {default-to-D, override-to-D} batch STILL gates on D readiness (unresolved sibling → rejected, nothing minted)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // D has two sibling cross-clarify sources (cc_a, cc_b → D); E has its own (cc_c → E).
-    const D = 'designer'
-    const E = 'designerE'
-    const nodes: WorkflowNode[] = [
-      { id: D, kind: 'agent-single', agentName: 'd' } as WorkflowNode,
-      { id: E, kind: 'agent-single', agentName: 'e' } as WorkflowNode,
-      { id: 'q_a', kind: 'agent-single', agentName: 'qa' } as WorkflowNode,
-      { id: 'q_b', kind: 'agent-single', agentName: 'qb' } as WorkflowNode,
-      { id: 'q_c', kind: 'agent-single', agentName: 'qc' } as WorkflowNode,
-      { id: 'cc_a', kind: 'clarify-cross-agent', title: 'cc_a' } as WorkflowNode,
-      { id: 'cc_b', kind: 'clarify-cross-agent', title: 'cc_b' } as WorkflowNode,
-      { id: 'cc_c', kind: 'clarify-cross-agent', title: 'cc_c' } as WorkflowNode,
-    ]
-    const edges: WorkflowDefinition['edges'] = []
-    for (const { q, cc, d } of [
-      { q: 'q_a', cc: 'cc_a', d: D },
-      { q: 'q_b', cc: 'cc_b', d: D },
-      { q: 'q_c', cc: 'cc_c', d: E },
-    ]) {
-      edges.push({
-        id: `e_q_${cc}`,
-        source: { nodeId: q, portName: '__clarify__' },
-        target: { nodeId: cc, portName: 'questions' },
-      })
-      edges.push({
-        id: `e_d_${cc}`,
-        source: { nodeId: cc, portName: 'to_designer' },
-        target: { nodeId: d, portName: '__external_feedback__' },
-      })
-      edges.push({
-        id: `e_qb_${cc}`,
-        source: { nodeId: cc, portName: 'to_questioner' },
-        target: { nodeId: q, portName: '__clarify_response__' },
-      })
-    }
-    const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
-    const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-    await db.insert(workflows).values({
-      id: `wf_${taskId}`,
-      name: 'h3',
-      description: '',
-      definition: JSON.stringify(def),
-      version: 1,
-      schemaVersion: 4,
-    })
-    await db.insert(tasks).values({
-      id: taskId,
-      name: 'h3',
-      workflowId: `wf_${taskId}`,
-      workflowSnapshot: JSON.stringify(def),
-      repoPath: '/tmp/aw-h3/repo',
-      worktreePath: '',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: JSON.stringify({}),
-      startedAt: Date.now(),
-    })
-    for (const n of [D, E]) {
-      await db
-        .insert(nodeRuns)
-        .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
-    }
-    const openSession = async (q: string, cc: string, d: string, qid: string): Promise<string> => {
-      const runId = ulid()
-      await db
-        .insert(nodeRuns)
-        .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: cc,
-        askingNodeId: q,
-        askingNodeRunId: runId,
-        targetConsumerNodeId: d,
-        loopIter: 0,
-        questions: [mkQ(qid, 'designer-scoped?')],
-      })
-      return crossClarifyNodeRunId
-    }
-    const ccA = await openSession('q_a', 'cc_a', D, 'a1')
-    await openSession('q_b', 'cc_b', D, 'b1') // cc_b stays awaiting_human (unresolved sibling)
-    const ccC = await openSession('q_c', 'cc_c', E, 'c1')
-
-    // Answer cc_a (→ D default entry) and cc_c (→ E default entry). cc_b is NOT answered.
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccA,
-      answers: [ans('a1')],
-      directive: 'continue',
-    })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccC,
-      answers: [ans('c1')],
-      directive: 'continue',
-    })
-    // RFC-162: reconcile no longer derives designers — add one per source (cc_a → D, cc_c → E).
-    await seedDesignerEntries(db, taskId, D, actor, { originNodeRunId: ccA })
-    await seedDesignerEntries(db, taskId, E, actor, { originNodeRunId: ccC })
-    const all = await designerEntries(db, taskId)
-    const entryA = all.find((e) => e.defaultTargetNodeId === D)! // default-to-D
-    const entryC = all.find((e) => e.defaultTargetNodeId === E)! // default-to-E
-    await reassignTaskQuestion(db, entryC.id, D, actor) // re-target entryC → D (its designer row moves to D)
-
-    // The batch's group for D = {entryA (cc_a), entryC (re-targeted from E)}. Both are now
-    // default-to-D designer rows — the readiness gate must NOT be skipped: D's graph subset
-    // {entryA, entryC} still gates on cc_b (D's unresolved sibling cross-clarify round).
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entryA.id, entryC.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('task-question-designer-not-ready')
-    // Nothing minted, nothing stamped (no partial dispatch).
-    expect((await designerEntries(db, taskId)).every((e) => e.dispatchedAt === null)).toBe(true)
-    const pending = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
-    expect(pending.length).toBe(0)
-  })
-
-  test('H2(re-gate): a NON-frontier affected graph designer is readiness-gated too — unresolved sibling → whole dispatch rejected, nothing stamped', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // A --(dataflow)--> B. A is a graph designer (cc_a → A); B is a graph designer with TWO
-    // sibling cross-clarify sources (cc_b1, cc_b2 → B). A is the frontier (upstream of B);
-    // B is NON-frontier (cascade). cc_b2 is left unresolved.
-    const A = 'designer'
-    const B = 'designerB'
-    const nodes: WorkflowNode[] = [
-      { id: A, kind: 'agent-single', agentName: 'a' } as WorkflowNode,
-      { id: B, kind: 'agent-single', agentName: 'b' } as WorkflowNode,
-      { id: 'q_a', kind: 'agent-single', agentName: 'qa' } as WorkflowNode,
-      { id: 'q_b1', kind: 'agent-single', agentName: 'qb1' } as WorkflowNode,
-      { id: 'q_b2', kind: 'agent-single', agentName: 'qb2' } as WorkflowNode,
-      { id: 'cc_a', kind: 'clarify-cross-agent', title: 'cc_a' } as WorkflowNode,
-      { id: 'cc_b1', kind: 'clarify-cross-agent', title: 'cc_b1' } as WorkflowNode,
-      { id: 'cc_b2', kind: 'clarify-cross-agent', title: 'cc_b2' } as WorkflowNode,
-    ]
-    const edges: WorkflowDefinition['edges'] = [
-      // A --(real dataflow edge)--> B → A is a transitive ancestor of B (A frontier, B not).
-      {
-        id: 'e_a_b',
-        source: { nodeId: A, portName: 'result' },
-        target: { nodeId: B, portName: 'input' },
-      },
-    ]
-    for (const { q, cc, d } of [
-      { q: 'q_a', cc: 'cc_a', d: A },
-      { q: 'q_b1', cc: 'cc_b1', d: B },
-      { q: 'q_b2', cc: 'cc_b2', d: B },
-    ]) {
-      edges.push({
-        id: `e_q_${cc}`,
-        source: { nodeId: q, portName: '__clarify__' },
-        target: { nodeId: cc, portName: 'questions' },
-      })
-      edges.push({
-        id: `e_d_${cc}`,
-        source: { nodeId: cc, portName: 'to_designer' },
-        target: { nodeId: d, portName: '__external_feedback__' },
-      })
-      edges.push({
-        id: `e_qb_${cc}`,
-        source: { nodeId: cc, portName: 'to_questioner' },
-        target: { nodeId: q, portName: '__clarify_response__' },
-      })
-    }
-    const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
-    const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-    await db.insert(workflows).values({
-      id: `wf_${taskId}`,
-      name: 'h2ng',
-      description: '',
-      definition: JSON.stringify(def),
-      version: 1,
-      schemaVersion: 4,
-    })
-    await db.insert(tasks).values({
-      id: taskId,
-      name: 'h2ng',
-      workflowId: `wf_${taskId}`,
-      workflowSnapshot: JSON.stringify(def),
-      repoPath: '/tmp/aw-h2ng/repo',
-      worktreePath: '',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: JSON.stringify({}),
-      startedAt: Date.now(),
-    })
-    for (const n of [A, B]) {
-      await db
-        .insert(nodeRuns)
-        .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
-    }
-    const openSession = async (q: string, cc: string, d: string, qid: string): Promise<string> => {
-      const runId = ulid()
-      await db
-        .insert(nodeRuns)
-        .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: cc,
-        askingNodeId: q,
-        askingNodeRunId: runId,
-        targetConsumerNodeId: d,
-        loopIter: 0,
-        questions: [mkQ(qid, 'designer-scoped?')],
-      })
-      return crossClarifyNodeRunId
-    }
-    const ccA = await openSession('q_a', 'cc_a', A, 'a1')
-    const ccB1 = await openSession('q_b1', 'cc_b1', B, 'b1')
-    await openSession('q_b2', 'cc_b2', B, 'b2') // cc_b2 stays awaiting_human (unresolved)
-
-    // Answer cc_a (→ A entry) and cc_b1 (→ B entry). cc_b2 is left unresolved.
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccA,
-      answers: [ans('a1')],
-      directive: 'continue',
-    })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccB1,
-      answers: [ans('b1')],
-      directive: 'continue',
-    })
-    // RFC-162: reconcile no longer derives designers — add one per source (cc_a → A, cc_b1 → B).
-    await seedDesignerEntries(db, taskId, A, actor, { originNodeRunId: ccA })
-    await seedDesignerEntries(db, taskId, B, actor, { originNodeRunId: ccB1 })
-    const all = await designerEntries(db, taskId)
-    const entryA = all.find((e) => e.defaultTargetNodeId === A)!
-    const entryB = all.find((e) => e.defaultTargetNodeId === B)!
-
-    // Dispatch BOTH. B is NON-frontier (A is its dataflow ancestor) but is still a graph
-    // designer with an unresolved sibling (cc_b2) → readiness must gate it, so the WHOLE
-    // dispatch is rejected before stamping anything.
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('task-question-designer-not-ready')
-    expect((await designerEntries(db, taskId)).every((e) => e.dispatchedAt === null)).toBe(true)
-    const pendingRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
-    expect(pendingRuns.length).toBe(0)
-
-    // Once cc_b2 is answered, the same dispatch succeeds (A frontier; B left for cascade).
-    const ccB2Run = (
-      await db
+    async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
+      return db
         .select()
-        .from(clarifyRounds)
-        .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.intermediaryNodeId, 'cc_b2')))
-    )[0]!.intermediaryNodeRunId
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccB2Run,
-      answers: [ans('b2')],
-      directive: 'continue',
-    })
-    // Now both of B's siblings are resolved → the same dispatch succeeds (A frontier; B left
-    // for the scheduler cascade). entryA/entryB ids are stable (reconcile is idempotent).
-    const result = await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
-    expect(result.reruns.length).toBe(1)
-    expect(result.reruns[0]?.targetNodeId).toBe(A) // only the frontier minted
-  })
-
-  test('H2(final): reassign is a CAS on dispatched_at — a concurrent dispatch makes it affect 0 rows → rejected', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
-    })
-    // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-    // Simulate a dispatch winning the race (stamping dispatched_at) AFTER reassign
-    // would have read a NULL — the reassign CAS (WHERE dispatched_at IS NULL) then
-    // affects 0 rows → reject (no silent re-target of committed work).
-    await db
-      .update(taskQuestions)
-      .set({ dispatchedAt: Date.now() })
-      .where(eq(taskQuestions.id, entry.id))
-    let threw: unknown = null
-    try {
-      await reassignTaskQuestion(db, entry.id, OTHER, actor)
-    } catch (e) {
-      threw = e
+        .from(taskQuestions)
+        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
     }
-    expect((threw as { code?: string }).code).toBe('task-question-already-dispatched')
-    // target unchanged (the CAS did not write): the designer row still points at DESIGNER,
-    // override still null (RFC-162 reassign re-targets defaultTargetNodeId, which never moved).
-    expect((await designerEntries(db, taskId))[0]?.defaultTargetNodeId).toBe(DESIGNER)
-    expect((await designerEntries(db, taskId))[0]?.overrideTargetNodeId).toBeNull()
-  })
 
-  test('H3(final): graph-designer dispatch is rejected while a sibling cross-clarify is still awaiting; succeeds once answered', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, ccA, ccB } = await seedTwoSource(db)
-
-    // Answer source A (designer-scoped, control seal) → parked. B is still awaiting_human.
-    const subA = await sealRoundQuestions({
-      db,
-      originNodeRunId: ccA,
-      answers: [ans('a1')],
-      directive: 'continue',
-    })
-    expect(subA.roundFullySealed).toBe(true)
-    // RFC-162: reconcile no longer derives a designer entry from scope — add one for source A
-    // (→ DESIGNER, the shared graph designer of both cc_a and cc_b).
-    await seedDesignerEntries(db, taskId, DESIGNER, actor, { originNodeRunId: ccA })
-    const entryA = (await designerEntries(db, taskId)).find((e) => e.originNodeRunId === ccA)!
-
-    // Dispatch A's designer entry → rejected: sibling B unresolved → partial rerun risk.
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('task-question-designer-not-ready')
-    expect((await designerEntries(db, taskId)).every((e) => e.triggerRunId === null)).toBe(true)
-
-    // Answer source B → now all siblings resolved.
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccB,
-      answers: [ans('b1')],
-      directive: 'continue',
-    })
-    // Dispatch now succeeds (one designer rerun for the full batch).
-    const result = await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
-    expect(result.reruns.length).toBe(1)
-    expect(result.reruns[0]?.targetNodeId).toBe(DESIGNER)
-  })
-
-  test('per-node queue (final): two graph designers each carry their OWN source only — NO C1 exclusion needed', async () => {
-    // RFC-127 借壳: pre-127 this split one round to an OVERRIDE node (fixer) and kept the other on
-    // the graph designer → two homes → two mints. Under 借壳 an override no longer moves the home,
-    // so two {override, default} entries sharing ONE default would collapse onto a single home and
-    // hit the per-home single-borrow gate. To preserve the dual-frontier / independent-queue intent
-    // we use TWO distinct graph designer nodes (different defaults → two homes → two mints).
-    const db = createInMemoryDb(MIGRATIONS)
-    const D1 = 'designer'
-    const D2 = 'designer2'
-    const nodes: WorkflowNode[] = [
-      { id: D1, kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
-      { id: D2, kind: 'agent-single', agentName: 'designer2' } as WorkflowNode,
-      { id: 'q_a', kind: 'agent-single', agentName: 'q_a' } as WorkflowNode,
-      { id: 'q_b', kind: 'agent-single', agentName: 'q_b' } as WorkflowNode,
-      { id: 'cc_a', kind: 'clarify-cross-agent', title: 'cc_a' } as WorkflowNode,
-      { id: 'cc_b', kind: 'clarify-cross-agent', title: 'cc_b' } as WorkflowNode,
-    ]
-    const edges: WorkflowDefinition['edges'] = []
-    for (const { q, cc, d } of [
-      { q: 'q_a', cc: 'cc_a', d: D1 },
-      { q: 'q_b', cc: 'cc_b', d: D2 },
-    ]) {
-      edges.push({
-        id: `e_q_${cc}`,
-        source: { nodeId: q, portName: '__clarify__' },
-        target: { nodeId: cc, portName: 'questions' },
+    test('H1: a round split q1→override / q2→graph-designer is REJECTED per-origin (nothing stamped/minted)', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, {
+        deferred: true,
+        questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
       })
-      edges.push({
-        id: `e_d_${cc}`,
-        source: { nodeId: cc, portName: 'to_designer' },
-        target: { nodeId: d, portName: '__external_feedback__' },
-      })
-      edges.push({
-        id: `e_qb_${cc}`,
-        source: { nodeId: cc, portName: 'to_questioner' },
-        target: { nodeId: q, portName: '__clarify_response__' },
-      })
-    }
-    const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
-    const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-    await db.insert(workflows).values({
-      id: `wf_${taskId}`,
-      name: 'two-designer',
-      description: '',
-      definition: JSON.stringify(def),
-      version: 1,
-      schemaVersion: 4,
-    })
-    await db.insert(tasks).values({
-      id: taskId,
-      name: 'two-designer',
-      workflowId: `wf_${taskId}`,
-      workflowSnapshot: JSON.stringify(def),
-      repoPath: '/tmp/aw-two-designer/repo',
-      worktreePath: '',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: JSON.stringify({}),
-      startedAt: Date.now(),
-    })
-    for (const n of [D1, D2]) {
-      await db
-        .insert(nodeRuns)
-        .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
-    }
-    const open = async (q: string, cc: string, d: string, qid: string): Promise<string> => {
-      const runId = ulid()
-      await db
-        .insert(nodeRuns)
-        .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
+      await db.insert(nodeRuns).values({
+        id: ulid(),
         taskId,
-        intermediaryNodeId: cc,
-        askingNodeId: q,
-        askingNodeRunId: runId,
-        targetConsumerNodeId: d,
-        loopIter: 0,
-        questions: [mkQ(qid, 'designer-scoped?')],
+        nodeId: OTHER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 500,
       })
-      return crossClarifyNodeRunId
-    }
-    const ccA = await open('q_a', 'cc_a', D1, 'a1')
-    const ccB = await open('q_b', 'cc_b', D2, 'b1')
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccA,
-      answers: [{ ...ans('a1'), selectedOptionLabels: ['AAA'] }],
-      directive: 'continue',
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1'), ans('q2')],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives designers. Build the split directly — q1's designer on
+      // OTHER, q2's on DESIGNER (different handler nodes, SAME origin round → a multi-target round).
+      const questioners = await db
+        .select()
+        .from(taskQuestions)
+        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
+      await reassignTaskQuestion(
+        db,
+        questioners.find((e) => e.questionId === 'q1')!.id,
+        OTHER,
+        actor,
+      )
+      await reassignTaskQuestion(
+        db,
+        questioners.find((e) => e.questionId === 'q2')!.id,
+        DESIGNER,
+        actor,
+      )
+      const entries = await designerEntries(db, taskId)
+      const q1Entry = entries.find((e) => e.questionId === 'q1')!
+
+      // dispatching q1 must be rejected: the per-origin guard sees q2 (→ DESIGNER) in the SAME
+      // round targeting a different handler node, even though q2 is outside the requested group.
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [q1Entry.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-question-round-multi-target')
+      // nothing stamped, nothing minted (no partial dispatch)
+      const after = await designerEntries(db, taskId)
+      expect(after.every((e) => e.triggerRunId === null)).toBe(true)
+      const minted = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
+      expect(minted.length).toBe(0)
     })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: ccB,
-      answers: [{ ...ans('b1'), selectedOptionLabels: ['BBB'] }],
-      directive: 'continue',
+
+    test('M1: the override handoff mints the rerun ON the target (RFC-141: no Update-Directive suppression anymore)', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: OTHER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 500,
+      })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+        directive: 'continue',
+      })
+      // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+      await reassignTaskQuestion(db, entry.id, OTHER, actor)
+      // RFC-131 T4 去借壳: the rerun is minted ON the target OTHER. (RFC-141 removed the run-scoped
+      // Update-Directive suppression this used to drive — OTHER now also sees its own prior output.)
+      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
     })
-    // RFC-162: reconcile no longer derives designers — add one per source (cc_a → D1, cc_b → D2).
-    await seedDesignerEntries(db, taskId, D1, actor, { originNodeRunId: ccA })
-    await seedDesignerEntries(db, taskId, D2, actor, { originNodeRunId: ccB })
-    const entryA = (await designerEntries(db, taskId)).find((e) => e.originNodeRunId === ccA)!
-    const entryB = (await designerEntries(db, taskId)).find((e) => e.originNodeRunId === ccB)!
 
-    // Two distinct graph designers → two homes → two independent frontier mints (no borrow).
-    const dispA = await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
-    const dispB = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
-    expect(dispA.reruns[0]?.targetNodeId).toBe(D1)
-    expect(dispB.reruns[0]?.targetNodeId).toBe(D2)
-
-    // D1's queue carries q_a ONLY — q_b lives on D2's own queue, so it is simply ABSENT from D1
-    // (no exclusion logic — RFC-120 §18.3).
-  })
-
-  test('H2(final): a directive=stop designer-scoped round never creates a deferred park', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    // A REJECT (directive='stop') round — intentionally skips the designer rerun; the unified
-    // quick channel still reruns the QUESTIONER (stop) via dispatch.
-    const submit = await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'stop',
-      actor: { userId: 'u1', role: 'owner' },
+    test('M1→RFC-141: the generic priorOutputUpdate is NO LONGER suppressed for an override handoff (source lock)', () => {
+      // The giant runOneNode prompt assembly can't be unit-run (it spawns opencode);
+      // lock at the source so a revert that re-adds the RFC-120 §18 gate goes red.
+      // RFC-141 (user ruling): an override target sees its own prior output as background — the
+      // reassigned Q&A rides `## Clarify Q&A`, and the directive's "feedback above" points at it.
+      const src = readFileSync(
+        join(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'task-execution',
+          'composition',
+          'nodeMechanics.ts',
+        ),
+        'utf8',
+      )
+      expect(src).not.toContain('clarifyQueue?.suppressPriorOutput')
+      expect(src).not.toContain('!suppressPriorOutput')
     })
-    expect(submit.dispatch.reruns.some((r) => r.targetNodeId === QUESTIONER)).toBe(true)
-    expect(submit.dispatch.reruns.some((r) => r.targetNodeId === DESIGNER)).toBe(false)
 
-    // Lazy reconcile (listTaskQuestions) must NOT mint a designer entry for a stop
-    // round → no eternal park. (The questioner entry is still created.)
-    const list = await listTaskQuestions(db, taskId)
-    expect(list.some((e) => e.roleKind === 'questioner')).toBe(true)
-    expect(list.some((e) => e.roleKind === 'designer')).toBe(false)
-    expect((await designerEntries(db, taskId)).length).toBe(0)
-    // The deferred gate stays EMPTY — the task does not get stuck awaiting_human.
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0)
-  })
-})
+    test('H2: full HTTP path — deferred submit parks, POST .../questions/dispatch stamps + mints + releases the gate', async () => {
+      const db = scope.harness.db
+      const app = await makeApp()
+      // owner = the daemon TOKEN actor (__system__) so the member gate passes.
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, {
+        deferred: true,
+        ownerUserId: '__system__',
+      })
+      // designer-scoped control seal → parked (entry created, no rerun); simulate the park.
+      const sealed = await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      expect(sealed.roundFullySealed).toBe(true)
+      // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
+      // derives it from scope) — the HTTP dispatch below then stamps + mints + releases it.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(1) // parked
+
+      const entry = (await designerEntries(db, taskId))[0]!
+      const res = await app.request(`/api/tasks/${taskId}/questions/dispatch`, {
+        method: 'POST',
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({ entryIds: [entry.id] }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { ok: boolean; reruns: Array<{ nodeRunId: string }> }
+      expect(body.ok).toBe(true)
+      expect(body.reruns.length).toBe(1)
+
+      // entry committed (dispatched_at) + a pending designer frontier rerun + gate released.
+      // trigger_run_id is NOT stamped at dispatch (the scheduler binds it at the rerun).
+      const dispatchedEntry = (await designerEntries(db, taskId))[0]
+      expect(dispatchedEntry?.dispatchedAt).not.toBeNull()
+      expect(dispatchedEntry?.triggerRunId).toBeNull()
+      const pending = await db
+        .select()
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            eq(nodeRuns.nodeId, DESIGNER),
+            eq(nodeRuns.status, 'pending'),
+          ),
+        )
+      expect(pending.length).toBe(1)
+      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0) // released
+    })
+
+    test('H2: dispatch route rejects empty entryIds (422)', async () => {
+      const db = scope.harness.db
+      const app = await makeApp()
+      const { taskId } = await seedTask(db, { deferred: true, ownerUserId: '__system__' })
+      const res = await app.request(`/api/tasks/${taskId}/questions/dispatch`, {
+        method: 'POST',
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({ entryIds: [] }),
+      })
+      expect(res.status).toBe(422)
+    })
+
+    // RFC-132 PR-B (universal deferred model): the H1 re-gate ('dispatch rejects a NON-deferred task')
+    // is REMOVED. Every task dispatches through the ONE unified path (route → autoDispatchClarifyRound
+    // → dispatchTaskQuestions); the `deferredQuestionDispatch` flag is vestigial. Double-mint is now
+    // prevented by the SINGLE path (an already-dispatched entry is a no-op), not by a flag gate.
+    test('PR-B: the unified quick channel dispatches the designer on any task — exactly one rerun, no double-mint', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: false })
+      // The unified quick channel seals + auto-dispatches the QUESTIONER (autoDispatch never
+      // auto-dispatches designers — they ride the board's 批量下发, RFC-162 reconcile derives none).
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+        actor,
+      })
+      // RFC-162: the designer handler is ADDED by a reassign, then dispatched through the SAME
+      // unified dispatchTaskQuestions the board uses — exactly one rerun, no double-mint.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+      await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      // the designer entry is dispatched (stamped) → the designer rerun minted EXACTLY once.
+      expect((await designerEntries(db, taskId))[0]?.dispatchedAt).not.toBeNull()
+      const designerReruns = await db
+        .select()
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            eq(nodeRuns.nodeId, DESIGNER),
+            eq(nodeRuns.rerunCause, 'cross-clarify-answer'),
+          ),
+        )
+      expect(designerReruns.length).toBe(1)
+      // a naive re-dispatch of the already-dispatched entry is a no-op (no double-mint) — the single
+      // path's own in-flight/dispatched gate, not a deferred-flag rejection.
+      const before = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+      await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+      expect(after).toBe(before)
+    })
+
+    test('read-side phase: pending→staged pre-dispatch, processing (dispatched, queued) → awaiting_confirm after the run BINDS + finishes', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const phaseOf = async () =>
+        (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase
+
+      // Pre-dispatch: NOT processing — the task is parked, the row is pending.
+      expect(await phaseOf()).toBe('pending')
+      const entry = (await designerEntries(db, taskId))[0]!
+      await stageTaskQuestion(db, entry.id, true, actor)
+      expect(await phaseOf()).toBe('staged')
+
+      // Dispatch → dispatched_at set, trigger_run_id still NULL (queued) → processing.
+      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const runId = result.reruns[0]!.nodeRunId
+      expect(await phaseOf()).toBe('processing')
+
+      await bindTriggerRun(db, [entry.id], runId)
+      expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(runId)
+      expect(await phaseOf()).toBe('processing') // bound, but run not done yet
+
+      // Run finishes done + output → awaiting_confirm.
+      await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
+      await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'result', content: 'x' })
+      expect(await phaseOf()).toBe('awaiting_confirm')
+    })
+
+    test('M1(re-gate): reassign allowed pre-dispatch (NULL trigger) but rejected post-dispatch (stamped)', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: OTHER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 500,
+      })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+
+      // pre-dispatch (dispatched_at NULL) → reassign allowed; RFC-162 re-targets the designer
+      // row's defaultTargetNodeId (override stays null).
+      await reassignTaskQuestion(db, entry.id, OTHER, actor)
+      expect((await designerEntries(db, taskId))[0]?.defaultTargetNodeId).toBe(OTHER)
+
+      // dispatch stamps trigger_run_id.
+      await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+
+      // post-dispatch → reassign rejected (reopen is the post-dispatch path).
+      let threw: unknown = null
+      try {
+        await reassignTaskQuestion(db, entry.id, DESIGNER, actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-question-already-dispatched')
+    })
+
+    test('H1(final): a process-retry of the dispatched run resolves awaiting_confirm (not stuck on the failed anchor); confirm works', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const anchorRunId = result.reruns[0]!.nodeRunId
+      const anchorRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, anchorRunId)))[0]!
+
+      await bindTriggerRun(db, [entry.id], anchorRunId)
+      expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(anchorRunId)
+
+      const phaseOf = async () =>
+        (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase
+
+      // The bound run FAILS → still processing (D3), confirm would reject.
+      await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, anchorRunId))
+      expect(await phaseOf()).toBe('processing')
+
+      // The scheduler mints a technical process-retry (same node + iteration, cause
+      // 'process-retry', fresh ULID > anchor) which succeeds with output.
+      const retryId = ulid()
+      await db.insert(nodeRuns).values({
+        id: retryId,
+        taskId,
+        nodeId: DESIGNER,
+        status: 'done',
+        retryIndex: 1,
+        iteration: anchorRow.iteration,
+        rerunCause: 'process-retry',
+        startedAt: Date.now(),
+      })
+      await db
+        .insert(nodeRunOutputs)
+        .values({ nodeRunId: retryId, portName: 'result', content: 'x' })
+
+      // The entry resolves through the LINEAGE → awaiting_confirm (not stuck).
+      expect(await phaseOf()).toBe('awaiting_confirm')
+      // confirm now works.
+      await confirmTaskQuestion(db, entry.id, actor)
+      expect(await phaseOf()).toBe('done')
+    })
+
+    test('H2(re-gate): a fresh process-retry STILL carries the External Feedback (lineage select, not == run id)', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const attempt1 = result.reruns[0]!.nodeRunId
+      const a1Row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, attempt1)))[0]!
+
+      await bindTriggerRun(db, [entry.id], attempt1)
+      expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(attempt1)
+      await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, attempt1))
+
+      // The scheduler mints a FRESH process-retry (different id, same node+iteration).
+      const attempt2 = ulid()
+      await db.insert(nodeRuns).values({
+        id: attempt2,
+        taskId,
+        nodeId: DESIGNER,
+        status: 'pending',
+        retryIndex: 1,
+        iteration: a1Row.iteration,
+        rerunCause: 'process-retry',
+        startedAt: null,
+      })
+
+      // Codex H2 re-gate: the retry's rerun REBINDS the question to attempt2 (the unified queue
+      // injector's lineage-select rebind — trigger_run_id follows the fresh process-retry).
+      await bindTriggerRun(db, [entry.id], attempt2)
+      expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(attempt2)
+    })
+
+    test('H3(re-gate): a mixed {default-to-D, override-to-D} batch STILL gates on D readiness (unresolved sibling → rejected, nothing minted)', async () => {
+      const db = scope.harness.db
+      // D has two sibling cross-clarify sources (cc_a, cc_b → D); E has its own (cc_c → E).
+      const D = 'designer'
+      const E = 'designerE'
+      const nodes: WorkflowNode[] = [
+        { id: D, kind: 'agent-single', agentName: 'd' } as WorkflowNode,
+        { id: E, kind: 'agent-single', agentName: 'e' } as WorkflowNode,
+        { id: 'q_a', kind: 'agent-single', agentName: 'qa' } as WorkflowNode,
+        { id: 'q_b', kind: 'agent-single', agentName: 'qb' } as WorkflowNode,
+        { id: 'q_c', kind: 'agent-single', agentName: 'qc' } as WorkflowNode,
+        { id: 'cc_a', kind: 'clarify-cross-agent', title: 'cc_a' } as WorkflowNode,
+        { id: 'cc_b', kind: 'clarify-cross-agent', title: 'cc_b' } as WorkflowNode,
+        { id: 'cc_c', kind: 'clarify-cross-agent', title: 'cc_c' } as WorkflowNode,
+      ]
+      const edges: WorkflowDefinition['edges'] = []
+      for (const { q, cc, d } of [
+        { q: 'q_a', cc: 'cc_a', d: D },
+        { q: 'q_b', cc: 'cc_b', d: D },
+        { q: 'q_c', cc: 'cc_c', d: E },
+      ]) {
+        edges.push({
+          id: `e_q_${cc}`,
+          source: { nodeId: q, portName: '__clarify__' },
+          target: { nodeId: cc, portName: 'questions' },
+        })
+        edges.push({
+          id: `e_d_${cc}`,
+          source: { nodeId: cc, portName: 'to_designer' },
+          target: { nodeId: d, portName: '__external_feedback__' },
+        })
+        edges.push({
+          id: `e_qb_${cc}`,
+          source: { nodeId: cc, portName: 'to_questioner' },
+          target: { nodeId: q, portName: '__clarify_response__' },
+        })
+      }
+      const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
+      const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
+      await db.insert(workflows).values({
+        id: `wf_${taskId}`,
+        name: 'h3',
+        description: '',
+        definition: JSON.stringify(def),
+        version: 1,
+        schemaVersion: 4,
+      })
+      await db.insert(tasks).values({
+        id: taskId,
+        name: 'h3',
+        workflowId: `wf_${taskId}`,
+        workflowSnapshot: JSON.stringify(def),
+        repoPath: '/tmp/aw-h3/repo',
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'running',
+        inputs: JSON.stringify({}),
+        startedAt: Date.now(),
+      })
+      for (const n of [D, E]) {
+        await db
+          .insert(nodeRuns)
+          .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
+      }
+      const openSession = async (
+        q: string,
+        cc: string,
+        d: string,
+        qid: string,
+      ): Promise<string> => {
+        const runId = ulid()
+        await db
+          .insert(nodeRuns)
+          .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: cc,
+          askingNodeId: q,
+          askingNodeRunId: runId,
+          targetConsumerNodeId: d,
+          loopIter: 0,
+          questions: [mkQ(qid, 'designer-scoped?')],
+        })
+        return crossClarifyNodeRunId
+      }
+      const ccA = await openSession('q_a', 'cc_a', D, 'a1')
+      await openSession('q_b', 'cc_b', D, 'b1') // cc_b stays awaiting_human (unresolved sibling)
+      const ccC = await openSession('q_c', 'cc_c', E, 'c1')
+
+      // Answer cc_a (→ D default entry) and cc_c (→ E default entry). cc_b is NOT answered.
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccA,
+        answers: [ans('a1')],
+        directive: 'continue',
+      })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccC,
+        answers: [ans('c1')],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives designers — add one per source (cc_a → D, cc_c → E).
+      await seedDesignerEntries(db, taskId, D, actor, { originNodeRunId: ccA })
+      await seedDesignerEntries(db, taskId, E, actor, { originNodeRunId: ccC })
+      const all = await designerEntries(db, taskId)
+      const entryA = all.find((e) => e.defaultTargetNodeId === D)! // default-to-D
+      const entryC = all.find((e) => e.defaultTargetNodeId === E)! // default-to-E
+      await reassignTaskQuestion(db, entryC.id, D, actor) // re-target entryC → D (its designer row moves to D)
+
+      // The batch's group for D = {entryA (cc_a), entryC (re-targeted from E)}. Both are now
+      // default-to-D designer rows — the readiness gate must NOT be skipped: D's graph subset
+      // {entryA, entryC} still gates on cc_b (D's unresolved sibling cross-clarify round).
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [entryA.id, entryC.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-question-designer-not-ready')
+      // Nothing minted, nothing stamped (no partial dispatch).
+      expect((await designerEntries(db, taskId)).every((e) => e.dispatchedAt === null)).toBe(true)
+      const pending = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
+      expect(pending.length).toBe(0)
+    })
+
+    test('H2(re-gate): a NON-frontier affected graph designer is readiness-gated too — unresolved sibling → whole dispatch rejected, nothing stamped', async () => {
+      const db = scope.harness.db
+      // A --(dataflow)--> B. A is a graph designer (cc_a → A); B is a graph designer with TWO
+      // sibling cross-clarify sources (cc_b1, cc_b2 → B). A is the frontier (upstream of B);
+      // B is NON-frontier (cascade). cc_b2 is left unresolved.
+      const A = 'designer'
+      const B = 'designerB'
+      const nodes: WorkflowNode[] = [
+        { id: A, kind: 'agent-single', agentName: 'a' } as WorkflowNode,
+        { id: B, kind: 'agent-single', agentName: 'b' } as WorkflowNode,
+        { id: 'q_a', kind: 'agent-single', agentName: 'qa' } as WorkflowNode,
+        { id: 'q_b1', kind: 'agent-single', agentName: 'qb1' } as WorkflowNode,
+        { id: 'q_b2', kind: 'agent-single', agentName: 'qb2' } as WorkflowNode,
+        { id: 'cc_a', kind: 'clarify-cross-agent', title: 'cc_a' } as WorkflowNode,
+        { id: 'cc_b1', kind: 'clarify-cross-agent', title: 'cc_b1' } as WorkflowNode,
+        { id: 'cc_b2', kind: 'clarify-cross-agent', title: 'cc_b2' } as WorkflowNode,
+      ]
+      const edges: WorkflowDefinition['edges'] = [
+        // A --(real dataflow edge)--> B → A is a transitive ancestor of B (A frontier, B not).
+        {
+          id: 'e_a_b',
+          source: { nodeId: A, portName: 'result' },
+          target: { nodeId: B, portName: 'input' },
+        },
+      ]
+      for (const { q, cc, d } of [
+        { q: 'q_a', cc: 'cc_a', d: A },
+        { q: 'q_b1', cc: 'cc_b1', d: B },
+        { q: 'q_b2', cc: 'cc_b2', d: B },
+      ]) {
+        edges.push({
+          id: `e_q_${cc}`,
+          source: { nodeId: q, portName: '__clarify__' },
+          target: { nodeId: cc, portName: 'questions' },
+        })
+        edges.push({
+          id: `e_d_${cc}`,
+          source: { nodeId: cc, portName: 'to_designer' },
+          target: { nodeId: d, portName: '__external_feedback__' },
+        })
+        edges.push({
+          id: `e_qb_${cc}`,
+          source: { nodeId: cc, portName: 'to_questioner' },
+          target: { nodeId: q, portName: '__clarify_response__' },
+        })
+      }
+      const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
+      const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
+      await db.insert(workflows).values({
+        id: `wf_${taskId}`,
+        name: 'h2ng',
+        description: '',
+        definition: JSON.stringify(def),
+        version: 1,
+        schemaVersion: 4,
+      })
+      await db.insert(tasks).values({
+        id: taskId,
+        name: 'h2ng',
+        workflowId: `wf_${taskId}`,
+        workflowSnapshot: JSON.stringify(def),
+        repoPath: '/tmp/aw-h2ng/repo',
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'running',
+        inputs: JSON.stringify({}),
+        startedAt: Date.now(),
+      })
+      for (const n of [A, B]) {
+        await db
+          .insert(nodeRuns)
+          .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
+      }
+      const openSession = async (
+        q: string,
+        cc: string,
+        d: string,
+        qid: string,
+      ): Promise<string> => {
+        const runId = ulid()
+        await db
+          .insert(nodeRuns)
+          .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: cc,
+          askingNodeId: q,
+          askingNodeRunId: runId,
+          targetConsumerNodeId: d,
+          loopIter: 0,
+          questions: [mkQ(qid, 'designer-scoped?')],
+        })
+        return crossClarifyNodeRunId
+      }
+      const ccA = await openSession('q_a', 'cc_a', A, 'a1')
+      const ccB1 = await openSession('q_b1', 'cc_b1', B, 'b1')
+      await openSession('q_b2', 'cc_b2', B, 'b2') // cc_b2 stays awaiting_human (unresolved)
+
+      // Answer cc_a (→ A entry) and cc_b1 (→ B entry). cc_b2 is left unresolved.
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccA,
+        answers: [ans('a1')],
+        directive: 'continue',
+      })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccB1,
+        answers: [ans('b1')],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives designers — add one per source (cc_a → A, cc_b1 → B).
+      await seedDesignerEntries(db, taskId, A, actor, { originNodeRunId: ccA })
+      await seedDesignerEntries(db, taskId, B, actor, { originNodeRunId: ccB1 })
+      const all = await designerEntries(db, taskId)
+      const entryA = all.find((e) => e.defaultTargetNodeId === A)!
+      const entryB = all.find((e) => e.defaultTargetNodeId === B)!
+
+      // Dispatch BOTH. B is NON-frontier (A is its dataflow ancestor) but is still a graph
+      // designer with an unresolved sibling (cc_b2) → readiness must gate it, so the WHOLE
+      // dispatch is rejected before stamping anything.
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-question-designer-not-ready')
+      expect((await designerEntries(db, taskId)).every((e) => e.dispatchedAt === null)).toBe(true)
+      const pendingRuns = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
+      expect(pendingRuns.length).toBe(0)
+
+      // Once cc_b2 is answered, the same dispatch succeeds (A frontier; B left for cascade).
+      const ccB2Run = (
+        await db
+          .select()
+          .from(clarifyRounds)
+          .where(
+            and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.intermediaryNodeId, 'cc_b2')),
+          )
+      )[0]!.intermediaryNodeRunId
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccB2Run,
+        answers: [ans('b2')],
+        directive: 'continue',
+      })
+      // Now both of B's siblings are resolved → the same dispatch succeeds (A frontier; B left
+      // for the scheduler cascade). entryA/entryB ids are stable (reconcile is idempotent).
+      const result = await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
+      expect(result.reruns.length).toBe(1)
+      expect(result.reruns[0]?.targetNodeId).toBe(A) // only the frontier minted
+    })
+
+    test('H2(final): reassign is a CAS on dispatched_at — a concurrent dispatch makes it affect 0 rows → rejected', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+      // Simulate a dispatch winning the race (stamping dispatched_at) AFTER reassign
+      // would have read a NULL — the reassign CAS (WHERE dispatched_at IS NULL) then
+      // affects 0 rows → reject (no silent re-target of committed work).
+      await db
+        .update(taskQuestions)
+        .set({ dispatchedAt: Date.now() })
+        .where(eq(taskQuestions.id, entry.id))
+      let threw: unknown = null
+      try {
+        await reassignTaskQuestion(db, entry.id, OTHER, actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-question-already-dispatched')
+      // target unchanged (the CAS did not write): the designer row still points at DESIGNER,
+      // override still null (RFC-162 reassign re-targets defaultTargetNodeId, which never moved).
+      expect((await designerEntries(db, taskId))[0]?.defaultTargetNodeId).toBe(DESIGNER)
+      expect((await designerEntries(db, taskId))[0]?.overrideTargetNodeId).toBeNull()
+    })
+
+    test('H3(final): graph-designer dispatch is rejected while a sibling cross-clarify is still awaiting; succeeds once answered', async () => {
+      const db = scope.harness.db
+      const { taskId, ccA, ccB } = await seedTwoSource(db)
+
+      // Answer source A (designer-scoped, control seal) → parked. B is still awaiting_human.
+      const subA = await sealRoundQuestions({
+        db,
+        originNodeRunId: ccA,
+        answers: [ans('a1')],
+        directive: 'continue',
+      })
+      expect(subA.roundFullySealed).toBe(true)
+      // RFC-162: reconcile no longer derives a designer entry from scope — add one for source A
+      // (→ DESIGNER, the shared graph designer of both cc_a and cc_b).
+      await seedDesignerEntries(db, taskId, DESIGNER, actor, { originNodeRunId: ccA })
+      const entryA = (await designerEntries(db, taskId)).find((e) => e.originNodeRunId === ccA)!
+
+      // Dispatch A's designer entry → rejected: sibling B unresolved → partial rerun risk.
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-question-designer-not-ready')
+      expect((await designerEntries(db, taskId)).every((e) => e.triggerRunId === null)).toBe(true)
+
+      // Answer source B → now all siblings resolved.
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccB,
+        answers: [ans('b1')],
+        directive: 'continue',
+      })
+      // Dispatch now succeeds (one designer rerun for the full batch).
+      const result = await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+      expect(result.reruns.length).toBe(1)
+      expect(result.reruns[0]?.targetNodeId).toBe(DESIGNER)
+    })
+
+    test('per-node queue (final): two graph designers each carry their OWN source only — NO C1 exclusion needed', async () => {
+      // RFC-127 借壳: pre-127 this split one round to an OVERRIDE node (fixer) and kept the other on
+      // the graph designer → two homes → two mints. Under 借壳 an override no longer moves the home,
+      // so two {override, default} entries sharing ONE default would collapse onto a single home and
+      // hit the per-home single-borrow gate. To preserve the dual-frontier / independent-queue intent
+      // we use TWO distinct graph designer nodes (different defaults → two homes → two mints).
+      const db = scope.harness.db
+      const D1 = 'designer'
+      const D2 = 'designer2'
+      const nodes: WorkflowNode[] = [
+        { id: D1, kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        { id: D2, kind: 'agent-single', agentName: 'designer2' } as WorkflowNode,
+        { id: 'q_a', kind: 'agent-single', agentName: 'q_a' } as WorkflowNode,
+        { id: 'q_b', kind: 'agent-single', agentName: 'q_b' } as WorkflowNode,
+        { id: 'cc_a', kind: 'clarify-cross-agent', title: 'cc_a' } as WorkflowNode,
+        { id: 'cc_b', kind: 'clarify-cross-agent', title: 'cc_b' } as WorkflowNode,
+      ]
+      const edges: WorkflowDefinition['edges'] = []
+      for (const { q, cc, d } of [
+        { q: 'q_a', cc: 'cc_a', d: D1 },
+        { q: 'q_b', cc: 'cc_b', d: D2 },
+      ]) {
+        edges.push({
+          id: `e_q_${cc}`,
+          source: { nodeId: q, portName: '__clarify__' },
+          target: { nodeId: cc, portName: 'questions' },
+        })
+        edges.push({
+          id: `e_d_${cc}`,
+          source: { nodeId: cc, portName: 'to_designer' },
+          target: { nodeId: d, portName: '__external_feedback__' },
+        })
+        edges.push({
+          id: `e_qb_${cc}`,
+          source: { nodeId: cc, portName: 'to_questioner' },
+          target: { nodeId: q, portName: '__clarify_response__' },
+        })
+      }
+      const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
+      const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
+      await db.insert(workflows).values({
+        id: `wf_${taskId}`,
+        name: 'two-designer',
+        description: '',
+        definition: JSON.stringify(def),
+        version: 1,
+        schemaVersion: 4,
+      })
+      await db.insert(tasks).values({
+        id: taskId,
+        name: 'two-designer',
+        workflowId: `wf_${taskId}`,
+        workflowSnapshot: JSON.stringify(def),
+        repoPath: '/tmp/aw-two-designer/repo',
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'running',
+        inputs: JSON.stringify({}),
+        startedAt: Date.now(),
+      })
+      for (const n of [D1, D2]) {
+        await db
+          .insert(nodeRuns)
+          .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
+      }
+      const open = async (q: string, cc: string, d: string, qid: string): Promise<string> => {
+        const runId = ulid()
+        await db
+          .insert(nodeRuns)
+          .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: cc,
+          askingNodeId: q,
+          askingNodeRunId: runId,
+          targetConsumerNodeId: d,
+          loopIter: 0,
+          questions: [mkQ(qid, 'designer-scoped?')],
+        })
+        return crossClarifyNodeRunId
+      }
+      const ccA = await open('q_a', 'cc_a', D1, 'a1')
+      const ccB = await open('q_b', 'cc_b', D2, 'b1')
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccA,
+        answers: [{ ...ans('a1'), selectedOptionLabels: ['AAA'] }],
+        directive: 'continue',
+      })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: ccB,
+        answers: [{ ...ans('b1'), selectedOptionLabels: ['BBB'] }],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives designers — add one per source (cc_a → D1, cc_b → D2).
+      await seedDesignerEntries(db, taskId, D1, actor, { originNodeRunId: ccA })
+      await seedDesignerEntries(db, taskId, D2, actor, { originNodeRunId: ccB })
+      const entryA = (await designerEntries(db, taskId)).find((e) => e.originNodeRunId === ccA)!
+      const entryB = (await designerEntries(db, taskId)).find((e) => e.originNodeRunId === ccB)!
+
+      // Two distinct graph designers → two homes → two independent frontier mints (no borrow).
+      const dispA = await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+      const dispB = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+      expect(dispA.reruns[0]?.targetNodeId).toBe(D1)
+      expect(dispB.reruns[0]?.targetNodeId).toBe(D2)
+
+      // D1's queue carries q_a ONLY — q_b lives on D2's own queue, so it is simply ABSENT from D1
+      // (no exclusion logic — RFC-120 §18.3).
+    })
+
+    test('H2(final): a directive=stop designer-scoped round never creates a deferred park', async () => {
+      const db = scope.harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      // A REJECT (directive='stop') round — intentionally skips the designer rerun; the unified
+      // quick channel still reruns the QUESTIONER (stop) via dispatch.
+      const submit = await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'stop',
+        actor: { userId: 'u1', role: 'owner' },
+      })
+      expect(submit.dispatch.reruns.some((r) => r.targetNodeId === QUESTIONER)).toBe(true)
+      expect(submit.dispatch.reruns.some((r) => r.targetNodeId === DESIGNER)).toBe(false)
+
+      // Lazy reconcile (listTaskQuestions) must NOT mint a designer entry for a stop
+      // round → no eternal park. (The questioner entry is still created.)
+      const list = await listTaskQuestions(db, taskId)
+      expect(list.some((e) => e.roleKind === 'questioner')).toBe(true)
+      expect(list.some((e) => e.roleKind === 'designer')).toBe(false)
+      expect((await designerEntries(db, taskId)).length).toBe(0)
+      // The deferred gate stays EMPTY — the task does not get stuck awaiting_human.
+      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0)
+    })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // G — RFC-120 §18 corrected model: UPSTREAM-FRONTIER mint + per-node queue +

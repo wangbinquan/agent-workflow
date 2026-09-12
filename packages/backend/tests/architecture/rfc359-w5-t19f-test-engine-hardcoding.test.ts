@@ -234,7 +234,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc107-url-upload-multipart.test.ts: 3',
   'rfc108-resume-safety.test.ts: 1',
   'rfc109-sync-task-workflow.test.ts: 1',
-  'rfc120-deferred-dispatch.test.ts: 42',
+  'rfc120-deferred-dispatch.test.ts: 27',
   'rfc120-task-questions-route.test.ts: 1',
   'rfc122-clarify-directive-dispatch.test.ts: 2',
   'rfc123-stop-enforcement.test.ts: 1',

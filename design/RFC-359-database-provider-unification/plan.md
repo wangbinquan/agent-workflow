@@ -6983,3 +6983,21 @@ CI 的 ubuntu shard 7/8 红两条（各约 504ms，也就是整条用例跑完�
    数据发现**——坐着想是想不出「waitFor 用 return 退出」这种形态的。
 3. **判据推断不了意图时，给带理由的豁免，别硬猜。** 假阳性在这里的代价不是噪声——
    是有人照着把一个正当的轮询循环、或一次刻意的时钟推进改坏。
+
+
+## 5be. `rfc120-deferred-dispatch` 的 HTTP 面（调用点 42 → 27）
+
+这个文件 2400+ 行、七个 describe，其中**只有一个**打 HTTP（`run-scoped layer Codex folds`，
+用一个本地 `makeApp(db)`）。把那一个包进作用域，`makeApp` 收成 `await scope.open()`
+——它原来自己 `mkdtempSync` 建 app home **又**建一个 config 目录，两个都由作用域负责。
+
+三个种子函数（`seedTask` / `seedDesignerEntries` / `seedTwoSource`）的形参从 `DbClient`
+收成 `ProviderNeutralDatabase`——函数体本来就只有普通 insert，那个类型纯属未收敛。
+一处改动，**32 个调用点**一起解锁（含另外六个 describe 将来要迁的那些）。
+
+**剩下 27 个调用点是服务层的六个 describe**（不打 HTTP）。它们该转
+`describeEachProvider`，与 AC-6 的 HTTP 面是**两件事**——账本条目因此不减。
+那批是更大的一刀：单个 describe 动辄 300–900 行，且各自带自己的 fake 调度器 / 钩子。
+
+**规律**：一个大文件里往往只有一两个 describe 真的打 HTTP。**先只迁那几个**——
+AC-6 要的就是 HTTP 面的双引擎，服务层的转换是另一条线，混在一起做会把一刀拖成十倍。
