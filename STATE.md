@@ -44,7 +44,20 @@
 > 仍是单引擎的 HTTP 用例文件 **83 个**（勘误：先前写 93——`grep -l 'createApp('` 会把
 > `expect(src).not.toContain('createApp(')` 这类**源码断言**也数进来，实际有 2 个是这种；
 > 其余差额是此后已迁的。判据用「该文件是否存在一行含 `createApp(` 且不含 `expect`/`toContain`」），
-> 其中**只有约 25 个**带非标准 `createApp` 选项；
+> **但「83」不是可迁量**。按两道筛子实测分层（2026-09-12）：
+> - **40 个**：`createApp` 选项标准 **且** 不碰 SQLite 绑定的测试基建 —— 这才是真正的省力入口；
+> - **18 个**：基建干净但带非标准 `createApp` 选项（`AppDeps` 独有的注入缝，见下）；
+> - **25 个**：卡在**SQLite 绑定的测试基建**上——`createTaskExecutionTestTopology` /
+>   `runTaskWithRealTestTopology`（内部就是 `createSqliteTaskExecutionPersistence`）、
+>   `composeTestSqliteRealtimeRuntime`、`StartTaskDeps.db: LegacySqliteTaskDatabase`、
+>   以及自己 `db.$client.close()` 的用例。这一层**不是迁移问题，是那些夹具/契约本身还没中立化**。
+>
+> 筛子命令（可复跑）：
+> ```sh
+> grep -qE "composeSqlite|composeTestSqlite|LegacySqlite|StartTaskDeps|createTaskExecutionTestTopology|runTaskWithRealTestTopology|\$client" "$f"
+> ```
+>
+> 其中**约 25 个**带非标准 `createApp` 选项；
 > 真正卡住的是 `AppDeps` 独有的那批注入缝（`runtimeDiagnosticTestDependencies` ×4 /
 > `webhookDispatcher` ×3 / `mcpRuntimeTestDependencies` ×2 / `intentTestDependencies` ×2 …），
 > **`PostgresqlApplicationInput` 上一个都没有**——这是与 secretBox 同类的能力不对称，

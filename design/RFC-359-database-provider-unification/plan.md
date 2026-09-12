@@ -6193,3 +6193,30 @@ for (const rc of CASES) {          // 每个资源类型一轮
 
 （同一轮里三个候选被脚本**拒绝**而不是硬迁：两个找不到 `token` 选项、一个触发 runaway 保护，
 文件原样未动。上一节那次「静默丢选项」之后这是想要的行为——**宁可拒绝，不要产出看着像对的东西**。）
+
+## 5ae. AC-6 剩余量的**分层实测**：「83 个待迁」里只有 40 个是省力的（W58）
+
+一批三个大文件（`review-state-machine` / `rfc326-review-decision-batch` / `tasks`）**全军覆没**，
+都不是迁移姿势问题，而是卡在**SQLite 绑定的测试基建**上。这促使把剩余量按「卡在什么上」分层实测，
+而不是只报一个总数：
+
+| 层 | 数量 | 卡在什么 |
+| --- | --- | --- |
+| **省力入口** | **40** | `createApp` 选项标准 **且** 不碰 SQLite 绑定的测试基建 |
+| 需要装配面变更 | 18 | 基建干净，但带 `AppDeps` 独有的注入缝（`PostgresqlApplicationInput` 上没有，见 §5aa） |
+| 卡在测试基建 | 25 | 下面这几样 |
+
+### 第三层的具体形态（这一层**不是迁移问题**）
+
+- `createTaskExecutionTestTopology` / `runTaskWithRealTestTopology` —— 名字看不出来，但它内部直接
+  composes `createSqliteTaskExecutionPersistence` / `sqliteMemoryInjectionQueries`，**按构造只跑
+  SQLite**。凡是要真 scheduler 拓扑的用例都卡在这里。
+- `composeTestSqliteRealtimeRuntime` —— 底下是登记在册的成对实现（§5ac）。
+- `StartTaskDeps.db: LegacySqliteTaskDatabase` —— legacy 契约上的 SQLite 绑定。
+- 用例自己 `db.$client.close()` —— 库归 harness 所有，这行在双引擎下本来就不该有（§5x）。
+
+**结论**：AC-6 剩下的不是「再迁 83 个文件」这种匀质工作量。省力那 40 个迁完之后，
+**真正的瓶颈是把上面这几件测试基建中立化**——尤其 `createTaskExecutionTestTopology`，
+它一个就挡着一批要真 scheduler 的用例。那是一刀独立的活，值得单独排。
+
+筛子命令写进了 `STATE.md`，可复跑。
