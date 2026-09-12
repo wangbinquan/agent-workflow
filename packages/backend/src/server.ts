@@ -1049,6 +1049,15 @@ export interface SqliteAppComposition<
 > extends ComposedAppDeps<TCore> {
   readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
+  /**
+   * RFC-359 —— 装配结果本来就在返回值里（`...runtimeDeps` 带出来的），只是类型上没声明。
+   * 声明出来，测试夹具才能把「应用自己建的那一份」交给用例，而不是逼用例在外面再
+   * `createTaskExecutionReadModels(db)` 建一份、再从 `AppDeps` 塞回去——那个形状把用例
+   * 钉死在 SQLite 上（`PostgresqlApplicationInput` 没有、也不该有这个只服务测试的字段）。
+   */
+  readonly taskExecutionReadModels: TaskExecutionReadModels
+  /** 同上：装配好的协作命令上下文，让夹具把它交给用例而不是逼用例重建。 */
+  readonly collaborationContext: CollaborationRouteContext
 }
 
 export type ProviderComposedAppDeps<
@@ -2147,6 +2156,8 @@ export function composeSqliteApplicationDeps(
     ...application,
     digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart,
     repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
+    taskExecutionReadModels: effectiveDeps.taskExecutionReadModels,
+    collaborationContext: effectiveDeps.collaborationContext,
   })
 }
 

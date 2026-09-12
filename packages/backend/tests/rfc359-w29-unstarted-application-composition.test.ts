@@ -55,11 +55,15 @@ function compact(node: ts.Node, source: ts.SourceFile): string {
   ) {
     const body = functionBody(source, 'composeSqliteUnstartedApplication')
     if (descendants(body, (candidate) => candidate === node).length === 1) {
+      // 追加在尾部的那几项同样是「暴露装配结果」，不是装配本身（见本文件另一处
+      // `APPENDED_EXPOSURES` 的说明）。新增一项要在这里一起登记。
       const expected =
         '{returncomposeUnstartedApplication((scope)=>{' +
         'constcomposed=composeSqliteApplicationDeps(deps,scope)' +
         'return{app:createComposedApp(composed),' +
-        'repositoryWorkspaceStore:composed.repositoryWorkspaceStore,}})}'
+        'repositoryWorkspaceStore:composed.repositoryWorkspaceStore,' +
+        'taskExecutionReadModels:composed.taskExecutionReadModels,' +
+        'collaborationContext:composed.collaborationContext,}})}'
       if (body.getText(source).replace(/\s/g, '') !== expected)
         throw new Error('SQLite helper must return the same composed store after one app mount')
       const composition = namedCalls(body, source, 'composeSqliteApplicationDeps')[0]
@@ -95,17 +99,32 @@ function oldSqliteStoreReturn(source: ts.SourceFile, body: ts.Block): ts.Block {
   )
     throw new Error('SQLite composition must keep its final frozen return')
   const value = last.expression.arguments[0]
+  // 合一后**追加**在返回对象尾部的那几项：它们都不是「装配」，而是把**已经装配好的东西
+  // 暴露出来**给测试夹具（RFC-359 §5aq——否则用例只能在外面再建一份一模一样的，再从
+  // `AppDeps` 塞回去，那个形状把用例钉死在 SQLite 上）。这里逐字对账后剥掉，再拿剩下的
+  // 部分与合一前的摘要比——**新增一项要在这个名单里显式登记**，不能默默混过去。
+  const APPENDED_EXPOSURES = [
+    'repositoryWorkspaceStore:repositoryBootstrap.repositoryWorkspaceStore',
+    'taskExecutionReadModels:effectiveDeps.taskExecutionReadModels',
+    'collaborationContext:effectiveDeps.collaborationContext',
+  ]
+  if (value === undefined || !ts.isObjectLiteralExpression(value))
+    throw new Error('SQLite composition must keep its final frozen return')
+  const tail = value.properties.slice(-APPENDED_EXPOSURES.length)
   if (
-    value === undefined ||
-    !ts.isObjectLiteralExpression(value) ||
-    value.properties.at(-1) === undefined ||
-    compact(value.properties.at(-1)!, source) !==
-      'repositoryWorkspaceStore:repositoryBootstrap.repositoryWorkspaceStore'
+    tail.length !== APPENDED_EXPOSURES.length ||
+    tail.some((property, index) => compact(property, source) !== APPENDED_EXPOSURES[index])
   )
-    throw new Error('SQLite composition must return the existing bootstrap store last')
+    throw new Error(
+      'SQLite composition must end with exactly the registered exposures: ' +
+        APPENDED_EXPOSURES.join(', '),
+    )
   const restored = ts.factory.updateObjectLiteralExpression(
     value,
-    ts.factory.createNodeArray(value.properties.slice(0, -1), value.properties.hasTrailingComma),
+    ts.factory.createNodeArray(
+      value.properties.slice(0, -APPENDED_EXPOSURES.length),
+      value.properties.hasTrailingComma,
+    ),
   )
   return ts.factory.updateBlock(body, [
     ...body.statements.slice(0, -1),
@@ -362,6 +381,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
   })
 
+  // RFC-359（2026-09-12，第二次）：语句条数仍是 159，摘要再次变化——`PostgresqlDaemonApplicationRuntime`
+  // 多了一个 `collaborationContext: boundCollaborationContext`。它**不是**新装配：那个上下文
+  // 早就在同一作用域里建好了，这里只是把它交出来，好让测试夹具把「应用自己建的那一份」给用例
+  // （plan §5aq）。daemon 自己不碰它。
+  //
   // RFC-359（2026-09-12）：语句条数仍是 159，**摘要变了**——`workgroupTaskRoom` 的
   // `continuation.assertResumable` 从空操作换成 `composeWorktreeResumePreflight({...})`
   // （工作树继续预检两个 provider 共用一份，见 plan §5ah）。这是一条**有意的**行为改动：
@@ -382,7 +406,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(159)
     expect(digest(restored, pg)).toBe(
-      '7f6260db1615351a60f38460bfbf9d6927a48f070a4cfe2f12eb5910479477eb',
+      '5aa7d91983312c1b60410a9e2c19c37db6270056d40808b0774bdc4ef3996eee',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

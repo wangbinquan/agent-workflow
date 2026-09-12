@@ -6664,3 +6664,39 @@ createApp({ …, taskExecutionReadModels })
 
 逐个仍要看：真正需要「换掉」而不是「拿到」的接缝（`*TestDependencies` 那几个可能是），
 才考虑别的办法。**先按调用方形态分类，再决定**——别再按字段名清单估工作量。
+
+
+## 5ar. 按 §5aq 的正解动手：把装配结果暴露出来（账本 559 → 558）
+
+`ProviderHttpApplication` 上加两项——`taskExecutionReadModels` 与 `collaborationContext`。
+两个 provider **本来就装配了它们**：
+
+| | 读模型 | 协作上下文 |
+| --- | --- | --- |
+| SQLite | `SqliteAppComposition`（`...runtimeDeps` 带出来的，只是类型上没声明） | 同左 |
+| PostgreSQL | `taskExecutionProvider.readModels` | `boundCollaborationContext` |
+
+所以这一刀**没有给生产输入类型加任何只服务测试的字段**：SQLite 侧是把已在返回值里的东西
+在类型上声明出来；PostgreSQL 侧是在 `PostgresqlDaemonApplicationRuntime` 上多交出一个已有的
+`const`（daemon 自己不碰它）。
+
+`rfc340-review-access` 是第一个消费者：它此前在外面用
+`createTaskExecutionReadModels(db)` + `createCollaborationCommandContext({...})` 建了一份
+一模一样的，再从 `AppDeps` 塞回 `createApp`。现在整份夹具改成 `await scope.open()` 取用，
+`Paths.root` 也跟着用 `opened.appHome`（原来自建的临时目录会被 `open()` 覆盖，见 §5al 同款坑）。
+
+### W29 当场红三条——这正是它该做的
+
+改装配体必跑 `rfc359-w29-unstarted-application-composition`（它不在 `tests/architecture/` 下，
+判据见 `scripts/source-guard-sweep.ts`）。三条分别是 daemon 摘要、SQLite 返回对象的尾部逐字
+比对、以及 helper 的整段文本比对。
+
+处置不是「改数字让它绿」，而是**把追加项登记成一个显式名单**：
+`APPENDED_EXPOSURES = ['repositoryWorkspaceStore:…', 'taskExecutionReadModels:…', 'collaborationContext:…']`，
+守卫剥掉这几项之后再与合一前的摘要比。**以后再加一项必须在名单里登记**，不能默默混过去——
+这样守卫仍然挡得住「真的改了装配」，又不会把「暴露已装配结果」误判成回归。
+
+### 下一批消费者
+
+`rfc326-mcp-review-tools` / `rfc327-memory-filter-and-facets` / `rfc247-mcp-server` 用的是同一
+组合（读模型 + 协作上下文 + 各自的 `appHome`），现在都不再卡在接缝上了。

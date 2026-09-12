@@ -10,6 +10,8 @@ import {
 import { invalidateReadConfigCache, loadConfig, saveConfigRaw } from '@/config'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/composition'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
+import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { SelectedPostgresqlTaskExecutionProviderRuntime } from '@/modules/task-execution/composition/providerRuntime'
 import type { WorkspaceClaimFinalizationCommand } from '@/modules/source-control/public/commands'
 import {
@@ -60,6 +62,19 @@ export interface ProviderHttpApplication {
    */
   readonly processConcurrencyScope: object
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
+  /**
+   * 应用**自己装配好**的任务执行读模型。
+   *
+   * RFC-359 —— 合一前一批用例为了拿到它，在外面再 `createTaskExecutionReadModels(db)` 建一份
+   * 一模一样的，再从 `AppDeps.taskExecutionReadModels` 塞回去（`rfc340-review-access` /
+   * `rfc314-session-view-window` / `rfc311-session-view-bounded` 等）。那个形状把用例钉死在
+   * SQLite 上——`PostgresqlApplicationInput` 没有、也不该有这个只服务测试的字段。
+   * 两个 provider 本来都已经装配了它（SQLite 的 `SqliteAppComposition.taskExecutionReadModels`、
+   * PostgreSQL 的 `taskExecutionProvider.readModels`），这里只是把结果交出来。
+   */
+  readonly taskExecutionReadModels: TaskExecutionReadModels
+  /** 同上：应用**自己装配好**的协作命令上下文，别在外面再建一份。 */
+  readonly collaborationContext: CollaborationRouteContext
   readonly taskExecution:
     | Readonly<{ provider: 'sqlite' }>
     | Readonly<{
@@ -137,6 +152,8 @@ export function composeSqliteUnstartedApplication(deps: AppDeps) {
     return {
       app: createComposedApp(composed),
       repositoryWorkspaceStore: composed.repositoryWorkspaceStore,
+      taskExecutionReadModels: composed.taskExecutionReadModels,
+      collaborationContext: composed.collaborationContext,
     }
   })
 }
@@ -158,6 +175,8 @@ export async function createProviderHttpApplication(
   const originalConfig = existsSync(input.configPath) ? readFileSync(input.configPath) : null
   let application: Pick<ProviderHttpApplication, 'app' | 'dispose'> | undefined
   let repositoryWorkspaceStore: RepositoryWorkspaceStore
+  let taskExecutionReadModels: TaskExecutionReadModels
+  let collaborationContext: CollaborationRouteContext
   let taskExecution: ProviderHttpApplication['taskExecution']
   let processConcurrencyScope: object
   let disposal: Promise<void> | undefined
@@ -204,6 +223,8 @@ export async function createProviderHttpApplication(
       })
       application = sqliteApplication
       repositoryWorkspaceStore = sqliteApplication.repositoryWorkspaceStore
+      taskExecutionReadModels = sqliteApplication.taskExecutionReadModels
+      collaborationContext = sqliteApplication.collaborationContext
       taskExecution = Object.freeze({ provider: 'sqlite' })
       processConcurrencyScope = binding.db
     } else {
@@ -222,6 +243,8 @@ export async function createProviderHttpApplication(
       })
       application = postgresqlApplication
       repositoryWorkspaceStore = postgresqlApplication.core.repositoryWorkspaceStore
+      taskExecutionReadModels = postgresqlApplication.runtime.taskExecution.readModels
+      collaborationContext = postgresqlApplication.runtime.collaborationContext
       processConcurrencyScope = binding.runtime
       taskExecution = Object.freeze({
         provider: 'postgresql',
@@ -234,6 +257,8 @@ export async function createProviderHttpApplication(
       secretBox,
       processConcurrencyScope,
       repositoryWorkspaceStore,
+      taskExecutionReadModels,
+      collaborationContext,
       dispose,
       taskExecution,
     })

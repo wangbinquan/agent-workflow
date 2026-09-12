@@ -392,6 +392,13 @@ export interface PostgresqlDaemonApplication {
  */
 export interface PostgresqlDaemonApplicationRuntime {
   readonly taskExecution: SelectedPostgresqlTaskExecutionProviderRuntime
+  /**
+   * RFC-359 —— 装配好的协作命令上下文。暴露它不是为了给 daemon 用（daemon 不碰它），
+   * 而是为了让**测试夹具能把应用自己建的那一份交给用例**。合一前一批用例为了拿到它，
+   * 在外面用 `createCollaborationCommandContext({...})` 再建一份一模一样的、再从
+   * `AppDeps.collaborationContext` 塞回去——那个形状把用例钉死在 SQLite 上。
+   */
+  readonly collaborationContext: CollaborationRouteContext
   readonly scheduledTasks: ReturnType<typeof composePostgresqlScheduledTaskRuntime>
   readonly scheduledTaskIdentityAccess: TaskExecutionBackgroundStartDependencies['scheduled']['identityAccess']
   readonly memory: ReturnType<typeof composePostgresqlMemoryOperations>
@@ -2213,6 +2220,7 @@ export async function composePostgresqlApplication(
   })
   const runtime: PostgresqlDaemonApplicationRuntime = Object.freeze({
     taskExecution: taskExecutionProvider,
+    collaborationContext: boundCollaborationContext,
     scheduledTasks: scheduledTaskRuntime,
     scheduledTaskIdentityAccess: integrationIdentityAccess,
     memory: memoryOperations,

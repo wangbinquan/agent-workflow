@@ -491,7 +491,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc338-maintenance-slices.test.ts: 4',
   'rfc338-maintenance-status.test.ts: 2',
   'rfc338-websocket-heartbeat.test.ts: 1',
-  'rfc340-review-access.test.ts: 1',
   'rfc341-committed-event-store.test.ts: 1',
   'rfc342-memory-scope-move.test.ts: 1',
   'rfc343-intent-apply-correctness.test.ts: 1',
