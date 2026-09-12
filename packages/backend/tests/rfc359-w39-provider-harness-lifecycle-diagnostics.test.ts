@@ -340,13 +340,16 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
 
   test('actual unbound hooks keep memoization and wait for initialization before close', async () => {
     const control = actualRegistration()
-    // `beforeEach` 恒带第二个实参（超时预算）：它做的是对真库的整库快照恢复，bun 的默认
-    // 5s hook 预算撑不住，与库数无关（`beforeAll` / `afterAll` 则沿用「单库用默认」的老约定）。
+    // 四个 hook 里有三个**恒带**第二个实参（超时预算），因为它们做的都是真库操作：
+    // `beforeAll` 现建库 + 跑迁移、`beforeEach` 整库快照恢复、`afterAll` 拆库。
+    // bun 的默认 hook 预算只有 5s，撑不住，**与库数无关**——此前 `beforeAll` / `afterAll`
+    // 只在 `databaseCount !== 1` 时才给预算，单库（绝大多数文件）反而吃默认值，
+    // real-PostgreSQL 泳道因此偶发 hook 超时。`afterEach` 是纯同步清理，保持无预算。
     expect(control.hooks.map((hook) => [hook.name, hook.args.length])).toEqual([
-      ['beforeAll', 1],
+      ['beforeAll', 2],
       ['beforeEach', 2],
       ['afterEach', 1],
-      ['afterAll', 1],
+      ['afterAll', 2],
     ])
     const setup = control.invoke('beforeAll')
     expect(control.invoke('beforeAll')).toBe(setup)

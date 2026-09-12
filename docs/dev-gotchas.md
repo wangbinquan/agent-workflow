@@ -6277,3 +6277,25 @@ grep -n 'createApp(' -A 30 <file> | grep -E '^\s*[0-9]*[-:]?\s*[A-Za-z_$][\w$]*\
 
 同理，**迁移前先 `grep describeEachProvider <file>`**：有的文件已经部分双引擎，外层再包一层会
 造出 `[postgresql] > … > [sqlite]` 的交叉积、两层 harness 互不相干。
+
+## 「hook timed out」记在一条 `(unnamed)` 用例头上 = 失败的是 `beforeAll`
+
+bun 把**失败的 `beforeAll`** 报成
+
+```
+(fail) <suite> [postgresql] > (unnamed) [5000.03ms]
+  ^ a beforeEach/afterEach hook timed out for this test.
+```
+
+——文案说的是 beforeEach/afterEach，实际是 `beforeAll`；用例名是 `(unnamed)`，因为压根没跑到任何
+一条用例。**看到 `(unnamed)` 就去看 `beforeAll`**，别在 `beforeEach` 和被测代码之间打转。
+
+2026-09-12 实撞两次，第一次还判错了：`eachProvider` 的 PostgreSQL 注册面里，
+`beforeAll`（现建库 + 跑全套迁移）与 `afterAll`（拆库）**只在 `databaseCount !== 1` 时才拿到
+显式预算**，而单库——也就是绝大多数文件——反而吃 bun 的 5s 默认值。文件里早就写着
+`POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS = 60_000` / `..._CLEANUP_... = 90_000`，只是没用在最常见的
+那条路上。本机实测「到第一条用例」PG 侧约 1.5s，CI 上容器化的库加同 job 其它负载会更久，
+于是 real-PostgreSQL 泳道偶发红。
+
+**教训**：常量声明了「这件事要 60s」，就要确认它**真的被用在每条路径上**——
+`if (n === 1) f(x) else f(x, budget)` 这种写法正是让最常见的那条路径悄悄退回默认值的形状。

@@ -1260,8 +1260,12 @@ function registerPostgresql(
       }
     })
   const setupDatabases = () => (initialization ??= initializeDatabases())
-  if (databaseCount === 1) beforeAll(setupDatabases)
-  else beforeAll(setupDatabases, databaseCount * POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS)
+  // 预算**无条件**给：`setupDatabases` 要现建一个 PostgreSQL 库并跑完整套迁移，本机实测到第一条
+  // 用例约 1.5s，CI 上容器化的库加上同 job 的其它负载会更久。此前只有 `databaseCount !== 1` 才用
+  // 这个常量，单库（绝大多数文件）反而吃 bun 的 5s 默认值——于是 real-PostgreSQL 泳道偶发
+  // 「a beforeEach/afterEach hook timed out」，还记在一条 `(unnamed)` 用例头上（bun 把失败的
+  // `beforeAll` 这样归属）。常量本身早就写着 60s，只是没用在最常见的那条路上。
+  beforeAll(setupDatabases, databaseCount * POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS)
 
   beforeEach(
     () =>
@@ -1334,8 +1338,8 @@ function registerPostgresql(
         if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
       }
     })
-  if (databaseCount === 1) afterAll(cleanupDatabases)
-  else afterAll(cleanupDatabases, databaseCount * POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS)
+  // 同上：拆库同样是真库操作，单库路径此前也吃 5s 默认值。
+  afterAll(cleanupDatabases, databaseCount * POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS)
 
   body(harnessView(states))
 }
