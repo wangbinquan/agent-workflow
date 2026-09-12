@@ -6344,3 +6344,41 @@ PG 侧「200 + worker 异步认领」的**正常**路径（工作树在、worker
 - `rfc327-memory-filter-and-facets` 的 harness 是**模块级** `let h` + 模块级 `beforeEach`，
   包 describe 之后 `beforeEach` 看不到 `scope`（当场 ReferenceError）。已退回，
   留待「模块级夹具上提」那一类一起做。**pre-flight 要加一条 MODULE-LEVEL-HARNESS。**
+
+
+## 5ai. 账本 576 → 569：七个「只差 await 化 / 只差别自建 app home」的文件
+
+pre-flight 把 82 个候选分完之后，**只差机械工作量**的那一档是 12 个。本轮迁掉七个：
+
+| 文件 | 实际要动的 |
+| --- | --- |
+| `rfc330-tool-template-acl-matrix` / `rfc324-grant-level-matrix` / `rfc324-scheduled-task-acl` / `rfc317-config-resource-write-gate` | 只是 `.run()` / `.all()` 终结符 |
+| `rfc317-employee-definition-acl` | 同上；另有一个**纯 AST 断言**的 describe 保持普通 `describe` |
+| `rfc330-employee-case-access` | 三处 `.get()` 改 `(await …)[0]`；一个**判据级**（合成 actor）describe 保持普通 `describe` |
+| `rfc128-p2-per-question-endpoint` | 自建 app home 那行直接删——作用域本来就建临时 home 并写 `AGENT_WORKFLOW_HOME`、`afterEach` 还原并删除 |
+
+`.all()` / `.run()` 直接去掉即可（builder 本身 await 出等价结果）；`.get()` 必须改成
+`(await …)[0]`——中立面回的是数组，去掉终结符会把「一行」悄悄变成「一个数组」，
+**用例照跑、断言全变**。
+
+### 本轮退回两个，各自暴露一条 pre-flight 漏判
+
+- `rfc120-deferred-dispatch` / `rfc142-review-rounds` —— 都吃 `wakeHumanGateContinuation`，
+  它的 `StartTaskDeps.db` 是 `LegacySqliteTaskDatabase`（bun:sqlite 专有类型），中立句柄传不进去。
+  pre-flight 的 SQLITE-BOUND-INFRA 语料里没有这个符号，已补；**兜底始终是 `tsc`**。
+- 顺带记两条迁移脚本的坑：①注册面的**选项对象在 describe 注册期就求值**，
+  `token: DAEMON_TOKEN` 这种引用必须先于第一个注册面声明，否则 TDZ（`rfc142` 实撞）；
+  ②`import type { ProviderNeutralDatabase } from '../src/db/client'` 这种**第三种路径写法**
+  也要进去重名单，否则 TS2300。
+
+### 一个必须记住的连带守卫：W29 的**摘要**
+
+改 `cli/postgresqlDaemonApplication.ts` 会动
+`tests/rfc359-w29-unstarted-application-composition.test.ts` 的 daemon 相位摘要。
+§5ah 那一提**推红了 CI**（ubuntu shard 8/8 与 macOS shard 2/6）就是因为本地只跑了
+`tests/architecture/` 与直接相关的用例，没跑它——它不在 `tests/architecture/` 下。
+语句条数仍是 159（替换的是一条语句的内容，不是增删），摘要按新值更新并在用例里写明
+**改了哪一条、为什么该改**：摘要变了说不出改了哪一条，才是红。
+
+**规律**：碰 `postgresqlDaemonApplication.ts` / `server.ts` 的装配体，除 `tests/architecture/`
+之外还要跑 `tests/rfc359-w29-unstarted-application-composition.test.ts`。

@@ -20,7 +20,10 @@ for f in "$@"; do
   # 注意：与上一条是**两个不同判据** —— 这条排除的是「已经部分双引擎」的文件
   grep -qE "describeEachProvider\(" "$f" && r="$r NESTED-EACHPROVIDER(交叉积)"
   grep -qE "\.run\(\)|\.get\(\)|\.all\(\)" "$f" && r="$r SYNC-TERMINAL"
-  grep -qE "composeSqlite|composeTestSqlite|LegacySqlite|StartTaskDeps|createTaskExecutionTestTopology|runTaskWithRealTestTopology" "$f" && r="$r SQLITE-BOUND-INFRA"
+  # 语料按实撞补：任何吃 `StartTaskDeps` / `LegacySqliteTaskDatabase` 的入口都算——它们的 `db`
+  # 是 bun:sqlite 专有类型，中立句柄传不进去（`wakeHumanGateContinuation` 2026-09-12 实撞）。
+  # **兜底始终是 tsc**：这份名单只为省一次白迁，漏了由 `bunx tsc --noEmit` 当场报出来。
+  grep -qE "composeSqlite|composeTestSqlite|LegacySqlite|StartTaskDeps|createTaskExecutionTestTopology|runTaskWithRealTestTopology|wakeHumanGateContinuation|composeHumanGateContinuationDriver|BunSQLiteDatabase" "$f" && r="$r SQLITE-BOUND-INFRA"
   grep -q '\$client' "$f" && r="$r SELF-CLOSES-DB"
   grep -qE "^\s+describe\(" "$f" && r="$r LOOP-OR-NESTED-DESCRIBE"
   grep -qE "writeFileSync\(.*config|applyConfigPatch\(|loadConfig\(" "$f" && r="$r WRITES-OWN-CONFIG(需 open({config}))"

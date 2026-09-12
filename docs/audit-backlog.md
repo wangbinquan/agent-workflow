@@ -4642,3 +4642,22 @@ TestingLibraryElementError: Unable to find an element by: [data-testid="mission-
 
 **给接手的人**：要复现大概率只能在 Windows 上跑（本机 VM 路径见个人 memory 的
 `reference_windows_vm`）。在没归因之前**不要**把它标成 flaky 忽略掉。
+
+## macOS 上 `rfc210-alternates` 的 `beforeAll` 卡在**第一条 git 子进程**（60s 超时，2026-09-12，未归因）
+
+`run 34677057520 / job 103508670375`（Backend tests, macos-latest shard 6/6）：
+`packages/backend/tests/rfc210-alternates.test.ts` 的 `beforeAll` 走到
+`markSetupPhase('module-init:begin')`（`elapsedMs: 6.39`）之后**再无输出**，60.002s 撞超时，
+报成 `(fail) (unnamed) … a beforeEach/afterEach hook timed out`（bun 把失败的 `beforeAll`
+记在一条 `(unnamed)` 用例上，见 `docs/dev-gotchas.md`）。
+
+卡住的那一句是 `await git(sub, ['init', '-q', '-b', 'main'])`——**该 hook 里的第一条 git
+子进程**。它前面的九个相位全在 6.4ms 内走完（都是 mkdir / writeFileSync / join）。
+
+**不归因给触发它的那次提交**：该提交（`1694bcfb5`）动的是 PostgreSQL 应用装配、
+`services/task.ts` 的判据抽取与一批测试迁移，与 `git init` 的调用路径没有任何交集；
+同一 run 的 ubuntu 分片没有这条红。仪表盘（`markSetupPhase`）本身是先前某次为排查同类
+悬挂加的，说明这不是第一次。
+
+**待办**：下次再现时记下 job id 与相位，攒够两三次再判是 runner 争用还是 git 首次调用
+（全局配置解析 / 目录扫描）的固有慢。**不要以「重跑就过了」结案。**

@@ -28,18 +28,20 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { eq } from 'drizzle-orm'
 import ts from 'typescript'
 import { ulid } from 'ulid'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { employeeDefinitions } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ROUTE_FILE = resolve(import.meta.dir, '..', 'src', 'routes', 'digitalEmployees.ts')
 const NOW = 1_700_000_000_000
 
@@ -49,22 +51,16 @@ interface Actor {
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   owner: Actor
   stranger: Actor
   admin: Actor
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc317-employee-acl-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const mkUser = async (username: string, role: 'admin' | 'user'): Promise<Actor> => {
     const user = await createUser(db, {
       username,
@@ -99,126 +95,140 @@ async function req(
 }
 
 async function seedEmployee(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   ownerUserId: string,
   visibility: 'private' | 'public',
 ): Promise<string> {
   const id = ulid()
-  await db
-    .insert(employeeDefinitions)
-    .values({
-      id,
-      name: `rfc317-employee-${id.slice(-6)}`,
-      typeId: 'rfc317-type',
-      typeRevision: 1,
-      configurationJson: '{}',
-      currentRevision: null,
-      ownerUserId,
-      visibility,
-      aclRevision: 0,
-      createdAt: NOW,
-      updatedAt: NOW,
-      archivedAt: null,
-    })
-    .run()
+  await db.insert(employeeDefinitions).values({
+    id,
+    name: `rfc317-employee-${id.slice(-6)}`,
+    typeId: 'rfc317-type',
+    typeRevision: 1,
+    configurationJson: '{}',
+    currentRevision: null,
+    ownerUserId,
+    visibility,
+    aclRevision: 0,
+    createdAt: NOW,
+    updatedAt: NOW,
+    archivedAt: null,
+  })
   return id
 }
 
-async function snapshot(db: DbClient, id: string): Promise<unknown> {
-  const rows = await db
-    .select()
-    .from(employeeDefinitions)
-    .where(eq(employeeDefinitions.id, id))
-    .all()
+async function snapshot(db: ProviderNeutralDatabase, id: string): Promise<unknown> {
+  const rows = await db.select().from(employeeDefinitions).where(eq(employeeDefinitions.id, id))
   return rows[0]
 }
 
 const DETAIL = (id: string): string => `/api/digital-employees/${id}`
 
-describe('RFC-317 T8 —— 员工定义的可见性', () => {
-  test('陌生人读别人的 private 员工定义 ⇒ 404，与不存在同形', async () => {
-    const h = await buildHarness()
-    const id = await seedEmployee(h.db, h.owner.id, 'private')
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-317 T8 —— 员工定义的可见性',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc317-employee-definition-acl-',
+  },
+  (scope) => {
+    test('陌生人读别人的 private 员工定义 ⇒ 404，与不存在同形', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedEmployee(h.db, h.owner.id, 'private')
 
-    const invisible = await req(h.app, h.stranger.token, DETAIL(id))
-    const missing = await req(h.app, h.stranger.token, DETAIL(ulid()))
-    expect(invisible.status, '不可见必须 404 而不是 403：403 本身就是存在性预言机').toBe(404)
-    expect(missing.status).toBe(404)
-    // 点名错误码：既是契约断言，也满足 route-error-code-coverage 的
-    // 「新错误码必须被某条测试点名」棘轮——两个 404 必须是**同一个**码，否则
-    // 「存在但看不见」与「不存在」仍能被区分出来。
-    const invisibleBody = (await invisible.clone().json()) as { code?: string }
-    const missingBody = (await missing.clone().json()) as { code?: string }
-    expect(invisibleBody.code).toBe('employee-definition-not-found')
-    expect(missingBody.code).toBe('employee-definition-not-found')
-    expect(await invisible.text(), '两者响应体必须逐字一致，否则仍能区分「存在但看不见」').toBe(
-      await missing.text(),
-    )
-  })
-
-  test('陌生人能看见 public 的那一行（收紧没有把 public 也关掉）', async () => {
-    const h = await buildHarness()
-    const id = await seedEmployee(h.db, h.owner.id, 'public')
-    // 前提复核：可见性判据放行后才轮到详情渲染。种子行没有 current revision，渲染
-    // 会失败——但**不会是 404**，那正是本用例要区分的。
-    const res = await req(h.app, h.stranger.token, DETAIL(id))
-    expect([403, 404], 'public 行对任何登录用户都应当通过可见性判据').not.toContain(res.status)
-  })
-})
-
-describe('RFC-317 T8 —— 员工定义的写门', () => {
-  const writes = (
-    id: string,
-  ): ReadonlyArray<{ label: string; path: string; init: RequestInit }> => [
-    {
-      label: 'PUT /api/digital-employees/:id',
-      path: DETAIL(id),
-      init: { method: 'PUT', body: JSON.stringify({ name: 'intruded' }) },
-    },
-  ]
-
-  test('可见但非 owner（public 行）⇒ 403 且零写入', async () => {
-    const h = await buildHarness()
-    const id = await seedEmployee(h.db, h.owner.id, 'public')
-    const before = await snapshot(h.db, id)
-
-    for (const attempt of writes(id)) {
-      const res = await req(h.app, h.stranger.token, attempt.path, attempt.init)
-      expect(res.status, `${attempt.label}：可见但非 owner 必须 403`).toBe(403)
-      expect(await snapshot(h.db, id), `${attempt.label}：被拒后不得留下任何持久写入`).toEqual(
-        before,
+      const invisible = await req(h.app, h.stranger.token, DETAIL(id))
+      const missing = await req(h.app, h.stranger.token, DETAIL(ulid()))
+      expect(invisible.status, '不可见必须 404 而不是 403：403 本身就是存在性预言机').toBe(404)
+      expect(missing.status).toBe(404)
+      // 点名错误码：既是契约断言，也满足 route-error-code-coverage 的
+      // 「新错误码必须被某条测试点名」棘轮——两个 404 必须是**同一个**码，否则
+      // 「存在但看不见」与「不存在」仍能被区分出来。
+      const invisibleBody = (await invisible.clone().json()) as { code?: string }
+      const missingBody = (await missing.clone().json()) as { code?: string }
+      expect(invisibleBody.code).toBe('employee-definition-not-found')
+      expect(missingBody.code).toBe('employee-definition-not-found')
+      expect(await invisible.text(), '两者响应体必须逐字一致，否则仍能区分「存在但看不见」').toBe(
+        await missing.text(),
       )
-    }
-  })
+    })
 
-  test('不可见（private 行）⇒ 404 而非 403，且零写入', async () => {
-    const h = await buildHarness()
-    const id = await seedEmployee(h.db, h.owner.id, 'private')
-    const before = await snapshot(h.db, id)
+    test('陌生人能看见 public 的那一行（收紧没有把 public 也关掉）', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedEmployee(h.db, h.owner.id, 'public')
+      // 前提复核：可见性判据放行后才轮到详情渲染。种子行没有 current revision，渲染
+      // 会失败——但**不会是 404**，那正是本用例要区分的。
+      const res = await req(h.app, h.stranger.token, DETAIL(id))
+      expect([403, 404], 'public 行对任何登录用户都应当通过可见性判据').not.toContain(res.status)
+    })
+  },
+)
 
-    for (const attempt of writes(id)) {
-      const res = await req(h.app, h.stranger.token, attempt.path, attempt.init)
-      expect(res.status, `${attempt.label}：不可见必须 404`).toBe(404)
-      expect(await snapshot(h.db, id)).toEqual(before)
-    }
-  })
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-317 T8 —— 员工定义的写门',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc317-employee-definition-acl-',
+  },
+  (scope) => {
+    const writes = (
+      id: string,
+    ): ReadonlyArray<{ label: string; path: string; init: RequestInit }> => [
+      {
+        label: 'PUT /api/digital-employees/:id',
+        path: DETAIL(id),
+        init: { method: 'PUT', body: JSON.stringify({ name: 'intruded' }) },
+      },
+    ]
 
-  test('owner 与 admin 被写门放行（收紧没有误伤正向路径，逃生阀仍在）', async () => {
-    const h = await buildHarness()
-    const id = await seedEmployee(h.db, h.owner.id, 'private')
+    test('可见但非 owner（public 行）⇒ 403 且零写入', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedEmployee(h.db, h.owner.id, 'public')
+      const before = await snapshot(h.db, id)
 
-    for (const who of ['owner', 'admin'] as const) {
-      const res = await req(h.app, h[who].token, DETAIL(id), {
-        method: 'PUT',
-        body: JSON.stringify({ name: `by-${who}` }),
-      })
-      expect([403, 404], `${who} 必须通过写门（放行后的领域校验失败不算写门问题）`).not.toContain(
-        res.status,
-      )
-    }
-  })
-})
+      for (const attempt of writes(id)) {
+        const res = await req(h.app, h.stranger.token, attempt.path, attempt.init)
+        expect(res.status, `${attempt.label}：可见但非 owner 必须 403`).toBe(403)
+        expect(await snapshot(h.db, id), `${attempt.label}：被拒后不得留下任何持久写入`).toEqual(
+          before,
+        )
+      }
+    })
 
+    test('不可见（private 行）⇒ 404 而非 403，且零写入', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedEmployee(h.db, h.owner.id, 'private')
+      const before = await snapshot(h.db, id)
+
+      for (const attempt of writes(id)) {
+        const res = await req(h.app, h.stranger.token, attempt.path, attempt.init)
+        expect(res.status, `${attempt.label}：不可见必须 404`).toBe(404)
+        expect(await snapshot(h.db, id)).toEqual(before)
+      }
+    })
+
+    test('owner 与 admin 被写门放行（收紧没有误伤正向路径，逃生阀仍在）', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedEmployee(h.db, h.owner.id, 'private')
+
+      for (const who of ['owner', 'admin'] as const) {
+        const res = await req(h.app, h[who].token, DETAIL(id), {
+          method: 'PUT',
+          body: JSON.stringify({ name: `by-${who}` }),
+        })
+        expect([403, 404], `${who} 必须通过写门（放行后的领域校验失败不算写门问题）`).not.toContain(
+          res.status,
+        )
+      }
+    })
+  },
+)
+
+// 纯 AST 断言，一行 DB 都不碰——不套双引擎 harness，否则白开一个 PostgreSQL 库读源码。
 describe('RFC-317 T8 —— 三个列表面都接了可见性过滤（AST 断言）', () => {
   // 为什么是 AST 而不是集成断言：列表渲染要求完整的 current revision，用真实员工
   // 做种子需要注册类型包，成本与被测边界不成比例；而 `filterVisibleRows` 本身的

@@ -16,15 +16,17 @@
 // 用例只断言「门放行」（响应码不是门的码），放行后的投影 / 状态机失败不归本文件管。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import type { Hono } from 'hono'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { employeeCaseMembers, employeeCases } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { buildActor } from '../src/auth/actor'
 import { canOperateCase, canViewCase } from '../src/services/employeeCaseMembers'
 import { createUser } from '../src/services/users'
@@ -35,7 +37,6 @@ import {
 } from '../src/ws/broadcaster'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 interface Actor {
@@ -44,7 +45,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   owner: Actor
   collaborator: Actor
@@ -53,15 +54,9 @@ interface Harness {
   admin: Actor
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc330-case-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  const app = (await scope.open()).app
   const mkUser = async (username: string, role: 'admin' | 'user'): Promise<Actor> => {
     const user = await createUser(db, {
       username,
@@ -98,35 +93,32 @@ async function req(
 }
 
 async function seedCase(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   ownerUserId: string | null,
   state: 'active' | 'blocked' = 'active',
 ): Promise<string> {
   const id = ulid()
-  await db
-    .insert(employeeCases)
-    .values({
-      id,
-      name: `case-${id.slice(-6)}`,
-      employeeId: 'employee-1',
-      employeeRevision: 1,
-      typeId: 'development',
-      typeRevision: 10,
-      primaryContextId: `context-${id}`,
-      executionPolicyRevision: 1,
-      ownerUserId,
-      state,
-      revision: 1,
-      writerGeneration: 1,
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    .run()
+  await db.insert(employeeCases).values({
+    id,
+    name: `case-${id.slice(-6)}`,
+    employeeId: 'employee-1',
+    employeeRevision: 1,
+    typeId: 'development',
+    typeRevision: 10,
+    primaryContextId: `context-${id}`,
+    executionPolicyRevision: 1,
+    ownerUserId,
+    state,
+    revision: 1,
+    writerGeneration: 1,
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
   return id
 }
 
 async function seedMember(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   caseId: string,
   userId: string,
   role: 'collaborator' | 'observer',
@@ -134,7 +126,6 @@ async function seedMember(
   await db
     .insert(employeeCaseMembers)
     .values({ caseId, userId, role, addedBy: 'seed', addedAt: NOW })
-    .run()
 }
 
 async function code(res: Response): Promise<string | undefined> {
@@ -148,275 +139,310 @@ const GATE_CODES = new Set([
 ])
 const CASE = (id: string): string => `/api/employee-cases/${id}`
 
-describe('RFC-330 D19 —— 案例可见性', () => {
-  test('陌生人 GET 别人的案例 ⇒ 404，与不存在同形（逐字一致）', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id)
-    const invisible = await req(h.app, h.stranger.token, CASE(id))
-    const missing = await req(h.app, h.stranger.token, CASE(ulid()))
-    expect(invisible.status).toBe(404)
-    expect(missing.status).toBe(404)
-    expect(await code(invisible)).toBe('employee-case-not-found')
-    expect(await invisible.text()).toBe(await missing.text())
-  })
-
-  test('发起人 / observer / collaborator / tasks:read:all（admin）都通过可见性判据', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id)
-    await seedMember(h.db, id, h.observer.id, 'observer')
-    await seedMember(h.db, id, h.collaborator.id, 'collaborator')
-    for (const who of ['owner', 'observer', 'collaborator', 'admin'] as const) {
-      const res = await req(h.app, h[who].token, CASE(id))
-      expect(await code(res), `${who} 必须通过可见性判据`).not.toBe('employee-case-not-found')
-    }
-  })
-
-  test('无 owner（系统发起）的案例只对 tasks:read:all / bypass 可见', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, null)
-    expect((await req(h.app, h.stranger.token, CASE(id))).status).toBe(404)
-    expect(await code(await req(h.app, h.admin.token, CASE(id)))).not.toBe(
-      'employee-case-not-found',
-    )
-  })
-})
-
-describe('RFC-330 D19 —— 案例操作面', () => {
-  const OPERATIONS = (id: string) =>
-    [
-      [`${CASE(id)}/resume`, { method: 'POST' }],
-      [
-        `${CASE(id)}/terminate`,
-        { method: 'POST', body: JSON.stringify({ terminalKind: 'canceled' }) },
-      ],
-      [
-        `${CASE(id)}/policy-upgrade-preview`,
-        { method: 'POST', body: JSON.stringify({ targetPolicyRevision: 1 }) },
-      ],
-    ] as const
-
-  test('observer 与 tasks:read:all（非 bypass）⇒ 403 employee-case-observer-read-only；陌生人 ⇒ 404；零状态变化', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id, 'blocked')
-    await seedMember(h.db, id, h.observer.id, 'observer')
-    const before = await h.db.select().from(employeeCases).where(eq(employeeCases.id, id)).get()
-    for (const [path, init] of OPERATIONS(id)) {
-      const observer = await req(h.app, h.observer.token, path, init)
-      expect(observer.status, `observer ${path}`).toBe(403)
-      expect(await code(observer)).toBe('employee-case-observer-read-only')
-      const stranger = await req(h.app, h.stranger.token, path, init)
-      expect(stranger.status, `stranger ${path}`).toBe(404)
-      expect(await code(stranger)).toBe('employee-case-not-found')
-    }
-    expect(await h.db.select().from(employeeCases).where(eq(employeeCases.id, id)).get()).toEqual(
-      before,
-    )
-  })
-
-  test('发起人 / collaborator / bypass 通过操作门', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id, 'blocked')
-    await seedMember(h.db, id, h.collaborator.id, 'collaborator')
-    for (const who of ['owner', 'collaborator', 'admin'] as const) {
-      for (const [path, init] of OPERATIONS(id)) {
-        const res = await req(h.app, h[who].token, path, init)
-        expect(GATE_CODES.has((await code(res)) ?? ''), `${who} ${path} 必须通过操作门`).toBe(false)
-      }
-    }
-  })
-
-  test('policy-upgrade-apply 从 token 解出案例后同样过操作门', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id)
-    await seedMember(h.db, id, h.observer.id, 'observer')
-    const token = Buffer.from(JSON.stringify({ caseId: id, garbage: true })).toString('base64url')
-    const observer = await req(
-      h.app,
-      h.observer.token,
-      '/api/employee-cases/policy-upgrade-apply',
-      {
-        method: 'POST',
-        body: JSON.stringify({ previewToken: token }),
-      },
-    )
-    expect(observer.status).toBe(403)
-    expect(await code(observer)).toBe('employee-case-observer-read-only')
-    const stranger = await req(
-      h.app,
-      h.stranger.token,
-      '/api/employee-cases/policy-upgrade-apply',
-      {
-        method: 'POST',
-        body: JSON.stringify({ previewToken: token }),
-      },
-    )
-    expect(stranger.status).toBe(404)
-    const malformed = await req(h.app, h.owner.token, '/api/employee-cases/policy-upgrade-apply', {
-      method: 'POST',
-      body: JSON.stringify({ previewToken: 'not-base64-json' }),
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-330 D19 —— 案例可见性',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc330-employee-case-',
+  },
+  (scope) => {
+    test('陌生人 GET 别人的案例 ⇒ 404，与不存在同形（逐字一致）', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id)
+      const invisible = await req(h.app, h.stranger.token, CASE(id))
+      const missing = await req(h.app, h.stranger.token, CASE(ulid()))
+      expect(invisible.status).toBe(404)
+      expect(missing.status).toBe(404)
+      expect(await code(invisible)).toBe('employee-case-not-found')
+      expect(await invisible.text()).toBe(await missing.text())
     })
-    expect(await code(malformed)).toBe('employee-policy-preview-invalid')
-  })
-})
 
-describe('RFC-330 D19/D20 —— 案例成员面', () => {
-  const MEMBERS = (id: string): string => `${CASE(id)}/members`
-
-  test('GET：可见者拿到 caseId 变体的成员 wire（canManage / canOperate 按角色）', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id)
-    await seedMember(h.db, id, h.observer.id, 'observer')
-    await seedMember(h.db, id, h.collaborator.id, 'collaborator')
-    const expectations = {
-      owner: { canManage: true, canOperate: true },
-      collaborator: { canManage: false, canOperate: true },
-      observer: { canManage: false, canOperate: false },
-      admin: { canManage: true, canOperate: true },
-    } as const
-    for (const who of ['owner', 'collaborator', 'observer', 'admin'] as const) {
-      const res = await req(h.app, h[who].token, MEMBERS(id))
-      expect(res.status, who).toBe(200)
-      const body = (await res.json()) as {
-        caseId: string
-        ownerUserId: string | null
-        members: Array<{ user: { id: string }; role: string }>
-        canManage: boolean
-        canOperate: boolean
+    test('发起人 / observer / collaborator / tasks:read:all（admin）都通过可见性判据', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id)
+      await seedMember(h.db, id, h.observer.id, 'observer')
+      await seedMember(h.db, id, h.collaborator.id, 'collaborator')
+      for (const who of ['owner', 'observer', 'collaborator', 'admin'] as const) {
+        const res = await req(h.app, h[who].token, CASE(id))
+        expect(await code(res), `${who} 必须通过可见性判据`).not.toBe('employee-case-not-found')
       }
-      expect(body.caseId).toBe(id)
-      expect(body.ownerUserId).toBe(h.owner.id)
-      expect(body.members.map((m) => [m.user.id, m.role]).sort()).toEqual(
+    })
+
+    test('无 owner（系统发起）的案例只对 tasks:read:all / bypass 可见', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, null)
+      expect((await req(h.app, h.stranger.token, CASE(id))).status).toBe(404)
+      expect(await code(await req(h.app, h.admin.token, CASE(id)))).not.toBe(
+        'employee-case-not-found',
+      )
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-330 D19 —— 案例操作面',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc330-employee-case-',
+  },
+  (scope) => {
+    const OPERATIONS = (id: string) =>
+      [
+        [`${CASE(id)}/resume`, { method: 'POST' }],
         [
-          [h.collaborator.id, 'collaborator'],
-          [h.observer.id, 'observer'],
-        ].sort(),
-      )
-      expect({ canManage: body.canManage, canOperate: body.canOperate }, who).toEqual(
-        expectations[who],
-      )
-    }
-    expect((await req(h.app, h.stranger.token, MEMBERS(id))).status).toBe(404)
-  })
-
-  test('PUT：仅 owner / bypass；collaborator ⇒ 403；非活跃 / 系统用户 ⇒ 422；重复成员 last-wins', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id)
-    await seedMember(h.db, id, h.collaborator.id, 'collaborator')
-    const denied = await req(h.app, h.collaborator.token, MEMBERS(id), {
-      method: 'PUT',
-      body: JSON.stringify({ members: [] }),
-    })
-    expect(denied.status).toBe(403)
-    expect(await code(denied)).toBe('forbidden')
-
-    const invalid = await req(h.app, h.owner.token, MEMBERS(id), {
-      method: 'PUT',
-      body: JSON.stringify({ members: [{ userId: '__system__', role: 'observer' }] }),
-    })
-    expect(invalid.status).toBe(422)
-    expect(await code(invalid)).toBe('members-user-invalid')
-
-    const replaced = await req(h.app, h.owner.token, MEMBERS(id), {
-      method: 'PUT',
-      body: JSON.stringify({
-        members: [
-          { userId: h.observer.id, role: 'collaborator' },
-          { userId: h.observer.id, role: 'observer' },
+          `${CASE(id)}/terminate`,
+          { method: 'POST', body: JSON.stringify({ terminalKind: 'canceled' }) },
         ],
-      }),
-    })
-    expect(replaced.status).toBe(200)
-    const body = (await replaced.json()) as {
-      members: Array<{ user: { id: string }; role: string }>
-    }
-    expect(body.members).toEqual([expect.objectContaining({ role: 'observer' })])
-    expect(body.members[0]?.user.id).toBe(h.observer.id)
-    // 旧 collaborator 被全量替换掉；observer 只剩最后一条。
-    expect(
-      (
-        await h.db
-          .select()
-          .from(employeeCaseMembers)
-          .where(eq(employeeCaseMembers.caseId, id))
-          .all()
-      ).map((row) => [row.userId, row.role]),
-    ).toEqual([[h.observer.id, 'observer']])
-  })
+        [
+          `${CASE(id)}/policy-upgrade-preview`,
+          { method: 'POST', body: JSON.stringify({ targetPolicyRevision: 1 }) },
+        ],
+      ] as const
 
-  test('D20 转移：新 owner 成为 owner、前任降为 collaborator（同一事务）；owner 永不进成员行', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id)
-    const seen: TasksListBroadcastContext[] = []
-    const unsubscribe = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (message, context) => {
-      if (message.type === 'employee-case.members.changed' && context !== undefined) {
-        seen.push(context)
+    test('observer 与 tasks:read:all（非 bypass）⇒ 403 employee-case-observer-read-only；陌生人 ⇒ 404；零状态变化', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id, 'blocked')
+      await seedMember(h.db, id, h.observer.id, 'observer')
+      const before = (await h.db.select().from(employeeCases).where(eq(employeeCases.id, id)))[0]
+      for (const [path, init] of OPERATIONS(id)) {
+        const observer = await req(h.app, h.observer.token, path, init)
+        expect(observer.status, `observer ${path}`).toBe(403)
+        expect(await code(observer)).toBe('employee-case-observer-read-only')
+        const stranger = await req(h.app, h.stranger.token, path, init)
+        expect(stranger.status, `stranger ${path}`).toBe(404)
+        expect(await code(stranger)).toBe('employee-case-not-found')
+      }
+      expect((await h.db.select().from(employeeCases).where(eq(employeeCases.id, id)))[0]).toEqual(
+        before,
+      )
+    })
+
+    test('发起人 / collaborator / bypass 通过操作门', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id, 'blocked')
+      await seedMember(h.db, id, h.collaborator.id, 'collaborator')
+      for (const who of ['owner', 'collaborator', 'admin'] as const) {
+        for (const [path, init] of OPERATIONS(id)) {
+          const res = await req(h.app, h[who].token, path, init)
+          expect(GATE_CODES.has((await code(res)) ?? ''), `${who} ${path} 必须通过操作门`).toBe(
+            false,
+          )
+        }
       }
     })
-    try {
-      const res = await req(h.app, h.owner.token, MEMBERS(id), {
+
+    test('policy-upgrade-apply 从 token 解出案例后同样过操作门', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id)
+      await seedMember(h.db, id, h.observer.id, 'observer')
+      const token = Buffer.from(JSON.stringify({ caseId: id, garbage: true })).toString('base64url')
+      const observer = await req(
+        h.app,
+        h.observer.token,
+        '/api/employee-cases/policy-upgrade-apply',
+        {
+          method: 'POST',
+          body: JSON.stringify({ previewToken: token }),
+        },
+      )
+      expect(observer.status).toBe(403)
+      expect(await code(observer)).toBe('employee-case-observer-read-only')
+      const stranger = await req(
+        h.app,
+        h.stranger.token,
+        '/api/employee-cases/policy-upgrade-apply',
+        {
+          method: 'POST',
+          body: JSON.stringify({ previewToken: token }),
+        },
+      )
+      expect(stranger.status).toBe(404)
+      const malformed = await req(
+        h.app,
+        h.owner.token,
+        '/api/employee-cases/policy-upgrade-apply',
+        {
+          method: 'POST',
+          body: JSON.stringify({ previewToken: 'not-base64-json' }),
+        },
+      )
+      expect(await code(malformed)).toBe('employee-policy-preview-invalid')
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-330 D19/D20 —— 案例成员面',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc330-employee-case-',
+  },
+  (scope) => {
+    const MEMBERS = (id: string): string => `${CASE(id)}/members`
+
+    test('GET：可见者拿到 caseId 变体的成员 wire（canManage / canOperate 按角色）', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id)
+      await seedMember(h.db, id, h.observer.id, 'observer')
+      await seedMember(h.db, id, h.collaborator.id, 'collaborator')
+      const expectations = {
+        owner: { canManage: true, canOperate: true },
+        collaborator: { canManage: false, canOperate: true },
+        observer: { canManage: false, canOperate: false },
+        admin: { canManage: true, canOperate: true },
+      } as const
+      for (const who of ['owner', 'collaborator', 'observer', 'admin'] as const) {
+        const res = await req(h.app, h[who].token, MEMBERS(id))
+        expect(res.status, who).toBe(200)
+        const body = (await res.json()) as {
+          caseId: string
+          ownerUserId: string | null
+          members: Array<{ user: { id: string }; role: string }>
+          canManage: boolean
+          canOperate: boolean
+        }
+        expect(body.caseId).toBe(id)
+        expect(body.ownerUserId).toBe(h.owner.id)
+        expect(body.members.map((m) => [m.user.id, m.role]).sort()).toEqual(
+          [
+            [h.collaborator.id, 'collaborator'],
+            [h.observer.id, 'observer'],
+          ].sort(),
+        )
+        expect({ canManage: body.canManage, canOperate: body.canOperate }, who).toEqual(
+          expectations[who],
+        )
+      }
+      expect((await req(h.app, h.stranger.token, MEMBERS(id))).status).toBe(404)
+    })
+
+    test('PUT：仅 owner / bypass；collaborator ⇒ 403；非活跃 / 系统用户 ⇒ 422；重复成员 last-wins', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id)
+      await seedMember(h.db, id, h.collaborator.id, 'collaborator')
+      const denied = await req(h.app, h.collaborator.token, MEMBERS(id), {
         method: 'PUT',
-        body: JSON.stringify({ ownerUserId: h.collaborator.id }),
+        body: JSON.stringify({ members: [] }),
       })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as {
-        ownerUserId: string | null
+      expect(denied.status).toBe(403)
+      expect(await code(denied)).toBe('forbidden')
+
+      const invalid = await req(h.app, h.owner.token, MEMBERS(id), {
+        method: 'PUT',
+        body: JSON.stringify({ members: [{ userId: '__system__', role: 'observer' }] }),
+      })
+      expect(invalid.status).toBe(422)
+      expect(await code(invalid)).toBe('members-user-invalid')
+
+      const replaced = await req(h.app, h.owner.token, MEMBERS(id), {
+        method: 'PUT',
+        body: JSON.stringify({
+          members: [
+            { userId: h.observer.id, role: 'collaborator' },
+            { userId: h.observer.id, role: 'observer' },
+          ],
+        }),
+      })
+      expect(replaced.status).toBe(200)
+      const body = (await replaced.json()) as {
         members: Array<{ user: { id: string }; role: string }>
-        canManage: boolean
       }
-      expect(body.ownerUserId).toBe(h.collaborator.id)
-      expect(body.members.map((m) => [m.user.id, m.role])).toEqual([[h.owner.id, 'collaborator']])
-      // 前任仍能操作但不再能管理成员。
-      expect(body.canManage).toBe(false)
-      expect(
-        await h.db
-          .select({ ownerUserId: employeeCases.ownerUserId, revision: employeeCases.revision })
-          .from(employeeCases)
-          .where(eq(employeeCases.id, id))
-          .get(),
-      ).toEqual({ ownerUserId: h.collaborator.id, revision: 1 })
-      expect(seen).toHaveLength(1)
-      const context = seen[0]!
-      expect(context.kind).toBe('employee-case.members-changed-audience')
-      if (context.kind === 'employee-case.members-changed-audience') {
-        expect(context.caseId).toBe(id)
-        expect([...context.visibleUserIds].sort()).toEqual([h.owner.id, h.collaborator.id].sort())
-      }
-      // 转移后前任的 PUT 被拒，新 owner 放行。
+      expect(body.members).toEqual([expect.objectContaining({ role: 'observer' })])
+      expect(body.members[0]?.user.id).toBe(h.observer.id)
+      // 旧 collaborator 被全量替换掉；observer 只剩最后一条。
       expect(
         (
-          await req(h.app, h.owner.token, MEMBERS(id), {
-            method: 'PUT',
-            body: JSON.stringify({ members: [] }),
-          })
-        ).status,
-      ).toBe(403)
-      expect(
-        (
-          await req(h.app, h.collaborator.token, MEMBERS(id), {
-            method: 'PUT',
-            body: JSON.stringify({ members: [] }),
-          })
-        ).status,
-      ).toBe(200)
-    } finally {
-      unsubscribe()
-    }
-  })
-
-  test('bypass（admin）在三个面上的判定与今天一致：可见、可操作、可管理', async () => {
-    const h = await buildHarness()
-    const id = await seedCase(h.db, h.owner.id)
-    const members = await req(h.app, h.admin.token, MEMBERS(id), {
-      method: 'PUT',
-      body: JSON.stringify({ members: [{ userId: h.stranger.id, role: 'observer' }] }),
+          await h.db.select().from(employeeCaseMembers).where(eq(employeeCaseMembers.caseId, id))
+        ).map((row) => [row.userId, row.role]),
+      ).toEqual([[h.observer.id, 'observer']])
     })
-    expect(members.status).toBe(200)
-    expect(await code(await req(h.app, h.stranger.token, CASE(id)))).not.toBe(
-      'employee-case-not-found',
-    )
-  })
-})
 
+    test('D20 转移：新 owner 成为 owner、前任降为 collaborator（同一事务）；owner 永不进成员行', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id)
+      const seen: TasksListBroadcastContext[] = []
+      const unsubscribe = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (message, context) => {
+        if (message.type === 'employee-case.members.changed' && context !== undefined) {
+          seen.push(context)
+        }
+      })
+      try {
+        const res = await req(h.app, h.owner.token, MEMBERS(id), {
+          method: 'PUT',
+          body: JSON.stringify({ ownerUserId: h.collaborator.id }),
+        })
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as {
+          ownerUserId: string | null
+          members: Array<{ user: { id: string }; role: string }>
+          canManage: boolean
+        }
+        expect(body.ownerUserId).toBe(h.collaborator.id)
+        expect(body.members.map((m) => [m.user.id, m.role])).toEqual([[h.owner.id, 'collaborator']])
+        // 前任仍能操作但不再能管理成员。
+        expect(body.canManage).toBe(false)
+        expect(
+          (
+            await h.db
+              .select({ ownerUserId: employeeCases.ownerUserId, revision: employeeCases.revision })
+              .from(employeeCases)
+              .where(eq(employeeCases.id, id))
+          )[0],
+        ).toEqual({ ownerUserId: h.collaborator.id, revision: 1 })
+        expect(seen).toHaveLength(1)
+        const context = seen[0]!
+        expect(context.kind).toBe('employee-case.members-changed-audience')
+        if (context.kind === 'employee-case.members-changed-audience') {
+          expect(context.caseId).toBe(id)
+          expect([...context.visibleUserIds].sort()).toEqual([h.owner.id, h.collaborator.id].sort())
+        }
+        // 转移后前任的 PUT 被拒，新 owner 放行。
+        expect(
+          (
+            await req(h.app, h.owner.token, MEMBERS(id), {
+              method: 'PUT',
+              body: JSON.stringify({ members: [] }),
+            })
+          ).status,
+        ).toBe(403)
+        expect(
+          (
+            await req(h.app, h.collaborator.token, MEMBERS(id), {
+              method: 'PUT',
+              body: JSON.stringify({ members: [] }),
+            })
+          ).status,
+        ).toBe(200)
+      } finally {
+        unsubscribe()
+      }
+    })
+
+    test('bypass（admin）在三个面上的判定与今天一致：可见、可操作、可管理', async () => {
+      const h = await buildHarness(scope)
+      const id = await seedCase(h.db, h.owner.id)
+      const members = await req(h.app, h.admin.token, MEMBERS(id), {
+        method: 'PUT',
+        body: JSON.stringify({ members: [{ userId: h.stranger.id, role: 'observer' }] }),
+      })
+      expect(members.status).toBe(200)
+      expect(await code(await req(h.app, h.stranger.token, CASE(id)))).not.toBe(
+        'employee-case-not-found',
+      )
+    })
+  },
+)
+
+// 判据级：合成 actor + 纯函数，一行 DB 都不碰——不套双引擎 harness。
 describe('RFC-330 D19 —— tasks:read:all 而无 bypass 的账号（判据级）', () => {
   // 仓内没有一个角色预设是「有 tasks:read:all、无 resource-acl:bypass」（manager / admin 两者都有），
   // 所以这一档只能在判据层用合成 actor 锁定：看得见、但不能操作（与任务侧 requireTaskOperator 同形）。

@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 576,
+      "baseline": 569,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5265,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 —— 新增 `modules/task-execution/application/worktreeResumePreflight.ts`（工作树继续预检的唯一判据，两个 provider 共用）并经 `public/participants` 暴露两个符号；普查随之多出这几条。本 commit 一次性放行，下一提退役。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4731,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 —— 新增 `modules/task-execution/application/worktreeResumePreflight.ts`（工作树继续预检的唯一判据，两个 provider 共用）并经 `public/participants` 暴露两个符号；普查随之多出这几条。本 commit 一次性放行，下一提退役。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -853,10 +847,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 983,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 —— 新增 `modules/task-execution/application/worktreeResumePreflight.ts`（工作树继续预检的唯一判据，两个 provider 共用）并经 `public/participants` 暴露两个符号；普查随之多出这几条。本 commit 一次性放行，下一提退役。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -877,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24941,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 —— 新增 `modules/task-execution/application/worktreeResumePreflight.ts`（工作树继续预检的唯一判据，两个 provider 共用）并经 `public/participants` 暴露两个符号；普查随之多出这几条。本 commit 一次性放行，下一提退役。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -897,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5c4b737bdc35c81d2a2eefd6cb2490fa6e500790",
-    "contentDigest": "sha256:c18aaf9892a95f7bec898483d0e6fd56fbec98749d1842ca11184142cab5e284",
+    "currentSnapshotSha": "1694bcfb53e9b3afef1bddef95bfe9ae3f459054",
+    "contentDigest": "sha256:3144fa9b95ea1274b40f990de3f5658b1b614008d15c517f4047894742334868",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -362,6 +362,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
   })
 
+  // RFC-359（2026-09-12）：语句条数仍是 159，**摘要变了**——`workgroupTaskRoom` 的
+  // `continuation.assertResumable` 从空操作换成 `composeWorktreeResumePreflight({...})`
+  // （工作树继续预检两个 provider 共用一份，见 plan §5ah）。这是一条**有意的**行为改动：
+  // 改前工作树被 GC 回收后 confirm/approve 在 PG 上回 200 并把任务永久搁浅，改后与 SQLite
+  // 同为 410、决策可重试。摘要跟着改是对的；**摘要变了而你说不出改了哪一条，才是红**。
+  //
   // RFC-359 W57：daemon 相位从 162 条降到 159 条——`/api/overview` 两侧收成一份时，这里那段
   // 「`WeakMap<authority, Actor>` + `{ resolve }` 解析器 + `systemOverview` 常量 + 包一层
   // `execute` 填 map」的胶水整段删掉了（目录概览端口现在直接收请求者投影），换成一条
@@ -376,7 +382,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(159)
     expect(digest(restored, pg)).toBe(
-      'd37eb8dceeccbcfe123abe96eee56bc93cdb151ccc464b174c2f0e3612810b5a',
+      '7f6260db1615351a60f38460bfbf9d6927a48f070a4cfe2f12eb5910479477eb',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
