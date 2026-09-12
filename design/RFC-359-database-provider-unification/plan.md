@@ -6809,3 +6809,19 @@ describe 里，跑出 `[postgresql] > application lifetime > … > [postgresql] 
 两条都写在标签文案里了。
 
 （顺带：`DAY` 原本是那个 describe 的局部常量，搬出去的块也要用，提到模块级。）
+
+
+## 5ax. `auth-routes` 全量双引擎（账本 555 → 554）
+
+六个 describe 接上作用域，另加一个 `bootstrap: 'required'` 的独立注册面。三处要点：
+
+1. **裸 SQL 换掉**：`h.db.$client.query('SELECT … FROM user_access_audit …').get(…)` 是
+   bun:sqlite 专有的（中立面没有 `$client`）。改成 drizzle 的 select + `desc(createdAt)` + `limit(1)`，
+   两个引擎同一份判据。**这类裸 SQL 是 SELF-CLOSES-DB 标签之外的另一种 provider 绑定**，
+   pre-flight 扫 `$client` 时会一并报出来。
+2. **`bootstrap` 是注册面级选项**：原来一条用例里既要 `'required'`（还没有管理员）又要
+   `'ready'`，一个作用域服务不了两种形态。拆成两条——两半本来断言的也是两件事。
+3. **一条用例里 `open()` 两次，换的是配置、库还是同一个**：第二半再建一个同名 `bob`
+   当场 `username already exists`。合一前每次 `buildHarness()` 现建一个库，所以同名无碍。
+   种子改名即可。**别**给作用域加「每次 open 重置库」——那会让「同一个库换一份配置」
+   这种真实场景变得不可测。已进 `docs/dev-gotchas.md`。

@@ -6488,3 +6488,20 @@ DrizzleQueryError                 // 没有 code / constraint
 **更一般的形态**：本文件已有一条「`beforeAll` / `afterAll` 里做真 I/O 必须显式给超时」。
 这条是它在 `test` 上的同款——**凡是「等一件需要时间的事」，预算就得按那件事的上限给，
 不能按它在你机器上的实测耗时给**。
+
+## 一条用例里 `scope.open()` 两次：换的是**配置**，库还是同一个（2026-09-12 实撞）
+
+`describeEachProviderHttpApplication` 的 `open()` 会关掉上一个应用、另建一个 app home，
+**但不重置数据库**——库由 harness 在**每条用例**的 `beforeEach` 重置。
+
+合一前那些用例每次 `buildHarness()` 都现建一个 SQLite 内存库，于是「同一条用例里建两个应用、
+各自 `createUser('bob')`」是成立的。迁过来之后第二次就撞 `username already exists`
+（`auth-routes` 的「外部签发开关」用例实撞：关着时拒、开着时准，两半各建一个 `bob`）。
+
+**处置**：第二半的种子换个名字（`bob-surface-on`），或者干脆拆成两条用例。
+**别**去给作用域加「每次 open 重置库」——那会让「同一个库、换一份配置」这种**真实场景**
+变得不可测。
+
+**另一条相关的**：`bootstrap`（`'required'` = 还没有管理员）是**注册面级**选项，不是
+`open()` 的参数。一条用例同时要两种形态时，只能拆成两个注册面
+（`auth-routes` 的 bootstrap 用例因此拆成两条：新装机的载荷校验 / 已就绪实例的 actor 闸门）。
