@@ -12,26 +12,14 @@
 // Stable operation bindings target the already-mounted handler chain, making
 // (1) and (2) structurally impossible without a second Hono route root.
 
+import type { Hono } from 'hono'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { describe, expect, test } from 'bun:test'
-import { randomBytes } from 'node:crypto'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { DEFAULT_CONFIG, type Permission, type WorkflowInput } from '@agent-workflow/shared'
+import { type Permission, type WorkflowInput } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import {
-  createReviewDecisionCommand,
-  createQuestionDispatchCommand,
-  createClarifyDecisionCommand,
-} from '@/modules/collaboration/composition/decisionCommands'
-import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { composeMemoryOperationsFor } from '@/modules/memory/composition'
-import { Paths } from '@/util/paths'
+import {} from '@/modules/collaboration/composition/decisionCommands'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
   ALL_TOOLS,
   describeCapabilities,
@@ -41,7 +29,10 @@ import {
 } from '../src/mcp/tools'
 import { MATRIX_RESOURCES } from '@agent-workflow/shared'
 import { KINDS_WITH_BODY_SCHEMAS } from '../src/mcp/resourceSchemas'
-import { createApp, type AppDeps } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { directMcpOperationAuthority } from '../src/routes/operationAuthority'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { createRouteOperationDispatcher as createDispatcher } from './helpers/routeOperationDispatcher'
@@ -66,23 +57,21 @@ const AGENT_BODY = {
   runtime: TEST_RUNTIME,
 }
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 
-function configPath(mcpSurfaceEnabled = true): string {
-  const path = join(mkdtempSync(join(tmpdir(), 'aw-rfc247-mcp-')), 'config.json')
-  writeFileSync(path, JSON.stringify({ ...DEFAULT_CONFIG, mcpSurfaceEnabled }))
-  return path
-}
-
 interface Harness {
-  db: DbClient
-  deps: AppDeps
+  db: ProviderNeutralDatabase
+  /** 应用自己装配好的那一份——dispatcher 与「同一枚 token 打 REST」都用它。 */
+  app: Hono
+  identityAccess: IdentityAccessRuntime
   userId: string
 }
 
-async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })
+async function harness(
+  scope: ProviderHttpApplicationScope,
+  role: 'admin' | 'user' = 'admin',
+): Promise<Harness> {
+  const db = scope.harness.db
   await createRuntime(runtimeRegistryPersistence(db), {
     name: TEST_RUNTIME,
     protocol: 'opencode',
@@ -94,32 +83,16 @@ async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
     role,
     password: 'pw12345678',
   })
-  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
-  const appHome = Paths.root
-  const memoryOperations = composeMemoryOperationsFor({
-    db: db,
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome),
-  })
+  // RFC-359 AC-6 —— 合一前这里自建 `composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有）
+  // 去凑 `schedulerDriver` / 读模型 / 协作上下文，只为拼出一个 `AppDeps` 喂给
+  // `createRouteOperationDispatcher`。helper 现在能直接吃**已装配的应用**（plan §5at），
+  // 那一整段随之删掉。
+  const opened = await scope.open()
   return {
     db,
+    app: opened.app,
+    identityAccess: opened.identityAccess,
     userId: user.id,
-    deps: {
-      token: DAEMON_TOKEN,
-      configPath: configPath(),
-      opencodeVersion: null,
-      dbVersion: 1,
-      db,
-      secretBox: createSecretBoxFromKey(randomBytes(32)),
-      schedulerDriver: taskExecutionRuntime.schedulerDriver,
-      taskExecutionReadModels: taskExecutionRuntime.readModels,
-      collaborationContext: createCollaborationCommandContext({
-        db,
-        taskExecutionReadModels: taskExecutionRuntime.readModels,
-        reviewDecisions: createReviewDecisionCommand({ db, appHome }),
-        questionDispatches: createQuestionDispatchCommand(db),
-        clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
-      }),
-    },
   }
 }
 
@@ -136,355 +109,424 @@ function tokenActor(
   })
 }
 
-describe('RFC-247 — the dispatcher runs the real route table', () => {
-  test('a tool call is gated by the token matrix, exactly as REST would be', async () => {
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 — the dispatcher runs the real route table',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('a tool call is gated by the token matrix, exactly as REST would be', async () => {
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
 
-    // No `agents:create` in the matrix, even though the OWNER is an admin.
-    const readOnly = mcpDispatchActor(tokenActor(h, []))
-    const refused = await dispatch(
-      { method: 'POST', path: '/api/agents', body: { ...AGENT_BODY, name: 'x' } },
-      readOnly,
-    )
-    expect(refused.status).toBe(403)
-    expect((refused.body as { code: string }).code).toBe('forbidden')
+      // No `agents:create` in the matrix, even though the OWNER is an admin.
+      const readOnly = mcpDispatchActor(tokenActor(h, []))
+      const refused = await dispatch(
+        { method: 'POST', path: '/api/agents', body: { ...AGENT_BODY, name: 'x' } },
+        readOnly,
+      )
+      expect(refused.status).toBe(403)
+      expect((refused.body as { code: string }).code).toBe('forbidden')
 
-    // …and the same call with the point ticked goes through, so the refusal
-    // above is the matrix rather than a broken dispatcher.
-    const creator = mcpDispatchActor(tokenActor(h, ['agents:create']))
-    const created = await dispatch(
-      {
-        method: 'POST',
-        path: '/api/agents',
-        body: { ...AGENT_BODY, name: 'mcp-made-agent' },
-      },
-      creator,
-    )
-    expect(created.status).toBe(201)
-  })
-
-  test('reads work with an empty matrix — reads are always on (D3)', async () => {
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const res = await dispatch(
-      { method: 'GET', path: '/api/agents' },
-      mcpDispatchActor(tokenActor(h, [])),
-    )
-    expect(res.status).toBe(200)
-  })
-
-  test('delete still demands its type-to-confirm body over MCP', async () => {
-    // The confirmation lives in the ROUTE HANDLER. A tool that called
-    // `services/agents.ts` directly would skip it entirely and delete on the
-    // first try — this is the single clearest example of why dispatch goes
-    // through the route table.
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const actor = mcpDispatchActor(tokenActor(h, ['agents:create', 'agents:delete']))
-
-    const created = await dispatch(
-      {
-        method: 'POST',
-        path: '/api/agents',
-        body: { ...AGENT_BODY, name: 'doomed-agent' },
-      },
-      actor,
-    )
-    expect(created.status).toBe(201)
-    const id = (created.body as { id: string }).id
-
-    // Agent deletes are ALSO fenced on the revision (RFC-231): read it back so
-    // the confirmation is the only thing under test here.
-    const fetched = (await dispatch({ method: 'GET', path: `/api/agents/${id}` }, actor)).body as {
-      updatedAt: number
-      aclRevision: number
-    }
-    const fence = {
-      expectedUpdatedAt: fetched.updatedAt,
-      expectedAclRevision: fetched.aclRevision,
-    }
-
-    const noConfirm = await dispatch(
-      { method: 'DELETE', path: `/api/agents/${id}`, body: fence },
-      actor,
-    )
-    expect(noConfirm.status).toBe(422)
-    expect((noConfirm.body as { code: string }).code).toBe('delete-confirm-required')
-
-    const wrongConfirm = await dispatch(
-      { method: 'DELETE', path: `/api/agents/${id}`, body: { ...fence, confirm: 'not-the-name' } },
-      actor,
-    )
-    expect(wrongConfirm.status).toBe(422)
-    expect((wrongConfirm.body as { code: string }).code).toBe('delete-confirm-mismatch')
-
-    // Still there after two refused attempts.
-    expect((await dispatch({ method: 'GET', path: `/api/agents/${id}` }, actor)).status).toBe(200)
-
-    const ok = await dispatch(
-      { method: 'DELETE', path: `/api/agents/${id}`, body: { ...fence, confirm: 'doomed-agent' } },
-      actor,
-    )
-    expect(ok.status).toBe(204)
-  })
-
-  test('payload validation is the route’s, not a second copy', async () => {
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const res = await dispatch(
-      { method: 'POST', path: '/api/agents', body: { ...AGENT_BODY } },
-      mcpDispatchActor(tokenActor(h, ['agents:create'])),
-    )
-    expect(res.status).toBe(422)
-  })
-
-  test('an unknown path answers 404 rather than falling through ungated', async () => {
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const res = await dispatch(
-      { method: 'GET', path: '/api/not-a-real-endpoint' },
-      mcpDispatchActor(tokenActor(h, [])),
-    )
-    expect(res.status).toBe(404)
-  })
-})
-
-describe('RFC-247 D2 — the purpose gate does not fire on its own channel', () => {
-  test('an mcp_only token dispatches fine through the MCP path', async () => {
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const actor = tokenActor(h, [])
-    expect(actor.purpose).toBe('mcp_only')
-    const res = await dispatch({ method: 'GET', path: '/api/agents' }, mcpDispatchActor(actor))
-    expect(res.status).toBe(200)
-  })
-
-  test('the SAME token is refused on the REST app', async () => {
-    // The two halves of D2 in one place: the purpose gate is about which door,
-    // and this proves both doors read the field the way they should.
-    const h = await harness()
-    const app = createApp(h.deps)
-    const { createPat } = await import('./helpers/auth/patStore')
-    const { token } = await createPat({
-      db: h.db,
-      userId: h.userId,
-      name: 'mcp-only',
-      scopes: [],
-      purpose: 'mcp_only',
-    })
-    const res = await app.request('/api/agents', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    expect(res.status).toBe(403)
-    expect(((await res.json()) as { code: string }).code).toBe('token-mcp-only')
-  })
-
-  test('the trusted MCP authority clears purpose and NOTHING else', async () => {
-    const h = await harness()
-    const actor = tokenActor(h, ['agents:create'])
-    const identityAccess = composeIdentityAccess(h.db)
-    const identity = await admitTestDirectAuthority(identityAccess.directAuthority, {
-      userId: actor.user.id,
-      source: 'pat',
-      patScopes: [...actor.permissions],
-      patPurpose: actor.purpose,
-      patId: actor.patId,
-    })
-    expect(identity).not.toBeNull()
-    const dispatchActor = directMcpOperationAuthority(
-      identityAccess.directAuthority,
-      identity!.actor as Actor,
-    )
-    expect(dispatchActor.purpose).toBe('mcp_only')
-    expect(Object.isFrozen(dispatchActor)).toBe(true)
-    expect(dispatchActor.source).toBe('pat')
-    expect(dispatchActor.user).toEqual(actor.user)
-    expect(dispatchActor).toBe(identity!.actor)
-    // The authority is identical — this is the line that would turn a channel
-    // adapter into a privilege escalation if someone "fixed" it later.
-    expect([...dispatchActor.permissions].sort()).toEqual([...actor.permissions].sort())
-  })
-})
-
-describe('RFC-247 D10 — tools/list reflects the matrix', () => {
-  test('a read-only token sees the read tools and none of the mutating ones', async () => {
-    const h = await harness()
-    const names = toolsFor(tokenActor(h, [])).map((t) => t.name)
-    expect(names).toContain('get_task')
-    expect(names).toContain('resource_read')
-    expect(names).toContain('describe_capabilities')
-    expect(names).not.toContain('launch_task')
-    expect(names).not.toContain('cancel_task')
-    expect(names).not.toContain('delete_task')
-  })
-
-  test('a task-automation token gains the task verbs but not delete', async () => {
-    const h = await harness()
-    const names = toolsFor(tokenActor(h, ['tasks:execute'])).map((t) => t.name)
-    expect(names).toContain('launch_task')
-    expect(names).toContain('cancel_task')
-    expect(names).toContain('retry_node')
-    expect(names).not.toContain('delete_task')
-  })
-
-  test('delete_task appears only when tasks:delete is ticked', async () => {
-    const h = await harness()
-    expect(toolsFor(tokenActor(h, ['tasks:delete'])).map((t) => t.name)).toContain('delete_task')
-  })
-
-  test('every listed tool is one the token can actually call', async () => {
-    const h = await harness()
-    for (const matrix of [
-      [],
-      ['tasks:execute'],
-      ['tasks:execute', 'tasks:delete'],
-    ] as Permission[][]) {
-      const actor = tokenActor(h, matrix)
-      for (const tool of toolsFor(actor)) {
-        for (const p of tool.permissions) expect(actor.permissions.has(p)).toBe(true)
-      }
-    }
-  })
-})
-
-describe('RFC-247 — describe_capabilities explains a refusal', () => {
-  test('it names the missing point for each unavailable tool', async () => {
-    const h = await harness()
-    const described = describeCapabilities(tokenActor(h, []))
-    const launch = described.toolsUnavailable.find((t) => t.tool === 'launch_task')
-    expect(launch?.missing).toEqual(['tasks:execute'])
-    expect(described.toolsAvailable).toContain('get_task')
-  })
-
-  test('granted never includes a system-domain point', async () => {
-    const h = await harness()
-    // The owner is an admin, so `users:read` etc. are in the ROLE baseline —
-    // the token must still not carry them (D7).
-    const granted = describeCapabilities(tokenActor(h, [])).granted
-    expect(granted).not.toContain('users:read')
-    expect(granted).not.toContain('settings:write')
-    expect(granted).not.toContain('account:self')
-  })
-})
-
-describe('RFC-247 — the tool table cannot drift from the permission catalog', () => {
-  test('the converged resource kinds cover every matrix resource except tasks', () => {
-    // `MCP_RESOURCE_KINDS` is spelled out as a tuple (z.enum needs one). This
-    // is the lock that keeps it honest: add a resource type to the catalog
-    // without giving it tools and this goes red, rather than the resource
-    // silently having no MCP surface.
-    //
-    // RFC-248 T30c 把方向从「相等」放宽成「覆盖」：MCP 的 kind 是**工具寻址
-    // 单位**，不必逐个对应可授权资源。`repo-groups` 就是这种——它有独立的
-    // CRUD 路由，但写权限沿用 `repos:*`（组编排的是仓库，不是第十一种可授权
-    // 资源；给账号页的令牌矩阵加一行没人看得懂的 `repo-groups:*` 才是坏的）。
-    for (const r of MATRIX_RESOURCES) {
-      if (r === 'tasks') continue
-      expect(MCP_RESOURCE_KINDS).toContain(r)
-    }
-    expect(MCP_RESOURCE_KINDS as readonly string[]).not.toContain('tasks')
-  })
-
-  test('RFC-248: kind 之外的额外项必须显式声明权限域，且那个域在矩阵里', async () => {
-    // 反向守卫：任何**不在** MATRIX_RESOURCES 里的 kind，它的写操作报出来的
-    // 权限点必须落在一个真实存在的域上。漏掉映射会让 describe_resource 报出
-    // `repo-groups:update` 这种不存在的点——调用方照着去申请，永远申请不到。
-    const { describeResource } = await import('@/mcp/tools')
-    const extras = MCP_RESOURCE_KINDS.filter(
-      (k) => !(MATRIX_RESOURCES as readonly string[]).includes(k),
-    )
-    expect(extras).toEqual(['repo-groups'])
-    for (const kind of extras) {
-      const d = describeResource(kind)
-      for (const op of d.operations) {
-        if (op.permission === null) continue
-        const domain = op.permission.split(':')[0]!
-        expect(MATRIX_RESOURCES as readonly string[]).toContain(domain)
-      }
-    }
-  })
-
-  test('every tool declares points that exist in the catalog', async () => {
-    const h = await harness()
-    const admin = tokenActor(h, [...MATRIX_RESOURCES.map((r) => `${r}:delete` as Permission)])
-    for (const tool of ALL_TOOLS) {
-      for (const p of tool.permissions) {
-        // An unknown point would silently make the tool unlistable forever.
-        expect(typeof p).toBe('string')
-        expect(p.includes(':')).toBe(true)
-      }
-    }
-    expect(toolsFor(admin).length).toBeGreaterThan(0)
-  })
-
-  test('no two tools share a name', () => {
-    const names = ALL_TOOLS.map((t) => t.name)
-    expect(new Set(names).size).toBe(names.length)
-  })
-
-  test('every tool has a description that says what it does', () => {
-    for (const tool of ALL_TOOLS) {
-      expect(tool.description.length).toBeGreaterThan(40)
-      expect(tool.title.length).toBeGreaterThan(0)
-    }
-  })
-})
-
-describe('RFC-247 D9 — an MCP secret does not come back through a token', () => {
-  test('a PAT read of an MCP server gets masked env, headers and oauth secret', async () => {
-    // The gap this closes: `redactMcpRecord` existed and was unit-tested, but
-    // nothing called it — so `GET /api/mcps/:id` returned credentials verbatim.
-    // It matters more on this channel than on REST: `resource_read` puts the
-    // answer straight into a model's context.
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const actor = mcpDispatchActor(tokenActor(h, ['mcps:create']))
-
-    const created = await dispatch(
-      {
-        method: 'POST',
-        path: '/api/mcps',
-        body: {
-          name: 'secret-bearing',
-          description: '',
-          type: 'local',
-          config: { command: ['run-me'], env: { API_KEY: 'sk-live-do-not-leak' } },
-          enabled: true,
+      // …and the same call with the point ticked goes through, so the refusal
+      // above is the matrix rather than a broken dispatcher.
+      const creator = mcpDispatchActor(tokenActor(h, ['agents:create']))
+      const created = await dispatch(
+        {
+          method: 'POST',
+          path: '/api/agents',
+          body: { ...AGENT_BODY, name: 'mcp-made-agent' },
         },
-      },
-      actor,
-    )
-    expect(created.status).toBe(201)
-    const id = (created.body as { id: string }).id
-
-    const read = await dispatch({ method: 'GET', path: `/api/mcps/${id}` }, actor)
-    expect(read.status).toBe(200)
-    const raw = JSON.stringify(read.body)
-    expect(raw).not.toContain('sk-live-do-not-leak')
-    // The KEY survives — a caller must still be able to see which variables
-    // exist in order to reason about the server at all.
-    expect(raw).toContain('API_KEY')
-
-    const listed = await dispatch({ method: 'GET', path: '/api/mcps' }, actor)
-    expect(JSON.stringify(listed.body)).not.toContain('sk-live-do-not-leak')
-
-    // …and the same read through a SESSION actor still shows it: redaction is
-    // about the token channel, not about hiding a user's own data from them.
-    const session = buildActor({
-      user: {
-        id: h.userId,
-        username: 'alice',
-        displayName: 'Alice',
-        role: 'admin',
-        status: 'active',
-      },
-      source: 'session',
+        creator,
+      )
+      expect(created.status).toBe(201)
     })
-    const bySession = await dispatch({ method: 'GET', path: `/api/mcps/${id}` }, session)
-    expect(JSON.stringify(bySession.body)).toContain('sk-live-do-not-leak')
-  })
-})
+
+    test('reads work with an empty matrix — reads are always on (D3)', async () => {
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const res = await dispatch(
+        { method: 'GET', path: '/api/agents' },
+        mcpDispatchActor(tokenActor(h, [])),
+      )
+      expect(res.status).toBe(200)
+    })
+
+    test('delete still demands its type-to-confirm body over MCP', async () => {
+      // The confirmation lives in the ROUTE HANDLER. A tool that called
+      // `services/agents.ts` directly would skip it entirely and delete on the
+      // first try — this is the single clearest example of why dispatch goes
+      // through the route table.
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const actor = mcpDispatchActor(tokenActor(h, ['agents:create', 'agents:delete']))
+
+      const created = await dispatch(
+        {
+          method: 'POST',
+          path: '/api/agents',
+          body: { ...AGENT_BODY, name: 'doomed-agent' },
+        },
+        actor,
+      )
+      expect(created.status).toBe(201)
+      const id = (created.body as { id: string }).id
+
+      // Agent deletes are ALSO fenced on the revision (RFC-231): read it back so
+      // the confirmation is the only thing under test here.
+      const fetched = (await dispatch({ method: 'GET', path: `/api/agents/${id}` }, actor))
+        .body as {
+        updatedAt: number
+        aclRevision: number
+      }
+      const fence = {
+        expectedUpdatedAt: fetched.updatedAt,
+        expectedAclRevision: fetched.aclRevision,
+      }
+
+      const noConfirm = await dispatch(
+        { method: 'DELETE', path: `/api/agents/${id}`, body: fence },
+        actor,
+      )
+      expect(noConfirm.status).toBe(422)
+      expect((noConfirm.body as { code: string }).code).toBe('delete-confirm-required')
+
+      const wrongConfirm = await dispatch(
+        {
+          method: 'DELETE',
+          path: `/api/agents/${id}`,
+          body: { ...fence, confirm: 'not-the-name' },
+        },
+        actor,
+      )
+      expect(wrongConfirm.status).toBe(422)
+      expect((wrongConfirm.body as { code: string }).code).toBe('delete-confirm-mismatch')
+
+      // Still there after two refused attempts.
+      expect((await dispatch({ method: 'GET', path: `/api/agents/${id}` }, actor)).status).toBe(200)
+
+      const ok = await dispatch(
+        {
+          method: 'DELETE',
+          path: `/api/agents/${id}`,
+          body: { ...fence, confirm: 'doomed-agent' },
+        },
+        actor,
+      )
+      expect(ok.status).toBe(204)
+    })
+
+    test('payload validation is the route’s, not a second copy', async () => {
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const res = await dispatch(
+        { method: 'POST', path: '/api/agents', body: { ...AGENT_BODY } },
+        mcpDispatchActor(tokenActor(h, ['agents:create'])),
+      )
+      expect(res.status).toBe(422)
+    })
+
+    test('an unknown path answers 404 rather than falling through ungated', async () => {
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const res = await dispatch(
+        { method: 'GET', path: '/api/not-a-real-endpoint' },
+        mcpDispatchActor(tokenActor(h, [])),
+      )
+      expect(res.status).toBe(404)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 D2 — the purpose gate does not fire on its own channel',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('an mcp_only token dispatches fine through the MCP path', async () => {
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const actor = tokenActor(h, [])
+      expect(actor.purpose).toBe('mcp_only')
+      const res = await dispatch({ method: 'GET', path: '/api/agents' }, mcpDispatchActor(actor))
+      expect(res.status).toBe(200)
+    })
+
+    test('the SAME token is refused on the REST app', async () => {
+      // The two halves of D2 in one place: the purpose gate is about which door,
+      // and this proves both doors read the field the way they should.
+      const h = await harness(scope)
+      const app = h.app
+      const { createPat } = await import('./helpers/auth/patStore')
+      const { token } = await createPat({
+        db: h.db,
+        userId: h.userId,
+        name: 'mcp-only',
+        scopes: [],
+        purpose: 'mcp_only',
+      })
+      const res = await app.request('/api/agents', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as { code: string }).code).toBe('token-mcp-only')
+    })
+
+    test('the trusted MCP authority clears purpose and NOTHING else', async () => {
+      const h = await harness(scope)
+      const actor = tokenActor(h, ['agents:create'])
+      const identityAccess = composeIdentityAccess(h.db)
+      const identity = await admitTestDirectAuthority(identityAccess.directAuthority, {
+        userId: actor.user.id,
+        source: 'pat',
+        patScopes: [...actor.permissions],
+        patPurpose: actor.purpose,
+        patId: actor.patId,
+      })
+      expect(identity).not.toBeNull()
+      const dispatchActor = directMcpOperationAuthority(
+        identityAccess.directAuthority,
+        identity!.actor as Actor,
+      )
+      expect(dispatchActor.purpose).toBe('mcp_only')
+      expect(Object.isFrozen(dispatchActor)).toBe(true)
+      expect(dispatchActor.source).toBe('pat')
+      expect(dispatchActor.user).toEqual(actor.user)
+      expect(dispatchActor).toBe(identity!.actor)
+      // The authority is identical — this is the line that would turn a channel
+      // adapter into a privilege escalation if someone "fixed" it later.
+      expect([...dispatchActor.permissions].sort()).toEqual([...actor.permissions].sort())
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 D10 — tools/list reflects the matrix',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('a read-only token sees the read tools and none of the mutating ones', async () => {
+      const h = await harness(scope)
+      const names = toolsFor(tokenActor(h, [])).map((t) => t.name)
+      expect(names).toContain('get_task')
+      expect(names).toContain('resource_read')
+      expect(names).toContain('describe_capabilities')
+      expect(names).not.toContain('launch_task')
+      expect(names).not.toContain('cancel_task')
+      expect(names).not.toContain('delete_task')
+    })
+
+    test('a task-automation token gains the task verbs but not delete', async () => {
+      const h = await harness(scope)
+      const names = toolsFor(tokenActor(h, ['tasks:execute'])).map((t) => t.name)
+      expect(names).toContain('launch_task')
+      expect(names).toContain('cancel_task')
+      expect(names).toContain('retry_node')
+      expect(names).not.toContain('delete_task')
+    })
+
+    test('delete_task appears only when tasks:delete is ticked', async () => {
+      const h = await harness(scope)
+      expect(toolsFor(tokenActor(h, ['tasks:delete'])).map((t) => t.name)).toContain('delete_task')
+    })
+
+    test('every listed tool is one the token can actually call', async () => {
+      const h = await harness(scope)
+      for (const matrix of [
+        [],
+        ['tasks:execute'],
+        ['tasks:execute', 'tasks:delete'],
+      ] as Permission[][]) {
+        const actor = tokenActor(h, matrix)
+        for (const tool of toolsFor(actor)) {
+          for (const p of tool.permissions) expect(actor.permissions.has(p)).toBe(true)
+        }
+      }
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 — describe_capabilities explains a refusal',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('it names the missing point for each unavailable tool', async () => {
+      const h = await harness(scope)
+      const described = describeCapabilities(tokenActor(h, []))
+      const launch = described.toolsUnavailable.find((t) => t.tool === 'launch_task')
+      expect(launch?.missing).toEqual(['tasks:execute'])
+      expect(described.toolsAvailable).toContain('get_task')
+    })
+
+    test('granted never includes a system-domain point', async () => {
+      const h = await harness(scope)
+      // The owner is an admin, so `users:read` etc. are in the ROLE baseline —
+      // the token must still not carry them (D7).
+      const granted = describeCapabilities(tokenActor(h, [])).granted
+      expect(granted).not.toContain('users:read')
+      expect(granted).not.toContain('settings:write')
+      expect(granted).not.toContain('account:self')
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 — the tool table cannot drift from the permission catalog',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('the converged resource kinds cover every matrix resource except tasks', () => {
+      // `MCP_RESOURCE_KINDS` is spelled out as a tuple (z.enum needs one). This
+      // is the lock that keeps it honest: add a resource type to the catalog
+      // without giving it tools and this goes red, rather than the resource
+      // silently having no MCP surface.
+      //
+      // RFC-248 T30c 把方向从「相等」放宽成「覆盖」：MCP 的 kind 是**工具寻址
+      // 单位**，不必逐个对应可授权资源。`repo-groups` 就是这种——它有独立的
+      // CRUD 路由，但写权限沿用 `repos:*`（组编排的是仓库，不是第十一种可授权
+      // 资源；给账号页的令牌矩阵加一行没人看得懂的 `repo-groups:*` 才是坏的）。
+      for (const r of MATRIX_RESOURCES) {
+        if (r === 'tasks') continue
+        expect(MCP_RESOURCE_KINDS).toContain(r)
+      }
+      expect(MCP_RESOURCE_KINDS as readonly string[]).not.toContain('tasks')
+    })
+
+    test('RFC-248: kind 之外的额外项必须显式声明权限域，且那个域在矩阵里', async () => {
+      // 反向守卫：任何**不在** MATRIX_RESOURCES 里的 kind，它的写操作报出来的
+      // 权限点必须落在一个真实存在的域上。漏掉映射会让 describe_resource 报出
+      // `repo-groups:update` 这种不存在的点——调用方照着去申请，永远申请不到。
+      const { describeResource } = await import('@/mcp/tools')
+      const extras = MCP_RESOURCE_KINDS.filter(
+        (k) => !(MATRIX_RESOURCES as readonly string[]).includes(k),
+      )
+      expect(extras).toEqual(['repo-groups'])
+      for (const kind of extras) {
+        const d = describeResource(kind)
+        for (const op of d.operations) {
+          if (op.permission === null) continue
+          const domain = op.permission.split(':')[0]!
+          expect(MATRIX_RESOURCES as readonly string[]).toContain(domain)
+        }
+      }
+    })
+
+    test('every tool declares points that exist in the catalog', async () => {
+      const h = await harness(scope)
+      const admin = tokenActor(h, [...MATRIX_RESOURCES.map((r) => `${r}:delete` as Permission)])
+      for (const tool of ALL_TOOLS) {
+        for (const p of tool.permissions) {
+          // An unknown point would silently make the tool unlistable forever.
+          expect(typeof p).toBe('string')
+          expect(p.includes(':')).toBe(true)
+        }
+      }
+      expect(toolsFor(admin).length).toBeGreaterThan(0)
+    })
+
+    test('no two tools share a name', () => {
+      const names = ALL_TOOLS.map((t) => t.name)
+      expect(new Set(names).size).toBe(names.length)
+    })
+
+    test('every tool has a description that says what it does', () => {
+      for (const tool of ALL_TOOLS) {
+        expect(tool.description.length).toBeGreaterThan(40)
+        expect(tool.title.length).toBeGreaterThan(0)
+      }
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 D9 — an MCP secret does not come back through a token',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('a PAT read of an MCP server gets masked env, headers and oauth secret', async () => {
+      // The gap this closes: `redactMcpRecord` existed and was unit-tested, but
+      // nothing called it — so `GET /api/mcps/:id` returned credentials verbatim.
+      // It matters more on this channel than on REST: `resource_read` puts the
+      // answer straight into a model's context.
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const actor = mcpDispatchActor(tokenActor(h, ['mcps:create']))
+
+      const created = await dispatch(
+        {
+          method: 'POST',
+          path: '/api/mcps',
+          body: {
+            name: 'secret-bearing',
+            description: '',
+            type: 'local',
+            config: { command: ['run-me'], env: { API_KEY: 'sk-live-do-not-leak' } },
+            enabled: true,
+          },
+        },
+        actor,
+      )
+      expect(created.status).toBe(201)
+      const id = (created.body as { id: string }).id
+
+      const read = await dispatch({ method: 'GET', path: `/api/mcps/${id}` }, actor)
+      expect(read.status).toBe(200)
+      const raw = JSON.stringify(read.body)
+      expect(raw).not.toContain('sk-live-do-not-leak')
+      // The KEY survives — a caller must still be able to see which variables
+      // exist in order to reason about the server at all.
+      expect(raw).toContain('API_KEY')
+
+      const listed = await dispatch({ method: 'GET', path: '/api/mcps' }, actor)
+      expect(JSON.stringify(listed.body)).not.toContain('sk-live-do-not-leak')
+
+      // …and the same read through a SESSION actor still shows it: redaction is
+      // about the token channel, not about hiding a user's own data from them.
+      const session = buildActor({
+        user: {
+          id: h.userId,
+          username: 'alice',
+          displayName: 'Alice',
+          role: 'admin',
+          status: 'active',
+        },
+        source: 'session',
+      })
+      const bySession = await dispatch({ method: 'GET', path: `/api/mcps/${id}` }, session)
+      expect(JSON.stringify(bySession.body)).toContain('sk-live-do-not-leak')
+    })
+  },
+)
 
 /**
  * Typed against the SHARED schema on purpose.
@@ -501,76 +543,86 @@ const UPLOAD_INPUTS: WorkflowInput[] = [
 ]
 const TEXT_INPUTS: WorkflowInput[] = [{ kind: 'text', key: 'goal', label: 'Goal' }]
 
-describe('RFC-247 AC-17 — an upload workflow is refused before anything exists', () => {
-  test('launch_task rejects it, and never dispatches the launch', async () => {
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 AC-17 — an upload workflow is refused before anything exists',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('launch_task rejects it, and never dispatches the launch', async () => {
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
 
-    const tool = ALL_TOOLS.find((t) => t.name === 'launch_task')
-    expect(tool).toBeDefined()
+      const tool = ALL_TOOLS.find((t) => t.name === 'launch_task')
+      expect(tool).toBeDefined()
 
-    // The workflow read is stubbed so the upload declaration is unambiguous;
-    // what is under test is the ORDER — refuse before POSTing a launch, so no
-    // task row and no worktree are created and there is nothing to clean up.
-    const calls: string[] = []
-    const recorded: RecordedOperationCall[] = []
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'launch_task',
-        forwardingOperationInvoker(recorded, (call) => {
-          calls.push(`${call.method} ${call.path}`)
-          if (call.method === 'GET' && call.path.startsWith('/api/workflows/')) {
-            return { status: 200, body: { definition: { inputs: UPLOAD_INPUTS } } }
-          }
-          return dispatch(call, actor)
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+      // The workflow read is stubbed so the upload declaration is unambiguous;
+      // what is under test is the ORDER — refuse before POSTing a launch, so no
+      // task row and no worktree are created and there is nothing to clean up.
+      const calls: string[] = []
+      const recorded: RecordedOperationCall[] = []
+      const ctx = {
+        actor,
+        operations: operationHandlesForInvoker(
+          'launch_task',
+          forwardingOperationInvoker(recorded, (call) => {
+            calls.push(`${call.method} ${call.path}`)
+            if (call.method === 'GET' && call.path.startsWith('/api/workflows/')) {
+              return { status: 200, body: { definition: { inputs: UPLOAD_INPUTS } } }
+            }
+            return dispatch(call, actor)
+          }),
+        ),
+        progress: async () => {},
+        signal: new AbortController().signal,
+      } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
 
-    // The refusal must NAME the offending input. Asserting only /upload/i is
-    // what let the `.name` vs `.key` bug live: the message read
-    // "takes file uploads (?)" and still matched.
-    await expect(
-      tool!.handler({ workflowId: 'wf-1', name: 'should-not-launch' }, ctx),
-    ).rejects.toThrow(/attachment/)
-    expect(calls).toEqual(['GET /api/workflows/wf-1'])
-  })
+      // The refusal must NAME the offending input. Asserting only /upload/i is
+      // what let the `.name` vs `.key` bug live: the message read
+      // "takes file uploads (?)" and still matched.
+      await expect(
+        tool!.handler({ workflowId: 'wf-1', name: 'should-not-launch' }, ctx),
+      ).rejects.toThrow(/attachment/)
+      expect(calls).toEqual(['GET /api/workflows/wf-1'])
+    })
 
-  test('a workflow with no upload input is launched normally', async () => {
-    // Without this the test above would also pass if launch_task simply always
-    // threw.
-    const h = await harness()
-    const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
-    const tool = ALL_TOOLS.find((t) => t.name === 'launch_task')
+    test('a workflow with no upload input is launched normally', async () => {
+      // Without this the test above would also pass if launch_task simply always
+      // threw.
+      const h = await harness(scope)
+      const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
+      const tool = ALL_TOOLS.find((t) => t.name === 'launch_task')
 
-    const calls: string[] = []
-    const recorded: RecordedOperationCall[] = []
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'launch_task',
-        forwardingOperationInvoker(recorded, (call) => {
-          calls.push(`${call.method} ${call.path}`)
-          if (call.method === 'GET' && call.path.startsWith('/api/workflows/')) {
-            return { status: 200, body: { definition: { inputs: TEXT_INPUTS } } }
-          }
-          // The launch itself will fail on a nonexistent workflow — irrelevant
-          // here; the point is that it was ATTEMPTED.
-          return { status: 404, body: { code: 'workflow-not-found', message: 'nope' } }
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+      const calls: string[] = []
+      const recorded: RecordedOperationCall[] = []
+      const ctx = {
+        actor,
+        operations: operationHandlesForInvoker(
+          'launch_task',
+          forwardingOperationInvoker(recorded, (call) => {
+            calls.push(`${call.method} ${call.path}`)
+            if (call.method === 'GET' && call.path.startsWith('/api/workflows/')) {
+              return { status: 200, body: { definition: { inputs: TEXT_INPUTS } } }
+            }
+            // The launch itself will fail on a nonexistent workflow — irrelevant
+            // here; the point is that it was ATTEMPTED.
+            return { status: 404, body: { code: 'workflow-not-found', message: 'nope' } }
+          }),
+        ),
+        progress: async () => {},
+        signal: new AbortController().signal,
+      } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
 
-    await expect(tool!.handler({ workflowId: 'wf-2', name: 'ok' }, ctx)).rejects.toThrow()
-    expect(calls).toEqual(['GET /api/workflows/wf-2', 'POST /api/tasks'])
-  })
-})
+      await expect(tool!.handler({ workflowId: 'wf-2', name: 'ok' }, ctx)).rejects.toThrow()
+      expect(calls).toEqual(['GET /api/workflows/wf-2', 'POST /api/tasks'])
+    })
+  },
+)
 
 // -----------------------------------------------------------------------------
 // Implementation-gate fixes (Codex impl-gate 2026-08-02).
@@ -582,158 +634,178 @@ describe('RFC-247 AC-17 — an upload workflow is refused before anything exists
 // whether that path accepts the body. These go through the REAL route table.
 // -----------------------------------------------------------------------------
 
-describe('RFC-247 impl-gate — advertised operations actually reach a live route', () => {
-  test('skills update targets the combined-save endpoint, not the retired PUT', async () => {
-    // `PUT /api/skills/:id` answers 410 Gone on every call, so the previous
-    // mapping made `resource_write(skills, update)` impossible to succeed.
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const actor = mcpDispatchActor(tokenActor(h, ['skills:update']))
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 impl-gate — advertised operations actually reach a live route',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('skills update targets the combined-save endpoint, not the retired PUT', async () => {
+      // `PUT /api/skills/:id` answers 410 Gone on every call, so the previous
+      // mapping made `resource_write(skills, update)` impossible to succeed.
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const actor = mcpDispatchActor(tokenActor(h, ['skills:update']))
 
-    const seen: string[] = []
-    const recorded: RecordedOperationCall[] = []
-    const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'resource_write',
-        forwardingOperationInvoker(recorded, (call) => {
-          seen.push(`${call.method} ${call.path}`)
-          return dispatch(call, actor)
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+      const seen: string[] = []
+      const recorded: RecordedOperationCall[] = []
+      const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
+      const ctx = {
+        actor,
+        operations: operationHandlesForInvoker(
+          'resource_write',
+          forwardingOperationInvoker(recorded, (call) => {
+            seen.push(`${call.method} ${call.path}`)
+            return dispatch(call, actor)
+          }),
+        ),
+        progress: async () => {},
+        signal: new AbortController().signal,
+      } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
 
-    await tool!
-      .handler({ kind: 'skills', method: 'update', id: 'sk-1', body: {} }, ctx)
-      .catch(() => undefined)
+      await tool!
+        .handler({ kind: 'skills', method: 'update', id: 'sk-1', body: {} }, ctx)
+        .catch(() => undefined)
 
-    expect(seen).toEqual(['POST /api/skills/sk-1/save'])
-    expect(seen[0]).not.toContain('PUT')
-  })
+      expect(seen).toEqual(['POST /api/skills/sk-1/save'])
+      expect(seen[0]).not.toContain('PUT')
+    })
 
-  test('memory delete carries the ?confirm=true query the route demands', async () => {
-    // The route checks the QUERY flag before the token's type-to-confirm body,
-    // so a body-only dispatch failed with `confirm-required` every time.
-    const h = await harness()
-    const dispatch = createDispatcher(h.deps)
-    const actor = mcpDispatchActor(tokenActor(h, ['memory:delete']))
+    test('memory delete carries the ?confirm=true query the route demands', async () => {
+      // The route checks the QUERY flag before the token's type-to-confirm body,
+      // so a body-only dispatch failed with `confirm-required` every time.
+      const h = await harness(scope)
+      const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+      const actor = mcpDispatchActor(tokenActor(h, ['memory:delete']))
 
-    const seen: Array<{ path: string; query: unknown }> = []
-    const recorded: RecordedOperationCall[] = []
-    const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'resource_write',
-        forwardingOperationInvoker(recorded, (call) => {
-          seen.push({ path: call.path, query: call.query })
-          return dispatch(call, actor)
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+      const seen: Array<{ path: string; query: unknown }> = []
+      const recorded: RecordedOperationCall[] = []
+      const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
+      const ctx = {
+        actor,
+        operations: operationHandlesForInvoker(
+          'resource_write',
+          forwardingOperationInvoker(recorded, (call) => {
+            seen.push({ path: call.path, query: call.query })
+            return dispatch(call, actor)
+          }),
+        ),
+        progress: async () => {},
+        signal: new AbortController().signal,
+      } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
 
-    await tool!
-      .handler({ kind: 'memory', method: 'delete', id: 'm-1', confirm: 'x' }, ctx)
-      .catch(() => undefined)
+      await tool!
+        .handler({ kind: 'memory', method: 'delete', id: 'm-1', confirm: 'x' }, ctx)
+        .catch(() => undefined)
 
-    expect(seen[0]?.query).toEqual({ confirm: 'true' })
-  })
+      expect(seen[0]?.query).toEqual({ confirm: 'true' })
+    })
 
-  test('agents delete does NOT carry it — the flag is memory-specific', () => {
-    // Guards the guard: a blanket `?confirm=true` would be indistinguishable
-    // from the fix in the test above.
-    expect(
-      describeResource('agents').operations.find((o) => o.operation === 'delete'),
-    ).toBeDefined()
-    expect(describeResource('memory').note).toBeUndefined()
-  })
+    test('agents delete does NOT carry it — the flag is memory-specific', () => {
+      // Guards the guard: a blanket `?confirm=true` would be indistinguishable
+      // from the fix in the test above.
+      expect(
+        describeResource('agents').operations.find((o) => o.operation === 'delete'),
+      ).toBeDefined()
+      expect(describeResource('memory').note).toBeUndefined()
+    })
 
-  test('repair_alert sends optionId + confirm, the shape the route validates', async () => {
-    const h = await harness()
-    const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
-    const tool = ALL_TOOLS.find((t) => t.name === 'repair_alert')
-    let body: unknown
-    const recorded: RecordedOperationCall[] = []
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'repair_alert',
-        recordingOperationInvoker(recorded, (call) => {
-          body = call.body
-          return {}
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+    test('repair_alert sends optionId + confirm, the shape the route validates', async () => {
+      const h = await harness(scope)
+      const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
+      const tool = ALL_TOOLS.find((t) => t.name === 'repair_alert')
+      let body: unknown
+      const recorded: RecordedOperationCall[] = []
+      const ctx = {
+        actor,
+        operations: operationHandlesForInvoker(
+          'repair_alert',
+          recordingOperationInvoker(recorded, (call) => {
+            body = call.body
+            return {}
+          }),
+        ),
+        progress: async () => {},
+        signal: new AbortController().signal,
+      } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
 
-    await tool!.handler({ id: 't1', alertId: 'a1', optionId: 'opt-9', confirm: true }, ctx)
-    expect(body).toEqual({ optionId: 'opt-9', confirm: true })
-  })
+      await tool!.handler({ id: 't1', alertId: 'a1', optionId: 'opt-9', confirm: true }, ctx)
+      expect(body).toEqual({ optionId: 'opt-9', confirm: true })
+    })
 
-  test('list_repair_options exists, so an option id is obtainable over MCP', () => {
-    // Fixing repair_alert's body alone would still leave the operation unusable:
-    // nothing else in the tool set returns an option id.
-    expect(ALL_TOOLS.map((t) => t.name)).toContain('list_repair_options')
-  })
-})
+    test('list_repair_options exists, so an option id is obtainable over MCP', () => {
+      // Fixing repair_alert's body alone would still leave the operation unusable:
+      // nothing else in the tool set returns an option id.
+      expect(ALL_TOOLS.map((t) => t.name)).toContain('list_repair_options')
+    })
+  },
+)
 
-describe('RFC-247 impl-gate — a model-supplied id cannot retarget the dispatch', () => {
-  test('a traversal id is encoded instead of normalised into another endpoint', async () => {
-    // `get_task({id:"../workflows"})` used to build `/api/tasks/../workflows`,
-    // which URL normalisation collapses to `/api/workflows` — a different
-    // endpoint from the one the tool declares, while the audit row still says
-    // `get_task`.
-    const h = await harness()
-    const actor = mcpDispatchActor(tokenActor(h, []))
-    const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
-    let path = ''
-    const recorded: RecordedOperationCall[] = []
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'get_task',
-        recordingOperationInvoker(recorded, (call) => {
-          path = call.path
-          return {}
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-247 impl-gate — a model-supplied id cannot retarget the dispatch',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc247-mcp-',
+  },
+  (scope) => {
+    test('a traversal id is encoded instead of normalised into another endpoint', async () => {
+      // `get_task({id:"../workflows"})` used to build `/api/tasks/../workflows`,
+      // which URL normalisation collapses to `/api/workflows` — a different
+      // endpoint from the one the tool declares, while the audit row still says
+      // `get_task`.
+      const h = await harness(scope)
+      const actor = mcpDispatchActor(tokenActor(h, []))
+      const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
+      let path = ''
+      const recorded: RecordedOperationCall[] = []
+      const ctx = {
+        actor,
+        operations: operationHandlesForInvoker(
+          'get_task',
+          recordingOperationInvoker(recorded, (call) => {
+            path = call.path
+            return {}
+          }),
+        ),
+        progress: async () => {},
+        signal: new AbortController().signal,
+      } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
 
-    await tool!.handler({ id: '../workflows' }, ctx)
-    expect(path).toBe('/api/tasks/..%2Fworkflows')
-    expect(new URL(`http://x${path}`).pathname).toBe('/api/tasks/..%2Fworkflows')
-  })
+      await tool!.handler({ id: '../workflows' }, ctx)
+      expect(path).toBe('/api/tasks/..%2Fworkflows')
+      expect(new URL(`http://x${path}`).pathname).toBe('/api/tasks/..%2Fworkflows')
+    })
 
-  test('a normal ULID is unaffected', async () => {
-    const h = await harness()
-    const actor = mcpDispatchActor(tokenActor(h, []))
-    const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
-    let path = ''
-    const recorded: RecordedOperationCall[] = []
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'get_task',
-        recordingOperationInvoker(recorded, (call) => {
-          path = call.path
-          return {}
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
-    await tool!.handler({ id: '01KZ08WX6YHWNFEZPX2PGT8GDP' }, ctx)
-    expect(path).toBe('/api/tasks/01KZ08WX6YHWNFEZPX2PGT8GDP')
-  })
-})
+    test('a normal ULID is unaffected', async () => {
+      const h = await harness(scope)
+      const actor = mcpDispatchActor(tokenActor(h, []))
+      const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
+      let path = ''
+      const recorded: RecordedOperationCall[] = []
+      const ctx = {
+        actor,
+        operations: operationHandlesForInvoker(
+          'get_task',
+          recordingOperationInvoker(recorded, (call) => {
+            path = call.path
+            return {}
+          }),
+        ),
+        progress: async () => {},
+        signal: new AbortController().signal,
+      } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+      await tool!.handler({ id: '01KZ08WX6YHWNFEZPX2PGT8GDP' }, ctx)
+      expect(path).toBe('/api/tasks/01KZ08WX6YHWNFEZPX2PGT8GDP')
+    })
+  },
+)
 
 describe('RFC-247 impl-gate — describe_resource answers the question it is pointed at', () => {
   test('it returns the create/update JSON Schema, derived from the route schemas', () => {

@@ -21,19 +21,17 @@
 //   - The decision route hands the acting user to the service (P16) — pinned by
 //     source text, since the service-level re-check is only observable in races.
 
+import type { Hono } from 'hono'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { randomBytes } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import { DEFAULT_CONFIG, SubmitReviewDecisionSchema, type Permission } from '@agent-workflow/shared'
+import { SubmitReviewDecisionSchema, type Permission } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   docVersions,
   nodeRunOutputs,
@@ -43,15 +41,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import {
-  createReviewDecisionCommand,
-  createQuestionDispatchCommand,
-  createClarifyDecisionCommand,
-} from '@/modules/collaboration/composition/decisionCommands'
-import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { composeMemoryOperationsFor } from '@/modules/memory/composition'
-import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
+import {} from '@/modules/collaboration/composition/decisionCommands'
 import {
   ALL_TOOLS,
   McpCallError,
@@ -60,10 +50,14 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../src/mcp/tools'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createBoundOperationInvoker } from '../src/platform/operations/boundOperationInvoker'
 import type { OperationInvoker } from '../src/platform/operations/contracts'
 import { listTokenAuditForUser } from '../src/services/tokenAudit'
+import { eventually } from './helpers/eventually'
 import { createUser } from '../src/services/users'
 import {
   operationHandlesForInvoker,
@@ -72,7 +66,6 @@ import {
   type RecordedOperationCall,
 } from './helpers/mcpOperationRecording'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 const NOW = 1_700_000_000_000
 
@@ -107,7 +100,8 @@ function toolNamed(name: string): McpToolDef {
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: DbClient
+  app: Hono
+  db: ProviderNeutralDatabase
   appHome: string
   configPath: string
   userId: string
@@ -115,59 +109,30 @@ interface Harness {
   cleanup: () => void
 }
 
-let previousAppHome: string | undefined
-
-async function harness(): Promise<Harness> {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc326-mcp-'))
-  const appHome = join(tmp, 'appHome')
+async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
+  // `mcpSurfaceEnabled` 不是默认值：必须经作用域的 `open({ config })` 并进应用读的那份配置，
+  // 自己另写一个 config 文件会被整份绕开（RFC-359 plan §5u 的老坑）。
+  const opened = await scope.open({ config: { mcpSurfaceEnabled: true } })
+  const appHome = opened.appHome
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
-  previousAppHome = process.env.AGENT_WORKFLOW_HOME
-  process.env.AGENT_WORKFLOW_HOME = appHome
-  const configPath = join(tmp, 'config.json')
-  writeFileSync(configPath, JSON.stringify({ ...DEFAULT_CONFIG, mcpSurfaceEnabled: true }))
-  const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })
   const user = await createUser(db, {
     username: 'alice',
     displayName: 'Alice',
     role: 'user',
     password: 'pw12345678',
   })
-  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
-  const memoryOperations = composeMemoryOperationsFor({
-    db: db,
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome),
-  })
-  const deps = {
-    token: DAEMON_TOKEN,
-    configPath,
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    secretBox: createSecretBoxFromKey(randomBytes(32)),
-    schedulerDriver: taskExecutionRuntime.schedulerDriver,
-    taskExecutionReadModels: taskExecutionRuntime.readModels,
-    collaborationContext: createCollaborationCommandContext({
-      db,
-      appHome,
-      taskExecutionReadModels: taskExecutionRuntime.readModels,
-      reviewDecisions: createReviewDecisionCommand({ db, appHome }),
-      questionDispatches: createQuestionDispatchCommand(db),
-      clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
-    }),
-  }
-  const app = createApp(deps)
+  // RFC-359 AC-6 —— 合一前这里自建 `composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有）
+  // 去凑 `schedulerDriver` / 读模型 / 协作上下文，只为拼出一个 `AppDeps`。
+  // 应用装配好的那一份现在由作用域交出来（plan §5ar / §5at），整段随之删掉。
   return {
     db,
+    app: opened.app,
     appHome,
-    configPath,
+    configPath: join(appHome, 'config.json'),
     userId: user.id,
-    invokeFor: (actor) => createBoundOperationInvoker(app, mcpTestOperationActor(actor)),
-    cleanup: () => {
-      db.$client.close()
-      rmSync(tmp, { recursive: true, force: true })
-      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-    },
+    invokeFor: (actor) => createBoundOperationInvoker(opened.app, mcpTestOperationActor(actor)),
+    cleanup: () => undefined,
   }
 }
 
@@ -360,273 +325,297 @@ describe('RFC-326 AC-21 — the review tools and their tiers', () => {
 // AC-22 — every tool through the real route table
 // ---------------------------------------------------------------------------
 
-describe('RFC-326 AC-22 — each review tool dispatches through the route table', () => {
-  let h: Harness
-  afterEach(() => h?.cleanup())
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-326 AC-22 — each review tool dispatches through the route table',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc326-mcp-',
+  },
+  (scope) => {
+    let h: Harness
+    afterEach(() => h?.cleanup())
 
-  test('reads: list_reviews / get_review / list_review_history / get_review_document', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const reader = patActor(h, [])
+    test('reads: list_reviews / get_review / list_review_history / get_review_document', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const reader = patActor(h, [])
 
-    const pending = (await call(h, reader, 'list_reviews', {})) as Array<{ nodeRunId: string }>
-    expect(pending.map((r) => r.nodeRunId)).toContain(fx.reviewRunId)
-    const byTask = (await call(h, reader, 'list_reviews', {
-      taskId: fx.taskId,
-      status: 'all',
-      limit: 5,
-    })) as Array<{ nodeRunId: string }>
-    expect(byTask.map((r) => r.nodeRunId)).toEqual([fx.reviewRunId])
-    const none = (await call(h, reader, 'list_reviews', { taskId: 'no-such-task' })) as unknown[]
-    expect(none).toEqual([])
+      const pending = (await call(h, reader, 'list_reviews', {})) as Array<{ nodeRunId: string }>
+      expect(pending.map((r) => r.nodeRunId)).toContain(fx.reviewRunId)
+      const byTask = (await call(h, reader, 'list_reviews', {
+        taskId: fx.taskId,
+        status: 'all',
+        limit: 5,
+      })) as Array<{ nodeRunId: string }>
+      expect(byTask.map((r) => r.nodeRunId)).toEqual([fx.reviewRunId])
+      const none = (await call(h, reader, 'list_reviews', { taskId: 'no-such-task' })) as unknown[]
+      expect(none).toEqual([])
 
-    const detail = (await call(h, reader, 'get_review', { nodeRunId: fx.reviewRunId })) as {
-      currentBody: string
-      summary: { reviewIteration: number }
-      comments: unknown[]
-    }
-    expect(detail.currentBody).toBe(SINGLE_BODY)
-    expect(detail.summary.reviewIteration).toBe(0)
+      const detail = (await call(h, reader, 'get_review', { nodeRunId: fx.reviewRunId })) as {
+        currentBody: string
+        summary: { reviewIteration: number }
+        comments: unknown[]
+      }
+      expect(detail.currentBody).toBe(SINGLE_BODY)
+      expect(detail.summary.reviewIteration).toBe(0)
 
-    const history = (await call(h, reader, 'list_review_history', {
-      nodeRunId: fx.reviewRunId,
-    })) as { versions: Array<{ id: string }>; rounds: unknown[] }
-    expect(history.versions.map((v) => v.id)).toEqual(fx.docIds)
-    expect(Array.isArray(history.rounds)).toBe(true)
+      const history = (await call(h, reader, 'list_review_history', {
+        nodeRunId: fx.reviewRunId,
+      })) as { versions: Array<{ id: string }>; rounds: unknown[] }
+      expect(history.versions.map((v) => v.id)).toEqual(fx.docIds)
+      expect(Array.isArray(history.rounds)).toBe(true)
 
-    const doc = (await call(h, reader, 'get_review_document', {
-      nodeRunId: fx.reviewRunId,
-      docVersionId: fx.docIds[0],
-    })) as { body: string }
-    expect(doc.body).toBe(SINGLE_BODY)
-  })
-
-  test('writes: add → update → delete a comment; iterate with a batch', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const writer = patActor(h, ['tasks:execute'])
-
-    const created = (await call(h, writer, 'add_review_comment', {
-      nodeRunId: fx.reviewRunId,
-      quote: 'partially_refunded',
-      commentText: 'name the state',
-    })) as {
-      id: string
-      anchor: { occurrenceIndex: number; offsetStart: number }
-      warnings: string[]
-    }
-    expect(created.anchor.occurrenceIndex).toBe(1)
-    expect(created.anchor.offsetStart).toBe(SINGLE_BODY.indexOf('partially_refunded'))
-    expect(created.warnings).toEqual([])
-
-    const updated = (await call(h, writer, 'update_review_comment', {
-      nodeRunId: fx.reviewRunId,
-      commentId: created.id,
-      commentText: 'name the state explicitly',
-    })) as { commentText: string }
-    expect(updated.commentText).toBe('name the state explicitly')
-
-    await call(h, writer, 'delete_review_comment', {
-      nodeRunId: fx.reviewRunId,
-      commentId: created.id,
+      const doc = (await call(h, reader, 'get_review_document', {
+        nodeRunId: fx.reviewRunId,
+        docVersionId: fx.docIds[0],
+      })) as { body: string }
+      expect(doc.body).toBe(SINGLE_BODY)
     })
-    expect(await h.db.select().from(reviewComments)).toEqual([])
 
-    const decided = (await call(h, writer, 'submit_review', {
-      nodeRunId: fx.reviewRunId,
-      decision: 'iterated',
-      reviewIteration: 0,
-      comments: [
-        { commentText: 'first', quote: 'export job' },
-        { commentText: 'second', quote: 'enum', section: 'Notes' },
-      ],
-    })) as { ok: boolean; reviewIteration: number; commentsAdded: number }
-    expect(decided.ok).toBe(true)
-    expect(decided.reviewIteration).toBe(1)
-    expect(decided.commentsAdded).toBe(2)
-    const dv = (await h.db.select().from(docVersions).where(eq(docVersions.id, fx.docIds[0]!)))[0]!
-    expect(dv.decision).toBe('iterated')
-    expect((JSON.parse(dv.commentsJson) as unknown[]).length).toBe(2)
-    expect(dv.decidedBy).toBe(h.userId)
-    expect(dv.decidedByRole).toBe('owner')
-  })
+    test('writes: add → update → delete a comment; iterate with a batch', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const writer = patActor(h, ['tasks:execute'])
 
-  test('multi-document: set_review_document_selection, then approve with selections + comments', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'multi-path', [
-      '# A\n\nalpha text\n',
-      '# B\n\nbeta text\n',
-      '# C\n\ngamma text\n',
-    ])
-    const writer = patActor(h, ['tasks:execute'])
-    const [a, b, c] = fx.docIds as [string, string, string]
-
-    const picked = (await call(h, writer, 'set_review_document_selection', {
-      nodeRunId: fx.reviewRunId,
-      docVersionId: a,
-      selection: 'accepted',
-    })) as { ok: boolean }
-    expect(picked.ok).toBe(true)
-
-    // The comment names its document; the missing-document rule reaches the model verbatim.
-    const unnamed = await refusalOf(() =>
-      call(h, writer, 'add_review_comment', {
+      const created = (await call(h, writer, 'add_review_comment', {
         nodeRunId: fx.reviewRunId,
-        quote: 'beta',
-        commentText: 'x',
-      }),
-    )
-    expect(unnamed.code).toBe('review-doc-version-required')
+        quote: 'partially_refunded',
+        commentText: 'name the state',
+      })) as {
+        id: string
+        anchor: { occurrenceIndex: number; offsetStart: number }
+        warnings: string[]
+      }
+      expect(created.anchor.occurrenceIndex).toBe(1)
+      expect(created.anchor.offsetStart).toBe(SINGLE_BODY.indexOf('partially_refunded'))
+      expect(created.warnings).toEqual([])
 
-    const decided = (await call(h, writer, 'submit_review', {
-      nodeRunId: fx.reviewRunId,
-      decision: 'approved',
-      reviewIteration: 0,
-      selections: [
-        { docVersionId: b, selection: 'not_accepted' },
-        { docVersionId: c, selection: 'accepted' },
-      ],
-      comments: [{ docVersionId: b, quote: 'beta', commentText: 'why b is out' }],
-    })) as { ok: boolean; selectionsApplied: number; commentsAdded: number }
-    expect(decided).toMatchObject({ ok: true, selectionsApplied: 2, commentsAdded: 1 })
-    const accepted = (
-      await h.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, fx.reviewRunId))
-    ).find((o) => o.portName === 'accepted')!
-    expect(accepted.content).toBe('cases/0.md\ncases/2.md')
-  })
-
-  test('reject with a reason and a comment', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const writer = patActor(h, ['tasks:execute'])
-    const decided = (await call(h, writer, 'submit_review', {
-      nodeRunId: fx.reviewRunId,
-      decision: 'rejected',
-      rejectReason: 'wrong direction',
-      reviewIteration: 0,
-      comments: [{ commentText: 'overall', quote: undefined }],
-    })) as { ok: boolean; commentsAdded: number }
-    expect(decided).toMatchObject({ ok: true, commentsAdded: 1 })
-    const dv = (await h.db.select().from(docVersions).where(eq(docVersions.id, fx.docIds[0]!)))[0]!
-    expect(dv.decision).toBe('rejected')
-    expect(dv.decisionReason).toBe('wrong direction')
-    const archived = JSON.parse(dv.commentsJson) as Array<{ anchor: { selectedText: string } }>
-    expect(archived[0]!.anchor.selectedText).toBe('Design v1') // document-level → the title
-  })
-
-  test('a token without tasks:execute is refused by the route gate, not by the tool', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const reader = patActor(h, [])
-    const err = await refusalOf(() =>
-      call(h, reader, 'add_review_comment', {
+      const updated = (await call(h, writer, 'update_review_comment', {
         nodeRunId: fx.reviewRunId,
-        quote: 'enum',
-        occurrence: 1,
-        commentText: 'x',
-      }),
-    )
-    expect(err.status).toBe(403)
-    expect(err.code).toBe('forbidden')
-    expect(await h.db.select().from(reviewComments)).toEqual([])
-  })
-})
+        commentId: created.id,
+        commentText: 'name the state explicitly',
+      })) as { commentText: string }
+      expect(updated.commentText).toBe('name the state explicitly')
+
+      await call(h, writer, 'delete_review_comment', {
+        nodeRunId: fx.reviewRunId,
+        commentId: created.id,
+      })
+      expect(await h.db.select().from(reviewComments)).toEqual([])
+
+      const decided = (await call(h, writer, 'submit_review', {
+        nodeRunId: fx.reviewRunId,
+        decision: 'iterated',
+        reviewIteration: 0,
+        comments: [
+          { commentText: 'first', quote: 'export job' },
+          { commentText: 'second', quote: 'enum', section: 'Notes' },
+        ],
+      })) as { ok: boolean; reviewIteration: number; commentsAdded: number }
+      expect(decided.ok).toBe(true)
+      expect(decided.reviewIteration).toBe(1)
+      expect(decided.commentsAdded).toBe(2)
+      const dv = (
+        await h.db.select().from(docVersions).where(eq(docVersions.id, fx.docIds[0]!))
+      )[0]!
+      expect(dv.decision).toBe('iterated')
+      expect((JSON.parse(dv.commentsJson) as unknown[]).length).toBe(2)
+      expect(dv.decidedBy).toBe(h.userId)
+      expect(dv.decidedByRole).toBe('owner')
+    })
+
+    test('multi-document: set_review_document_selection, then approve with selections + comments', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'multi-path', [
+        '# A\n\nalpha text\n',
+        '# B\n\nbeta text\n',
+        '# C\n\ngamma text\n',
+      ])
+      const writer = patActor(h, ['tasks:execute'])
+      const [a, b, c] = fx.docIds as [string, string, string]
+
+      const picked = (await call(h, writer, 'set_review_document_selection', {
+        nodeRunId: fx.reviewRunId,
+        docVersionId: a,
+        selection: 'accepted',
+      })) as { ok: boolean }
+      expect(picked.ok).toBe(true)
+
+      // The comment names its document; the missing-document rule reaches the model verbatim.
+      const unnamed = await refusalOf(() =>
+        call(h, writer, 'add_review_comment', {
+          nodeRunId: fx.reviewRunId,
+          quote: 'beta',
+          commentText: 'x',
+        }),
+      )
+      expect(unnamed.code).toBe('review-doc-version-required')
+
+      const decided = (await call(h, writer, 'submit_review', {
+        nodeRunId: fx.reviewRunId,
+        decision: 'approved',
+        reviewIteration: 0,
+        selections: [
+          { docVersionId: b, selection: 'not_accepted' },
+          { docVersionId: c, selection: 'accepted' },
+        ],
+        comments: [{ docVersionId: b, quote: 'beta', commentText: 'why b is out' }],
+      })) as { ok: boolean; selectionsApplied: number; commentsAdded: number }
+      expect(decided).toMatchObject({ ok: true, selectionsApplied: 2, commentsAdded: 1 })
+      const accepted = (
+        await h.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, fx.reviewRunId))
+      ).find((o) => o.portName === 'accepted')!
+      expect(accepted.content).toBe('cases/0.md\ncases/2.md')
+    })
+
+    test('reject with a reason and a comment', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const writer = patActor(h, ['tasks:execute'])
+      const decided = (await call(h, writer, 'submit_review', {
+        nodeRunId: fx.reviewRunId,
+        decision: 'rejected',
+        rejectReason: 'wrong direction',
+        reviewIteration: 0,
+        comments: [{ commentText: 'overall', quote: undefined }],
+      })) as { ok: boolean; commentsAdded: number }
+      expect(decided).toMatchObject({ ok: true, commentsAdded: 1 })
+      const dv = (
+        await h.db.select().from(docVersions).where(eq(docVersions.id, fx.docIds[0]!))
+      )[0]!
+      expect(dv.decision).toBe('rejected')
+      expect(dv.decisionReason).toBe('wrong direction')
+      const archived = JSON.parse(dv.commentsJson) as Array<{ anchor: { selectedText: string } }>
+      expect(archived[0]!.anchor.selectedText).toBe('Design v1') // document-level → the title
+    })
+
+    test('a token without tasks:execute is refused by the route gate, not by the tool', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const reader = patActor(h, [])
+      const err = await refusalOf(() =>
+        call(h, reader, 'add_review_comment', {
+          nodeRunId: fx.reviewRunId,
+          quote: 'enum',
+          occurrence: 1,
+          commentText: 'x',
+        }),
+      )
+      expect(err.status).toBe(403)
+      expect(err.code).toBe('forbidden')
+      expect(await h.db.select().from(reviewComments)).toEqual([])
+    })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // AC-24 / AC-27 — refusal texts keep their keys; ids are path-encoded
 // ---------------------------------------------------------------------------
 
-describe('RFC-326 AC-24 — refusals a model can act on', () => {
-  let h: Harness
-  afterEach(() => h?.cleanup())
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-326 AC-24 — refusals a model can act on',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc326-mcp-',
+  },
+  (scope) => {
+    let h: Harness
+    afterEach(() => h?.cleanup())
 
-  test('ambiguous quote: the candidates ride in the message with their global occurrence numbers', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const writer = patActor(h, ['tasks:execute'])
-    const err = await refusalOf(() =>
-      call(h, writer, 'add_review_comment', {
-        nodeRunId: fx.reviewRunId,
-        quote: 'enum',
-        commentText: 'x',
-      }),
-    )
-    expect(err.status).toBe(422)
-    expect(err.code).toBe('review-anchor-ambiguous')
-    expect(err.message).toContain('occurrence 1')
-    expect(err.message).toContain('occurrence 2')
-    expect(err.message).toContain('## Notes')
-  })
-
-  test('unknown quote: near-miss suggestions ride in the message', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const writer = patActor(h, ['tasks:execute'])
-    const err = await refusalOf(() =>
-      call(h, writer, 'add_review_comment', {
-        nodeRunId: fx.reviewRunId,
-        quote: 'ENUM SHOULD include',
-        commentText: 'x',
-      }),
-    )
-    expect(err.code).toBe('review-anchor-not-found')
-    expect(err.message).toContain('enum should include')
-  })
-
-  // 实现门 P1#9：上面两条走的是 handler,绕过了 MCP 的 `toolError` 包装与 D9
-  // `redactErrorText`。真正到模型手里的是**脱敏之后**的那段文本——它才是「模型
-  // 能照着改」这条验收标准的被测面。redactor 若哪天把 occurrence / sectionPath /
-  // offsetStart 一起抹掉,或者反过来把内部 details 泄出去,只有这条会红。
-  test('over a real tools/call: ambiguous / not-found keep their actionable keys after redaction', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const pat = await createPat({
-      db: h.db,
-      userId: h.userId,
-      name: 'rw',
-      scopes: ['tasks:execute'],
-      purpose: 'mcp_only',
+    test('ambiguous quote: the candidates ride in the message with their global occurrence numbers', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const writer = patActor(h, ['tasks:execute'])
+      const err = await refusalOf(() =>
+        call(h, writer, 'add_review_comment', {
+          nodeRunId: fx.reviewRunId,
+          quote: 'enum',
+          commentText: 'x',
+        }),
+      )
+      expect(err.status).toBe(422)
+      expect(err.code).toBe('review-anchor-ambiguous')
+      expect(err.message).toContain('occurrence 1')
+      expect(err.message).toContain('occurrence 2')
+      expect(err.message).toContain('## Notes')
     })
 
-    const ambiguous = await rpc(h, pat.token, 'tools/call', {
-      name: 'add_review_comment',
-      arguments: { nodeRunId: fx.reviewRunId, quote: 'enum', commentText: 'x' },
+    test('unknown quote: near-miss suggestions ride in the message', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const writer = patActor(h, ['tasks:execute'])
+      const err = await refusalOf(() =>
+        call(h, writer, 'add_review_comment', {
+          nodeRunId: fx.reviewRunId,
+          quote: 'ENUM SHOULD include',
+          commentText: 'x',
+        }),
+      )
+      expect(err.code).toBe('review-anchor-not-found')
+      expect(err.message).toContain('enum should include')
     })
-    expect(ambiguous.result?.isError).toBe(true)
-    const ambiguousText = ambiguous.result?.content?.map((c) => c.text).join('\n') ?? ''
-    expect(ambiguousText).toContain('review-anchor-ambiguous')
-    // 候选逐条可用:全局 occurrence 序号 + 章节路径 + 源文偏移,三样缺一不可
-    // ——少任何一样,模型都只能靠猜第二次调用的参数。
-    expect(ambiguousText).toContain('occurrence 1')
-    expect(ambiguousText).toContain('occurrence 2')
-    expect(ambiguousText).toContain('## Notes')
-    // 源文偏移以 `@<offset>` 形态给出(reviewAnchor.ts describeCandidates)。
-    expect(/·\s*@\d+\s*·/.test(ambiguousText), ambiguousText).toBe(true)
-    // 脱敏不得把内部实现细节带出去(栈、SQL、绝对路径)。
-    expect(ambiguousText).not.toContain('/Users/')
-    expect(ambiguousText.toLowerCase()).not.toContain('select ')
-    expect(ambiguousText).not.toContain('at Object.')
 
-    const notFound = await rpc(h, pat.token, 'tools/call', {
-      name: 'add_review_comment',
-      arguments: {
-        nodeRunId: fx.reviewRunId,
-        quote: 'ENUM SHOULD include',
-        occurrence: 1,
-        commentText: 'x',
-      },
+    // 实现门 P1#9：上面两条走的是 handler,绕过了 MCP 的 `toolError` 包装与 D9
+    // `redactErrorText`。真正到模型手里的是**脱敏之后**的那段文本——它才是「模型
+    // 能照着改」这条验收标准的被测面。redactor 若哪天把 occurrence / sectionPath /
+    // offsetStart 一起抹掉,或者反过来把内部 details 泄出去,只有这条会红。
+    test('over a real tools/call: ambiguous / not-found keep their actionable keys after redaction', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const pat = await createPat({
+        db: h.db,
+        userId: h.userId,
+        name: 'rw',
+        scopes: ['tasks:execute'],
+        purpose: 'mcp_only',
+      })
+
+      const ambiguous = await rpc(h, pat.token, 'tools/call', {
+        name: 'add_review_comment',
+        arguments: { nodeRunId: fx.reviewRunId, quote: 'enum', commentText: 'x' },
+      })
+      expect(ambiguous.result?.isError).toBe(true)
+      const ambiguousText = ambiguous.result?.content?.map((c) => c.text).join('\n') ?? ''
+      expect(ambiguousText).toContain('review-anchor-ambiguous')
+      // 候选逐条可用:全局 occurrence 序号 + 章节路径 + 源文偏移,三样缺一不可
+      // ——少任何一样,模型都只能靠猜第二次调用的参数。
+      expect(ambiguousText).toContain('occurrence 1')
+      expect(ambiguousText).toContain('occurrence 2')
+      expect(ambiguousText).toContain('## Notes')
+      // 源文偏移以 `@<offset>` 形态给出(reviewAnchor.ts describeCandidates)。
+      expect(/·\s*@\d+\s*·/.test(ambiguousText), ambiguousText).toBe(true)
+      // 脱敏不得把内部实现细节带出去(栈、SQL、绝对路径)。
+      expect(ambiguousText).not.toContain('/Users/')
+      expect(ambiguousText.toLowerCase()).not.toContain('select ')
+      expect(ambiguousText).not.toContain('at Object.')
+
+      const notFound = await rpc(h, pat.token, 'tools/call', {
+        name: 'add_review_comment',
+        arguments: {
+          nodeRunId: fx.reviewRunId,
+          quote: 'ENUM SHOULD include',
+          occurrence: 1,
+          commentText: 'x',
+        },
+      })
+      expect(notFound.result?.isError).toBe(true)
+      const notFoundText = notFound.result?.content?.map((c) => c.text).join('\n') ?? ''
+      expect(notFoundText).toContain('review-anchor-not-found')
+      // 近似候选必须活过 redactor:它是模型下一次调用的唯一线索。
+      expect(notFoundText).toContain('enum should include')
+      expect(notFoundText).not.toContain('/Users/')
+
+      // 两次都被拒 ⇒ 零写入。
+      expect(await h.db.select().from(reviewComments)).toEqual([])
     })
-    expect(notFound.result?.isError).toBe(true)
-    const notFoundText = notFound.result?.content?.map((c) => c.text).join('\n') ?? ''
-    expect(notFoundText).toContain('review-anchor-not-found')
-    // 近似候选必须活过 redactor:它是模型下一次调用的唯一线索。
-    expect(notFoundText).toContain('enum should include')
-    expect(notFoundText).not.toContain('/Users/')
-
-    // 两次都被拒 ⇒ 零写入。
-    expect(await h.db.select().from(reviewComments)).toEqual([])
-  })
-})
+  },
+)
 
 describe('RFC-326 AC-27 — every id is encoded before it reaches the dispatcher', () => {
   test('nodeRunId / docVersionId / commentId', async () => {
@@ -676,14 +665,8 @@ async function rpc(
   method: string,
   params: Record<string, unknown>,
 ): Promise<RpcFrame> {
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: h.configPath,
-    opencodeVersion: null,
-    dbVersion: 1,
-    db: h.db,
-    secretBox: createSecretBoxFromKey(randomBytes(32)),
-  })
+  // 同一个应用——合一前这里又建了一个，等于测的不是夹具那一个。
+  const app = h.app
   const res = await app.request('/api/mcp', {
     method: 'POST',
     headers: {
@@ -699,110 +682,128 @@ async function rpc(
   return JSON.parse(line === undefined ? text : line.slice('data: '.length)) as RpcFrame
 }
 
-describe('RFC-326 AC-23 / AC-25 — over the Streamable HTTP transport', () => {
-  let h: Harness
-  afterEach(() => h?.cleanup())
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-326 AC-23 / AC-25 — over the Streamable HTTP transport',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc326-mcp-',
+  },
+  (scope) => {
+    let h: Harness
+    afterEach(() => h?.cleanup())
 
-  test('read-only token: tools/list omits the write tools; a hard call is the SDK unknown-tool error (D8)', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const readOnly = await createPat({
-      db: h.db,
-      userId: h.userId,
-      name: 'ro',
-      scopes: [],
-      purpose: 'mcp_only',
-    })
-    expect(toolsFor(patActor(h, [])).map((t) => t.name)).toEqual(expect.arrayContaining(READ_TOOLS))
-    for (const name of WRITE_TOOLS) {
-      expect(toolsFor(patActor(h, [])).map((t) => t.name)).not.toContain(name)
-    }
-    const listed = await rpc(h, readOnly.token, 'tools/list', {})
-    const names = (listed.result?.tools ?? []).map((t) => t.name)
-    for (const name of READ_TOOLS) expect(names).toContain(name)
-    for (const name of WRITE_TOOLS) expect(names).not.toContain(name)
+    test('read-only token: tools/list omits the write tools; a hard call is the SDK unknown-tool error (D8)', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const readOnly = await createPat({
+        db: h.db,
+        userId: h.userId,
+        name: 'ro',
+        scopes: [],
+        purpose: 'mcp_only',
+      })
+      expect(toolsFor(patActor(h, [])).map((t) => t.name)).toEqual(
+        expect.arrayContaining(READ_TOOLS),
+      )
+      for (const name of WRITE_TOOLS) {
+        expect(toolsFor(patActor(h, [])).map((t) => t.name)).not.toContain(name)
+      }
+      const listed = await rpc(h, readOnly.token, 'tools/list', {})
+      const names = (listed.result?.tools ?? []).map((t) => t.name)
+      for (const name of READ_TOOLS) expect(names).toContain(name)
+      for (const name of WRITE_TOOLS) expect(names).not.toContain(name)
 
-    const hard = await rpc(h, readOnly.token, 'tools/call', {
-      name: 'add_review_comment',
-      arguments: { nodeRunId: fx.reviewRunId, quote: 'enum', occurrence: 1, commentText: 'x' },
+      const hard = await rpc(h, readOnly.token, 'tools/call', {
+        name: 'add_review_comment',
+        arguments: { nodeRunId: fx.reviewRunId, quote: 'enum', occurrence: 1, commentText: 'x' },
+      })
+      // The SDK answers an unregistered tool either as a JSON-RPC error or as an
+      // `isError` result — both name the tool and say "not found"; neither is a 403.
+      const refusalText =
+        hard.error?.message ?? hard.result?.content?.map((c) => c.text).join('\n') ?? ''
+      if (hard.error === undefined) expect(hard.result?.isError).toBe(true)
+      expect(refusalText).toContain('add_review_comment')
+      expect(refusalText.toLowerCase()).toContain('not found')
+      expect(refusalText.toLowerCase()).not.toContain('permission denied')
+      expect(await h.db.select().from(reviewComments)).toEqual([])
     })
-    // The SDK answers an unregistered tool either as a JSON-RPC error or as an
-    // `isError` result — both name the tool and say "not found"; neither is a 403.
-    const refusalText =
-      hard.error?.message ?? hard.result?.content?.map((c) => c.text).join('\n') ?? ''
-    if (hard.error === undefined) expect(hard.result?.isError).toBe(true)
-    expect(refusalText).toContain('add_review_comment')
-    expect(refusalText.toLowerCase()).toContain('not found')
-    expect(refusalText.toLowerCase()).not.toContain('permission denied')
-    expect(await h.db.select().from(reviewComments)).toEqual([])
-  })
 
-  // 实现门 P2#14（AC-22）：只读 token 被拒之后,唯一能自救的线索是
-  // `describe_capabilities` 报出「缺的是哪个点」。评审五个写工具全部挂在
-  // `tasks:execute` 上——这条把「工具被藏起来」与「该去申请什么」对上。
-  test('read-only token: describe_capabilities names tasks:execute as the missing point', async () => {
-    h = await harness()
-    const caps = describeCapabilities(patActor(h, []))
-    // 空矩阵 PAT 仍持有全部读点(RFC-247 D3「读面恒开」),但写点一个都没有。
-    expect(caps.granted).not.toContain('tasks:execute')
-    const unavailable = new Map(caps.toolsUnavailable.map((u) => [u.tool, u.missing]))
-    for (const name of WRITE_TOOLS) {
-      expect(unavailable.get(name), `${name} 应当被报成「缺 tasks:execute」`).toEqual([
-        'tasks:execute',
-      ])
-    }
-    // 读工具不在缺失名单里(否则「缺的是 tasks:execute」这句话会变成噪音)。
-    for (const name of READ_TOOLS) expect(unavailable.has(name)).toBe(false)
-    // 拿到这个点之后,五个写工具都出现在 tools/list 上（守卫的守卫:
-    // 否则「缺 tasks:execute」这句话本身就是错的）。
-    const withPoint = toolsFor(patActor(h, ['tasks:execute'])).map((t) => t.name)
-    for (const name of WRITE_TOOLS) expect(withPoint).toContain(name)
-  })
+    // 实现门 P2#14（AC-22）：只读 token 被拒之后,唯一能自救的线索是
+    // `describe_capabilities` 报出「缺的是哪个点」。评审五个写工具全部挂在
+    // `tasks:execute` 上——这条把「工具被藏起来」与「该去申请什么」对上。
+    test('read-only token: describe_capabilities names tasks:execute as the missing point', async () => {
+      h = await harness(scope)
+      const caps = describeCapabilities(patActor(h, []))
+      // 空矩阵 PAT 仍持有全部读点(RFC-247 D3「读面恒开」),但写点一个都没有。
+      expect(caps.granted).not.toContain('tasks:execute')
+      const unavailable = new Map(caps.toolsUnavailable.map((u) => [u.tool, u.missing]))
+      for (const name of WRITE_TOOLS) {
+        expect(unavailable.get(name), `${name} 应当被报成「缺 tasks:execute」`).toEqual([
+          'tasks:execute',
+        ])
+      }
+      // 读工具不在缺失名单里(否则「缺的是 tasks:execute」这句话会变成噪音)。
+      for (const name of READ_TOOLS) expect(unavailable.has(name)).toBe(false)
+      // 拿到这个点之后,五个写工具都出现在 tools/list 上（守卫的守卫:
+      // 否则「缺 tasks:execute」这句话本身就是错的）。
+      const withPoint = toolsFor(patActor(h, ['tasks:execute'])).map((t) => t.name)
+      for (const name of WRITE_TOOLS) expect(withPoint).toContain(name)
+    })
 
-  test('audit rows: reviews + nodeRunId / human-gates / argument fallback; refusal text keeps the keys after redaction', async () => {
-    h = await harness()
-    const fx = await seedReview(h, 'single')
-    const pat = await createPat({
-      db: h.db,
-      userId: h.userId,
-      name: 'rw',
-      scopes: ['tasks:execute'],
-      purpose: 'mcp_only',
-    })
-    const got = await rpc(h, pat.token, 'tools/call', {
-      name: 'get_review',
-      arguments: { nodeRunId: fx.reviewRunId },
-    })
-    expect(got.result?.isError).not.toBe(true)
-    await rpc(h, pat.token, 'tools/call', { name: 'list_pending_gates', arguments: {} })
-    await rpc(h, pat.token, 'tools/call', { name: 'describe_capabilities', arguments: {} })
-    const ambiguous = await rpc(h, pat.token, 'tools/call', {
-      name: 'add_review_comment',
-      arguments: { nodeRunId: fx.reviewRunId, quote: 'enum', commentText: 'x' },
-    })
-    expect(ambiguous.result?.isError).toBe(true)
-    const text = ambiguous.result?.content?.map((c) => c.text).join('\n') ?? ''
-    expect(text).toContain('review-anchor-ambiguous')
-    expect(text).toContain('occurrence 2')
+    test('audit rows: reviews + nodeRunId / human-gates / argument fallback; refusal text keeps the keys after redaction', async () => {
+      h = await harness(scope)
+      const fx = await seedReview(h, 'single')
+      const pat = await createPat({
+        db: h.db,
+        userId: h.userId,
+        name: 'rw',
+        scopes: ['tasks:execute'],
+        purpose: 'mcp_only',
+      })
+      const got = await rpc(h, pat.token, 'tools/call', {
+        name: 'get_review',
+        arguments: { nodeRunId: fx.reviewRunId },
+      })
+      expect(got.result?.isError).not.toBe(true)
+      await rpc(h, pat.token, 'tools/call', { name: 'list_pending_gates', arguments: {} })
+      await rpc(h, pat.token, 'tools/call', { name: 'describe_capabilities', arguments: {} })
+      const ambiguous = await rpc(h, pat.token, 'tools/call', {
+        name: 'add_review_comment',
+        arguments: { nodeRunId: fx.reviewRunId, quote: 'enum', commentText: 'x' },
+      })
+      expect(ambiguous.result?.isError).toBe(true)
+      const text = ambiguous.result?.content?.map((c) => c.text).join('\n') ?? ''
+      expect(text).toContain('review-anchor-ambiguous')
+      expect(text).toContain('occurrence 2')
 
-    const rows = await listTokenAuditForUser(h.db, h.userId)
-    const byTool = new Map(rows.filter((r) => r.channel === 'mcp').map((r) => [r.toolName, r]))
-    expect(byTool.get('get_review')).toMatchObject({
-      resourceKind: 'reviews',
-      resourceId: fx.reviewRunId,
-      statusCode: 200,
+      // 审计行由 MCP 通道 fire-and-forget 写入（`void deps.tokenCallAudit.record(...)`）：
+      // bun:sqlite 同 tick 落盘，PostgreSQL 是一次真实往返。四个工具各一行，读到为止。
+      const rows = await eventually(
+        () => listTokenAuditForUser(h.db, h.userId),
+        (found) => found.filter((r) => r.channel === 'mcp').length >= 4,
+        { what: 'the four MCP audit rows' },
+      )
+      const byTool = new Map(rows.filter((r) => r.channel === 'mcp').map((r) => [r.toolName, r]))
+      expect(byTool.get('get_review')).toMatchObject({
+        resourceKind: 'reviews',
+        resourceId: fx.reviewRunId,
+        statusCode: 200,
+      })
+      expect(byTool.get('add_review_comment')).toMatchObject({
+        resourceKind: 'reviews',
+        resourceId: fx.reviewRunId,
+        statusCode: 422,
+      })
+      expect(byTool.get('list_pending_gates')).toMatchObject({ resourceKind: 'human-gates' })
+      expect(byTool.get('list_pending_gates')?.resourceId ?? null).toBeNull()
+      expect(byTool.get('describe_capabilities')?.resourceKind ?? null).toBeNull()
+      expect(rows.some((r) => r.path === '/api/mcp')).toBe(false)
     })
-    expect(byTool.get('add_review_comment')).toMatchObject({
-      resourceKind: 'reviews',
-      resourceId: fx.reviewRunId,
-      statusCode: 422,
-    })
-    expect(byTool.get('list_pending_gates')).toMatchObject({ resourceKind: 'human-gates' })
-    expect(byTool.get('list_pending_gates')?.resourceId ?? null).toBeNull()
-    expect(byTool.get('describe_capabilities')?.resourceKind ?? null).toBeNull()
-    expect(rows.some((r) => r.path === '/api/mcp')).toBe(false)
-  })
-})
+  },
+)
 
 // ---------------------------------------------------------------------------
 // P16 — the route hands the acting user to the service

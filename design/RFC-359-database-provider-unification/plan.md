@@ -6766,3 +6766,23 @@ larger than N`，已变异验证）。细节与两个正则坑进 `docs/dev-gotc
 `rfc345-resource-catalog-contracts` 有一条源码锁钉着 `routeOperationDispatcher` 的
 `deps.identityAccess ?? …` 字面量，§5at 把形参改名 `input` 之后它当场红。
 本地扫到、当场改对，没有推红主干。**这就是那个脚本存在的理由。**
+
+
+## 5av. §5at 的收益兑现：`rfc247-mcp-server` 与 `rfc326-mcp-review-tools`（账本 557 → 555）
+
+同一个 helper 锁住的另外两个文件，照做即可：
+
+- `rfc247-mcp-server`：九个 describe 接上双引擎（两个纯 AST / 判据 describe 保持普通
+  `describe`）。harness 里那段「自建 `composeTaskExecutionTestRuntime(db)` + 12 行 `deps`」
+  整段删掉，`createApp(h.deps)` 换成 `h.app`。**65 条全部双引擎。**
+- `rfc326-mcp-review-tools`：三个 describe 接上；它的 `mcpSurfaceEnabled: true` 走
+  `open({ config })`（自己另写 config 文件会被整份绕开）。另一处「为 HTTP transport 再建一个
+  app」也换成 `h.app`——合一前那里测的其实**不是夹具那一个应用**。
+
+`rfc326` 的 PG 侧红了一条，是**已知那一类**：MCP 通道的审计行也是
+`void deps.tokenCallAudit.record(...)`，四个工具各一行、应答之后才落。用 `eventually` 读到为止
+（判据同 §5aj）。这条再次说明那个原语值得单独存在——同一形态第二次出现在完全不同的文件里。
+
+### 到这里为止，「自建运行时去凑 `AppDeps`」这个形状在 MCP 面上清干净了
+
+`grep -rn 'composeTaskExecutionTestRuntime' tests/` 剩下的调用方都不再是为了拼 dispatcher。
