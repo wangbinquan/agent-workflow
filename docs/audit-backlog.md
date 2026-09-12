@@ -4749,3 +4749,45 @@ RFC-359 这一轮 4 条 PG 缺陷里**有两条是同一个形状**：一个 `vo
 且没有 `.catch(`」的位置，逐个判断该由调用点兜还是由被调用方自己保证不 reject。
 **倾向后者**（plan §5br 的规律）：所有调用点都 fire-and-forget 的函数，保证不 reject 是它自己的责任。
 注意判据要能识别「被调用方内部已有外层 catch」的情况，否则会把已修好的也报出来。
+
+## `rfc189-wg-round` 的 `[postgresql]` 侧偶发红，**且日志看不到真因**（2026-09-12 首次观察，未决）
+
+**症状**：`Backend tests (ubuntu-latest shard 4/8)` 红在
+`RFC-189 workgroup round providers [postgresql] > fc 免疫`：
+
+```
+ERROR [rfc189-test] workgroup turn threw taskId=… item=initial:m-coder
+      error="Failed query: insert into \"agent_workflow\".\"node_runs\" (…)"
+…
+> 487 | expect(members.length).toBeGreaterThanOrEqual(2)
+Expected: >= 2      Received: 1
+```
+
+也就是**并发派单的两个成员行只落了一行**，另一行的 insert 抛了。同文件另外三条
+`[postgresql]` 用例同轮全过，所以不是系统性的类型/DDL 问题。
+
+**排除了提交者**：观察到它的那一提（`6c033e5ef`）**只改了两个 markdown 文件**
+（`STATE.md` + `plan.md`），上一提 `91503480f` 全绿；近 12 次 run 里这是第一次出现。
+
+**本机复现不了**：11 次连跑全绿（`bun test tests/rfc189-wg-round.test.ts`）。
+CI 上是整条分片一起跑，有真实负载与连接池压力。
+
+### 真正卡住排查的是「日志看不到真因」
+
+`workgroupTurnsDriver.ts` 的 catch 只记 `error.message`
+（`src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts` 附近）。
+drizzle 把 PG 错误包成 `Failed query: <整条 SQL> params: …`，**真正的 PG 原因不在 message 里**
+——Bun.SQL 把 SQLSTATE 放在 **`errno`**，`code` 恒为 `ERR_POSTGRES_SERVER_ERROR`
+（本仓已知，见 `src/platform/persistence/capabilities.ts:392` 的 `postgresqlSqlState`，
+它沿 cause 链取）。于是 CI 日志里只剩一条几百字符的 SQL，看不出是唯一键冲突、死锁还是序列化失败。
+
+**待办（按顺序）**：
+1. **先让它可诊断**：给那条 catch 的日志补上沿 cause 链取到的 `code` / `errno` / `detail`。
+   注意 `postgresqlSqlState` 目前是**私有**的，直接导出会给 resource-catalog → platform/persistence
+   添一条跨上下文边（会顶高 `rfc294-cross-context-observed-imports` 账本）——
+   要么在 driver 内联一小段 cause 遍历，要么把它提到一个双方都已依赖的位置。
+2. 拿到 SQLSTATE 之后再判：`23505`（唯一键）多半是并发派单的 id/shard_key 撞了；
+   `40P01`（死锁）/`40001`（序列化）则属于 PG 并发语义，与 `docs/audit-backlog.md` 上面那条
+   「并发点燃意图回合撞死锁」可能同源。
+
+**不要用「重跑就过了」结案**（本仓明令）。在 1. 做完之前，再次遇到也只能记录、不能归因。

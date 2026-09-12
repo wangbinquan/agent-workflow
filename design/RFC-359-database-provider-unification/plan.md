@@ -7559,3 +7559,43 @@ WS 用例不是只要一个实时运行时——它们**自建 `Bun.serve`**，�
 
 我把探路的两处改动都 revert 了（helper 没有消费者就是死代码，与本 RFC 对「补了口子必须有用例钉住」
 的要求同一把尺）。
+
+## 5bt. WS 作用域写出来了——**WebSocket 用例第一次在 PostgreSQL 上跑起来**
+
+§5bs 查清了两层拦路石，这一轮把作用域写了：`tests/helpers/providerWebSocketScope.ts`
+的 `describeEachProviderWebSocketApplication`。它一次交出
+**provider 应用 + 实时运行时 + ws 适配器 + 活的 server**：
+
+- 应用来自内层的 `describeEachProviderHttpApplication`（两个引擎都装得起来）；
+- 实时运行时来自 `composeTestProviderRealtimeRuntime`（按 `applicationBinding` 判别式分派）；
+- `Bun.serve` 的 `fetch` 把 `ws.tryUpgrade` 与 **`opened.app.fetch` 的 HTTP 回落**接在一起
+  ——那正是 WS 用例原来各自手拼的那一段；
+- 交出 `url`（`ws://…`）与 `httpUrl`（同一监听器的 http 形态，WS 用例常要先打 REST 建数据）。
+
+### 两个细节是踩出来的，不是设计出来的
+
+1. **identityAccess 必须用应用自己装配的那一份**（`opened.identityAccess`），
+   不能像原来那样另 `createIdentityAccessRuntime({ db })` 建一个——两份实例会让**升级门**和
+   **路由**看到不同的授权视图。共用作用域早就把它暴露出来了（§5ar 那一批），直接取。
+2. **广播器是进程级单例**，作用域的 `afterEach` 必须 `resetBroadcastersForTests()`，
+   否则上一条用例的订阅者会收到本条的帧。原来每个文件的 `cleanup` 各做一次，现在归作用域。
+
+### 已迁两个，账本 537 → 535
+
+`ws-repo-imports`（8 条 ×2）与 `rfc152-ws-frame-gates`（5 条 ×2）。
+junit 里两个文件都各有 `[sqlite]` / `[postgresql]` 两组 classname——
+**这是本仓 WebSocket 用例第一次在 PostgreSQL 上跑。**
+
+### 变异验证：确认 PG 分支是**真的**走到了
+
+把 `composeTestProviderRealtimeRuntime` 的 PG 分支换成 `throw`，
+`ws-repo-imports` 立刻炸在那一行。**这一步不能省**——分派写错时最容易的失败形态是
+「两遍都走 SQLite」，那样 junit 里照样有两组 classname、照样全绿，但 PG 侧等于没跑。
+
+### 剩下 9 个 WS 文件
+
+`rfc152-ws-channel-registry` / `rfc312-impl-gate-fixes` / `rfc212-revalidation-behavior` /
+`ws-auth-multi-token` / `rfc338-websocket-heartbeat` / `ws` / `rfc099-ws-acl-filter` /
+`rfc152-ws-task-channel` / `rfc225-workgroups-ws`。形状与已迁的两个一样：
+`buildHarness` 收成 `scope.open()`、删掉自建的 `Bun.serve` / 适配器 / `createApp`、
+`h.server.hostname:port` 换 `h.httpUrl`。

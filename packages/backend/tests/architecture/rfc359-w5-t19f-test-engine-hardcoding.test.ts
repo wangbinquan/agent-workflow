@@ -253,7 +253,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc145-migration-0077.test.ts: 2',
   'rfc145-write-side.test.ts: 1',
   'rfc152-ws-channel-registry.test.ts: 2',
-  'rfc152-ws-frame-gates.test.ts: 1',
   'rfc152-ws-task-channel.test.ts: 1',
   'rfc154-runtime-config-dir.test.ts: 8',
   'rfc162-migration-0081.test.ts: 1',
@@ -597,7 +596,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'workgroup-host-output-isolation.test.ts: 1',
   'worktree-files-proxy.test.ts: 1',
   'ws-auth-multi-token.test.ts: 1',
-  'ws-repo-imports.test.ts: 1',
   'ws.test.ts: 1',
 ]
 

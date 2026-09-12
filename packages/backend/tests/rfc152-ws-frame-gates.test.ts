@@ -16,14 +16,15 @@
 //      stale on supersede" is a registered known limitation (design.md §1),
 //      improving it is explicitly out of scope for RFC-152.
 
-import type { Server } from 'bun'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderWebSocketApplication,
+  type ProviderWebSocketScope,
+} from './helpers/providerWebSocketScope'
 import { agents, memories, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import {
   MEMORY_CHANNEL,
@@ -32,35 +33,31 @@ import {
   WORKFLOWS_CHANNEL,
   workflowsBroadcaster,
 } from '../src/ws/broadcaster'
-import { buildWebSocketAdapter } from '../src/ws/server'
-import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
-
-type AnyServer = Server<unknown>
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const SCOPE_OPTIONS = {
+  token: DAEMON_TOKEN,
+  daemonToken: DAEMON_TOKEN,
+  opencodeVersion: '1.14.25',
+  dbVersion: 1,
+  tempPrefix: 'aw-rfc152-frame-gates-',
+} as const
 
 interface Harness {
-  db: DbClient
-  server: AnyServer
+  db: ProviderNeutralDatabase
   url: string
   adminToken: string
   aliceToken: string
   aliceId: string
   carolToken: string
-  cleanup: () => Promise<void>
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/__never_used__.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+// RFC-359 AC-6 —— 整套「provider 应用 + 实时运行时 + ws 适配器 + 活的 server」由
+// `describeEachProviderWebSocketApplication` 交出；这里只留本文件的种子用户。
+async function buildHarness(scope: ProviderWebSocketScope): Promise<Harness> {
+  const db = scope.harness.db
+  const opened = await scope.open()
   const admin = await createUser(db, {
     username: 'root',
     displayName: 'Root',
@@ -79,38 +76,13 @@ async function buildHarness(): Promise<Harness> {
     role: 'user',
     password: 'longEnoughPassword',
   })
-  const adminToken = (await createSession({ db, userId: admin.id })).token
-  const aliceToken = (await createSession({ db, userId: alice.id })).token
-  const carolToken = (await createSession({ db, userId: carol.id })).token
-  const identityAccess = createIdentityAccessRuntime({ db })
-  const ws = buildWebSocketAdapter({
-    daemonToken: DAEMON_TOKEN,
-    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
-    identityAccess,
-  })
-  const server = Bun.serve({
-    port: 0,
-    hostname: '127.0.0.1',
-    async fetch(req: Request, srv): Promise<Response> {
-      const upgraded = await ws.tryUpgrade(req, srv)
-      if (upgraded === true) return undefined as unknown as Response
-      if (upgraded === false) return await app.fetch(req)
-      return upgraded
-    },
-    websocket: ws.handlers,
-  })
   return {
     db,
-    server,
-    url: `ws://${server.hostname}:${server.port}`,
-    adminToken,
-    aliceToken,
+    url: opened.url,
+    adminToken: (await createSession({ db, userId: admin.id })).token,
+    aliceToken: (await createSession({ db, userId: alice.id })).token,
     aliceId: alice.id,
-    carolToken,
-    cleanup: async () => {
-      server.stop(true)
-      resetBroadcastersForTests()
-    },
+    carolToken: (await createSession({ db, userId: carol.id })).token,
   }
 }
 
@@ -159,194 +131,200 @@ async function waitUntil(pred: () => boolean, capMs = 1000): Promise<void> {
   }
 }
 
-describe('RFC-152 — workflows frameGate keeps the deleted-uses-OLD-cache ordering', () => {
-  let h: Harness
-  let privateWfId = ''
-  let publicWfId = ''
+describeEachProviderWebSocketApplication(
+  'RFC-152 — workflows frameGate keeps the deleted-uses-OLD-cache ordering',
+  SCOPE_OPTIONS,
+  (scope) => {
+    let h: Harness
+    let privateWfId = ''
+    let publicWfId = ''
 
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-    privateWfId = ulid()
-    await h.db.insert(workflows).values({
-      id: privateWfId,
-      name: 'private-flow',
-      definition: '{}',
-      ownerUserId: h.aliceId,
-      visibility: 'private',
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+      privateWfId = ulid()
+      await h.db.insert(workflows).values({
+        id: privateWfId,
+        name: 'private-flow',
+        definition: '{}',
+        ownerUserId: h.aliceId,
+        visibility: 'private',
+      })
+      // RFC-359 AC-20 因果屏障用：任何连接都有权看见的公共工作流。
+      publicWfId = ulid()
+      await h.db.insert(workflows).values({
+        id: publicWfId,
+        name: 'public-control-flow',
+        definition: '{}',
+        ownerUserId: h.aliceId,
+        visibility: 'public',
+      })
     })
-    // RFC-359 AC-20 因果屏障用：任何连接都有权看见的公共工作流。
-    publicWfId = ulid()
-    await h.db.insert(workflows).values({
-      id: publicWfId,
-      name: 'public-control-flow',
-      definition: '{}',
-      ownerUserId: h.aliceId,
-      visibility: 'public',
+
+    /** 控制帧：走同一条 socket、同一套 gate，但必定被放行。 */
+    function fireControl(version: number) {
+      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+        type: 'workflow.updated',
+        workflowId: publicWfId,
+        clientMutationId: ulid(),
+        version,
+        snapshotHash: '0'.repeat(64),
+        updatedAt: 456,
+      })
+    }
+
+    function fireUpdated() {
+      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+        type: 'workflow.updated',
+        workflowId: privateWfId,
+        clientMutationId: ulid(),
+        version: 2,
+        snapshotHash: '0'.repeat(64),
+        updatedAt: 123,
+      })
+    }
+    function fireDeleted() {
+      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+        type: 'workflow.deleted',
+        workflowId: privateWfId,
+        clientMutationId: ulid(),
+        deletedVersion: 2,
+      })
+    }
+
+    test('previously-visible owner connection receives workflow.deleted', async () => {
+      const frames = await collectFrames(
+        `${h.url}/ws/workflows?token=${h.aliceToken}`,
+        async (received) => {
+          // 1. an update populates this connection's visibility cache (true).
+          fireUpdated()
+          await waitUntil(() => received.some((f) => f.type === 'workflow.updated'))
+          // 2. the delete frame must ride the OLD cache entry.
+          fireDeleted()
+          await waitUntil(() => received.some((f) => f.type === 'workflow.deleted'))
+        },
+      )
+      expect(frames.some((f) => f.type === 'workflow.updated')).toBe(true)
+      expect(frames.some((f) => f.type === 'workflow.deleted')).toBe(true)
     })
-  })
-  afterEach(async () => h.cleanup())
 
-  /** 控制帧：走同一条 socket、同一套 gate，但必定被放行。 */
-  function fireControl(version: number) {
-    workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-      type: 'workflow.updated',
-      workflowId: publicWfId,
-      clientMutationId: ulid(),
-      version,
-      snapshotHash: '0'.repeat(64),
-      updatedAt: 456,
+    test('never-visible stranger connection receives neither update nor deleted', async () => {
+      const frames = await collectFrames(
+        `${h.url}/ws/workflows?token=${h.carolToken}`,
+        async (received) => {
+          // 1. 私有 update —— 必须被丢掉（并把该连接的可见性缓存钉成 false）。
+          fireUpdated()
+          // 2. 屏障：等一帧有权看见的控制帧到达，才说明上面那帧的 gate 已经判完、
+          //    缓存已经落成 false。这比「睡 100ms」强，而且随机器变慢一起变长。
+          fireControl(11)
+          await waitUntil(() => received.some((f) => f.version === 11))
+          // 3. 私有 delete —— 这才是本 describe 要钉的「delete 吃旧缓存」那一步。
+          fireDeleted()
+          fireControl(12)
+          await waitUntil(() => received.some((f) => f.version === 12))
+        },
+      )
+      // 两帧控制帧都到了（屏障成立），私有工作流的帧一条都没到。
+      expect(frames.map((f) => f.version)).toEqual([11, 12])
+      expect(frames.some((f) => f.workflowId === privateWfId)).toBe(false)
     })
-  }
+  },
+)
 
-  function fireUpdated() {
-    workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-      type: 'workflow.updated',
-      workflowId: privateWfId,
-      clientMutationId: ulid(),
-      version: 2,
-      snapshotHash: '0'.repeat(64),
-      updatedAt: 123,
+describeEachProviderWebSocketApplication(
+  'RFC-152 — memory.superseded keeps the non-admin drop (admin 收 / scoped 丢 / stranger 丢)',
+  SCOPE_OPTIONS,
+  (scope) => {
+    let h: Harness
+    let privateAgentId = ''
+    let agentMemoryId = ''
+    let globalMemoryId = ''
+
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+      privateAgentId = ulid()
+      await h.db.insert(agents).values({
+        id: privateAgentId,
+        name: `priv-${privateAgentId}`,
+        ownerUserId: h.aliceId,
+        visibility: 'private',
+      })
+      agentMemoryId = ulid()
+      globalMemoryId = ulid()
+      await h.db.insert(memories).values([
+        {
+          id: agentMemoryId,
+          scopeType: 'agent',
+          scopeId: privateAgentId,
+          title: 'agent-scoped',
+          bodyMd: 'b',
+          tags: '[]',
+          status: 'approved',
+          sourceKind: 'manual',
+          createdAt: Date.now(),
+        },
+        {
+          id: globalMemoryId,
+          scopeType: 'global',
+          scopeId: null,
+          title: 'global-scoped',
+          bodyMd: 'b',
+          tags: '[]',
+          status: 'approved',
+          sourceKind: 'manual',
+          createdAt: Date.now(),
+        },
+      ])
     })
-  }
-  function fireDeleted() {
-    workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-      type: 'workflow.deleted',
-      workflowId: privateWfId,
-      clientMutationId: ulid(),
-      deletedVersion: 2,
+
+    /** superseded (no memoryId) + a control frame every logged-in user can see. */
+    function fireSupersededThenControl() {
+      memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
+        type: 'memory.superseded',
+        oldId: agentMemoryId,
+        newId: ulid(),
+      })
+      memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
+        type: 'memory.archived',
+        memoryId: globalMemoryId,
+      })
+    }
+
+    test('admin receives the superseded frame', async () => {
+      const frames = await collectFrames(
+        `${h.url}/ws/memories?token=${h.adminToken}`,
+        async (received) => {
+          fireSupersededThenControl()
+          await waitUntil(() => received.some((f) => f.type === 'memory.superseded'))
+        },
+      )
+      expect(frames.some((f) => f.type === 'memory.superseded')).toBe(true)
     })
-  }
 
-  test('previously-visible owner connection receives workflow.deleted', async () => {
-    const frames = await collectFrames(
-      `${h.url}/ws/workflows?token=${h.aliceToken}`,
-      async (received) => {
-        // 1. an update populates this connection's visibility cache (true).
-        fireUpdated()
-        await waitUntil(() => received.some((f) => f.type === 'workflow.updated'))
-        // 2. the delete frame must ride the OLD cache entry.
-        fireDeleted()
-        await waitUntil(() => received.some((f) => f.type === 'workflow.deleted'))
-      },
-    )
-    expect(frames.some((f) => f.type === 'workflow.updated')).toBe(true)
-    expect(frames.some((f) => f.type === 'workflow.deleted')).toBe(true)
-  })
-
-  test('never-visible stranger connection receives neither update nor deleted', async () => {
-    const frames = await collectFrames(
-      `${h.url}/ws/workflows?token=${h.carolToken}`,
-      async (received) => {
-        // 1. 私有 update —— 必须被丢掉（并把该连接的可见性缓存钉成 false）。
-        fireUpdated()
-        // 2. 屏障：等一帧有权看见的控制帧到达，才说明上面那帧的 gate 已经判完、
-        //    缓存已经落成 false。这比「睡 100ms」强，而且随机器变慢一起变长。
-        fireControl(11)
-        await waitUntil(() => received.some((f) => f.version === 11))
-        // 3. 私有 delete —— 这才是本 describe 要钉的「delete 吃旧缓存」那一步。
-        fireDeleted()
-        fireControl(12)
-        await waitUntil(() => received.some((f) => f.version === 12))
-      },
-    )
-    // 两帧控制帧都到了（屏障成立），私有工作流的帧一条都没到。
-    expect(frames.map((f) => f.version)).toEqual([11, 12])
-    expect(frames.some((f) => f.workflowId === privateWfId)).toBe(false)
-  })
-})
-
-describe('RFC-152 — memory.superseded keeps the non-admin drop (admin 收 / scoped 丢 / stranger 丢)', () => {
-  let h: Harness
-  let privateAgentId = ''
-  let agentMemoryId = ''
-  let globalMemoryId = ''
-
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-    privateAgentId = ulid()
-    await h.db.insert(agents).values({
-      id: privateAgentId,
-      name: `priv-${privateAgentId}`,
-      ownerUserId: h.aliceId,
-      visibility: 'private',
+    test('scope-visible user (owner of the superseded memory scope) still drops it', async () => {
+      const frames = await collectFrames(
+        `${h.url}/ws/memories?token=${h.aliceToken}`,
+        async (received) => {
+          fireSupersededThenControl()
+          // The control frame proves the socket is live and gated frames flow.
+          await waitUntil(() => received.some((f) => f.type === 'memory.archived'))
+        },
+      )
+      expect(frames.some((f) => f.type === 'memory.archived')).toBe(true)
+      expect(frames.some((f) => f.type === 'memory.superseded')).toBe(false)
     })
-    agentMemoryId = ulid()
-    globalMemoryId = ulid()
-    await h.db.insert(memories).values([
-      {
-        id: agentMemoryId,
-        scopeType: 'agent',
-        scopeId: privateAgentId,
-        title: 'agent-scoped',
-        bodyMd: 'b',
-        tags: '[]',
-        status: 'approved',
-        sourceKind: 'manual',
-        createdAt: Date.now(),
-      },
-      {
-        id: globalMemoryId,
-        scopeType: 'global',
-        scopeId: null,
-        title: 'global-scoped',
-        bodyMd: 'b',
-        tags: '[]',
-        status: 'approved',
-        sourceKind: 'manual',
-        createdAt: Date.now(),
-      },
-    ])
-  })
-  afterEach(async () => h.cleanup())
 
-  /** superseded (no memoryId) + a control frame every logged-in user can see. */
-  function fireSupersededThenControl() {
-    memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
-      type: 'memory.superseded',
-      oldId: agentMemoryId,
-      newId: ulid(),
+    test('stranger drops the superseded frame too', async () => {
+      const frames = await collectFrames(
+        `${h.url}/ws/memories?token=${h.carolToken}`,
+        async (received) => {
+          fireSupersededThenControl()
+          await waitUntil(() => received.some((f) => f.type === 'memory.archived'))
+        },
+      )
+      expect(frames.some((f) => f.type === 'memory.archived')).toBe(true)
+      expect(frames.some((f) => f.type === 'memory.superseded')).toBe(false)
     })
-    memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
-      type: 'memory.archived',
-      memoryId: globalMemoryId,
-    })
-  }
-
-  test('admin receives the superseded frame', async () => {
-    const frames = await collectFrames(
-      `${h.url}/ws/memories?token=${h.adminToken}`,
-      async (received) => {
-        fireSupersededThenControl()
-        await waitUntil(() => received.some((f) => f.type === 'memory.superseded'))
-      },
-    )
-    expect(frames.some((f) => f.type === 'memory.superseded')).toBe(true)
-  })
-
-  test('scope-visible user (owner of the superseded memory scope) still drops it', async () => {
-    const frames = await collectFrames(
-      `${h.url}/ws/memories?token=${h.aliceToken}`,
-      async (received) => {
-        fireSupersededThenControl()
-        // The control frame proves the socket is live and gated frames flow.
-        await waitUntil(() => received.some((f) => f.type === 'memory.archived'))
-      },
-    )
-    expect(frames.some((f) => f.type === 'memory.archived')).toBe(true)
-    expect(frames.some((f) => f.type === 'memory.superseded')).toBe(false)
-  })
-
-  test('stranger drops the superseded frame too', async () => {
-    const frames = await collectFrames(
-      `${h.url}/ws/memories?token=${h.carolToken}`,
-      async (received) => {
-        fireSupersededThenControl()
-        await waitUntil(() => received.some((f) => f.type === 'memory.archived'))
-      },
-    )
-    expect(frames.some((f) => f.type === 'memory.archived')).toBe(true)
-    expect(frames.some((f) => f.type === 'memory.superseded')).toBe(false)
-  })
-})
+  },
+)

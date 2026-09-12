@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 537**；反睡眠清零 + 两个组合根签名对齐）
+> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 535**；反睡眠清零 + 两个组合根签名对齐）
 >
 > 接着下面那段做。主线是**把两个组合根的装配签名对齐**（补了五个覆盖口）与**把负向断言从
 > 墙钟改成因果屏障**；末尾又照出**第 4 条 PG-only 产品缺陷**（fire-and-forget 少一层网，见下）。
@@ -156,7 +156,20 @@
 >
 >    HTTP 形状的欠债还剩 **41 个文件**，其中最大的一簇是 **WS 的 11 个**（见下）。
 >
-> 5. **下一刀建议：写一个「WS 版作用域」，而不是逐个迁 WS 文件**（plan §5bs，已查清未动手）。
+> 5. ~~下一刀建议：写 WS 作用域~~ **已经写了**（plan §5bt）：
+>    `tests/helpers/providerWebSocketScope.ts` 的 `describeEachProviderWebSocketApplication`
+>    一次交出 **provider 应用 + 实时运行时 + ws 适配器 + 活的 server**（`url` / `httpUrl`）。
+>    已迁 `ws-repo-imports`(8×2) 与 `rfc152-ws-frame-gates`(5×2)——**本仓 WebSocket 用例第一次
+>    在 PostgreSQL 上跑起来**。**剩 9 个 WS 文件**，形状与这两个一样，照抄即可。
+>
+>    两个踩出来的细节：① `identityAccess` 必须取 `opened.identityAccess`（应用自己装配的那份），
+>    另建一个会让升级门与路由看到不同的授权视图；② 广播器是**进程级单例**，作用域的 `afterEach`
+>    必须 `resetBroadcastersForTests()`，否则上一条用例的订阅者会收到本条的帧。
+>
+>    **变异验证不能省**：把 PG 分支换成 `throw` 确认它真的被走到——分派写错时最容易的失败形态是
+>    「两遍都走 SQLite」，那样 junit 里照样两组 classname、照样全绿，但 PG 侧等于没跑。
+>
+>    下面这段是当初的分析（保留）：
 >    11 个 WS 文件都被 `composeTestSqliteRealtimeRuntime` 钉住，但那只是**第一层**：
 >    · 第一层可解且**不必动生产**——底下 `DrizzleRealtimeStore` 收的本来就是中立句柄，
 >      两个 `composeXxxRealtimeRuntime` 函数体逐字相同，资源目录那边 `composeResourceCatalogFor`
