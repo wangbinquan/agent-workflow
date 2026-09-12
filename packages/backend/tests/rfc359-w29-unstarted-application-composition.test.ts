@@ -382,6 +382,20 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
   })
 
+  // RFC-359（2026-09-12，第五次）：语句条数 **159 → 160**，摘要随之变化。加的是**一条**语句：
+  //     const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
+  // 原来那个 `createWebhookDispatcher(...)` 的结果改名成 `composedWebhookDispatcher`，
+  // 新的 `webhookDispatcher` 绑定挑「覆盖件还是自建的那个」。同轮还把事件中心两处改成
+  // **能力探测**接线（`supportsEventCenterWorkStart` / `supportsEventCenterCodeHostDelivery`），
+  // 与 `server.ts` 对同一件事的做法逐字同构——那两处是既有语句内部的形态变化，不增减条数。
+  //
+  // 为什么要这样而不是像另外两个覆盖口那样纯透传：两个组合根对 dispatcher 的**所有权**
+  // 本来就不同（SQLite 当可选依赖收、PG 自己构造），直接 `??` 会让只有部分能力的测试桩
+  // 在 `automationWorkStart` 处运行时炸。三个选项与取舍见 plan §5bi。
+  //
+  // 生产逐字不变：不传覆盖件 ⇒ 取自建的那个 ⇒ 它带全部能力 ⇒ 两个探测门都通过。
+  // 已变异验证承重：抽掉 `?? ` 那一侧，`rfc259-github-ingress` 的 [postgresql] 三条当场转红。
+  //
   // RFC-359（2026-09-12，第四次）：语句条数仍是 159，摘要再次变化——PG 组合根补了**两个
   // 可选覆盖口**，都只改了既有语句里的属性取值，没有新增/删除语句：
   //   · `integration.scheduledTasks.buildScheduleLaunch` 从直接取
@@ -409,7 +423,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // 「`WeakMap<authority, Actor>` + `{ resolve }` 解析器 + `systemOverview` 常量 + 包一层
   // `execute` 填 map」的胶水整段删掉了（目录概览端口现在直接收请求者投影），换成一条
   // `composeSystemOverviewQuery({...})` 赋值。降，不是升。
-  test('daemon phase retains the complete original 159-statement graph and ordered effects', () => {
+  test('daemon phase retains the complete original 160-statement graph and ordered effects', () => {
     const body = functionBody(pg, 'composePostgresqlApplication')
     const phaseBlocks = body.statements.filter(
       (node): node is ts.IfStatement =>
@@ -417,9 +431,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
     expect(phaseBlocks).toHaveLength(8)
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
-    expect(restored.statements).toHaveLength(159)
+    expect(restored.statements).toHaveLength(160)
     expect(digest(restored, pg)).toBe(
-      '80e58a40d58b3ce2b96de61dc3a91da149ee4dadb42652dc5ae565b0182205bb',
+      '4a9d086fe2980206c149fbf88087b00220942c68ab901b4ec8d71fc8155cff3f',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

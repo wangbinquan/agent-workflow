@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 545**；反睡眠清零 + 两个组合根签名对齐）
+> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 544**；反睡眠清零 + 两个组合根签名对齐）
 >
 > 接着下面那段做。这一段没有新的产品缺陷，主线是**把两个组合根的装配签名对齐**，
 > 以及**把负向断言从墙钟改成因果屏障**。
@@ -81,15 +81,33 @@
 > `runtimeRegistry`），**从不读**那个注入口，所以两个应用行为上一直是同一个。判据照旧成立，
 > 对照是假的。
 >
+> ### `webhookDispatcher` 也补完了（plan §5bi 列选项、§5bl 记裁决）
+>
+> 它**不是**纯透传：两个根对 dispatcher 的**所有权**就不同（SQLite 当可选依赖收、
+> PG 自己构造），直接 `??` 会让只有部分能力的测试桩在 `automationWorkStart` 处运行时炸。
+> 三个选项里选了**方案 2（覆盖 + 能力探测）**——另外两个都不满足目标：方案 1（只替换路由面）
+> 会让同一条用例在两个引擎上**观察到的派发不是同一批**，正是 AC-6 要消灭的；方案 3 要动
+> ingress 路由的自我跳过纪律，属能力收缩、触发 §RFC workflow 第 7 条。
+> 落地的两处探测与 `server.ts` 逐字同构，生产逐字不变（不传覆盖件 ⇒ 取自建的 ⇒ 全部能力齐 ⇒
+> 两个门都过）。迁了 `rfc257-webhook-error-codes`(15×2) 与 `rfc259-github-ingress`(10×2)。
+>
+> **一条值得记的**：同一处改动，**两个引擎的「承重点」不在一处**。
+> `rfc257` 那批只走拒绝路径、从不到达派发，抽掉 PG 的 `??` 不会红；但抽掉**夹具**的
+> dispatcher，`[sqlite]` 三条立刻红（SQLite 根没它就不挂 ingress 路由）。真正钉住 PG 那个口子的
+> 是 `rfc259`（它断言 `calls`）。**别拿只走拒绝路径的用例去证明一个口子承重**——够不着。
+>
 > ### 下一刀
 >
-> 剩 ~50 个文件。按「同一个覆盖口解锁几个文件」排序：
+> 剩 ~48 个文件。按「同一个覆盖口解锁几个文件」排序：
 >
-> 1. **`webhookDispatcher`（3 个文件）——但它不是纯透传，先定语义再动**，三个选项与各自代价
->    已列在 plan §5bi（两个根对 dispatcher 的**所有权**就不同：SQLite 当依赖收、PG 自己构造；
->    塞部分桩进 PG 会在 `1290` 运行时炸）。**需要用户拍板**，我没有自己选。
-> 2. `mcpRuntimeTestDependencies` / `intentTestDependencies`（各 2 个）。
-> 3. `helpers/taskRecoveryOperations` 那层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）仍未动。
+> 1. `mcpRuntimeTestDependencies` / `intentTestDependencies`（各 2 个）。**已先查过形态**：
+>    它们**不是**路由依赖类型上的字段（`grep`：`server.ts` 各 8 / 3 处，PG 根 **0** 处），
+>    而是被 `server.ts` 以条件展开喂进**模块装配**（`server.ts:2014-2023` / `:2750-2752`）。
+>    所以形态更接近 `buildScheduleLaunch`（转发进一个被装配的服务），不是
+>    `runtimeDiagnosticTestDependencies` 那种纯路由透传——照后者抄会找不到落点。
+> 2. `helpers/taskRecoveryOperations` 那层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）仍未动。
+> 3. 单个覆盖口只解锁 1 个文件的那些（`databaseTelemetry` / `executionContracts` /
+>    `codeHostFetch` / `repositoryTransport` …），逐个按同样的判据处理。
 
 > ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 551**，又照出三条 PG 缺陷）
 >

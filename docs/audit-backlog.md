@@ -4689,3 +4689,28 @@ VACUUM INTO + tar；PostgreSQL 走 `postgresqlAdminBackupCoordinator` /
 
 **注意**：在查清之前**不要**顺手把它改成抛错——会一次推红六条。函数体里已写了同样的警告。
 发现经过见 `design/RFC-359-database-provider-unification/plan.md` §5bk。
+
+## e2e flake：`workflow-matrix.spec.ts:1157` 拒审后任务变 `failed`（2026-09-12 首次观察，未决）
+
+**症状**：`mixed wrappers + humans: clarified decision survives review rejection before fanout and
+final approval` 在 `Playwright e2e (ubuntu-latest shard 3/3)` 红：
+
+```
+> 1191 |   expect(afterReject.status).toBe('awaiting_review')
+Expected: "awaiting_review"
+Received: "failed"
+```
+
+也就是**拒审之后 `mixed_writer` 的重跑失败了**，没有产出第二轮评审。同 run 内自动重试一次
+（retry #1）**同样红**，所以不是一次性抖动。
+
+**排除了提交者**：观察到它的那一提（`4a53d0b46`）**一行 `src/` 都没动**
+（只有 4 个后端测试文件 + `architecture/*.json` + 三份文档），而 e2e 跑的产品源码与上一提
+`e48b1d71a` 逐字相同，后者的 e2e 是绿的。所以这不是那一提引入的。
+
+**待办**：本机复现（要起 stub runtime + 真 daemon），看那次重跑的
+`node_runs.last_error` / `node_run_events` 究竟是什么——是 stub runtime 在这条路径上偶发退出，
+还是「拒审 → 重跑」本身有竞态。定位之前**不要**用「重跑就过了」结案（本仓明令）。
+
+**不要混淆**：`docs/dev-gotchas.md:3213` 记过 `workflow-matrix` 的另外两条
+（「耗尽重试预算」「超时套用到每次重试」）是已知 CI-only 时序放大，那两条与本条不是同一个用例。

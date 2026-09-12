@@ -34,6 +34,12 @@ import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { RuntimeDiagnosticDependencies } from '@/routes/runtimes'
+import {
+  supportsEventCenterCodeHostDelivery,
+  supportsEventCenterWorkStart,
+  type EventCenterAutomationWorkStarter,
+  type WebhookDispatcher,
+} from '@/services/webhook/dispatcherTypes'
 import { loadConfig } from '@/config'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
@@ -381,6 +387,15 @@ export interface PostgresqlDaemonApplicationInput {
    * 用例在 PG 上没法双跑。这里补的是一次纯透传，不改任何默认行为。
    */
   readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
+  /**
+   * RFC-257 / RFC-359 —— 覆盖 webhook 派发器。生产两侧都省略（PG 根自己构造、
+   * SQLite 根由 `cli/start.ts` 注入真的那个）；测试注入桩，免得真的去投递。
+   *
+   * 与另外两个覆盖口不同：两个根对它的**所有权**本来就不同，所以这里不是简单透传
+   * ——覆盖件只有部分能力时，事件中心那几处按 `supports*` 探测降级，与 `server.ts`
+   * 对同一件事的做法逐字同构。见 plan §5bi。
+   */
+  readonly webhookDispatcher?: WebhookDispatcher
   readonly maintenanceStatus: NonNullable<
     PostgresqlAppCompositionInput['platform']['maintenance']['maintenanceStatus']
   >
@@ -1244,7 +1259,7 @@ export async function composePostgresqlApplication(
       })
     }
   }
-  const webhookDispatcher = createWebhookDispatcher({
+  const composedWebhookDispatcher = createWebhookDispatcher({
     persistence: composePostgresqlWebhookDispatchPersistence(input.db),
     deliveryPersistence: composePostgresqlWebhookDeliveryPersistence(input.db),
     identityAccess: integrationIdentityAccess,
@@ -1265,6 +1280,12 @@ export async function composePostgresqlApplication(
     admitLaunch: composeWebhookLaunchAdmission(scheduledTaskRuntime.operations),
     terminalControl: webhookTerminalControl,
   })
+  /**
+   * RFC-359 AC-6 —— 生效的 dispatcher。生产不传覆盖件，取的就是上面构造的那个，逐字不变；
+   * 测试注入桩时两个引擎观察到的是同一件事（这正是本 RFC 的目的：别让同一条判据在两个
+   * provider 上测的不是一回事）。能力不全的桩由下面几处 `supports*` 探测兜住。
+   */
+  const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
   const developmentApprovalGateway = composePostgresqlApprovalGatewayRunner(input.db)
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composePostgresqlEventCenter({
@@ -1287,14 +1308,33 @@ export async function composePostgresqlApplication(
       input.db,
       missionEventContinuation,
     ),
-    automationWorkStart: { launch: (request) => webhookDispatcher.dispatchEventTarget(request) },
-    deliveryConsumers: [
-      createPostgresqlCodeHostWebhookDeliveryConsumer(
-        input.db,
-        webhookDispatcher,
-        missionEventContinuation,
-      ),
-    ],
+    // RFC-359 AC-6 —— 与 SQLite 根逐字同构的**能力探测**接线。
+    // 两个根对 dispatcher 的所有权本来就不同（SQLite 当可选依赖收、PG 自己构造），
+    // 所以这里不是简单 `??`：覆盖件只有部分能力时（测试桩通常只有
+    // `dispatch` / `dispatchSubscription`），直接调 `dispatchEventTarget` 会运行时炸。
+    // `server.ts` 对同一件事的做法是探测不到就置空，这里照抄。
+    //
+    // 生产逐字不变：不传覆盖件 ⇒ 用自己构造的那个 ⇒ 它带全部能力 ⇒ 每个门都通过。
+    ...(supportsEventCenterWorkStart(webhookDispatcher)
+      ? {
+          automationWorkStart: {
+            launch: (
+              request: Parameters<EventCenterAutomationWorkStarter['dispatchEventTarget']>[0],
+            ) => webhookDispatcher.dispatchEventTarget(request),
+          },
+        }
+      : {}),
+    // 同上：能力探测不到就不接这个消费者，与 `server.ts` 的
+    // `codeHostDeliveryDispatcher === null ? [] : [...]` 逐字同构。
+    deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher)
+      ? [
+          createPostgresqlCodeHostWebhookDeliveryConsumer(
+            input.db,
+            webhookDispatcher,
+            missionEventContinuation,
+          ),
+        ]
+      : [],
     deliveryRetryLimits: {
       current() {
         const current = loadConfig(input.configPath)

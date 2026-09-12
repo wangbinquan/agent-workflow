@@ -5,23 +5,21 @@
 //   管理面创建 github 端点、以及 **AC-14：github 投递可 replay**（事件头从
 //   审计列重建——不修则 GitHub replay 全体 parse-failed，实现期自查 P0）。
 import { createHmac } from 'node:crypto'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { describe, expect, test } from 'bun:test'
-import { join, resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 import { createSession } from './helpers/auth/sessionStore'
+import { ulid } from 'ulid'
 import { eventually } from './helpers/eventually'
 import { webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SECRET = 'gh-webhook-secret'
-const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
 
 const REPOSITORY = {
   full_name: 'acme/api',
@@ -51,15 +49,40 @@ function ghHeaders(body: string, event = 'push', delivery = 'guid-1'): Record<st
   }
 }
 
-async function harness(opts?: { dispatcher?: WebhookDispatcher; configPath?: string }) {
-  const db = createInMemoryDb(MIGRATIONS)
+// RFC-359 AC-6 —— 迁到共用双引擎作用域。
+//   · dispatcher 桩要**按用例新建**（它记录 `calls`），而覆盖口是**注册期**参数：
+//     照例注册一个稳定的转发件指向 `currentDispatcher`。PG 根同轮补了「覆盖 + 能力探测」
+//     （plan §5bi），所以 `calls` 在两个引擎上记的是同一件事——本文件正是钉住那个口子的用例。
+//   · 加密列（`secretEnc`）必须用作用域装配那一份 secretBox 封。
+//   · `publicBaseUrl` 那条走 `open({ config })`，不再自建 config 文件（自建的会被绕开）。
+let currentDispatcher: WebhookDispatcher | undefined
+const SCOPE_DISPATCHER: WebhookDispatcher = {
+  dispatch: async (...args) => currentDispatcher?.dispatch(...args),
+  dispatchSubscription: async (...args) => currentDispatcher?.dispatchSubscription?.(...args),
+}
+
+const SCOPE_OPTIONS = {
+  token: 'a'.repeat(64),
+  opencodeVersion: '1.14.25',
+  dbVersion: 1,
+  tempPrefix: 'aw-rfc259-gh-',
+  webhookDispatcher: SCOPE_DISPATCHER,
+} as const
+
+async function harness(
+  scope: ProviderHttpApplicationScope,
+  opts?: { dispatcher?: WebhookDispatcher; config?: Readonly<Record<string, unknown>> },
+) {
+  const db = scope.harness.db
   const calls: string[] = []
-  const dispatcher: WebhookDispatcher = opts?.dispatcher ?? {
+  currentDispatcher = opts?.dispatcher ?? {
     dispatch: async () => {},
     dispatchSubscription: async (input) => {
       calls.push(input.deliveryId)
     },
   }
+  const opened = await scope.open(opts?.config === undefined ? undefined : { config: opts.config })
+  const box = opened.secretBox
   await db.insert(webhookEndpoints).values({
     id: 'ep-gh',
     name: 'github',
@@ -82,22 +105,13 @@ async function harness(opts?: { dispatcher?: WebhookDispatcher; configPath?: str
     templateSyntaxVersion: 2,
   })
   const admin = await createUser(db, {
-    username: 'root',
+    username: `root-${ulid().toLowerCase()}`,
     displayName: 'root',
     role: 'admin',
     password: 'longEnoughPassword',
   })
   const { token } = await createSession({ db, userId: admin.id })
-  const app = createApp({
-    token: 'a'.repeat(64),
-    configPath: opts?.configPath ?? '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-    secretBox: box,
-    webhookDispatcher: dispatcher,
-  })
-  return { db, app, calls, adminToken: token }
+  return { db, app: opened.app, calls, adminToken: token }
 }
 
 type H = Awaited<ReturnType<typeof harness>>
@@ -113,13 +127,13 @@ function post(
 
 const URL_GH = '/webhooks/github/aw_whk_gh1'
 
-async function rows(db: DbClient) {
+async function rows(db: ProviderNeutralDatabase) {
   return db.select().from(webhookDeliveries)
 }
 
-describe('RFC-259 · GitHub 入站状态码语义', () => {
+describeEachProviderHttpApplication('RFC-259 · GitHub 入站状态码语义', SCOPE_OPTIONS, (scope) => {
   test('正确 HMAC → 200 received + 摘要列（事件头/判别符/去重 id 全落库）', async () => {
-    const { app, db, calls } = await harness()
+    const { app, db, calls } = await harness(scope)
     const body = pushBody()
     const res = await post(app, URL_GH, body, ghHeaders(body))
     expect(res.status).toBe(200)
@@ -142,7 +156,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 
   test('401 + rejected 行：签名错 / 签名缺（AC-1 的 HTTP 面）', async () => {
-    const { app, db, calls } = await harness()
+    const { app, db, calls } = await harness(scope)
     const body = pushBody()
     const bad = await post(app, URL_GH, body, {
       ...ghHeaders(body),
@@ -162,7 +176,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 
   test('404 同形：未知 provider（gitea）/ github token 走 gitlab 路径（AC-9）', async () => {
-    const { app } = await harness()
+    const { app } = await harness(scope)
     const body = pushBody()
     const bodies: string[] = []
     for (const path of ['/webhooks/gitea/aw_whk_gh1', '/webhooks/gitlab/aw_whk_gh1']) {
@@ -174,7 +188,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 
   test('ping → 200 + ignored(unsupported-event)（AC-8：GitHub 连通性测试拿绿勾）', async () => {
-    const { app, db, calls } = await harness()
+    const { app, db, calls } = await harness(scope)
     const body = JSON.stringify({ zen: 'Keep it logically awesome.', hook_id: 1 })
     const res = await post(app, URL_GH, body, ghHeaders(body, 'ping', 'guid-ping'))
     expect(res.status).toBe(200)
@@ -185,7 +199,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 
   test('同 X-GitHub-Delivery 重投（Redeliver 复用 GUID）→ 原行 bump、不重复分发（AC-3）', async () => {
-    const { app, db, calls } = await harness()
+    const { app, db, calls } = await harness(scope)
     const body = pushBody()
     const r1 = await post(app, URL_GH, body, ghHeaders(body))
     const id1 = ((await r1.json()) as { deliveryId: string }).deliveryId
@@ -207,7 +221,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 
   test('曾 rejected 的 GUID 修正签名后重投能落地（AC-3 后半——去重索引排除 rejected，评审门 F-6）', async () => {
-    const { app, db } = await harness()
+    const { app, db } = await harness(scope)
     const body = pushBody()
     const bad = await post(app, URL_GH, body, {
       ...ghHeaders(body, 'push', 'guid-R'),
@@ -221,7 +235,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 
   test('X-GitHub-Delivery 缺失 → 无去重逐条处理（F-18 降级平移）', async () => {
-    const { app, db } = await harness()
+    const { app, db } = await harness(scope)
     const body = pushBody()
     for (let i = 0; i < 2; i++) {
       const res = await post(app, URL_GH, body, {
@@ -234,7 +248,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 
   test('content type 误配（form-urlencoded）→ 验签过、解析 400 + parse-failed（proposal §9 诊断路径）', async () => {
-    const { app, db } = await harness()
+    const { app, db } = await harness(scope)
     const form = `payload=${encodeURIComponent(pushBody())}`
     const res = await post(app, URL_GH, form, ghHeaders(form, 'push', 'guid-form'))
     expect(res.status).toBe(400)
@@ -244,83 +258,93 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
   })
 })
 
-describe('RFC-259 · 管理面 github 端点（AC-10）', () => {
-  test('创建 provider=github → 持久化 + ingressUrl 含 /webhooks/github/ 路径段', async () => {
-    // ingressUrl 只由 publicBaseUrl 拼装（禁 c.req.url）——喂真实 config 文件断言
-    // 完整 URL 形态（评审门 F-3：此前无任何测试锁 github 的 ingressUrl 段）。
-    const configPath = join(mkdtempSync(join(tmpdir(), 'rfc259-cfg-')), 'config.json')
-    writeFileSync(configPath, JSON.stringify({ publicBaseUrl: 'https://aw.example.com' }))
-    const { app, adminToken } = await harness({ configPath })
-    const res = await app.request('/api/webhook-endpoints', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'GitHub.com', provider: 'github' }),
+describeEachProviderHttpApplication(
+  'RFC-259 · 管理面 github 端点（AC-10）',
+  SCOPE_OPTIONS,
+  (scope) => {
+    test('创建 provider=github → 持久化 + ingressUrl 含 /webhooks/github/ 路径段', async () => {
+      // ingressUrl 只由 publicBaseUrl 拼装（禁 c.req.url）——喂真实 config 断言
+      // 完整 URL 形态（评审门 F-3：此前无任何测试锁 github 的 ingressUrl 段）。
+      // RFC-359 AC-6：配置走作用域的 `open({ config })`；自建 config 文件会被整份绕开，
+      // 测出来永远是默认值。
+      const { app, adminToken } = await harness(scope, {
+        config: { publicBaseUrl: 'https://aw.example.com' },
+      })
+      const res = await app.request('/api/webhook-endpoints', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'GitHub.com', provider: 'github' }),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as {
+        provider: string
+        urlToken: string
+        secret: string
+        ingressUrl: string | null
+      }
+      expect(body.provider).toBe('github')
+      expect(body.secret.length).toBeGreaterThan(20)
+      expect(body.ingressUrl).toBe(`https://aw.example.com/webhooks/github/${body.urlToken}`)
+      // provider 不可变：strict PUT 对 provider 键 422（既有语义在 github 值域下同样成立）
+      const created = body as unknown as { id: string }
+      const put = await app.request(`/api/webhook-endpoints/${created.id}`, {
+        method: 'PUT',
+        headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: 'gitlab' }),
+      })
+      expect(put.status).toBe(422)
     })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as {
-      provider: string
-      urlToken: string
-      secret: string
-      ingressUrl: string | null
-    }
-    expect(body.provider).toBe('github')
-    expect(body.secret.length).toBeGreaterThan(20)
-    expect(body.ingressUrl).toBe(`https://aw.example.com/webhooks/github/${body.urlToken}`)
-    // provider 不可变：strict PUT 对 provider 键 422（既有语义在 github 值域下同样成立）
-    const created = body as unknown as { id: string }
-    const put = await app.request(`/api/webhook-endpoints/${created.id}`, {
-      method: 'PUT',
-      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ provider: 'gitlab' }),
-    })
-    expect(put.status).toBe(422)
-  })
-})
+  },
+)
 
-describe('RFC-259 · GitHub 投递 replay（AC-14——实现期自查 P0 回归锁）', () => {
-  test('入站落库的 github 投递可 replay：事件头从审计列重建、新行指回原行、分发发生', async () => {
-    const { app, db, calls, adminToken } = await harness()
-    const body = JSON.stringify({
-      action: 'completed',
-      workflow_run: {
-        head_branch: 'feature/x',
-        head_sha: 'abc123',
-        conclusion: 'failure',
-        actor: { login: 'dev-a' },
-        pull_requests: [],
-      },
-      repository: REPOSITORY,
-      sender: { login: 'dev-a' },
-    })
-    const ingress = await post(app, URL_GH, body, ghHeaders(body, 'workflow_run', 'guid-wr'))
-    expect(ingress.status).toBe(200)
-    const deliveryId = ((await ingress.json()) as { deliveryId: string }).deliveryId
-    // fake dispatcher 不推进状态；replay 前置要求终态——手动落 matched 模拟分发完成
-    const { eq } = await import('drizzle-orm')
-    await db
-      .update(webhookDeliveries)
-      .set({ status: 'matched' })
-      .where(eq(webhookDeliveries.id, deliveryId))
+describeEachProviderHttpApplication(
+  'RFC-259 · GitHub 投递 replay（AC-14——实现期自查 P0 回归锁）',
+  SCOPE_OPTIONS,
+  (scope) => {
+    test('入站落库的 github 投递可 replay：事件头从审计列重建、新行指回原行、分发发生', async () => {
+      const { app, db, calls, adminToken } = await harness(scope)
+      const body = JSON.stringify({
+        action: 'completed',
+        workflow_run: {
+          head_branch: 'feature/x',
+          head_sha: 'abc123',
+          conclusion: 'failure',
+          actor: { login: 'dev-a' },
+          pull_requests: [],
+        },
+        repository: REPOSITORY,
+        sender: { login: 'dev-a' },
+      })
+      const ingress = await post(app, URL_GH, body, ghHeaders(body, 'workflow_run', 'guid-wr'))
+      expect(ingress.status).toBe(200)
+      const deliveryId = ((await ingress.json()) as { deliveryId: string }).deliveryId
+      // fake dispatcher 不推进状态；replay 前置要求终态——手动落 matched 模拟分发完成
+      const { eq } = await import('drizzle-orm')
+      await db
+        .update(webhookDeliveries)
+        .set({ status: 'matched' })
+        .where(eq(webhookDeliveries.id, deliveryId))
 
-    const replay = await app.request(`/api/webhook-deliveries/${deliveryId}/replay`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${adminToken}` },
+      const replay = await app.request(`/api/webhook-deliveries/${deliveryId}/replay`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${adminToken}` },
+      })
+      expect(replay.status).toBe(200)
+      const rb = (await replay.json()) as { deliveryId: string; replayedFrom: string }
+      expect(rb.replayedFrom).toBe(deliveryId)
+      const all = await rows(db)
+      expect(all.length).toBe(2)
+      const replayRow = all.find((r) => r.id === rb.deliveryId)
+      expect(replayRow?.replayedFromDeliveryId).toBe(deliveryId)
+      expect(replayRow?.eventUuid).toBeNull() // 绕过去重
+      expect(replayRow?.eventType).toBe('pipeline_failed') // 归一化成功 = 事件头重建生效
+      // RFC-359 AC-20：重放派发同样在应答之后，读到为止。
+      await eventually(
+        async () => calls.includes(rb.deliveryId),
+        (seen) => seen,
+        { what: 'replay dispatch' },
+      )
+      expect(calls).toContain(rb.deliveryId)
     })
-    expect(replay.status).toBe(200)
-    const rb = (await replay.json()) as { deliveryId: string; replayedFrom: string }
-    expect(rb.replayedFrom).toBe(deliveryId)
-    const all = await rows(db)
-    expect(all.length).toBe(2)
-    const replayRow = all.find((r) => r.id === rb.deliveryId)
-    expect(replayRow?.replayedFromDeliveryId).toBe(deliveryId)
-    expect(replayRow?.eventUuid).toBeNull() // 绕过去重
-    expect(replayRow?.eventType).toBe('pipeline_failed') // 归一化成功 = 事件头重建生效
-    // RFC-359 AC-20：重放派发同样在应答之后，读到为止。
-    await eventually(
-      async () => calls.includes(rb.deliveryId),
-      (seen) => seen,
-      { what: 'replay dispatch' },
-    )
-    expect(calls).toContain(rb.deliveryId)
-  })
-})
+  },
+)

@@ -38,6 +38,9 @@ export type ProviderHttpApplicationInput = Pick<
   // 同上：运行时诊断的测试注入口（`RuntimesRouteDependencies` 本来就声明了它，
   // PG 根同轮补上透传）。运行时诊断那一批用例是 AC-6 runway 上最大的一簇。
   | 'runtimeDiagnosticTestDependencies'
+  // webhook 派发器。两个根对它的所有权不同（SQLite 当依赖收、PG 自己构造），PG 根同轮
+  // 补上「覆盖 + 能力探测」，两侧观察到的于是是同一件事（plan §5bi）。
+  | 'webhookDispatcher'
 > & {
   readonly appHome: string
   /**

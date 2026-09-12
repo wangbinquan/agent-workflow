@@ -7235,3 +7235,47 @@ await waitForQueued(getTaskWriteSem(secondChild), 1, '第二笔删除停到自�
 **规律**：**静默超时的等待函数会把「编排没成立」伪装成「编排成立了」**。
 本轮两次撞到同一形状（`waitUntil` / `waitForReads`）。写这类 helper 时默认就该抛；
 已经静默的那些，**改之前先跑一遍全量**——它可能正兜着好几条你不知道的假绿。
+
+## 5bl. `webhookDispatcher` 定了：选 §5bi 的方案 2（覆盖 + 能力探测），并有测试钉住
+
+§5bi 列了三个选项。**选方案 2**，理由是另外两个都不满足本 RFC 的目标：
+
+- **方案 1（只替换路由面）看似最小，其实制造了新的双引擎分歧**：测试桩在 SQLite 上是
+  *唯一*的 dispatcher（事件中心也用它，能力探测兜底），在 PG 上却只管路由面、事件中心仍走
+  自建的那个。于是同一条用例在两个引擎上**观察到的派发不是同一批**——正是 AC-6 要消灭的东西。
+- **方案 3（反过来让 SQLite 也自己构造）** 要动 `cli/start.ts` 的注入与 ingress 路由的
+  自我跳过纪律（RFC-257 明确设计的「部分接线就不暴露保证 500 的公共路由」），属于能力收缩，
+  触发 CLAUDE.md §RFC workflow 第 7 条，代价远大于收益。
+
+**方案 2 的落地**（`postgresqlDaemonApplication.ts`）：
+
+```ts
+const composedWebhookDispatcher = createWebhookDispatcher({ … })   // 原来那个，改名
+const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
+…
+...(supportsEventCenterWorkStart(webhookDispatcher) ? { automationWorkStart: { … } } : {}),
+deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher) ? [ … ] : [],
+```
+
+两处能力探测与 `server.ts`（`codeHostDeliveryDispatcher` / `eventWorkStarter` 那两段）
+**逐字同构**——这不是我发明的第三种形态，是把 SQLite 早就在做的事搬过来。
+**生产逐字不变**：不传覆盖件 ⇒ 取自建的 ⇒ 它带全部能力 ⇒ 两个门都通过。
+
+### 两条用例，两种「承重」，都变异验证过
+
+- `rfc257-webhook-error-codes`（迁了 15 条 ×2）：这批只走**拒绝路径**，**从不到达派发**。
+  所以把 PG 的 `??` 抽掉**不会红**——它证明不了 PG 侧那个口子。但把**夹具**的
+  `webhookDispatcher` 抽掉，`[sqlite]` 三条立刻红：SQLite 根没有 dispatcher 就
+  **不挂 ingress 路由**。**同一处改动，两个引擎的「承重点」不在一处**，各验各的才算数。
+- `rfc259-github-ingress`（迁了 10 条 ×2）：它断言 `calls`（真的派发了哪几笔），
+  抽掉 PG 的 `??` ⇒ `[postgresql]` 三条当场红。**这条才是钉住 PG 覆盖口的那个用例。**
+
+**规律**：给两个 provider 补对称口子时，**别拿只走拒绝路径的用例去证明它承重**——
+那种用例够不着被改的那一段。先问「这个口子生效时会发生什么可观测的事」，再去找断言了那件事的用例。
+
+### 单引擎留一条，理由与 §5bg③ 同类
+
+`rfc257-webhook-error-codes` 的 `webhook-ingress-unavailable`（装配缺 dispatcher ⇒ replay 拒绝）
+留在普通 describe：被测的是「装配里没有 dispatcher」这个**测试独有**的形态
+（生产两侧都必有一个：`cli/start.ts:2310` 注入 / PG 根自建），塞进 provider 作用域还会带着
+自建的 bun:sqlite 库在 `[postgresql]` 那一遍里炸。
