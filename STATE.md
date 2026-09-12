@@ -154,7 +154,20 @@
 >    `rfc310` 顺带清了 4 处 `await db.insert(...).values({...}).run()`——**awaited 的 `.run()`**
 >    在中立面上能过类型也能跑，所以一直没被发现；守卫只扫已迁文件，迁进来就必须清。
 >
->    HTTP 形状的欠债还剩 **41 个文件**。
+>    HTTP 形状的欠债还剩 **41 个文件**，其中最大的一簇是 **WS 的 11 个**（见下）。
+>
+> 5. **下一刀建议：写一个「WS 版作用域」，而不是逐个迁 WS 文件**（plan §5bs，已查清未动手）。
+>    11 个 WS 文件都被 `composeTestSqliteRealtimeRuntime` 钉住，但那只是**第一层**：
+>    · 第一层可解且**不必动生产**——底下 `DrizzleRealtimeStore` 收的本来就是中立句柄，
+>      两个 `composeXxxRealtimeRuntime` 函数体逐字相同，资源目录那边 `composeResourceCatalogFor`
+>      本身就是中立导出；测试侧按 `applicationBinding` 判别式分派即可
+>      （`rfc359-w12-realtime-composition.test.ts` 已经是这么写的）。我写过一版、tsc 干净。
+>    · **第二层才是真拦路石**：WS 用例自建 `Bun.serve`，把 `ws.tryUpgrade` 与
+>      **`app.fetch` 的 HTTP 回落**接在一起，而那个 `app` 来自 `createApp`（SQLite 根）。
+>      解掉实时运行时之后**应用仍是单引擎的**。
+>    所以要的是一个交出「活 server + 已接好的 ws 适配器 + provider 应用」的作用域，写一次迁 11 个；
+>    否则每个文件都要重拼一遍 `Bun.serve` + 适配器 + 应用——正是共用作用域当初要消灭的那 18 份拷贝。
+>    探路的改动已全部 revert（helper 没有消费者就是死代码）。
 >
 > 4. 原第 2 条的形态调查（保留）：
 >    它们**不是**路由依赖类型上的字段（`grep`：`server.ts` 各 8 / 3 处，PG 根 **0** 处），

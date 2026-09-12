@@ -7517,3 +7517,45 @@ PostgreSQL 上这条路径真实可达：回合在后台跑，进程（或测试
 前三条见 STATE.md 上一段（工作树预检空操作 / 房间补偿无 catch / 同名并发 409 退化成 500）。
 **四条里有两条是同一个形状：fire-and-forget 少一层网。** 值得单独做一次全仓扫查
 （`void <expr>(...)` 且无 `.catch`），已记进 `docs/audit-backlog.md`。
+
+## 5bs. WS 那一簇（11 个文件）的拦路石查清了——但它比看起来深一层，**没动手**
+
+HTTP 形状的欠债里最大的一簇是 WebSocket 用例：**11 个文件**都调
+`composeTestSqliteRealtimeRuntime`（`tests/helpers/realtimeRuntime.ts`），被钉在 SQLite 上。
+本轮把它查清但**刻意没动手**，把结论留下省下一次重复探路。
+
+### 第一层（可解，且不必动生产）
+
+`composeTestSqliteRealtimeRuntime` 里两处 `composeSqlite*` 是真的 provider-bound。
+但底下**全是中立的**：
+
+- `DrizzleRealtimeStore` 的构造器收的就是 `ProviderNeutralDatabase`；
+- `composeSqliteRealtimeRuntime` 与 `composePostgresqlRealtimeRuntime` 的**函数体逐字相同**，
+  差别只在两个导出包装声明的 `db` 类型；
+- 资源目录那边**根本不用分派**：`composeResourceCatalogFor` 本身就是导出的中立函数
+  （两个 `composeXxxResourceCatalog` 也只是它的类型化包装）。
+
+所以测试侧按 harness 的 `applicationBinding` 判别式分派就行——`rfc359-w12-realtime-composition.test.ts`
+**已经是这么写的**，照抄即可。我写过一版 `composeTestProviderRealtimeRuntime`，零 `as` 强转、
+`tsc` 干净。
+
+**没把那对孪生合成一个中立导出**：它是 RFC-349「provider-selected composition」有意留的形状，
+而且 `rfc359-w12-realtime-composition` 正是钉它的；要不要合并是那条线自己的决定，
+**不该作为一次测试迁移的副作用**（生产调用点也只有 2+2 个，真要合很便宜）。
+
+### 第二层（真正的拦路石）
+
+WS 用例不是只要一个实时运行时——它们**自建 `Bun.serve`**，把 `ws.tryUpgrade` 和
+**`app.fetch` 的 HTTP 回落**接在一起，而那个 `app` 来自 **`createApp`，也就是 SQLite 根**。
+换句话说：解掉实时运行时之后，**应用本身仍是单引擎的**。
+
+所以这一簇要的不是「再补一个 helper」，而是一个 **WS 版作用域**——
+形如 `describeEachProviderHttpApplication`，但额外交出「活的 server + 已接好的 ws 适配器」，
+应用取自 `createProviderHttpApplication`（两个引擎都装得起来）。
+
+**估算**：写这个作用域一次，11 个文件顺次迁；不写它，每个文件都要自己把
+`Bun.serve` + 适配器 + provider 应用重新拼一遍——正是共用作用域当初要消灭的那 18 份拷贝。
+**所以下一刀应该是「写 WS 作用域」，不是「逐个迁 WS 文件」。**
+
+我把探路的两处改动都 revert 了（helper 没有消费者就是死代码，与本 RFC 对「补了口子必须有用例钉住」
+的要求同一把尺）。
