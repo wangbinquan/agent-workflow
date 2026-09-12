@@ -11,10 +11,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archivePortArtifacts } from '../src/services/portArtifacts'
-import { createApp } from '../src/server'
+import type { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -22,7 +22,6 @@ import {
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HEADERS = { Authorization: 'Bearer tok' }
 
 interface Harness<Database extends ProviderNeutralDatabase = DbClient> {
@@ -35,16 +34,15 @@ interface Harness<Database extends ProviderNeutralDatabase = DbClient> {
   cleanup: () => void
 }
 
-function buildHarness(): Promise<Harness>
-function buildHarness(provider: ProviderHarnessContext): Promise<Harness<ProviderNeutralDatabase>>
+// RFC-359 AC-6 —— 无参重载（自建 SQLite 内存库）的三个调用方都接到了共用注册器上，
+// 那条路随之退役：库总是由 harness 传进来。
 async function buildHarness(
-  provider?: ProviderHarnessContext,
+  provider: ProviderHarnessContext,
 ): Promise<Harness<ProviderNeutralDatabase>> {
-  const nativeDb = provider === undefined ? createInMemoryDb(MIGRATIONS) : undefined
-  const db = provider?.db ?? nativeDb!
+  const db = provider.db
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc193-api-'))
   const cleanup = () => rmSync(appHome, { recursive: true, force: true })
-  provider?.retainCleanup(cleanup)
+  provider.retainCleanup(cleanup)
   const worktree = join(appHome, 'wt')
   mkdirSync(worktree, { recursive: true })
 
@@ -82,16 +80,7 @@ async function buildHarness(
     finishedAt: Date.now(),
   })
 
-  const app =
-    nativeDb !== undefined
-      ? createApp({
-          token: 'tok',
-          configPath: '',
-          opencodeVersion: '1.14.25',
-          dbVersion: 1,
-          db: nativeDb,
-        })
-      : await provider!.createApp(appHome)
+  const app = await provider.createApp(appHome)
   return {
     db,
     appHome,
@@ -133,114 +122,171 @@ async function seedArchivedPort(
   })
 }
 
-describeEachProvider('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', (harness) => {
-  describe('fixture lifetime', () => {
-    let h: Harness<ProviderNeutralDatabase>
-    let application: ProviderHttpApplication | undefined
-    let cleanup: (() => void) | undefined
-    let previousHome: string | undefined
-    let homeAssigned = false
-    beforeEach(async () => {
-      h = await buildHarness({
-        db: harness.db,
-        retainCleanup(value) {
-          cleanup = value
-        },
-        async createApp(appHome) {
-          previousHome = process.env.AGENT_WORKFLOW_HOME
-          process.env.AGENT_WORKFLOW_HOME = appHome
-          homeAssigned = true
-          application = await createProviderHttpApplication(harness, {
-            token: 'tok',
-            configPath: join(appHome, 'config.json'),
-            opencodeVersion: '1.14.25',
-            dbVersion: 1,
-            appHome,
-          })
-          return application.app
-        },
+// RFC-359 AC-6 —— 这段夹具生命周期（建应用 / 存还 `AGENT_WORKFLOW_HOME` / 先 dispose 再清理）
+// 原样抄了**三份**。提成一个注册器，三份 provider 块与三份 native 块一起接到同一条路上。
+function describeProviderPortArtifacts(
+  register: (getHarness: () => Harness<ProviderNeutralDatabase>) => void,
+): void {
+  describeEachProvider('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', (harness) => {
+    describe('fixture lifetime', () => {
+      let h: Harness<ProviderNeutralDatabase>
+      let application: ProviderHttpApplication | undefined
+      let cleanup: (() => void) | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      beforeEach(async () => {
+        h = await buildHarness({
+          db: harness.db,
+          retainCleanup(value) {
+            cleanup = value
+          },
+          async createApp(appHome) {
+            previousHome = process.env.AGENT_WORKFLOW_HOME
+            process.env.AGENT_WORKFLOW_HOME = appHome
+            homeAssigned = true
+            application = await createProviderHttpApplication(harness, {
+              token: 'tok',
+              configPath: join(appHome, 'config.json'),
+              opencodeVersion: '1.14.25',
+              dbVersion: 1,
+              appHome,
+            })
+            return application.app
+          },
+        })
       })
-    })
-    afterEach(async () => {
-      try {
-        await application?.dispose()
-      } finally {
-        application = undefined
+      afterEach(async () => {
         try {
-          cleanup?.()
+          await application?.dispose()
         } finally {
-          cleanup = undefined
-          if (homeAssigned) {
-            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          application = undefined
+          try {
+            cleanup?.()
+          } finally {
+            cleanup = undefined
+            if (homeAssigned) {
+              if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+              else process.env.AGENT_WORKFLOW_HOME = previousHome
+            }
+            homeAssigned = false
           }
-          homeAssigned = false
         }
-      }
+      })
+      register(() => h)
     })
+  })
+}
 
-    test('metadata form lists items with size/truncated/source', async () => {
-      await seedArchivedPort(h, 'doc', { 'a.md': '# A' })
-      const res = await h.app.fetch(
-        new Request(`http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/doc`, {
+describeProviderPortArtifacts((getHarness) => {
+  test('metadata form lists items with size/truncated/source', async () => {
+    await seedArchivedPort(getHarness(), 'doc', { 'a.md': '# A' })
+    const res = await getHarness().app.fetch(
+      new Request(
+        `http://localhost/api/tasks/${getHarness().taskId}/port-artifacts/${getHarness().runId}/doc`,
+        {
           headers: HEADERS,
-        }),
-      )
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as { items: Array<Record<string, unknown>> }
-      expect(body.items).toHaveLength(1)
-      expect(body.items[0]).toMatchObject({ path: 'a.md', truncated: false, source: 'archive' })
-      expect(body.items[0]!.size).toBe(Buffer.byteLength('# A'))
-    })
+        },
+      ),
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { items: Array<Record<string, unknown>> }
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0]).toMatchObject({ path: 'a.md', truncated: false, source: 'archive' })
+    expect(body.items[0]!.size).toBe(Buffer.byteLength('# A'))
+  })
 
-    test('item form returns bytes with markdown MIME; worktree can vanish (GC immunity)', async () => {
-      await seedArchivedPort(h, 'doc', { 'a.md': '# GC immune' })
-      rmSync(h.worktree, { recursive: true, force: true }) // simulate worktree GC
-      const res = await h.app.fetch(
-        new Request(`http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/doc?item=0`, {
+  test('item form returns bytes with markdown MIME; worktree can vanish (GC immunity)', async () => {
+    await seedArchivedPort(getHarness(), 'doc', { 'a.md': '# GC immune' })
+    rmSync(getHarness().worktree, { recursive: true, force: true }) // simulate worktree GC
+    const res = await getHarness().app.fetch(
+      new Request(
+        `http://localhost/api/tasks/${getHarness().taskId}/port-artifacts/${getHarness().runId}/doc?item=0`,
+        {
           headers: HEADERS,
-        }),
-      )
-      expect(res.status).toBe(200)
-      expect(res.headers.get('content-type')).toContain('text/markdown')
-      expect(await res.text()).toBe('# GC immune')
-    })
+        },
+      ),
+    )
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/markdown')
+    expect(await res.text()).toBe('# GC immune')
+  })
 
-    test('binary artifact round-trips exact bytes with image MIME', async () => {
-      const bin = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe])
-      await seedArchivedPort(h, 'img', { 'shot.png': bin })
-      const res = await h.app.fetch(
-        new Request(`http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/img?item=0`, {
+  test('binary artifact round-trips exact bytes with image MIME', async () => {
+    const bin = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe])
+    await seedArchivedPort(getHarness(), 'img', { 'shot.png': bin })
+    const res = await getHarness().app.fetch(
+      new Request(
+        `http://localhost/api/tasks/${getHarness().taskId}/port-artifacts/${getHarness().runId}/img?item=0`,
+        {
           headers: HEADERS,
-        }),
-      )
-      expect(res.status).toBe(200)
-      expect(res.headers.get('content-type')).toBe('image/png')
-      expect(Buffer.compare(Buffer.from(await res.arrayBuffer()), bin)).toBe(0)
-    })
+        },
+      ),
+    )
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(Buffer.compare(Buffer.from(await res.arrayBuffer()), bin)).toBe(0)
   })
 })
 
-describe('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', () => {
-  let h: Harness
-  let prevHome: string | undefined
-  beforeEach(async () => {
-    h = await buildHarness()
-    // 路由经 Paths.root（AGENT_WORKFLOW_HOME 惰性 getter）定位归档根。
-    prevHome = process.env.AGENT_WORKFLOW_HOME
-    process.env.AGENT_WORKFLOW_HOME = h.appHome
-  })
-  afterEach(() => {
-    if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = prevHome
-    h.cleanup()
-  })
-
-  test('portName percent-encode round-trip (hostile name)', async () => {
-    await seedArchivedPort(h, '../evil', { 'a.md': 'safe' })
-    const res = await h.app.fetch(
+describeProviderPortArtifacts((getHarness) => {
+  test('legacy row (no archive) falls back to worktree; both-missing → 404', async () => {
+    writeFileSync(join(getHarness().worktree, 'legacy.md'), 'FROM WORKTREE')
+    await getHarness().db.insert(nodeRunOutputs).values({
+      nodeRunId: getHarness().runId,
+      portName: 'legacy',
+      content: 'legacy.md',
+      kind: 'path<md>',
+      archiveJson: null,
+    })
+    const ok = await getHarness().app.fetch(
       new Request(
-        `http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/${encodeURIComponent('../evil')}?item=0`,
+        `http://localhost/api/tasks/${getHarness().taskId}/port-artifacts/${getHarness().runId}/legacy?item=0`,
+        {
+          headers: HEADERS,
+        },
+      ),
+    )
+    expect(ok.status).toBe(200)
+    expect(await ok.text()).toBe('FROM WORKTREE')
+
+    rmSync(join(getHarness().worktree, 'legacy.md'))
+    const miss = await getHarness().app.fetch(
+      new Request(
+        `http://localhost/api/tasks/${getHarness().taskId}/port-artifacts/${getHarness().runId}/legacy?item=0`,
+        {
+          headers: HEADERS,
+        },
+      ),
+    )
+    expect(miss.status).toBe(404)
+  })
+})
+
+describeProviderPortArtifacts((getHarness) => {
+  test('truncated artifact carries the truncation response header', async () => {
+    const { WORKTREE_FILE_MAX_BYTES } = await import('@agent-workflow/shared')
+    await seedArchivedPort(getHarness(), 'big', {
+      'big.md': 'x'.repeat(WORKTREE_FILE_MAX_BYTES + 5),
+    })
+    const res = await getHarness().app.fetch(
+      new Request(
+        `http://localhost/api/tasks/${getHarness().taskId}/port-artifacts/${getHarness().runId}/big?item=0`,
+        {
+          headers: HEADERS,
+        },
+      ),
+    )
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-aw-artifact-truncated')).toBe('1')
+  })
+})
+
+describeProviderPortArtifacts((getHarness) => {
+  test('portName percent-encode round-trip (hostile name)', async () => {
+    await seedArchivedPort(getHarness(), '../evil', { 'a.md': 'safe' })
+    const res = await getHarness().app.fetch(
+      new Request(
+        `http://localhost/api/tasks/${getHarness().taskId}/port-artifacts/${getHarness().runId}/${encodeURIComponent('../evil')}?item=0`,
         { headers: HEADERS },
       ),
     )
@@ -249,207 +295,48 @@ describe('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', () => {
   })
 })
 
-describeEachProvider('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', (harness) => {
-  describe('fixture lifetime', () => {
-    let h: Harness<ProviderNeutralDatabase>
-    let application: ProviderHttpApplication | undefined
-    let cleanup: (() => void) | undefined
-    let previousHome: string | undefined
-    let homeAssigned = false
-    beforeEach(async () => {
-      h = await buildHarness({
-        db: harness.db,
-        retainCleanup(value) {
-          cleanup = value
-        },
-        async createApp(appHome) {
-          previousHome = process.env.AGENT_WORKFLOW_HOME
-          process.env.AGENT_WORKFLOW_HOME = appHome
-          homeAssigned = true
-          application = await createProviderHttpApplication(harness, {
-            token: 'tok',
-            configPath: join(appHome, 'config.json'),
-            opencodeVersion: '1.14.25',
-            dbVersion: 1,
-            appHome,
-          })
-          return application.app
-        },
-      })
-    })
-    afterEach(async () => {
-      try {
-        await application?.dispose()
-      } finally {
-        application = undefined
-        try {
-          cleanup?.()
-        } finally {
-          cleanup = undefined
-          if (homeAssigned) {
-            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-            else process.env.AGENT_WORKFLOW_HOME = previousHome
-          }
-          homeAssigned = false
-        }
-      }
-    })
-
-    test('legacy row (no archive) falls back to worktree; both-missing → 404', async () => {
-      writeFileSync(join(h.worktree, 'legacy.md'), 'FROM WORKTREE')
-      await h.db.insert(nodeRunOutputs).values({
-        nodeRunId: h.runId,
-        portName: 'legacy',
-        content: 'legacy.md',
-        kind: 'path<md>',
-        archiveJson: null,
-      })
-      const ok = await h.app.fetch(
-        new Request(
-          `http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/legacy?item=0`,
-          {
-            headers: HEADERS,
-          },
-        ),
-      )
-      expect(ok.status).toBe(200)
-      expect(await ok.text()).toBe('FROM WORKTREE')
-
-      rmSync(join(h.worktree, 'legacy.md'))
-      const miss = await h.app.fetch(
-        new Request(
-          `http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/legacy?item=0`,
-          {
-            headers: HEADERS,
-          },
-        ),
-      )
-      expect(miss.status).toBe(404)
-    })
-  })
-})
-
-describe('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', () => {
-  let h: Harness
-  let prevHome: string | undefined
-  beforeEach(async () => {
-    h = await buildHarness()
-    // 路由经 Paths.root（AGENT_WORKFLOW_HOME 惰性 getter）定位归档根。
-    prevHome = process.env.AGENT_WORKFLOW_HOME
-    process.env.AGENT_WORKFLOW_HOME = h.appHome
-  })
-  afterEach(() => {
-    if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = prevHome
-    h.cleanup()
-  })
-
+describeProviderPortArtifacts((getHarness) => {
   test('cross-task nodeRunId → 404 (same shape as not-found)', async () => {
-    await seedArchivedPort(h, 'doc', { 'a.md': 'x' })
+    await seedArchivedPort(getHarness(), 'doc', { 'a.md': 'x' })
     const otherTask = ulid()
     const workflowId = ulid()
-    await h.db.insert(workflows).values({
-      id: workflowId,
-      name: 'wf2',
-      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-    })
-    await h.db.insert(tasks).values({
-      name: 'other',
-      id: otherTask,
-      workflowId,
-      workflowSnapshot: '{}',
-      repoPath: '/repo',
-      worktreePath: h.worktree,
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + otherTask,
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    const res = await h.app.fetch(
-      new Request(`http://localhost/api/tasks/${otherTask}/port-artifacts/${h.runId}/doc?item=0`, {
-        headers: HEADERS,
-      }),
+    await getHarness()
+      .db.insert(workflows)
+      .values({
+        id: workflowId,
+        name: 'wf2',
+        definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+      })
+    await getHarness()
+      .db.insert(tasks)
+      .values({
+        name: 'other',
+        id: otherTask,
+        workflowId,
+        workflowSnapshot: '{}',
+        repoPath: '/repo',
+        worktreePath: getHarness().worktree,
+        baseBranch: 'main',
+        branch: 'agent-workflow/' + otherTask,
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+    const res = await getHarness().app.fetch(
+      new Request(
+        `http://localhost/api/tasks/${otherTask}/port-artifacts/${getHarness().runId}/doc?item=0`,
+        {
+          headers: HEADERS,
+        },
+      ),
     )
     expect(res.status).toBe(404)
   })
 })
 
-describeEachProvider('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', (harness) => {
-  describe('fixture lifetime', () => {
-    let h: Harness<ProviderNeutralDatabase>
-    let application: ProviderHttpApplication | undefined
-    let cleanup: (() => void) | undefined
-    let previousHome: string | undefined
-    let homeAssigned = false
-    beforeEach(async () => {
-      h = await buildHarness({
-        db: harness.db,
-        retainCleanup(value) {
-          cleanup = value
-        },
-        async createApp(appHome) {
-          previousHome = process.env.AGENT_WORKFLOW_HOME
-          process.env.AGENT_WORKFLOW_HOME = appHome
-          homeAssigned = true
-          application = await createProviderHttpApplication(harness, {
-            token: 'tok',
-            configPath: join(appHome, 'config.json'),
-            opencodeVersion: '1.14.25',
-            dbVersion: 1,
-            appHome,
-          })
-          return application.app
-        },
-      })
-    })
-    afterEach(async () => {
-      try {
-        await application?.dispose()
-      } finally {
-        application = undefined
-        try {
-          cleanup?.()
-        } finally {
-          cleanup = undefined
-          if (homeAssigned) {
-            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-            else process.env.AGENT_WORKFLOW_HOME = previousHome
-          }
-          homeAssigned = false
-        }
-      }
-    })
-
-    test('truncated artifact carries the truncation response header', async () => {
-      const { WORKTREE_FILE_MAX_BYTES } = await import('@agent-workflow/shared')
-      await seedArchivedPort(h, 'big', { 'big.md': 'x'.repeat(WORKTREE_FILE_MAX_BYTES + 5) })
-      const res = await h.app.fetch(
-        new Request(`http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/big?item=0`, {
-          headers: HEADERS,
-        }),
-      )
-      expect(res.status).toBe(200)
-      expect(res.headers.get('x-aw-artifact-truncated')).toBe('1')
-    })
-  })
-})
-
-describe('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', () => {
-  let h: Harness
-  let prevHome: string | undefined
-  beforeEach(async () => {
-    h = await buildHarness()
-    // 路由经 Paths.root（AGENT_WORKFLOW_HOME 惰性 getter）定位归档根。
-    prevHome = process.env.AGENT_WORKFLOW_HOME
-    process.env.AGENT_WORKFLOW_HOME = h.appHome
-  })
-  afterEach(() => {
-    if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = prevHome
-    h.cleanup()
-  })
-
+// 纯源码锁：读 `routes/port-artifacts.ts` 做文本断言，一行 DB 都不碰——不套双引擎夹具，
+// 否则白开一个 PostgreSQL 库读源码。
+describe('RFC-193 route source lock', () => {
   test('route delegates visibility and artifact rows to the provider read model', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes', 'port-artifacts.ts'),

@@ -281,7 +281,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc188-isolated-agent-run.test.ts: 4',
   'rfc189-wg-round.test.ts: 1',
   'rfc193-force-include.test.ts: 1',
-  'rfc193-port-artifacts-api.test.ts: 1',
   'rfc193-port-artifacts.test.ts: 1',
   'rfc193-wrapper-review.test.ts: 1',
   'rfc199-start-task-workflow-race.test.ts: 1',

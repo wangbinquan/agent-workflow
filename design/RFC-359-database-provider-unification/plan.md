@@ -6847,3 +6847,20 @@ describe 里，跑出 `[postgresql] > application lifetime > … > [postgresql] 
 `rfc164-workgroups` 同批：路由 ACL 那个 describe 接上作用域（另外两个是服务层的
 `describeEachProvider`，本来就双引擎；`CreateWorkgroupSchema shape` 是纯 schema 断言，保持普通
 `describe`）。文件里还剩一处单引擎调用点，条目不减。
+
+
+## 5az. `rfc193-port-artifacts-api`：一份夹具抄了**六份**（账本 553 → 552，净删 100+ 行）
+
+这个文件是「抄拷贝」的极端样本：同一段 45 行的夹具生命周期（建应用 / 存还
+`AGENT_WORKFLOW_HOME` / 先 dispose 再清理）**三份 provider 版 + 三份 native 版**，一共六份，
+彼此只差里面的 test。
+
+处置是先提成一个注册器 `describeProviderPortArtifacts(register)`，六处一起接上去；
+接完之后 `buildHarness` 的**无参重载**（自建 SQLite 内存库 + `createApp`）一个调用方都没有了，
+连同 `nativeDb` 三元分支一起删除。净删 100+ 行。
+
+另有一个 describe 是**纯源码锁**（读 `routes/port-artifacts.ts` 做文本断言，一行 DB 都不碰），
+不套双引擎夹具，保持普通 `describe`——否则白开一个 PostgreSQL 库读源码。
+
+**规律**：看到「同一段夹具在一个文件里出现三次以上」，先提注册器再迁，比逐份改省一个数量级，
+而且提完之后 native 那条路往往就自己空了——`删除优于 deprecate` 在这里是自动发生的。
