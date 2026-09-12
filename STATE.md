@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 562**，又照出三条 PG 缺陷）
+> ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 558**，又照出三条 PG 缺陷）
 >
 > 接着下面那段做。**新发现的三条产品缺陷，全部是把单引擎用例改成双引擎当天红出来的**：
 >
@@ -42,15 +42,29 @@
 > `describeEachProvider` 与 `createApp` 同处一个文件，先问「旧半测的用例新半有没有」。
 > 暂缓 `plugins-http`（两边种子一同步一异步，要先统一）。
 >
+> ### 已按正解动手：夹具交出「应用自己装配好的那一份」（plan §5ar）
+>
+> `ProviderHttpApplication` 上加了 `taskExecutionReadModels` 与 `collaborationContext`——
+> 两个 provider 本来就装配了它们，**生产输入类型一个只服务测试的字段都没加**。
+> `rfc340-review-access` 是第一个消费者（此前在外面重建一份再从 `AppDeps` 塞回去）。
+> W29 当场红三条，处置是把追加项登记成显式名单 `APPENDED_EXPOSURES`，
+> **以后再加一项必须登记**——守卫仍挡得住「真的改了装配」。
+>
 > ### 下一刀
 >
-> 剩 ~60 个文件。最大的一块此前记成「PG 侧没有测试接缝」——**那个框架是错的**（plan §5aq）：
+> 剩 ~58 个文件。最大的一块此前记成「PG 侧没有测试接缝」——**那个框架是错的**（plan §5aq）：
 > 用例传 `taskExecutionReadModels` 时建的是 `createTaskExecutionReadModels(db)`，也就是
 > **真**读模型；它要的不是注入假件，而是「把应用自己会建的那个也给我一份」。正解是让共用
 > HTTP 夹具**暴露装配结果**（`ProviderHttpApplication` 上已有 `secretBox` /
 > `processConcurrencyScope` / `repositoryWorkspaceStore` / `taskExecution` 四个先例），
 > 而不是给生产输入类型加 13 个只服务测试的可选字段、还两个 provider 各一份。
+> 按这个思路，下一个要交出来的是 **dispatcher / schedulerDriver**：`rfc327` 的 MCP 那组、
+> `rfc247-mcp-server`、`rfc326-mcp-review-tools` 都卡在这里（它们自建
+> `composeTaskExecutionTestRuntime(db)` 去拿 `schedulerDriver` 拼 route operation dispatcher）。
 > 其次是 `helpers/taskRecoveryOperations` 这层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）。
+>
+> **`rfc327` 已按「诚实地留一半」处置**：两组 REST 接上双引擎，MCP 那组明写理由留在单引擎——
+> 硬塞只会得到「看起来双跑、实际仍只测 SQLite」的用例。账本条目因此不减；账本是手段不是目的。
 > 另记：**PG 备份路径今天零覆盖**且不能靠迁 `backup.test.ts` 来补，见 `docs/audit-backlog.md`。
 
 > ## 📌 RFC-359 本轮进展（2026-09-12 上半场，AC-6 账本 **625 → 581**，含三条已修 PG 缺陷）

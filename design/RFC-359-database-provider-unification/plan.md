@@ -6700,3 +6700,28 @@ createApp({ …, taskExecutionReadModels })
 
 `rfc326-mcp-review-tools` / `rfc327-memory-filter-and-facets` / `rfc247-mcp-server` 用的是同一
 组合（读模型 + 协作上下文 + 各自的 `appHome`），现在都不再卡在接缝上了。
+
+
+## 5as. `rfc327-memory-filter-and-facets`：两组接上双引擎，第三组**诚实地**留在单引擎
+
+三个 describe 里两个（REST 的多标签过滤、facets 聚合）接上了共用作用域——模块级 `let h` +
+模块级钩子整体上提进注册面（pre-flight 的 `MODULE-LEVEL-HARNESS` 那一类）。11 条 → 22 条。
+
+**第三组（MCP `resource_read`）留在单引擎，这是有意的**：它在夹具外面自建
+`composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有，吃 `DbClient`），为的是拿
+`schedulerDriver` 去拼一个 route operation dispatcher。§5ar 交出来的是读模型与协作上下文，
+**还没交出 dispatcher / schedulerDriver**。
+
+硬把它塞进双引擎只会得到一个「看起来双跑、实际仍只测 SQLite」的用例——那正是本 RFC 一路在
+消灭的形状。文件里写清了理由与解锁条件。
+
+**因此这个文件的账本条目不减**（仍有一处 `createInMemoryDb`）。账本是手段不是目的：
+这一刀换来的是 REST 两组真的在 PostgreSQL 上跑起来了。
+
+### 拆分时自己踩了一次 MODULE-LEVEL-HARNESS
+
+把单引擎那组的 `let native` + `beforeEach` 顺手放在了模块级 ⇒ 模块级钩子对**全文件**生效 ⇒
+双引擎那半在 PostgreSQL 轮次里也去建一个 SQLite 应用，当场
+`no such table: agent_workflow.users`，9 条红 + 18 个 unhandled error。
+钩子挪进它自己的 describe 即好。已进 `docs/dev-gotchas.md`——那条判据此前只防「迁移时漏了
+上提」，现在同样防「**拆分时新引入**一个模块级钩子」。

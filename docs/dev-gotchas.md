@@ -6452,3 +6452,20 @@ DrizzleQueryError                 // 没有 code / constraint
 
 **看错误形态的手法**：写一个临时 `describeEachProvider` 用例故意撞一次约束，把
 `error.cause` 链逐层打出 `{ctor, code, errno, constraint, table, message}`——比猜字段快得多。
+
+
+## 把一个文件**拆成**「双引擎那几组 + 单引擎这一组」时，单引擎的钩子必须在它自己的 describe 里
+
+2026-09-12 实撞：`rfc327-memory-filter-and-facets` 有一组用例暂时接不上双引擎（它在夹具外面
+自建 `composeTaskExecutionTestRuntime(db)`，那是 bun:sqlite 专有的），于是把那组留成单引擎。
+它的 `let native` + `beforeEach(() => nativeHarness())` 顺手放在了**模块级**——
+
+结果：模块级钩子对**文件里每一条用例**都跑一遍，于是双引擎那半在 **PostgreSQL 轮次里也去建
+一个 SQLite 应用**，`composeApplicationEventCenter` 当场
+`SQLiteError: no such table: agent_workflow.users`（schema provider 已经是 PG 的了）。
+9 条红 + 18 个 unhandled error。
+
+**规律**：`bun` 的 `beforeEach` 作用域就是它所在的 describe；写在模块级 = 全文件。
+一个文件里**混着两种引擎形态**时，每一种的夹具钩子都必须关在自己的 describe 里。
+这与 pre-flight 的 `MODULE-LEVEL-HARNESS` 是同一条判据——只是那条防的是「迁移时漏了上提」，
+这条防的是「**拆分时新引入**一个模块级钩子」。
