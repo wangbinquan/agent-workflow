@@ -275,7 +275,9 @@ export function intentGraphValidationForTest(db: DbClient): IntentWorkflowGraphV
   return Object.freeze(graph)
 }
 
-export function intentTurnRuntimeResolverForTest(db: DbClient) {
+// RFC-359 AC-6：这个形参的 `DbClient` 纯属未收敛——它只把库转手给
+// `intentPersistenceForTest`，而那个早就是中立面了。收成中立面，调用方即可用 harness.db。
+export function intentTurnRuntimeResolverForTest(db: ProviderNeutralDatabase) {
   return composeIntentTurnRuntimeResolver(intentPersistenceForTest(db))
 }
 

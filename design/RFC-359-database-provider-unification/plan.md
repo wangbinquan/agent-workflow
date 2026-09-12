@@ -7430,3 +7430,90 @@ sweep 跑到 W29 那一批时，源码已经是新的、而 W29 的摘要我还�
 
 （顺带：本文件仍是那 18 份手抄 lifetime 之一，没有换成
 `describeEachProviderHttpApplication`——那是独立的一刀，与本轮账本无关。）
+
+## 5bq. 同一个形状连撞三次：「provider 注册面旁边那个只服务一两条用例的 native 构造器」
+
+`repos`(§5bp) / `rfc310-digital-employee-writer-cutover` / `rfc234-config-intent-runtime`
+三个文件的账本残留**完全同形**，值得单独立一条判据：
+
+| 文件 | 已双引擎的部分 | 残留 | 残留服务几条用例 |
+| --- | --- | --- | --- |
+| `repos` | 手抄的 application lifetime | `registerNativeApplication` | **1**（401 门禁，不碰库） |
+| `rfc310-…-writer-cutover` | `describeEachProvider` 服务层块 | 文件下半段一个普通 `describe` | **1**（HTTP 拒绝 + 排空报告） |
+| `rfc234-config-intent-runtime` | 手抄的 provider 注册面 | 模块级 `makeApp()` | **1**（`resolveIntentTurnConfig`） |
+
+**判据**：看到「同一文件里已迁的注册面 + 一个单引擎构造器」并存，**先数那个构造器还服务几条用例**。
+三次都是 **1 条**，并进去就能把整个构造器连同它的建库/建应用一起删掉——
+比给它补一套双引擎装配便宜一个数量级，也不会留下「两套装配」的长期债。
+
+反过来说：**别默认那半是「还没迁完的一半」**。前几波确实有那种（§5aa 的「新半 + 旧半并存」），
+但到这个阶段，剩下的多半只是**没人回头收的尾巴**。
+
+### 顺带又验证一次「从 helper 那头拆」
+
+`rfc234-config-intent-runtime` 迁的时候被
+`intentTurnRuntimeResolverForTest(db: DbClient)` 挡了一下——而它的函数体只是把库转手给
+`intentPersistenceForTest`，**那个早就是中立面了**。形参的 `DbClient` 纯属未收敛，
+收一下就通。**判据**：被 helper 的类型挡住时，先读它的函数体到底用没用到 bun:sqlite 专有面；
+没用到就直接收形参，不要在调用方 `as` 一下绕过去。
+
+### `rfc310` 顺带清掉 4 个同步终结符
+
+那 4 处是 `await db.insert(...).values({...}).run()`——**awaited 的 `.run()`**，
+在中立面上能过类型也能跑，所以一直没被发现。去掉 `.run()` 即可（`await` 本身就是终结）。
+**它们能活下来是因为守卫只扫已迁文件**（§5bc）：这个文件的 HTTP 那半迁进来之后就会被扫到，
+所以顺手清掉是必须的，不是可选的。
+
+### 账本 540 → 537
+
+## 5br. 迁 `rfc234-intent-routes` 推红了一次 CI —— 而那是一条**真的 PG-only 产品缺陷**
+
+`c8c944bed` 推上去，ubuntu shard 6/8 红。日志里**没有任何 `(fail)`**，只有：
+
+```
+# Unhandled error between tests
+PostgresError: Connection closed
+ code: "ERR_POSTGRES_CONNECTION_CLOSED"
+```
+
+**这种红看起来像绿的**：bun 把它算作 `1 error`，计数行照样 `N pass / 0 fail`，只把退出码变成 1。
+（本仓已经吃过同一个亏——`test-suite-policy` 里那段注释记的就是它。）
+
+### 机制
+
+`dispatchIntentTurn` 的 **13 个调用点全是 fire-and-forget**（3 个在 dispatcher 自己、
+10 个在 `intentSessionRoutes` 的 `void fireTurn(...)`）：应答先回，回合在后台跑。
+它**有** try/catch/finally，但——
+
+**它的 catch 与 finally 里也在写库**（`settleReservedIntentTurnStartFailure` /
+`activateIntentWorkingSetChange`）。连接池一关，**处理块自己就抛**，异常于是**越过它自己的
+catch** 逃出来，`void` 掉之后就是一条进程级 unhandled rejection。
+
+PostgreSQL 上这条路径真实可达：回合在后台跑，进程（或测试作用域）收尾时把池关掉，
+在飞的那笔查询直接拿到 `ERR_POSTGRES_CONNECTION_CLOSED`。
+**SQLite 是同步单写者，没有「池关了但活还在跑」这个窗口**，所以此前一直看不见。
+
+### 修法：把网织在**被调用方**，不是 13 个调用点上
+
+第一版我给 `fireTurn` 加 `.catch()`——能修，但要给 `intentSessionRoutes` 新引一个 logger，
+于是三份架构账本涨了（`cross-context-observed-imports` +1 / `architecture-exceptions` +1 /
+`module-symbol-owners` +2），而**涨账本要一次性 `allowGrowth` 并点名 RFC**。
+
+第二版把外层 try/catch 放进 `dispatchIntentTurn` **自己**：dispatcher 本来就有 `log`，
+**零新符号、零新 import、三份账本一个没涨**，而且 13 个调用点一次全覆盖——
+以后再多一个 `void dispatchIntentTurn(...)` 也自动被兜住。
+
+**规律**：**一个「所有调用点都 fire-and-forget」的函数，保证不 reject 是它自己的责任，
+不是调用点的。** 把网织在调用点上，既漏（下一个调用点忘了加）又贵（常常要给调用方新引依赖）。
+顺带一条：**先看改动会不会顶高架构账本**——顶高了就说明这个修法在「往外摊」，多半有更内聚的位置。
+
+### 已变异验证
+
+抽掉那层外层 catch，`rfc234-intent-routes` 立刻回到 `EXIT=1 / unhandled=1`（而
+`28 pass / 0 fail` 不变——再次说明**不能只看计数行**）；装回去 3/3 全绿、`EXIT=0`。
+
+### 这是本 session 第 4 条「靠迁移照出来的 PG 缺陷」
+
+前三条见 STATE.md 上一段（工作树预检空操作 / 房间补偿无 catch / 同名并发 409 退化成 500）。
+**四条里有两条是同一个形状：fire-and-forget 少一层网。** 值得单独做一次全仓扫查
+（`void <expr>(...)` 且无 `.catch`），已记进 `docs/audit-backlog.md`。

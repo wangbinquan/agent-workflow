@@ -62,127 +62,153 @@ export async function dispatchIntentTurn(
   actor: Actor,
   reservation: ReservedIntentTurn,
 ): Promise<void> {
-  const EXECUTION_BROADCAST_THROTTLE_MS = 500
-  let lastExecutionBroadcastAt = 0
-  let pendingExecution: { sessionId: string; turnId: string; eventSeq: number } | undefined
-  let executionTimer: ReturnType<typeof setTimeout> | undefined
-  const flushExecution = (): void => {
-    if (pendingExecution === undefined) return
-    const event = pendingExecution
-    pendingExecution = undefined
-    lastExecutionBroadcastAt = Date.now()
-    deps.events.publish({
-      type: 'intent.turn.execution.updated',
-      sessionId: event.sessionId,
-      turnId: event.turnId,
-      eventSeq: event.eventSeq,
-      ownerUserId: actor.user.id,
-    })
-  }
-  const queueExecution = (event: { sessionId: string; turnId: string; eventSeq: number }): void => {
-    if (pendingExecution === undefined || event.eventSeq >= pendingExecution.eventSeq) {
-      pendingExecution = event
-    }
-    const remaining = EXECUTION_BROADCAST_THROTTLE_MS - (Date.now() - lastExecutionBroadcastAt)
-    if (remaining <= 0) {
-      if (executionTimer !== undefined) clearTimeout(executionTimer)
-      executionTimer = undefined
-      flushExecution()
-      return
-    }
-    if (executionTimer !== undefined) return
-    executionTimer = setTimeout(() => {
-      executionTimer = undefined
-      flushExecution()
-    }, remaining)
-    executionTimer.unref?.()
-  }
-
-  let outcome: Awaited<ReturnType<typeof runIntentTurn>> | undefined
+  // RFC-359 —— 这个函数的**全部** 13 个调用点都是 fire-and-forget（应答先回、回合在后台跑），
+  // 所以它必须自己保证**永不 reject**。
+  //
+  // 下面那层 try/catch/finally 是原有的，但**它的 catch 与 finally 里也在写库**
+  // （`settleReservedIntentTurnStartFailure` / `activateIntentWorkingSetChange`）：连接池一关，
+  // 处理块自己就抛，异常于是**越过**它逃出来，`void` 掉之后就是一条进程级 unhandled rejection。
+  //
+  // PostgreSQL 上这条路径真实可达——回合在后台跑、进程（或测试作用域）收尾时把池关掉，
+  // 在飞的查询拿到 `ERR_POSTGRES_CONNECTION_CLOSED`（2026-09-12 CI 实撞 ubuntu shard 6/8）。
+  // 那种红**看起来像绿的**：bun 印 `# Unhandled error between tests`，计数行照样
+  // `N pass / 0 fail`，只把退出码变成 1。SQLite 是同步单写者，没有「池关了但活还在跑」这个窗口。
+  //
+  // 兜住并记一条 warn 就够：该回合要么已被下面的 catch 结算过，要么本进程正在收尾、
+  // 下次启动由恢复路径重新认领。
   try {
-    const config = await resolveIntentTurnConfig(deps.runtimeResolver, deps.configSnapshot)
-    outcome = await runIntentTurn(
-      {
-        persistence: deps.persistence,
-        appHome: deps.appHome,
-        config,
-        resourceCatalog: deps.resourceCatalogFor(actor),
-        dumpAuxiliary: deps.dumpAuxiliary,
-        graphValidation: deps.graphValidation,
-        onSessionEvent: (event) => {
-          if (
-            event.type === 'intent.turn.execution.updated' &&
-            event.turnId !== undefined &&
-            event.eventSeq !== undefined
-          ) {
-            queueExecution({
-              sessionId: event.sessionId,
-              turnId: event.turnId,
-              eventSeq: event.eventSeq,
-            })
-            return
-          }
-          if (event.type === 'intent.turn.started' || event.type === 'intent.turn.finished') {
-            if (event.type === 'intent.turn.finished') flushExecution()
-            deps.events.publish({
-              type: event.type,
-              sessionId: event.sessionId,
-              turnId: event.turnId ?? '',
-              ownerUserId: actor.user.id,
-            })
-          }
-        },
-        ...(deps.runFn === undefined ? {} : { runFn: deps.runFn }),
-      },
-      { sessionId, actor, reservation },
-    )
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
-    const settled = await settleReservedIntentTurnStartFailure(deps.persistence, {
-      sessionId,
-      actor,
-      reservation,
-      detail,
-    })
-    log.warn('intent-turn-fire-failed', { sessionId, err: detail, settled })
-    if (settled) {
+    const EXECUTION_BROADCAST_THROTTLE_MS = 500
+    let lastExecutionBroadcastAt = 0
+    let pendingExecution: { sessionId: string; turnId: string; eventSeq: number } | undefined
+    let executionTimer: ReturnType<typeof setTimeout> | undefined
+    const flushExecution = (): void => {
+      if (pendingExecution === undefined) return
+      const event = pendingExecution
+      pendingExecution = undefined
+      lastExecutionBroadcastAt = Date.now()
       deps.events.publish({
-        type: 'intent.turn.finished',
-        sessionId,
-        turnId: reservation.turnId,
+        type: 'intent.turn.execution.updated',
+        sessionId: event.sessionId,
+        turnId: event.turnId,
+        eventSeq: event.eventSeq,
         ownerUserId: actor.user.id,
       })
     }
-  } finally {
-    if (executionTimer !== undefined) clearTimeout(executionTimer)
-    flushExecution()
-    const next = await activateIntentWorkingSetChange(
-      deps.persistence,
-      intentResourceVisibility(deps.resourceCatalogFor(actor)),
-      actor,
-      sessionId,
-      deps.configSnapshot.intentBuilderMaxGenerateRounds ?? 50,
-    )
-    if (next.reservation !== null) {
-      emitSessionUpdated(deps.events, sessionId, actor.user.id)
-      void dispatchIntentTurn(deps, sessionId, actor, next.reservation)
-    } else if (outcome?.graphRepair !== undefined) {
-      // RFC-358 T6（决策 D2）—— 图校验红了，自动再开一轮让模型自己修。
-      //
-      // 预约已经在 settle 的**同一个事务**里铸好（没有 in-flight 空窗），这里只负责
-      // 把它跑起来。「只修一轮」的判据也在那个事务里：修复轮自己的 turn 行带标记，
-      // 它再红一次就不会有第三轮。
-      //
-      // 用户提交的 working-set 变更优先——那是人的新输入，比自动修复重要，所以这条
-      // 挂在 `next.reservation === null` 的分支上。
-      log.info('intent-graph-repair-turn', {
-        sessionId,
-        afterTurnId: outcome.turnId,
-        blockingErrors: outcome.blockingErrors ?? 0,
-      })
-      emitSessionUpdated(deps.events, sessionId, actor.user.id)
-      void dispatchIntentTurn(deps, sessionId, actor, outcome.graphRepair)
+    const queueExecution = (event: {
+      sessionId: string
+      turnId: string
+      eventSeq: number
+    }): void => {
+      if (pendingExecution === undefined || event.eventSeq >= pendingExecution.eventSeq) {
+        pendingExecution = event
+      }
+      const remaining = EXECUTION_BROADCAST_THROTTLE_MS - (Date.now() - lastExecutionBroadcastAt)
+      if (remaining <= 0) {
+        if (executionTimer !== undefined) clearTimeout(executionTimer)
+        executionTimer = undefined
+        flushExecution()
+        return
+      }
+      if (executionTimer !== undefined) return
+      executionTimer = setTimeout(() => {
+        executionTimer = undefined
+        flushExecution()
+      }, remaining)
+      executionTimer.unref?.()
     }
+
+    let outcome: Awaited<ReturnType<typeof runIntentTurn>> | undefined
+    try {
+      const config = await resolveIntentTurnConfig(deps.runtimeResolver, deps.configSnapshot)
+      outcome = await runIntentTurn(
+        {
+          persistence: deps.persistence,
+          appHome: deps.appHome,
+          config,
+          resourceCatalog: deps.resourceCatalogFor(actor),
+          dumpAuxiliary: deps.dumpAuxiliary,
+          graphValidation: deps.graphValidation,
+          onSessionEvent: (event) => {
+            if (
+              event.type === 'intent.turn.execution.updated' &&
+              event.turnId !== undefined &&
+              event.eventSeq !== undefined
+            ) {
+              queueExecution({
+                sessionId: event.sessionId,
+                turnId: event.turnId,
+                eventSeq: event.eventSeq,
+              })
+              return
+            }
+            if (event.type === 'intent.turn.started' || event.type === 'intent.turn.finished') {
+              if (event.type === 'intent.turn.finished') flushExecution()
+              deps.events.publish({
+                type: event.type,
+                sessionId: event.sessionId,
+                turnId: event.turnId ?? '',
+                ownerUserId: actor.user.id,
+              })
+            }
+          },
+          ...(deps.runFn === undefined ? {} : { runFn: deps.runFn }),
+        },
+        { sessionId, actor, reservation },
+      )
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      const settled = await settleReservedIntentTurnStartFailure(deps.persistence, {
+        sessionId,
+        actor,
+        reservation,
+        detail,
+      })
+      log.warn('intent-turn-fire-failed', { sessionId, err: detail, settled })
+      if (settled) {
+        deps.events.publish({
+          type: 'intent.turn.finished',
+          sessionId,
+          turnId: reservation.turnId,
+          ownerUserId: actor.user.id,
+        })
+      }
+    } finally {
+      if (executionTimer !== undefined) clearTimeout(executionTimer)
+      flushExecution()
+      const next = await activateIntentWorkingSetChange(
+        deps.persistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
+        actor,
+        sessionId,
+        deps.configSnapshot.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      if (next.reservation !== null) {
+        emitSessionUpdated(deps.events, sessionId, actor.user.id)
+        void dispatchIntentTurn(deps, sessionId, actor, next.reservation)
+      } else if (outcome?.graphRepair !== undefined) {
+        // RFC-358 T6（决策 D2）—— 图校验红了，自动再开一轮让模型自己修。
+        //
+        // 预约已经在 settle 的**同一个事务**里铸好（没有 in-flight 空窗），这里只负责
+        // 把它跑起来。「只修一轮」的判据也在那个事务里：修复轮自己的 turn 行带标记，
+        // 它再红一次就不会有第三轮。
+        //
+        // 用户提交的 working-set 变更优先——那是人的新输入，比自动修复重要，所以这条
+        // 挂在 `next.reservation === null` 的分支上。
+        log.info('intent-graph-repair-turn', {
+          sessionId,
+          afterTurnId: outcome.turnId,
+          blockingErrors: outcome.blockingErrors ?? 0,
+        })
+        emitSessionUpdated(deps.events, sessionId, actor.user.id)
+        void dispatchIntentTurn(deps, sessionId, actor, outcome.graphRepair)
+      }
+    }
+  } catch (escaped) {
+    log.warn('intent-turn-dispatch-escaped', {
+      sessionId,
+      turnId: reservation.turnId,
+      err: escaped instanceof Error ? escaped.message : String(escaped),
+    })
   }
 }
 

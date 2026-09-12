@@ -9,8 +9,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { loadConfig } from '@/config'
-import { createInMemoryDb, type DbClient } from '@/db/client'
-import { createApp } from '@/server'
+import type { createApp } from '@/server'
 import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveIntentTurnConfig } from '@/modules/intent/application/turnEngine'
@@ -23,30 +22,11 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'c'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
-
-async function makeApp(): Promise<{
-  app: ReturnType<typeof createApp>
-  configPath: string
-  db: DbClient
-}> {
-  return buildApplication(
-    () => createInMemoryDb(MIGRATIONS),
-    (db, _root, configPath) =>
-      createApp({
-        token: TOKEN,
-        configPath,
-        opencodeVersion: null,
-        dbVersion: 1,
-        db,
-      }),
-  )
-}
 
 async function buildApplication<TDatabase extends ProviderNeutralDatabase>(
   database: () => TDatabase,
@@ -116,15 +96,18 @@ describe('RFC-276 natural intentBuilderRuntime admission', () => {
       expect(cleared.status).toBe(200)
       expect(loadConfig(configPath).intentBuilderRuntime).toBeUndefined()
     })
-  })
 
-  test('resolveIntentTurnConfig admits a claude-code selection naturally', async () => {
-    const { db } = await makeApp()
-    const cfg = await resolveIntentTurnConfig(intentTurnRuntimeResolverForTest(db), {
-      intentBuilderRuntime: 'claude-code',
+    // RFC-359 AC-6：这一条原来挂在模块级那个**只跑 SQLite** 的 `makeApp` 上，
+    // 而它旁边这一组早已双引擎。它只要一个库（解析器是从库里读运行时注册表的），
+    // 并进来即可两个引擎各跑一遍；那个只服务它一条的模块级构造器随之删掉。
+    test('resolveIntentTurnConfig admits a claude-code selection naturally', async () => {
+      const { db } = await makeApp()
+      const cfg = await resolveIntentTurnConfig(intentTurnRuntimeResolverForTest(db), {
+        intentBuilderRuntime: 'claude-code',
+      })
+      expect(cfg.runtime.protocol).toBe('claude-code')
+      expect(cfg.runtime.configDir.env).toBe('CLAUDE_CONFIG_DIR')
     })
-    expect(cfg.runtime.protocol).toBe('claude-code')
-    expect(cfg.runtime.configDir.env).toBe('CLAUDE_CONFIG_DIR')
   })
 
   test('config save and launch contain no retired Intent permission-profile gate', () => {

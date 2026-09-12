@@ -4733,3 +4733,19 @@ dispatcher 目前的处置是 warn + 把该回合记失败（自己的重试域�
 SQLite 单写者天然不会暴露这条路径——这正是「合一之后才看得见」的那类。
 
 发现经过见 `design/RFC-359-database-provider-unification/plan.md` §5bo。
+
+## 全仓扫一次「fire-and-forget 少一层网」（2026-09-12 提出，未做）
+
+RFC-359 这一轮 4 条 PG 缺陷里**有两条是同一个形状**：一个 `void someAsync(...)` 的调用点，
+被调用方在 PostgreSQL 上因为连接池关闭 / 真往返而抛，异常无人接，变成进程级 unhandled rejection。
+
+- `workgroupTaskRoomCommands` 的 2.5s 补偿（`void continueIfStillParked(...)`，已修）；
+- `dispatchIntentTurn` 的 13 个调用点（已在被调用方内部加外层 catch，见 plan §5br）。
+
+**为什么值得单独扫**：这种红**看起来像绿的**——bun 记成 `1 error`，
+计数行照样 `N pass / 0 fail`，只把退出码变成 1；CI 上要具体分片红了才发现。
+
+**待办**：写一条守卫或一次性扫查，找出 `src/` 里所有「`void <expr>(...)` 且该表达式返回 Promise、
+且没有 `.catch(`」的位置，逐个判断该由调用点兜还是由被调用方自己保证不 reject。
+**倾向后者**（plan §5br 的规律）：所有调用点都 fire-and-forget 的函数，保证不 reject 是它自己的责任。
+注意判据要能识别「被调用方内部已有外层 catch」的情况，否则会把已修好的也报出来。

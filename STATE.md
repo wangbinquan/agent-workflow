@@ -2,10 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 539**；反睡眠清零 + 两个组合根签名对齐）
+> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 537**；反睡眠清零 + 两个组合根签名对齐）
 >
-> 接着下面那段做。这一段没有新的产品缺陷，主线是**把两个组合根的装配签名对齐**，
-> 以及**把负向断言从墙钟改成因果屏障**。
+> 接着下面那段做。主线是**把两个组合根的装配签名对齐**（补了五个覆盖口）与**把负向断言从
+> 墙钟改成因果屏障**；末尾又照出**第 4 条 PG-only 产品缺陷**（fire-and-forget 少一层网，见下）。
 >
 > ### 1. 七条「睡一觉再断言」全清掉（plan §5bf）
 >
@@ -24,6 +24,23 @@
 > （机器越慢屏障自己越慢，窗口跟着放大），但别让下一个人以为拿到了证明。
 >
 > `docs/dev-gotchas.md` 里「负向断言只能靠固定等待，无法轮询」**是错的，已勘误**。
+>
+> ### 1.5 第 4 条 PG-only 缺陷：`dispatchIntentTurn` 的 fire-and-forget 少一层网（plan §5br）
+>
+> 迁 `rfc234-intent-routes` 把 CI 推红一次（`c8c944bed`，ubuntu shard 6/8）。日志里**没有任何
+> `(fail)`**，只有 `# Unhandled error between tests` + `ERR_POSTGRES_CONNECTION_CLOSED`
+> ——**这种红看起来像绿的**：bun 记成 `1 error`，计数行照样 `N pass / 0 fail`，只把退出码变成 1。
+>
+> 机制：`dispatchIntentTurn` 的 **13 个调用点全是 fire-and-forget**，它虽有 try/catch/finally，
+> 但**catch 与 finally 里也在写库**；池一关，处理块自己就抛、越过它自己的 catch 逃出来。
+> PG 上「池关了但活还在跑」这个窗口真实存在，SQLite 单写者没有。
+>
+> **修在被调用方内部**（外层 try/catch），不是 13 个调用点上：dispatcher 本来就有 logger，
+> **零新符号 / 零新 import / 三份架构账本一个没涨**，且以后新增调用点自动被兜住。
+> 第一版我修在调用点上，结果顶高了三份账本——**那正是「修法在往外摊」的信号**。
+>
+> **规律**：所有调用点都 fire-and-forget 的函数，**保证不 reject 是它自己的责任**。
+> 本 session 4 条 PG 缺陷里**有两条是这个形状**，已开单子全仓扫一次（`docs/audit-backlog.md`）。
 >
 > ### 2. 三处「看起来已迁」的账本残留（plan §5bg）
 >
@@ -128,10 +145,16 @@
 >    **判据**：看到「同一文件里 provider 注册面与 native 注册面并存」，先看 native 那边到底还测
 >    什么——常常只剩一两条不碰库的门禁用例，并过去就能整段删。
 >
->    下一批（都不需要新口子）：`rfc234-config-intent-runtime`(195 行，多一个 WRITES-OWN-CONFIG，
->    用 `open({config})`) / `rfc310-digital-employee-writer-cutover`(191 行，有 SYNC-TERMINAL 要改
->    await)。两个都报 NESTED-EACHPROVIDER——**那不是拦路灯**，处置是「只包 HTTP 那个 describe」。
->    HTTP 形状的欠债还剩 **43 个文件**。
+>    `rfc310-digital-employee-writer-cutover` 与 `rfc234-config-intent-runtime` **也迁完了**
+>    ——**三个文件的残留完全同形**，已立成判据（plan §5bq）：
+>    **「同一文件里已迁的注册面 + 一个单引擎构造器」并存时，先数那个构造器还服务几条用例。**
+>    三次都是 **1 条**，并进去就能整段删，比给它补一套双引擎装配便宜一个数量级。
+>    **别默认那半是「还没迁完的一半」**——到这个阶段多半只是没人回头收的尾巴。
+>
+>    `rfc310` 顺带清了 4 处 `await db.insert(...).values({...}).run()`——**awaited 的 `.run()`**
+>    在中立面上能过类型也能跑，所以一直没被发现；守卫只扫已迁文件，迁进来就必须清。
+>
+>    HTTP 形状的欠债还剩 **41 个文件**。
 >
 > 4. 原第 2 条的形态调查（保留）：
 >    它们**不是**路由依赖类型上的字段（`grep`：`server.ts` 各 8 / 3 处，PG 根 **0** 处），
