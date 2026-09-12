@@ -4615,3 +4615,30 @@ supersede。判据：**同时看 `cancelled`**，并算一下 `completedAt - sta
 **仍未处置**：套件还在长，这只是买了余量不是解决。真正的问题是**分片不均**——
 按文件路径切，慢文件（起真 daemon、跑真子进程的那些）会成堆落在同一片。
 候选：按历史耗时加权分片，或把已知的慢文件显式拆到不同片。**未立项。**
+
+## Windows-only 偶发红：`code-mission-detail-ux` 的 `mission-config-upgrade` 徽标等不到（未归因）
+
+**现象**（2026-09-12，run 34673…，`Frontend tests (windows-latest shard 1/3)`）：
+
+```
+tests/code-mission-detail-ux.test.tsx > RFC-310 PR-8 mission detail care UX >
+  config upgrade badge appears only when a newer policy revision is published
+TestingLibraryElementError: Unable to find an element by: [data-testid="mission-config-upgrade"]
+```
+
+失败是 `waitFor` 超时，DOM 转储显示页面其余部分**都渲染好了**，只差这一个徽标 —— 时序形状，
+不是逻辑形状。
+
+**已排除的**：
+- 触发这次 CI 的提交是**纯后端**的（backend 用例 + architecture JSON + plan.md，零前端文件）；
+- 同一个 job 在紧邻的前三个提交上都是 success；
+- 那次 push 是从上一个绿提交的**快进**，中间没有别人的提交挤进来；
+- **本机全量前端套件 832 文件 / 7001 用例全绿**（含该文件）；
+- macOS / Ubuntu 的前端分片同一次 CI 都绿，只有 windows 分片红。
+
+**没做的**：没有定位到根因。徽标依赖「更新的 policy revision 已发布」这个异步条件，
+怀疑是 Windows 上某个 IDB / 定时器 / 微任务时序更慢导致 `waitFor` 预算不够，但**没有证据**，
+不要据此直接去调 `waitFor` 超时——按本仓一贯做法，先确认是不是真 bug。
+
+**给接手的人**：要复现大概率只能在 Windows 上跑（本机 VM 路径见个人 memory 的
+`reference_windows_vm`）。在没归因之前**不要**把它标成 flaky 忽略掉。
