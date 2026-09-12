@@ -640,4 +640,33 @@ describe('repository test-suite policy', () => {
         '在慢机器 / 忙分片上必红。给它一个明显大于等待上限的预算（bun 的缺省只有 5s）。',
     ).toEqual([])
   })
+
+  // 2026-09-12 —— `rfc247-token-audit` 的 AC-20 三条用例原来用
+  // `await new Promise((r) => setTimeout(r, 50))` 当「让 fire-and-forget 落库」的手段。
+  // 在 bun:sqlite 上够（同 tick 落盘），迁到双引擎之后 PostgreSQL 是真实往返——本机够、
+  // 忙分片不够，CI 的 ubuntu shard 7/8 实红两条。**睡一觉不是同步手段**：
+  // 正向用 `tests/helpers/eventually.ts` 读到为止，负向补因果屏障（再发一次已知会写的请求）。
+  test('provider HTTP tests do not sleep to wait for a write', () => {
+    const offenders: string[] = []
+    const pattern = /new Promise\([^)]*\)\s*=>\s*setTimeout|Bun\.sleep\(/
+    for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
+      if (file === import.meta.path) continue
+      const source = readFileSync(file, 'utf8')
+      if (!source.includes('describeEachProviderHttpApplication')) continue
+      source.split('\n').forEach((line, index) => {
+        if (pattern.test(line)) {
+          offenders.push(
+            `${toPortableRelativePath(relative(REPO_ROOT, file))}:${String(index + 1)}`,
+          )
+        }
+      })
+    }
+    expect(
+      offenders.sort(),
+      '共用 HTTP 作用域的用例里出现了「睡一觉等写入」：那只在「被等的东西刚好够快」时绿，' +
+        '在 PostgreSQL 的真实往返上必然间歇性红。正向改用 helpers/eventually 的 ' +
+        '`eventually` / `eventuallyAtLeast` 读到为止；负向补**因果屏障**' +
+        '（再发一次已知会写的请求，等它落库再断言「除它之外没有别的行」）。',
+    ).toEqual([])
+  })
 })

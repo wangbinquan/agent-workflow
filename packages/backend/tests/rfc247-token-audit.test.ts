@@ -682,10 +682,14 @@ describeEachProviderHttpApplication(
       })
       expect(res.status).toBe(200)
 
-      // The audit hook is fire-and-forget, so settle the microtask queue.
-      await new Promise((r) => setTimeout(r, 50))
-
-      const snaps = await h.db.select().from(tokenDeleteSnapshot)
+      // 审计钩子是 fire-and-forget：**不能睡一觉**（原来是 `setTimeout(50)`，在 bun:sqlite 上
+      // 够，在 PostgreSQL 的真实往返上本机够、忙分片不够——CI 上 ubuntu shard 7/8 实红）。
+      // 读到为止。
+      const snaps = await eventuallyAtLeast(
+        () => h.db.select().from(tokenDeleteSnapshot),
+        1,
+        'the delete snapshot',
+      )
       expect(snaps.length).toBe(1)
       // The CONTENT is the point — metadata alone answers "who deleted what" but
       // not "what was it", and the second question is the one that survives.
@@ -710,8 +714,40 @@ describeEachProviderHttpApplication(
         headers: { Authorization: `Bearer ${h.sessionToken}` },
       })
       expect(res.status).toBe(200)
-      await new Promise((r) => setTimeout(r, 50))
-      expect((await h.db.select().from(tokenDeleteSnapshot)).length).toBe(0)
+      // 光「睡一觉再断言空」会在 PG 上**因为还没来得及写**而绿。补一次已知会写快照的 PAT 删除
+      // 当因果屏障：后发的那条都落库了，先发的 session 删除若会写早该写了。
+      const barrier = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'agent',
+        scopeId: h.ownedAgentId,
+        title: 'pat barrier delete',
+        bodyMd: 'body',
+        tags: [],
+      })
+      const { token: barrierToken } = await createPat({
+        db: h.db,
+        userId: h.userId,
+        name: 'session-barrier',
+        scopes: ['memory:delete'],
+        purpose: 'general',
+      })
+      const barrierRes = await h.app.request(`/api/memories/${barrier.id}?confirm=true`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${barrierToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ confirm: 'pat barrier delete' }),
+      })
+      expect(barrierRes.status).toBe(200)
+      const snaps = await eventuallyAtLeast(
+        () => h.db.select().from(tokenDeleteSnapshot),
+        1,
+        'the PAT barrier snapshot',
+      )
+      // 只有屏障那一条——session 删除没写。（`resourceId` 在这条路径上是 `'unknown'`，
+      // 所以按快照正文里的标题辨认；「内容才是重点」也正是本组用例的立意。）
+      expect(snaps).toHaveLength(1)
+      expect(snaps[0]?.snapshotJson).toContain('pat barrier delete')
     })
 
     test('a REFUSED delete leaves no snapshot — nothing was destroyed', async () => {
@@ -740,8 +776,27 @@ describeEachProviderHttpApplication(
         body: JSON.stringify({ confirm: 'wrong name' }),
       })
       expect(res.status).toBe(422)
-      await new Promise((r) => setTimeout(r, 50))
-      expect((await h.db.select().from(tokenDeleteSnapshot)).length).toBe(0)
+      // 同上：补一次**成功**的 PAT 删除当因果屏障，再断言「除它之外没有别的快照」。
+      const barrier = await memoryCatalogOf(h.db).commands.createManual({
+        scopeType: 'agent',
+        scopeId: h.ownedAgentId,
+        title: 'refusal barrier delete',
+        bodyMd: 'body',
+        tags: [],
+      })
+      const barrierRes = await h.app.request(`/api/memories/${barrier.id}?confirm=true`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ confirm: 'refusal barrier delete' }),
+      })
+      expect(barrierRes.status).toBe(200)
+      const snaps = await eventuallyAtLeast(
+        () => h.db.select().from(tokenDeleteSnapshot),
+        1,
+        'the refusal barrier snapshot',
+      )
+      expect(snaps).toHaveLength(1)
+      expect(snaps[0]?.snapshotJson).toContain('refusal barrier delete')
     })
   },
 )

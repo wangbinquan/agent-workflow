@@ -6505,3 +6505,31 @@ DrizzleQueryError                 // 没有 code / constraint
 **另一条相关的**：`bootstrap`（`'required'` = 还没有管理员）是**注册面级**选项，不是
 `open()` 的参数。一条用例同时要两种形态时，只能拆成两个注册面
 （`auth-routes` 的 bootstrap 用例因此拆成两条：新装机的载荷校验 / 已就绪实例的 actor 闸门）。
+
+## 「睡一觉等 fire-and-forget 落库」在 PostgreSQL 上必然间歇性红（2026-09-12 推红一格）
+
+`rfc247-token-audit` 的 AC-20 三条用例原来这样等审计快照：
+
+```ts
+// The audit hook is fire-and-forget, so settle the microtask queue.
+await new Promise((r) => setTimeout(r, 50))
+expect((await db.select().from(tokenDeleteSnapshot)).length).toBe(1)
+```
+
+在 bun:sqlite 上够——写在同一个 tick 内落盘，50ms 是绰绰有余的余量。迁到双引擎之后
+PostgreSQL 是一次真实往返：**本机够、忙分片不够**，CI 的 ubuntu shard 7/8 当场红两条
+（而这三条在本机跑 3/3 全绿——这正是它危险的地方）。
+
+**睡一觉不是同步手段。** 处置：
+
+- 正向：`tests/helpers/eventually.ts` 的 `eventually` / `eventuallyAtLeast` **读到为止**
+  （有界轮询，超时带上最后一次实际值）。
+- 负向（「不该写」）：补**因果屏障**——再发一次**已知会写**的请求，等它落库，再断言
+  「除它之外没有别的行」。时间不是屏障，因果才是。
+
+判据已写成守卫（`test-suite-policy`：`provider HTTP tests do not sleep to wait for a write`，
+扫 `new Promise(… => setTimeout` 与 `Bun.sleep(`），已变异验证。
+
+**这条与本文件另一条「负向断言在 PG 上会因为错的理由绿」是同一个根**：
+fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「断言空」的陷阱，
+这条讲的是「用睡眠掩盖它」的陷阱——**后者更隐蔽，因为它在本机永远是绿的**。

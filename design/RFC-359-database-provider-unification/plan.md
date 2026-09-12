@@ -6918,3 +6918,24 @@ SQLite 库、播两个用户——而三块正文**一次都不碰 `db`**：它�
 | 白做的夹具（本节） | `IDLE-FIXTURE`：建了库但整块不碰 `db` | 删 `beforeEach` |
 
 **先分类再动手**——后两类的成本是前者的十分之一，而且不需要任何双引擎验证。
+
+
+## 5bc. 自己留下的一格红：`rfc247-token-audit` 的 AC-20 还在用 `setTimeout(50)` 等落库
+
+§5av 迁 `rfc247-token-audit` 时我用 `eventually` 修了五处断言，**漏了 AC-20 那三条**——
+它们用的是 `await new Promise((r) => setTimeout(r, 50))`。本机 3/3 全绿，
+CI 的 ubuntu shard 7/8 红两条（各约 504ms，也就是整条用例跑完了才断言失败）。
+
+漏的原因很具体：那三条**不在**我 grep `listTokenAuditForUser` 找到的那批里，
+它们查的是 `tokenDeleteSnapshot`。**按「哪个表」grep 会漏掉同一条 fire-and-forget 路径上
+的其它表**——`deletedSnapshot` 是跟着 `tokenCallAudit.record` 一起写的。
+
+处置：
+- 正向那条改 `eventuallyAtLeast`；
+- 两条负向（session 删除 / 被拒的删除都不该留快照）补**因果屏障**：再发一次成功的 PAT
+  删除，等它的快照落库，再断言「除它之外没有别的」。按快照正文里的标题辨认——
+  `resourceId` 在这条路径上是 `'unknown'`（路由没往上报资源 id），第一版按 id 断言当场红。
+
+**判据已写成守卫**（`test-suite-policy`：`provider HTTP tests do not sleep to wait for a write`，
+扫 `new Promise(… => setTimeout` 与 `Bun.sleep(`），已变异验证。现在这类漏不掉了——
+**这才是这一格红真正的产出**：靠人记「迁完要 grep 一遍睡眠」是记不住的，我自己就没记住。
