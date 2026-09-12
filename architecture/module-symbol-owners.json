@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1789,
+    "backendFiles": 1790,
     "frontendFiles": 622,
     "legacyFiles": 602,
-    "moduleFiles": 1187,
-    "productionFiles": 2566,
+    "moduleFiles": 1188,
+    "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24936
+    "symbolsIncludingFileRoots": 24941
   },
   "entries": [
     {
@@ -118393,6 +118393,54 @@
     },
     {
       "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts#assertWorktreePresentForResume",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertWorktreePresentForResume",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts#composeWorktreeResumePreflight",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeWorktreeResumePreflight",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts#WorktreeResumePreflightDependencies",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorktreeResumePreflightDependencies",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition.ts",
@@ -136233,6 +136281,19 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#assertWorktreePresentForResume",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:621a522586b910cf8e0e77b93ce0ca9162d6e6a7d3531b69b4ef326d36ad9af3",
+      "status": "current-module",
+      "symbol": "assertWorktreePresentForResume",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#buildCodeHostRecoveryDescriptor",
       "removeAfterWave": null,
       "signatureDigest": "sha256:1907d1877ed3d6a6d156fab2ede76600749d062d584efedf922daf9e6168f467",
@@ -136342,6 +136403,19 @@
       "signatureDigest": "sha256:66fb6f43376f66282222cf44e179b3e3476aa4424f3051bcc343ed07ce2f423a",
       "status": "current-module",
       "symbol": "CodeHostSendAttemptSettlement",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#composeWorktreeResumePreflight",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:14e64e1464997fecc5561378096ca3d4238b23910bf79cccab491302fe777c82",
+      "status": "current-module",
+      "symbol": "composeWorktreeResumePreflight",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -188517,18 +188591,6 @@
       "status": "legacy-target",
       "symbol": "assertLaunchSourceSchemeSync",
       "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#assertWorktreePresentForResume",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "assertWorktreePresentForResume",
-      "targetContext": "source-control",
       "targetLayer": "application"
     },
     {
@@ -299931,5 +299993,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bf68782401f0dc0fac7d3dd696958e8bfe57ff5f8f2a5ae73f6acbec57dcc2b6"
+  "sourceDigest": "sha256:b7f8e1bc95e047c0974e811c23a4934f640ada5e90c5bde93460d2012a8691d6"
 }

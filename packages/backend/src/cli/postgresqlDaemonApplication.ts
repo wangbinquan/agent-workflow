@@ -97,6 +97,7 @@ import {
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 import { createPostgresqlTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/participants'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { createPostgresqlTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -1126,9 +1127,16 @@ export async function composePostgresqlApplication(
     }),
     systemUserId: SYSTEM_USER_ID,
     continuation: {
-      // 多进程部署：受理请求的进程未必看得到该任务的工作树、也未必该驱动它。两件都交给 daemon 的
-      // `human-gate-continuation` worker 轮询认领（start.ts 注册），这里是空操作。
-      assertResumable: async () => {},
+      // RFC-359 —— 预检与 SQLite 同一份判据（`worktreeResumePreflight`，两个依赖都是 neutral：
+      // `routes.tasks.get` 与 recovery port）。此前这里是空操作，理由写成「多进程部署看不到
+      // 工作树」，净效果却是：工作树被 GC 回收后 confirm/approve 在 SQLite 上 410、决策可重试，
+      // 在 PostgreSQL 上 200——闸门关上、holder 释放、worker 驱动失败只打一行 warn，任务永久搁浅。
+      assertResumable: composeWorktreeResumePreflight({
+        getTask: (taskId) => taskExecutionProvider.routes.tasks.get(taskId),
+        taskRecoveryOperations: taskExecutionProvider.recovery,
+      }),
+      // 驱动仍交给 daemon 的 `human-gate-continuation` worker 轮询认领（start.ts 注册）：
+      // 「谁驱动这个任务」才是真按部署形态分的那一半，预检不是。
       driveAfterCommit: async () => {},
     },
     broadcast(taskId, event) {

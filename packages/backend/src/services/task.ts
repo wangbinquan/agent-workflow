@@ -2,7 +2,7 @@
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
 import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
-import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
+import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type {
   ScriptLanguage,
@@ -54,7 +54,6 @@ import {
   parseTriggerContextJson,
   webhookTaskSourceLinkOf,
   CANCELABLE_TASK_STATUSES,
-  taskWorkspacePhase,
 } from '@agent-workflow/shared'
 import type {
   CommitPushMeta,
@@ -3913,80 +3912,9 @@ async function rollbackNodeRunForResume(
   )
 }
 
-/**
- * RFC-108 T6 (AR-15): fail CLEAN with 410 if a resumable task's worktree is
- * gone (e.g. `worktreeAutoGc` reclaimed a still-`failed`/`interrupted` task —
- * the gc.ts blindspot) BEFORE the continuation-admission CAS flips the row to pending.
- * Otherwise resumeKick CAS-flips to pending then warn-and-continues into a
- * scheduler kick whose cwd no longer exists (a generic 500). Mirrors
- * getTaskDiff's worktree-missing guard (single vs multi-repo).
- */
-async function assertWorktreePresentForResume(
-  operations: TaskRecoveryOperations,
-  task: Task,
-  verb: string,
-): Promise<void> {
-  const gone = (msg: string): never => {
-    throw new DomainError(
-      'task-worktree-missing',
-      `${msg}; cannot ${verb} — the worktree was likely reclaimed by worktree GC`,
-      410,
-    )
-  }
-  // RFC-287 G7 / AC-10 —— 「工作树没建出来」与「工作树被回收了」是**两件事**。
-  //
-  // G7 之前不变量是「有任务行就有工作树」，所以空路径只可能是回收。G7 之后多了一段
-  // 新形态：任务行已落、准备（clone/物化）失败或还没跑完，`worktreePath` 是空串。
-  // 此时 `existsSync('')` 恒 false，会掉进下面那句 410，并把原因写成
-  // 「likely reclaimed by worktree GC」——归因完全错误（它从来没被建出来过，谈不上
-  // 被回收），给用户的下一步也相反：正解是**重试准备仓库**（AC-11），不是另起任务。
-  // 前端已经靠 `__repo_prep__` 行分出了第四态，服务端这一半必须跟上，否则 API 的
-  // 错误码与文案仍在误导（且开了 autoResumeOnBoot 时每次 boot 都吃一个错误归因）。
-  //
-  // 判据用墓碑区分（DTO 上是 workspaceState：pruned/pruning 即已打/正在打）：
-  // 打了墓碑 = 老的「物化失败 / 工作区已回收」形态（沿用原语义）；没打墓碑 + 空
-  // 路径 = G7 的准备阶段（AC-15 刻意保证准备失败不打墓碑）。
-  // ⚠️ 判据必须再加一条「确实有 `__repo_prep__` 行」（五轮门 Codex 数据完整性面 F7）。
-  //
-  // 「空路径 + 无墓碑」在 G7 之前**也**是合法形态:那时物化失败会留下
-  // `failed + worktreePath=''` 的任务行（且迁移 0034 给它回填了一条空路径的
-  // `task_repos`、迁移 0085 新增墓碑列时不回填）。只凭这两个标量判，会把**存量**
-  // 物化失败任务谎报成「repository preparation has not completed」并劝用户去重试准备
-  // ——而它根本没有准备行，AC-11 的重试入口对它不存在，等于把人指向一扇不存在的门。
-  // RFC-317 T50（LC-05）—— 判据收进 `taskWorkspacePhase`（shared，纯函数）。
-  // 此前这里是三份手写判据中唯一考虑过存量行的那一份；另两份（autoResume /
-  // stuckTaskDetector）的注释声称与本处同源，实际上少了两条判定，对同一行给出不同结论。
-  // `workspaceState` 是 `workspacePruningAt` / `workspacePrunedAt` 的 DTO 投影，
-  // 这里把两个原始列还原回去，让三个调用点吃同一个函数。
-  const phase = taskWorkspacePhase({
-    worktreePath: task.worktreePath,
-    workspacePruningAt: (task.workspaceState ?? 'available') === 'pruning' ? 1 : null,
-    workspacePrunedAt: (task.workspaceState ?? 'available') === 'pruned' ? 1 : null,
-    hasRepoPrepRow: (await taskIdsWithRepoPrepRow(operations, [task.id])).has(task.id),
-  })
-  if (phase === 'preparing') {
-    throw new ConflictError(
-      'task-repo-prep-incomplete',
-      `task '${task.id}' has no worktree yet — repository preparation has not completed; ` +
-        `retry the preparation step instead of ${verb}`,
-    )
-  }
-  // AR-15's concern is `worktreeAutoGc` REMOVING the worktree (removeWorktree
-  // deletes the dir), so an existence check is the right gate — and it does not
-  // false-fire on tasks whose worktree dir is present but not (yet) a git repo
-  // (a per-repo "source moved" edge that the diff path handles separately).
-  if (!existsSync(task.worktreePath)) {
-    gone(`worktree '${task.worktreePath}' does not exist`)
-  }
-  // Multi-repo: the container survived but every per-repo worktree was reclaimed.
-  if (
-    task.repoCount > 1 &&
-    task.repos.length > 0 &&
-    !task.repos.some((r) => existsSync(r.worktreePath))
-  ) {
-    gone(`task '${task.id}' has no remaining repo worktree (all reclaimed by gc)`)
-  }
-}
+// RFC-359 —— 判据本体搬进 `modules/task-execution/application/worktreeResumePreflight`，
+// 两个 provider 共用一份（合一前 PostgreSQL 部署注入的是空操作，见那边的注释）。
+// 这里保留原名的转发，让本文件既有的调用点不动。
 
 /**
  * RFC-098 WP-9: snapshot-lost escalation shared by resumeTask / retryNode.

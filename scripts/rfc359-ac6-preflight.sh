@@ -9,7 +9,10 @@
 #   sh ../../../scripts/rfc359-ac6-preflight.sh <test-file...>
 #
 # 输出 CLEAN 才可以直接上批量迁移；其余每一项的处置见
-# design/RFC-359-database-provider-unification/plan.md §5u–§5af 与 docs/dev-gotchas.md。
+# design/RFC-359-database-provider-unification/plan.md §5u–§5ah 与 docs/dev-gotchas.md。
+#
+# 迁完还要看一眼 eslint：`'scope' is defined but never used` **不是 lint 小事**——它说明那个
+# describe 根本没吃 provider 作用域，等于双跑一遍却仍然只测了原来那一个引擎。
 for f in "$@"; do
   [ -f "$f" ] || { echo "$f | MISSING"; continue; }
   r=""
@@ -23,6 +26,40 @@ for f in "$@"; do
   grep -qE "writeFileSync\(.*config|applyConfigPatch\(|loadConfig\(" "$f" && r="$r WRITES-OWN-CONFIG(需 open({config}))"
   grep -q "AGENT_WORKFLOW_HOME" "$f" && r="$r OWN-APPHOME(需用 opened.appHome)"
   grep -q "resetRouteMetaRegistry" "$f" && r="$r ROUTE-META-POISON(已知雷)"
+  # 模块级 `let h` + 模块级 beforeEach：包 describe 之后钩子看不到 `scope`，当场 ReferenceError
+  # （rfc327-memory-filter-and-facets 实撞）。夹具要先上提进 describe 才谈得上迁。
+  grep -qE "^(let|var) [A-Za-z_$]+: *Harness|^let h\b" "$f" && r="$r MODULE-LEVEL-HARNESS(夹具需上提)"
+  # 纯函数 describe（整块一行 DB 都不碰）不该被整文件包进双引擎 harness——白开一个 PG 库跑
+  # 字符串断言（rfc164-workgroup-room 的 `resolveMentions` 实撞）。这类 describe 保持普通
+  # `describe`，只有真的要库的那几块才包。判据是**逐块**扫，不是「文件里有 describe」。
+  pure=$(python3 - "$f" <<'PYEOF'
+import re, sys
+
+source = open(sys.argv[1]).read()
+names = []
+# 本仓 describe 名一律单引号。引号字符用 chr(39) 拼，避免在 $( ) 里出现不成对的引号
+# ——sh 扫命令替换时是**带引号状态**扫的，heredoc 里的裸引号会让它找不到收尾的 `)`。
+Q = chr(39)
+for match in re.finditer("(?m)^describe\(" + Q + "([^" + Q + "]*)", source):
+    start = source.find('{', match.end())
+    if start < 0:
+        continue
+    depth, i = 0, start
+    while i < len(source):
+        if source[i] == '{':
+            depth += 1
+        elif source[i] == '}':
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    body = source[start : i + 1]
+    if not re.search(r"\bdb\b|\bapp\b|harness|request\(|createApp", body):
+        names.append(match.group(1))
+print(','.join(names))
+PYEOF
+)
+  [ -n "$pure" ] && r="$r PURE-DESCRIBE[$pure](别包，保持普通 describe)"
   grep -qE "\.seal\(|secretEnc" "$f" && r="$r ENCRYPTED-FIXTURE(需 scope 的 secretBox)"
   opts=$(python3 - "$f" <<'PY'
 import sys,re

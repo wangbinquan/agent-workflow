@@ -3,19 +3,16 @@
 // user still has event-sources:update but cannot write automation rules, every
 // non-admin writer is owner-scoped, and the source-neutral channel rejects PATs.
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb } from '@/db/client'
 import { eventResponseRules, eventSources, eventTypeCatalog } from '@/db/schema'
-import { createApp } from '@/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createPat } from './helpers/auth/patStore'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '@/services/users'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 31))
 
 function ruleBody(name: string, targetKind: 'workflow' | 'digital-employee' = 'workflow') {
   return {
@@ -42,8 +39,8 @@ function ruleBody(name: string, targetKind: 'workflow' | 'digital-employee' = 'w
   }
 }
 
-async function harness() {
-  const db = createInMemoryDb(MIGRATIONS)
+async function harness(scope: ProviderHttpApplicationScope) {
+  const db = scope.harness.db
   const source = {
     schemaVersion: 1 as const,
     sourceRef: { id: 'test.source', revision: 1 },
@@ -126,14 +123,7 @@ async function harness() {
     'event-automation-rules:delete',
     'event-automation-rules:override-owner',
   ])
-  const app = createApp({
-    token: 'a'.repeat(64),
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-    secretBox,
-  })
+  const app = (await scope.open()).app
   const call = (token: string, method: string, path: string, body?: unknown) =>
     app.request(path, {
       method,
@@ -150,175 +140,190 @@ async function responseCode(response: Response): Promise<string> {
   return ((await response.json()) as { code: string }).code
 }
 
-describe('RFC-315 event automation permissions', () => {
-  test('default role matrix is read-all / manager-own-write / admin-global-write', async () => {
-    const h = await harness()
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-315 event automation permissions',
+  {
+    token: 'a'.repeat(64),
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-event-perms-',
+  },
+  (scope) => {
+    test('default role matrix is read-all / manager-own-write / admin-global-write', async () => {
+      const h = await harness(scope)
 
-    const userMe = await h.call(h.user.token, 'GET', '/api/auth/me')
-    expect((await userMe.json()) as { permissions: string[] }).toMatchObject({
-      permissions: expect.arrayContaining(['event-sources:update', 'event-automation-rules:read']),
+      const userMe = await h.call(h.user.token, 'GET', '/api/auth/me')
+      expect((await userMe.json()) as { permissions: string[] }).toMatchObject({
+        permissions: expect.arrayContaining([
+          'event-sources:update',
+          'event-automation-rules:read',
+        ]),
+      })
+      expect(
+        (await h.call(h.user.token, 'POST', '/api/event-center/response-rules', ruleBody('no')))
+          .status,
+      ).toBe(403)
+      expect((await h.call(h.guest.token, 'GET', '/api/event-center/response-rules')).status).toBe(
+        403,
+      )
+
+      const adminCreated = await h.call(
+        h.admin.token,
+        'POST',
+        '/api/event-center/response-rules',
+        ruleBody('admin rule'),
+      )
+      expect(adminCreated.status).toBe(201)
+      const adminRule = (await adminCreated.json()) as { id: string; ownerUserId: string }
+      expect(adminRule.ownerUserId).toBe(h.admin.user.id)
+
+      const managerCreated = await h.call(
+        h.manager.token,
+        'POST',
+        '/api/event-center/response-rules',
+        ruleBody('manager rule'),
+      )
+      expect(managerCreated.status).toBe(201)
+      const managerRule = (await managerCreated.json()) as { id: string; ownerUserId: string }
+      expect(managerRule.ownerUserId).toBe(h.manager.user.id)
+
+      expect(
+        (
+          await h.call(h.manager.token, 'PUT', `/api/event-center/response-rules/${adminRule.id}`, {
+            malformed: true,
+          })
+        ).status,
+      ).toBe(404)
+      expect(
+        (
+          await h.call(
+            h.manager.token,
+            'PUT',
+            `/api/event-center/response-rules/${managerRule.id}`,
+            ruleBody('manager updated'),
+          )
+        ).status,
+      ).toBe(200)
+      expect(
+        (
+          await h.call(
+            h.admin.token,
+            'PUT',
+            `/api/event-center/response-rules/${managerRule.id}`,
+            ruleBody('admin override'),
+          )
+        ).status,
+      ).toBe(200)
+      expect((await h.call(h.user.token, 'GET', '/api/event-center/response-rules')).status).toBe(
+        200,
+      )
     })
-    expect(
-      (await h.call(h.user.token, 'POST', '/api/event-center/response-rules', ruleBody('no')))
-        .status,
-    ).toBe(403)
-    expect((await h.call(h.guest.token, 'GET', '/api/event-center/response-rules')).status).toBe(
-      403,
-    )
 
-    const adminCreated = await h.call(
-      h.admin.token,
-      'POST',
-      '/api/event-center/response-rules',
-      ruleBody('admin rule'),
-    )
-    expect(adminCreated.status).toBe(201)
-    const adminRule = (await adminCreated.json()) as { id: string; ownerUserId: string }
-    expect(adminRule.ownerUserId).toBe(h.admin.user.id)
+    test('explicit CRUD grants stay owner-scoped and body owner injection is rejected', async () => {
+      const h = await harness(scope)
+      const own = await h.call(
+        h.editor.token,
+        'POST',
+        '/api/event-center/response-rules',
+        ruleBody('editor own'),
+      )
+      expect(own.status).toBe(201)
+      const ownRule = (await own.json()) as { id: string; ownerUserId: string }
+      expect(ownRule.ownerUserId).toBe(h.editor.user.id)
 
-    const managerCreated = await h.call(
-      h.manager.token,
-      'POST',
-      '/api/event-center/response-rules',
-      ruleBody('manager rule'),
-    )
-    expect(managerCreated.status).toBe(201)
-    const managerRule = (await managerCreated.json()) as { id: string; ownerUserId: string }
-    expect(managerRule.ownerUserId).toBe(h.manager.user.id)
+      const forged = await h.call(h.editor.token, 'POST', '/api/event-center/response-rules', {
+        ...ruleBody('forged'),
+        ownerUserId: h.admin.user.id,
+      })
+      expect(forged.status).toBe(422)
+      expect(await responseCode(forged)).toBe('event-response-rule-invalid')
 
-    expect(
-      (
-        await h.call(h.manager.token, 'PUT', `/api/event-center/response-rules/${adminRule.id}`, {
-          malformed: true,
-        })
-      ).status,
-    ).toBe(404)
-    expect(
-      (
-        await h.call(
-          h.manager.token,
-          'PUT',
-          `/api/event-center/response-rules/${managerRule.id}`,
-          ruleBody('manager updated'),
-        )
-      ).status,
-    ).toBe(200)
-    expect(
-      (
-        await h.call(
-          h.admin.token,
-          'PUT',
-          `/api/event-center/response-rules/${managerRule.id}`,
-          ruleBody('admin override'),
-        )
-      ).status,
-    ).toBe(200)
-    expect((await h.call(h.user.token, 'GET', '/api/event-center/response-rules')).status).toBe(200)
-  })
-
-  test('explicit CRUD grants stay owner-scoped and body owner injection is rejected', async () => {
-    const h = await harness()
-    const own = await h.call(
-      h.editor.token,
-      'POST',
-      '/api/event-center/response-rules',
-      ruleBody('editor own'),
-    )
-    expect(own.status).toBe(201)
-    const ownRule = (await own.json()) as { id: string; ownerUserId: string }
-    expect(ownRule.ownerUserId).toBe(h.editor.user.id)
-
-    const forged = await h.call(h.editor.token, 'POST', '/api/event-center/response-rules', {
-      ...ruleBody('forged'),
-      ownerUserId: h.admin.user.id,
+      const adminCreated = await h.call(
+        h.admin.token,
+        'POST',
+        '/api/event-center/response-rules',
+        ruleBody('admin other'),
+      )
+      const otherRule = (await adminCreated.json()) as { id: string }
+      expect(
+        (await h.call(h.editor.token, 'DELETE', `/api/event-center/response-rules/${otherRule.id}`))
+          .status,
+      ).toBe(404)
+      expect(
+        (
+          await h.call(
+            h.overrideEditor.token,
+            'DELETE',
+            `/api/event-center/response-rules/${otherRule.id}`,
+          )
+        ).status,
+      ).toBe(200)
+      expect(
+        (await h.call(h.editor.token, 'DELETE', `/api/event-center/response-rules/${ownRule.id}`))
+          .status,
+      ).toBe(200)
     })
-    expect(forged.status).toBe(422)
-    expect(await responseCode(forged)).toBe('event-response-rule-invalid')
 
-    const adminCreated = await h.call(
-      h.admin.token,
-      'POST',
-      '/api/event-center/response-rules',
-      ruleBody('admin other'),
-    )
-    const otherRule = (await adminCreated.json()) as { id: string }
-    expect(
-      (await h.call(h.editor.token, 'DELETE', `/api/event-center/response-rules/${otherRule.id}`))
-        .status,
-    ).toBe(404)
-    expect(
-      (
-        await h.call(
-          h.overrideEditor.token,
-          'DELETE',
-          `/api/event-center/response-rules/${otherRule.id}`,
-        )
-      ).status,
-    ).toBe(200)
-    expect(
-      (await h.call(h.editor.token, 'DELETE', `/api/event-center/response-rules/${ownRule.id}`))
-        .status,
-    ).toBe(200)
-  })
+    test('source-neutral rule routes reject PATs and digital-employee create keeps launch permission', async () => {
+      const h = await harness(scope)
+      const pat = await createPat({
+        db: h.db,
+        userId: h.admin.user.id,
+        name: 'rfc315',
+        scopes: [
+          'event-automation-rules:create',
+          'event-automation-rules:update',
+          'event-automation-rules:delete',
+        ],
+        purpose: 'general',
+      })
+      expect((await h.call(pat.token, 'GET', '/api/webhook-triggers')).status).toBe(200)
+      const patGet = await h.call(pat.token, 'GET', '/api/event-center/response-rules')
+      expect(patGet.status).toBe(403)
+      expect(await responseCode(patGet)).toBe('token-forbidden-route')
 
-  test('source-neutral rule routes reject PATs and digital-employee create keeps launch permission', async () => {
-    const h = await harness()
-    const pat = await createPat({
-      db: h.db,
-      userId: h.admin.user.id,
-      name: 'rfc315',
-      scopes: [
-        'event-automation-rules:create',
-        'event-automation-rules:update',
-        'event-automation-rules:delete',
-      ],
-      purpose: 'general',
+      const limited = await createUser(h.db, {
+        username: 'rfc315-limited',
+        displayName: 'limited',
+        role: 'guest',
+        password: 'longEnoughPassword',
+        additionalPermissions: [
+          'event-automation-rules:create',
+          'event-automation-rules:update',
+          'tasks:execute',
+        ],
+      })
+      const limitedToken = (await createSession({ db: h.db, userId: limited.id })).token
+      const denied = await h.call(
+        limitedToken,
+        'POST',
+        '/api/event-center/response-rules',
+        ruleBody('employee', 'digital-employee'),
+      )
+      expect(denied.status).toBe(403)
+      expect(await responseCode(denied)).toBe('forbidden')
+
+      const workflowRule = await h.call(
+        limitedToken,
+        'POST',
+        '/api/event-center/response-rules',
+        ruleBody('workflow first'),
+      )
+      expect(workflowRule.status).toBe(201)
+      const workflowRuleId = ((await workflowRule.json()) as { id: string }).id
+      const deniedUpdate = await h.call(
+        limitedToken,
+        'PUT',
+        `/api/event-center/response-rules/${workflowRuleId}`,
+        ruleBody('employee update', 'digital-employee'),
+      )
+      expect(deniedUpdate.status).toBe(403)
+      expect(await responseCode(deniedUpdate)).toBe('forbidden')
+
+      expect(await h.db.select({ id: eventResponseRules.id }).from(eventResponseRules)).toEqual([
+        { id: workflowRuleId },
+      ])
     })
-    expect((await h.call(pat.token, 'GET', '/api/webhook-triggers')).status).toBe(200)
-    const patGet = await h.call(pat.token, 'GET', '/api/event-center/response-rules')
-    expect(patGet.status).toBe(403)
-    expect(await responseCode(patGet)).toBe('token-forbidden-route')
-
-    const limited = await createUser(h.db, {
-      username: 'rfc315-limited',
-      displayName: 'limited',
-      role: 'guest',
-      password: 'longEnoughPassword',
-      additionalPermissions: [
-        'event-automation-rules:create',
-        'event-automation-rules:update',
-        'tasks:execute',
-      ],
-    })
-    const limitedToken = (await createSession({ db: h.db, userId: limited.id })).token
-    const denied = await h.call(
-      limitedToken,
-      'POST',
-      '/api/event-center/response-rules',
-      ruleBody('employee', 'digital-employee'),
-    )
-    expect(denied.status).toBe(403)
-    expect(await responseCode(denied)).toBe('forbidden')
-
-    const workflowRule = await h.call(
-      limitedToken,
-      'POST',
-      '/api/event-center/response-rules',
-      ruleBody('workflow first'),
-    )
-    expect(workflowRule.status).toBe(201)
-    const workflowRuleId = ((await workflowRule.json()) as { id: string }).id
-    const deniedUpdate = await h.call(
-      limitedToken,
-      'PUT',
-      `/api/event-center/response-rules/${workflowRuleId}`,
-      ruleBody('employee update', 'digital-employee'),
-    )
-    expect(deniedUpdate.status).toBe(403)
-    expect(await responseCode(deniedUpdate)).toBe('forbidden')
-
-    expect(await h.db.select({ id: eventResponseRules.id }).from(eventResponseRules)).toEqual([
-      { id: workflowRuleId },
-    ])
-  })
-})
+  },
+)

@@ -45,6 +45,10 @@ import {
   workflowSyncGateReason as workflowSyncGateReasonInternal,
 } from '../domain/workflowSyncPreview'
 import {
+  assertWorktreePresentForResume as assertWorktreePresentForResumeInternal,
+  composeWorktreeResumePreflight as composeWorktreeResumePreflightInternal,
+} from '../application/worktreeResumePreflight'
+import {
   canonicalJson as canonicalTaskExecutionJsonInternal,
   decodeLineageSlotPath as decodeLineageSlotPathInternal,
   encodeLineageSlotPath as encodeLineageSlotPathInternal,
@@ -255,6 +259,12 @@ export const encodeLineageSlotPath = encodeLineageSlotPathInternal
 /** RFC-359 —— 工作流同步预览的两条判据（纯投影），legacy `services/task.ts` 经此取用。 */
 export const builtinWorkflowSyncPreview = builtinWorkflowSyncPreviewInternal
 export const workflowSyncGateReason = workflowSyncGateReasonInternal
+/**
+ * RFC-359 —— 「工作树还在不在、这个任务还能不能被继续」的唯一判据，两个 provider 共用。
+ * legacy `services/task.ts` 与 PostgreSQL 部署都经此取用（后者此前注入的是空操作）。
+ */
+export const assertWorktreePresentForResume = assertWorktreePresentForResumeInternal
+export const composeWorktreeResumePreflight = composeWorktreeResumePreflightInternal
 export const appendTaskCreatedCommittedEvent = appendTaskCreatedCommittedEventInternal
 export const setNodeRunStatusInTransaction = setNodeRunStatusInTransactionInternal
 export const revokeExactOwnerInTransaction = revokeExactOwnerInTransactionInternal

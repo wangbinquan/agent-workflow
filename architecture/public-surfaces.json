@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 850,
+    "consumers": 854,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20485,
-    "symbols": 981
+    "symbols": 983
   },
   "entries": [
     {
@@ -145342,6 +145342,52 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:33f1ba340a998147d3dd"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:assertWorktreePresentForResume",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#assertWorktreePresentForResume",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:33f1ba340a998147d3dd",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:621a522586b910cf8e0e77b93ce0ca9162d6e6a7d3531b69b4ef326d36ad9af3",
+      "status": "target-context-current-surface",
+      "symbol": "assertWorktreePresentForResume",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
@@ -148319,6 +148365,52 @@
       "unresolvedTypeRefs": [
         "z.infer"
       ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:0e231133250c813496bd"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:composeWorktreeResumePreflight",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#composeWorktreeResumePreflight",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:0e231133250c813496bd",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:14e64e1464997fecc5561378096ca3d4238b23910bf79cccab491302fe777c82",
+      "status": "target-context-current-surface",
+      "symbol": "composeWorktreeResumePreflight",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -161893,7 +161985,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bf68782401f0dc0fac7d3dd696958e8bfe57ff5f8f2a5ae73f6acbec57dcc2b6",
+  "sourceDigest": "sha256:b7f8e1bc95e047c0974e811c23a4934f640ada5e90c5bde93460d2012a8691d6",
   "targetContexts": [
     "collaboration",
     "development-automation",

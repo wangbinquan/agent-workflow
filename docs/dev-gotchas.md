@@ -6311,3 +6311,39 @@ bun 把**失败的 `beforeAll`** 报成
 
 **教训**：常量声明了「这件事要 60s」，就要确认它**真的被用在每条路径上**——
 `if (n === 1) f(x) else f(x, budget)` 这种写法正是让最常见的那条路径悄悄退回默认值的形状。
+
+## 源码注释给的「做不到」理由，要核对到**今天的代码**再采信（2026-09-12，我照抄一次、判错一次）
+
+RFC-359 把 `rfc164-workgroup-room` 迁到双引擎之后，PG 侧稳定红一条（confirm 恢复失败时期望
+410、得到 200）。`services/task.ts` 那段注释写得很像定论：
+
+> 多进程 daemon 部署两件都做不了（受理请求的进程未必看得到工作树、也未必该驱动这个任务），
+> 注入的是空操作，由 daemon 的 `human-gate-continuation` worker 轮询认领。
+
+我照抄了它，把这条记成「不是缺陷，是部署形态差异」，还把那个文件退回单引擎。**两件都错了。**
+核对之后：两个部署的 `human-gate-continuation` worker 都跑在同一个 daemon 进程里
+（`cli/start.ts:590` 与 `cli/start.ts:2570`），工作树对受理请求的进程是可见的——注释描述的那种
+多机形态在今天的代码里**不存在**。那个空操作的净效果只有一个，而且用户可见：工作树被 GC 回收后
+`confirm/approve` 在 SQLite 上 410、决策可重试，在 PG 上 200——闸门关上、holder 释放、worker
+驱动失败只打一行 warn，任务永久搁浅。判据搬进 application 层之后两边共用一份，
+**一行 provider SQL 都没有要复制**，这本身就说明「做不到」从来不是技术原因。
+
+**规律**：注释写的是「当时的打算」，不是「现在的事实」。凡是要拿注释当**放弃某项覆盖**的依据，
+先把它声称的前提逐条 grep 到今天的代码里。成本是几分钟，收益是不会把缺陷记成设计。
+
+**更要紧的第二层**：我不只是记错了一条，还顺手把那个用例退回了单引擎——等于**亲手拆掉发现
+缺陷的那只探针**。迁移撞红时，「把用例退回去」永远是最后一档，前面还有「这条红是不是真的」。
+
+## 迁移后 eslint 报 `'scope' is defined but never used` 不是 lint 小事（2026-09-12）
+
+它说明那个 describe **根本没吃 provider 作用域**：双跑了一遍，两遍测的还是原来那一个引擎。
+两种成因都实撞过：
+
+- **纯函数 describe**（`resolveMentions` 那种，一行 DB 都不碰）被整文件包进去了——白开一个
+  PostgreSQL 库跑字符串断言。处置：这类保持普通 `describe`，只包真的要库的那几块。
+- **模块级夹具**：`let h: Harness` + 模块级 `beforeEach` 里 `h = await harness(scope)`——
+  钩子在 describe 外面，看不到 `scope`，当场 ReferenceError。处置：夹具先上提进 describe。
+
+`scripts/rfc359-ac6-preflight.sh` 现在两条都能提前报（`PURE-DESCRIBE[...]` 逐块判、
+`MODULE-LEVEL-HARNESS`）。**判据必须逐块扫**——按「文件里有 describe」判会对着几乎每个文件报警，
+噪声等于没有。

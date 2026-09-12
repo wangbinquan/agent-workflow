@@ -6256,11 +6256,13 @@ PG 侧额外要 `taskDagCollaboration` / `childLaunchWorkgroup` / `processConcur
 2. 调用方基数大（约 25 个用例文件），建议先改夹具并让它在 SQLite 上与现状逐字等价（零行为变化），
    再逐批把用例切到双引擎——**不要一次同时改夹具与用例**，否则红了无从归因。
 
-## 5ag. 第四条能力不对称：`confirmGate` 的 `assertResumable` 按**部署形态**注入（W58 发现）
+## 5ag. ~~第四条能力不对称：`confirmGate` 的 `assertResumable` 按**部署形态**注入~~（**结论已推翻，见 §5ah**）
 
 账本 579 → 578（`users-http`）。同批 `rfc164-workgroup-room` 迁过去之后 PG 侧**稳定红一条**
 （`上线前加固：confirm 恢复失败时 gate、holder 与消息全部保持可重试`，期望 410 得到 200）。
-查清楚了：**不是 PG 缺陷，是既有的、有明确理由的部署形态差异。**
+当时的结论是「**不是 PG 缺陷，是既有的、有明确理由的部署形态差异**」。
+**这个结论是错的**——它照抄了源码注释里的理由，没去核对那个理由在今天的代码里成不成立。
+下面整节保留作为**判断失误的记录**，正确的处置见 §5ah。
 
 `confirmGate`（`resource-catalog/infrastructure/workgroupTaskRoomCommands.ts`）在写任何一行之前
 调 `dependencies.continuation.assertResumable`。这个依赖**按部署形态注入**——源码原话是
@@ -6286,3 +6288,59 @@ PG 侧额外要 `taskDagCollaboration` / `childLaunchWorkgroup` / `processConcur
 前三条（无 secretBox 部署 / PG 的 `task-active` 测试钩子 / WebSocket 成对适配器）多少还有
 「应该收敛」的余地，这一条是**设计上就该按部署形态分**。记在这里是为了让后来人一眼分清
 「该收敛的分叉」与「本就该不同的部署形态」——把后者也硬掰成一致，反而是错的。
+
+
+## 5ah. 更正 §5ag：那个空操作不是部署形态，是**实打实的功能缺陷**（已修）
+
+账本 578 → 576（`rfc315-event-automation-permissions` + `rfc164-workgroup-room`）。
+
+§5ag 把 PG 侧的空操作判成「设计上就该按部署形态分」，依据是 `services/task.ts` 里那段注释：
+「多进程 daemon 部署两件都做不了（受理请求的进程未必看得到工作树、也未必该驱动这个任务）」。
+**照抄注释，没去核对。** 核对之后事实是：
+
+- 两个部署的 `human-gate-continuation` worker **都跑在同一个 daemon 进程里**
+  （`cli/start.ts:590` 单进程那条、`cli/start.ts:2570` PG 那条），工作树对受理请求的进程
+  是可见的。所谓「看不到工作树」的多机形态，今天的代码里**不存在**。
+- 于是那个空操作的净效果只有一个，而且是用户可见的：工作树被 GC 回收之后，
+  `confirm/approve` 在 SQLite 上是 410（闸门与消息随事务回滚、决策可重试），
+  在 PG 上是 **200**——闸门就地关上、holder 释放，随后 worker 驱动失败**只打一行 warn**
+  （`cli/start.ts:580` 的 `onError`），任务**永久搁浅**，且没有第二次 confirm 的入口。
+  这正是那条用例（「上线前加固」）当初被写下来要挡的回归，只不过它此前只跑 SQLite，
+  所以 PG 这半从来没被看住。
+
+用户对本 RFC 的要求原话是「以后不允许再出现两种数据库一个好一个不好的分支」。
+一个 provider 410 可重试、另一个 200 永久搁浅，正是那种分支。已修：
+
+- 判据本体从 `services/task.ts` 的私有函数搬进
+  `modules/task-execution/application/worktreeResumePreflight.ts`，经
+  `public/participants` 暴露。两个依赖都是 neutral（`TaskRouteOperations.get` 与
+  `TaskRecoveryOperations` port），所以**没有任何 provider SQL 要复制**——
+  这也说明「做不到」从来不是技术原因。
+- PG 部署注入 `composeWorktreeResumePreflight({ getTask, taskRecoveryOperations })`，
+  与 SQLite 同一份判据；两边 44 条用例全绿。
+- `driveAfterCommit` **仍是** PG 侧空操作：「谁驱动这个任务」才是真按部署形态分的那一半
+  （单进程就地驱动到底、PG 交给 worker 轮询认领），预检不是。
+- 那条用例顶端写清了「PG 那半当初是红的、别把任一边再退回空操作」。
+
+**方法论教训（已进 `docs/dev-gotchas.md`）**：迁移撞到「某 provider 这条过不了」时，
+源码注释给出的理由**必须逐条核对到今天的代码**再采信。这次注释写的多机形态并不存在，
+照抄它就等于把一个实打实的搁浅缺陷记成了「设计如此」，还顺手把用例退回单引擎——
+等于亲手把发现缺陷的那只探针拆了。§5ag 保留原文，就是留着这个反例。
+
+### §5ag 里那条覆盖缺口仍然成立
+
+PG 侧「200 + worker 异步认领」的**正常**路径（工作树在、worker 顺利驱动）今天仍无用例覆盖。
+现在预检统一之后，它不再兼任「工作树没了」的兜底，缺口范围反而更清楚了：需要在夹具里把
+`human-gate-continuation` worker 跑起来，是独立一条用例。留在 backlog。
+
+### 迁移工具的两处修正（本轮踩到）
+
+- `@/server` / `@/db/client` **别名形式**此前没认，结果是脚本报
+  「scope type used but not imported」并拒绝写盘——白跑一趟。已认两种写法。
+- 文件本来就 import 过 `ProviderNeutralDatabase` 时会被追加第二份 → TS2300。已去重。
+- `rfc164-workgroup-room` 里有一个**纯函数** describe（`resolveMentions`，一行 DB 都不碰）。
+  脚本按「文件里有 `createApp`」整文件包，把它也套进了双引擎 harness——等于为几条字符串断言
+  白开一个 PostgreSQL 库。这类 describe 保持普通 `describe`，已在文件里写明理由。
+- `rfc327-memory-filter-and-facets` 的 harness 是**模块级** `let h` + 模块级 `beforeEach`，
+  包 describe 之后 `beforeEach` 看不到 `scope`（当场 ReferenceError）。已退回，
+  留待「模块级夹具上提」那一类一起做。**pre-flight 要加一条 MODULE-LEVEL-HARNESS。**
