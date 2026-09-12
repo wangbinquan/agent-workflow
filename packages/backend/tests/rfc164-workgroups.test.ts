@@ -1,5 +1,6 @@
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 // RFC-164 PR-1 — workgroups resource: service CRUD + zod shape + route ACL.
 //
 // Locks:
@@ -32,7 +33,6 @@ import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, users } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import {
   createWorkgroup,
@@ -443,7 +443,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
         { kind: 'actor', actor: T6_ACTOR },
         {
           beforeWriteTransaction: async () => {
-            await db.update(users).set({ status: 'disabled' }).where(eq(users.id, u.id)).run()
+            await db.update(users).set({ status: 'disabled' }).where(eq(users.id, u.id))
           },
         },
       )
@@ -562,281 +562,285 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
   })
 })
 
-describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
-  let db: DbClient
-  let app: Hono
-  let alice: { id: string; token: string }
-  let bob: { id: string; token: string }
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc164-workgroups-',
+  },
+  (scope) => {
+    let db: ProviderNeutralDatabase
+    let app: Hono
+    let alice: { id: string; token: string }
+    let bob: { id: string; token: string }
 
-  async function mkUser(username: string, role: 'admin' | 'user') {
-    const u = await createUser(db, {
-      username,
-      displayName: username,
-      role,
-      password: 'longEnoughPassword',
-    })
-    const { token } = await createSession({ db, userId: u.id })
-    return { id: u.id, token }
-  }
+    async function mkUser(username: string, role: 'admin' | 'user') {
+      const u = await createUser(db, {
+        username,
+        displayName: username,
+        role,
+        password: 'longEnoughPassword',
+      })
+      const { token } = await createSession({ db, userId: u.id })
+      return { id: u.id, token }
+    }
 
-  async function req(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-    const headers = new Headers(init.headers)
-    headers.set('Authorization', `Bearer ${token}`)
-    if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
-    return app.request(path, { ...init, headers })
-  }
+    async function req(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+      const headers = new Headers(init.headers)
+      headers.set('Authorization', `Bearer ${token}`)
+      if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
+      return app.request(path, { ...init, headers })
+    }
 
-  async function detail(token: string, id: string): Promise<WorkgroupDetail> {
-    const response = await req(token, `/api/workgroups/${id}`)
-    expect(response.status).toBe(200)
-    return (await response.json()) as WorkgroupDetail
-  }
+    async function detail(token: string, id: string): Promise<WorkgroupDetail> {
+      const response = await req(token, `/api/workgroups/${id}`)
+      expect(response.status).toBe(200)
+      return (await response.json()) as WorkgroupDetail
+    }
 
-  function saveBody(group: WorkgroupDetail, patch: Partial<WorkgroupDraftSnapshot> = {}): string {
-    return JSON.stringify({
-      expectedVersion: group.version,
-      clientMutationId: ulid(),
-      snapshot: { ...workgroupDraftSnapshotOf(group), ...patch },
-    })
-  }
+    function saveBody(group: WorkgroupDetail, patch: Partial<WorkgroupDraftSnapshot> = {}): string {
+      return JSON.stringify({
+        expectedVersion: group.version,
+        clientMutationId: ulid(),
+        snapshot: { ...workgroupDraftSnapshotOf(group), ...patch },
+      })
+    }
 
-  function renameBody(group: WorkgroupDetail, newName: string, description?: string): string {
-    return JSON.stringify({
-      newName,
-      ...(description === undefined ? {} : { description }),
-      expectedVersion: group.version,
-      clientMutationId: ulid(),
-    })
-  }
+    function renameBody(group: WorkgroupDetail, newName: string, description?: string): string {
+      return JSON.stringify({
+        newName,
+        ...(description === undefined ? {} : { description }),
+        expectedVersion: group.version,
+        clientMutationId: ulid(),
+      })
+    }
 
-  beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    await seedTestDefaultOpencodeRuntime(db)
-    app = createApp({
-      token: DAEMON_TOKEN,
-      configPath: '/tmp/aw-rfc164-config-never-used.json',
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
-    alice = await mkUser('alice', 'user')
-    bob = await mkUser('bob', 'user')
-    await db.insert(agents).values(
-      AGENT_NAMES.map((name) => ({
-        id: agentId(name),
-        name,
-        ownerUserId: alice.id,
-      })),
-    )
-  })
-
-  test('create → 201, creator becomes owner, default private; invalid body → 422', async () => {
-    const res = await req(alice.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify(groupInput()),
-    })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { ownerUserId: string; visibility: string }
-    expect(body.ownerUserId).toBe(alice.id)
-    expect(body.visibility).toBe('private')
-
-    // RFC-264 RE-JUDGEMENT: 'BAD NAME!' is a legal human-readable name now, so
-    // the invalid-body fixture moves to a name the current rule rejects
-    // (reserved `_` prefix). The invariant — a bad create body is a 422 — holds.
-    const bad = await req(alice.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify({ name: '_reserved' }),
-    })
-    expect(bad.status).toBe(422)
-    expect(((await bad.json()) as { code: string }).code).toBe('workgroup-invalid')
-  })
-
-  test('private group: stranger list-excluded + detail 404 identical to missing (D1)', async () => {
-    const createdResponse = await req(alice.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify(groupInput()),
-    })
-    const created = (await createdResponse.json()) as WorkgroupDetail
-    await req(alice.token, `/api/workgroups/${created.id}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        visibility: 'private',
-        expectedResourceId: created.id,
-        expectedAclRevision: 0,
-      }),
-    })
-    const list = (await (await req(bob.token, '/api/workgroups')).json()) as Array<{
-      name: string
-    }>
-    expect(list.some((g) => g.name === 'payment-squad')).toBe(false)
-    const invisible = await req(bob.token, `/api/workgroups/${created.id}`)
-    const missing = await req(bob.token, '/api/workgroups/never-existed-id')
-    expect(invisible.status).toBe(404)
-    expect(missing.status).toBe(404)
-    expect(((await invisible.json()) as { code: string }).code).toBe(
-      ((await missing.json()) as { code: string }).code,
-    )
-  })
-
-  test('non-owner PUT/DELETE → 403; owner PUT ok', async () => {
-    const createdResponse = await req(alice.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify(groupInput()),
-    })
-    const created = (await createdResponse.json()) as WorkgroupDetail
-    const group = await detail(alice.token, created.id)
-    await req(alice.token, `/api/workgroups/${created.id}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        // RFC-324：授权带档位。这条用例锁的正是「只读被授权者改不动」，
-        // 所以必须是 read —— 换成 write 它就该 200 了。
-        grants: [{ userId: bob.id, level: 'read' }],
-        expectedResourceId: created.id,
-        expectedAclRevision: 0,
-      }),
-    })
-    const forbidden = await req(bob.token, `/api/workgroups/${created.id}`, {
-      method: 'PUT',
-      body: saveBody(group),
-    })
-    expect(forbidden.status).toBe(403)
-    const del = await req(bob.token, `/api/workgroups/${created.id}`, { method: 'DELETE' })
-    expect(del.status).toBe(403)
-    const ok = await req(alice.token, `/api/workgroups/${created.id}`, {
-      method: 'PUT',
-      body: saveBody(group, { description: 'v2' }),
-    })
-    expect(ok.status).toBe(200)
-    expect(((await ok.json()) as { workgroup: WorkgroupDetail }).workgroup.description).toBe('v2')
-  })
-
-  test('D15: referencing an invisible private agent as a NEW member → 422 acl-missing-refs; grandfathered ref passes', async () => {
-    // alice creates a private agent
-    const agentRes = await req(alice.token, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'alice-private-agent',
-        description: '',
-        outputs: [],
-        syncOutputsOnIterate: true,
-        permission: {},
-        skills: [],
-        dependsOn: [],
-        mcp: [],
-        plugins: [],
-        frontmatterExtra: {},
-        bodyMd: 'x',
-      }),
-    })
-    expect(agentRes.status).toBe(201)
-    const privateAgent = (await agentRes.json()) as { id: string }
-    await req(alice.token, `/api/agents/${privateAgent.id}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        visibility: 'private',
-        expectedResourceId: privateAgent.id,
-        expectedAclRevision: 0,
-      }),
+    beforeEach(async () => {
+      db = scope.harness.db
+      await seedTestDefaultOpencodeRuntime(db)
+      app = (await scope.open()).app
+      alice = await mkUser('alice', 'user')
+      bob = await mkUser('bob', 'user')
+      await db.insert(agents).values(
+        AGENT_NAMES.map((name) => ({
+          id: agentId(name),
+          name,
+          ownerUserId: alice.id,
+        })),
+      )
     })
 
-    // bob cannot reference it in a new group
-    const blocked = await req(bob.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify(
-        groupInput({
-          name: 'bobs-squad',
-          leaderDisplayName: 'lead',
-          members: [
-            {
-              memberType: 'agent',
-              agentId: agentId('lead-agent'),
-              displayName: 'lead',
-              roleDesc: '',
-            },
-            {
-              memberType: 'agent',
-              agentId: privateAgent.id,
-              displayName: 'stolen',
-              roleDesc: '',
-            },
-          ],
+    test('create → 201, creator becomes owner, default private; invalid body → 422', async () => {
+      const res = await req(alice.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify(groupInput()),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as { ownerUserId: string; visibility: string }
+      expect(body.ownerUserId).toBe(alice.id)
+      expect(body.visibility).toBe('private')
+
+      // RFC-264 RE-JUDGEMENT: 'BAD NAME!' is a legal human-readable name now, so
+      // the invalid-body fixture moves to a name the current rule rejects
+      // (reserved `_` prefix). The invariant — a bad create body is a 422 — holds.
+      const bad = await req(alice.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify({ name: '_reserved' }),
+      })
+      expect(bad.status).toBe(422)
+      expect(((await bad.json()) as { code: string }).code).toBe('workgroup-invalid')
+    })
+
+    test('private group: stranger list-excluded + detail 404 identical to missing (D1)', async () => {
+      const createdResponse = await req(alice.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify(groupInput()),
+      })
+      const created = (await createdResponse.json()) as WorkgroupDetail
+      await req(alice.token, `/api/workgroups/${created.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: created.id,
+          expectedAclRevision: 0,
         }),
-      ),
+      })
+      const list = (await (await req(bob.token, '/api/workgroups')).json()) as Array<{
+        name: string
+      }>
+      expect(list.some((g) => g.name === 'payment-squad')).toBe(false)
+      const invisible = await req(bob.token, `/api/workgroups/${created.id}`)
+      const missing = await req(bob.token, '/api/workgroups/never-existed-id')
+      expect(invisible.status).toBe(404)
+      expect(missing.status).toBe(404)
+      expect(((await invisible.json()) as { code: string }).code).toBe(
+        ((await missing.json()) as { code: string }).code,
+      )
     })
-    expect(blocked.status).toBe(422)
-    expect(((await blocked.json()) as { code: string }).code).toBe('acl-missing-refs')
 
-    // A visible canonical id can be frozen in a new group.
-    const createdResponse = await req(bob.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify(groupInput({ name: 'bobs-squad' })),
+    test('non-owner PUT/DELETE → 403; owner PUT ok', async () => {
+      const createdResponse = await req(alice.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify(groupInput()),
+      })
+      const created = (await createdResponse.json()) as WorkgroupDetail
+      const group = await detail(alice.token, created.id)
+      await req(alice.token, `/api/workgroups/${created.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          // RFC-324：授权带档位。这条用例锁的正是「只读被授权者改不动」，
+          // 所以必须是 read —— 换成 write 它就该 200 了。
+          grants: [{ userId: bob.id, level: 'read' }],
+          expectedResourceId: created.id,
+          expectedAclRevision: 0,
+        }),
+      })
+      const forbidden = await req(bob.token, `/api/workgroups/${created.id}`, {
+        method: 'PUT',
+        body: saveBody(group),
+      })
+      expect(forbidden.status).toBe(403)
+      const del = await req(bob.token, `/api/workgroups/${created.id}`, { method: 'DELETE' })
+      expect(del.status).toBe(403)
+      const ok = await req(alice.token, `/api/workgroups/${created.id}`, {
+        method: 'PUT',
+        body: saveBody(group, { description: 'v2' }),
+      })
+      expect(ok.status).toBe(200)
+      expect(((await ok.json()) as { workgroup: WorkgroupDetail }).workgroup.description).toBe('v2')
     })
-    expect(createdResponse.status).toBe(201)
-    const created = (await createdResponse.json()) as WorkgroupDetail
 
-    // Grandfathered: visibility loss after save does not invalidate an
-    // unchanged member id on the existing group.
-    await req(alice.token, `/api/agents/${agentId('planner-agent')}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        visibility: 'private',
-        expectedResourceId: agentId('planner-agent'),
-        expectedAclRevision: 0,
-      }),
-    })
-    const group = await detail(bob.token, created.id)
-    const keep = await req(bob.token, `/api/workgroups/${created.id}`, {
-      method: 'PUT',
-      body: saveBody(group),
-    })
-    expect(keep.status).toBe(200)
-  })
+    test('D15: referencing an invisible private agent as a NEW member → 422 acl-missing-refs; grandfathered ref passes', async () => {
+      // alice creates a private agent
+      const agentRes = await req(alice.token, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'alice-private-agent',
+          description: '',
+          outputs: [],
+          syncOutputsOnIterate: true,
+          permission: {},
+          skills: [],
+          dependsOn: [],
+          mcp: [],
+          plugins: [],
+          frontmatterExtra: {},
+          bodyMd: 'x',
+        }),
+      })
+      expect(agentRes.status).toBe(201)
+      const privateAgent = (await agentRes.json()) as { id: string }
+      await req(alice.token, `/api/agents/${privateAgent.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: privateAgent.id,
+          expectedAclRevision: 0,
+        }),
+      })
 
-  test('rename via route + acl endpoint round-trip', async () => {
-    const createdResponse = await req(alice.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify(groupInput()),
-    })
-    const created = (await createdResponse.json()) as WorkgroupDetail
-    const group = await detail(alice.token, created.id)
-    const renamed = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
-      method: 'POST',
-      body: renameBody(group, 'pay-squad'),
-    })
-    expect(renamed.status).toBe(200)
-    const acl = await req(alice.token, `/api/workgroups/${created.id}/acl`)
-    expect(acl.status).toBe(200)
-    const aclBody = (await acl.json()) as { resourceType: string; canManage: boolean }
-    expect(aclBody.resourceType).toBe('workgroup')
-    expect(aclBody.canManage).toBe(true)
-  })
+      // bob cannot reference it in a new group
+      const blocked = await req(bob.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify(
+          groupInput({
+            name: 'bobs-squad',
+            leaderDisplayName: 'lead',
+            members: [
+              {
+                memberType: 'agent',
+                agentId: agentId('lead-agent'),
+                displayName: 'lead',
+                roleDesc: '',
+              },
+              {
+                memberType: 'agent',
+                agentId: privateAgent.id,
+                displayName: 'stolen',
+                roleDesc: '',
+              },
+            ],
+          }),
+        ),
+      })
+      expect(blocked.status).toBe(422)
+      expect(((await blocked.json()) as { code: string }).code).toBe('acl-missing-refs')
 
-  test('rename route saves name + description atomically; description-only keeps the name', async () => {
-    const createdResponse = await req(alice.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify(groupInput()),
+      // A visible canonical id can be frozen in a new group.
+      const createdResponse = await req(bob.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify(groupInput({ name: 'bobs-squad' })),
+      })
+      expect(createdResponse.status).toBe(201)
+      const created = (await createdResponse.json()) as WorkgroupDetail
+
+      // Grandfathered: visibility loss after save does not invalidate an
+      // unchanged member id on the existing group.
+      await req(alice.token, `/api/agents/${agentId('planner-agent')}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: agentId('planner-agent'),
+          expectedAclRevision: 0,
+        }),
+      })
+      const group = await detail(bob.token, created.id)
+      const keep = await req(bob.token, `/api/workgroups/${created.id}`, {
+        method: 'PUT',
+        body: saveBody(group),
+      })
+      expect(keep.status).toBe(200)
     })
-    const created = (await createdResponse.json()) as WorkgroupDetail
-    const group = await detail(alice.token, created.id)
-    const both = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
-      method: 'POST',
-      body: renameBody(group, 'pay-squad', 'atomic blurb'),
+
+    test('rename via route + acl endpoint round-trip', async () => {
+      const createdResponse = await req(alice.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify(groupInput()),
+      })
+      const created = (await createdResponse.json()) as WorkgroupDetail
+      const group = await detail(alice.token, created.id)
+      const renamed = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
+        method: 'POST',
+        body: renameBody(group, 'pay-squad'),
+      })
+      expect(renamed.status).toBe(200)
+      const acl = await req(alice.token, `/api/workgroups/${created.id}/acl`)
+      expect(acl.status).toBe(200)
+      const aclBody = (await acl.json()) as { resourceType: string; canManage: boolean }
+      expect(aclBody.resourceType).toBe('workgroup')
+      expect(aclBody.canManage).toBe(true)
     })
-    expect(both.status).toBe(200)
-    const bothReceipt = (await both.json()) as { workgroup: WorkgroupDetail }
-    expect(bothReceipt.workgroup).toMatchObject({
-      name: 'pay-squad',
-      description: 'atomic blurb',
+
+    test('rename route saves name + description atomically; description-only keeps the name', async () => {
+      const createdResponse = await req(alice.token, '/api/workgroups', {
+        method: 'POST',
+        body: JSON.stringify(groupInput()),
+      })
+      const created = (await createdResponse.json()) as WorkgroupDetail
+      const group = await detail(alice.token, created.id)
+      const both = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
+        method: 'POST',
+        body: renameBody(group, 'pay-squad', 'atomic blurb'),
+      })
+      expect(both.status).toBe(200)
+      const bothReceipt = (await both.json()) as { workgroup: WorkgroupDetail }
+      expect(bothReceipt.workgroup).toMatchObject({
+        name: 'pay-squad',
+        description: 'atomic blurb',
+      })
+      // description-only edit — newName echoes the current name, no rename occurs.
+      const descOnly = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
+        method: 'POST',
+        body: renameBody(bothReceipt.workgroup, 'pay-squad', 'blurb only'),
+      })
+      expect(descOnly.status).toBe(200)
+      expect(((await descOnly.json()) as { workgroup: WorkgroupDetail }).workgroup).toMatchObject({
+        name: 'pay-squad',
+        description: 'blurb only',
+      })
     })
-    // description-only edit — newName echoes the current name, no rename occurs.
-    const descOnly = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
-      method: 'POST',
-      body: renameBody(bothReceipt.workgroup, 'pay-squad', 'blurb only'),
-    })
-    expect(descOnly.status).toBe(200)
-    expect(((await descOnly.json()) as { workgroup: WorkgroupDetail }).workgroup).toMatchObject({
-      name: 'pay-squad',
-      description: 'blurb only',
-    })
-  })
-})
+  },
+)

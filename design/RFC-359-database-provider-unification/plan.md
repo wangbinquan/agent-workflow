@@ -6825,3 +6825,25 @@ describe 里，跑出 `[postgresql] > application lifetime > … > [postgresql] 
    当场 `username already exists`。合一前每次 `buildHarness()` 现建一个库，所以同名无碍。
    种子改名即可。**别**给作用域加「每次 open 重置库」——那会让「同一个库换一份配置」
    这种真实场景变得不可测。已进 `docs/dev-gotchas.md`。
+
+
+## 5ay. `rfc294-route-gate-compat`（554 → 553）与 `rfc164-workgroups`（条目 2 → 1）
+
+模块级 `beforeEach`/`afterEach` 建库建应用建 app home，整体上提进注册面。
+`doc_versions` 目录改建在 `opened.appHome` 下（路由经 `Paths.root` 定位，自己另建一个会被
+`open()` 覆盖）。`afterEach` 里的 `$client.close()` + `rmSync(root)` 全部退役——库与目录都归
+作用域。
+
+`.get()` 的三处按 §5al 的判据改成 `(await …)[0]`——**不能只去掉终结符**：中立面回的是数组，
+去掉就把「一行」悄悄变成「一个数组」。
+
+### 第三次被自己的注释绊倒
+
+写完改动后 `test-suite-policy` 报 `rfc294-route-gate-compat: 1` 个同步终结符——扫到的是我
+**注释里**那句「中立面上没有 `.get()`」。`docs/dev-gotchas.md` 早有一条
+「守卫按文本计数时，你的注释就是它的输入」，这是第三次撞。注释改成不写出方法名即可。
+
+
+`rfc164-workgroups` 同批：路由 ACL 那个 describe 接上作用域（另外两个是服务层的
+`describeEachProvider`，本来就双引擎；`CreateWorkgroupSchema shape` 是纯 schema 断言，保持普通
+`describe`）。文件里还剩一处单引擎调用点，条目不减。
