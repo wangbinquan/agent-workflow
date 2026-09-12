@@ -1,5 +1,10 @@
+import type { Hono } from 'hono'
+
 import type { Actor } from '@/auth/actor'
-import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import {
+  createIdentityAccessRuntime,
+  type IdentityAccessRuntime,
+} from '@/modules/identity-access/composition'
 import { allOperationRoutes } from '@/platform/operations/catalog'
 import type { OperationResult } from '@/platform/operations/contracts'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
@@ -32,10 +37,23 @@ function matchPath(template: string, concrete: string): Readonly<Record<string, 
   return params
 }
 
-/** Test-only compatibility shim for pre-RFC-344 route-level assertions. */
-export function createRouteOperationDispatcher(deps: AppDeps): RouteOperationDispatcher {
-  const identityAccess = deps.identityAccess ?? createIdentityAccessRuntime({ db: deps.db })
-  const app = createApp({ ...deps, identityAccess })
+/**
+ * Test-only compatibility shim for pre-RFC-344 route-level assertions.
+ *
+ * RFC-359 —— 两种入参形态：
+ *   · `{ app, identityAccess }` —— **已装配好的应用**，两个 provider 通用。共用 HTTP 夹具把
+ *     这两样都交出来了（`ProviderHttpApplication`），所以 MCP dispatcher 类用例不再需要
+ *     `AppDeps`，也就不再被钉死在 SQLite 上。
+ *   · `AppDeps` —— 旧形态：自己 `createApp`，只能是 SQLite。存量调用方还在用，新用例别再用。
+ */
+export function createRouteOperationDispatcher(
+  input: AppDeps | { readonly app: Hono; readonly identityAccess: IdentityAccessRuntime },
+): RouteOperationDispatcher {
+  const composed = 'app' in input
+  const identityAccess = composed
+    ? input.identityAccess
+    : (input.identityAccess ?? createIdentityAccessRuntime({ db: input.db }))
+  const app = composed ? input.app : createApp({ ...input, identityAccess })
   return async (request, actor) => {
     for (const route of allOperationRoutes()) {
       if (route.method !== request.method) continue

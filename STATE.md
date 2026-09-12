@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 558**，又照出三条 PG 缺陷）
+> ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 557**，又照出三条 PG 缺陷）
 >
 > 接着下面那段做。**新发现的三条产品缺陷，全部是把单引擎用例改成双引擎当天红出来的**：
 >
@@ -58,13 +58,18 @@
 > HTTP 夹具**暴露装配结果**（`ProviderHttpApplication` 上已有 `secretBox` /
 > `processConcurrencyScope` / `repositoryWorkspaceStore` / `taskExecution` 四个先例），
 > 而不是给生产输入类型加 13 个只服务测试的可选字段、还两个 provider 各一份。
-> 按这个思路，下一个要交出来的是 **dispatcher / schedulerDriver**：`rfc327` 的 MCP 那组、
-> `rfc247-mcp-server`、`rfc326-mcp-review-tools` 都卡在这里（它们自建
-> `composeTaskExecutionTestRuntime(db)` 去拿 `schedulerDriver` 拼 route operation dispatcher）。
-> 其次是 `helpers/taskRecoveryOperations` 这层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）。
+> **接着又拆掉一把锁（plan §5at）**：`tests/helpers/routeOperationDispatcher` 只吃 `AppDeps`
+> 并内部 `createApp`——**按构造只能是 SQLite**。所有 MCP dispatcher 用例被它钉住，而它们为了
+> 凑出那个 `AppDeps` 又得自建 `composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有），
+> 是一条**自我维持的锁链**。给 helper 加一条「吃已装配的应用」的入参形态 + 把 `identityAccess`
+> 也加进夹具暴露面之后，`rfc327` 的 MCP 那组从「自建 6 行运行时 + 12 行 dispatcher 选项」
+> 塌成一行，整个文件 26 条全部双引擎。
 >
-> **`rfc327` 已按「诚实地留一半」处置**：两组 REST 接上双引擎，MCP 那组明写理由留在单引擎——
-> 硬塞只会得到「看起来双跑、实际仍只测 SQLite」的用例。账本条目因此不减；账本是手段不是目的。
+> **规律**：遇到「这组接不进双引擎」，先看它调用的那个**测试 helper 自己是不是 provider-bound**
+> ——从 helper 这头拆往往便宜一个数量级。`rfc247-mcp-server` / `rfc326-mcp-review-tools`
+> 用的是同一个 helper，下一刀直接照做。
+>
+> 再往后是 `helpers/taskRecoveryOperations` 这层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）。
 > 另记：**PG 备份路径今天零覆盖**且不能靠迁 `backup.test.ts` 来补，见 `docs/audit-backlog.md`。
 
 > ## 📌 RFC-359 本轮进展（2026-09-12 上半场，AC-6 账本 **625 → 581**，含三条已修 PG 缺陷）

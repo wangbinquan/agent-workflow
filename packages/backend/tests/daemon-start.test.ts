@@ -317,7 +317,9 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
       }
       await child.exited
     }
-  })
+    // 预算必须**大于**自己内部那个 `waitForReady(…, 10_000)`：这一条此前跑在 bun 的 5s
+    // 默认预算上，于是「daemon 起得够快」才过——macOS 分片上 2026-09-12 实红两条。
+  }, 30_000)
 
   test('startup never executes a configured OpenCode binary, regardless of reported version', async () => {
     const marker = join(tmp, 'opencode-was-executed')
@@ -346,7 +348,7 @@ printf '%s\\n' 'stub-opencode custom-build'
       }
       await child.exited
     }
-  })
+  }, 30_000)
 
   // The readiness helper intentionally allows a loaded daemon boot ten
   // seconds. Bun's five-second default must not preempt that contract before

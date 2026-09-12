@@ -6707,16 +6707,14 @@ createApp({ …, taskExecutionReadModels })
 三个 describe 里两个（REST 的多标签过滤、facets 聚合）接上了共用作用域——模块级 `let h` +
 模块级钩子整体上提进注册面（pre-flight 的 `MODULE-LEVEL-HARNESS` 那一类）。11 条 → 22 条。
 
-**第三组（MCP `resource_read`）留在单引擎，这是有意的**：它在夹具外面自建
-`composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有，吃 `DbClient`），为的是拿
-`schedulerDriver` 去拼一个 route operation dispatcher。§5ar 交出来的是读模型与协作上下文，
-**还没交出 dispatcher / schedulerDriver**。
+**第三组（MCP `resource_read`）一开始留在了单引擎**，理由是它在夹具外面自建
+`composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有，吃 `DbClient`）去拿 `schedulerDriver`
+拼一个 route operation dispatcher。
 
-硬把它塞进双引擎只会得到一个「看起来双跑、实际仍只测 SQLite」的用例——那正是本 RFC 一路在
-消灭的形状。文件里写清了理由与解锁条件。
-
-**因此这个文件的账本条目不减**（仍有一处 `createInMemoryDb`）。账本是手段不是目的：
-这一刀换来的是 REST 两组真的在 PostgreSQL 上跑起来了。
+**随后解开了（§5at）**：真正的障碍不是 `schedulerDriver`，而是
+`tests/helpers/routeOperationDispatcher` 只吃 `AppDeps` 并自己 `createApp`。
+给它加一条「吃**已装配的应用**」的入参形态之后，那一整段自建运行时直接删掉——
+整个文件 26 条全部双引擎。
 
 ### 拆分时自己踩了一次 MODULE-LEVEL-HARNESS
 
@@ -6725,3 +6723,46 @@ createApp({ …, taskExecutionReadModels })
 `no such table: agent_workflow.users`，9 条红 + 18 个 unhandled error。
 钩子挪进它自己的 describe 即好。已进 `docs/dev-gotchas.md`——那条判据此前只防「迁移时漏了
 上提」，现在同样防「**拆分时新引入**一个模块级钩子」。
+
+
+## 5at. dispatcher 只吃 `AppDeps` 才是真障碍（账本 558 → 557）
+
+`createRouteOperationDispatcher(deps: AppDeps)` 内部 `createApp(...)`——**按构造只能是 SQLite**。
+所有 MCP dispatcher 类用例都被它钉住，而它们为了凑出那个 `AppDeps`，又得在外面自建
+`composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有）去拿 `schedulerDriver`、读模型、
+协作上下文——**一条自我维持的锁链**。
+
+拆法是从 helper 这一头：它其实只需要两样东西——一个 `app` 和 `identityAccess.directAuthority`。
+加一条入参形态 `{ app, identityAccess }`（旧的 `AppDeps` 形态保留给存量调用方），
+再把 `identityAccess` 加进夹具的暴露面（第三项，与 §5ar 的两项同源：**两个 provider 本来就
+装配了它**——SQLite 的 `composed.core.identityAccess`、PostgreSQL 的 `core.identityAccess`）。
+
+`rfc327` 的 MCP 那组随即从「自建 6 行运行时 + 12 行 dispatcher 选项」塌成一行：
+
+```ts
+const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+```
+
+**规律**：遇到「这组用例接不进双引擎」时，别只盯着用例缺什么依赖——先看它调用的那个
+**测试 helper 自己是不是 provider-bound**。helper 吃 `AppDeps`、内部 `createApp`，
+就是一把锁；从 helper 这头拆，往往比给用例补依赖便宜一个数量级。
+
+`rfc247-mcp-server` / `rfc326-mcp-review-tools` 用的是同一个 helper，下一刀直接照做。
+
+
+## 5au. 一条与 RFC-359 无关、但被本轮 CI 逮到的真缺陷：用例预算小于它自己的等待上限
+
+`c00d45c90` 的 macOS 分片红了两条 `daemon start — lifecycle`（各 5006ms 超时）。查下来与本轮
+改动无任何调用路径交集——是 `tests/daemon-start.test.ts` 里两条用例内部
+`waitForReady(child.stdout, 10_000)`，自己却跑在 **bun 的 5s 缺省预算**上。
+
+也就是说它们实际测的是「daemon 起得够不够快」：本机与快 runner 上绿，忙分片上红。
+同文件里每条同样等 10s 的兄弟用例给的都是 15–30s，**只有这两条漏了**。
+
+已补预算，并把判据写成守卫（`test-suite-policy`：`a test that waits N ms declares a budget
+larger than N`，已变异验证）。细节与两个正则坑进 `docs/dev-gotchas.md`。
+
+**顺带**：`scripts/source-guard-sweep.ts` 这一轮真的兜住了一条——
+`rfc345-resource-catalog-contracts` 有一条源码锁钉着 `routeOperationDispatcher` 的
+`deps.identityAccess ?? …` 字面量，§5at 把形参改名 `input` 之后它当场红。
+本地扫到、当场改对，没有推红主干。**这就是那个脚本存在的理由。**

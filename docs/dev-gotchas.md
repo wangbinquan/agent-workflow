@@ -6469,3 +6469,22 @@ DrizzleQueryError                 // 没有 code / constraint
 一个文件里**混着两种引擎形态**时，每一种的夹具钩子都必须关在自己的 describe 里。
 这与 pre-flight 的 `MODULE-LEVEL-HARNESS` 是同一条判据——只是那条防的是「迁移时漏了上提」，
 这条防的是「**拆分时新引入**一个模块级钩子」。
+
+## 一条用例内部等 N 毫秒，它自己的超时预算必须 **> N**（2026-09-12 macOS 分片实红两条）
+
+`bun` 的用例缺省预算是 **5 秒**。`tests/daemon-start.test.ts` 里两条用例内部
+`waitForReady(child.stdout, 10_000)`——**等待上限比自己的预算还大**。于是它们实际上在测
+「daemon 是不是起得够快」：本机与快 runner 上 daemon 2 秒就绪，绿；macOS 分片一忙就红。
+同文件里每一条同样 `waitForReady(…, 10_000)` 的兄弟用例给的都是 15–30s，只有这两条漏了。
+
+**判据已写成守卫**（`test-suite-policy`：`a test that waits N ms declares a budget larger than N`）：
+扫 bun 用例里 `waitFor*(x, N)` 形态，`test(fn)` 的第三个实参（没有就是 5000）必须 **>** N。
+已变异验证。两条注意：
+
+- **只扫 bun 用例**：`e2e/*.spec.ts` 是 Playwright，超时来自它自己的 config，不是第三个实参。
+- **正则里第一个实参不许跨行 / 带括号**：`waitFor\w*\([^,]*,\s*(\d+)\)` 会贪婪跨行，把
+  `waitForFile(x)).toBe(true)` 后面某个无关数字吃进来（本轮实撞的假阳性）。
+
+**更一般的形态**：本文件已有一条「`beforeAll` / `afterAll` 里做真 I/O 必须显式给超时」。
+这条是它在 `test` 上的同款——**凡是「等一件需要时间的事」，预算就得按那件事的上限给，
+不能按它在你机器上的实测耗时给**。

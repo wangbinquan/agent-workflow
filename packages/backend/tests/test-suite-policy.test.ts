@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
 import { toPortableRelativePath } from '@/util/platformExec'
 
@@ -589,6 +589,55 @@ describe('repository test-suite policy', () => {
       offenders.sort(),
       '有 `expect(db.select()...)` 这样的断言少了 `await`：断言的是 builder 对象本身，不是行。' +
         '中立面上查询只有 await 之后才会执行——写成 `expect(await db.select()...)`。',
+    ).toEqual([])
+  })
+
+  // 2026-09-12 —— `daemon-start` 里两条用例内部 `waitForReady(stdout, 10_000)`，自己却跑在
+  // bun 的 **5s 默认预算**上：快机器「daemon 起得够快」就过，慢机器必红（macOS 分片实撞两条）。
+  // 兄弟用例给的都是 15–30s。判据写死：**一条用例的预算必须大于它自己等待的上限**。
+  test('a test that waits N ms declares a budget larger than N', () => {
+    const offenders: string[] = []
+    const testStart = /^(\s*)test\(/
+    // 只扫 bun 的用例：`e2e/*.spec.ts` 是 Playwright，超时来自它自己的 config，
+    // 不是 `test(fn, ms)` 的第三个实参，拿这条判据去套它只会得到噪声。
+    for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
+      if (file === import.meta.path || file.includes(`${sep}e2e${sep}`)) continue
+      const lines = readFileSync(file, 'utf8').split('\n')
+      lines.forEach((line, index) => {
+        if (!testStart.test(line)) return
+        let depth = 0
+        let started = false
+        let end = index
+        for (; end < lines.length; end += 1) {
+          for (const character of lines[end]!) {
+            if (character === '{') {
+              depth += 1
+              started = true
+            } else if (character === '}') depth -= 1
+          }
+          if (started && depth <= 0) break
+        }
+        const body = lines.slice(index, end + 1).join('\n')
+        // 第一个实参里不许出现换行 / 括号：贪婪跨行会把 `waitForFile(x)).toBe(true)` 后面
+        // 某个无关数字也吃进来（本轮实撞的假阳性）。
+        const waits = [...body.matchAll(/waitFor\w*\(\s*[^,()\n]*,\s*([0-9_]+)\s*\)/g)].map(
+          (match) => Number(match[1]!.replaceAll('_', '')),
+        )
+        if (waits.length === 0) return
+        const declared = /\},\s*([0-9_]+)\)/.exec(lines[end] ?? '')
+        const budget = declared === null ? 5_000 : Number(declared[1]!.replaceAll('_', ''))
+        if (budget <= Math.max(...waits)) {
+          offenders.push(
+            `${toPortableRelativePath(relative(REPO_ROOT, file))}:${String(index + 1)} ` +
+              `budget=${String(budget)} wait=${String(Math.max(...waits))}`,
+          )
+        }
+      })
+    }
+    expect(
+      offenders.sort(),
+      '有用例内部等待的上限 >= 它自己的超时预算：那样它只在「被等的东西刚好够快」时绿，' +
+        '在慢机器 / 忙分片上必红。给它一个明显大于等待上限的预算（bun 的缺省只有 5s）。',
     ).toEqual([])
   })
 })

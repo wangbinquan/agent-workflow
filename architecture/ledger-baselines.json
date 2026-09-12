@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 558,
+      "baseline": 557,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0f46fc9b2b87192569594fe4d867f3eed6ab1930",
-    "contentDigest": "sha256:618256cfc282b81f07d10cdc95353215096fbe80a3a5ac6c9a87980ae4644e8b",
+    "currentSnapshotSha": "c00d45c90692f98be523b2ce7057f9043b1bd3e5",
+    "contentDigest": "sha256:5c89f960d8f2e532d5796f3b42fa97c92fa76712bbdcebb8f45e7853e8bbd67b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

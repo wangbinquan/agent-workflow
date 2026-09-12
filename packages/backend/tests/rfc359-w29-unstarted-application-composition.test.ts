@@ -63,7 +63,8 @@ function compact(node: ts.Node, source: ts.SourceFile): string {
         'return{app:createComposedApp(composed),' +
         'repositoryWorkspaceStore:composed.repositoryWorkspaceStore,' +
         'taskExecutionReadModels:composed.taskExecutionReadModels,' +
-        'collaborationContext:composed.collaborationContext,}})}'
+        'collaborationContext:composed.collaborationContext,' +
+        'core:composed.core,}})}'
       if (body.getText(source).replace(/\s/g, '') !== expected)
         throw new Error('SQLite helper must return the same composed store after one app mount')
       const composition = namedCalls(body, source, 'composeSqliteApplicationDeps')[0]

@@ -12,6 +12,7 @@ import { composeDatabaseMigrationModule } from '@/modules/system-operations/comp
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
+import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { SelectedPostgresqlTaskExecutionProviderRuntime } from '@/modules/task-execution/composition/providerRuntime'
 import type { WorkspaceClaimFinalizationCommand } from '@/modules/source-control/public/commands'
 import {
@@ -75,6 +76,14 @@ export interface ProviderHttpApplication {
   readonly taskExecutionReadModels: TaskExecutionReadModels
   /** 同上：应用**自己装配好**的协作命令上下文，别在外面再建一份。 */
   readonly collaborationContext: CollaborationRouteContext
+  /**
+   * 同上：应用自己装配好的身份运行时。
+   *
+   * `tests/helpers/routeOperationDispatcher` 需要它的 `directAuthority` 来准入测试 actor；
+   * 合一前那个 helper 只能吃 `AppDeps` 并自己 `createApp`，于是所有 MCP dispatcher 用例都被
+   * 钉死在 SQLite 上。交出它之后，helper 可以直接吃**已装配的应用**。
+   */
+  readonly identityAccess: IdentityAccessRuntime
   readonly taskExecution:
     | Readonly<{ provider: 'sqlite' }>
     | Readonly<{
@@ -154,6 +163,7 @@ export function composeSqliteUnstartedApplication(deps: AppDeps) {
       repositoryWorkspaceStore: composed.repositoryWorkspaceStore,
       taskExecutionReadModels: composed.taskExecutionReadModels,
       collaborationContext: composed.collaborationContext,
+      core: composed.core,
     }
   })
 }
@@ -177,6 +187,7 @@ export async function createProviderHttpApplication(
   let repositoryWorkspaceStore: RepositoryWorkspaceStore
   let taskExecutionReadModels: TaskExecutionReadModels
   let collaborationContext: CollaborationRouteContext
+  let identityAccess: IdentityAccessRuntime
   let taskExecution: ProviderHttpApplication['taskExecution']
   let processConcurrencyScope: object
   let disposal: Promise<void> | undefined
@@ -225,6 +236,7 @@ export async function createProviderHttpApplication(
       repositoryWorkspaceStore = sqliteApplication.repositoryWorkspaceStore
       taskExecutionReadModels = sqliteApplication.taskExecutionReadModels
       collaborationContext = sqliteApplication.collaborationContext
+      identityAccess = sqliteApplication.core.identityAccess
       taskExecution = Object.freeze({ provider: 'sqlite' })
       processConcurrencyScope = binding.db
     } else {
@@ -245,6 +257,7 @@ export async function createProviderHttpApplication(
       repositoryWorkspaceStore = postgresqlApplication.core.repositoryWorkspaceStore
       taskExecutionReadModels = postgresqlApplication.runtime.taskExecution.readModels
       collaborationContext = postgresqlApplication.runtime.collaborationContext
+      identityAccess = postgresqlApplication.core.identityAccess
       processConcurrencyScope = binding.runtime
       taskExecution = Object.freeze({
         provider: 'postgresql',
@@ -259,6 +272,7 @@ export async function createProviderHttpApplication(
       repositoryWorkspaceStore,
       taskExecutionReadModels,
       collaborationContext,
+      identityAccess,
       dispose,
       taskExecution,
     })

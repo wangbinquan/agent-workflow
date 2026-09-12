@@ -9,32 +9,17 @@
 //      本身就泄露了私有 scope 里有哪些记忆存在（这是本 RFC 唯一不可商量的约束）；
 //   3. MCP `resource_read` 的 query 真的透传到路由，`method:'facets'` 打到 facets 端点。
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { rmSync } from 'node:fs'
+import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { randomBytes } from 'node:crypto'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
-import { DEFAULT_CONFIG, type Permission } from '@agent-workflow/shared'
+import { type Permission } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { agents } from '../src/db/schema'
 import { ALL_TOOLS, describeResource } from '../src/mcp/tools'
-import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import {
-  createReviewDecisionCommand,
-  createQuestionDispatchCommand,
-  createClarifyDecisionCommand,
-} from '@/modules/collaboration/composition/decisionCommands'
-import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { composeMemoryOperationsFor } from '@/modules/memory/composition'
-import { Paths } from '@/util/paths'
-import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
+import {} from '@/modules/collaboration/composition/decisionCommands'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -51,10 +36,10 @@ import { createUser } from '../src/services/users'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness<TDb = ProviderNeutralDatabase> {
   db: TDb
+  identityAccess: IdentityAccessRuntime
   app: Hono
   configPath: string
   adminId: string
@@ -64,16 +49,11 @@ interface Harness<TDb = ProviderNeutralDatabase> {
   cleanup: () => void
 }
 
-function configFile(): string {
-  const path = join(mkdtempSync(join(tmpdir(), 'aw-rfc327-')), 'config.json')
-  writeFileSync(path, JSON.stringify(DEFAULT_CONFIG))
-  return path
-}
-
 /** 两条路共用的种子：建两个用户、发两枚会话票。 */
 async function seedHarness<TDb extends ProviderNeutralDatabase>(
   db: TDb,
   app: Hono,
+  identityAccess: IdentityAccessRuntime,
   configPath: string,
   cleanup: () => void,
 ): Promise<Harness<TDb>> {
@@ -92,6 +72,7 @@ async function seedHarness<TDb extends ProviderNeutralDatabase>(
   return {
     db,
     app,
+    identityAccess,
     configPath,
     adminId: admin.id,
     adminToken: (await createSession({ db, userId: admin.id })).token,
@@ -105,23 +86,12 @@ async function seedHarness<TDb extends ProviderNeutralDatabase>(
 async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
   const opened = await scope.open()
   // 临时目录归作用域所有（`afterEach` 还原环境变量并删掉），用例不再自己删。
-  return seedHarness(scope.harness.db, opened.app, join(opened.appHome, 'config.json'), () => {})
-}
-
-/** 单引擎那条路：只服务下面那一组还没法双跑的 MCP 用例。 */
-async function nativeHarness(): Promise<Harness<DbClient>> {
-  const configPath = configFile()
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath,
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    secretBox: createSecretBoxFromKey(randomBytes(32)),
-  })
-  return seedHarness(db, app, configPath, () =>
-    rmSync(join(configPath, '..'), { recursive: true, force: true }),
+  return seedHarness(
+    scope.harness.db,
+    opened.app,
+    opened.identityAccess,
+    join(opened.appHome, 'config.json'),
+    () => {},
   )
 }
 
@@ -350,134 +320,98 @@ describeEachProviderHttpApplication(
         )
       })
     })
+    describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
+      function patActor(h: Harness, scopes: ReadonlyArray<Permission>): Actor {
+        return buildActor({
+          user: {
+            id: h.adminId,
+            username: 'alice',
+            displayName: 'Alice',
+            role: 'admin',
+            status: 'active',
+          },
+          source: 'pat',
+          patScopes: scopes,
+          patPurpose: 'mcp_only',
+        })
+      }
+
+      async function callResourceRead(args: Record<string, unknown>): Promise<{
+        seen: Array<{ path: string; query: unknown }>
+        value: unknown
+      }> {
+        // RFC-359 —— dispatcher 直接吃**已装配的应用**（夹具交出 app 与 identityAccess）。
+        // 合一前这里自建 `composeTaskExecutionTestRuntime(db)` 去凑 `schedulerDriver` /
+        // 读模型 / 协作上下文，那条路只有 bun:sqlite 走得通，整组用例因此被钉死在 SQLite 上。
+        const dispatch = createDispatcher({ app: h.app, identityAccess: h.identityAccess })
+        const actor = mcpDispatchActor(patActor(h, []))
+        const seen: Array<{ path: string; query: unknown }> = []
+        const recorded: RecordedOperationCall[] = []
+        const tool = ALL_TOOLS.find((t) => t.name === 'resource_read')!
+        const ctx = {
+          actor,
+          operations: operationHandlesForInvoker(
+            'resource_read',
+            forwardingOperationInvoker(recorded, (call) => {
+              seen.push({ path: call.path, query: call.query })
+              return dispatch(call, actor)
+            }),
+          ),
+          progress: async () => {},
+          signal: new AbortController().signal,
+        } as unknown as Parameters<typeof tool.handler>[1]
+        const value = await tool.handler(args, ctx)
+        return { seen, value }
+      }
+
+      test('list 带 query：过滤真的到达路由（不是被丢掉）', async () => {
+        await seedApproved(h, {
+          scopeType: 'global',
+          scopeId: null,
+          title: 'both',
+          tags: ['api', 'db'],
+        })
+        await seedApproved(h, { scopeType: 'global', scopeId: null, title: 'other', tags: ['ui'] })
+        const { seen, value } = await callResourceRead({
+          kind: 'memory',
+          method: 'list',
+          query: { status: 'approved', tags: 'api,db', tagMode: 'all' },
+        })
+        expect(seen[0]?.query).toEqual({ status: 'approved', tags: 'api,db', tagMode: 'all' })
+        const items = (value as { items: Array<{ title: string }> }).items
+        expect(items.map((i) => i.title)).toEqual(['both'])
+      })
+
+      test('method:facets 打到 facets 端点并返回标签计数', async () => {
+        await seedApproved(h, { scopeType: 'global', scopeId: null, title: 'a', tags: ['api'] })
+        const { seen, value } = await callResourceRead({ kind: 'memory', method: 'facets' })
+        expect(seen[0]?.path).toBe('/api/memories/facets')
+        expect((value as { tags: Array<{ tag: string; count: number }> }).tags).toEqual([
+          { tag: 'api', count: 1 },
+        ])
+      })
+
+      test('没有 facets 的 kind 明确报错，而不是悄悄退回 list', async () => {
+        await expect(callResourceRead({ kind: 'agents', method: 'facets' })).rejects.toThrow(
+          /has no facets/,
+        )
+      })
+
+      test('describe_resource 报出 facets 操作与 query 契约（模型不用猜参数名）', () => {
+        const d = describeResource('memory')
+        expect(d.operations.find((o) => o.operation === 'facets')).toEqual({
+          operation: 'facets',
+          method: 'GET',
+          path: '/api/memories/facets',
+          permission: null,
+        })
+        const q = JSON.stringify(d.querySchema)
+        for (const key of ['scopeType', 'scopeId', 'status', 'search', 'tags', 'tagMode']) {
+          expect(q, `query 契约应当包含 ${key}`).toContain(key)
+        }
+        // 没有 query 契约的 kind 不该凭空长出一个。
+        expect(describeResource('agents').querySchema).toBeUndefined()
+      })
+    })
   },
 )
-
-// RFC-359 AC-6 —— 这一组**暂时**留在单引擎：它在夹具外面自建
-// `composeTaskExecutionTestRuntime(db)`（bun:sqlite 专有：吃 `DbClient`），
-// 为的是拿 `schedulerDriver` 去拼一个 route operation dispatcher。共用夹具今天交出的是
-// 读模型与协作上下文（plan §5ar），还没交出 dispatcher / schedulerDriver。
-// 等那层也暴露出来再接双引擎——别为了账本硬塞，那只会让它看起来双跑、实际仍只测 SQLite。
-describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
-  // 钩子必须**在 describe 里面**：放在模块级会对文件里每一条用例都跑一遍，
-  // 于是双引擎那半在 PostgreSQL 轮次里也去建一个 SQLite 应用，
-  // 当场 `no such table: agent_workflow.users`（本轮实撞，判据同 pre-flight 的
-  // MODULE-LEVEL-HARNESS）。
-  let native: Harness<DbClient>
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    native = await nativeHarness()
-  })
-  afterEach(() => native?.cleanup())
-
-  function patActor(h: Harness, scopes: ReadonlyArray<Permission>): Actor {
-    return buildActor({
-      user: {
-        id: h.adminId,
-        username: 'alice',
-        displayName: 'Alice',
-        role: 'admin',
-        status: 'active',
-      },
-      source: 'pat',
-      patScopes: scopes,
-      patPurpose: 'mcp_only',
-    })
-  }
-
-  async function callResourceRead(args: Record<string, unknown>): Promise<{
-    seen: Array<{ path: string; query: unknown }>
-    value: unknown
-  }> {
-    const taskExecutionRuntime = composeTaskExecutionTestRuntime(native.db)
-    const appHome = Paths.root
-    const memoryOperations = composeMemoryOperationsFor({
-      db: native.db,
-      reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(native.db, appHome),
-    })
-    const dispatch = createDispatcher({
-      token: DAEMON_TOKEN,
-      configPath: native.configPath,
-      opencodeVersion: null,
-      dbVersion: 1,
-      db: native.db,
-      secretBox: createSecretBoxFromKey(randomBytes(32)),
-      schedulerDriver: taskExecutionRuntime.schedulerDriver,
-      taskExecutionReadModels: taskExecutionRuntime.readModels,
-      collaborationContext: createCollaborationCommandContext({
-        db: native.db,
-        taskExecutionReadModels: taskExecutionRuntime.readModels,
-        reviewDecisions: createReviewDecisionCommand({ db: native.db, appHome }),
-        questionDispatches: createQuestionDispatchCommand(native.db),
-        clarifyDecisions: createClarifyDecisionCommand(native.db, memoryOperations.distillCommands),
-      }),
-    })
-    const actor = mcpDispatchActor(patActor(native, []))
-    const seen: Array<{ path: string; query: unknown }> = []
-    const recorded: RecordedOperationCall[] = []
-    const tool = ALL_TOOLS.find((t) => t.name === 'resource_read')!
-    const ctx = {
-      actor,
-      operations: operationHandlesForInvoker(
-        'resource_read',
-        forwardingOperationInvoker(recorded, (call) => {
-          seen.push({ path: call.path, query: call.query })
-          return dispatch(call, actor)
-        }),
-      ),
-      progress: async () => {},
-      signal: new AbortController().signal,
-    } as unknown as Parameters<typeof tool.handler>[1]
-    const value = await tool.handler(args, ctx)
-    return { seen, value }
-  }
-
-  test('list 带 query：过滤真的到达路由（不是被丢掉）', async () => {
-    await seedApproved(native, {
-      scopeType: 'global',
-      scopeId: null,
-      title: 'both',
-      tags: ['api', 'db'],
-    })
-    await seedApproved(native, { scopeType: 'global', scopeId: null, title: 'other', tags: ['ui'] })
-    const { seen, value } = await callResourceRead({
-      kind: 'memory',
-      method: 'list',
-      query: { status: 'approved', tags: 'api,db', tagMode: 'all' },
-    })
-    expect(seen[0]?.query).toEqual({ status: 'approved', tags: 'api,db', tagMode: 'all' })
-    const items = (value as { items: Array<{ title: string }> }).items
-    expect(items.map((i) => i.title)).toEqual(['both'])
-  })
-
-  test('method:facets 打到 facets 端点并返回标签计数', async () => {
-    await seedApproved(native, { scopeType: 'global', scopeId: null, title: 'a', tags: ['api'] })
-    const { seen, value } = await callResourceRead({ kind: 'memory', method: 'facets' })
-    expect(seen[0]?.path).toBe('/api/memories/facets')
-    expect((value as { tags: Array<{ tag: string; count: number }> }).tags).toEqual([
-      { tag: 'api', count: 1 },
-    ])
-  })
-
-  test('没有 facets 的 kind 明确报错，而不是悄悄退回 list', async () => {
-    await expect(callResourceRead({ kind: 'agents', method: 'facets' })).rejects.toThrow(
-      /has no facets/,
-    )
-  })
-
-  test('describe_resource 报出 facets 操作与 query 契约（模型不用猜参数名）', () => {
-    const d = describeResource('memory')
-    expect(d.operations.find((o) => o.operation === 'facets')).toEqual({
-      operation: 'facets',
-      method: 'GET',
-      path: '/api/memories/facets',
-      permission: null,
-    })
-    const q = JSON.stringify(d.querySchema)
-    for (const key of ['scopeType', 'scopeId', 'status', 'search', 'tags', 'tagMode']) {
-      expect(q, `query 契约应当包含 ${key}`).toContain(key)
-    }
-    // 没有 query 契约的 kind 不该凭空长出一个。
-    expect(describeResource('agents').querySchema).toBeUndefined()
-  })
-})

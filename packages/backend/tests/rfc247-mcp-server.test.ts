@@ -41,7 +41,7 @@ import {
 } from '../src/mcp/tools'
 import { MATRIX_RESOURCES } from '@agent-workflow/shared'
 import { KINDS_WITH_BODY_SCHEMAS } from '../src/mcp/resourceSchemas'
-import { createApp } from '../src/server'
+import { createApp, type AppDeps } from '../src/server'
 import { directMcpOperationAuthority } from '../src/routes/operationAuthority'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { createRouteOperationDispatcher as createDispatcher } from './helpers/routeOperationDispatcher'
@@ -77,7 +77,7 @@ function configPath(mcpSurfaceEnabled = true): string {
 
 interface Harness {
   db: DbClient
-  deps: Parameters<typeof createDispatcher>[0]
+  deps: AppDeps
   userId: string
 }
 
