@@ -330,9 +330,9 @@ describeEachProvider('generation GC safety', (harness) => {
   })
 })
 
+// 纯源码 ratchet：整块不用 `setupNativeFixture` 的任何产物（不碰 db / binding / pluginsDir），
+// 那行 beforeEach 白建一个 SQLite 库 + 一个临时目录。判据见 pre-flight 的 IDLE-FIXTURE。
 describe('production coordinator callsite ratchet', () => {
-  beforeEach(setupNativeFixture)
-
   test('Plugin mutations, Check/Upgrade, create, and generic ACL use the stable id fence', async () => {
     const route = await readFile(
       resolve(import.meta.dir, '..', 'src', 'routes', 'plugins.ts'),

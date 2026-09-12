@@ -33,19 +33,24 @@ for f in "$@"; do
   grep -qE "writeFileSync\(.*config|applyConfigPatch\(|loadConfig\(" "$f" && r="$r WRITES-OWN-CONFIG(需 open({config}))"
   grep -q "AGENT_WORKFLOW_HOME" "$f" && r="$r OWN-APPHOME(需用 opened.appHome)"
   grep -q "resetRouteMetaRegistry" "$f" && r="$r ROUTE-META-POISON(已知雷)"
-  # 「白做的夹具」：某个 describe 挂了建库的 beforeEach，正文却一次都不碰 db
-  # （`rfc264-unicode-names` 三个 describe 都是这样——纯 schema 断言，却各建一个 SQLite 库
-  # 加播两个用户）。这类根本不用迁，把那行 beforeEach 删掉就够。
+  # 「白做的夹具」：某个 describe 挂了 setup 型 beforeEach，正文却**一样都不用**那个 setup
+  # 的产物（`rfc264-unicode-names` 三块全是这样——纯 schema 断言，却各建一个 SQLite 库加播
+  # 两个用户）。这类不用迁，删掉那行 beforeEach 就够。
+  #
+  # 判据必须看**全部**产物，不能只看 `db`：`rfc201-plugin-exact-operation` 的两块不提 `db`，
+  # 但一块用 `binding`（由 db 建出来的）、一块用 `pluginsDir`（同一个 setup 建的目录）
+  # ——只看 `db` 会把它们误报成白做（本轮实撞，报出来才发现判据太松）。
   idle=$(python3 - "$f" <<'PYEOF'
 import re, sys
 
 source = open(sys.argv[1]).read()
 Q = chr(39)
-names = []
-for match in re.finditer("(?m)^describe\\(" + Q + "([^" + Q + "]*)", source):
-    start = source.find('{', match.end())
+
+
+def block_at(index):
+    start = source.find('{', index)
     if start < 0:
-        continue
+        return None
     depth, i = 0, start
     while i < len(source):
         if source[i] == '{':
@@ -53,15 +58,34 @@ for match in re.finditer("(?m)^describe\\(" + Q + "([^" + Q + "]*)", source):
         elif source[i] == '}':
             depth -= 1
             if depth == 0:
-                break
+                return source[start : i + 1]
         i += 1
-    body = source[start : i + 1]
-    if re.search(r"beforeEach\(\s*\w*[Ss]etup", body) and not re.search(r"\bdb\b", body):
+    return None
+
+
+# setup 型函数各自产出了哪些模块级绑定
+products = {}
+for match in re.finditer(r"(?:const|async function|function)\s+(\w*[Ss]etup\w*)\b", source):
+    body = block_at(match.end())
+    if body is None:
+        continue
+    products[match.group(1)] = set(re.findall(r"(?m)^\s*(\w+)\s*=[^=]", body))
+
+names = []
+for match in re.finditer("(?m)^describe\\(" + Q + "([^" + Q + "]*)", source):
+    body = block_at(match.end())
+    if body is None:
+        continue
+    hook = re.search(r"beforeEach\(\s*(?:\(\)\s*=>\s*)?(\w*[Ss]etup\w*)", body)
+    if hook is None:
+        continue
+    produced = products.get(hook.group(1), set())
+    if produced and not any(re.search(r"(?<![\w.])" + re.escape(p) + r"(?![\w])", body) for p in produced):
         names.append(match.group(1))
 print(','.join(names))
 PYEOF
 )
-  [ -n "$idle" ] && r="$r IDLE-FIXTURE[$idle](建了库但整块不碰 db,删 beforeEach 即可)"
+  [ -n "$idle" ] && r="$r IDLE-FIXTURE[$idle](整块不用该 setup 的任何产物,删 beforeEach 即可)"
   # `createApp(h.deps)`：选项是个变量，下面那段扫不到任何键，于是 EXTRA-CREATEAPP-OPTS
   # 会**假阴性**（rfc247-mcp-server 实撞：它的 deps 里有 schedulerDriver /
   # taskExecutionReadModels / collaborationContext，PG 侧一个都没有）。看不见就要报出来。

@@ -6891,8 +6891,23 @@ SQLite 库、播两个用户——而三块正文**一次都不碰 `db`**：它�
 也就是说那个库每条用例白建一次。删掉那三行 `beforeEach`，`setupNative` / `seedUser` /
 `let db` / `createInMemoryDb` 一路空掉。
 
-**这类根本不用迁，是删。** 判据已加进 pre-flight（`IDLE-FIXTURE[...]`：某个 describe 挂了
-`beforeEach(*setup*)` 但整块不出现 `db`），并用一个刻意造的负样本验证过会报。
+**这类根本不用迁，是删。** 判据加进了 pre-flight（`IDLE-FIXTURE[...]`）。
+
+### 第一版判据太松，报出来才发现——已收紧
+
+第一版只看「整块不出现 `db`」。拿整份账本扫一遍，`rfc201-plugin-exact-operation` 被报了**三块**，
+逐块看下去两块是**误报**：一块用 `binding`（由 db 建出来的）、一块用 `pluginsDir`
+（同一个 setup 建的目录）——它们只是没**直接**提 `db`，夹具照样是要的。
+
+收紧后的判据看**全部产物**：先从 setup 函数体里收集它赋值的模块级绑定
+（`^\s*(\w+)\s*=`），再要求 describe 正文**一个都不用**。两个误报随之消失，只剩
+`production coordinator callsite ratchet` 一块——那块确实什么都不用（纯源码 ratchet），
+那行 `beforeEach` 白建一个 SQLite 库加一个临时目录。已用一个含两种情形的负样本验证：
+只报「真白做」那一块。
+
+**这也是这条判据本身的价值**：如果只是靠人扫，那两个误报很可能被当成真的删掉——
+删完测试照样绿（`binding` 在 provider 那半的 describe 里也建），要等到很久以后才发现
+这两块从此什么都没测。
 
 ### 账本残留的三类，到这里都有了判据
 
