@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 544**；反睡眠清零 + 两个组合根签名对齐）
+> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 541**；反睡眠清零 + 两个组合根签名对齐）
 >
 > 接着下面那段做。这一段没有新的产品缺陷，主线是**把两个组合根的装配签名对齐**，
 > 以及**把负向断言从墙钟改成因果屏障**。
@@ -100,7 +100,25 @@
 >
 > 剩 ~48 个文件。按「同一个覆盖口解锁几个文件」排序：
 >
-> 1. `mcpRuntimeTestDependencies` / `intentTestDependencies`（各 2 个）。**已先查过形态**：
+> 1. ~~`mcpRuntimeTestDependencies`（2 个）~~ **已完成**（plan §5bm）：`server.ts` 把
+>    `runFn` / `now` / `capacity` 条件展开进 `getMcpRuntimeTestService(...)`，PG 根建**同一个**
+>    服务却一项没转发。补成同形后迁了 `rfc238-mcp-runtime-test-http` 与
+>    `rfc349-mcp-runtime-test-daemon-identity`。**`appHome` 刻意不补**：迁进作用域后两边自然
+>    对齐（`Paths.root === opened.appHome`），用例直接把它从注入口删掉，好过制造第二个来源。
+> 2. `intentTestDependencies`（2 个）——**补完了口子、迁完 1 个**（plan §5bn）。
+>    `rfc355-intent-session-event-callsites` 踩的是**模块级钩子**那一坑：钩子写在任何 describe
+>    之外 ⇒ 对整文件生效 ⇒ 只包里面那个 describe 的话两个引擎跑的还是同一个 SQLite 库。
+>    处置是整段钩子上提进注册面。**注意 pre-flight 对这个文件同时报了 `PURE-DESCRIBE(别包)`，
+>    那条在这里是误导**——判据看的是块内有没有碰库，而 setup 全在模块级钩子里。
+>    两个标记同时出现时 `MODULE-LEVEL-HARNESS` 优先。
+>    **剩 `rfc234-intent-routes`**（1126 行 / 两个 describe / 三处 `createApp`，其中两处在用例
+>    中途换 stub 重建应用）。**那个判据已经先查掉了**：`runTurn` 是**逐请求取**的
+>    （`src/modules/intent/inbound/intentSessionRoutes.ts:149` 在 `dispatchIntentTurn(...)`
+>    入参里现取），与 `mountRuntimesRoutes` 装载期就取 `smokeRuntime` 正相反。
+>    **所以那两处「重建应用」可以直接塌成换 `currentRunFn` 目标，不必重开**
+>    （重开会换掉 app home）。
+>
+> 3. 原第 2 条的形态调查（保留）：
 >    它们**不是**路由依赖类型上的字段（`grep`：`server.ts` 各 8 / 3 处，PG 根 **0** 处），
 >    而是被 `server.ts` 以条件展开喂进**模块装配**（`server.ts:2014-2023` / `:2750-2752`）。
 >    所以形态更接近 `buildScheduleLaunch`（转发进一个被装配的服务），不是

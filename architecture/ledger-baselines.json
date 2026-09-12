@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 544,
+      "baseline": 541,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -872,7 +872,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6653402d99c54e171380eacdb89ff08d4f2fa40f4a0ff2cec2e119dd6b992ee9",
+    "sourceDigest": "sha256:d2fdaf315a8f6ca9d65b040362e3a97acca2501bc846b78aef3bb33b350cf0e0",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4a53d0b463635811871594188bef466b3ab03dcf",
-    "contentDigest": "sha256:e14d568d1316a298f58cb74942cc6dfb567912a546e0771c6788a5133abedab5",
+    "currentSnapshotSha": "263756c71b4de0a90e94fec4343caec73ccbbbae",
+    "contentDigest": "sha256:b8064d9707de250906b29eb61019c091b761e2183d386184d551442e665f4497",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

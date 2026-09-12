@@ -7279,3 +7279,101 @@ deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher) ? [ �
 留在普通 describe：被测的是「装配里没有 dispatcher」这个**测试独有**的形态
 （生产两侧都必有一个：`cli/start.ts:2310` 注入 / PG 根自建），塞进 provider 作用域还会带着
 自建的 bun:sqlite 库在 `[postgresql]` 那一遍里炸。
+
+## 5bm. `mcpRuntimeTestDependencies`：第四个覆盖口，又是「同一个服务、只有一边转发」
+
+`server.ts:2014-2023` 把 `runFn` / `now` / `capacity` 三项条件展开进
+`getMcpRuntimeTestService(...)`；PG 根建的是**同一个**服务（`postgresqlDaemonApplication.ts:603`），
+却一项都没转发——于是 MCP 运行时测试那两个文件在 PG 上没法双跑。补成同形，三条条件展开，
+生产逐字不变。
+
+**`appHome` 不在这三项里**，值得单记：SQLite 根读的是
+`mcpRuntimeTestDependencies?.appHome ?? Paths.root`，PG 根读的是 `input.appHome`。
+迁进作用域之后两边**自然对齐**——作用域在装配前把 `AGENT_WORKFLOW_HOME` 指向它现建的目录，
+于是 `Paths.root === appHome`。用例因此可以**把 `appHome` 从注入口里删掉**，
+而不是往 PG 那边也加一个 `appHome` 字段（加了反而会出现「两个来源、可能不一致」）。
+
+### 又一次撞上「我自己的注释被按文本扫的守卫算成调用点」
+
+迁完 `rfc349-mcp-runtime-test-daemon-identity` 后账本仍然报它有 1 个调用点——查下去是
+**文件头注释里写了那个建库函数的字面名字**（在解释「为什么既有 rfc238 测试绕开了这条分支」）。
+账本守卫按文本扫，注释也算它的输入。
+
+**本 session 第四次撞同一形状**（前三次见 §5ab 等）。处置照旧：改写注释、不写出那个字面名字，
+并在原地留一句说明为什么不写。**规律**：凡是「按文本扫源码」的守卫，它的语料**包含注释**；
+写注释解释某个 API 时，先想一下有没有守卫在扫它。
+
+### 本轮四个覆盖口的共同判据（给下一个人）
+
+1. **先确认它到底是不是「纯透传」**：看那个字段有没有**已经**出现在某个共享类型上
+   （`RuntimesRouteDependencies` 有 ⇒ 纯透传；`webhookDispatcher` 没有、两个根所有权不同 ⇒ 不是）。
+2. **找一个「这个口子生效时会发生可观测的事」的用例去变异验证**，别拿只走拒绝路径的用例
+   （§5bl 的教训）。
+3. **两个引擎的承重点可能不在一处**，各验各的。
+4. 改完组合根必跑 `scripts/source-guard-sweep.ts`，不能只跑 `tests/architecture/`（§5bh 的教训）。
+
+## 5bn. `intentTestDependencies`：第五个覆盖口，以及「模块级钩子」那一坑的第二次
+
+与 `mcpRuntimeTestDependencies` 完全同形：`IntentSessionRouteDependencies` 本来就有 `runTurn`，
+`server.ts:2750-2752` 一直条件展开进去，PG 根没转发。补一条同形展开即可。
+
+### `rfc355-intent-session-event-callsites` 踩的是「模块级 harness」
+
+这个文件把 `beforeEach` / `afterEach` 写在**模块级**（不在任何 describe 里），于是它们
+**对整文件生效**。pre-flight 的 `MODULE-LEVEL-HARNESS` 就是为这个形状加的：如果只把
+里面那个 describe 包进 provider 作用域，模块级钩子仍然建自己那个 SQLite 库，
+**两个引擎跑的是同一个库**，双跑等于白跑。
+
+处置：整段钩子**上提进注册面**（与 §5az 的 `rfc327` 同一招）。同时 app home 交给作用域
+——原来它自己 `mkdtempSync` 再设 `process.env.AGENT_WORKFLOW_HOME`，迁进来之后那份会被
+作用域覆盖掉。`afterEach` 里只剩 `unsubscribe()`：删目录与还原环境变量都归作用域。
+
+pre-flight 还给这个文件报了 `PURE-DESCRIBE(别包，保持普通 describe)`——**那条提示在这里是
+误导**，因为判据看的是「describe 块**自己**有没有碰库/建 app」，而这个文件的 setup 全在
+模块级钩子里，块内自然看着很"纯"。**两个标记同时出现时，`MODULE-LEVEL-HARNESS` 优先**：
+先把钩子上提，`PURE-DESCRIBE` 随之消失。（已在此记录，免得下一个人照着 `PURE-DESCRIBE` 跳过它。）
+
+### 一次「守卫在我改源码的中途跑」的假红，值得记
+
+这一轮跑 `source-guard-sweep` 时我**同时**在改 PG 组合根（加 intent 那条展开）。
+sweep 跑到 W29 那一批时，源码已经是新的、而 W29 的摘要我还没更新，于是报红。
+**不是真回归**，但也**不是噪声**——它恰好演示了这个 sweep 的价值（§5bh 那次就是没跑它）。
+**做法**：sweep 要在**源码停手之后**跑；跑之前 `git status` 看一眼自己还在不在改。
+
+### 账本 544 → 541
+
+`rfc238`(-1) / `rfc349`(-2，其中 1 条是**注释里写了建库函数名**被按文本扫算成的调用点，
+见 §5bm) / `rfc355`(-1)。
+
+**`rfc234-intent-routes` 留到下一刀**：1126 行、两个 describe、三处 `createApp`
+（其中两处在用例中途**换一套 stub 重建应用**）。
+
+**那个判据已经先查掉了**（省下一次试错）：`runTurn` 是**逐请求取**的——
+`src/modules/intent/inbound/intentSessionRoutes.ts:149` 在 `dispatchIntentTurn(...)` 的
+入参里现取 `deps.runTurn`，不是装载时捕获（与 `mountRuntimesRoutes` 装载期就取
+`smokeRuntime` 正相反，见 §5bj）。
+
+**所以那两处「换 stub 重建应用」可以直接塌成换目标**：注册一个稳定转发闭包指向
+`currentRunFn`，用例中途只改 `currentRunFn`，**不必重开应用**——重开会换掉 app home，
+把用例中途写进去的东西一起丢掉。
+
+**规律**：遇到「注册期参数 vs 用例中途要换」这类冲突，先去读**消费端**那一行是
+`const x = deps.x`（装载期）还是在函数体里 `deps.x`（逐请求）。两个答案给出完全不同的迁移
+形状，而读一行就能定。
+
+### 5bn 补记：`source-guard-sweep` 的**前置条件**比我以为的严
+
+同一轮里我被这个咬了两次，两次都不是回归：
+
+1. **源码还在改的时候跑 sweep** ⇒ W29 摘要守卫报红（源码已新、摘要还没更新）。
+2. **census 还没重采就跑 sweep** ⇒ `RFC-294 N1b` 的两条清单守卫报红
+   （我在上一次 census 之后又动了一次 PG 组合根，哪怕只是**调整接口成员顺序 + 挪注释**）。
+
+所以顺序是死的：**改完源码 → `prettier --write` → 重采 census → 再跑 sweep**。
+少任何一步，sweep 都会报出与本次改动无关的红，而你得花时间把它们一条条排除掉
+——这比不跑还糟，因为它会训练你忽略 sweep 的输出。
+
+3. **别在 sweep 跑的时候另外跑 `bun test`**。这一轮我并发跑了一次 W29，结果
+   `rfc223-pr1-impl-gate` 的 `[postgresql]` 在那一批里 **5393ms 超时**（bun 默认 5s），
+   隔离重跑 3/3 全绿。那不是「flaky 可以忽略」，那是**我自己制造的 CPU 争抢**——
+   但它和真 flake 在日志里长得一模一样，事后无法区分。**sweep 期间保持机器安静。**

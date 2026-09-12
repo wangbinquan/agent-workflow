@@ -382,6 +382,20 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
   })
 
+  // RFC-359（2026-09-12，第七次）：语句条数**仍是 160**，摘要变化——`intent` 路由依赖里
+  // 多了一条条件展开 `...(input.intentTestDependencies?.runFn === undefined ? {} : { runTurn })`，
+  // 与 `server.ts:2750-2752` 逐字同构（`IntentSessionRouteDependencies` 本来就有 `runTurn`）。
+  // 既有语句内部的形态变化，不增减条数；生产不传 ⇒ 空展开 ⇒ 用真的 runner。
+  //
+  // RFC-359（2026-09-12，第六次）：语句条数**仍是 160**，摘要变化——
+  // `getMcpRuntimeTestService(...)` 的入参里多了三条条件展开
+  // （`runFn` / `now` / `capacity`，来自 `input.mcpRuntimeTestDependencies`），
+  // 与 `server.ts:2014-2023` 对同一个服务的做法逐字同构。`appHome` 不在其中：PG 根本来
+  // 就从 `input.appHome` 取。既有语句内部的形态变化，不增减条数。
+  // 生产逐字不变（不传 ⇒ 三个展开都是空对象 ⇒ 服务取自己的默认）。
+  // 已变异验证承重：抽掉 `runFn` 那条展开，`rfc238-mcp-runtime-test-http` 的
+  // [postgresql] 当场转红。
+  //
   // RFC-359（2026-09-12，第五次）：语句条数 **159 → 160**，摘要随之变化。加的是**一条**语句：
   //     const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
   // 原来那个 `createWebhookDispatcher(...)` 的结果改名成 `composedWebhookDispatcher`，
@@ -433,7 +447,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(160)
     expect(digest(restored, pg)).toBe(
-      '4a9d086fe2980206c149fbf88087b00220942c68ab901b4ec8d71fc8155cff3f',
+      '3a7cc0566a3edbf3d3b8ba60dd30a5a805dc72e92627fb882fb7323e552c68e7',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

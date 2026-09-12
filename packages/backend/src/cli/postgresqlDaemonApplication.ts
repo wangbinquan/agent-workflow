@@ -292,6 +292,7 @@ import type { DatabaseMigrationModule } from '@/modules/system-operations/compos
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { createRepositoryEndpointDiscovery } from '@/modules/integration/composition'
@@ -396,6 +397,27 @@ export interface PostgresqlDaemonApplicationInput {
    * 对同一件事的做法逐字同构。见 plan §5bi。
    */
   readonly webhookDispatcher?: WebhookDispatcher
+  /**
+   * RFC-238 / RFC-359 —— MCP 运行时测试的测试接缝。生产两侧都省略（用真的 runner 与真时钟）。
+   *
+   * 与 `runtimeDiagnosticTestDependencies` 同类：SQLite 根一直把这三项条件展开进
+   * `getMcpRuntimeTestService(...)`（`server.ts` 的 `runFn` / `now` / `capacity`），
+   * PG 根建的是**同一个**服务却没转发它们，于是同一批用例在 PG 上没法双跑。
+   * `appHome` 不在这里——PG 根本来就从 `input.appHome` 取。
+   */
+  readonly mcpRuntimeTestDependencies?: {
+    readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+    readonly now?: () => number
+    readonly capacity?: number
+  }
+  /**
+   * RFC-234 / RFC-359 —— 意图回合的 system-agent 运行接缝。生产两侧都省略。
+   * 与 MCP 那一个同理：`IntentSessionRouteDependencies` 本来就有 `runTurn`，
+   * SQLite 根一直条件展开进去（`server.ts:2750-2752`），PG 根没转发。
+   */
+  readonly intentTestDependencies?: {
+    readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  }
   readonly maintenanceStatus: NonNullable<
     PostgresqlAppCompositionInput['platform']['maintenance']['maintenanceStatus']
   >
@@ -614,6 +636,16 @@ export async function composePostgresqlApplication(
     loadRuntime: (name) => core.runtimeRegistry.getRuntime(name),
     configPath: input.configPath,
     appHome: input.appHome,
+    // RFC-359 AC-6：与 `server.ts` 同形的条件展开（生产不传，取服务自己的默认）。
+    ...(input.mcpRuntimeTestDependencies?.runFn === undefined
+      ? {}
+      : { runFn: input.mcpRuntimeTestDependencies.runFn }),
+    ...(input.mcpRuntimeTestDependencies?.now === undefined
+      ? {}
+      : { now: input.mcpRuntimeTestDependencies.now }),
+    ...(input.mcpRuntimeTestDependencies?.capacity === undefined
+      ? {}
+      : { capacity: input.mcpRuntimeTestDependencies.capacity }),
   })
   const mcpCatalog = composeMcpCatalog({
     db: input.db,
@@ -1835,6 +1867,10 @@ export async function composePostgresqlApplication(
       }),
     }),
     resourceCatalogFor: intentResourceCatalogFor,
+    // RFC-359 AC-6：与 `server.ts` 同形的条件展开（生产不传 ⇒ 用真的 runner）。
+    ...(input.intentTestDependencies?.runFn === undefined
+      ? {}
+      : { runTurn: input.intentTestDependencies.runFn }),
   })
   const taskCatalog = composeTaskCatalog({
     sources: [

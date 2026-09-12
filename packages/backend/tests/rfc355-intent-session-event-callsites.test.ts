@@ -22,13 +22,11 @@
 // `server.ts` 里那次 `createIntentSessionWsPublisher()` 装配也是真的接上的
 // （注入 spy 的写法证明不了这一点——bootstrap 忘了注入照样绿）。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { Hono } from 'hono'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -39,15 +37,18 @@ import {
   type SystemAgentRunResult,
 } from '../src/services/systemAgentRun'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'rfc355-callsites-daemon-token'
 
-let db: DbClient
-let root: string
-let app: ReturnType<typeof createApp>
+// RFC-359 AC-6 —— 原来是**模块级** beforeEach/afterEach + 一个普通 describe。模块级钩子
+// 对整文件生效，混两种引擎形态时必错（pre-flight 的 MODULE-LEVEL-HARNESS），所以整段
+// 上提进注册面；`intentTestDependencies` 是注册期参数、`stubRun()` 按用例新建，照例走
+// 稳定转发闭包。app home 交给作用域（原来自建 `root` 并自己设 `AGENT_WORKFLOW_HOME`）。
+let db: ProviderNeutralDatabase
+let app: Hono
 let ownerToken: string
 let seen: { type: string; sessionId?: string }[]
 let unsubscribe: () => void
+let currentRunFn: ((opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>) | undefined
 
 /** 最小可用的 agent 轮次：只回一个 summary 端口，够让一轮跑完。 */
 function stubRun(): (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult> {
@@ -74,39 +75,6 @@ async function waitFor(until: () => boolean): Promise<void> {
   throw new Error(`condition timed out; seen=${JSON.stringify(seen)}`)
 }
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
-  await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
-  root = mkdtempSync(join(tmpdir(), 'rfc355-callsites-'))
-  process.env.AGENT_WORKFLOW_HOME = root
-  app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: join(root, 'config.json'),
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    intentTestDependencies: { runFn: stubRun() },
-  })
-  const owner = await createUser(db, {
-    username: 'owner',
-    displayName: 'Owner',
-    role: 'user',
-    password: 'longEnoughPassword',
-  })
-  ownerToken = (await createSession({ db, userId: owner.id })).token
-  seen = []
-  unsubscribe = intentSessionsBroadcaster.subscribe(INTENT_SESSIONS_CHANNEL, (message) => {
-    seen.push(message as { type: string; sessionId?: string })
-  })
-})
-
-afterEach(() => {
-  unsubscribe()
-  delete process.env.AGENT_WORKFLOW_HOME
-  rmSync(root, { recursive: true, force: true })
-})
-
 async function req(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
   headers.set('authorization', `Bearer ${ownerToken}`)
@@ -124,44 +92,82 @@ async function createIntentSession(): Promise<string> {
   return body.id
 }
 
-describe('RFC-355 T4b —— 生产接线确实在播（删掉调用点必须红）', () => {
-  test('dispatcher 的轮次事件真的到达广播器（turn.started / turn.finished）', async () => {
-    const sessionId = await createIntentSession()
-    await waitFor(() => seen.some((event) => event.type === 'intent.turn.finished'))
-    const types = seen.filter((event) => event.sessionId === sessionId).map((e) => e.type)
-    // 删掉 dispatcher.ts 的 `turn.started` / `turn.finished` 两处 publish ⇒ 这条超时。
-    expect(types).toContain('intent.turn.started')
-    expect(types).toContain('intent.turn.finished')
-  })
-
-  test('路由的 archive / reopen 真的播 intent.session.updated', async () => {
-    const sessionId = await createIntentSession()
-    await waitFor(() => seen.some((event) => event.type === 'intent.turn.finished'))
-    seen.length = 0
-
-    for (const action of ['archive', 'reopen'] as const) {
-      const response = await req(`/api/intent-sessions/${sessionId}/${action}`, {
-        method: 'POST',
+describeEachProviderHttpApplication(
+  'RFC-355 T4b —— 生产接线确实在播（删掉调用点必须红）',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: null,
+    dbVersion: 1,
+    tempPrefix: 'rfc355-callsites-',
+    intentTestDependencies: {
+      runFn: (opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> => {
+        if (currentRunFn === undefined) throw new Error('rfc355 runFn not installed')
+        return currentRunFn(opts)
+      },
+    },
+  },
+  (scope) => {
+    beforeEach(async () => {
+      db = scope.harness.db
+      await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+      await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
+      currentRunFn = stubRun()
+      app = (await scope.open()).app
+      const owner = await createUser(db, {
+        username: 'owner',
+        displayName: 'Owner',
+        role: 'user',
+        password: 'longEnoughPassword',
       })
-      expect(response.status).toBe(200)
-    }
-    // 删掉 inbound 的 `emitSessionUpdated` ⇒ 这条红。
-    expect(
-      seen.filter(
-        (event) => event.type === 'intent.session.updated' && event.sessionId === sessionId,
-      ).length,
-    ).toBeGreaterThanOrEqual(2)
-  })
+      ownerToken = (await createSession({ db, userId: owner.id })).token
+      seen = []
+      unsubscribe = intentSessionsBroadcaster.subscribe(INTENT_SESSIONS_CHANNEL, (message) => {
+        seen.push(message as { type: string; sessionId?: string })
+      })
+    })
 
-  test('广播的 ownerUserId 是会话归属人——前端按它过滤，错了等于推给别人', async () => {
-    const sessionId = await createIntentSession()
-    await waitFor(() => seen.some((event) => event.type === 'intent.turn.finished'))
-    const owners = new Set(
-      seen
-        .filter((event) => event.sessionId === sessionId)
-        .map((event) => (event as { ownerUserId?: string }).ownerUserId),
-    )
-    expect(owners.size).toBe(1)
-    expect([...owners][0]).toBeTruthy()
-  })
-})
+    afterEach(() => {
+      unsubscribe()
+    })
+
+    test('dispatcher 的轮次事件真的到达广播器（turn.started / turn.finished）', async () => {
+      const sessionId = await createIntentSession()
+      await waitFor(() => seen.some((event) => event.type === 'intent.turn.finished'))
+      const types = seen.filter((event) => event.sessionId === sessionId).map((e) => e.type)
+      // 删掉 dispatcher.ts 的 `turn.started` / `turn.finished` 两处 publish ⇒ 这条超时。
+      expect(types).toContain('intent.turn.started')
+      expect(types).toContain('intent.turn.finished')
+    })
+
+    test('路由的 archive / reopen 真的播 intent.session.updated', async () => {
+      const sessionId = await createIntentSession()
+      await waitFor(() => seen.some((event) => event.type === 'intent.turn.finished'))
+      seen.length = 0
+
+      for (const action of ['archive', 'reopen'] as const) {
+        const response = await req(`/api/intent-sessions/${sessionId}/${action}`, {
+          method: 'POST',
+        })
+        expect(response.status).toBe(200)
+      }
+      // 删掉 inbound 的 `emitSessionUpdated` ⇒ 这条红。
+      expect(
+        seen.filter(
+          (event) => event.type === 'intent.session.updated' && event.sessionId === sessionId,
+        ).length,
+      ).toBeGreaterThanOrEqual(2)
+    })
+
+    test('广播的 ownerUserId 是会话归属人——前端按它过滤，错了等于推给别人', async () => {
+      const sessionId = await createIntentSession()
+      await waitFor(() => seen.some((event) => event.type === 'intent.turn.finished'))
+      const owners = new Set(
+        seen
+          .filter((event) => event.sessionId === sessionId)
+          .map((event) => (event as { ownerUserId?: string }).ownerUserId),
+      )
+      expect(owners.size).toBe(1)
+      expect([...owners][0]).toBeTruthy()
+    })
+  },
+)
