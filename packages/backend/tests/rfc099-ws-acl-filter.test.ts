@@ -5,15 +5,16 @@
 // per-connection visibility cache) restores delivery. Memory frames follow
 // the scoped resource (D12).
 
-import type { Server } from 'bun'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderWebSocketApplication,
+  type ProviderWebSocketScope,
+} from './helpers/providerWebSocketScope'
 import { agents, memories, resourceGrants, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import {
   MEMORY_CHANNEL,
@@ -22,36 +23,34 @@ import {
   WORKFLOWS_CHANNEL,
   workflowsBroadcaster,
 } from '../src/ws/broadcaster'
-import { buildWebSocketAdapter } from '../src/ws/server'
-import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
-
-type AnyServer = Server<unknown>
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const SCOPE_OPTIONS = {
+  token: DAEMON_TOKEN,
+  daemonToken: DAEMON_TOKEN,
+  opencodeVersion: '1.14.25',
+  dbVersion: 1,
+  tempPrefix: 'aw-rfc099-ws-acl-',
+} as const
 
 interface Harness {
-  db: DbClient
-  server: AnyServer
+  db: ProviderNeutralDatabase
   url: string
+  httpUrl: string
   aliceToken: string
   aliceId: string
   carolToken: string
   carolId: string
   daveToken: string
-  cleanup: () => Promise<void>
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/__never_used__.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+// RFC-359 AC-6：本文件有 HTTP 回落（DELETE /api/workflows 走 app.fetch），所以要**应用**——
+// 用 `describeEachProviderWebSocketApplication` 一次拿到 provider 应用 + 实时运行时 + ws 适配器
+// + 活的 server。
+async function buildHarness(scope: ProviderWebSocketScope): Promise<Harness> {
+  const db = scope.harness.db
+  const opened = await scope.open()
   const alice = await createUser(db, {
     username: 'alice',
     displayName: 'Alice',
@@ -70,39 +69,15 @@ async function buildHarness(): Promise<Harness> {
     role: 'user',
     password: 'longEnoughPassword',
   })
-  const aliceToken = (await createSession({ db, userId: alice.id })).token
-  const carolToken = (await createSession({ db, userId: carol.id })).token
-  const daveToken = (await createSession({ db, userId: dave.id })).token
-  const identityAccess = createIdentityAccessRuntime({ db })
-  const ws = buildWebSocketAdapter({
-    daemonToken: DAEMON_TOKEN,
-    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
-    identityAccess,
-  })
-  const server = Bun.serve({
-    port: 0,
-    hostname: '127.0.0.1',
-    async fetch(req: Request, srv): Promise<Response> {
-      const upgraded = await ws.tryUpgrade(req, srv)
-      if (upgraded === true) return undefined as unknown as Response
-      if (upgraded === false) return await app.fetch(req)
-      return upgraded
-    },
-    websocket: ws.handlers,
-  })
   return {
     db,
-    server,
-    url: `ws://${server.hostname}:${server.port}`,
-    aliceToken,
+    url: opened.url,
+    httpUrl: opened.httpUrl,
+    aliceToken: (await createSession({ db, userId: alice.id })).token,
     aliceId: alice.id,
-    carolToken,
+    carolToken: (await createSession({ db, userId: carol.id })).token,
     carolId: carol.id,
-    daveToken,
-    cleanup: async () => {
-      server.stop(true)
-      resetBroadcastersForTests()
-    },
+    daveToken: (await createSession({ db, userId: dave.id })).token,
   }
 }
 
@@ -173,7 +148,7 @@ async function deleteViaHttp(
   clientMutationId: string,
   confirm: string, // RFC-222 (D5): type-to-confirm — the workflow's name
 ): Promise<Response> {
-  return fetch(`${h.url.replace(/^ws:/, 'http:')}/api/workflows/${workflowId}`, {
+  return fetch(`${h.httpUrl}/api/workflows/${workflowId}`, {
     method: 'DELETE',
     headers: {
       authorization: `Bearer ${h.aliceToken}`,
@@ -183,242 +158,257 @@ async function deleteViaHttp(
   })
 }
 
-describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
-  let h: Harness
-  let privateWfId = ''
+describeEachProviderWebSocketApplication(
+  'RFC-099 — /ws/workflows per-frame ACL filter',
+  SCOPE_OPTIONS,
+  (scope) => {
+    let h: Harness
+    let privateWfId = ''
 
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-    privateWfId = ulid()
-    await h.db.insert(workflows).values({
-      id: privateWfId,
-      name: 'private-flow',
-      definition: '{}',
-      ownerUserId: h.aliceId,
-      visibility: 'private',
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+      privateWfId = ulid()
+      await h.db.insert(workflows).values({
+        id: privateWfId,
+        name: 'private-flow',
+        definition: '{}',
+        ownerUserId: h.aliceId,
+        visibility: 'private',
+      })
     })
-  })
-  afterEach(async () => h.cleanup())
 
-  function fireUpdated() {
-    workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-      type: 'workflow.updated',
-      workflowId: privateWfId,
-      clientMutationId: ulid(),
-      version: 2,
-      snapshotHash: '0'.repeat(64),
-      updatedAt: 123,
-    })
-  }
-
-  test('owner receives frames for their private workflow; stranger receives none', async () => {
-    const aliceFrames = await framesSeen(`${h.url}/ws/workflows?token=${h.aliceToken}`, fireUpdated)
-    expect(aliceFrames.some((f) => f.type === 'workflow.updated')).toBe(true)
-
-    const carolFrames = await framesSeen(`${h.url}/ws/workflows?token=${h.carolToken}`, fireUpdated)
-    expect(carolFrames.length).toBe(0)
-  })
-
-  test('acl.updated busts the cache: after a grant, the SAME connection starts receiving', async () => {
-    const carolFrames = await framesSeen(
-      `${h.url}/ws/workflows?token=${h.carolToken}`,
-      () => {
-        // 1. pre-grant frame — dropped (and caches visible=false).
-        fireUpdated()
-        // 2. grant lands + acl.updated busts the cached entry.
-        setTimeout(() => {
-          void h.db
-            .insert(resourceGrants)
-            .values({
-              resourceType: 'workflow',
-              resourceId: privateWfId,
-              userId: h.carolId,
-              addedBy: h.aliceId,
-              addedAt: Date.now(),
-            })
-            .then(() => {
-              workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-                type: 'workflow.acl.updated',
-                workflowId: privateWfId,
-              })
-              // 3. post-grant frame — must now arrive.
-              setTimeout(fireUpdated, 50)
-            })
-        }, 50)
-      },
-      600,
-    )
-    expect(carolFrames.some((f) => f.type === 'workflow.acl.updated')).toBe(true)
-    expect(carolFrames.some((f) => f.type === 'workflow.updated')).toBe(true)
-  })
-
-  test('cold owner and grantee receive an exact private delete frame while a stranger learns nothing', async () => {
-    await h.db.insert(resourceGrants).values({
-      resourceType: 'workflow',
-      resourceId: privateWfId,
-      userId: h.carolId,
-      addedBy: h.aliceId,
-      addedAt: Date.now(),
-    })
-    // RFC-359 AC-20 因果屏障用：一个陌生人**有权**看见的公共工作流。
-    const publicWfId = ulid()
-    await h.db.insert(workflows).values({
-      id: publicWfId,
-      name: 'public-barrier-flow',
-      definition: '{}',
-      ownerUserId: h.aliceId,
-      visibility: 'public',
-    })
-    const [owner, grantee, stranger] = await Promise.all([
-      connectLiveFrames(`${h.url}/ws/workflows?token=${h.aliceToken}`),
-      connectLiveFrames(`${h.url}/ws/workflows?token=${h.carolToken}`),
-      connectLiveFrames(`${h.url}/ws/workflows?token=${h.daveToken}`),
-    ])
-    const clientMutationId = ulid()
-    const exactFrame = {
-      type: 'workflow.deleted',
-      workflowId: privateWfId,
-      clientMutationId,
-      deletedVersion: 1,
-    }
-    try {
-      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId, 'private-flow')
-      expect(response.status).toBe(204)
-      await waitUntil(
-        () =>
-          owner.frames.some((frame) => frame.type === 'workflow.deleted') &&
-          grantee.frames.some((frame) => frame.type === 'workflow.deleted'),
-      )
-
-      expect(owner.frames).toContainEqual(exactFrame)
-      expect(grantee.frames).toContainEqual(exactFrame)
-
-      // RFC-359 AC-20 —— 断言「某帧没送到」不能靠睡一觉：`gatedSubscribe` 是
-      // fire-and-forget 地起 frameGate（`src/ws/registry.ts` 的 `.then(...)`），
-      // 跨帧送达**无序**，所以别人那两条到了并不代表陌生人这条已判完。
-      // 改成走**陌生人自己这条 socket** 的因果屏障：在私有删除**之后**再播一帧
-      // 他有权看见的公共工作流；他收到它，就说明他这条连接的 gate 管线已经
-      // 把队列里前一帧（私有删除）推过去了。屏障帧和被断言的帧同一条 socket、
-      // 同一套 gate，比固定 50ms 强。
+    function fireUpdated() {
       workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
         type: 'workflow.updated',
-        workflowId: publicWfId,
+        workflowId: privateWfId,
         clientMutationId: ulid(),
         version: 2,
         snapshotHash: '0'.repeat(64),
-        updatedAt: 456,
+        updatedAt: 123,
       })
-      await waitUntil(() => stranger.frames.some((frame) => frame.workflowId === publicWfId))
-      // 屏障本身必须真的到了，否则下面那条负向断言是空的。
-      expect(stranger.frames.some((frame) => frame.workflowId === publicWfId)).toBe(true)
-
-      expect(stranger.frames.some((frame) => frame.type === 'workflow.deleted')).toBe(false)
-      const ownerFrame = owner.frames.find((frame) => frame.type === 'workflow.deleted')
-      expect(Object.keys(ownerFrame ?? {}).sort()).toEqual(Object.keys(exactFrame).sort())
-    } finally {
-      owner.socket.close()
-      grantee.socket.close()
-      stranger.socket.close()
     }
-  })
 
-  test('cold public viewers receive workflow.deleted without serializing its audience context', async () => {
-    await h.db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, privateWfId))
-    const [owner, publicViewer] = await Promise.all([
-      connectLiveFrames(`${h.url}/ws/workflows?token=${h.aliceToken}`),
-      connectLiveFrames(`${h.url}/ws/workflows?token=${h.daveToken}`),
-    ])
-    const clientMutationId = ulid()
-    const exactFrame = {
-      type: 'workflow.deleted',
-      workflowId: privateWfId,
-      clientMutationId,
-      deletedVersion: 1,
-    }
-    try {
-      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId, 'private-flow')
-      expect(response.status).toBe(204)
-      await waitUntil(
-        () =>
-          owner.frames.some((frame) => frame.type === 'workflow.deleted') &&
-          publicViewer.frames.some((frame) => frame.type === 'workflow.deleted'),
+    test('owner receives frames for their private workflow; stranger receives none', async () => {
+      const aliceFrames = await framesSeen(
+        `${h.url}/ws/workflows?token=${h.aliceToken}`,
+        fireUpdated,
       )
+      expect(aliceFrames.some((f) => f.type === 'workflow.updated')).toBe(true)
 
-      expect(owner.frames).toContainEqual(exactFrame)
-      expect(publicViewer.frames).toContainEqual(exactFrame)
-      const publicFrame = publicViewer.frames.find((frame) => frame.type === 'workflow.deleted')
-      expect(Object.keys(publicFrame ?? {}).sort()).toEqual(Object.keys(exactFrame).sort())
-    } finally {
-      owner.socket.close()
-      publicViewer.socket.close()
+      const carolFrames = await framesSeen(
+        `${h.url}/ws/workflows?token=${h.carolToken}`,
+        fireUpdated,
+      )
+      expect(carolFrames.length).toBe(0)
+    })
+
+    test('acl.updated busts the cache: after a grant, the SAME connection starts receiving', async () => {
+      const carolFrames = await framesSeen(
+        `${h.url}/ws/workflows?token=${h.carolToken}`,
+        () => {
+          // 1. pre-grant frame — dropped (and caches visible=false).
+          fireUpdated()
+          // 2. grant lands + acl.updated busts the cached entry.
+          setTimeout(() => {
+            void h.db
+              .insert(resourceGrants)
+              .values({
+                resourceType: 'workflow',
+                resourceId: privateWfId,
+                userId: h.carolId,
+                addedBy: h.aliceId,
+                addedAt: Date.now(),
+              })
+              .then(() => {
+                workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+                  type: 'workflow.acl.updated',
+                  workflowId: privateWfId,
+                })
+                // 3. post-grant frame — must now arrive.
+                setTimeout(fireUpdated, 50)
+              })
+          }, 50)
+        },
+        600,
+      )
+      expect(carolFrames.some((f) => f.type === 'workflow.acl.updated')).toBe(true)
+      expect(carolFrames.some((f) => f.type === 'workflow.updated')).toBe(true)
+    })
+
+    test('cold owner and grantee receive an exact private delete frame while a stranger learns nothing', async () => {
+      await h.db.insert(resourceGrants).values({
+        resourceType: 'workflow',
+        resourceId: privateWfId,
+        userId: h.carolId,
+        addedBy: h.aliceId,
+        addedAt: Date.now(),
+      })
+      // RFC-359 AC-20 因果屏障用：一个陌生人**有权**看见的公共工作流。
+      const publicWfId = ulid()
+      await h.db.insert(workflows).values({
+        id: publicWfId,
+        name: 'public-barrier-flow',
+        definition: '{}',
+        ownerUserId: h.aliceId,
+        visibility: 'public',
+      })
+      const [owner, grantee, stranger] = await Promise.all([
+        connectLiveFrames(`${h.url}/ws/workflows?token=${h.aliceToken}`),
+        connectLiveFrames(`${h.url}/ws/workflows?token=${h.carolToken}`),
+        connectLiveFrames(`${h.url}/ws/workflows?token=${h.daveToken}`),
+      ])
+      const clientMutationId = ulid()
+      const exactFrame = {
+        type: 'workflow.deleted',
+        workflowId: privateWfId,
+        clientMutationId,
+        deletedVersion: 1,
+      }
+      try {
+        const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId, 'private-flow')
+        expect(response.status).toBe(204)
+        await waitUntil(
+          () =>
+            owner.frames.some((frame) => frame.type === 'workflow.deleted') &&
+            grantee.frames.some((frame) => frame.type === 'workflow.deleted'),
+        )
+
+        expect(owner.frames).toContainEqual(exactFrame)
+        expect(grantee.frames).toContainEqual(exactFrame)
+
+        // RFC-359 AC-20 —— 断言「某帧没送到」不能靠睡一觉：`gatedSubscribe` 是
+        // fire-and-forget 地起 frameGate（`src/ws/registry.ts` 的 `.then(...)`），
+        // 跨帧送达**无序**，所以别人那两条到了并不代表陌生人这条已判完。
+        // 改成走**陌生人自己这条 socket** 的因果屏障：在私有删除**之后**再播一帧
+        // 他有权看见的公共工作流；他收到它，就说明他这条连接的 gate 管线已经
+        // 把队列里前一帧（私有删除）推过去了。屏障帧和被断言的帧同一条 socket、
+        // 同一套 gate，比固定 50ms 强。
+        workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+          type: 'workflow.updated',
+          workflowId: publicWfId,
+          clientMutationId: ulid(),
+          version: 2,
+          snapshotHash: '0'.repeat(64),
+          updatedAt: 456,
+        })
+        await waitUntil(() => stranger.frames.some((frame) => frame.workflowId === publicWfId))
+        // 屏障本身必须真的到了，否则下面那条负向断言是空的。
+        expect(stranger.frames.some((frame) => frame.workflowId === publicWfId)).toBe(true)
+
+        expect(stranger.frames.some((frame) => frame.type === 'workflow.deleted')).toBe(false)
+        const ownerFrame = owner.frames.find((frame) => frame.type === 'workflow.deleted')
+        expect(Object.keys(ownerFrame ?? {}).sort()).toEqual(Object.keys(exactFrame).sort())
+      } finally {
+        owner.socket.close()
+        grantee.socket.close()
+        stranger.socket.close()
+      }
+    })
+
+    test('cold public viewers receive workflow.deleted without serializing its audience context', async () => {
+      await h.db
+        .update(workflows)
+        .set({ visibility: 'public' })
+        .where(eq(workflows.id, privateWfId))
+      const [owner, publicViewer] = await Promise.all([
+        connectLiveFrames(`${h.url}/ws/workflows?token=${h.aliceToken}`),
+        connectLiveFrames(`${h.url}/ws/workflows?token=${h.daveToken}`),
+      ])
+      const clientMutationId = ulid()
+      const exactFrame = {
+        type: 'workflow.deleted',
+        workflowId: privateWfId,
+        clientMutationId,
+        deletedVersion: 1,
+      }
+      try {
+        const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId, 'private-flow')
+        expect(response.status).toBe(204)
+        await waitUntil(
+          () =>
+            owner.frames.some((frame) => frame.type === 'workflow.deleted') &&
+            publicViewer.frames.some((frame) => frame.type === 'workflow.deleted'),
+        )
+
+        expect(owner.frames).toContainEqual(exactFrame)
+        expect(publicViewer.frames).toContainEqual(exactFrame)
+        const publicFrame = publicViewer.frames.find((frame) => frame.type === 'workflow.deleted')
+        expect(Object.keys(publicFrame ?? {}).sort()).toEqual(Object.keys(exactFrame).sort())
+      } finally {
+        owner.socket.close()
+        publicViewer.socket.close()
+      }
+    })
+  },
+)
+
+describeEachProviderWebSocketApplication(
+  'RFC-099 — /ws/memories per-frame scope filter (D12)',
+  SCOPE_OPTIONS,
+  (scope) => {
+    let h: Harness
+    let privateAgentId = ''
+    let agentMemoryId = ''
+    let globalMemoryId = ''
+
+    beforeEach(async () => {
+      resetBroadcastersForTests()
+      h = await buildHarness(scope)
+      privateAgentId = ulid()
+      await h.db.insert(agents).values({
+        id: privateAgentId,
+        name: `priv-${privateAgentId}`,
+        ownerUserId: h.aliceId,
+        visibility: 'private',
+      })
+      agentMemoryId = ulid()
+      globalMemoryId = ulid()
+      await h.db.insert(memories).values([
+        {
+          id: agentMemoryId,
+          scopeType: 'agent',
+          scopeId: privateAgentId,
+          title: 'agent-scoped',
+          bodyMd: 'b',
+          tags: '[]',
+          status: 'approved',
+          sourceKind: 'manual',
+          createdAt: Date.now(),
+        },
+        {
+          id: globalMemoryId,
+          scopeType: 'global',
+          scopeId: null,
+          title: 'global-scoped',
+          bodyMd: 'b',
+          tags: '[]',
+          status: 'approved',
+          sourceKind: 'manual',
+          createdAt: Date.now(),
+        },
+      ])
+    })
+
+    function fireBoth() {
+      memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
+        type: 'memory.archived',
+        memoryId: agentMemoryId,
+      })
+      memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
+        type: 'memory.archived',
+        memoryId: globalMemoryId,
+      })
     }
-  })
-})
 
-describe('RFC-099 — /ws/memories per-frame scope filter (D12)', () => {
-  let h: Harness
-  let privateAgentId = ''
-  let agentMemoryId = ''
-  let globalMemoryId = ''
+    test('stranger only receives the global-scoped frame; owner receives both', async () => {
+      const carolFrames = await framesSeen(`${h.url}/ws/memories?token=${h.carolToken}`, fireBoth)
+      expect(carolFrames.map((f) => f.memoryId)).toEqual([globalMemoryId])
 
-  beforeEach(async () => {
-    resetBroadcastersForTests()
-    h = await buildHarness()
-    privateAgentId = ulid()
-    await h.db.insert(agents).values({
-      id: privateAgentId,
-      name: `priv-${privateAgentId}`,
-      ownerUserId: h.aliceId,
-      visibility: 'private',
+      const aliceFrames = await framesSeen(`${h.url}/ws/memories?token=${h.aliceToken}`, fireBoth)
+      expect(aliceFrames.map((f) => f.memoryId).sort()).toEqual(
+        [agentMemoryId, globalMemoryId].sort(),
+      )
     })
-    agentMemoryId = ulid()
-    globalMemoryId = ulid()
-    await h.db.insert(memories).values([
-      {
-        id: agentMemoryId,
-        scopeType: 'agent',
-        scopeId: privateAgentId,
-        title: 'agent-scoped',
-        bodyMd: 'b',
-        tags: '[]',
-        status: 'approved',
-        sourceKind: 'manual',
-        createdAt: Date.now(),
-      },
-      {
-        id: globalMemoryId,
-        scopeType: 'global',
-        scopeId: null,
-        title: 'global-scoped',
-        bodyMd: 'b',
-        tags: '[]',
-        status: 'approved',
-        sourceKind: 'manual',
-        createdAt: Date.now(),
-      },
-    ])
-  })
-  afterEach(async () => h.cleanup())
-
-  function fireBoth() {
-    memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
-      type: 'memory.archived',
-      memoryId: agentMemoryId,
-    })
-    memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
-      type: 'memory.archived',
-      memoryId: globalMemoryId,
-    })
-  }
-
-  test('stranger only receives the global-scoped frame; owner receives both', async () => {
-    const carolFrames = await framesSeen(`${h.url}/ws/memories?token=${h.carolToken}`, fireBoth)
-    expect(carolFrames.map((f) => f.memoryId)).toEqual([globalMemoryId])
-
-    const aliceFrames = await framesSeen(`${h.url}/ws/memories?token=${h.aliceToken}`, fireBoth)
-    expect(aliceFrames.map((f) => f.memoryId).sort()).toEqual(
-      [agentMemoryId, globalMemoryId].sort(),
-    )
-  })
-})
+  },
+)

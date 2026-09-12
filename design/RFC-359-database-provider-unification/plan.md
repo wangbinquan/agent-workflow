@@ -7599,3 +7599,33 @@ junit 里两个文件都各有 `[sqlite]` / `[postgresql]` 两组 classname—�
 `rfc152-ws-task-channel` / `rfc225-workgroups-ws`。形状与已迁的两个一样：
 `buildHarness` 收成 `scope.open()`、删掉自建的 `Bun.serve` / 适配器 / `createApp`、
 `h.server.hostname:port` 换 `h.httpUrl`。
+
+## 5bu. WS 那一簇迁掉 6 个：**先按「要不要应用」分流**，别一律套作用域
+
+§5bt 写出 WS 作用域之后，剩下 9 个文件**并不都需要它**。先用一条 grep 分流：
+
+```
+app.fetch=?  Bun.serve=?  $client=?
+```
+
+- **有 `app.fetch` 回落** ⇒ 真的要**应用**，套 `describeEachProviderWebSocketApplication`
+  （`rfc099-ws-acl-filter` / `ws`）；
+- **没有应用**（ws 之外回落是一条 404）⇒ 只要换库 + 按 provider 分派实时运行时，
+  `Bun.serve` 仍归文件自管，用 `describeEachProvider` 就够
+  （`ws-auth-multi-token` / `rfc152-ws-task-channel`）；
+- **连 server 都不要**（直接调 `adapter.handlers.message` 或只取 `.channels`）⇒ 同上，更轻
+  （`rfc338-websocket-heartbeat` 39 行 / `rfc225-workgroups-ws` 的第二个 describe）。
+
+**为什么值得分流**：给一个只调 `handlers.message` 的 39 行用例套上「应用 + server」的作用域，
+是把它的依赖面凭空放大——跑得更慢，失败面更宽，而它一条 HTTP 都不打。
+**作用域是给「真的需要那一套」的用例准备的，不是默认值。**
+
+本轮按这条分流迁了 6 个（账本 535 → 530）：
+`rfc338-websocket-heartbeat` / `ws-auth-multi-token` / `rfc225-workgroups-ws` /
+`rfc152-ws-task-channel` / `rfc099-ws-acl-filter`，外加 §5bt 的两个。
+
+### 剩 3 个都卡在同一件事：用例自己 `db.$client.close()`
+
+`rfc152-ws-channel-registry`(6 处) / `rfc312-impl-gate-fixes`(4 处) / `rfc212-revalidation-behavior`(3 处)。
+库归 harness 所有，用例关它在双引擎下本来就不该有（§5x 记过同一条）。
+这三个要先把自持库的生命周期交出去，才谈得上分流——是下一刀。

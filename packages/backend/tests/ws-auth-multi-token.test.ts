@@ -21,31 +21,37 @@ import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { users } from '../src/db/schema'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
+import { composeTestProviderRealtimeRuntime } from './helpers/realtimeRuntime'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   server: AnyServer
   baseUrl: string
   cleanup: () => Promise<void>
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
+// RFC-359 AC-6：本文件**没有应用**（ws 之外的回落是一条 404），所以不需要 WS 作用域——
+// 只要把库换成 harness 的、实时运行时按 provider 判别式分派即可；`Bun.serve` 仍归本文件自管。
+async function buildHarness(harness: ProviderDatabaseHarness): Promise<Harness> {
+  const db = harness.db
   const identityAccess = createIdentityAccessRuntime({ db })
   const ws = buildWebSocketAdapter({
     daemonToken: DAEMON_TOKEN,
-    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
+    realtime: composeTestProviderRealtimeRuntime({
+      binding: harness.applicationBinding,
+      neutralDb: db,
+      identityAccess,
+    }),
     identityAccess,
   })
   const server = Bun.serve({
@@ -70,7 +76,10 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedUser(db: DbClient, role: 'admin' | 'user' = 'admin'): Promise<string> {
+async function seedUser(
+  db: ProviderNeutralDatabase,
+  role: 'admin' | 'user' = 'admin',
+): Promise<string> {
   const id = ulid()
   await db.insert(users).values({
     id,
@@ -128,10 +137,10 @@ async function probeUpgrade(
   })
 }
 
-describe('WS upgrade — RFC-036 multi-token auth', () => {
+describeEachProvider('WS upgrade — RFC-036 multi-token auth', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness)
   })
   afterEach(async () => {
     await h.cleanup()
@@ -195,10 +204,10 @@ describe('WS upgrade — RFC-036 multi-token auth', () => {
 // routes/memoryDistillJobs.ts 全部 requireAdmin——但 WS upgrade 路径
 // 从未 enforce，普通用户持有效 token 即可订阅蒸馏队列帧。锁定：
 // 非 admin session 升级被 403 拒（close-before-open）、admin 正常升级。
-describe('RFC-152 P0 — /ws/memory-distill-jobs admin-only upgrade gate', () => {
+describeEachProvider('RFC-152 P0 — /ws/memory-distill-jobs admin-only upgrade gate', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness)
   })
   afterEach(async () => {
     await h.cleanup()

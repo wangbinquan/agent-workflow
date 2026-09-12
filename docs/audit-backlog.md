@@ -4708,6 +4708,10 @@ Received: "failed"
 （只有 4 个后端测试文件 + `architecture/*.json` + 三份文档），而 e2e 跑的产品源码与上一提
 `e48b1d71a` 逐字相同，后者的 e2e 是绿的。所以这不是那一提引入的。
 
+**2026-09-12 续：已第二次出现**（`6a672fe06`，同一个 job `Playwright e2e (ubuntu-latest shard 3/3)`）。
+两次都在与它无关的提交上（一次零 `src/`、一次只改测试预算+文档），所以**不是一次性抖动，是稳定复发**
+——优先级应当提高。
+
 **待办**：本机复现（要起 stub runtime + 真 daemon），看那次重跑的
 `node_runs.last_error` / `node_run_events` 究竟是什么——是 stub runtime 在这条路径上偶发退出，
 还是「拒审 → 重跑」本身有竞态。定位之前**不要**用「重跑就过了」结案（本仓明令）。

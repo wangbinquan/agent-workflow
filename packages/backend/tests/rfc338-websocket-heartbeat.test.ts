@@ -1,21 +1,26 @@
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import type { ServerWebSocket } from 'bun'
 
 import { WsControlMessageSchema } from '@agent-workflow/shared'
-import { createInMemoryDb } from '@/db/client'
 import { buildWebSocketAdapter } from '@/ws/server'
 import type { WsConnectionData } from '@/ws/registry'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { MIGRATIONS } from './migration-freeze'
-import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
+import { describeEachProvider } from './helpers/eachProvider'
+import { composeTestProviderRealtimeRuntime } from './helpers/realtimeRuntime'
 
-describe('RFC-338 WebSocket responsiveness control frame', () => {
+// RFC-359 AC-6：这条不需要 server、也不需要应用——它直接调 `adapter.handlers.message`。
+// 所以用 `describeEachProvider` 就够，实时运行时按 provider 判别式分派。
+describeEachProvider('RFC-338 WebSocket responsiveness control frame', (harness) => {
   test('answers a bounded ping without DB/domain work and ignores every other inbound frame', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const identityAccess = createIdentityAccessRuntime({ db })
     const adapter = buildWebSocketAdapter({
       daemonToken: 'd'.repeat(64),
-      realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
+      realtime: composeTestProviderRealtimeRuntime({
+        binding: harness.applicationBinding,
+        neutralDb: db,
+        identityAccess,
+      }),
       identityAccess,
     })
     const sent: string[] = []

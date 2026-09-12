@@ -6,7 +6,6 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
 import { resourceGrants, users, workgroups } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
@@ -23,9 +22,7 @@ import {
 } from '../src/ws/broadcaster'
 import { WS_CHANNELS } from '../src/ws/registry'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { composeTestProviderRealtimeRuntime } from './helpers/realtimeRuntime'
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -123,9 +120,11 @@ describeEachProvider('RFC-225 workgroup broadcaster producers', (harness) => {
   })
 })
 
-describe('RFC-225 workgroup WS frame gate', () => {
+// RFC-359 AC-6：本 describe 只要「库 + 实时运行时的 channels」，不建 server 也不建应用
+// ——换成 harness 的库、实时运行时按 provider 判别式分派即可。
+describeEachProvider('RFC-225 workgroup WS frame gate', (harness) => {
   test('private owner/grantee receive, stranger drops, ACL busts false cache', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workgroupId = ulid()
     const now = Date.now()
     await db.insert(users).values(
@@ -153,7 +152,11 @@ describe('RFC-225 workgroup WS frame gate', () => {
     })
     const gate = WS_CHANNELS.workgroups.frameGate!
     const identityAccess = createIdentityAccessRuntime({ db })
-    const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
+    const channels = composeTestProviderRealtimeRuntime({
+      binding: harness.applicationBinding,
+      neutralDb: db,
+      identityAccess,
+    }).channels
     const frame: WorkgroupsWsMessage = {
       type: 'workgroup.updated',
       workgroupId,
@@ -186,7 +189,7 @@ describe('RFC-225 workgroup WS frame gate', () => {
   })
 
   test('cold private delete uses captured audience and unknown variants fail closed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workgroupId = ulid()
     await db.insert(workgroups).values({
       id: workgroupId,
@@ -197,7 +200,11 @@ describe('RFC-225 workgroup WS frame gate', () => {
     })
     await db.delete(workgroups).where(eq(workgroups.id, workgroupId))
     const identityAccess = createIdentityAccessRuntime({ db })
-    const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
+    const channels = composeTestProviderRealtimeRuntime({
+      binding: harness.applicationBinding,
+      neutralDb: db,
+      identityAccess,
+    }).channels
     const context: WorkgroupDeletedAudienceContext = {
       kind: 'workgroup.deleted-audience',
       workgroupId,

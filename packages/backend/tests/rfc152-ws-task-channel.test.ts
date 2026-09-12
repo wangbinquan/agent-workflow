@@ -23,22 +23,22 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { createUser } from '../src/services/users'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { WS_CHANNEL_KINDS } from '../src/ws/registry'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
+import { composeTestProviderRealtimeRuntime } from './helpers/realtimeRuntime'
 
 type AnyServer = Server<unknown>
 
 const DAEMON_TOKEN = 'd'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   server: AnyServer
   baseUrl: string
   taskId: string
@@ -48,8 +48,9 @@ interface Harness {
   cleanup: () => Promise<void>
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
+// RFC-359 AC-6：本文件没有应用（ws 之外的回落是 404），只要换库 + 按 provider 分派实时运行时。
+async function buildHarness(harness: ProviderDatabaseHarness): Promise<Harness> {
+  const db = harness.db
   const owner = await createUser(db, {
     username: 'owner',
     displayName: 'Owner',
@@ -98,7 +99,11 @@ async function buildHarness(): Promise<Harness> {
   const identityAccess = createIdentityAccessRuntime({ db })
   const ws = buildWebSocketAdapter({
     daemonToken: DAEMON_TOKEN,
-    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
+    realtime: composeTestProviderRealtimeRuntime({
+      binding: harness.applicationBinding,
+      neutralDb: db,
+      identityAccess,
+    }),
     identityAccess,
   })
   const server = Bun.serve({
@@ -164,37 +169,40 @@ async function probeUpgrade(
   })
 }
 
-describe('RFC-152 — /ws/tasks/{taskId} upgrade gate (canViewTask via registry)', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(async () => {
-    await h.cleanup()
-  })
+describeEachProvider(
+  'RFC-152 — /ws/tasks/{taskId} upgrade gate (canViewTask via registry)',
+  (harness) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(harness)
+    })
+    afterEach(async () => {
+      await h.cleanup()
+    })
 
-  test('stranger session token is refused (close-before-open, 403 task-not-visible)', async () => {
-    const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${h.taskId}?token=${h.strangerToken}`)
-    expect(out.outcome).toBe('closed')
-  })
+    test('stranger session token is refused (close-before-open, 403 task-not-visible)', async () => {
+      const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${h.taskId}?token=${h.strangerToken}`)
+      expect(out.outcome).toBe('closed')
+    })
 
-  test('owner session token upgrades cleanly', async () => {
-    const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${h.taskId}?token=${h.ownerToken}`)
-    expect(out.outcome).toBe('open')
-  })
+    test('owner session token upgrades cleanly', async () => {
+      const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${h.taskId}?token=${h.ownerToken}`)
+      expect(out.outcome).toBe('open')
+    })
 
-  test('admin session token upgrades cleanly (tasks:read:all)', async () => {
-    const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${h.taskId}?token=${h.adminToken}`)
-    expect(out.outcome).toBe('open')
-  })
+    test('admin session token upgrades cleanly (tasks:read:all)', async () => {
+      const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${h.taskId}?token=${h.adminToken}`)
+      expect(out.outcome).toBe('open')
+    })
 
-  test('nonexistent task refuses even the admin-equivalent daemon token? no — fails closed for users only when row missing', async () => {
-    // canViewTask is asked with a missing row → the gate fails closed for
-    // EVERYONE (admins included: the row lookup happens before canViewTask).
-    const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${ulid()}?token=${h.adminToken}`)
-    expect(out.outcome).toBe('closed')
-  })
-})
+    test('nonexistent task refuses even the admin-equivalent daemon token? no — fails closed for users only when row missing', async () => {
+      // canViewTask is asked with a missing row → the gate fails closed for
+      // EVERYONE (admins included: the row lookup happens before canViewTask).
+      const out = await probeUpgrade(`${h.baseUrl}/ws/tasks/${ulid()}?token=${h.adminToken}`)
+      expect(out.outcome).toBe('closed')
+    })
+  },
+)
 
 describe('RFC-152 — server.ts ratchet: zero per-channel branches (whitelist = none)', () => {
   const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'ws', 'server.ts'), 'utf8')
