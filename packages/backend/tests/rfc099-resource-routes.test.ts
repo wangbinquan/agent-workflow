@@ -4,24 +4,25 @@
 // (owner transfer keeps the old owner visible), and the D15 new-reference
 // usability gate on agent/workflow saves.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   alice: { id: string; token: string } // regular user — resource creator
   bob: { id: string; token: string } // regular user — grantee
@@ -29,20 +30,14 @@ interface Harness {
   admin: { id: string; token: string }
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
   await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',
   })
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc099-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const app = (await scope.open()).app
   async function mkUser(username: string, role: 'admin' | 'user') {
     const u = await createUser(db, {
       username,
@@ -139,412 +134,457 @@ const AGENT_BODY = {
   runtime: VALID_OPENCODE_RUNTIME,
 }
 
-describe('RFC-231 — copy route payload validation', () => {
-  test('malformed workflow and workgroup copy requests return stable 422 codes', async () => {
-    const h = await buildHarness()
-    const cases = [
-      ['/api/workflows/missing/copy', 'workflow-copy-invalid'],
-      ['/api/workgroups/missing/copy', 'workgroup-copy-invalid'],
-    ] as const
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-231 — copy route payload validation',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-resource-routes-',
+  },
+  (scope) => {
+    test('malformed workflow and workgroup copy requests return stable 422 codes', async () => {
+      const h = await buildHarness(scope)
+      const cases = [
+        ['/api/workflows/missing/copy', 'workflow-copy-invalid'],
+        ['/api/workgroups/missing/copy', 'workgroup-copy-invalid'],
+      ] as const
 
-    for (const [path, code] of cases) {
-      const response = await req(h.app, h.alice.token, path, {
+      for (const [path, code] of cases) {
+        const response = await req(h.app, h.alice.token, path, {
+          method: 'POST',
+          body: '{}',
+        })
+        expect(response.status).toBe(422)
+        expect(await response.json()).toMatchObject({ code })
+      }
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-099 — agents route ACL',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-resource-routes-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    async function createAgentAsAlice(): Promise<string> {
+      const res = await req(h.app, h.alice.token, '/api/agents', {
         method: 'POST',
-        body: '{}',
+        body: JSON.stringify(AGENT_BODY),
       })
-      expect(response.status).toBe(422)
-      expect(await response.json()).toMatchObject({ code })
+      expect(res.status).toBe(201)
+      return ((await res.json()) as { id: string }).id
     }
-  })
-})
 
-describe('RFC-099 — agents route ACL', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  async function createAgentAsAlice(): Promise<string> {
-    const res = await req(h.app, h.alice.token, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify(AGENT_BODY),
-    })
-    expect(res.status).toBe(201)
-    return ((await res.json()) as { id: string }).id
-  }
-
-  async function setPrivate(agentId: string): Promise<void> {
-    const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { visibility: 'private' })),
-    })
-    expect(res.status).toBe(200)
-  }
-
-  // RFC-231: every user ACL resource now defaults private; existing rows and
-  // the physical legacy DB fallback are unchanged.
-  test('user creates agent → becomes owner, defaults private, strangers cannot see it', async () => {
-    const agentId = await createAgentAsAlice()
-    const detail = await req(h.app, h.alice.token, `/api/agents/${agentId}`)
-    expect(detail.status).toBe(200)
-    const body = (await detail.json()) as { ownerUserId: string; visibility: string }
-    expect(body.ownerUserId).toBe(h.alice.id)
-    expect(body.visibility).toBe('private')
-    expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(404)
-  })
-
-  test('private agent: stranger list-excluded + detail 404 byte-identical to missing', async () => {
-    const agentId = await createAgentAsAlice()
-    await setPrivate(agentId)
-    const list = (await (await req(h.app, h.carol.token, '/api/agents')).json()) as Array<{
-      name: string
-    }>
-    expect(list.some((a) => a.name === 'secret-agent')).toBe(false)
-    const invisible = await req(h.app, h.carol.token, `/api/agents/${agentId}`)
-    const missing = await req(h.app, h.carol.token, '/api/agents/00000000000000000000000000')
-    expect(invisible.status).toBe(404)
-    expect(missing.status).toBe(404)
-    const a = (await invisible.json()) as { code: string }
-    const b = (await missing.json()) as { code: string }
-    expect(a.code).toBe(b.code) // D1: existence does not leak via the error code
-    // owner + admin still see it
-    expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
-    expect((await req(h.app, h.admin.token, `/api/agents/${agentId}`)).status).toBe(200)
-  })
-
-  test('grant via ACL PUT → grantee can view but not modify; owner + admin can modify', async () => {
-    const agentId = await createAgentAsAlice()
-    await setPrivate(agentId)
-    const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(
-        aclMutation(agentId, { grants: [{ userId: h.bob.id, level: 'read' }] }, 1),
-      ),
-    })
-    expect(put.status).toBe(200)
-    expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(200)
-    const revision = await loadAgentRevision(h.app, h.alice.token, agentId)
-    // grantee modify → 403 (visible, so a 403 leaks nothing new)
-    const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'bob was here', ...revision }),
-    })
-    expect(bobPatch.status).toBe(403)
-    // stranger modify → 404 (must look like it doesn't exist)
-    const carolPatch = await req(h.app, h.carol.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'carol was here', ...revision }),
-    })
-    expect(carolPatch.status).toBe(404)
-    const ownerPatch = await req(h.app, h.alice.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'owner edit', ...revision }),
-    })
-    expect(ownerPatch.status).toBe(200)
-    const ownerSaved = (await ownerPatch.json()) as { updatedAt: number; aclRevision?: number }
-    const adminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'admin edit',
-        expectedUpdatedAt: ownerSaved.updatedAt,
-        expectedAclRevision: ownerSaved.aclRevision ?? 0,
-      }),
-    })
-    expect(adminPatch.status).toBe(200)
-  })
-
-  test('GET acl: member list visible read-only to grantee; canManage only for owner/admin', async () => {
-    const agentId = await createAgentAsAlice()
-    await setPrivate(agentId)
-    await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(
-        aclMutation(agentId, { grants: [{ userId: h.bob.id, level: 'read' }] }, 1),
-      ),
-    })
-    const asBob = (await (await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`)).json()) as {
-      ownerUserId: string
-      // RFC-324：裸 `users` 换成带档位的 `grants`（旧字段是删除，不是并存）。
-      grants: Array<{ user: { id: string }; level: 'read' | 'write' }>
-      canManage: boolean
+    async function setPrivate(agentId: string): Promise<void> {
+      const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(agentId, { visibility: 'private' })),
+      })
+      expect(res.status).toBe(200)
     }
-    expect(asBob.ownerUserId).toBe(h.alice.id)
-    expect(asBob.grants.map((g) => g.user.id)).toEqual([h.bob.id])
-    expect(
-      asBob.grants.map((g) => g.level),
-      'RFC-324 之前的 grant 就是只读，迁移后照旧',
-    ).toEqual(['read'])
-    expect(asBob.canManage).toBe(false)
-    // grantee cannot PUT the acl
-    const bobPut = await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { visibility: 'public' }, 2)),
-    })
-    expect(bobPut.status).toBe(403)
-    // stranger gets the same 404 as a missing resource
-    expect((await req(h.app, h.carol.token, `/api/agents/${agentId}/acl`)).status).toBe(404)
-  })
 
-  test('owner transfer keeps the previous owner in the grant list', async () => {
-    const agentId = await createAgentAsAlice()
-    await setPrivate(agentId)
-    const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { ownerUserId: h.bob.id }, 1)),
+    // RFC-231: every user ACL resource now defaults private; existing rows and
+    // the physical legacy DB fallback are unchanged.
+    test('user creates agent → becomes owner, defaults private, strangers cannot see it', async () => {
+      const agentId = await createAgentAsAlice()
+      const detail = await req(h.app, h.alice.token, `/api/agents/${agentId}`)
+      expect(detail.status).toBe(200)
+      const body = (await detail.json()) as { ownerUserId: string; visibility: string }
+      expect(body.ownerUserId).toBe(h.alice.id)
+      expect(body.visibility).toBe('private')
+      expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(404)
     })
-    expect(put.status).toBe(200)
-    const acl = (await put.json()) as {
-      ownerUserId: string
-      grants: Array<{ user: { id: string }; level: 'read' | 'write' }>
-    }
-    expect(acl.ownerUserId).toBe(h.bob.id)
-    expect(acl.grants.map((g) => g.user.id)).toContain(h.alice.id)
-    // alice (now a grantee) still sees it but can no longer manage
-    expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
-    const alicePut = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { visibility: 'public' }, 2)),
-    })
-    expect(alicePut.status).toBe(403)
-    // bob (new owner) can modify the agent itself
-    const revision = await loadAgentRevision(h.app, h.bob.token, agentId)
-    const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'new owner edit', ...revision }),
-    })
-    expect(bobPatch.status).toBe(200)
-  })
 
-  test('owner transfer invalidates an ordinary mutation fence for admin and former owner', async () => {
-    const agentId = await createAgentAsAlice()
-    const staleRevision = await loadAgentRevision(h.app, h.alice.token, agentId)
-    const transfer = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { ownerUserId: h.bob.id })),
+    test('private agent: stranger list-excluded + detail 404 byte-identical to missing', async () => {
+      const agentId = await createAgentAsAlice()
+      await setPrivate(agentId)
+      const list = (await (await req(h.app, h.carol.token, '/api/agents')).json()) as Array<{
+        name: string
+      }>
+      expect(list.some((a) => a.name === 'secret-agent')).toBe(false)
+      const invisible = await req(h.app, h.carol.token, `/api/agents/${agentId}`)
+      const missing = await req(h.app, h.carol.token, '/api/agents/00000000000000000000000000')
+      expect(invisible.status).toBe(404)
+      expect(missing.status).toBe(404)
+      const a = (await invisible.json()) as { code: string }
+      const b = (await missing.json()) as { code: string }
+      expect(a.code).toBe(b.code) // D1: existence does not leak via the error code
+      // owner + admin still see it
+      expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
+      expect((await req(h.app, h.admin.token, `/api/agents/${agentId}`)).status).toBe(200)
     })
-    expect(transfer.status).toBe(200)
 
-    const staleAdminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'stale admin write', ...staleRevision }),
+    test('grant via ACL PUT → grantee can view but not modify; owner + admin can modify', async () => {
+      const agentId = await createAgentAsAlice()
+      await setPrivate(agentId)
+      const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(
+          aclMutation(agentId, { grants: [{ userId: h.bob.id, level: 'read' }] }, 1),
+        ),
+      })
+      expect(put.status).toBe(200)
+      expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(200)
+      const revision = await loadAgentRevision(h.app, h.alice.token, agentId)
+      // grantee modify → 403 (visible, so a 403 leaks nothing new)
+      const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'bob was here', ...revision }),
+      })
+      expect(bobPatch.status).toBe(403)
+      // stranger modify → 404 (must look like it doesn't exist)
+      const carolPatch = await req(h.app, h.carol.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'carol was here', ...revision }),
+      })
+      expect(carolPatch.status).toBe(404)
+      const ownerPatch = await req(h.app, h.alice.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'owner edit', ...revision }),
+      })
+      expect(ownerPatch.status).toBe(200)
+      const ownerSaved = (await ownerPatch.json()) as { updatedAt: number; aclRevision?: number }
+      const adminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'admin edit',
+          expectedUpdatedAt: ownerSaved.updatedAt,
+          expectedAclRevision: ownerSaved.aclRevision ?? 0,
+        }),
+      })
+      expect(adminPatch.status).toBe(200)
     })
-    expect(staleAdminPatch.status).toBe(409)
-    expect(((await staleAdminPatch.json()) as { code: string }).code).toBe(
-      'resource-operation-stale',
-    )
 
-    const formerOwnerPatch = await req(h.app, h.alice.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'former owner write', ...staleRevision }),
+    test('GET acl: member list visible read-only to grantee; canManage only for owner/admin', async () => {
+      const agentId = await createAgentAsAlice()
+      await setPrivate(agentId)
+      await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(
+          aclMutation(agentId, { grants: [{ userId: h.bob.id, level: 'read' }] }, 1),
+        ),
+      })
+      const asBob = (await (
+        await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`)
+      ).json()) as {
+        ownerUserId: string
+        // RFC-324：裸 `users` 换成带档位的 `grants`（旧字段是删除，不是并存）。
+        grants: Array<{ user: { id: string }; level: 'read' | 'write' }>
+        canManage: boolean
+      }
+      expect(asBob.ownerUserId).toBe(h.alice.id)
+      expect(asBob.grants.map((g) => g.user.id)).toEqual([h.bob.id])
+      expect(
+        asBob.grants.map((g) => g.level),
+        'RFC-324 之前的 grant 就是只读，迁移后照旧',
+      ).toEqual(['read'])
+      expect(asBob.canManage).toBe(false)
+      // grantee cannot PUT the acl
+      const bobPut = await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(agentId, { visibility: 'public' }, 2)),
+      })
+      expect(bobPut.status).toBe(403)
+      // stranger gets the same 404 as a missing resource
+      expect((await req(h.app, h.carol.token, `/api/agents/${agentId}/acl`)).status).toBe(404)
     })
-    expect(formerOwnerPatch.status).toBe(403)
 
-    const unchanged = (await (
-      await req(h.app, h.admin.token, `/api/agents/${agentId}`)
-    ).json()) as { description: string }
-    expect(unchanged.description).toBe(AGENT_BODY.description)
+    test('owner transfer keeps the previous owner in the grant list', async () => {
+      const agentId = await createAgentAsAlice()
+      await setPrivate(agentId)
+      const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(agentId, { ownerUserId: h.bob.id }, 1)),
+      })
+      expect(put.status).toBe(200)
+      const acl = (await put.json()) as {
+        ownerUserId: string
+        grants: Array<{ user: { id: string }; level: 'read' | 'write' }>
+      }
+      expect(acl.ownerUserId).toBe(h.bob.id)
+      expect(acl.grants.map((g) => g.user.id)).toContain(h.alice.id)
+      // alice (now a grantee) still sees it but can no longer manage
+      expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
+      const alicePut = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(agentId, { visibility: 'public' }, 2)),
+      })
+      expect(alicePut.status).toBe(403)
+      // bob (new owner) can modify the agent itself
+      const revision = await loadAgentRevision(h.app, h.bob.token, agentId)
+      const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'new owner edit', ...revision }),
+      })
+      expect(bobPatch.status).toBe(200)
+    })
 
-    const freshRevision = await loadAgentRevision(h.app, h.admin.token, agentId)
-    const freshAdminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'fresh admin write', ...freshRevision }),
-    })
-    expect(freshAdminPatch.status).toBe(200)
-  })
+    test('owner transfer invalidates an ordinary mutation fence for admin and former owner', async () => {
+      const agentId = await createAgentAsAlice()
+      const staleRevision = await loadAgentRevision(h.app, h.alice.token, agentId)
+      const transfer = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(agentId, { ownerUserId: h.bob.id })),
+      })
+      expect(transfer.status).toBe(200)
 
-  test('granting an unknown or system user → 422 acl-user-invalid', async () => {
-    const agentId = await createAgentAsAlice()
-    const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(
-        aclMutation(agentId, { grants: [{ userId: '01HFAKEUSERID0000000000000', level: 'read' }] }),
-      ),
-    })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('acl-user-invalid')
-    const sys = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(
-        aclMutation(agentId, { grants: [{ userId: '__system__', level: 'read' }] }),
-      ),
-    })
-    expect(sys.status).toBe(422)
-  })
-})
+      const staleAdminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'stale admin write', ...staleRevision }),
+      })
+      expect(staleAdminPatch.status).toBe(409)
+      expect(((await staleAdminPatch.json()) as { code: string }).code).toBe(
+        'resource-operation-stale',
+      )
 
-describe('RFC-099 — D15 new-reference usability gate', () => {
-  let h: Harness
-  let secretAgentId: string
-  beforeEach(async () => {
-    h = await buildHarness()
-    // alice owns a PRIVATE agent.
-    const created = await req(h.app, h.alice.token, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify(AGENT_BODY),
-    })
-    secretAgentId = ((await created.json()) as { id: string }).id
-    await req(h.app, h.alice.token, `/api/agents/${secretAgentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(secretAgentId, { visibility: 'private' })),
-    })
-  })
+      const formerOwnerPatch = await req(h.app, h.alice.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'former owner write', ...staleRevision }),
+      })
+      expect(formerOwnerPatch.status).toBe(403)
 
-  function wfBody(agentId: string | null, agentName = 'secret-agent'): Record<string, unknown> {
-    return {
-      name: 'flow',
-      description: '',
-      definition: {
-        $schema_version: 4,
-        inputs: [],
-        nodes: agentId === null ? [] : [{ id: 'n1', kind: 'agent-single', agentId, agentName }],
-        edges: [],
-      },
-    }
-  }
+      const unchanged = (await (
+        await req(h.app, h.admin.token, `/api/agents/${agentId}`)
+      ).json()) as { description: string }
+      expect(unchanged.description).toBe(AGENT_BODY.description)
 
-  test('creating a workflow that references an invisible agent → 422 acl-missing-refs', async () => {
-    const res = await req(h.app, h.bob.token, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify(wfBody(secretAgentId)),
+      const freshRevision = await loadAgentRevision(h.app, h.admin.token, agentId)
+      const freshAdminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'fresh admin write', ...freshRevision }),
+      })
+      expect(freshAdminPatch.status).toBe(200)
     })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as {
-      code: string
-      details?: { missing?: Array<{ type: string; name: string }> }
-    }
-    expect(body.code).toBe('acl-missing-refs')
-    expect(body.details?.missing).toEqual([{ type: 'agent', name: secretAgentId }])
-  })
 
-  test('owner can reference their own private agent; admin can reference anything', async () => {
-    expect(
-      (
-        await req(h.app, h.alice.token, '/api/workflows', {
-          method: 'POST',
-          body: JSON.stringify(wfBody(secretAgentId)),
-        })
-      ).status,
-    ).toBe(201)
-    expect(
-      (
-        await req(h.app, h.admin.token, '/api/workflows', {
-          method: 'POST',
-          body: JSON.stringify(wfBody(secretAgentId)),
-        })
-      ).status,
-    ).toBe(201)
-  })
+    test('granting an unknown or system user → 422 acl-user-invalid', async () => {
+      const agentId = await createAgentAsAlice()
+      const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(
+          aclMutation(agentId, {
+            grants: [{ userId: '01HFAKEUSERID0000000000000', level: 'read' }],
+          }),
+        ),
+      })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { code: string }
+      expect(body.code).toBe('acl-user-invalid')
+      const sys = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(
+          aclMutation(agentId, { grants: [{ userId: '__system__', level: 'read' }] }),
+        ),
+      })
+      expect(sys.status).toBe(422)
+    })
+  },
+)
 
-  test('unresolvable agent names still save (existence stays the validator’s job)', async () => {
-    const res = await req(h.app, h.bob.token, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify(wfBody('never-heard-of-it', 'never-heard-of-it')),
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-099 — D15 new-reference usability gate',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-resource-routes-',
+  },
+  (scope) => {
+    let h: Harness
+    let secretAgentId: string
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+      // alice owns a PRIVATE agent.
+      const created = await req(h.app, h.alice.token, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify(AGENT_BODY),
+      })
+      secretAgentId = ((await created.json()) as { id: string }).id
+      await req(h.app, h.alice.token, `/api/agents/${secretAgentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(secretAgentId, { visibility: 'private' })),
+      })
     })
-    expect(res.status).toBe(201)
-  })
 
-  test('grandfathered reference survives an unrelated PUT; adding a NEW invisible ref is rejected', async () => {
-    // alice creates a workflow referencing her private agent, then transfers
-    // the WORKFLOW (not the agent) to bob — bob now owns a workflow with a
-    // reference he could not add himself.
-    const created = await req(h.app, h.alice.token, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify(wfBody(secretAgentId)),
-    })
-    const wf = (await created.json()) as WorkflowDetail
-    await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(wf.id, { ownerUserId: h.bob.id })),
-    })
-    // bob saves with the existing reference untouched → allowed (D15).
-    const keep = await saveWorkflowDefinition(h.app, h.bob.token, wf.id, wf.definition)
-    expect(keep.status).toBe(200)
-    // bob adds a SECOND node pointing at the same invisible agent under a new
-    // node id — the agent NAME set is unchanged, so still allowed…
-    const def2 = {
-      ...wf.definition,
-      nodes: [
-        ...(wf.definition.nodes as unknown[]),
-        {
-          id: 'n2',
-          kind: 'agent-single',
-          agentId: secretAgentId,
-          agentName: 'secret-agent',
-        },
-      ],
-    }
-    expect(
-      (await saveWorkflowDefinition(h.app, h.bob.token, wf.id, def2 as WorkflowDefinition)).status,
-    ).toBe(200)
-    // …but referencing a DIFFERENT private agent he cannot see is rejected.
-    const secondAgent = await req(h.app, h.alice.token, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify({ ...AGENT_BODY, name: 'second-secret' }),
-    })
-    const secondAgentId = ((await secondAgent.json()) as { id: string }).id
-    await req(h.app, h.alice.token, `/api/agents/${secondAgentId}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(secondAgentId, { visibility: 'private' })),
-    })
-    const def3 = {
-      ...wf.definition,
-      nodes: [
-        ...(wf.definition.nodes as unknown[]),
-        {
-          id: 'n3',
-          kind: 'agent-single',
-          agentId: secondAgentId,
-          agentName: 'second-secret',
-        },
-      ],
-    }
-    const rejected = await saveWorkflowDefinition(
-      h.app,
-      h.bob.token,
-      wf.id,
-      def3 as WorkflowDefinition,
-    )
-    expect(rejected.status).toBe(422)
-    expect(((await rejected.json()) as { code: string }).code).toBe('acl-missing-refs')
-  })
-
-  test('agent create referencing an invisible dependsOn agent → 422', async () => {
-    const res = await req(h.app, h.bob.token, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify({ ...AGENT_BODY, name: 'wrapper', dependsOn: [secretAgentId] }),
-    })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')
-  })
-})
-
-describe('RFC-099 — workflows list filter + private workflow lifecycle', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  test('private workflow hidden from stranger lists and 404 on detail/validate（export 端点随 C1 下线）', async () => {
-    const created = await req(h.app, h.alice.token, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'private-flow',
+    function wfBody(agentId: string | null, agentName = 'secret-agent'): Record<string, unknown> {
+      return {
+        name: 'flow',
         description: '',
-        definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
-      }),
+        definition: {
+          $schema_version: 4,
+          inputs: [],
+          nodes: agentId === null ? [] : [{ id: 'n1', kind: 'agent-single', agentId, agentName }],
+          edges: [],
+        },
+      }
+    }
+
+    test('creating a workflow that references an invisible agent → 422 acl-missing-refs', async () => {
+      const res = await req(h.app, h.bob.token, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify(wfBody(secretAgentId)),
+      })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as {
+        code: string
+        details?: { missing?: Array<{ type: string; name: string }> }
+      }
+      expect(body.code).toBe('acl-missing-refs')
+      expect(body.details?.missing).toEqual([{ type: 'agent', name: secretAgentId }])
     })
-    const wf = (await created.json()) as WorkflowDetail
-    await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
-      method: 'PUT',
-      body: JSON.stringify(aclMutation(wf.id, { visibility: 'private' })),
+
+    test('owner can reference their own private agent; admin can reference anything', async () => {
+      expect(
+        (
+          await req(h.app, h.alice.token, '/api/workflows', {
+            method: 'POST',
+            body: JSON.stringify(wfBody(secretAgentId)),
+          })
+        ).status,
+      ).toBe(201)
+      expect(
+        (
+          await req(h.app, h.admin.token, '/api/workflows', {
+            method: 'POST',
+            body: JSON.stringify(wfBody(secretAgentId)),
+          })
+        ).status,
+      ).toBe(201)
     })
-    const list = (await (await req(h.app, h.carol.token, '/api/workflows')).json()) as Array<{
-      id: string
-    }>
-    expect(list.some((w) => w.id === wf.id)).toBe(false)
-    expect((await req(h.app, h.carol.token, `/api/workflows/${wf.id}`)).status).toBe(404)
-    // owner still fully operational
-    expect((await req(h.app, h.alice.token, `/api/workflows/${wf.id}`)).status).toBe(200)
-  })
-})
+
+    test('unresolvable agent names still save (existence stays the validator’s job)', async () => {
+      const res = await req(h.app, h.bob.token, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify(wfBody('never-heard-of-it', 'never-heard-of-it')),
+      })
+      expect(res.status).toBe(201)
+    })
+
+    test('grandfathered reference survives an unrelated PUT; adding a NEW invisible ref is rejected', async () => {
+      // alice creates a workflow referencing her private agent, then transfers
+      // the WORKFLOW (not the agent) to bob — bob now owns a workflow with a
+      // reference he could not add himself.
+      const created = await req(h.app, h.alice.token, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify(wfBody(secretAgentId)),
+      })
+      const wf = (await created.json()) as WorkflowDetail
+      await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(wf.id, { ownerUserId: h.bob.id })),
+      })
+      // bob saves with the existing reference untouched → allowed (D15).
+      const keep = await saveWorkflowDefinition(h.app, h.bob.token, wf.id, wf.definition)
+      expect(keep.status).toBe(200)
+      // bob adds a SECOND node pointing at the same invisible agent under a new
+      // node id — the agent NAME set is unchanged, so still allowed…
+      const def2 = {
+        ...wf.definition,
+        nodes: [
+          ...(wf.definition.nodes as unknown[]),
+          {
+            id: 'n2',
+            kind: 'agent-single',
+            agentId: secretAgentId,
+            agentName: 'secret-agent',
+          },
+        ],
+      }
+      expect(
+        (await saveWorkflowDefinition(h.app, h.bob.token, wf.id, def2 as WorkflowDefinition))
+          .status,
+      ).toBe(200)
+      // …but referencing a DIFFERENT private agent he cannot see is rejected.
+      const secondAgent = await req(h.app, h.alice.token, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({ ...AGENT_BODY, name: 'second-secret' }),
+      })
+      const secondAgentId = ((await secondAgent.json()) as { id: string }).id
+      await req(h.app, h.alice.token, `/api/agents/${secondAgentId}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(secondAgentId, { visibility: 'private' })),
+      })
+      const def3 = {
+        ...wf.definition,
+        nodes: [
+          ...(wf.definition.nodes as unknown[]),
+          {
+            id: 'n3',
+            kind: 'agent-single',
+            agentId: secondAgentId,
+            agentName: 'second-secret',
+          },
+        ],
+      }
+      const rejected = await saveWorkflowDefinition(
+        h.app,
+        h.bob.token,
+        wf.id,
+        def3 as WorkflowDefinition,
+      )
+      expect(rejected.status).toBe(422)
+      expect(((await rejected.json()) as { code: string }).code).toBe('acl-missing-refs')
+    })
+
+    test('agent create referencing an invisible dependsOn agent → 422', async () => {
+      const res = await req(h.app, h.bob.token, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({ ...AGENT_BODY, name: 'wrapper', dependsOn: [secretAgentId] }),
+      })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-099 — workflows list filter + private workflow lifecycle',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-resource-routes-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    test('private workflow hidden from stranger lists and 404 on detail/validate（export 端点随 C1 下线）', async () => {
+      const created = await req(h.app, h.alice.token, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'private-flow',
+          description: '',
+          definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+        }),
+      })
+      const wf = (await created.json()) as WorkflowDetail
+      await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify(aclMutation(wf.id, { visibility: 'private' })),
+      })
+      const list = (await (await req(h.app, h.carol.token, '/api/workflows')).json()) as Array<{
+        id: string
+      }>
+      expect(list.some((w) => w.id === wf.id)).toBe(false)
+      expect((await req(h.app, h.carol.token, `/api/workflows/${wf.id}`)).status).toBe(404)
+      // owner still fully operational
+      expect((await req(h.app, h.alice.token, `/api/workflows/${wf.id}`)).status).toBe(200)
+    })
+  },
+)

@@ -10,9 +10,8 @@
 //   4. the fixed-clock 7-day window boundary (D10 / design gate P2-1);
 //   5. the response contract (OverviewResponseSchema + generatedAt).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import {
   OverviewResponseSchema,
   type OverviewResponse,
@@ -20,7 +19,7 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import {
   cachedRepos,
@@ -30,7 +29,10 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { createApp } from '../src/server'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
 import {
   composeRepositoryWorkspaceOperations,
   composeSqliteRepositoryWorkspaceStore,
@@ -46,7 +48,6 @@ import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 /** 概览是纯读；调度任务 runtime 的写能力在这条路径上永远不会被触到。 */
 function unusedCapability(): never {
@@ -60,7 +61,7 @@ function unusedCapability(): never {
  * 这一条 oracle 的价值正在于此：它逐 actor 断言「概览计数 === 同一 actor 在对应列表端点
  * 拿到的行数」，是这次两份收一份的安全网。
  */
-function buildOverview(db: DbClient, actor: Actor, now?: () => number) {
+function buildOverview(db: ProviderNeutralDatabase, actor: Actor, now?: () => number) {
   const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db,
     resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
@@ -85,7 +86,7 @@ function buildOverview(db: DbClient, actor: Actor, now?: () => number) {
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   alice: { id: string; token: string } // creator / task owner
   bob: { id: string; token: string } // grantee / second owner
@@ -93,16 +94,10 @@ interface Harness {
   admin: { id: string; token: string }
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
+  const db = scope.harness.db
   await seedTestDefaultOpencodeRuntime(db)
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-rfc190-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const app = (await scope.open()).app
   async function mkUser(username: string, role: 'admin' | 'user') {
     const u = await createUser(db, {
       username,
@@ -480,191 +475,211 @@ function exactActor(
   }
 }
 
-describe('RFC-190 /api/overview — 口径 oracle（逐 actor 与列表接口相等）', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-    await seedResources(h)
-    await seedTasks(h)
-  })
-
-  test('resources 各 key == 对应列表接口行数（alice/bob/carol/admin）', async () => {
-    for (const who of [h.alice, h.bob, h.carol, h.admin]) {
-      const ov = await getOverview(h, who.token)
-      const listLen = async (path: string) =>
-        ((await (await req(h.app, who.token, path)).json()) as unknown[]).length
-      const itemsLen = async (path: string) =>
-        ((await (await req(h.app, who.token, path)).json()) as { items: unknown[] }).items.length
-
-      expect(ov.resources.agents).toBe(await listLen('/api/agents'))
-      expect(ov.resources.skills).toBe(await listLen('/api/skills'))
-      expect(ov.resources.mcps).toBe(await listLen('/api/mcps'))
-      expect(ov.resources.plugins).toBe(await listLen('/api/plugins'))
-      expect(ov.resources.workflows).toBe(await listLen('/api/workflows'))
-      expect(ov.resources.workgroups).toBe(await listLen('/api/workgroups'))
-      expect(ov.resources.scheduled).toBe(await listLen('/api/scheduled-tasks'))
-      expect(ov.resources.repos).toBe(await itemsLen('/api/cached-repos'))
-      expect(ov.resources.memories).toBe(await itemsLen('/api/memories?status=approved'))
-    }
-  })
-
-  test('ACL 真差异化：私有资源只对 owner/grantee/admin 计数', async () => {
-    const a = await getOverview(h, h.alice.token)
-    const b = await getOverview(h, h.bob.token)
-    const c = await getOverview(h, h.carol.token)
-    const adm = await getOverview(h, h.admin.token)
-    // agents: alice 5 (all hers) / bob 4 (public 3 + granted) / carol 3 (public only)
-    expect(a.resources.agents).toBe(5)
-    expect(b.resources.agents).toBe(4)
-    expect(c.resources.agents).toBe(3)
-    expect(adm.resources.agents).toBe(5)
-    // workgroups: private one hidden from non-owners
-    expect(a.resources.workgroups).toBe(2)
-    expect(c.resources.workgroups).toBe(1)
-    expect(adm.resources.workgroups).toBe(2)
-    // scheduled: owner-only rows (admin sees both)
-    expect(a.resources.scheduled).toBe(1)
-    expect(b.resources.scheduled).toBe(1)
-    expect(c.resources.scheduled).toBe(0)
-    expect(adm.resources.scheduled).toBe(2)
-    // repos: global — same number for everyone
-    expect(a.resources.repos).toBe(2)
-    expect(c.resources.repos).toBe(2)
-    // memories: approved only + scope visibility (candidate never counted;
-    // private-agent/-workflow rows only for alice + admin)
-    expect(a.resources.memories).toBe(3)
-    expect(b.resources.memories).toBe(1)
-    expect(c.resources.memories).toBe(1)
-    expect(adm.resources.memories).toBe(3)
-  })
-
-  test('tasks 统计（HTTP，member 口径 + 7d 窗口 + canceled 不计）', async () => {
-    const a = await getOverview(h, h.alice.token)
-    expect(a.tasks).toEqual({ running: 1, awaiting: 2, done7d: 1, failed7d: 1 })
-    const b = await getOverview(h, h.bob.token)
-    expect(b.tasks).toEqual({ running: 0, awaiting: 1, done7d: 1, failed7d: 0 })
-    const c = await getOverview(h, h.carol.token)
-    expect(c.tasks).toEqual({ running: 0, awaiting: 0, done7d: 0, failed7d: 0 })
-    const adm = await getOverview(h, h.admin.token)
-    // t8 canceled + t6 done@-8d prove the exclusions (else done7d would be 3+).
-    expect(adm.tasks).toEqual({ running: 1, awaiting: 2, done7d: 2, failed7d: 1 })
-  })
-
-  test('旧任务列表和首页统计共同排除 durable internal executions', async () => {
-    const response = await req(h.app, h.admin.token, '/api/tasks?limit=100&scope=all')
-    expect(response.status).toBe(200)
-    const rows = (await response.json()) as Array<{ id: string }>
-    expect(rows.some((row) => row.id === 'internal-done')).toBe(false)
-    expect((await getOverview(h, h.admin.token)).tasks?.done7d).toBe(2)
-    expect(
-      (await h.db.select({ id: tasks.id }).from(tasks)).some((row) => row.id === 'internal-done'),
-    ).toBe(true)
-  })
-
-  test('响应过 shared schema，generatedAt 可解析', async () => {
-    const ov = await getOverview(h, h.alice.token)
-    expect(Number.isFinite(Date.parse(ov.generatedAt))).toBe(true)
-  })
-})
-
-describe('RFC-190 buildOverview — 权限真值表 + 固定时钟 7d 边界（单元）', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-
-  // RFC-247 reshaped half of this table. What SURVIVES: the range points
-  // (`tasks:read:own` vs `tasks:read:all`) still decide whose task numbers you
-  // see, and `buildOverview` still nulls a resource key when the actor lacks its
-  // read point. What CHANGED: a PAT can no longer be missing a read point at all
-  // (D3 「读恒开」 grants every read unconditionally), so the null branch is
-  // exercised with an exact-permission actor instead of a narrowed token.
-  test('权限真值表：read:all 全量 / read:own mine / 皆无 null；缺读点的 key 置 null', async () => {
-    await seedResources(h)
-    await seedTasks(h)
-
-    // admin PAT ticking tasks:read:all — tasks are the UNSCOPED numbers.
-    const readAllOnly = patActor('ghost-admin', 'admin', ['tasks:read:all'])
-    const ovAll = await buildOverview(h.db, readAllOnly)
-    expect(ovAll.tasks).toEqual({ running: 1, awaiting: 2, done7d: 2, failed7d: 1 })
-    // RFC-247: reads ride along, so NO resource key is null for a token. RFC-305
-    // separately strips resource-acl:bypass from every PAT, so this ghost actor
-    // sees the three public agents rather than private rows owned by others.
-    expect(ovAll.resources.agents).toBe(3)
-    expect(ovAll.resources.skills).not.toBeNull()
-    expect(ovAll.resources.mcps).not.toBeNull()
-    expect(ovAll.resources.plugins).not.toBeNull()
-    expect(ovAll.resources.workflows).not.toBeNull()
-    expect(ovAll.resources.repos).not.toBeNull()
-    expect(ovAll.resources.memories).not.toBeNull()
-    expect(ovAll.resources.workgroups).toBe(1)
-    expect(ovAll.resources.scheduled).toBe(2)
-
-    // user PAT ticking tasks:read:own only → mine numbers (alice's view).
-    // The range points still do their job; they are NOT on the token matrix and
-    // ride in from the role baseline (RFC-247 §2.1 RANGE_POINTS).
-    const ownOnly = patActor(h.alice.id, 'user', ['tasks:read:own'])
-    const ovOwn = await buildOverview(h.db, ownOnly)
-    expect(ovOwn.tasks).toEqual({ running: 1, awaiting: 2, done7d: 1, failed7d: 1 })
-
-    // neither range point → tasks null. Unreachable via a PAT now (a user-role
-    // token always carries tasks:read:own), so exercised directly — the branch
-    // still exists in buildOverview and must keep working.
-    const noTaskRead = exactActor(h.carol.id, 'user', ['workgroups:read', 'scheduled-tasks:read'])
-    const ovNone = await buildOverview(h.db, noTaskRead)
-    expect(ovNone.tasks).toBeNull()
-    expect(ovNone.resources.workgroups).toBe(1)
-    expect(ovNone.resources.scheduled).toBe(0)
-    expect(ovNone.resources.agents).toBeNull()
-
-    // single-key null: everything except repos:read → only repos null.
-    const noRepos = exactActor(h.alice.id, 'user', [
-      'agents:read',
-      'skills:read',
-      'mcps:read',
-      'plugins:read',
-      'workflows:read',
-      'memory:read',
-      'resource-acl:private',
-      'tasks:read:own',
-    ])
-    const ovNoRepos = await buildOverview(h.db, noRepos)
-    expect(ovNoRepos.resources.repos).toBeNull()
-    expect(ovNoRepos.resources.agents).toBe(5)
-    expect(ovNoRepos.resources.memories).toBe(3)
-    expect(ovNoRepos.resources.workgroups).toBeNull()
-    expect(ovNoRepos.resources.scheduled).toBeNull()
-  })
-
-  test('7d 边界（注入时钟）：cutoff-1ms 不计 / 恰好 cutoff 计 / cutoff+1ms 计', async () => {
-    const T0 = 1_900_000_000_000 // fixed, far from wall-clock seed noise
-    const cutoff = T0 - 7 * 86_400_000
-    await h.db.insert(workflows).values({
-      id: 'wf-bd',
-      name: 'wf-bd',
-      description: '',
-      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-190 /api/overview — 口径 oracle（逐 actor 与列表接口相等）',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-overview-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+      await seedResources(h)
+      await seedTasks(h)
     })
-    await h.db.insert(tasks).values([
-      taskRow('bd-out', h.alice.id, 'done', {
-        startedAt: cutoff - 10,
-        finishedAt: cutoff - 1,
-        workflowId: 'wf-bd',
-      }),
-      taskRow('bd-exact', h.alice.id, 'done', {
-        startedAt: cutoff - 10,
-        finishedAt: cutoff,
-        workflowId: 'wf-bd',
-      }),
-      taskRow('bd-in', h.alice.id, 'done', {
-        startedAt: cutoff - 10,
-        finishedAt: cutoff + 1,
-        workflowId: 'wf-bd',
-      }),
-    ])
-    const ov = await buildOverview(h.db, sessionActor(h.alice.id, 'user'), () => T0)
-    expect(ov.tasks?.done7d).toBe(2)
-    expect(ov.tasks?.failed7d).toBe(0)
-    expect(ov.generatedAt).toBe(new Date(T0).toISOString())
-  })
-})
+
+    test('resources 各 key == 对应列表接口行数（alice/bob/carol/admin）', async () => {
+      for (const who of [h.alice, h.bob, h.carol, h.admin]) {
+        const ov = await getOverview(h, who.token)
+        const listLen = async (path: string) =>
+          ((await (await req(h.app, who.token, path)).json()) as unknown[]).length
+        const itemsLen = async (path: string) =>
+          ((await (await req(h.app, who.token, path)).json()) as { items: unknown[] }).items.length
+
+        expect(ov.resources.agents).toBe(await listLen('/api/agents'))
+        expect(ov.resources.skills).toBe(await listLen('/api/skills'))
+        expect(ov.resources.mcps).toBe(await listLen('/api/mcps'))
+        expect(ov.resources.plugins).toBe(await listLen('/api/plugins'))
+        expect(ov.resources.workflows).toBe(await listLen('/api/workflows'))
+        expect(ov.resources.workgroups).toBe(await listLen('/api/workgroups'))
+        expect(ov.resources.scheduled).toBe(await listLen('/api/scheduled-tasks'))
+        expect(ov.resources.repos).toBe(await itemsLen('/api/cached-repos'))
+        expect(ov.resources.memories).toBe(await itemsLen('/api/memories?status=approved'))
+      }
+    })
+
+    test('ACL 真差异化：私有资源只对 owner/grantee/admin 计数', async () => {
+      const a = await getOverview(h, h.alice.token)
+      const b = await getOverview(h, h.bob.token)
+      const c = await getOverview(h, h.carol.token)
+      const adm = await getOverview(h, h.admin.token)
+      // agents: alice 5 (all hers) / bob 4 (public 3 + granted) / carol 3 (public only)
+      expect(a.resources.agents).toBe(5)
+      expect(b.resources.agents).toBe(4)
+      expect(c.resources.agents).toBe(3)
+      expect(adm.resources.agents).toBe(5)
+      // workgroups: private one hidden from non-owners
+      expect(a.resources.workgroups).toBe(2)
+      expect(c.resources.workgroups).toBe(1)
+      expect(adm.resources.workgroups).toBe(2)
+      // scheduled: owner-only rows (admin sees both)
+      expect(a.resources.scheduled).toBe(1)
+      expect(b.resources.scheduled).toBe(1)
+      expect(c.resources.scheduled).toBe(0)
+      expect(adm.resources.scheduled).toBe(2)
+      // repos: global — same number for everyone
+      expect(a.resources.repos).toBe(2)
+      expect(c.resources.repos).toBe(2)
+      // memories: approved only + scope visibility (candidate never counted;
+      // private-agent/-workflow rows only for alice + admin)
+      expect(a.resources.memories).toBe(3)
+      expect(b.resources.memories).toBe(1)
+      expect(c.resources.memories).toBe(1)
+      expect(adm.resources.memories).toBe(3)
+    })
+
+    test('tasks 统计（HTTP，member 口径 + 7d 窗口 + canceled 不计）', async () => {
+      const a = await getOverview(h, h.alice.token)
+      expect(a.tasks).toEqual({ running: 1, awaiting: 2, done7d: 1, failed7d: 1 })
+      const b = await getOverview(h, h.bob.token)
+      expect(b.tasks).toEqual({ running: 0, awaiting: 1, done7d: 1, failed7d: 0 })
+      const c = await getOverview(h, h.carol.token)
+      expect(c.tasks).toEqual({ running: 0, awaiting: 0, done7d: 0, failed7d: 0 })
+      const adm = await getOverview(h, h.admin.token)
+      // t8 canceled + t6 done@-8d prove the exclusions (else done7d would be 3+).
+      expect(adm.tasks).toEqual({ running: 1, awaiting: 2, done7d: 2, failed7d: 1 })
+    })
+
+    test('旧任务列表和首页统计共同排除 durable internal executions', async () => {
+      const response = await req(h.app, h.admin.token, '/api/tasks?limit=100&scope=all')
+      expect(response.status).toBe(200)
+      const rows = (await response.json()) as Array<{ id: string }>
+      expect(rows.some((row) => row.id === 'internal-done')).toBe(false)
+      expect((await getOverview(h, h.admin.token)).tasks?.done7d).toBe(2)
+      expect(
+        (await h.db.select({ id: tasks.id }).from(tasks)).some((row) => row.id === 'internal-done'),
+      ).toBe(true)
+    })
+
+    test('响应过 shared schema，generatedAt 可解析', async () => {
+      const ov = await getOverview(h, h.alice.token)
+      expect(Number.isFinite(Date.parse(ov.generatedAt))).toBe(true)
+    })
+  },
+)
+
+// RFC-359 AC-6：两个引擎各跑一遍。
+describeEachProviderHttpApplication(
+  'RFC-190 buildOverview — 权限真值表 + 固定时钟 7d 边界（单元）',
+  {
+    token: DAEMON_TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-overview-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
+    })
+
+    // RFC-247 reshaped half of this table. What SURVIVES: the range points
+    // (`tasks:read:own` vs `tasks:read:all`) still decide whose task numbers you
+    // see, and `buildOverview` still nulls a resource key when the actor lacks its
+    // read point. What CHANGED: a PAT can no longer be missing a read point at all
+    // (D3 「读恒开」 grants every read unconditionally), so the null branch is
+    // exercised with an exact-permission actor instead of a narrowed token.
+    test('权限真值表：read:all 全量 / read:own mine / 皆无 null；缺读点的 key 置 null', async () => {
+      await seedResources(h)
+      await seedTasks(h)
+
+      // admin PAT ticking tasks:read:all — tasks are the UNSCOPED numbers.
+      const readAllOnly = patActor('ghost-admin', 'admin', ['tasks:read:all'])
+      const ovAll = await buildOverview(h.db, readAllOnly)
+      expect(ovAll.tasks).toEqual({ running: 1, awaiting: 2, done7d: 2, failed7d: 1 })
+      // RFC-247: reads ride along, so NO resource key is null for a token. RFC-305
+      // separately strips resource-acl:bypass from every PAT, so this ghost actor
+      // sees the three public agents rather than private rows owned by others.
+      expect(ovAll.resources.agents).toBe(3)
+      expect(ovAll.resources.skills).not.toBeNull()
+      expect(ovAll.resources.mcps).not.toBeNull()
+      expect(ovAll.resources.plugins).not.toBeNull()
+      expect(ovAll.resources.workflows).not.toBeNull()
+      expect(ovAll.resources.repos).not.toBeNull()
+      expect(ovAll.resources.memories).not.toBeNull()
+      expect(ovAll.resources.workgroups).toBe(1)
+      expect(ovAll.resources.scheduled).toBe(2)
+
+      // user PAT ticking tasks:read:own only → mine numbers (alice's view).
+      // The range points still do their job; they are NOT on the token matrix and
+      // ride in from the role baseline (RFC-247 §2.1 RANGE_POINTS).
+      const ownOnly = patActor(h.alice.id, 'user', ['tasks:read:own'])
+      const ovOwn = await buildOverview(h.db, ownOnly)
+      expect(ovOwn.tasks).toEqual({ running: 1, awaiting: 2, done7d: 1, failed7d: 1 })
+
+      // neither range point → tasks null. Unreachable via a PAT now (a user-role
+      // token always carries tasks:read:own), so exercised directly — the branch
+      // still exists in buildOverview and must keep working.
+      const noTaskRead = exactActor(h.carol.id, 'user', ['workgroups:read', 'scheduled-tasks:read'])
+      const ovNone = await buildOverview(h.db, noTaskRead)
+      expect(ovNone.tasks).toBeNull()
+      expect(ovNone.resources.workgroups).toBe(1)
+      expect(ovNone.resources.scheduled).toBe(0)
+      expect(ovNone.resources.agents).toBeNull()
+
+      // single-key null: everything except repos:read → only repos null.
+      const noRepos = exactActor(h.alice.id, 'user', [
+        'agents:read',
+        'skills:read',
+        'mcps:read',
+        'plugins:read',
+        'workflows:read',
+        'memory:read',
+        'resource-acl:private',
+        'tasks:read:own',
+      ])
+      const ovNoRepos = await buildOverview(h.db, noRepos)
+      expect(ovNoRepos.resources.repos).toBeNull()
+      expect(ovNoRepos.resources.agents).toBe(5)
+      expect(ovNoRepos.resources.memories).toBe(3)
+      expect(ovNoRepos.resources.workgroups).toBeNull()
+      expect(ovNoRepos.resources.scheduled).toBeNull()
+    })
+
+    test('7d 边界（注入时钟）：cutoff-1ms 不计 / 恰好 cutoff 计 / cutoff+1ms 计', async () => {
+      const T0 = 1_900_000_000_000 // fixed, far from wall-clock seed noise
+      const cutoff = T0 - 7 * 86_400_000
+      await h.db.insert(workflows).values({
+        id: 'wf-bd',
+        name: 'wf-bd',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+      })
+      await h.db.insert(tasks).values([
+        taskRow('bd-out', h.alice.id, 'done', {
+          startedAt: cutoff - 10,
+          finishedAt: cutoff - 1,
+          workflowId: 'wf-bd',
+        }),
+        taskRow('bd-exact', h.alice.id, 'done', {
+          startedAt: cutoff - 10,
+          finishedAt: cutoff,
+          workflowId: 'wf-bd',
+        }),
+        taskRow('bd-in', h.alice.id, 'done', {
+          startedAt: cutoff - 10,
+          finishedAt: cutoff + 1,
+          workflowId: 'wf-bd',
+        }),
+      ])
+      const ov = await buildOverview(h.db, sessionActor(h.alice.id, 'user'), () => T0)
+      expect(ov.tasks?.done7d).toBe(2)
+      expect(ov.tasks?.failed7d).toBe(0)
+      expect(ov.generatedAt).toBe(new Date(T0).toISOString())
+    })
+  },
+)

@@ -6105,44 +6105,40 @@ file:line 锚点，`rfc359-w5-t19d` 的成对覆盖账本**当场从 10 vs 6 变
 `rfc349-execution-contract-postgresql-adapter`）**先别迁**——要么给作用域加一条通用的
 「额外 createApp 依赖」直通口，要么就接受它们留在单引擎。这是个设计决定，不该在批量迁移里顺手做。
 
-## 5ab. AC-6：**用例遗留在途请求**在真库上是「harness 拆库时挂死」，不是用例失败（W58，诊断签名）
+## 5ab. AC-6：迁移后**真库往返多的用例会越过 bun 的 5s 默认预算**（W58）
 
-账本 586 → 585（`rfc099-membership-attribution`）。这一批本来有三个文件，另两个的经历更值得记。
+> **勘误（同一轮内更正）**：本节初稿把因果写反了，说这是「用例遗留在途请求 ⇒ harness 拆库挂死」，
+> 还给出了一条「见到 55006 就去找在途请求、别调预算」的指引。**那条指引是错的，会让人追一个不存在
+> 的 bug**。查清楚的真相在下面。初稿的结论之所以站不住，是因为我只看了症状里最刺眼的那两行错误，
+> 没有先去数这条用例到底做了多少次真库往返。
 
-### 现象
+### 真相
 
-`rfc190-overview-route` 迁完之后**间歇红**：同一组两次跑，一次 3 红一次全绿。红的那次是
+`rfc190-overview-route` 里那条用例是
 
 ```
-(fail) … > resources 各 key == 对应列表接口行数 [20124.59ms]
-  ^ a beforeEach/afterEach hook timed out for this test.
-PostgresError: Connection closed            ← 来自 routes/operationRoute.ts，回滚时
-PostgresError: cannot drop the currently open database (55006)   ← harness afterAll 拆库
+for (const who of [alice, bob, carol, admin])   // 4 个 actor
+  for (9 个列表端点) await req(...)              // 每个都是一次真库 HTTP 往返
 ```
 
-**别被表象骗了**：失败记在「某个用例的 hook 超时」上，而真正的事实是
-**上一条用例还有 HTTP 请求在途**，harness 已经往下走去拆这个文件的专属库了。
+**36 次真库往返**。迁移前它跑在同步内存 SQLite 上，一两秒；迁到 PostgreSQL 之后它本身就越过了
+bun 的 **5s 默认用例预算**。
 
-这是和「没 await 的 `.run()` 写」同一家族：一个没人等的 promise。在同步的内存 SQLite 上无害，
-在带连接池、且**用完就 DROP DATABASE** 的真 PG 上就是这个下场。而且它**不稳定复现**——
-赢了竞态就是绿的。
+`PostgresError: Connection closed` 与 `cannot drop the currently open database`(55006) 是**超时之后
+的余波**——预算到点，bun 往下走，harness 开始 DROP 这个文件的专属库，而超时那条用例的请求还在跑。
+它们是结果，不是原因。
 
-### 一条走错的路，记下来免得下次再走
+### 处置
 
-我先以为是预算不够（毕竟迁移后每个 `beforeEach` 装配的是**一整个真应用**，而 bun 默认 hook 预算
-只有 5s），就在作用域里加了 `setDefaultTimeout(20_000)`。结果：**同样的 hook 照样超时，只是从
-5s 变成 20s**。这说明预算不是原因，于是把那个改动**撤回**了——没有证据支撑的旋钮不留，
-它只会把真正的挂死延后四倍再报。
+给那一条用例与它实际工作量相称的预算（`}, 60_000)`），并在旁边写明「36 次真库往返」。
+`rfc099-resource-routes` 同理，重测后无需额外预算。三个文件放在一起**连跑 6 次全绿**
+（此前同一组必然在两三次内红一次）。
 
-（顺带：真需要更大预算的场景是存在的，`eachProvider` 的 PG `beforeEach` 快照回滚就是，
-那一处有实测支撑、已单独给了 `databaseCount × 30s`。区别在于**有没有证据**。）
+### 留下的判断方法
 
-### 给下一个人的诊断签名
+看到 hook / 用例超时，先问**这条用例在真库上要做多少次往返**，再决定是调预算还是找 bug：
+- 往返次数明显很多（循环 × 多端点）⇒ 就是预算，给一个与工作量相称的数字，别用默认值撞运气；
+- 往返很少却仍超时 ⇒ 才去找没 await 的调用 / 在途请求。
 
-看到下面任意一条，先去找**在途请求 / 没 await 的调用**，不要去调预算：
-- `cannot drop the currently open database`（55006）
-- `Connection closed` / `ERR_POSTGRES_CONNECTION_CLOSED` 且栈里有路由层
-- hook 超时**记在一条与它无关的用例**头上，且同一组反复跑时红的位置会变
-
-`rfc190-overview-route` 与 `rfc099-resource-routes` 因此**原样退回**，不带着间歇红上库。
-它们要迁，得先把那条在途请求揪出来——那是独立一刀，不该混在批量迁移里。
+（另一处**确有**预算问题的地方是 `eachProvider` 的 PG `beforeEach` 快照回滚，已单独给
+`databaseCount × 30s`——那一处也是先数清它做什么、再给数字。）
