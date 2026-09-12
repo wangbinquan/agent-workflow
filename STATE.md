@@ -44,10 +44,13 @@
 >
 > ### 下一刀
 >
-> 剩 ~66 个文件，最大的一块是 **PG 侧没有任何测试接缝**（`AppDeps` 上 13 个
-> `webhookDispatcher` / `taskExecutionReadModels` / `*TestDependencies` 之类，
-> `PostgresqlApplicationInput` 上**一个都没有**，22 个文件卡在这里）。其次是
-> `helpers/taskRecoveryOperations` 这层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）。
+> 剩 ~60 个文件。最大的一块此前记成「PG 侧没有测试接缝」——**那个框架是错的**（plan §5aq）：
+> 用例传 `taskExecutionReadModels` 时建的是 `createTaskExecutionReadModels(db)`，也就是
+> **真**读模型；它要的不是注入假件，而是「把应用自己会建的那个也给我一份」。正解是让共用
+> HTTP 夹具**暴露装配结果**（`ProviderHttpApplication` 上已有 `secretBox` /
+> `processConcurrencyScope` / `repositoryWorkspaceStore` / `taskExecution` 四个先例），
+> 而不是给生产输入类型加 13 个只服务测试的可选字段、还两个 provider 各一份。
+> 其次是 `helpers/taskRecoveryOperations` 这层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）。
 > 另记：**PG 备份路径今天零覆盖**且不能靠迁 `backup.test.ts` 来补，见 `docs/audit-backlog.md`。
 
 > ## 📌 RFC-359 本轮进展（2026-09-12 上半场，AC-6 账本 **625 → 581**，含三条已修 PG 缺陷）

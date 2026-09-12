@@ -6620,3 +6620,47 @@ NESTED-EACHPROVIDER 提示的最小动作），这条缺陷会继续躺着。
 
 `rfc304` 是一个典型：同一个标题下 `describe` 与 `describeEachProvider` **交替出现**，
 是前几波「逐条挑着迁」留下的形状。判据仍是那一条：旧半测的用例新半有没有。
+
+
+## 5ap. 账本 560 → 559：`rfc326` 的 native 分支整条删掉
+
+这个文件的 `buildFixture` 带两个重载：**不传 harness 就自建 SQLite 内存库 + `createApp`**。
+四个 describe 走的是那条 native 路。把它们接到既有的 `registerProviderFixture` 之后，
+native 分支**一个调用方都没有了**——重载、`connection.kind === 'native'` 的分支、
+`createInMemoryDb` / `MIGRATIONS` 一并删除，库总是由 harness 传进来。
+
+「删除优于 deprecate」在这里是实的：留着那条分支，下一个人写新用例时仍会不小心走回单引擎。
+
+### 暂缓：`rfc193-port-artifacts-api`
+
+同一形态，但它的 provider 夹具生命周期（~45 行）**原样抄了三份**，要先提成一个注册器再把
+native 那组接进去。不难，但比上面几个大一档，单独一刀。
+
+
+## 5aq. 更正：PG「没有测试接缝」这个说法不准，真正的缺口是**装配结果没被暴露出来**
+
+此前把剩下最大的一块记成「`AppDeps` 上有 13 个测试接缝，`PostgresqlApplicationInput` 上一个
+都没有，22 个文件卡在这里」。读了调用方之后，这个框架**是错的**：
+
+```ts
+// tests/rfc340-review-access.test.ts
+const taskExecutionReadModels = createTaskExecutionReadModels(db)   // ← 建的是**真**读模型
+createApp({ …, taskExecutionReadModels })
+```
+
+用例并不是要注入一个假件，而是「**把应用自己会建的那个东西也给我一份**」——因为
+`createApp` 没把装配结果交出来，用例只好在外面再建一份一模一样的，再从 `AppDeps` 塞回去。
+`taskExecutionReadModels` 的五个调用方全是这个形态（`createTaskExecutionReadModels(db)`）。
+
+所以正解不是「给 PG 补 13 个接缝」（那会把一个本来就该收掉的形状复制到第二个 provider 上），
+而是**让共用 HTTP 夹具把应用已经装配好的东西暴露出来**——PG 侧本来就有
+（`taskExecutionProvider.readModels` / `core.*`），SQLite 侧要让
+`composeSqliteUnstartedApplication` 一并返回。`ProviderHttpApplication` 上已经有
+`secretBox` / `processConcurrencyScope` / `repositoryWorkspaceStore` / `taskExecution` 四个
+先例，按同一形状往下加即可。
+
+**这条更正很重要**：按错的框架做，会给生产输入类型加 13 个只服务测试的可选字段，
+并且**两个 provider 各一份**；按对的框架做，是把已有的装配结果暴露出来，生产类型一个字不加。
+
+逐个仍要看：真正需要「换掉」而不是「拿到」的接缝（`*TestDependencies` 那几个可能是），
+才考虑别的办法。**先按调用方形态分类，再决定**——别再按字段名清单估工作量。

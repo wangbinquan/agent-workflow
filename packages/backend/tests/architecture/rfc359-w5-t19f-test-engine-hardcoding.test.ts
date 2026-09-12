@@ -475,7 +475,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc324-memory-editor-grant.test.ts: 1',
   'rfc324-task-observer.test.ts: 1',
   'rfc326-mcp-review-tools.test.ts: 1',
-  'rfc326-review-comment-simplified-anchor.test.ts: 1',
   'rfc326-review-decision-batch.test.ts: 2',
   'rfc326-review-decision-transaction.test.ts: 1',
   'rfc326-tx-primitives-equivalence.test.ts: 2',

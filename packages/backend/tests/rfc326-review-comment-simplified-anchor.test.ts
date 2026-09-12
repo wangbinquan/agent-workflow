@@ -24,7 +24,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -33,19 +33,18 @@ import {
   REVIEW_COMMENT_TEXT_MAX_CHARS,
 } from '@agent-workflow/shared'
 import type { ReviewCommentAnchor } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { type DbClient } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import {
   buildReviewAnchorDocument,
   resolveReviewAnchor,
 } from '../src/modules/collaboration/public/queries'
 import { REVIEW_WRITE_BODY_MAX_BYTES } from '../src/routes/reviews'
-import { createApp } from '../src/server'
+import type { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HEADERS = { Authorization: 'Bearer tok', 'content-type': 'application/json' }
 
 const SINGLE_BODY = [
@@ -94,17 +93,13 @@ type AnyFixture = Fixture<ProviderNeutralDatabase, void | Promise<void>>
 
 type Mode = 'single' | 'multi-path' | 'multi-inline'
 
-function buildFixture(mode: Mode, bodies?: string[]): Promise<Fixture>
-function buildFixture(
-  mode: Mode,
-  bodies: string[] | undefined,
-  provider: ProviderHarness,
-): Promise<ProviderFixture>
+// RFC-359 AC-6：native（自建 SQLite 内存库 + `createApp`）那条分支已经没有调用方——
+// 所有 describe 都走 harness 了。重载与分支一起退役，库总是由 harness 传进来。
 async function buildFixture(
   mode: Mode,
   bodies: string[] = [SINGLE_BODY],
-  provider?: ProviderHarness,
-): Promise<AnyFixture> {
+  provider: ProviderHarness,
+): Promise<ProviderFixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc326-rest-'))
   const appHome = join(tmp, 'appHome')
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
@@ -112,11 +107,7 @@ async function buildFixture(
   // The route resolves doc_version bodies under Paths.root (AGENT_WORKFLOW_HOME).
   process.env.AGENT_WORKFLOW_HOME = appHome
 
-  const connection =
-    provider === undefined
-      ? { kind: 'native' as const, db: createInMemoryDb(MIGRATIONS) }
-      : { kind: 'provider' as const, db: provider.db, harness: provider }
-  const db = connection.db
+  const db = provider.db
   const workflowId = ulid()
   await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
   const taskId = ulid()
@@ -218,35 +209,19 @@ async function buildFixture(
     if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
     else process.env.AGENT_WORKFLOW_HOME = previousAppHome
   }
-  let app: ReturnType<typeof createApp>
-  let cleanup: () => void | Promise<void>
-  if (connection.kind === 'native') {
-    app = createApp({
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: connection.db,
-    })
-    cleanup = () => {
-      connection.db.$client.close()
+  const application = await createProviderHttpApplication(provider, {
+    token: 'tok',
+    configPath: join(appHome, 'config.json'),
+    opencodeVersion: '1.14.99',
+    dbVersion: 1,
+    appHome,
+  })
+  const app = application.app
+  const cleanup = async () => {
+    try {
+      await application.dispose()
+    } finally {
       cleanupFiles()
-    }
-  } else {
-    const application = await createProviderHttpApplication(connection.harness, {
-      token: 'tok',
-      configPath: join(appHome, 'config.json'),
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      appHome,
-    })
-    app = application.app
-    cleanup = async () => {
-      try {
-        await application.dispose()
-      } finally {
-        cleanupFiles()
-      }
     }
   }
   return {
@@ -416,34 +391,42 @@ registerProviderFixture('RFC-326 AC-11 / AC-12 — simplified anchors over REST'
   })
 })
 
-describe('RFC-326 AC-11 / AC-16 — refusals are 422s and write nothing', () => {
-  let f: Fixture
-  afterEach(() => f?.cleanup())
+// RFC-359 AC-6：这一组此前只跑 native（SQLite）夹具，改成与上面同一个双引擎注册器。
+registerProviderFixture(
+  'RFC-326 AC-11 / AC-16 — refusals are 422s and write nothing',
+  (harness) => {
+    let f: ProviderFixture
+    const buildFixture = (mode: Mode, bodies?: string[]) =>
+      buildFixtureOnProvider(harness, mode, bodies)
+    afterEach(async () => {
+      await f?.cleanup()
+    })
 
-  test('exclusivity, dangling occurrence/section, and the three length caps', async () => {
-    f = await buildFixture('single')
-    const anchor = resolved(SINGLE_BODY, { quote: 'enum', occurrence: 1 }).anchor
-    const bodies: Array<Record<string, unknown>> = [
-      { anchor, quote: 'enum', commentText: 'both' },
-      { occurrence: 1, commentText: 'no quote' },
-      { section: 'Notes', commentText: 'no quote' },
-      { quote: 'x'.repeat(REVIEW_ANCHOR_QUOTE_MAX_CHARS + 1), commentText: 'long quote' },
-      {
-        quote: 'enum',
-        section: 's'.repeat(REVIEW_ANCHOR_SECTION_MAX_CHARS + 1),
-        commentText: 'long section',
-      },
-      { quote: 'enum', commentText: 'c'.repeat(REVIEW_COMMENT_TEXT_MAX_CHARS + 1) },
-      { quote: 'enum', commentText: '' },
-    ]
-    for (const body of bodies) {
-      const { status, json } = await postJson(f, commentsPath(f), body)
-      expect(status).toBe(422)
-      expect(json.code).toBe('review-comment-invalid')
-    }
-    expect(await commentRowCount(f)).toBe(0)
-  })
-})
+    test('exclusivity, dangling occurrence/section, and the three length caps', async () => {
+      f = await buildFixture('single')
+      const anchor = resolved(SINGLE_BODY, { quote: 'enum', occurrence: 1 }).anchor
+      const bodies: Array<Record<string, unknown>> = [
+        { anchor, quote: 'enum', commentText: 'both' },
+        { occurrence: 1, commentText: 'no quote' },
+        { section: 'Notes', commentText: 'no quote' },
+        { quote: 'x'.repeat(REVIEW_ANCHOR_QUOTE_MAX_CHARS + 1), commentText: 'long quote' },
+        {
+          quote: 'enum',
+          section: 's'.repeat(REVIEW_ANCHOR_SECTION_MAX_CHARS + 1),
+          commentText: 'long section',
+        },
+        { quote: 'enum', commentText: 'c'.repeat(REVIEW_COMMENT_TEXT_MAX_CHARS + 1) },
+        { quote: 'enum', commentText: '' },
+      ]
+      for (const body of bodies) {
+        const { status, json } = await postJson(f, commentsPath(f), body)
+        expect(status).toBe(422)
+        expect(json.code).toBe('review-comment-invalid')
+      }
+      expect(await commentRowCount(f)).toBe(0)
+    })
+  },
+)
 
 registerProviderFixture(
   'RFC-326 AC-11 / AC-16 — refusals are 422s and write nothing',
@@ -505,9 +488,14 @@ registerProviderFixture(
   },
 )
 
-describe('RFC-326 AC-13 — multi-document rounds name their document', () => {
-  let f: Fixture
-  afterEach(() => f?.cleanup())
+// RFC-359 AC-6：这一组此前只跑 native（SQLite）夹具，改成与上面同一个双引擎注册器。
+registerProviderFixture('RFC-326 AC-13 — multi-document rounds name their document', (harness) => {
+  let f: ProviderFixture
+  const buildFixture = (mode: Mode, bodies?: string[]) =>
+    buildFixtureOnProvider(harness, mode, bodies)
+  afterEach(async () => {
+    await f?.cleanup()
+  })
 
   test('two pending items: docVersionId omitted → 422; wrong ids → 404; right id → 201', async () => {
     f = await buildFixture('multi-path', ['# A\n\nalpha text\n', '# B\n\nbeta text\n'])
@@ -565,9 +553,14 @@ registerProviderFixture('RFC-326 AC-13 — multi-document rounds name their docu
   })
 })
 
-describe('RFC-326 AC-13 — multi-document rounds name their document', () => {
-  let f: Fixture
-  afterEach(() => f?.cleanup())
+// RFC-359 AC-6：这一组此前只跑 native（SQLite）夹具，改成与上面同一个双引擎注册器。
+registerProviderFixture('RFC-326 AC-13 — multi-document rounds name their document', (harness) => {
+  let f: ProviderFixture
+  const buildFixture = (mode: Mode, bodies?: string[]) =>
+    buildFixtureOnProvider(harness, mode, bodies)
+  afterEach(async () => {
+    await f?.cleanup()
+  })
 
   test('single-document rounds keep the implicit target; a foreign docVersionId is still a 404', async () => {
     f = await buildFixture('single')
@@ -589,80 +582,88 @@ describe('RFC-326 AC-13 — multi-document rounds name their document', () => {
   })
 })
 
-describe('RFC-326 P10 — verified body limit on both review write routes', () => {
-  let f: Fixture
-  afterEach(() => f?.cleanup())
-
-  function streamOver(limit: number): ReadableStream<Uint8Array> {
-    const chunk = new Uint8Array(64 * 1024).fill(0x20)
-    let emitted = 0
-    return new ReadableStream<Uint8Array>({
-      pull(controller) {
-        controller.enqueue(chunk)
-        emitted += chunk.byteLength
-        if (emitted > limit) controller.close()
-      },
+// RFC-359 AC-6：这一组此前只跑 native（SQLite）夹具，改成与上面同一个双引擎注册器。
+registerProviderFixture(
+  'RFC-326 P10 — verified body limit on both review write routes',
+  (harness) => {
+    let f: ProviderFixture
+    const buildFixture = (mode: Mode, bodies?: string[]) =>
+      buildFixtureOnProvider(harness, mode, bodies)
+    afterEach(async () => {
+      await f?.cleanup()
     })
-  }
 
-  function request(
-    path: string,
-    body: ReadableStream<Uint8Array>,
-    contentLength?: string,
-  ): Request {
-    const headers = new Headers(HEADERS)
-    if (contentLength !== undefined) headers.set('content-length', contentLength)
-    return new Request(`http://localhost${path}`, {
-      method: 'POST',
-      headers,
-      body,
-      duplex: 'half',
-    } as RequestInit & { duplex: 'half' })
-  }
-
-  async function expect413(req: Request, label: string): Promise<void> {
-    const res = await Promise.race([
-      f.app.fetch(req),
-      Bun.sleep(1500).then(() => {
-        throw new Error(`${label}: the handler tried to consume a body it should have refused`)
-      }),
-    ])
-    expect(res.status).toBe(413)
-    expect(await res.json()).toMatchObject({ ok: false, code: 'review-body-too-large' })
-    await req.body?.cancel().catch(() => {})
-  }
-
-  test('honest oversized Content-Length fails fast; understated / malformed / chunked are cut at the limit', async () => {
-    f = await buildFixture('single')
-    const paths = [commentsPath(f), `/api/reviews/${f.reviewRunId}/decision`]
-    for (const path of paths) {
-      // This stream never yields a byte: only the declaration can produce the 413.
-      const never = new ReadableStream<Uint8Array>({ pull() {} })
-      await expect413(request(path, never, String(REVIEW_WRITE_BODY_MAX_BYTES + 1)), 'declared')
-      for (const bad of ['-1', 'NaN', String(Number.MAX_SAFE_INTEGER + 1)]) {
-        await expect413(request(path, new ReadableStream({ pull() {} }), bad), `malformed ${bad}`)
-      }
-      await expect413(request(path, streamOver(REVIEW_WRITE_BODY_MAX_BYTES), '1'), 'understated')
-      await expect413(request(path, streamOver(REVIEW_WRITE_BODY_MAX_BYTES)), 'chunked')
+    function streamOver(limit: number): ReadableStream<Uint8Array> {
+      const chunk = new Uint8Array(64 * 1024).fill(0x20)
+      let emitted = 0
+      return new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(chunk)
+          emitted += chunk.byteLength
+          if (emitted > limit) controller.close()
+        },
+      })
     }
-    expect(await commentRowCount(f)).toBe(0)
-    const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
-    expect(run.status).toBe('awaiting_review')
-  })
 
-  test('a body just under the limit still reaches the handler', async () => {
-    f = await buildFixture('single')
-    const padding = 'p'.repeat(REVIEW_WRITE_BODY_MAX_BYTES - 200)
-    const { status, json } = await postJson(f, commentsPath(f), {
-      quote: 'partially_refunded',
-      commentText: padding.slice(0, REVIEW_COMMENT_TEXT_MAX_CHARS),
-      // Unknown keys are ignored by the schema; they only inflate the byte size.
-      padding: padding.slice(REVIEW_COMMENT_TEXT_MAX_CHARS),
+    function request(
+      path: string,
+      body: ReadableStream<Uint8Array>,
+      contentLength?: string,
+    ): Request {
+      const headers = new Headers(HEADERS)
+      if (contentLength !== undefined) headers.set('content-length', contentLength)
+      return new Request(`http://localhost${path}`, {
+        method: 'POST',
+        headers,
+        body,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' })
+    }
+
+    async function expect413(req: Request, label: string): Promise<void> {
+      const res = await Promise.race([
+        f.app.fetch(req),
+        Bun.sleep(1500).then(() => {
+          throw new Error(`${label}: the handler tried to consume a body it should have refused`)
+        }),
+      ])
+      expect(res.status).toBe(413)
+      expect(await res.json()).toMatchObject({ ok: false, code: 'review-body-too-large' })
+      await req.body?.cancel().catch(() => {})
+    }
+
+    test('honest oversized Content-Length fails fast; understated / malformed / chunked are cut at the limit', async () => {
+      f = await buildFixture('single')
+      const paths = [commentsPath(f), `/api/reviews/${f.reviewRunId}/decision`]
+      for (const path of paths) {
+        // This stream never yields a byte: only the declaration can produce the 413.
+        const never = new ReadableStream<Uint8Array>({ pull() {} })
+        await expect413(request(path, never, String(REVIEW_WRITE_BODY_MAX_BYTES + 1)), 'declared')
+        for (const bad of ['-1', 'NaN', String(Number.MAX_SAFE_INTEGER + 1)]) {
+          await expect413(request(path, new ReadableStream({ pull() {} }), bad), `malformed ${bad}`)
+        }
+        await expect413(request(path, streamOver(REVIEW_WRITE_BODY_MAX_BYTES), '1'), 'understated')
+        await expect413(request(path, streamOver(REVIEW_WRITE_BODY_MAX_BYTES)), 'chunked')
+      }
+      expect(await commentRowCount(f)).toBe(0)
+      const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
+      expect(run.status).toBe('awaiting_review')
     })
-    expect(status).toBe(201)
-    expect(json.warnings).toEqual([])
-  })
-})
+
+    test('a body just under the limit still reaches the handler', async () => {
+      f = await buildFixture('single')
+      const padding = 'p'.repeat(REVIEW_WRITE_BODY_MAX_BYTES - 200)
+      const { status, json } = await postJson(f, commentsPath(f), {
+        quote: 'partially_refunded',
+        commentText: padding.slice(0, REVIEW_COMMENT_TEXT_MAX_CHARS),
+        // Unknown keys are ignored by the schema; they only inflate the byte size.
+        padding: padding.slice(REVIEW_COMMENT_TEXT_MAX_CHARS),
+      })
+      expect(status).toBe(201)
+      expect(json.warnings).toEqual([])
+    })
+  },
+)
 
 // RFC-359 W49: the inner scope finishes application disposal before provider release.
 function registerProviderFixture(
