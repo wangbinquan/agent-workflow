@@ -4677,3 +4677,15 @@ VACUUM INTO + tar；PostgreSQL 走 `postgresqlAdminBackupCoordinator` /
 
 **待办**：立一个能造出「在用 PG generation」的夹具，再给 PG 备份补正向 + 失败路径覆盖。
 在那之前，PG 备份的任何改动都没有网。
+
+## RFC-359 W8-T28 的 `waitForReads` 静默超时掩着六条「假编排」（2026-09-12 发现，未决）
+
+`packages/backend/tests/rfc359-w8-t28-lost-update.test.ts` 的 `waitForReads` 等不到目标读数就
+**静默 return**。把它改成抛错之后，**L1 / L2 / L4 六条（两个引擎各三条）当场转红**——说明那几条
+用例并没有真的等到它们声称的并发交错，一直靠静默超时往下走、断言碰巧成立。
+
+**待办**：逐条查清「该等的那个读是什么、为什么等不到」（可能是 `readsMatching` 的 SQL 形态在某个
+引擎上对不上，也可能是编排本身就写错了），修好之后把 `waitForReads` 改成等不到就抛。
+
+**注意**：在查清之前**不要**顺手把它改成抛错——会一次推红六条。函数体里已写了同样的警告。
+发现经过见 `design/RFC-359-database-provider-unification/plan.md` §5bk。

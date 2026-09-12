@@ -75,6 +75,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskRecoveryOperations'
 import { deleteTask } from '@/services/taskDelete'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import type { Semaphore } from '@/util/semaphore'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import type { StatementRecording } from './helpers/statementRecorder'
@@ -187,6 +188,31 @@ async function waitForReads(
     if (readsMatching(recording, pattern) >= count) return
     await settle(1)
   }
+  // 注意：**等不到就静默往下走**，这是本函数既有的行为，本轮刻意没改。
+  //
+  // 2026-09-12 实测：把它改成抛错，L1 / L2 / L4 六条（两个引擎各三条）当场转红
+  // ——也就是说那几条用例**根本没等到**它们声称的那个交错，一直是靠这里静默超时
+  // 才走下去的，断言碰巧成立。那是一个独立的、需要逐条查清「它们到底要卡在哪一步」
+  // 的问题，不在本轮（修 L6 的 CI 抖动）范围内，已记进 plan §5bk 与 audit-backlog。
+  // 在查清之前不要顺手把它改成抛错——会把六条用例一起推红。
+}
+
+/**
+ * 等到 `count` 个调用方**确实**卡在这把信号量上。
+ *
+ * RFC-359 AC-20：替掉原来的 `await settle(20)`。那条固定等待赌的是「20 个 tick 足够让两笔
+ * 删除各自走完认领链、停到自己的每任务写锁上」；在 8 分片挤一台 runner 的 CI 上赌输了
+ * （2026-09-12 ubuntu shard 1/8 实撞，本机 3/3 全绿）。`Semaphore.queueLength` 就是
+ * 「有几个调用方正卡着」的直接可观测量，等它而不是等时间。
+ */
+async function waitForQueued(sem: Semaphore, count: number, what: string): Promise<void> {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    if (sem.queueLength >= count) return
+    await settle(1)
+  }
+  throw new Error(
+    `${what}：等不到 ${String(count)} 个调用方卡在写锁上（queueLength=${String(sem.queueLength)}）`,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -616,7 +642,10 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     const releaseSecond = await getTaskWriteSem(secondChild).acquire()
     const deletingFirst = deleteTask(legacy(db), firstChild)
     const deletingSecond = deleteTask(legacy(db), secondChild)
-    await settle(20)
+    // 两笔删除各自走完认领链之后会停在自己的每任务写锁上——等**那件事**发生，
+    // 而不是等 20 个 tick（见 `waitForQueued` 的注释）。
+    await waitForQueued(getTaskWriteSem(firstChild), 1, '第一笔删除停到自己的写锁上')
+    await waitForQueued(getTaskWriteSem(secondChild), 1, '第二笔删除停到自己的写锁上')
 
     const recording = recorderFor(harness)
     const brake = await holdAggregateRoot(harness, tasks, tasks.id, parentId)

@@ -7142,3 +7142,96 @@ run-now 真去 spawn opencode）。**SQLite 根有这个可选覆盖口**（`ser
 **顺带一条记账更正**：`98545e3f8` 的标题写「账本 550 → 547」是**错的**，实际是 548。
 这条账本的 baseline 数的是**文件条目数**，而 `scheduled-tasks-run-now` 那笔是把同一条目的
 调用点从 2 改成 1，**条目没减**。（这个坑本轮之前就踩过一次，见 §5v。）
+
+## 5bi. `webhookDispatcher` 不是第三个「纯透传」——两个根对它的**所有权**就不同，得先定语义
+
+补完 `buildScheduleLaunch` 与 `runtimeDiagnosticTestDependencies` 之后，第三个卡住 AC-6
+的覆盖口是 `webhookDispatcher`（挡着 3 个文件：`rfc257-webhook-error-codes` /
+`rfc259-github-ingress` / `rfc257-webhook-management`）。**它不能照抄前两个的做法**：
+
+| | SQLite 根 | PG 根 |
+| --- | --- | --- |
+| 谁构造 dispatcher | **不构造**，当依赖收（`deps.webhookDispatcher?`，生产由 `cli/start.ts:2310` 注入） | **自己构造**（`postgresqlDaemonApplication.ts:1247`） |
+| 没有 dispatcher 时 | 事件中心两个用途各降级为 `null`（能力探测：`supportsEventCenterCodeHostDelivery` / `supportsEventCenterWorkStart`），公共 ingress 路由**自我跳过不挂载** | 该状态不存在 |
+| 部分能力的桩 | 能力探测天然容忍（缺 `dispatchEventTarget` ⇒ 那一路当 `null`） | `1290` 直接调 `webhookDispatcher.dispatchEventTarget(...)`，塞个部分桩进去会**运行时炸** |
+
+所以「给 PG 加一个 `input.webhookDispatcher ?? 构造的那个`」是错的：测试桩只有
+`dispatch` / `dispatchSubscription`（见 `rfc257-webhook-error-codes`），一旦有事件目标触发就
+在 `1290` 炸 TypeError；而且炸得**很晚**，看起来像别的 bug。
+
+**要先定的语义**（三选一，需要用户拍板，我不自己选）：
+
+1. **覆盖只替换路由面**（`webhookDeliveries` / `webhookIngress` 两处路由依赖），事件中心内部
+   仍用自己构造的那个。改动最小、最不惊扰生产，但「同一个装配里两个 dispatcher」读起来别扭。
+2. **覆盖整体替换，并把能力探测也搬到 PG 根**：`automationWorkStart` 改成「探测得到才接线」，
+   与 SQLite 逐字同构。语义最统一，但这是**行为改动**——PG 上「没有 work starter」这个状态
+   从「不存在」变成「可达」，得确认没有哪条路径默认它一定在。
+3. **反过来统一**：让 SQLite 根也自己构造 dispatcher、不再当可选依赖，两边都变成「总是有」。
+   最彻底，但要动 `cli/start.ts` 的注入与 ingress 路由的自我跳过纪律（那是 RFC-257 明确设计的
+   「部分接线就不暴露保证 500 的公共路由」），**属于能力收缩，触发 CLAUDE.md §RFC workflow 第 7 条**。
+
+**在定下来之前不动它**。前两个覆盖口之所以可以直接补，是因为它们**确实**是纯透传：
+`RuntimesRouteDependencies` / `integration.scheduledTasks` 本来就声明了那个可选字段，
+默认取值逐字未变。`webhookDispatcher` 不满足这个前提，硬套就是在给两个根制造第三种形态。
+
+## 5bj. 一个前置未知数已经测掉：装配之后**中途**改配置，路由读得到
+
+`runtime-routes` / `runtime-routes-registry` 那一簇有个和别人都不一样的形态：它们不是在
+装配前准备好配置，而是**在用例中途** `applyConfigPatch(h.configPath, {...})` 再发一次请求，
+断言路由看到了新值（换默认二进制、换 `defaultRuntime` 之类）。
+
+共用作用域的 `open({config})` 只覆盖**装配那一刻**的配置，所以迁之前必须先回答：
+作用域装配出来的应用，中途改它那份 config 文件还算不算数？已迁的 91 个文件里**一个都没有
+这个形态**，查不到先例，只能实测。
+
+写了一次性探针（`describeEachProviderHttpApplication` + `open()` 之后
+`applyConfigPatch(join(opened.appHome, 'config.json'), …)` 再打一次 `/api/runtimes`）：
+**两个引擎都通过**。路由内部是逐请求 `loadConfig(deps.configPath)`，而 `applyConfigPatch`
+自己会让读缓存失效，所以中途改配置照常生效。探针已删。
+
+**结论**：这一簇按 `join(opened.appHome, 'config.json')` 取路径就能原样迁，
+不需要给作用域加「重新装配」或「暴露 configPath」之类的新口子。
+（`opened.appHome` 本来就在暴露面上。）
+
+**方法记一笔**：迁移前遇到「已迁的文件里没有这个形态」的时候，**写个一次性探针去测，
+别靠读代码推断**——这次推断和实测结论一致，但 §5bd 那四版判据的教训是反过来的，
+成本只有几分钟，不值得赌。
+
+## 5bk. 一条真的 CI 抖动（不是「重跑就过了」），以及顺手照出的六条「假编排」
+
+`e48b1d71a` 在 ubuntu shard 1/8 红在
+`rfc359-w8-t28-lost-update` 的 **L6**（并发删兄弟任务后父行物化列收敛），`[postgresql]` 侧。
+本机 3/3 全绿，前两提（`fe0d9e087` / `25c3ba4c2`）跑同一条也绿——是**间歇**。
+
+本仓明令「绝不允许『重跑就过了』作为通过依据」，所以查到机制为止：
+
+```ts
+const deletingFirst = deleteTask(legacy(db), firstChild)
+const deletingSecond = deleteTask(legacy(db), secondChild)
+await settle(20)          // ← 赌 20 个 tick 够两笔删除各自走完认领链、停到自己的写锁上
+```
+
+这就是本轮一直在拆的那个形状：**固定等待当同步手段**。8 个分片挤一台 runner 时赌输。
+可观测量是现成的——`Semaphore.queueLength`（`src/util/semaphore.ts`，注释原话
+"Number of callers blocked waiting for a slot"）。改成等**那件事**：
+
+```ts
+await waitForQueued(getTaskWriteSem(firstChild), 1, '第一笔删除停到自己的写锁上')
+await waitForQueued(getTaskWriteSem(secondChild), 1, '第二笔删除停到自己的写锁上')
+```
+
+变异验证过它不是恒真：把要求改成 3（不可达）会抛并报出 `queueLength=1`，说明确实在观测。
+
+### 顺手照出的：`waitForReads` 静默超时，掩着六条「假编排」
+
+同文件的 `waitForReads` 等不到就**静默 return**。我本想顺手改成抛错，一改
+**L1 / L2 / L4 六条（两个引擎各三条）当场转红**——也就是说那几条用例**从来没等到**
+它们声称的那个交错，一直是靠静默超时走下去、断言碰巧成立。
+
+**没有在本轮改**：那是一个独立问题，要逐条查清「它们到底想卡在哪一步、为什么那个读等不到」，
+而当时 main 正红着（本节开头那条），优先级是把红修掉。已在函数体里写明
+「查清之前别顺手改成抛错，会一次推红六条」，并记进 `docs/audit-backlog.md`。
+
+**规律**：**静默超时的等待函数会把「编排没成立」伪装成「编排成立了」**。
+本轮两次撞到同一形状（`waitUntil` / `waitForReads`）。写这类 helper 时默认就该抛；
+已经静默的那些，**改之前先跑一遍全量**——它可能正兜着好几条你不知道的假绿。

@@ -2,6 +2,95 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 545**；反睡眠清零 + 两个组合根签名对齐）
+>
+> 接着下面那段做。这一段没有新的产品缺陷，主线是**把两个组合根的装配签名对齐**，
+> 以及**把负向断言从墙钟改成因果屏障**。
+>
+> ### 1. 七条「睡一觉再断言」全清掉（plan §5bf）
+>
+> §5bd 只挑出了它们并分了类，这一轮逐条改完，实际处置比预判多出一类：
+>
+> - **负向断言 ⇒ 因果屏障**（`rfc099-ws-acl-filter` / `ws-repo-imports` / `rfc152-ws-frame-gates`）：
+>   播一帧该连接**有权**看见的控制帧、等它到达，再断言被门掉的那帧不在。
+> - **等写入 ⇒ `helpers/eventually`**（`rfc257-webhook-management` / `rfc259-github-ingress`）。
+>   其中 `rfc259:191` 是正负各一半：负向那半的屏障就是 `duplicate` 应答本身。
+> - **新的第四类「证明一个在飞的请求还卡着」**三处同形 ⇒ 抽出 `tests/helpers/stillParked.ts`：
+>   把一趟不走那把锁的请求完整驱过同一个 app，再读 settled 标志。
+> - 确实无谓词可等的一处（刻意推进时钟）写 `// sleep-ok:` 豁免——守卫只读**紧邻上一行**。
+>
+> **屏障分两种强度，注释里必须写清**：投递路径同步的（repo-import 无 frameGate）是**严格蕴含**；
+> fire-and-forget 的（workflows 有 frameGate，跨帧无序）只是**相对屏障**——仍远好于固定毫秒
+> （机器越慢屏障自己越慢，窗口跟着放大），但别让下一个人以为拿到了证明。
+>
+> `docs/dev-gotchas.md` 里「负向断言只能靠固定等待，无法轮询」**是错的，已勘误**。
+>
+> ### 2. 三处「看起来已迁」的账本残留（plan §5bg）
+>
+> pre-flight 报 `ALREADY-MIGRATED` 却仍有条目的 3 个文件，两个都是**同名遮蔽**：
+> 模块级 `buildHarness` / `makeApp` 与已迁 describe 吃的**注入形参**同名，grep 分不出谁是谁。
+> `rfc120` 那例更阴——两个同名 `makeApp` **签名还不同**（同步 / 异步），残留那条写
+> `const app = makeApp(db)` 没有 `await`，正因为吃的是同步那个才一直绿着。
+> **`await` 的有无比 grep 更能定位残留。**
+>
+> 第三个 `rfc221-login-policy-routes` 该留单引擎，但原记的**理由不准**：`oidcProviders === null`
+> 只在没传 secretBox 时出现，而 `cli/start.ts:1435` 在**选 provider 之前**就建 secretBox
+> （源码注释 "needed by either selected composition"）——那个 null 分支与背后两个 503
+> **在生产上两个引擎都到不了**。不是「PG 缺了 SQLite 有的能力」，差的只是装配签名。
+>
+> ### 3. 两个组合根的可选覆盖口补成同形
+>
+> 这是本段的主线发现：**SQLite 根有、PG 根没有**的可选覆盖口，会直接挡住 AC-6 迁移。已补两个：
+>
+> - `buildScheduleLaunch`（`server.ts:822` 早就有）⇒ 解锁 `scheduled-tasks-run-now` 的路由门；
+> - `runtimeDiagnosticTestDependencies`（`RuntimesRouteDependencies` 本来就声明了）⇒ 解锁运行时
+>   诊断那一簇（**4 个文件，runway 上最大的一簇**），已迁 `rfc317-runtime-spawn-capability-guard`。
+>
+> 两个都是**纯透传、默认行为逐字不变**，且都做了变异验证（抽掉透传 ⇒ `[postgresql]` 侧当场红）。
+> **还剩一个同类的没补**：`webhookDispatcher`（3 个文件等着）。它比前两个难——PG 根直接调
+> `webhookDispatcher.dispatchEventTarget(...)`，而 SQLite 侧是靠
+> `supportsEventCenterCodeHostDelivery()` **能力探测**容忍部分桩；照搬会炸，要连探测一起对齐。
+>
+> ### 4. 我推红了一次 main，教训值得记（plan §5bh）
+>
+> 补 `buildScheduleLaunch` 那一提红在 `rfc359-w29-unstarted-application-composition`
+> ——daemon 相位 159 条语句没变、**摘要**变了。推之前我跑了 `tests/architecture/` 全套 663 条
+> 全绿，但**那条守卫在 `tests/` 根目录，不在 `architecture/` 下**。
+>
+> **按目录选测试是按位置选，风险却按被依赖面分布，两者不重合。**
+> 动组合根（`src/cli/postgresqlDaemonApplication.ts` / `src/server.ts`）之后，
+> 除了 `tests/architecture/`，必须跑 `scripts/source-guard-sweep.ts`（它按「哪些测试读了本包
+> `src/`」挑），或至少把 W29 那条显式加进去。
+>
+> ### 运行时诊断那一簇已收 3/4
+>
+> `runtimeDiagnosticTestDependencies` 补上之后当轮迁了三个：
+> `rfc317-runtime-spawn-capability-guard` / `runtime-routes-registry` / `runtime-routes`。
+> 两条可复用的招式：
+>
+> - **注入口是注册期参数、而用例要中途换实现** ⇒ 注册一个**稳定的转发闭包**指向可变目标。
+>   `runtime-routes-registry` 的 `appWithSmoke` 因此不必重新装配应用——关键事实是
+>   `mountRuntimesRoutes` **在装载时**取 `smokeRuntime`（`src/routes/runtimes.ts`），
+>   装载后换那个对象根本不生效；而重新装配会换掉 app home，把用例中途写进去的配置一起丢掉。
+> - **中途 `applyConfigPatch` 是成立的**（plan §5bj，写探针实测过两个引擎）：
+>   路由逐请求 `loadConfig(deps.configPath)`，补丁函数自己让读缓存失效。
+>   取路径用 `join(opened.appHome, 'config.json')`，不需要给作用域加新口子。
+>
+> 顺带纠了一个**本来就不成立的对照**：`runtime-routes` 里那个「另建一个不带注入口的生产形态
+> 应用」——本文件测的 `/api/runtime/models` 走 `RuntimeRouteDependencies`（只有 `configPath` /
+> `runtimeRegistry`），**从不读**那个注入口，所以两个应用行为上一直是同一个。判据照旧成立，
+> 对照是假的。
+>
+> ### 下一刀
+>
+> 剩 ~50 个文件。按「同一个覆盖口解锁几个文件」排序：
+>
+> 1. **`webhookDispatcher`（3 个文件）——但它不是纯透传，先定语义再动**，三个选项与各自代价
+>    已列在 plan §5bi（两个根对 dispatcher 的**所有权**就不同：SQLite 当依赖收、PG 自己构造；
+>    塞部分桩进 PG 会在 `1290` 运行时炸）。**需要用户拍板**，我没有自己选。
+> 2. `mcpRuntimeTestDependencies` / `intentTestDependencies`（各 2 个）。
+> 3. `helpers/taskRecoveryOperations` 那层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）仍未动。
+
 > ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 551**，又照出三条 PG 缺陷）
 >
 > 接着下面那段做。**新发现的三条产品缺陷，全部是把单引擎用例改成双引擎当天红出来的**：

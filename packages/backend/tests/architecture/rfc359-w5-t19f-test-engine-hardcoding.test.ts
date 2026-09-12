@@ -551,8 +551,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'runtime-claude-capture.test.ts: 1',
   'runtime-claude-e2e.test.ts: 1',
   'runtime-extra-args.test.ts: 3',
-  'runtime-routes-registry.test.ts: 1',
-  'runtime-routes.test.ts: 1',
   'runtime-session-lease.test.ts: 1',
   'scheduled-task-scheduler.test.ts: 1',
   'scheduled-tasks-crud.test.ts: 1',

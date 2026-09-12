@@ -1,44 +1,59 @@
 // RFC-001 HTTP integration tests for /api/runtime/models (all namespaces).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { Hono } from 'hono'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
-import { applyConfigPatch, loadConfig } from '../src/config'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
+import { applyConfigPatch } from '../src/config'
 import { clearOpencodeModelsCache } from '../src/services/runtime/opencode/models'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+// 三个 describe 共用同一套作用域参数。
+const SCOPE_OPTIONS = {
+  token: TOKEN,
+  opencodeVersion: null,
+  dbVersion: 1,
+  tempPrefix: 'aw-runtime-',
+} as const
 
 interface Harness {
   app: Hono
-  db: DbClient
+  db: ProviderNeutralDatabase
+  /** 作用域现建的 app home——本文件把桩二进制也写在它下面，用完随作用域一起删。 */
   tmp: string
   configPath: string
   binaryPath: string
 }
 
-function makeHarness(opts: { binary: string }): Harness {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-runtime-'))
-  const configPath = join(tmp, 'config.json')
-  loadConfig(configPath) // write defaults
-  applyConfigPatch(configPath, { opencodePath: opts.binary })
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath,
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    runtimeDiagnosticTestDependencies: FIXTURE_RUNTIME_DIAGNOSTICS,
-  })
-  return { app, db, tmp, configPath, binaryPath: opts.binary }
+// RFC-359 AC-6 —— 配置由作用域在装配时写入（`open({ config })`），app home 也归它；
+// 原来自建的那份 config 迁进来之后会被整份绕开。
+//
+// 顺带纠一个**本来就不成立的对照**：原 `makeHarness` 传了
+// `runtimeDiagnosticTestDependencies`，但本文件测的 `/api/runtime/models` 走的是
+// `RuntimeRouteDependencies`（`src/routes/runtime.ts`，只有 `configPath` /
+// `runtimeRegistry`），**根本不读那个注入口**——它只被 `mountRuntimesRoutes`
+// （`/api/runtimes` 那一族）消费。所以那个参数在本文件里一直是空转的。
+async function makeHarness(
+  scope: ProviderHttpApplicationScope,
+  opts: { binary: string },
+): Promise<Harness> {
+  const opened = await scope.open({ config: { opencodePath: opts.binary } })
+  return {
+    app: opened.app,
+    db: scope.harness.db,
+    tmp: opened.appHome,
+    configPath: join(opened.appHome, 'config.json'),
+    binaryPath: opts.binary,
+  }
 }
 
 async function req(app: Hono, path: string): Promise<Response> {
@@ -135,10 +150,10 @@ esac
 // semantics (missing binary, min-version gate for the daemon, no version
 // ceiling) stay locked at the util layer in opencode-version.test.ts.
 
-describe('GET /api/runtime/models', () => {
+describeEachProviderHttpApplication('GET /api/runtime/models', SCOPE_OPTIONS, (scope) => {
   let h: Harness
 
-  beforeEach(() => {
+  beforeEach(async () => {
     const tmp = mkdtempSync(join(tmpdir(), 'aw-runtime-bin-'))
     const bin = stubBinaryPath(tmp)
     writeBinary(bin, {
@@ -150,12 +165,8 @@ describe('GET /api/runtime/models', () => {
         'openai/gpt-5',
       ].join('\n'),
     })
-    h = makeHarness({ binary: bin })
+    h = await makeHarness(scope, { binary: bin })
     clearOpencodeModelsCache()
-  })
-
-  afterEach(() => {
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('first call returns parsed list with cached=false', async () => {
@@ -176,14 +187,11 @@ describe('GET /api/runtime/models', () => {
   })
 
   test('production admits an administrator-selected executable without a vendor allowlist', async () => {
-    const productionApp = createApp({
-      token: TOKEN,
-      configPath: h.configPath,
-      opencodeVersion: null,
-      dbVersion: 1,
-      db: h.db,
-    })
-    const res = await req(productionApp, '/api/runtime/models')
+    // 原来这里另建一个「不带测试注入口」的应用当作生产形态。按源码对账，本路由的依赖
+    // 是 `RuntimeRouteDependencies`（只有 `configPath` / `runtimeRegistry`），**从不读**
+    // 那个注入口——所以那个「对照」在行为上一直是同一个应用。判据本身（管理员选定的
+    // 可执行文件被接受、没有厂商白名单）照旧成立，这里直接用作用域装配的那一个。
+    const res = await req(h.app, '/api/runtime/models')
     expect(res.status).toBe(200)
     expect((await res.json()) as Record<string, unknown>).toMatchObject({
       binary: h.binaryPath,
@@ -237,105 +245,111 @@ describe('GET /api/runtime/models', () => {
 
 // RFC-111 — claude static model list. (The GET /api/runtime/claude probe was
 // removed in RFC-135 along with its opencode sibling — see the note above.)
-describe('GET /api/runtime/models?runtime=claude (RFC-111)', () => {
-  let h: Harness
-  let claudeBin: string
-  beforeEach(() => {
-    // opencode path is a non-empty placeholder (claude routes never invoke it).
-    h = makeHarness({ binary: 'opencode' })
-    claudeBin = stubBinaryPath(h.tmp, 'fake-claude')
-    writeBinary(claudeBin, { versionStdout: '2.1.193 (Claude Code)' })
-    applyConfigPatch(h.configPath, { claudeCodePath: claudeBin })
-  })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
+describeEachProviderHttpApplication(
+  'GET /api/runtime/models?runtime=claude (RFC-111)',
+  SCOPE_OPTIONS,
+  (scope) => {
+    let h: Harness
+    let claudeBin: string
+    beforeEach(async () => {
+      // opencode path is a non-empty placeholder (claude routes never invoke it).
+      h = await makeHarness(scope, { binary: 'opencode' })
+      claudeBin = stubBinaryPath(h.tmp, 'fake-claude')
+      writeBinary(claudeBin, { versionStdout: '2.1.193 (Claude Code)' })
+      // §5bj：装配之后再改这份 config，路由下一次请求读得到（已实测两个引擎）。
+      applyConfigPatch(h.configPath, { claudeCodePath: claudeBin })
+    })
 
-  test('models?runtime=claude returns the curated static list (cached)', async () => {
-    const res = await req(h.app, '/api/runtime/models?runtime=claude')
-    expect(res.status).toBe(200)
-    const json = (await res.json()) as {
-      models: Array<{ id: string; provider: string }>
-      cached: boolean
-    }
-    expect(json.cached).toBe(true)
-    expect(json.models.length).toBeGreaterThan(0)
-    expect(json.models.some((m) => m.id === 'opus')).toBe(true)
-    expect(json.models.every((m) => m.provider === 'anthropic')).toBe(true)
-  })
-})
+    test('models?runtime=claude returns the curated static list (cached)', async () => {
+      const res = await req(h.app, '/api/runtime/models?runtime=claude')
+      expect(res.status).toBe(200)
+      const json = (await res.json()) as {
+        models: Array<{ id: string; provider: string }>
+        cached: boolean
+      }
+      expect(json.cached).toBe(true)
+      expect(json.models.length).toBeGreaterThan(0)
+      expect(json.models.some((m) => m.id === 'opus')).toBe(true)
+      expect(json.models.every((m) => m.provider === 'anthropic')).toBe(true)
+    })
+  },
+)
 
 // RFC-114 — /api/runtime/models?runtime=<name> resolves THAT runtime's binary.
-describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-114)', () => {
-  let h: Harness
-  let customBin: string
-  beforeEach(async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'aw-rt114-default-'))
-    const defaultBin = stubBinaryPath(dir)
-    writeBinary(defaultBin, { modelsStdout: 'default/d-model' })
-    h = makeHarness({ binary: defaultBin })
-    clearOpencodeModelsCache()
-    await seedBuiltinRuntimes(runtimeRegistryPersistence(h.db))
-    customBin = stubBinaryPath(h.tmp, 'oc-fork')
-    writeBinary(customBin, { modelsStdout: 'fork/special' })
-    await createRuntime(runtimeRegistryPersistence(h.db), {
-      name: 'oc-fork',
-      protocol: 'opencode',
-      binaryPath: customBin,
+describeEachProviderHttpApplication(
+  'GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-114)',
+  SCOPE_OPTIONS,
+  (scope) => {
+    let h: Harness
+    let customBin: string
+    beforeEach(async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'aw-rt114-default-'))
+      const defaultBin = stubBinaryPath(dir)
+      writeBinary(defaultBin, { modelsStdout: 'default/d-model' })
+      h = await makeHarness(scope, { binary: defaultBin })
+      clearOpencodeModelsCache()
+      await seedBuiltinRuntimes(runtimeRegistryPersistence(h.db))
+      customBin = stubBinaryPath(h.tmp, 'oc-fork')
+      writeBinary(customBin, { modelsStdout: 'fork/special' })
+      await createRuntime(runtimeRegistryPersistence(h.db), {
+        name: 'oc-fork',
+        protocol: 'opencode',
+        binaryPath: customBin,
+      })
     })
-  })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
-
-  test('?runtime=<custom opencode> lists the custom binary models, not the default (D1)', async () => {
-    const res = await req(h.app, '/api/runtime/models?runtime=oc-fork')
-    expect(res.status).toBe(200)
-    const json = (await res.json()) as Record<string, unknown>
-    expect(json.binary).toBe(customBin)
-    expect(json.models).toEqual([{ id: 'fork/special', provider: 'fork', modelID: 'special' }])
-  })
-
-  test('no ?runtime= still uses the default opencodePath (backward-compat / P2-5)', async () => {
-    const res = await req(h.app, '/api/runtime/models')
-    const json = (await res.json()) as Record<string, unknown>
-    expect(json.binary).toBe(h.binaryPath)
-    expect(json.models).toEqual([
-      { id: 'default/d-model', provider: 'default', modelID: 'd-model' },
-    ])
-  })
-
-  test('P1-1: a runtime NAMED "claude" (opencode) is NOT hijacked into the static list', async () => {
-    const claudeNamedBin = stubBinaryPath(h.tmp, 'oc-claude')
-    writeBinary(claudeNamedBin, { modelsStdout: 'fork/named-claude' })
-    await createRuntime(runtimeRegistryPersistence(h.db), {
-      name: 'claude',
-      protocol: 'opencode',
-      binaryPath: claudeNamedBin,
+    test('?runtime=<custom opencode> lists the custom binary models, not the default (D1)', async () => {
+      const res = await req(h.app, '/api/runtime/models?runtime=oc-fork')
+      expect(res.status).toBe(200)
+      const json = (await res.json()) as Record<string, unknown>
+      expect(json.binary).toBe(customBin)
+      expect(json.models).toEqual([{ id: 'fork/special', provider: 'fork', modelID: 'special' }])
     })
-    const res = await req(h.app, '/api/runtime/models?runtime=claude')
-    expect(res.status).toBe(200)
-    const json = (await res.json()) as Record<string, unknown>
-    // its own opencode binary + live list — NOT the static Anthropic list.
-    expect(json.binary).toBe(claudeNamedBin)
-    expect(json.models).toEqual([
-      { id: 'fork/named-claude', provider: 'fork', modelID: 'named-claude' },
-    ])
-  })
 
-  test('502 carries the runtime name + a redacted message (P2-4)', async () => {
-    const failBin = join(h.tmp, 'oc-fail')
-    writeBinary(failBin, {
-      modelsExit: 4,
-      modelsStderr: 'clone https://u:supersecrettoken@github.com/x.git failed',
+    test('no ?runtime= still uses the default opencodePath (backward-compat / P2-5)', async () => {
+      const res = await req(h.app, '/api/runtime/models')
+      const json = (await res.json()) as Record<string, unknown>
+      expect(json.binary).toBe(h.binaryPath)
+      expect(json.models).toEqual([
+        { id: 'default/d-model', provider: 'default', modelID: 'd-model' },
+      ])
     })
-    await createRuntime(runtimeRegistryPersistence(h.db), {
-      name: 'oc-fail',
-      protocol: 'opencode',
-      binaryPath: failBin,
+
+    test('P1-1: a runtime NAMED "claude" (opencode) is NOT hijacked into the static list', async () => {
+      const claudeNamedBin = stubBinaryPath(h.tmp, 'oc-claude')
+      writeBinary(claudeNamedBin, { modelsStdout: 'fork/named-claude' })
+      await createRuntime(runtimeRegistryPersistence(h.db), {
+        name: 'claude',
+        protocol: 'opencode',
+        binaryPath: claudeNamedBin,
+      })
+      const res = await req(h.app, '/api/runtime/models?runtime=claude')
+      expect(res.status).toBe(200)
+      const json = (await res.json()) as Record<string, unknown>
+      // its own opencode binary + live list — NOT the static Anthropic list.
+      expect(json.binary).toBe(claudeNamedBin)
+      expect(json.models).toEqual([
+        { id: 'fork/named-claude', provider: 'fork', modelID: 'named-claude' },
+      ])
     })
-    const res = await req(h.app, '/api/runtime/models?runtime=oc-fail')
-    expect(res.status).toBe(502)
-    const json = (await res.json()) as Record<string, unknown>
-    expect(json.code).toBe('opencode-models-failed')
-    expect(json.runtime).toBe('oc-fail')
-    // the git-URL credential is redacted before reaching the client.
-    expect(String(json.message)).not.toContain('supersecrettoken')
-  })
-})
+
+    test('502 carries the runtime name + a redacted message (P2-4)', async () => {
+      const failBin = join(h.tmp, 'oc-fail')
+      writeBinary(failBin, {
+        modelsExit: 4,
+        modelsStderr: 'clone https://u:supersecrettoken@github.com/x.git failed',
+      })
+      await createRuntime(runtimeRegistryPersistence(h.db), {
+        name: 'oc-fail',
+        protocol: 'opencode',
+        binaryPath: failBin,
+      })
+      const res = await req(h.app, '/api/runtime/models?runtime=oc-fail')
+      expect(res.status).toBe(502)
+      const json = (await res.json()) as Record<string, unknown>
+      expect(json.code).toBe('opencode-models-failed')
+      expect(json.runtime).toBe('oc-fail')
+      // the git-URL credential is redacted before reaching the client.
+      expect(String(json.message)).not.toContain('supersecrettoken')
+    })
+  },
+)
