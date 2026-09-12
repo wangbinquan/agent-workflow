@@ -4791,3 +4791,64 @@ drizzle 把 PG 错误包成 `Failed query: <整条 SQL> params: …`，**真正�
    「并发点燃意图回合撞死锁」可能同源。
 
 **不要用「重跑就过了」结案**（本仓明令）。在 1. 做完之前，再次遇到也只能记录、不能归因。
+
+## Windows e2e `rfc294-human-gate-restart` 偶发：daemon 重启起不来（2026-09-12 首次观察，未决）
+
+**症状**：`Playwright e2e (windows-latest shard 2/4)` 红：
+
+```
+Error: review gate did not reappear for 01M2BK85…; last=undefined; lastReadError=none;
+       daemon={"pid":2384,"exitCode":null,…}
+Error: e2e/harness: daemon closed with code 1 signal null before printing ready line
+```
+
+也就是**守护进程重启那一步没起来**，评审闸门自然没重现。只在 **windows** 分片上见过。
+
+**排除了提交者**：观察到它的那一提（`2d330ace7`）**零 `src/` 改动**（只有后端测试 + 账本 +
+文档），e2e 跑的产品源码与前两提逐字相同，而 `91503480f` 是 42/42 全绿（含 Windows e2e 分片）。
+
+### ⚠️ 别和 `docs/dev-gotchas.md:3481` 那条搞混——**同一句报错、不同成因**
+
+那条记的是「共享工作树有他人半途态 ⇒ `build:binary:e2e` 出来的二进制 daemon 起不来」，
+判据是**视觉场景齐红**。**本条不是**：
+
+- CI 是**干净 checkout**，本地脏树影响不到它；
+- 那一提前后几提都是同一个人的、且都按路径精确提交，主干上没有半途态；
+- 只红**一条**用例、只在 **windows** 上，不是齐红。
+
+所以看到这句报错时先分流：**齐红 + 本地共享树** ⇒ 3481 那条；
+**单条 + 只在某个 OS 分片** ⇒ 本条，属于平台相关的重启时序。
+
+**待办**：拿 Windows 上那次 daemon 的 stderr（目前 `stderrTail` 是空的——这本身就是线索：
+进程以 code 1 退出却没往 stderr 写东西，说明可能死在很早的启动阶段或被平台机制杀掉）。
+先让 harness 在这条路径上把子进程的完整输出落盘，再谈归因。本机有 Windows ARM64 验收 VM 可用。
+
+## 主干抖动率：最近 16 次 run 里 **6 次红，其中 3 次与提交者无关**（2026-09-12 统计）
+
+把 2026-09-12 这一天的 CI 结果逐条归因（下面每条都单独查过日志、比对过提交内容）：
+
+| commit | 红在哪 | 归因 |
+| --- | --- | --- |
+| `98545e3f8` | Backend macos 3/6 + ubuntu 1/8 | **真缺陷**（W29 摘要没同步）+ 一次抖动 |
+| `e48b1d71a` | Backend ubuntu 1/8 | **真抖动**（W8-T28 L6 固定等待，已修成信号量谓词） |
+| `4a53d0b46` | Playwright e2e ubuntu 3/3 | 抖动（`workflow-matrix:1157`，**该提零 `src/` 改动**） |
+| `c8c944bed` | Backend ubuntu 6/8 | **真缺陷**（`dispatchIntentTurn` fire-and-forget 无网，已修） |
+| `6c033e5ef` | Backend ubuntu 4/8 | 抖动（`rfc189-wg-round` PG，**该提只改了两个 markdown**） |
+| `2d330ace7` | Playwright e2e windows 2/4 | 抖动（`rfc294-human-gate-restart`，**该提零 `src/` 改动**） |
+
+**6 红里 3 条是真问题（都已修），另 3 条与提交内容无关**，且分属**三个不同的**不稳定面：
+PG 并发派单、ubuntu e2e 工作流矩阵、windows e2e 守护进程重启。
+
+### 为什么这条要单独记：它在侵蚀本仓的 CI 纪律
+
+`CLAUDE.md` 的规矩是「推完立刻按自己的确切 sha 查 CI，**盯到绿为止**；红了立刻修，
+修不完就 revert 自己那笔」。这条规矩的前提是**红=自己的锅**。
+当 ~1/4 的推送因为与自己无关的原因变红时：
+
+- 「盯到绿」变成「盯到某次重跑碰巧绿」——而本仓**明令禁止**拿重跑当通过依据；
+- 真红被淹没在假红里，下一个人学会的是**忽略红**，那比红本身危险得多
+  （本轮已经有一次差点这样：`c8c944bed` 那条**真缺陷**的报错形态是
+  `# Unhandled error between tests`，计数行还是 `N pass / 0 fail`，**看起来像绿的**）。
+
+**建议**（未做，需要用户定优先级）：把上面三条抖动各自开一刀查清（三条都已在本文件单独立条、
+各自写明「先让它可诊断」的第一步），而不是继续按「重跑一次看看」处理。
