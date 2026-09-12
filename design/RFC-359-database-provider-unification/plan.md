@@ -6941,39 +6941,45 @@ CI 的 ubuntu shard 7/8 红两条（各约 504ms，也就是整条用例跑完�
 **这才是这一格红真正的产出**：靠人记「迁完要 grep 一遍睡眠」是记不住的，我自己就没记住。
 
 
-## 5bd. 那一格红不是孤例——但第一版统计**多算了一倍**（20 → 11）
+## 5bd. 那条「睡一觉等写入」的判据，我改了**四版**才对——每一版都是跑真实数据才发现错
 
-§5bc 的守卫只扫**已迁**的文件（判据是「文件里有 `describeEachProviderHttpApplication`」），
-挡得住回潮，挡不住「下一个文件迁进来时带着一个睡眠」。把同一条判据加进 pre-flight
-之后扫剩余候选，**第一版报了 20 个**。
+§5bc 的守卫只扫**已迁**的文件，挡得住回潮、挡不住「下一个文件迁进来时带着一个睡眠」。
+补一条同判据的 pre-flight 之后，报出的数字是 **20 → 11 → 12 → 7**：
 
-**这个数字是错的。** 拿 `tasks.test.ts` 逐行看才发现：它那处睡眠在一个**有界轮询**里——
+| 版本 | 判据 | 跑真实数据发现的错 |
+| --- | --- | --- |
+| ① | 有 `setTimeout` / `Bun.sleep` 就算 | 把**有界轮询**也算进去（`tasks.test.ts`：`for(;;){ …break; if(Date.now()>deadline) break; await sleep }`）。报 20，多算一倍。 |
+| ② | 循环 + `Date.now() +` | 漏了**计数式上界**（`review-state-machine`：`for (attempt < 500 && isTaskActive(id))`）。 |
+| ③ | 循环里有 `break`，或循环条件里有调用 | 漏了**用 `return` / `throw` 退出**的轮询（`rfc238` / `rfc300` / `rfc349` 的 waitFor 辅助函数全是这么写：`if (done) return session; if (过期) throw …; await sleep`）。 |
+| ④ | 出口认 `break` / `return` / `throw` | 现在只剩 7 个文件、真的都是直线式。 |
 
-```ts
-const deadline = Date.now() + 30_000
-for (;;) {
-  if (row?.status === 'failed' || row?.status === 'done') break
-  if (Date.now() > deadline) break
-  await new Promise((r) => setTimeout(r, 50))   // 退避，不是「睡一觉然后断言」
-}
-```
+**真正的区别不在「有没有上界」，而在谁在做同步**：坏形态是「睡一觉然后断言」——睡眠时长
+**就是**同步手段；好形态是 `loop { 查一下; 满足就退出; sleep(退避) }`——**那个检查**才是同步。
+上界写成 deadline 还是计数、退出写成 `break` 还是 `return`，都不改变这一点。
 
-这是**正当形态**：有退出条件、有上界，睡眠只是退避。危险的是直线式的「睡一觉然后断言」。
+### 还有第四类：判据无法推断意图
 
-判据收紧成「往上找同一条用例里的循环 + `Date.now() +`」，两边（pre-flight 与
-`test-suite-policy`）用同一条。**20 → 11**，也就是说第一版里有 **9 个是假阳性**。
-已用一个把两种形态放在同一文件里的负样本验证：只报直线式那一条。
+逐条看剩下 7 个时又发现一种：`plugins-http:628` 的注释写着
+「Allow some clock advance so installedAt strictly increases」——那是**刻意推进时钟**，
+不是等写入。改成谓词等待反而是错的。
 
-真正待换的 11 个（带行号）：`plugins-http`(L628,680,761) / `review-state-machine`(L240) /
-`rfc099-ws-acl-filter`(L165,288) / `rfc152-ws-frame-gates`(L142,152,214) /
-`rfc234-intent-routes`(L124,132) / `rfc257-webhook-management`(L643) /
-`rfc259-github-ingress`(L134,191,305) / `rfc355-intent-session-event-callsites`(L72) /
-`runtime-routes-registry`(L694) / `ws`(L115) / `ws-repo-imports`(L79,171)。
+所以这条检查**本质上是顾问式的**：它找出直线式睡眠，然后必须逐条分三类——
+① 等一个写入落库 ⇒ 改 `eventually`；② 断言某件事没发生 ⇒ 补**因果屏障**；
+③ 与写入无关（推进时钟之类）⇒ 上一行写 `// sleep-ok: <理由>` 豁免。
+零容忍 + 带理由的豁免，比「让判据自己猜意图」诚实。已验证豁免注释在两处都生效。
 
-### 两条规律
+真正待处理的 7 个（带行号）：`plugins-http`(L628,680,761) / `rfc099-ws-acl-filter`(L288) /
+`rfc152-ws-frame-gates`(L142,214) / `rfc257-webhook-management`(L643) /
+`rfc259-github-ingress`(L134,191,305) / `runtime-routes-registry`(L694) /
+`ws-repo-imports`(L171)。其中 `rfc099-ws-acl-filter:288` 与 `ws-repo-imports:171` 是
+**负向断言**（断言某个 frame 没送到），正是最该补因果屏障的那一类——后者的注释还写着
+「cannot be predicate-driven — keep a short fixed settle」，因果屏障恰好解决它。
 
-1. **守卫写完要问「它扫的范围是不是正好覆盖了问题发生的时机」。**
-   `test-suite-policy` 那条扫「已迁完的文件」，对回潮有效、对**迁移当下**无效；
-   补一条同判据的 pre-flight，两个时机才都盖住。
-2. **报出来的第一个数字先别信，去看几条。** 第一版判据钝到把合法的退避轮询也算进去，
-   多算了一倍。假阳性在这里的代价不是噪声——是有人照着把一个**正当的轮询循环**改坏。
+### 三条规律
+
+1. **守卫写完要问「它扫的范围是不是正好覆盖了问题发生的时机」。** `test-suite-policy` 扫
+   「已迁完的文件」，对回潮有效、对**迁移当下**无效；两个时机都要有。
+2. **报出来的第一个数字先别信，去看几条。** 这条判据我改了四版，**每一版的错都只能靠跑真实
+   数据发现**——坐着想是想不出「waitFor 用 return 退出」这种形态的。
+3. **判据推断不了意图时，给带理由的豁免，别硬猜。** 假阳性在这里的代价不是噪声——
+   是有人照着把一个正当的轮询循环、或一次刻意的时钟推进改坏。

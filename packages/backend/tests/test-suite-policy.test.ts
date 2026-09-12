@@ -656,10 +656,22 @@ describe('repository test-suite policy', () => {
       const lines = source.split('\n')
       lines.forEach((line, index) => {
         if (!pattern.test(line)) return
-        // **有界轮询不算**：`for (;;) { … if (done) break; if (Date.now() > deadline) break;
-        // await sleep(…) }` 是正当形态——它有退出条件也有上界，睡眠只是退避。危险的是
-        // 直线式的「睡一觉然后断言」。判据：往上找同一条用例里的循环 + deadline。
-        // （`tasks.test.ts` 等任务状态轮询实撞此假阳性，报出来才发现判据太钝。）
+        // 显式豁免：上一行写 `// sleep-ok: <理由>`。**不是所有睡眠都是「等写入」**——
+        // 有的是刻意推进时钟（`plugins-http` 让 `installedAt` 严格递增），那种改成谓词
+        // 等待反而不对。零容忍 + 带理由的豁免，比「判据自己猜意图」诚实。
+        if (/^\s*\/\/\s*sleep-ok:/.test(lines[index - 1] ?? '')) return
+        // **轮询不算，直线式才算。** 两者的区别不在「有没有上界」，而在**谁在做同步**：
+        //   · 坏形态：睡一觉然后断言 —— 睡眠时长**就是**同步手段，慢机器上必然偶发红。
+        //   · 好形态：`loop { 查一下; 满足就 break; sleep(退避) }` —— **那个检查**才是同步，
+        //     睡眠只是退避。上界写成 deadline（`Date.now() + …`）还是计数（`attempt < 500`）
+        //     都一样。
+        // 判据因此是「循环里有条件驱动的出口（`break` / `return` / `throw`），或循环条件里
+        // 有函数调用（在查什么）」，不是「有没有 deadline」。前三版各漏一种：把 deadline 当
+        // 必要条件（漏了计数式上界，`review-state-machine`）、只认 `break`（漏了
+        // `return session` / `throw new Error('timed out')` 这类，`rfc238` / `rfc300` /
+        // `rfc349` 的 waitFor 辅助函数全是这么写的）。每一版都是**拿它跑真实数据**才发现的。
+        // 这样 `for (let i = 0; i < 3; i++) await sleep(50)` 仍会被判坏：它既不 break
+        // 也不查任何东西，等于一个拆成三段的睡眠。
         // `findLast` 要 es2023 的 lib，本仓 target 更低——手写倒着找。
         let head = 0
         for (let back = index - 1; back >= 0; back -= 1) {
@@ -669,17 +681,22 @@ describe('repository test-suite policy', () => {
           }
         }
         const body = lines.slice(head, index + 1).join('\n')
-        const bounded = /\b(?:for|while)\s*\(/.test(body) && /Date\.now\(\)\s*\+/.test(body)
-        if (bounded) return
+        const loop = /\b(?:for|while)\s*\(([^)]*)\)/.exec(body)
+        const polling =
+          loop !== null &&
+          (/\b(?:break|return|throw)\b/.test(body) || /\w\s*\(/.test(loop[1] ?? ''))
+        if (polling) return
         offenders.push(`${toPortableRelativePath(relative(REPO_ROOT, file))}:${String(index + 1)}`)
       })
     }
     expect(
       offenders.sort(),
-      '共用 HTTP 作用域的用例里出现了「睡一觉等写入」：那只在「被等的东西刚好够快」时绿，' +
-        '在 PostgreSQL 的真实往返上必然间歇性红。正向改用 helpers/eventually 的 ' +
-        '`eventually` / `eventuallyAtLeast` 读到为止；负向补**因果屏障**' +
-        '（再发一次已知会写的请求，等它落库再断言「除它之外没有别的行」）。',
+      '共用 HTTP 作用域的用例里出现了直线式睡眠。逐条分三类处置：' +
+        '①「等一个写入落库」⇒ 改用 helpers/eventually 的 `eventually` / `eventuallyAtLeast` ' +
+        '读到为止；②「断言某件事没发生」⇒ 补**因果屏障**（再发一次已知会写的请求，' +
+        '等它落库再断言「除它之外没有别的行」——时间不是屏障，因果才是）；' +
+        '③ 确实与写入无关（刻意推进时钟之类）⇒ 在上一行写 `// sleep-ok: <理由>` 豁免。' +
+        '前两类在 PostgreSQL 的真实往返上必然间歇性红，而且在本机永远是绿的。',
     ).toEqual([])
   })
 })

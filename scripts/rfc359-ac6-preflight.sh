@@ -54,13 +54,18 @@ for index, line in enumerate(lines):
             head = back
             break
     body = chr(10).join(lines[head : index + 1])
-    bounded = re.search(r"\b(?:for|while)\s*\(", body) and re.search(r"Date\.now\(\)\s*\+", body)
-    if not bounded:
+    loop = re.search(r"\b(?:for|while)\s*\(([^)]*)\)", body)
+    polling = loop is not None and (
+        re.search(r"\b(?:break|return|throw)\b", body) or re.search(r"\w\s*\(", loop.group(1) or "")
+    )
+    if re.match(r"\s*//\s*sleep-ok:", lines[index - 1] if index else ""):
+        continue
+    if not polling:
         hits.append(str(index + 1))
 print(','.join(hits))
 PYEOF
 )
-  [ -n "$sleeps" ] && r="$r SLEEP-TO-WAIT[L$sleeps](直线式睡一觉等写入,迁前先换掉)"
+  [ -n "$sleeps" ] && r="$r SLEEP-TO-WAIT[L$sleeps](直线式睡眠,逐条判:等写入/负向断言/与写入无关)"
   # 「白做的夹具」：某个 describe 挂了 setup 型 beforeEach，正文却**一样都不用**那个 setup
   # 的产物（`rfc264-unicode-names` 三块全是这样——纯 schema 断言，却各建一个 SQLite 库加播
   # 两个用户）。这类不用迁，删掉那行 beforeEach 就够。
