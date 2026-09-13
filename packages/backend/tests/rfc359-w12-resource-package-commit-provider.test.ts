@@ -18,7 +18,6 @@ import {
 
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import {
   agents,
   mcps,
@@ -38,14 +37,12 @@ import {
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import {
   composeResourcePackageOperations,
-  composeSqliteResourcePackageProvider,
   type ComposedResourcePackageCatalog,
   type ResourcePackageProviderComposition,
 } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import type { PostgresqlResourcePackageApplyReceipt } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
@@ -53,7 +50,6 @@ import { errorHandler } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const OWNER = 'rfc359-package-owner'
 const NOW = 1_788_278_400_000
@@ -410,20 +406,12 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     }
     const box = createSecretBoxFromKey(randomBytes(32))
 
+    // RFC-359 —— 两台 apply 引擎合一后，这里不再按引擎分叉：两个 provider 装同一条组合根。
     function compose(): {
       catalog: ComposedResourcePackageCatalog
       provider: ResourcePackageProviderComposition
     } {
-      // These factories still own different mutation-session mechanisms. The
-      // harness supplies the real selected client; only this assembly branches.
-      if (harness.capabilities.isolation === 'exclusive') {
-        const db = harness.db as DbClient
-        return {
-          provider: composeSqliteResourcePackageProvider({ db, appHome }),
-          catalog: composeSqliteResourcePackageCatalogForTest({ db, appHome, box }),
-        }
-      }
-      const db = harness.db as PostgresqlDatabaseClient
+      const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
         db,
         appHome,

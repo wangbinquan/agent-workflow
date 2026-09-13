@@ -36417,9 +36417,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/services/resourcePackage/executionAdapter.ts",
+      "file": "packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/resourcePackage/executionAdapter.ts#createSqliteResourcePackageExecutionAdapter",
+      "id": "mutation:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts#createResourcePackagePluginInstaller",
       "missingControls": [
         "audit",
         "authority",
@@ -36428,9 +36428,9 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/executionAdapter.ts#createSqliteResourcePackageExecutionAdapter",
-      "symbol": "createSqliteResourcePackageExecutionAdapter",
-      "targetContext": "task-execution",
+      "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts#createResourcePackagePluginInstaller",
+      "symbol": "createResourcePackagePluginInstaller",
+      "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
     {
@@ -41261,7 +41261,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b5e42d8baa454472d249bb092fea0e3c571ef0224e9490fd2ba217ea5b715a0",
+  "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

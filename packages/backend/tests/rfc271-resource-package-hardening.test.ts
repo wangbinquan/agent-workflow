@@ -16,7 +16,8 @@ import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, runtimes, users, workflows } from '../src/db/schema'
-import { commitResourcePackage, translateDecisions } from '../src/services/resourcePackage/commit'
+import { translateDecisions } from '../src/services/resourcePackage/commit'
+import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { assignSlugs, serializeClosure } from '../src/services/resourcePackage/serialize'
@@ -122,7 +123,7 @@ describe('built-in 根：完整跨实例导入', () => {
       expect(preview.entries).toEqual([])
 
       const input = { pkg, previewToken: preview.previewToken, decisions: [] }
-      const first = await commitResourcePackage(
+      const first = await commitResourcePackageForTest(
         { db: target, appHome: targetHome, box },
         actorOf('u1'),
         input,
@@ -139,7 +140,7 @@ describe('built-in 根：完整跨实例导入', () => {
         target.select().from(workflows).where(eq(workflows.name, 'aw-builtin-probe')).all(),
       ).toHaveLength(2)
 
-      const replay = await commitResourcePackage(
+      const replay = await commitResourcePackageForTest(
         { db: target, appHome: targetHome, box },
         actorOf('u1'),
         input,
@@ -213,7 +214,7 @@ secrets: []
       })
       expect(
         await codeOf(
-          commitResourcePackage({ db, appHome, box }, actorOf('u1'), {
+          commitResourcePackageForTest({ db, appHome, box }, actorOf('u1'), {
             pkg,
             previewToken: forgedToken,
             decisions: [],
@@ -538,7 +539,7 @@ describe('agent 行为字段真 DB 往返', () => {
         box,
         importId: ulid(),
       })
-      const receipt = await commitResourcePackage(
+      const receipt = await commitResourcePackageForTest(
         { db: target, appHome: targetHome, box },
         actorOf('u1', ['agents:create']),
         {

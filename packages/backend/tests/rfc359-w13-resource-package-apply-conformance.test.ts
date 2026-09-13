@@ -48,7 +48,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import {
   agents,
   mcps,
@@ -67,14 +66,12 @@ import {
   composePostgresqlResourcePackageProvider,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import type { ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
 
@@ -280,41 +277,30 @@ describeEachProvider(
         now: T0,
       }
       const box = createSecretBoxFromKey(randomBytes(32))
-      const catalog: ComposedResourcePackageCatalog = (() => {
-        if (harness.capabilities.isolation === 'exclusive') {
-          return composeSqliteResourcePackageCatalogForTest({
-            db: harness.db as DbClient,
-            appHome,
-            box,
-          })
-        }
-        const client = harness.db as PostgresqlDatabaseClient
-        const provider = composePostgresqlResourcePackageProvider({
-          db: client,
-          appHome,
-          authorityResolver: { resolve: () => actor },
-          mcpLifecycle: createMcpTransactionLifecycle(),
-          capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
-            db: client,
-          }),
-          pluginInstaller: {
-            plannedGenerationDirectory() {
-              throw new Error('workgroup apply must not install plugins')
-            },
-            async install() {
-              throw new Error('workgroup apply must not install plugins')
-            },
+      const client = harness.db
+      const provider = composePostgresqlResourcePackageProvider({
+        db: client,
+        appHome,
+        authorityResolver: { resolve: () => actor },
+        mcpLifecycle: createMcpTransactionLifecycle(),
+        capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db: client }),
+        pluginInstaller: {
+          plannedGenerationDirectory() {
+            throw new Error('workgroup apply must not install plugins')
           },
-        })
-        return composePostgresqlResourcePackageCatalog({
+          async install() {
+            throw new Error('workgroup apply must not install plugins')
+          },
+        },
+      })
+      const catalog: ComposedResourcePackageCatalog = composePostgresqlResourcePackageCatalog({
+        provider,
+        execution: createPostgresqlResourcePackageExecutionAdapter({
+          box,
           provider,
-          execution: createPostgresqlResourcePackageExecutionAdapter({
-            box,
-            provider,
-            atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db: client, box }),
-          }),
-        })
-      })()
+          atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db: client, box }),
+        }),
+      })
 
       const preview = async (bytes: Uint8Array) => {
         const staged = await catalog.operations.inspect.invoke(

@@ -23,7 +23,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import { agents, users, workgroups, workgroupMembers, resourceBundleApplies } from '@/db/schema'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
@@ -45,13 +44,11 @@ import {
   normalizeWorkgroupSnapshot,
   workgroupDraftMemberOf,
 } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { ValidationError } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 type Row = typeof workgroups.$inferSelect
 type MemberRow = typeof workgroupMembers.$inferSelect
@@ -504,14 +501,9 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
     })
     const context = { authority, operationId: 'w28-package', correlationId: 'w28-package', now: T0 }
     const box = createSecretBoxFromKey(randomBytes(32))
+    // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
     function compose(): ComposedResourcePackageCatalog {
-      if (harness.capabilities.isolation === 'exclusive')
-        return composeSqliteResourcePackageCatalogForTest({
-          db: harness.db as DbClient,
-          appHome,
-          box,
-        })
-      const db = harness.db as PostgresqlDatabaseClient
+      const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
         db,
         appHome,

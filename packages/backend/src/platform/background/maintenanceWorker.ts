@@ -58,7 +58,6 @@ import {
   type PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { createPluginGenerationFilesystemGcPort } from '@/services/pluginGenerationGc'
 import { INTENT_SCRATCH_DIRNAME } from '@/modules/intent/application/turnEngine'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
@@ -715,7 +714,9 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         db: sqliteDb,
         appHome,
         pluginsDir: join(appHome, 'plugins'),
-        activitySource: { activeApplyIds: activeResourceBundleApplyIds },
+        // Worker 线程不跑 apply：正在执行的 journal id 由主线程随 payload 送进来
+        // （`converge({ activeApplyIds })`），这里的查询面没有消费者。
+        activitySource: { activeApplyIds: () => [] },
         log: intentMaintenanceLog,
       })
       const resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand =

@@ -5,7 +5,7 @@ import { prepareCapabilityTemplatePackageWrite } from '../application/capability
 import type { CapabilityTemplateRecord } from '../application/ports/capabilityTemplatePersistence'
 import { createCapabilityTemplatePersistence } from './capabilityTemplatePersistence'
 import { createPostgresqlCapabilityTemplatePackageCommit } from './capabilityTemplatePackageCommit'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { PostgresqlResourceCatalogTransaction } from '@/modules/resource-catalog/infrastructure/postgresql/repositorySupport'
 import { ValidationError } from '@/util/errors'
@@ -46,7 +46,7 @@ async function ownerNameExists(
  * against the aggregate's reserved transaction.
  */
 export function createPostgresqlCapabilityTemplatePackageMutationOwner(input: {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly now?: () => number
 }): PostgresqlCapabilityTemplatePackageMutationOwner {
   const persistence = createCapabilityTemplatePersistence(input.db)

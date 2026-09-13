@@ -38,7 +38,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users, workgroups } from '../src/db/schema'
-import { commitResourcePackage } from '../src/services/resourcePackage/commit'
+import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
@@ -117,7 +117,7 @@ async function previewAndCommit(
   const actor = actorOf('u1')
   const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
   const humanBaseline = verifyPreviewToken(box, preview.previewToken).humanBaseline
-  return commitResourcePackage(deps(db), actor, {
+  return commitResourcePackageForTest(deps(db), actor, {
     pkg,
     previewToken: preview.previewToken,
     decisions: [{ localSlug: 'workgroup-squad', action, targetId }],
@@ -146,14 +146,18 @@ describe('AC-15 · 包级导入链上的 overwrite 归属边界', () => {
 
     const out = await previewAndCommit(db, 'overwrite', theirs)
 
-    // 断言**具体错误码**而不只是「被拒」：码即「哪一层拦的」。今天先撞上工作组域
-    // 服务的写门（`workgroups.ts` 的 `assertPrincipalCanWrite`）；把那道门摘掉重跑，
-    // 会落到引擎的 `bundle-overwrite-not-owned` —— 已实测，两层都真的在。
-    // 若这里变红且实际码是 `bundle-overwrite-not-owned`，说明域服务那道门被动过，
-    // 该去确认是有意重构还是回归，而不是顺手把期望值改掉。
-    // RFC-324 —— 码从裸 `forbidden` 分流成只读档专用码：覆盖是**内容写**，而这个
-    // 导入者对别人那份工作组只有可见性（public ⇒ 全员只读），拒绝理由正是这一条。
-    expect(out).toEqual({ ok: false, code: 'resource-read-only' })
+    // 断言**具体错误码**而不只是「被拒」：码即「哪一层拦的」。两层都真的在——
+    // 引擎的归属检查（`bundle-overwrite-not-owned`）与工作组域服务的写门
+    // （`workgroups.ts` 的 `assertPrincipalCanWrite` ⇒ RFC-324 的 `resource-read-only`）。
+    //
+    // RFC-359（两台 apply 引擎合一）**实测出的一处用户可见差异**：这个码取决于两道门
+    // 谁先跑，而两台引擎的顺序不同——legacy SQLite 引擎先走域服务写门，报
+    // `resource-read-only`；统一后的原子 apply 引擎先做归属检查，报
+    // `bundle-overwrite-not-owned`（`postgresqlResourcePackageMutationArms.ts:484`）。
+    // 也就是说 PostgreSQL 部署上这条路径**一直**报的是后者，SQLite 上报的是前者。
+    // 合一必须二选一：取统一引擎那一个，SQLite 从此与 PostgreSQL 同码。
+    // 两道门一个没少，拒绝这件事本身不变；变的只是先报哪一条理由。
+    expect(out).toEqual({ ok: false, code: 'bundle-overwrite-not-owned' })
 
     // 不只断言被拒——还要断言**什么都没写下去**。写了一半才抛错的拒绝，与提前拒绝
     // 的，对受害者的数据是两回事。

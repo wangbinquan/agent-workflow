@@ -267,7 +267,9 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   'cli/doctor.ts: 3',
   'cli/migrate.ts: 1',
   'cli/start.ts: 2',
-  'main.ts: 4',
+  // RFC-359 4 → 3：`package` 子命令的资源包装配此前是一个 `provider === 'sqlite' ? … : …`，
+  // 两台 apply 引擎合一后只剩一条装配（见 `rfc271-cli` 的源码锁）。
+  'main.ts: 3',
   'modules/system-operations/composition.ts: 2',
   'modules/system-operations/infrastructure/databaseMigrationCoordinator.ts: 1',
   'modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts: 2',

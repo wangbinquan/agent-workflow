@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { ulid } from 'ulid'
+import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, users, workflows } from '../src/db/schema'
@@ -61,45 +62,46 @@ function testQueryContext(): QueryContext {
 function makeApp(db: DbClient, appHome: string): Hono {
   const box = createSecretBoxFromKey(randomBytes(32))
   const app = new Hono()
+  const actor = {
+    user: {
+      id: 'u1',
+      username: 'u1',
+      displayName: 'U1',
+      role: 'admin',
+      status: 'active',
+    },
+    source: 'daemon',
+    permissions: new Set<string>([
+      'agents:read',
+      'skills:read',
+      'mcps:read',
+      'plugins:read',
+      'workflows:read',
+      'workgroups:read',
+      'resource-acl:private',
+      'agents:create',
+      'agents:update',
+      'skills:create',
+      'skills:update',
+      'mcps:create',
+      'mcps:update',
+      'plugins:create',
+      'plugins:update',
+      'workflows:create',
+      'workflows:update',
+      'workgroups:create',
+      'workgroups:update',
+      'scripts:author',
+    ]),
+  } as unknown as Actor
   const injectActor: MiddlewareHandler = async (c, next) => {
-    c.set('actor', {
-      user: {
-        id: 'u1',
-        username: 'u1',
-        displayName: 'U1',
-        role: 'admin',
-        status: 'active',
-      },
-      source: 'daemon',
-      permissions: new Set<string>([
-        'agents:read',
-        'skills:read',
-        'mcps:read',
-        'plugins:read',
-        'workflows:read',
-        'workgroups:read',
-        'resource-acl:private',
-        'agents:create',
-        'agents:update',
-        'skills:create',
-        'skills:update',
-        'mcps:create',
-        'mcps:update',
-        'plugins:create',
-        'plugins:update',
-        'workflows:create',
-        'workflows:update',
-        'workgroups:create',
-        'workgroups:update',
-        'scripts:author',
-      ]),
-    })
+    c.set('actor', actor)
     await next()
   }
   app.use('*', injectActor)
   app.onError(errorHandler)
   registerResourcePackageRoutes(app, {
-    catalog: composeSqliteResourcePackageCatalogForTest({ db, appHome, box }),
+    catalog: composeSqliteResourcePackageCatalogForTest({ db, appHome, box, actor }),
     commandContextFor: testCommandContext,
     queryContextFor: testQueryContext,
   })

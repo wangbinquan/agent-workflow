@@ -7,7 +7,7 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { skills, skillVersions } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { safeJoin } from '@/util/safePath'
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
@@ -111,9 +111,11 @@ function parseArtifacts(json: string): readonly PostgresqlArtifact[] {
  * `domain/resourcePackageApplyReceipt.ts`，两个引擎调同一份**——此前只有 PostgreSQL 有，
  * SQLite 上回执缺失 / 认领别的 journal 也照常 roll-forward 并报成功。
  *
- * 留在这里的只有**载荷层**：`applied[]` 逐条的 PostgreSQL 形状（`operationId` + `.strict()`）。
- * 它不能中立化——SQLite 生产写出的逐条是 `opId`，两套格式互不认识
- * （`tests/architecture/rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵）。
+ * 留在这里的只有**载荷层**：`applied[]` 逐条的 `operationId` + `.strict()` 形状。
+ *
+ * RFC-359（apply 引擎合一）：**两个 provider 现在都写这一种格式**——生产侧只剩一台 apply 引擎。
+ * 旧的 SQLite 格式（逐条 `opId`）只可能来自**合一之前**留在盘上的半成品，由
+ * `composeResourcePackageApplyArtifactRecoveryChain` 回落到 legacy 读回侧处理。
  */
 function parseReceipt(journal: ResourcePackageApplyJournalSnapshot): ApplyReceipt {
   return ApplyReceiptSchema.parse(JSON.parse(assertCommittedApplyReceipt(journal)))
@@ -175,7 +177,7 @@ function assertSkillArtifactPaths(input: {
 }
 
 async function rollForwardSkillArtifact(input: {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly artifact: PostgresqlSkillArtifact
 }): Promise<void> {
@@ -278,7 +280,7 @@ function compensateSkillArtifact(input: {
 }
 
 export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly pluginsDir: string
 }): ResourcePackageApplyArtifactRecoveryPort {

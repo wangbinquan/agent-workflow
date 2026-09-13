@@ -12,7 +12,6 @@ import ts from 'typescript'
 import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import { plugins, resourceBundleApplies, users } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
@@ -33,14 +32,12 @@ import {
 } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const OWNER = 'rfc359-plugin-publication-owner'
 const T0 = 1_700_000_000_000
@@ -154,14 +151,8 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
     const box = createSecretBoxFromKey(randomBytes(32))
 
     function compose(): ComposedResourcePackageCatalog {
-      if (harness.capabilities.isolation === 'exclusive') {
-        return composeSqliteResourcePackageCatalogForTest({
-          db: harness.db as DbClient,
-          appHome,
-          box,
-        })
-      }
-      const db = harness.db as PostgresqlDatabaseClient
+      // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
+      const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
         db,
         appHome,

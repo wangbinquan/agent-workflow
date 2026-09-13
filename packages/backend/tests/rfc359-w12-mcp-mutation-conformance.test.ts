@@ -14,7 +14,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import { mcps, mcpRuntimeTestSessions, resourceBundleApplies, users } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
@@ -34,13 +33,11 @@ import {
   updateMcpRowInTx,
 } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { createMcpRepository } from '@/modules/resource-catalog/infrastructure/mcpRepository'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const OWNER = 'mcp-publication-owner'
 const T0 = 1_700_000_000_000
@@ -362,13 +359,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
     }
     const box = createSecretBoxFromKey(randomBytes(32))
     const compose = (): ComposedResourcePackageCatalog => {
-      if (harness.capabilities.isolation === 'exclusive')
-        return composeSqliteResourcePackageCatalogForTest({
-          db: harness.db as DbClient,
-          appHome,
-          box,
-        })
-      const db = harness.db as PostgresqlDatabaseClient
+      // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
+      const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
         db,
         appHome,

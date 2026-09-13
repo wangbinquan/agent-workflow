@@ -1,6 +1,5 @@
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import { sha256Hex } from '@/util/hash'
 import { createResourcePackageApplication } from '../application/package/packageApplication'
@@ -11,10 +10,6 @@ import type {
   ResourcePackageOwnedResourceLookupPort,
   ResourcePackageSecretInput,
 } from '../application/package/ports'
-import {
-  composeResourcePackageProvider,
-  type ResourcePackageProviderComposition,
-} from './resourcePackageProvider'
 import { createResourcePackageOperationDescriptors } from './catalogOperationDescriptors'
 import type { ResourcePackageCatalogModule } from '../public/operations'
 import {
@@ -109,11 +104,6 @@ export interface ResourcePackageTransport {
 
 export interface ComposedResourcePackageCatalog extends ResourcePackageCatalogModule {
   readonly transport: ResourcePackageTransport
-}
-
-export interface SqliteResourcePackageProviderDependencies {
-  readonly db: DbClient
-  readonly appHome: string
 }
 
 export interface ResourcePackageAdapterCompositionDependencies {
@@ -228,12 +218,6 @@ export function composeResourcePackageOperationsFromAdapters(
     operations,
     transport,
   })
-}
-
-export function composeSqliteResourcePackageProvider(
-  deps: SqliteResourcePackageProviderDependencies,
-): ResourcePackageProviderComposition {
-  return composeResourcePackageProvider(deps)
 }
 
 export function composeResourcePackageOperations(

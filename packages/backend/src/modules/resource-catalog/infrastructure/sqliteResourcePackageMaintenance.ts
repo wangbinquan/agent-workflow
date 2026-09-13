@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { skills } from '@/db/schema'
 import { skillOperationStateQuery } from './skillOperationStateQuery'
@@ -79,7 +79,7 @@ function parseArtifacts(json: string): readonly LegacyArtifact[] {
 }
 
 async function publishStagedVersion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   artifact: LegacySkillVersionArtifact,
 ): Promise<void> {
@@ -140,7 +140,7 @@ async function publishStagedVersion(
 }
 
 async function compensateArtifact(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   pluginsDir: string,
   artifact: LegacyArtifact,
@@ -186,7 +186,7 @@ async function compensateArtifact(
 }
 
 async function rollForwardArtifacts(input: {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly artifacts: readonly LegacyArtifact[]
   readonly log?: ResourcePackageApplyMaintenanceLog
@@ -245,7 +245,7 @@ async function rollForwardArtifacts(input: {
 }
 
 export function createSqliteResourcePackageApplyArtifactRecovery(input: {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly pluginsDir: string
   readonly log?: ResourcePackageApplyMaintenanceLog

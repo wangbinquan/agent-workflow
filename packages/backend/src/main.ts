@@ -41,15 +41,12 @@ import { createAuthRuntimeFor } from './auth/composition'
 import { createIdentityAccessRuntime } from './modules/identity-access/composition'
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
 import {
-  composeResourcePackageOperations,
-  composeSqliteResourcePackageProvider,
-} from './modules/resource-catalog/composition/resourcePackageOperations'
-import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
 } from './modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createMcpTransactionLifecycle } from './modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from './modules/code-capability/composition/capabilityTemplateOperations'
+import { createResourcePackagePluginInstaller } from './services/resourcePackage/pluginInstallerAdapter'
 import {
   composeLocalSystemOperations,
   prepareDatabaseProviderForBoot,
@@ -70,11 +67,7 @@ import {
 import { runManagedProcess } from './services/execution/managedProcess'
 import { resolveMigrationsFolder } from './util/migrationsFolder'
 import { Paths } from './util/paths'
-import { installPlugin, plannedGenerationDir } from './services/pluginInstaller'
-import {
-  createPostgresqlResourcePackageExecutionAdapter,
-  createSqliteResourcePackageExecutionAdapter,
-} from './services/resourcePackage/executionAdapter'
+import { createPostgresqlResourcePackageExecutionAdapter } from './services/resourcePackage/executionAdapter'
 
 declare const AW_E2E_BUILD: boolean | undefined
 
@@ -106,10 +99,9 @@ function readPortFlag(argv: string[]): number | undefined {
 
 async function composeUserCommandBootstrap() {
   const provider = await resolveCommandProvider()
-  // Residual fence for every `provider.provider === 'sqlite' ? … : …` below: while
-  // the bootstrap union has exactly these two variants this is unreachable, and a
-  // third one widens `provider` here so this stops compiling — rather than every
-  // ternary below silently handing the new provider the PostgreSQL branch.
+  // Residual fence: the bootstrap union has exactly these two variants, so this is
+  // unreachable today; a third one widens `provider` and stops this compiling rather
+  // than silently letting a new provider fall through the composition below.
   if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
     return unhandledDatabaseProvider(provider)
   }
@@ -182,10 +174,9 @@ async function resolveCommandProvider() {
 
 async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap> {
   const provider = await resolveCommandProvider()
-  // Residual fence for every `provider.provider === 'sqlite' ? … : …` below: while
-  // the bootstrap union has exactly these two variants this is unreachable, and a
-  // third one widens `provider` here so this stops compiling — rather than every
-  // ternary below silently handing the new provider the PostgreSQL branch.
+  // Residual fence: the bootstrap union has exactly these two variants, so this is
+  // unreachable today; a third one widens `provider` and stops this compiling rather
+  // than silently letting a new provider fall through the composition below.
   if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
     return unhandledDatabaseProvider(provider)
   }
@@ -206,70 +197,32 @@ async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap
       },
     })
   const box = createSecretBox(Paths.secretKeyFile)
-  const pluginInstaller: PostgresqlResourcePackageProviderInput['pluginInstaller'] = Object.freeze({
-    plannedGenerationDirectory(
-      input: Parameters<
-        PostgresqlResourcePackageProviderInput['pluginInstaller']['plannedGenerationDirectory']
-      >[0],
-    ) {
-      return plannedGenerationDir(input.pluginId, input.spec, input.generationId, input.pluginsDir)
-    },
-    async install(
-      input: Parameters<PostgresqlResourcePackageProviderInput['pluginInstaller']['install']>[0],
-    ) {
-      const installed = await installPlugin(input.pluginId, input.spec, {
-        generationId: input.generationId,
-        pluginsDir: input.pluginsDir,
-      })
-      return Object.freeze({
-        cachedPath: installed.cachedPath,
-        resolvedVersion: installed.resolvedVersion,
-        sourceKind: installed.sourceKind,
-        generationDirectory: installed.generationDir,
-      })
-    },
+  // RFC-359 —— 资源包 apply **一台引擎两个 provider**。此处此前是一个
+  // `provider === 'sqlite' ? … : …`：SQLite 走 `commitResourcePackage` + 同步事务里的
+  // legacy 参与者，PostgreSQL 走 journal + prestage/compensate 的原子 apply。两份做的是
+  // 同一件事，而判据只跑 SQLite 那一份（见 `rfc359-w13-…-conformance`）。现在只剩后者，
+  // 装配所需的四件依赖本来就是中立的，此前就已经算在分叉之外。
+  const resourcePackageProvider = composePostgresqlResourcePackageProvider({
+    db: provider.db,
+    appHome: Paths.root,
+    authorityResolver,
+    mcpLifecycle: createMcpTransactionLifecycle(),
+    capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
+      db: provider.db,
+    }),
+    pluginInstaller: createResourcePackagePluginInstaller(),
   })
-  const catalog =
-    provider.provider === 'sqlite'
-      ? (() => {
-          const resourcePackageProvider = composeSqliteResourcePackageProvider({
-            db: provider.db,
-            appHome: Paths.root,
-          })
-          return composeResourcePackageOperations({
-            execution: createSqliteResourcePackageExecutionAdapter({
-              db: provider.db,
-              appHome: Paths.root,
-              box,
-              provider: resourcePackageProvider,
-            }),
-            resources: resourcePackageProvider.resources,
-          })
-        })()
-      : (() => {
-          const resourcePackageProvider = composePostgresqlResourcePackageProvider({
-            db: provider.db,
-            appHome: Paths.root,
-            authorityResolver,
-            mcpLifecycle: createMcpTransactionLifecycle(),
-            capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
-              db: provider.db,
-            }),
-            pluginInstaller,
-          })
-          const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
-            db: provider.db,
-            box,
-          })
-          return composePostgresqlResourcePackageCatalog({
-            provider: resourcePackageProvider,
-            execution: createPostgresqlResourcePackageExecutionAdapter({
-              box,
-              provider: resourcePackageProvider,
-              atomicApply,
-            }),
-          })
-        })()
+  const catalog = composePostgresqlResourcePackageCatalog({
+    provider: resourcePackageProvider,
+    execution: createPostgresqlResourcePackageExecutionAdapter({
+      box,
+      provider: resourcePackageProvider,
+      atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({
+        db: provider.db,
+        box,
+      }),
+    }),
+  })
   const identity = Object.freeze({
     async resolveLocalIdentityByUsername(username: string) {
       const user = await identityAccess.userDirectory.findByUsername(username)

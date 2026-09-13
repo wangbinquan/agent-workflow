@@ -16,7 +16,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, resourceBundleApplies, users, workgroupMembers, workgroups } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
@@ -37,14 +36,12 @@ import {
 } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { createWorkgroupRepository } from '@/modules/resource-catalog/infrastructure/workgroupRepository'
 import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { ValidationError } from '@/util/errors'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
-import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const OWNER = 'workgroup-row-owner'
 const HUMAN = 'workgroup-row-human'
@@ -414,15 +411,8 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
       now: T0,
     }
     function compose(): ComposedResourcePackageCatalog {
-      // The selected clients are real. The two factories retain different mutation sessions.
-      if (harness.capabilities.isolation === 'exclusive') {
-        return composeSqliteResourcePackageCatalogForTest({
-          db: harness.db as DbClient,
-          appHome,
-          box,
-        })
-      }
-      const db = harness.db as PostgresqlDatabaseClient
+      // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
+      const db = harness.db
       const provider = composePostgresqlResourcePackageProvider({
         db,
         appHome,

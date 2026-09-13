@@ -1805,9 +1805,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('createResourcePackageApplication')
     expect(composition).toContain('createResourcePackageOperationDescriptors')
     expect(composition).toContain('readonly execution: ResourcePackageExecutionAdapter')
-    expect(composition).toContain('composeSqliteResourcePackageProvider')
+    // RFC-359 —— 两台 apply 引擎合一后，SQLite 专属的 `composeSqliteResourcePackageProvider`
+    // 已零生产消费者而退役；共享读面仍由同一个 `composeResourcePackageProvider` 装配，
+    // 只是现在只有带写会话的那条组合根装它。
+    expect(composition).not.toContain('composeSqliteResourcePackageProvider')
     expect(composition).toContain("from './resourcePackageProvider'")
-    expect(composition).toContain('return composeResourcePackageProvider(deps)')
     expect(composition).not.toContain('createResourcePackageReadPort')
     expect(providerComposition).toContain('reads: createResourcePackageReadPort(input.db)')
     // RFC-359 W12：W8 合一的技能树读出随共享 provider 装配搬家，数据库与 appHome 仍来自同一输入。

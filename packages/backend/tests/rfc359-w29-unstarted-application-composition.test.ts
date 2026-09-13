@@ -108,6 +108,10 @@ function oldSqliteStoreReturn(source: ts.SourceFile, body: ts.Block): ts.Block {
     'repositoryWorkspaceStore:repositoryBootstrap.repositoryWorkspaceStore',
     'taskExecutionReadModels:effectiveDeps.taskExecutionReadModels',
     'collaborationContext:effectiveDeps.collaborationContext',
+    // RFC-359（apply 引擎合一）：同理——把**装配好的** apply 引擎的「本进程在跑哪些 apply」
+    // 查询面暴露出来，交给 `cli/start.ts` 晚绑定给维护服务。合一前这个输入来自
+    // `services/bundle/apply.ts` 的模块级集合，SQLite 不再走那条路后它永远为空。
+    'resourcePackageApplyActivity:resourcePackageBinding?.applyActivity??NO_RESOURCE_PACKAGE_APPLY_ACTIVITY',
   ]
   if (value === undefined || !ts.isObjectLiteralExpression(value))
     throw new Error('SQLite composition must keep its final frozen return')
@@ -493,8 +497,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359（2026-09-13）：摘要变了——同一批别名退役，SQLite 根这一侧改调
     // `composeWebhookDeliveryRuntimeFor` / `composeWebhookIngressPersistenceFor` /
     // `composeWebhookDeliveryPersistenceFor` / `composeScheduledTaskRuntimeFor`（plan §5ds）。
+    //
+    // RFC-359（2026-09-13，apply 引擎合一，plan §5dv）：摘要又变了，变的是**资源包目录那一段**——
+    // 此前 `composeSqliteResourcePackageProvider` + `createSqliteResourcePackageExecutionAdapter`
+    // （SQLite 专属的 legacy `commitResourcePackage` 那条），现在 `composePostgresqlResourcePackageProvider`
+    // + `composePostgresqlResourcePackageCatalog` + `createPostgresqlResourcePackageAtomicApplyOperations`
+    // （两个 provider 装的同一条），并带出 `ResourcePackageRouteBinding`（目录 + 造 context 的那条路同源）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      'cd32724065991bb75a3ff0c54c1d3bcf8619342bb033248b0c5df6d1a66c2bb8',
+      'c7fd72ed74414b8c94057d122f177e390ba49d9956e13132cc69462eeb0ab6c8',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -506,8 +516,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     //
     // RFC-359（2026-09-13）：摘要变了——同一批别名退役波及这一层的
     // `composeSqliteWebhookIngressPersistence` → `composeWebhookIngressPersistenceFor`（plan §5ds）。
+    //
+    // RFC-359（2026-09-13，apply 引擎合一，plan §5dv）：形参表里的
+    // `resourcePackageCatalog: ComposedResourcePackageCatalog | null` 变成
+    // `resourcePackageBinding: ResourcePackageRouteBinding | null`，资源包路由挂载改从这个绑定
+    // 取目录与 `commandContextFor`——写会话要把 `context.authority` 解回 Actor 并与传入的 Actor
+    // 对照，所以目录与「造 context 的那条路」必须同源。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '3bccb54f8c71f3354e3b577f9ed461e64506090111bb17034ccf71536fb22bfd',
+      '415dd229037050ccde00cb5fb30402e728ca7c6ce7144cebcd546b7e22fb11da',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '3e6131c32a868090e7236eb8e554605e8b46a5df15a149671acd396c0a072194',

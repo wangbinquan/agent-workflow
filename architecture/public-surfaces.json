@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 854,
+    "consumers": 856,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
@@ -46254,6 +46254,7 @@
       },
       "consumerEdgeIds": [
         "import:0f621b3cca666aab99c6",
+        "import:2aea8dc90cc99e10f1b2",
         "import:31b04162aacbe0cc05d0",
         "import:429b7a0fd995a2dbd0cc",
         "import:66a41196cbedf3bacae5",
@@ -46283,6 +46284,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2aea8dc90cc99e10f1b2",
             "import:967d7b9ae971e1fb5af9",
             "import:c2bd0d5c8b04d27f37c8"
           ],
@@ -46316,6 +46318,12 @@
           "edgeId": "import:0f621b3cca666aab99c6",
           "file": "packages/backend/src/modules/resource-catalog/application/package/ports.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/package/ports.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:2aea8dc90cc99e10f1b2",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         },
         {
           "context": "resource-catalog",
@@ -106464,7 +106472,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:54d5455ee030ad46be7a"
+        "import:54d5455ee030ad46be7a",
+        "import:bc8822402438f988548b"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -106485,7 +106494,8 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:54d5455ee030ad46be7a"
+            "import:54d5455ee030ad46be7a",
+            "import:bc8822402438f988548b"
           ],
           "name": "activeApplyIds",
           "signatureDigest": "sha256:59cae18de845cbb45dc840fce8c2da40b008062eb193362417f9d70bca4a7cf5"
@@ -106498,6 +106508,12 @@
           "edgeId": "import:54d5455ee030ad46be7a",
           "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:bc8822402438f988548b",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -161985,7 +162001,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b5e42d8baa454472d249bb092fea0e3c571ef0224e9490fd2ba217ea5b715a0",
+  "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5",
   "targetContexts": [
     "collaboration",
     "development-automation",

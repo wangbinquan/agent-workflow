@@ -5,18 +5,12 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PackageResourceRef } from '@/modules/resource-catalog/public/types'
-import { legacyResourcePackageMutationRuntimeFactory } from '@/services/bundle/legacyResourcePackageMutationDependencies'
 import type {
   BundleAppliedOp,
   BundleReceipt,
   BundleSkippedSecret,
 } from '@/services/bundle/provider'
-import {
-  commitResourcePackage,
-  type CommitPackageDeps,
-  type HumanMemberMapping,
-  type ImportDecision,
-} from '@/services/resourcePackage/commit'
+import type { HumanMemberMapping, ImportDecision } from '@/services/resourcePackage/commit'
 import { exportResourcePackageFromReadPort } from '@/services/resourcePackage/export'
 import { parseResourcePackage, type ParsedPackage } from '@/services/resourcePackage/parse'
 import { buildPackagePreviewFromReadPort } from '@/services/resourcePackage/preview'
@@ -142,51 +136,6 @@ function createResourcePackageExecutionAdapter(
         },
       )
       return Object.freeze({ zip: exported.zip, filename: exported.filename })
-    },
-  })
-}
-
-export interface SqliteResourcePackageExecutionAdapterDependencies {
-  readonly db: CommitPackageDeps['db']
-  readonly appHome: string
-  readonly box: SecretBox
-  readonly provider: ResourcePackageReadProvider
-  readonly id?: () => string
-  readonly pluginInstallOpts?: {
-    readonly pluginsDir?: string
-    readonly npmBin?: string
-    readonly timeoutMs?: number
-  }
-}
-
-export function createSqliteResourcePackageExecutionAdapter(
-  dependencies: SqliteResourcePackageExecutionAdapterDependencies,
-): ResourcePackageExecutionAdapter {
-  return createResourcePackageExecutionAdapter({
-    box: dependencies.box,
-    provider: dependencies.provider,
-    ...(dependencies.id === undefined ? {} : { id: dependencies.id }),
-    async apply(context, input, pkg) {
-      return commitResourcePackage(
-        {
-          db: dependencies.db,
-          appHome: dependencies.appHome,
-          box: dependencies.box,
-          resourcePackageMutations: legacyResourcePackageMutationRuntimeFactory,
-          currentAuthority: () => context.authority,
-          ...(dependencies.pluginInstallOpts === undefined
-            ? {}
-            : { pluginInstallOpts: dependencies.pluginInstallOpts }),
-        },
-        input.actor,
-        {
-          pkg,
-          previewToken: input.previewToken,
-          decisions: [...input.decisions],
-          humanMemberMappings: [...input.humanMemberMappings],
-          secretInputs: [...input.secretInputs],
-        },
-      )
     },
   })
 }

@@ -109,12 +109,12 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       'src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts',
     )
     expect(composition).toContain('composeResourcePackageOperationsFromAdapters')
-    expect(composition).toContain('composeSqliteResourcePackageProvider')
+    // RFC-359 —— SQLite 专属的 provider 装配已退役（零生产消费者）。
+    expect(composition).not.toContain('composeSqliteResourcePackageProvider')
     expect(composition).toContain('ResourcePackageExecutionAdapter')
     const sharedReads = source(
       'src/modules/resource-catalog/composition/resourcePackageProvider.ts',
     )
-    expect(composition).toContain('return composeResourcePackageProvider(deps)')
     expect(sharedReads).toContain('createResourcePackageOwnedResourceLookup(input.db)')
     expect(sharedReads).toContain('createResourcePackageReadPort(input.db)')
     expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId)')

@@ -46,7 +46,7 @@ import { encodeZip } from '../src/util/zip'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { MAX_DECLARED_BUILTINS, parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
-import { commitResourcePackage } from '../src/services/resourcePackage/commit'
+import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
@@ -268,15 +268,19 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
           box,
           importId: ulid(),
         })
-        await commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1'), {
-          pkg: parsed,
-          previewToken: preview.previewToken,
-          decisions: preview.entries.map((e) => ({
-            localSlug: e.localSlug,
-            action: 'new' as const,
-            finalName: e.suggestedName,
-          })),
-        })
+        await commitResourcePackageForTest(
+          { db: dst.db, appHome: dst.appHome, box },
+          actorOf('u1'),
+          {
+            pkg: parsed,
+            previewToken: preview.previewToken,
+            decisions: preview.entries.map((e) => ({
+              localSlug: e.localSlug,
+              action: 'new' as const,
+              finalName: e.suggestedName,
+            })),
+          },
+        )
 
         const landed = dst.db.select().from(skills).where(eq(skills.name, 'helper')).get()
         expect(landed).toBeDefined()
@@ -330,22 +334,26 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
           { workgroupSlug: 'workgroup-squad', username: 'alice', required: false },
         ])
 
-        await commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1'), {
-          pkg: parsed,
-          previewToken: preview.previewToken,
-          decisions: preview.entries.map((e) => ({
-            localSlug: e.localSlug,
-            action: 'new' as const,
-            finalName: e.suggestedName,
-          })),
-          humanMemberMappings: [
-            {
-              workgroupSlug: preview.humanMembers[0]!.workgroupSlug,
-              username: 'alice',
-              userId: 'u1',
-            },
-          ],
-        })
+        await commitResourcePackageForTest(
+          { db: dst.db, appHome: dst.appHome, box },
+          actorOf('u1'),
+          {
+            pkg: parsed,
+            previewToken: preview.previewToken,
+            decisions: preview.entries.map((e) => ({
+              localSlug: e.localSlug,
+              action: 'new' as const,
+              finalName: e.suggestedName,
+            })),
+            humanMemberMappings: [
+              {
+                workgroupSlug: preview.humanMembers[0]!.workgroupSlug,
+                username: 'alice',
+                userId: 'u1',
+              },
+            ],
+          },
+        )
 
         const landed = dst.db.select().from(workgroups).where(eq(workgroups.name, 'squad')).get()
         expect(landed).toBeDefined()
@@ -406,7 +414,7 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
           box,
           importId: ulid(),
         })
-        const receipt = await commitResourcePackage(
+        const receipt = await commitResourcePackageForTest(
           { db: dst.db, appHome: dst.appHome, box },
           actorOf('u1'),
           {
@@ -471,11 +479,15 @@ describe('R0 · 写权限（用户规则：令牌有写权限才能导入，和�
           missingPermissions: ['skills:create'],
         })
         await expect(
-          commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1', []), {
-            pkg: parsed,
-            previewToken: preview.previewToken,
-            decisions: [{ localSlug: preview.entries[0]!.localSlug, action: 'new' }],
-          }),
+          commitResourcePackageForTest(
+            { db: dst.db, appHome: dst.appHome, box },
+            actorOf('u1', []),
+            {
+              pkg: parsed,
+              previewToken: preview.previewToken,
+              decisions: [{ localSlug: preview.entries[0]!.localSlug, action: 'new' }],
+            },
+          ),
         ).rejects.toThrow(/new/)
       } finally {
         removeTempDirSync(dst.appHome)
@@ -729,15 +741,19 @@ describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动�
         // built-in 不产 op ⇒ 它根本不出现在需要用户决策的条目里（「自动忽略」）。
         expect(preview.entries.map((e) => e.name)).not.toContain('__skill_merger__')
 
-        await commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1'), {
-          pkg: parsed,
-          previewToken: preview.previewToken,
-          decisions: preview.entries.map((e) => ({
-            localSlug: e.localSlug,
-            action: 'new' as const,
-            finalName: e.suggestedName,
-          })),
-        })
+        await commitResourcePackageForTest(
+          { db: dst.db, appHome: dst.appHome, box },
+          actorOf('u1'),
+          {
+            pkg: parsed,
+            previewToken: preview.previewToken,
+            decisions: preview.entries.map((e) => ({
+              localSlug: e.localSlug,
+              action: 'new' as const,
+              finalName: e.suggestedName,
+            })),
+          },
+        )
 
         // 没有多出副本：仍然只有对端那一个 built-in。
         const merged = dst.db.select().from(agents).all()
@@ -855,7 +871,7 @@ describe('AC-9 · built-in 作**依赖**：完整链路 + 绑到对端自己的�
         box,
         importId: ulid(),
       })
-      const receipt = await commitResourcePackage(
+      const receipt = await commitResourcePackageForTest(
         { db: dst.db, appHome: dst.appHome, box },
         actorOf('u1'),
         {
@@ -1169,7 +1185,7 @@ describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () 
       })
       expect(preview.entries).toEqual([])
 
-      const receipt = await commitResourcePackage(
+      const receipt = await commitResourcePackageForTest(
         { db: dst.db, appHome: dst.appHome, box },
         actorOf('u1'),
         { pkg: parsed, previewToken: preview.previewToken, decisions: [] },

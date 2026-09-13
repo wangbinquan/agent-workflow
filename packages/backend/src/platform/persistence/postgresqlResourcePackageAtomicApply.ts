@@ -24,7 +24,7 @@ import {
   databaseSessionFor,
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createResourcePackageApplyLock } from '@/platform/persistence/resourcePackageApplyLock'
 import {
   assertActionsAllowed,
@@ -151,7 +151,7 @@ const ReceiptSchema = z
 const ExpectedObjectSchema = z.record(z.unknown())
 
 export interface PostgresqlResourcePackageAtomicApplyDependencies {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly box: SecretBox
   readonly id?: () => string
   readonly now?: () => number

@@ -74,7 +74,10 @@ import {
   type IdentityAccessModule,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
-import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
+import type {
+  CommandContext,
+  DirectAuthenticatedAuthority,
+} from '@/modules/identity-access/public/participants'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
 import type { AgentResourceIntegrityComposition } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
@@ -98,11 +101,7 @@ import {
   composeResourceCatalogFor,
   type ProviderResourceCatalogComposition,
 } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import {
-  composeResourcePackageOperations,
-  composeSqliteResourcePackageProvider,
-  type ComposedResourcePackageCatalog,
-} from '@/modules/resource-catalog/composition/resourcePackageOperations'
+import { type ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
@@ -170,6 +169,7 @@ import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infras
 import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
 import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
+import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
 import {
   readCommittedReviewArtifactBody,
   resolveCollaborationTaskAccess,
@@ -348,7 +348,14 @@ import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-exe
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { composeWorkgroupTaskRoomContinuationDriver } from '@/services/task'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
-import { createSqliteResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
+import {
+  composePostgresqlResourcePackageCatalog,
+  composePostgresqlResourcePackageProvider,
+} from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
+import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
 import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
@@ -1057,6 +1064,12 @@ export interface SqliteAppComposition<
   readonly taskExecutionReadModels: TaskExecutionReadModels
   /** 同上：装配好的协作命令上下文，让夹具把它交给用例而不是逼用例重建。 */
   readonly collaborationContext: CollaborationRouteContext
+  /**
+   * RFC-359 —— 本进程**正在执行**的资源包 apply 的 journal id 快照。维护 Worker 拿它来
+   * 决定哪些 journal 行不能回收：两台 apply 引擎合一前，SQLite 这一侧读的是 legacy
+   * `services/bundle/apply` 的模块级集合；现在与 PostgreSQL 一样，读的是 apply 引擎自己的。
+   */
+  readonly resourcePackageApplyActivity: ResourcePackageApplyActivityQuery
 }
 
 export type ProviderComposedAppDeps<
@@ -2066,22 +2079,54 @@ export function composeSqliteApplicationDeps(
     db: effectiveDeps.db,
     resourceCatalog: providerResourceCatalog,
   })
-  const resourcePackageCatalog =
+  // RFC-359 —— 资源包 apply **一台引擎两个 provider**：此处此前装的是 SQLite 专属的
+  // `commitResourcePackage`（同步事务里的 legacy 参与者），PostgreSQL 那台装的是
+  // journal + prestage/compensate 的原子 apply。两份做同一件事，判据却只跑前者。
+  // 现在两边都装后者；`authorityResolver` 把路由那一层的 authority 认回请求者本人。
+  const packageActorsByAuthority = new WeakMap<object, Actor>()
+  const resourcePackageBinding: ResourcePackageRouteBinding | null =
     effectiveDeps.secretBox === undefined
       ? null
       : (() => {
-          const provider = composeSqliteResourcePackageProvider({
+          const box = effectiveDeps.secretBox
+          const provider = composePostgresqlResourcePackageProvider({
             db: effectiveDeps.db,
             appHome,
-          })
-          return composeResourcePackageOperations({
-            execution: createSqliteResourcePackageExecutionAdapter({
+            authorityResolver: {
+              resolve(authority) {
+                const actor = packageActorsByAuthority.get(authority)
+                if (actor === undefined) throw new Error('foreign-resource-package-authority')
+                return actor
+              },
+            },
+            mcpLifecycle: createMcpTransactionLifecycle(),
+            capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
               db: effectiveDeps.db,
-              appHome,
-              box: effectiveDeps.secretBox,
-              provider,
             }),
-            resources: provider.resources,
+            pluginInstaller: createResourcePackagePluginInstaller(),
+          })
+          const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+            db: effectiveDeps.db,
+            box,
+          })
+          return Object.freeze({
+            applyActivity: atomicApply,
+            catalog: composePostgresqlResourcePackageCatalog({
+              provider,
+              execution: createPostgresqlResourcePackageExecutionAdapter({
+                box,
+                provider,
+                atomicApply,
+              }),
+            }),
+            commandContextFor(actor: Actor): CommandContext {
+              const context = identityAccess.contexts.fromAuthority(
+                directRequestAuthority(identityAccess.directAuthority, actor),
+                'http',
+              )
+              packageActorsByAuthority.set(context.authority, actor)
+              return context
+            },
           })
         })()
   const intentApply = composeSqliteIntentApplyOperations({
@@ -2121,7 +2166,7 @@ export function composeSqliteApplicationDeps(
     skillCatalog,
     workflowCatalog,
     workgroupCatalog,
-    resourcePackageCatalog,
+    resourcePackageBinding,
     providerResourceCatalog,
     memoryCatalog,
     agentResourceIntegrity,
@@ -2157,6 +2202,8 @@ export function composeSqliteApplicationDeps(
     repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
     taskExecutionReadModels: effectiveDeps.taskExecutionReadModels,
     collaborationContext: effectiveDeps.collaborationContext,
+    resourcePackageApplyActivity:
+      resourcePackageBinding?.applyActivity ?? NO_RESOURCE_PACKAGE_APPLY_ACTIVITY,
   })
 }
 
@@ -2320,6 +2367,22 @@ interface SqliteApiRouteComposition {
 }
 
 /** SQLite compatibility composition used by direct `createApp({ db })` tests. */
+/**
+ * RFC-359 —— 资源包路由要的两件事：目录本身，以及**把 authority 认回请求者**的上下文工厂。
+ * 它们必须同源——apply 会话在 `create()` 里用 `authorityResolver` 把 `context.authority`
+ * 解回 Actor 并与传入的 Actor 对照，路由若另起一条造 context 的路，那次对照就认不出来。
+ */
+interface ResourcePackageRouteBinding {
+  readonly catalog: ComposedResourcePackageCatalog
+  readonly applyActivity: ResourcePackageApplyActivityQuery
+  commandContextFor(actor: Actor): CommandContext
+}
+
+/** 没有 secretBox 就没有 apply 引擎，也就不可能有在执行的 apply。 */
+const NO_RESOURCE_PACKAGE_APPLY_ACTIVITY: ResourcePackageApplyActivityQuery = Object.freeze({
+  activeApplyIds: () => [],
+})
+
 function composeSqliteApiRouteMounts(
   deps: SqliteComposedAppDeps,
   identityAccess: IdentityAccessModule & IntegrationTriggerIdentityAccess,
@@ -2333,7 +2396,7 @@ function composeSqliteApiRouteMounts(
   skillCatalog: SkillCatalogModule,
   workflowCatalog: WorkflowCatalogModule,
   workgroupCatalog: WorkgroupCatalogModule,
-  resourcePackageCatalog: ComposedResourcePackageCatalog | null,
+  resourcePackageBinding: ResourcePackageRouteBinding | null,
   providerResourceCatalog: ReturnType<typeof composeResourceCatalogFor>,
   composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
   agentResourceIntegrity: AgentResourceIntegrityComposition,
@@ -2922,14 +2985,10 @@ function composeSqliteApiRouteMounts(
         taskLaunch: taskRouteLaunch.workgroup,
       }),
     resourcePackages: (app) => {
-      if (resourcePackageCatalog === null) return
+      if (resourcePackageBinding === null) return
       registerResourcePackageRoutes(app, {
-        catalog: resourcePackageCatalog,
-        commandContextFor: (actor) =>
-          identityAccess.contexts.fromAuthority(
-            directRequestAuthority(identityAccess.directAuthority, actor),
-            'http',
-          ),
+        catalog: resourcePackageBinding.catalog,
+        commandContextFor: resourcePackageBinding.commandContextFor,
         queryContextFor: (actor) =>
           identityAccess.contexts.queryFromAuthority(
             directRequestAuthority(identityAccess.directAuthority, actor),

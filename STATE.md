@@ -2,6 +2,43 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 13，**两台 apply 引擎合一**：生产侧不再有 SQLite 专属的资源包写入路径）
+>
+> 落档 plan §5dv。§5dp 找到的那处**本仓最大的重复**（SQLite 侧约 1448 行 / PG 侧约 976 行）收掉了。
+>
+> **先用实测代替对账**：把 `rfc359-w13` 的 SQLite 泳道换成 PG 那台原子 apply 引擎、`db` 直接
+> 传 bun:sqlite 客户端——**22 格全绿，一格没改**。它能绿不是巧合：那台引擎的七臂参与者
+> （2977 行）里 `PostgresqlDatabaseClient` / `DbClient` / `DbTxSync` **零处**出现，唯一的品牌痕迹
+> 是三个形参标注，改成 `ProviderNeutralDatabase` 后 `tsc` 零报错。这一对从来不是两台机器，
+> 是**一台中立引擎 + 一条 SQLite 专属老路**。
+>
+> **生产两个装配口一起换**：`main.ts`（`package` 子命令）与 `server.ts`（HTTP）的
+> `provider === 'sqlite' ? legacy : 原子apply` 三元都删成一条。
+>
+> **合一逼出来的一处真实功能回归**：维护 Worker 判「哪些 journal 行不能回收」的输入是
+> `services/bundle/apply.ts` 的模块级 `ACTIVE_BUNDLE_APPLIES`；SQLite 不再走 legacy 后它**永远为空**，
+> 维护会把正在执行的 apply 当孤儿。改成与 PG 同一条接线：引擎自己出
+> `ResourcePackageApplyActivityQuery`，装配带出来、`cli/start.ts` 晚绑定给维护服务。
+>
+> **退役**：`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`
+> 零生产消费者，直接删（不进账本）。五份对拍里「SQLite 走这条、PG 走那条」的装配分叉一并删除。
+>
+> **合一实测出的两处用户可见差异**：①覆盖别人的资源，SQLite 从 `resource-read-only` 变成
+> `bundle-overwrite-not-owned`——两道门一个没少，只是统一引擎先做归属检查；PostgreSQL 上一直是后者。
+> ②**一处真被引入的缺陷，同一笔修掉**：两个引擎写出的落盘半成品工件格式互不认识，写出侧一换，
+> SQLite 的维护读回侧就会把其中一种读不回来（journal 行永久卡住 / 半成品目录收不掉）。
+> 加 `composeResourcePackageApplyArtifactRecoveryChain`：先按统一格式读，**只在 `ZodError`**
+> （格式不认识、且此刻一个字节都没动过）回落到 legacy 读回侧；其它错误原样抛。
+> 四条判据 `rfc359-w14-artifact-recovery-fallback` 先红后绿实测过两种变异。
+>
+> **测试侧一并接过来**：`commitResourcePackage` 的 43 个调用点全改指
+> `tests/helpers/resourcePackageApply.ts`（装生产那条），**改接线不改判据**；改完它全仓零调用方。
+>
+> **这一批没做的**：删文件。那条 legacy 链（约 3300 行）零调用方了，但删它要先把
+> `legacyResourcePackageCommit.ts` 里七个**中立助手**搬进 `services/resourcePackage/commit.ts`
+> （统一引擎今天从那个门面 import 它们），并判断 `rfc271-bundle-engine` /
+> `rfc271-bundle-recovery-hardening` 两份通用 bundle 引擎判据的去留。下一批做。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 11，孪生清零 + 常驻守卫；并修 `447f25661` 的 macOS 红）
 >
 > 落档 plan §5ds 收尾 / §5dt。

@@ -30,7 +30,7 @@ import { mcps, resourceBundleApplies, users, workgroups } from '../src/db/schema
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePackage/preview'
-import { commitResourcePackage } from '../src/services/resourcePackage/commit'
+import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
@@ -324,7 +324,7 @@ describe('基础：new 动作把包内资源建出来', () => {
     const pkg = await parseResourcePackage(packageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
@@ -342,7 +342,22 @@ describe('基础：new 动作把包内资源建出来', () => {
       name: 'tools',
       action: 'create',
     })
-    expect(JSON.parse(db.select().from(resourceBundleApplies).get()!.receiptJson!)).toEqual(receipt)
+    // RFC-359 —— 两台 apply 引擎合一后，journal 里持久化的是引擎内部字段名 `operationId`；
+    // 用户看到的回执文档把它翻成 `opId`（`executionAdapter.ts` 的 `resourcePackageReceiptDocument`，
+    // 测试助手做同一次翻译）。所以这里比的是**同一份回执的两种命名**：把持久化那份翻一次再比，
+    // 断言仍然是「回给调用方的，与落进 journal 供重放的，是同一份」。
+    const persisted = JSON.parse(
+      db.select().from(resourceBundleApplies).get()!.receiptJson!,
+    ) as Record<string, unknown> & {
+      applied: (Record<string, unknown> & { operationId: string })[]
+    }
+    expect({
+      ...persisted,
+      applied: persisted.applied.map(({ operationId, ...rest }) => ({
+        opId: operationId,
+        ...rest,
+      })),
+    }).toEqual(receipt)
   })
 })
 
@@ -374,7 +389,7 @@ describe('① duplicate lookup **先于**过期检查', () => {
       } as never)
       .run()
 
-    const out = await commitResourcePackage(deps(db), actorOf('u1', []), {
+    const out = await commitResourcePackageForTest(deps(db), actorOf('u1', []), {
       pkg,
       previewToken: preview.previewToken,
       // Replay is before mutable permissions and even decision completeness.
@@ -393,7 +408,7 @@ describe('① duplicate lookup **先于**过期检查', () => {
       importId: ulid(),
       now: Date.now() - 60 * 60 * 1000,
     })
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
@@ -428,7 +443,7 @@ describe('① duplicate lookup **先于**过期检查', () => {
       } as never)
       .run()
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
@@ -447,7 +462,7 @@ describe('② / ③ 决策必须落在签名基线内，且服务端重算 allow
     const pkg = await parseResourcePackage(packageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: '01FORGED' }],
@@ -466,7 +481,7 @@ describe('② / ③ 决策必须落在签名基线内，且服务端重算 allow
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
     expect(preview.entries[0]?.allowedActions).not.toContain('overwrite')
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: foreign }],
@@ -486,7 +501,7 @@ describe('② / ③ 决策必须落在签名基线内，且服务端重算 allow
     const pkg = await parseResourcePackage(packageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [],
@@ -503,7 +518,7 @@ describe('② / ③ 决策必须落在签名基线内，且服务端重算 allow
     const previewActor = actorOf('u1')
     const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
 
-    const err = await commitResourcePackage(deps(db), actorOf('u1', []), {
+    const err = await commitResourcePackageForTest(deps(db), actorOf('u1', []), {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
@@ -524,7 +539,7 @@ describe('② / ③ 决策必须落在签名基线内，且服务端重算 allow
     const previewActor = actorOf('u1', ['workflows:create', 'scripts:author'])
     const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
 
-    const err = await commitResourcePackage(deps(db), actorOf('u1', ['workflows:create']), {
+    const err = await commitResourcePackageForTest(deps(db), actorOf('u1', ['workflows:create']), {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'workflow-deploy', action: 'new' }],
@@ -554,7 +569,7 @@ describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关'
       .where(eq(mcps.id, target))
       .run()
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
@@ -572,7 +587,7 @@ describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关'
     const pkg = await parseResourcePackage(packageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
@@ -598,7 +613,7 @@ describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关'
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
     await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target)).run()
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
@@ -616,7 +631,7 @@ describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关'
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: target }],
@@ -646,7 +661,7 @@ describe('external 引用不提供隐藏资源存在性预言机', () => {
       box,
       importId: ulid(),
     })
-    const hiddenError = await commitResourcePackage(deps(hiddenDb), actor, {
+    const hiddenError = await commitResourcePackageForTest(deps(hiddenDb), actor, {
       pkg: hiddenPkg,
       previewToken: hiddenPreview.previewToken,
       decisions: [{ localSlug: 'agent-worker', action: 'new' }],
@@ -661,7 +676,7 @@ describe('external 引用不提供隐藏资源存在性预言机', () => {
       box,
       importId: ulid(),
     })
-    const absentError = await commitResourcePackage(deps(absentDb), actor, {
+    const absentError = await commitResourcePackageForTest(deps(absentDb), actor, {
       pkg: absentPkg,
       previewToken: absentPreview.previewToken,
       decisions: [{ localSlug: 'agent-worker', action: 'new' }],
@@ -683,7 +698,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'workgroup-squad', action: 'reuse', targetId: target }],
@@ -704,7 +719,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
@@ -722,7 +737,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
@@ -743,7 +758,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'workgroup-squad', action: 'overwrite', targetId: target }],
@@ -763,7 +778,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
@@ -788,7 +803,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
@@ -813,7 +828,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
     const baseline = verifyPreviewToken(box, preview.previewToken).humanBaseline
 
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
@@ -847,7 +862,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
       humanBaseline: verified.humanBaseline.map((slot) => ({ ...slot, required: true })),
     })
 
-    const err = await commitResourcePackage(deps(db), actor, {
+    const err = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: legacyToken,
       decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
@@ -871,7 +886,7 @@ describe('⑥ secret inputs 只投影到会落地的资源', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],
@@ -897,7 +912,7 @@ describe('⑥ secret inputs 只投影到会落地的资源', () => {
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
-    const receipt = await commitResourcePackage(deps(db), actor, {
+    const receipt = await commitResourcePackageForTest(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
       decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],

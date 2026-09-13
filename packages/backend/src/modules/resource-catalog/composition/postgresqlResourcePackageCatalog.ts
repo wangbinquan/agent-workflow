@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ResourceCurrentAuthorityResolver } from '../application/participants/resourceAuthorization'
 import {
   createPostgresqlResourcePackageMutationSessionFactory,
@@ -26,7 +26,7 @@ export interface PostgresqlResourcePackageProviderComposition extends ResourcePa
 }
 
 export interface PostgresqlResourcePackageProviderDependencies {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly authorityResolver: ResourceCurrentAuthorityResolver
   readonly mcpLifecycle: McpTransactionLifecycle

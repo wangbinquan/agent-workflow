@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 321,
+    "serviceFiles": 322,
     "thinFacades": 70
   },
   "entries": [
@@ -3555,9 +3555,7 @@
       "exportedSymbols": [
         "PostgresqlResourcePackageExecutionAdapterDependencies",
         "ResourcePackageExecutionAdapter",
-        "SqliteResourcePackageExecutionAdapterDependencies",
-        "createPostgresqlResourcePackageExecutionAdapter",
-        "createSqliteResourcePackageExecutionAdapter"
+        "createPostgresqlResourcePackageExecutionAdapter"
       ],
       "file": "packages/backend/src/services/resourcePackage/executionAdapter.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/executionAdapter.ts",
@@ -3620,6 +3618,19 @@
       "status": "legacy-implementation",
       "targetContext": "task-execution",
       "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
+        "createResourcePackagePluginInstaller"
+      ],
+      "file": "packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
+      "id": "facade:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts#$file",
+      "removeAfterWave": "W4-C",
+      "status": "legacy-implementation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
     },
     {
       "boundaryEdgeIds": [],
@@ -6737,5 +6748,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b5e42d8baa454472d249bb092fea0e3c571ef0224e9490fd2ba217ea5b715a0"
+  "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5"
 }

@@ -83,7 +83,12 @@ describe('① --as-user 强制', () => {
     expect(SRC).not.toContain("from '@/db/")
     expect(MAIN).toContain('composePackageCommandBootstrap')
     expect(MAIN).toContain('identityAccess.localOperator.forUser(user.id)')
-    expect(MAIN).toContain('composeResourcePackageOperations({')
+    // RFC-359 —— 两台 apply 引擎合一后，bootstrap 只剩这一条装配（此前 SQLite 走
+    // `composeResourcePackageOperations({` + `commitResourcePackage`，PostgreSQL 走这一条）。
+    expect(MAIN).toContain('composePostgresqlResourcePackageCatalog({')
+    expect(MAIN).not.toMatch(
+      /provider\.provider === 'sqlite'\s*\n?\s*\?[\s\S]{0,80}ResourcePackage/,
+    )
     expect(SRC).toContain('catalog.operations.inspect')
     expect(SRC).toContain('catalog.operations.apply')
     expect(SRC).not.toContain("from '@/services/resourcePackage/")

@@ -14,6 +14,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { eq } from 'drizzle-orm'
 import { PACKAGE_SECRET_PLACEHOLDER } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
+import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, resourceBundleApplies, users, workgroupMembers, workgroups } from '../src/db/schema'
@@ -31,11 +32,19 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
 const tempDirs: string[] = []
 
+/**
+ * RFC-359 —— apply 引擎合一后，写会话**会**读 `context.authority`：它把 authority 解回 Actor
+ * 并与传入的 Actor 对照（`createPostgresqlResourcePackageMutationSessionFactory`）。此前
+ * SQLite 那条路直接收 Actor、不读 authority，于是这里用一个「一读就炸」的 getter 锁住
+ * 「路由层不消费请求 authority」。现在给一个真的 authority：判据从「不读」改成「读到的
+ * 就是这次请求的人」，由夹具的 `authorityResolver` 认回同一个 actor。
+ */
 function testCommandContext(): CommandContext {
   return Object.freeze({
-    get authority(): never {
-      throw new Error('rfc271-import-http-does-not-consume-request-authority')
-    },
+    authority: new AuthorityClaimRegistry().mintLocalAuthority({
+      userId: 'u1',
+      source: 'system' as const,
+    }),
     operationId: 'rfc271-import-http',
     correlationId: 'rfc271-import-http',
     now: 0,
@@ -212,7 +221,7 @@ function appWithResourcePackageRoutes(
   app.use('*', injectActor)
   app.onError(errorHandler)
   registerResourcePackageRoutes(app, {
-    catalog: composeSqliteResourcePackageCatalogForTest({ db, appHome, box }),
+    catalog: composeSqliteResourcePackageCatalogForTest({ db, appHome, box, actor }),
     commandContextFor: testCommandContext,
     queryContextFor: testQueryContext,
   })

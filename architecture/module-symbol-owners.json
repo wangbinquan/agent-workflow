@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1789,
+    "backendFiles": 1790,
     "frontendFiles": 622,
-    "legacyFiles": 601,
+    "legacyFiles": 602,
     "moduleFiles": 1188,
-    "productionFiles": 2566,
+    "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24913
+    "symbolsIncludingFileRoots": 24915
   },
   "entries": [
     {
@@ -83908,6 +83908,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/composition/resourcePackageMaintenance.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageMaintenance.ts#composeResourcePackageApplyArtifactRecoveryChain",
+      "removeAfterWave": "W4-C",
+      "status": "current-module",
+      "symbol": "composeResourcePackageApplyArtifactRecoveryChain",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/composition/resourcePackageMaintenance.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageMaintenance.ts#composeSqliteResourcePackageApplyMaintenance",
       "removeAfterWave": "W4-C",
       "status": "current-module",
@@ -84004,18 +84016,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#composeSqliteResourcePackageProvider",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "composeSqliteResourcePackageProvider",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#ResourcePackageAdapterCompositionDependencies",
       "removeAfterWave": "W4-C",
       "status": "current-module",
@@ -84092,18 +84092,6 @@
       "removeAfterWave": "W4-C",
       "status": "current-module",
       "symbol": "ResourcePackageTransport",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#SqliteResourcePackageProviderDependencies",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "SqliteResourcePackageProviderDependencies",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -158800,6 +158788,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "server.ts",
+      "exported": false,
+      "file": "packages/backend/src/server.ts",
+      "id": "owner:packages/backend/src/server.ts#NO_RESOURCE_PACKAGE_APPLY_ACTIVITY",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "NO_RESOURCE_PACKAGE_APPLY_ACTIVITY",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "server.ts",
       "exported": true,
       "file": "packages/backend/src/server.ts",
       "id": "owner:packages/backend/src/server.ts#PostgresqlAppCompositionInput",
@@ -158988,6 +158988,18 @@
       "symbol": "RepositoryBootstrap",
       "targetContext": "bootstrap",
       "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "server.ts",
+      "exported": false,
+      "file": "packages/backend/src/server.ts",
+      "id": "owner:packages/backend/src/server.ts#ResourcePackageRouteBinding",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ResourcePackageRouteBinding",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
     },
     {
       "currentContext": "legacy",
@@ -176056,18 +176068,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/resourcePackage/executionAdapter.ts",
-      "id": "owner:packages/backend/src/services/resourcePackage/executionAdapter.ts#createSqliteResourcePackageExecutionAdapter",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "createSqliteResourcePackageExecutionAdapter",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/resourcePackage/executionAdapter.ts",
       "id": "owner:packages/backend/src/services/resourcePackage/executionAdapter.ts#PostgresqlResourcePackageAtomicApply",
@@ -176206,18 +176206,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "resourcePackageReceiptDocument",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/resourcePackage/executionAdapter.ts",
-      "id": "owner:packages/backend/src/services/resourcePackage/executionAdapter.ts#SqliteResourcePackageExecutionAdapterDependencies",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "SqliteResourcePackageExecutionAdapterDependencies",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -176592,6 +176580,42 @@
       "symbol": "README",
       "targetContext": "task-execution",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
+      "id": "owner:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts#$file",
+      "removeAfterWave": "W4-C",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
+      "id": "owner:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts#createResourcePackagePluginInstaller",
+      "removeAfterWave": "W4-C",
+      "status": "legacy-target",
+      "symbol": "createResourcePackagePluginInstaller",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
+      "id": "owner:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts#ResourcePackagePluginInstaller",
+      "removeAfterWave": "W4-C",
+      "status": "legacy-target",
+      "symbol": "ResourcePackagePluginInstaller",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
     },
     {
       "currentContext": "legacy",
@@ -299657,5 +299681,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b5e42d8baa454472d249bb092fea0e3c571ef0224e9490fd2ba217ea5b715a0"
+  "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5"
 }

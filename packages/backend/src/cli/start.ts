@@ -117,7 +117,6 @@ import {
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
-import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { admitDaemonIdentity } from '@/auth/session'
 import {
@@ -2621,6 +2620,10 @@ async function composeSqliteProviderSession(
   // notification/admission deltas; Worker failure never falls back to running
   // the old body on this HTTP event loop.
   const intentMaintenanceSnapshots = composeSqliteIntentMaintenanceSnapshotQueries(db)
+  // RFC-359 —— 「本进程正在跑哪些 apply」的来源是 apply 引擎自己（与 PostgreSQL 同一条），
+  // 不再是 legacy `services/bundle/apply` 的模块级集合。引擎在下面的 `composeSqliteAppDeps`
+  // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
+  let resourcePackageApplyActivity: (() => readonly string[]) | null = null
   const maintenanceService = startMaintenanceService({
     dbPath: Paths.db,
     migrationsFolder,
@@ -2630,7 +2633,7 @@ async function composeSqliteProviderSession(
     payloadSources: Object.freeze({
       activeTaskIds: activeTaskIdsSnapshot,
       activeIntentApplyJournalIds: intentMaintenanceSnapshots.activeApplyJournalIds,
-      activeResourceBundleApplyIds,
+      activeResourceBundleApplyIds: () => resourcePackageApplyActivity?.() ?? [],
       bootIntentTurnIds: intentMaintenanceSnapshots.bootTurnIds,
     }),
     onLifecycleDelta: (delta) => {
@@ -2720,6 +2723,7 @@ async function composeSqliteProviderSession(
     digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
     digitalEmployeeTypePackageDriftPolicy,
   })
+  resourcePackageApplyActivity = () => appComposition.resourcePackageApplyActivity.activeApplyIds()
   const app = createComposedApp(appComposition)
 
   const ws = buildWebSocketAdapter({
