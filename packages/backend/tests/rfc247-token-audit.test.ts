@@ -492,11 +492,23 @@ describeEachProviderHttpApplication(
     test('the owner reads their own through /api/auth/pats/audit', async () => {
       const h = await harness(scope)
       await h.app.request('/api/agents', { headers: { Authorization: `Bearer ${h.patToken}` } })
-      const res = await h.app.request('/api/auth/pats/audit', {
-        headers: { Authorization: `Bearer ${h.sessionToken}` },
-      })
-      expect(res.status).toBe(200)
-      expect(((await res.json()) as unknown[]).length).toBeGreaterThan(0)
+      // 审计写点在 `server.ts` 的 `/api/*` 中间件里是 **`void ...record(...)`**（刻意不 await：
+      // F13/F14「审计永不拖垮业务调用」）。SQLite 上那条 insert 是同步的，所以下一条请求必然
+      // 看得到；**PostgreSQL 上它是真异步**，紧接着读会读到空列表。这是一条**生产侧的两引擎
+      // 保证差异**（`docs/audit-backlog.md` 已立项），不是用例写错——所以这里按「最终一致」
+      // 的语义有界等待，而不是假装它是即时的。CI 上 ubuntu shard 3/12 实测撞过。
+      const deadline = Date.now() + 5_000
+      let rows: unknown[] = []
+      for (;;) {
+        const res = await h.app.request('/api/auth/pats/audit', {
+          headers: { Authorization: `Bearer ${h.sessionToken}` },
+        })
+        expect(res.status).toBe(200)
+        rows = (await res.json()) as unknown[]
+        if (rows.length > 0 || Date.now() >= deadline) break
+        await Bun.sleep(20)
+      }
+      expect(rows.length).toBeGreaterThan(0)
     })
 
     test('a token cannot read the audit, not even its own', async () => {

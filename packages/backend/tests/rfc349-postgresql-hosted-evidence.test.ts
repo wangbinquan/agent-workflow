@@ -168,13 +168,15 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     }
 
     // W21 expands Ubuntu to eight shards; RFC-359 W57 expands macOS from four to six
-    // （四片时最长的一片长期在 15 分钟预算的 75%~90%，实测有一次 15 分 16 秒被超时杀掉）。
+    // （四片时最长的一片长期在 15 分钟预算的 75%~90%，实测有一次 15 分 16 秒被超时杀掉）；
+    // RFC-359 W5（2026-09-13）再把 Ubuntu 从八片扩到**十二片**——AC-6 把大批用例迁成双引擎后
+    // Ubuntu 侧每个文件跑两遍，连续两次 run 的 shard 1/8 撞上 15 分钟 job 预算。
     // Parse the owning job: the shard text must not accept an unrelated matrix elsewhere
     // in this workflow or reject the stronger expanded leg.
     const matrix = parse(owners['ci.yml']).jobs['test-backend'].strategy.matrix
     expect(matrix.os).toEqual(['ubuntu-latest'])
-    expect(matrix.shard).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-    expect(matrix.shards).toEqual([8])
+    expect(matrix.shard).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    expect(matrix.shards).toEqual([12])
     expect(matrix.include).toEqual(
       Array.from({ length: 6 }, (_, index) => ({
         os: 'macos-latest',

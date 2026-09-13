@@ -306,7 +306,12 @@ describe('repository test entrypoint', () => {
       'ubuntu-latest',
     ])
     for (const [os, total] of [
-      ['ubuntu-latest', 8],
+      // RFC-359 W5（2026-09-13）：Ubuntu 从八片加到十二片——AC-6 把大批用例迁成双引擎之后
+      // Ubuntu 侧每个文件要跑两遍，连续两次 run 的 shard 1/8 都撞上 15 分钟 job 预算
+      // （一次是测试体跑完后整个 job 超时、一次是 15:15）。实测八片最长片贴到预算 101%，
+      // 十片只压到 81%（macOS 那次证明 88% 也不够），十二片压到 ~67%。同样照 ci.yml 的规矩：
+      // 加 runner，不动预算、不改单条用例超时。
+      ['ubuntu-latest', 12],
       // RFC-359 W57：macOS 从四片加到六片——四片时最长的一片长期在 15 分钟预算的 75%~90%，
       // 实测有一次跑到 15 分 16 秒被超时杀掉（GitHub 把超时报成 `cancelled`，聚合 job 随之判红）。
       // 处置照 ci.yml 自己立的规矩：加 runner，不动预算、不改单条用例超时。

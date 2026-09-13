@@ -6723,3 +6723,17 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   **处置照 `.github/workflows/ci.yml` 自己立的规矩：加 runner（多分片），不动预算、
   也不改单条用例的超时。** 2026-09-13 Ubuntu 因此从八片加到十二片；此前 macOS 同因从四片加到六片。
   经验值：最长的一片压到预算的 **~67%** 才有足够方差空间（88% 实测不够）。
+
+- **改 CI 分片数，必须同步改两个把矩阵逐字钉死的守卫**：
+  `packages/backend/tests/root-test-entrypoint.test.ts`（「CI matrices cover every declared test
+  shard and supported OS」）与 `packages/backend/tests/rfc349-postgresql-hosted-evidence.test.ts`。
+  它们**不是多余的**——前者的注释写明了理由：**只改 `--shard=N/M` 的分母、不改矩阵里的分子，
+  CI 会绿着跑掉其中一片的用例**（例如 `[1,2,3]` 配 `/4`）。
+
+- **重新分片会把「靠时序侥幸绿着」的竞态撞出来**。分片数一变，同一个 runner 上的文件组合和执行
+  时序全变；此前恰好排在写入之后的读取，可能就排到前面去了。2026-09-13 实撞：Ubuntu 八片→十二片
+  之后，`/api/auth/pats/audit` 的判据在 PG 上读到空列表——根因是 `server.ts` 中间件里
+  `void ...tokenCallAudit.record(...)` 在 SQLite 上同步、在 PostgreSQL 上真异步。
+  **诊断顺序**：先确认单文件跑是绿的、再确认它不是本次改动引入的，然后按「最终一致」重写判据
+  **并把生产侧的保证差异单独立项**——不要顺手把 `void` 改成 `await` 了事，那是产品决策
+  （给每个请求加一次写往返 vs.「审计永不拖垮业务调用」）。

@@ -5048,3 +5048,32 @@ PostgreSQL 的错误归因在这一支上可能落错分支。**要定的是一�
 **没有动手**：不改单条用例超时、也不加 skip——`.github/workflows/ci.yml` 立的规矩是
 「加 runner，不动预算、不改单条用例的超时」。若后续复现，正解是继续拆分并行度
 （sweep 的批大小），而不是放宽这条用例。
+
+## token 调用审计在 PostgreSQL 上是**最终一致**、在 SQLite 上是即时的（2026-09-13，CI 实撞）
+
+**写点**：`src/server.ts` 的 `/api/*` 中间件
+
+```ts
+void deps.core.tokenCallAudit.record({ actor, channel: 'rest', method, path, statusCode, … })
+```
+
+`void` 是**刻意**的——RFC-247 F13/F14 的判据就叫「auditing never breaks the call」，
+审计失败不能拖垮业务调用，也不该给每个请求加一次写延迟。
+
+**两个引擎的保证因此不同**：
+- **SQLite**：`insertAudit` 同步执行，中间件返回时行已经落库。客户端下一条请求必然读得到。
+- **PostgreSQL**：它是一次**真异步**插入，且没有任何人 await 它。客户端紧接着读
+  `/api/auth/pats/audit` 会读到**空列表**——审计行随后才到。
+
+**证据**：CI run `34763930487` 的 `ubuntu shard 3/12`，
+`RFC-247 D8 … the owner reads their own through /api/auth/pats/audit [postgresql]` 以
+`Expected: > 0, Received: 0` 失败；同一文件单跑 46 pass / 0 fail。
+它不是新回归，是**一直存在、靠时序侥幸绿着**的竞态——重新分片改变了同片文件组合与时序，把它撞出来了。
+
+**用户可见后果**：PostgreSQL 部署上，「刚发出的那次 token 调用」在审计页上可能还看不到，
+滞后没有上界（没人 await、没有重试计数、失败只 `log.warn`）。SQLite 上则是即时的。
+对一个**审计轨迹**来说，「你上一次调用可能还没出现」与「一定出现」是两种不同的产品承诺。
+
+**处置**：用例改成按「最终一致」语义**有界等待**（5s 内轮询），并在注释里写明这是生产侧差异、
+不是用例写错。**生产代码没动**——要不要在 PG 上 await（给每个 token 请求加一次写往返）、
+或者改成带确认的后台队列，是**产品决策**：它在延迟、可靠性与「审计永不拖垮业务调用」之间取舍。

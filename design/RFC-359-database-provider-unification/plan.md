@@ -8792,3 +8792,34 @@ run `34762730963` 实测八片：15.25 / 10.7 / 10.05 / 10.5 / 13.9 / 11.3 / 10.
 
 **对后续波次的含义**：AC-6 还剩 108 条待办，继续迁会继续加 Ubuntu 侧的时长。
 十二片留出的方差空间够下一批用，但**再迁一大批就要再量一次**——判据是「最长片 ≤ 预算 67%」。
+
+
+## 5dg. 分片改动的**三个下游**：两个分片数守卫 + 一条被时序掩盖的真竞态
+
+§5df 把 Ubuntu 从八片加到十二片，run `34763930487` 里五个作业红了。分开看是两件完全不同的事：
+
+### 四个红是**守卫按设计拦住了我**（好事）
+
+`root-test-entrypoint.test.ts` 与 `rfc349-postgresql-hosted-evidence.test.ts` 各自把 Ubuntu 矩阵
+**逐字钉死**。前者的注释写明了为什么要钉死：「A denominator in the command is not enough:
+accidentally shortening the matrix (for example, [1, 2, 3] with /4) makes CI green while one
+quarter of the suite is never selected.」——只写分母不写分子，CI 会绿着跑掉四分之一的用例。
+两个守卫都按设计工作，改分片就必须同步改它们（连同写清为什么扩片）。
+
+### 第五个红是**一条一直存在、靠时序侥幸绿着的生产竞态**
+
+`RFC-247 D8 … the owner reads their own through /api/auth/pats/audit [postgresql]`
+以 `Expected: > 0, Received: 0` 失败，而同文件单跑 46 pass / 0 fail。
+
+根因在 `src/server.ts` 的 `/api/*` 中间件：`void deps.core.tokenCallAudit.record(...)`。
+`void` 是**刻意**的（RFC-247 F13/F14：「auditing never breaks the call」），但两个引擎的**保证**
+因此不同——SQLite 上 `insertAudit` 同步执行，中间件返回时行已落库；PostgreSQL 上它是**真异步**
+且无人 await，客户端紧接着读审计接口会读到空列表，滞后无上界。
+
+**重新分片没有引入它，只是改变了同片文件组合与时序，把它撞了出来。** 这与 §5ct（PG 上 fixture DDL
+跨用例污染）、§5dc（注册期读 harness）是同一族教训的第三例：**「本地绿」与「上次 CI 绿」都不能
+证明没有时序耦合**，分片、文件顺序、并行度一变就翻脸。
+
+处置：用例改成按「最终一致」语义有界等待并注明这是生产差异；**生产代码没动**——要不要在 PG 上
+await（给每个 token 请求加一次写往返）还是改成带确认的后台队列，是**产品决策**，已在
+`docs/audit-backlog.md` 立项。
