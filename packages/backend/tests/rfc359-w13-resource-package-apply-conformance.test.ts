@@ -36,11 +36,15 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
+import {
+  PACKAGE_SECRET_PLACEHOLDER,
+  PackageImportReceiptSchema,
+  PackagePreviewSchema,
+} from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import { resourceBundleApplies, resourceGrants, users, workgroups } from '@/db/schema'
+import { agents, mcps, resourceBundleApplies, resourceGrants, users, workgroups } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
@@ -53,10 +57,119 @@ import type { ComposedResourcePackageCatalog } from '@/modules/resource-catalog/
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { encodeZip } from '@/util/zip'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
+
+const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
+
+/** 一个最小的 agent 包：没有任何外部引用，用来验第二种资源类型走的是同一套归属 / 可见性规则。 */
+const agentPackageZip = (): Uint8Array =>
+  encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: agent-worker
+  type: agent
+  name: worker
+resources:
+  - slug: agent-worker
+    type: agent
+    name: worker
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'agent-create',
+              slug: 'agent-worker',
+              payload: {
+                name: 'worker',
+                description: 'from package',
+                outputs: [],
+                syncOutputsOnIterate: true,
+                permission: {},
+                skills: [],
+                dependsOn: [],
+                mcp: [],
+                plugins: [],
+                frontmatterExtra: {},
+                bodyMd: '',
+              },
+            },
+          ],
+          rootRef: 'local:agent-worker',
+        }),
+      ),
+    },
+  ])
+
+/** 一个声明了凭据字段的 MCP 包：`config.env.TOKEN` 落在包里的是占位符，真值由 `secretInputs` 给。 */
+const secretPackageZip = (): Uint8Array =>
+  encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: mcp-tools
+  type: mcp
+  name: tools
+resources:
+  - slug: mcp-tools
+    type: mcp
+    name: tools
+requirements:
+  executables:
+    - tool-server
+  mcpKinds:
+    - local
+secrets:
+  - resourceType: mcp
+    resourceName: tools
+    field: config.env.TOKEN
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'mcp-create',
+              slug: 'mcp-tools',
+              payload: {
+                name: 'tools',
+                description: 'from package',
+                type: 'local',
+                config: {
+                  command: ['tool-server'],
+                  env: { TOKEN: PACKAGE_SECRET_PLACEHOLDER },
+                },
+                enabled: true,
+              },
+            },
+          ],
+          rootRef: 'local:mcp-tools',
+        }),
+      ),
+    },
+  ])
 
 const OWNER = 'package-apply-owner'
 const T0 = 1_700_000_000_000
@@ -154,6 +267,12 @@ describeEachProvider('RFC-359 —— 资源包 apply 引擎双引擎对拍（工
         username: string
         userId: string
       }[] = [],
+      secretInputs: readonly {
+        resourceType: 'mcp'
+        resourceName: string
+        field: string
+        value: string
+      }[] = [],
     ) => {
       const staged = await catalog.operations.apply.invoke(
         context,
@@ -162,7 +281,7 @@ describeEachProvider('RFC-359 —— 资源包 apply 引擎双引擎对拍（工
           previewToken,
           decisions: [decision],
           humanMemberMappings: [...humanMemberMappings],
-          secretInputs: [],
+          secretInputs: [...secretInputs],
         }),
       )
       return PackageImportReceiptSchema.parse(
@@ -245,5 +364,98 @@ describeEachProvider('RFC-359 —— 资源包 apply 引擎双引擎对拍（工
       ]),
     ).rejects.toMatchObject({ status: 422 })
     expect(await f.db.select().from(workgroups)).toEqual([])
+  })
+
+  test('⑤ 第二种资源类型（agent）走同一套归属 / 可见性规则', async () => {
+    const f = await fixture()
+    const bytes = agentPackageZip()
+    const previewResult = await f.preview(bytes)
+    const receipt = await f.apply(bytes, previewResult.previewToken, {
+      localSlug: 'agent-worker',
+      action: 'new',
+    })
+
+    const rootId = receipt.root?.resourceId
+    if (rootId === undefined) throw new Error('agent receipt root missing')
+    const rows = await f.db.select().from(agents).where(eq(agents.id, rootId))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      name: 'worker',
+      description: 'from package',
+      ownerUserId: OWNER,
+      visibility: 'private',
+    })
+    expect(
+      await f.db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, rootId)),
+    ).toEqual([])
+    const journal = await f.db.select().from(resourceBundleApplies)
+    expect(journal).toHaveLength(1)
+    expect(journal[0]?.state).toBe('committed')
+  })
+
+  test('⑥ agent 的重放也是同一条路：回执逐字相同、不产生第二行', async () => {
+    const f = await fixture()
+    const bytes = agentPackageZip()
+    const previewResult = await f.preview(bytes)
+    const decision = { localSlug: 'agent-worker', action: 'new' as const }
+    const first = await f.apply(bytes, previewResult.previewToken, decision)
+    const replay = await f.apply(bytes, previewResult.previewToken, decision)
+
+    expect(replay).toEqual(first)
+    expect(await f.db.select().from(agents)).toHaveLength(1)
+    expect(await f.db.select().from(resourceBundleApplies)).toHaveLength(1)
+  })
+
+  test('⑦ 凭据：真值只写进实际落地的那一行，回执不记 skippedSecrets', async () => {
+    const f = await fixture()
+    const bytes = secretPackageZip()
+    const previewResult = await f.preview(bytes)
+    const receipt = await f.apply(
+      bytes,
+      previewResult.previewToken,
+      { localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' },
+      [],
+      [
+        {
+          resourceType: 'mcp',
+          resourceName: 'tools',
+          field: 'config.env.TOKEN',
+          value: 'local-secret',
+        },
+      ],
+    )
+
+    expect(receipt.root?.name).toBe('tools-copy')
+    expect(receipt.skippedSecrets).toBeUndefined()
+    const rows = await f.db.select().from(mcps).where(eq(mcps.name, 'tools-copy'))
+    expect(JSON.parse(rows[0]?.config ?? '{}')).toMatchObject({ env: { TOKEN: 'local-secret' } })
+  })
+
+  test('⑧ 凭据留空：该字段整个省掉、占位符绝不落库，且 skippedSecrets 进耐久回执', async () => {
+    const f = await fixture()
+    const bytes = secretPackageZip()
+    const previewResult = await f.preview(bytes)
+    const receipt = await f.apply(
+      bytes,
+      previewResult.previewToken,
+      { localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' },
+      [],
+      [{ resourceType: 'mcp', resourceName: 'tools', field: 'config.env.TOKEN', value: '' }],
+    )
+
+    const rows = await f.db.select().from(mcps).where(eq(mcps.name, 'tools-copy'))
+    const stored = JSON.parse(rows[0]?.config ?? '{}') as { env?: Record<string, string> }
+    expect(stored.env?.TOKEN).toBeUndefined()
+    // 占位符落库 = 用户拿到一个跑不起来的 MCP，两个引擎都不许。
+    expect(JSON.stringify(stored)).not.toContain(PACKAGE_SECRET_PLACEHOLDER)
+    expect(receipt.skippedSecrets).toEqual([
+      { resourceType: 'mcp', resourceName: 'tools-copy', field: 'config.env.TOKEN' },
+    ])
+    // 耐久回执里也要记着——重放时用户看到的是同一份「哪些凭据被跳过了」。
+    const journal = await f.db
+      .select({ receiptJson: resourceBundleApplies.receiptJson })
+      .from(resourceBundleApplies)
+      .where(eq(resourceBundleApplies.id, receipt.journalId))
+    expect(journal[0]?.receiptJson ?? '').toContain('skippedSecrets')
   })
 })
