@@ -7,19 +7,18 @@
 //
 // 这条锁的是最直接的用户后果:非成员的收件箱徽章不得因为别人的工作组任务而 +1。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users, workflows, workgroupTaskState } from '../src/db/schema'
 import type { WorkgroupOperationContext } from '../src/modules/resource-catalog/public/participants'
 import { composeTestWorkgroupTaskRoom, roomDocument } from './helpers/workgroupTaskRoom'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_278_400_000
 
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -101,9 +100,9 @@ function reads(db: Db) {
   }
 }
 
-describe('RFC-311 — workgroup pending-count honours task visibility', () => {
+describeEachProvider('RFC-311 — workgroup pending-count honours task visibility', (harness) => {
   test('the owner and an admin see the gate; an unrelated user counts zero', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
     const { pendingCount } = reads(db)
 

@@ -510,15 +510,15 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 528,
+      "baseline": 500,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "EXEMPT",
-      "baseline": 2,
-      "why": "RFC-359 W5「防复辟」波次。上一条的豁免名单：harness 自己（`tests/helpers/eachProvider.ts`）与该守卫自身。只降不升，防止豁免退化成空白许可证。"
+      "baseline": 1,
+      "why": "RFC-359 W5「防复辟」波次。上一条的豁免名单：只剩 harness 自己（`tests/helpers/eachProvider.ts`）——它按定义就要建 SQLite 库。守卫自身的豁免在判据改成按 AST 数真调用点后退役（注释与断言字符串不再被记成债）。只降不升，防止豁免退化成空白许可证。"
     },
     {
       "id": "rfc359-w5-toplevel-column-capture",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c782d4222d91f627e20e68bc6c8f038c4ea05d1e",
-    "contentDigest": "sha256:21975ac88ba71acfa1ab061e1c70419ef809bebbc53844c7b7dda38ce79a6e31",
+    "currentSnapshotSha": "0bc843b538cda56cb10c847ea2732d8c3bc4c33c",
+    "contentDigest": "sha256:d2f751c1ee03db6e7d93aaf984caa86b20b3aba0045a8158c914c0bc02a97241",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

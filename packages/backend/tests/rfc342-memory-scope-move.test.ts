@@ -3,12 +3,12 @@
 // These tests lock the command boundary, old+new scope authorization, durable
 // event atomicity, mutation races, and the eventual prompt-injection audience.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { MemoryWsMessage } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   agents,
   cachedRepos,
@@ -35,11 +35,10 @@ import { createUser } from '../src/services/users'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_789_747_212_066
 
 function moveMemory(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   contexts: ReturnType<typeof composeIdentityAccess>['contexts'],
   context: CommandContext,
   id: string,
@@ -62,8 +61,8 @@ function captureBroadcasts(): { messages: MemoryWsMessage[]; stop: () => void } 
   return { messages, stop }
 }
 
-describe('RFC-342 memory scope move correctness', () => {
-  let db: DbClient
+describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
+  let db: ProviderNeutralDatabase
   let contexts: ReturnType<typeof composeIdentityAccess>['contexts']
   let ownerId = ''
   let otherOwnerId = ''
@@ -77,7 +76,7 @@ describe('RFC-342 memory scope move correctness', () => {
   let repoGroupId = ''
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     contexts = composeIdentityAccess(db).contexts
     resetBroadcastersForTests()
 

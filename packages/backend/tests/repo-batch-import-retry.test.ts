@@ -2,9 +2,9 @@
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   __resetBatchImportForTests,
   startBatchImport,
@@ -15,8 +15,6 @@ import {
 import { DomainError, NotFoundError } from '../src/util/errors'
 import type { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 type Resolver = typeof resolveCachedRepo
 
@@ -81,7 +79,7 @@ async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise
   throw new Error('timed out waiting for batch.completed')
 }
 
-function deps(db: DbClient, resolver: Resolver): RepoBatchImportDeps {
+function deps(db: ProviderNeutralDatabase, resolver: Resolver): RepoBatchImportDeps {
   return {
     store: composeSqliteRepositoryWorkspaceStore(db),
     resolveCachedRepo: resolver,
@@ -89,12 +87,12 @@ function deps(db: DbClient, resolver: Resolver): RepoBatchImportDeps {
   }
 }
 
-describe('retryBatchRow (RFC-033-T2)', () => {
+describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
   beforeEach(() => __resetBatchImportForTests())
   afterEach(() => __resetBatchImportForTests())
 
   test('failed row succeeds on retry', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const resolver = flakyOnceResolver('https://h/a.git')
     const sharedDeps = deps(db, resolver)
     const r = startBatchImport(
@@ -114,7 +112,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
   })
 
   test('done row can be retried (resets and re-runs)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const r = startBatchImport(
       deps(db, happyResolver()),
       { urls: ['https://h/a.git'] },
@@ -129,7 +127,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
   })
 
   test('running row cannot be retried (409 row-not-retryable)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     // Resolver that never resolves — keeps the row cloning forever.
     let release: (() => void) | null = null
     const heldResolver: Resolver = (async (_d, input) => {
@@ -176,7 +174,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
   })
 
   test('retry with override URL replaces the URL', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const calls: string[] = []
     const tracking: Resolver = (async (_d, input) => {
       calls.push(input.url)
@@ -214,7 +212,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
   })
 
   test('retry on completed batch rewinds state and re-emits batch.completed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const events: string[] = []
     const myDeps: RepoBatchImportDeps = {
       store: composeSqliteRepositoryWorkspaceStore(db),
@@ -235,7 +233,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
   })
 
   test('row-not-found / batch-not-found surface as NotFoundError', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     expect(() => retryBatchRow(deps(db, happyResolver()), 'nope', 'nope')).toThrow(NotFoundError)
     const r = startBatchImport(
       deps(db, happyResolver()),
@@ -246,7 +244,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
   })
 
   test('retry with invalid URL parks row as failed/repo-url-invalid without queuing', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const r = startBatchImport(
       deps(db, happyResolver()),
       { urls: ['https://h/a.git'] },

@@ -7,13 +7,13 @@
 // the in-transaction row snapshot. Also locks the referenced-user active check
 // (G5-P5).
 
-import { describe, expect, test, beforeEach } from 'bun:test'
+import { expect, test, beforeEach } from 'bun:test'
 import { UpdateResourceAclBodySchema } from '@agent-workflow/shared'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, users } from '../src/db/schema'
 import {
   getResourceAcl,
@@ -22,8 +22,6 @@ import {
 import type { AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
 import { ConflictError, ValidationError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   return buildActor({
     user: { id, username: `u-${id.slice(-4)}`, displayName: 'U', role, status: 'active' },
@@ -31,7 +29,7 @@ function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 async function seedUser(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   role: 'admin' | 'user',
   status: 'active' | 'disabled' = 'active',
@@ -47,8 +45,8 @@ async function seedUser(
   })
 }
 
-describe('RFC-170 §8 — ACL aclRevision CAS', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 §8 — ACL aclRevision CAS', (harness) => {
+  let db: ProviderNeutralDatabase
   let owner: Actor
   let admin: Actor
   const OWNER = 'user-owner'
@@ -57,7 +55,7 @@ describe('RFC-170 §8 — ACL aclRevision CAS', () => {
   let agentRow: AclRow
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedUser(db, OWNER, 'user')
     await seedUser(db, OTHER, 'user')
     await seedUser(db, ADMIN, 'admin')

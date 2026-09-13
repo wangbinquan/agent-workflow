@@ -6,11 +6,11 @@
 //   - updateTaskMembers: owner/admin-only writes, full-replace semantics,
 //     owner transfer keeps the previous owner as collaborator
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { createUser } from '../src/services/users'
 import {
@@ -27,8 +27,6 @@ import {
 } from '../src/ws/broadcaster'
 import { registerRevalidationTrigger } from '../src/ws/revalidationHook'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 function actorFor(id: string, role: 'admin' | 'user'): Actor {
   return buildActor({
     user: { id, username: `u-${id.slice(-4)}`, displayName: 'U', role, status: 'active' },
@@ -36,8 +34,8 @@ function actorFor(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 
-describe('taskCollab — RFC-099 membership model', () => {
-  let db: DbClient
+describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
+  let db: ProviderNeutralDatabase
   let bob = ''
   let carol = ''
   let dave = ''
@@ -79,7 +77,7 @@ describe('taskCollab — RFC-099 membership model', () => {
   }
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     bob = (
       await createUser(db, {
         username: 'bob',

@@ -22,13 +22,13 @@
 //   kills it). Retryable conflicts (DESIGNER_DEFERRABLE_CONFLICTS) keep the marker; anything
 //   else clears it (back to the manual board, never silent-spin).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { fileURLToPath } from 'node:url'
 import { eq, inArray } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   clarifyRounds,
   nodeRuns,
@@ -44,7 +44,6 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const ASKER = 'asker' // cross 轮提问节点
 const DESIGNER = 'designer' // cross 轮图设计节点（塌缩目标 / 混批 home）
@@ -108,7 +107,7 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: DbClient, taskId: string): Promise<void> {
+async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
   const def = liveDef()
   await db.insert(workflows).values({
     id: `wf_${taskId}`,
@@ -134,7 +133,7 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
@@ -156,7 +155,7 @@ async function seedRun(
 }
 
 async function seedCrossRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   questions: ClarifyQuestion[],
   _opts: { scopesJson?: string | null } = {},
@@ -187,7 +186,7 @@ async function seedCrossRound(
 
 /** self 轮（DESIGNER 自问）——混批测试的 clarify-answer cause 来源。 */
 async function seedSelfRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   questions: ClarifyQuestion[],
 ): Promise<{ roundId: string; origin: string }> {
@@ -225,7 +224,11 @@ interface EntrySeed {
   stagedAt?: number | null
 }
 
-async function insertEntry(db: DbClient, taskId: string, e: EntrySeed): Promise<string> {
+async function insertEntry(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  e: EntrySeed,
+): Promise<string> {
   const id = ulid()
   await db.insert(taskQuestions).values({
     id,
@@ -251,10 +254,10 @@ async function insertEntry(db: DbClient, taskId: string, e: EntrySeed): Promise<
   return id
 }
 
-const allEntries = (db: DbClient, taskId: string) =>
+const allEntries = (db: ProviderNeutralDatabase, taskId: string) =>
   db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
 
-const entryById = async (db: DbClient, id: string) =>
+const entryById = async (db: ProviderNeutralDatabase, id: string) =>
   (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
 
 // RFC-162: the W1 (symmetric collapse questioner→designer) describe blocks are RETIRED — collapse
@@ -270,7 +273,7 @@ beforeEach(() => resetBroadcastersForTests())
 /** 混批夹具：DESIGNER home 上 self（clarify-answer）+ designer（cross-clarify-answer）两类
  *  cause；self staged 更早 → aging 选 self 先发，designer 批被 defer。返回 defer 批 id。 */
 async function seedMixedBatch(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<{ selfIds: string[]; designerIds: string[] }> {
   await seedTask(db, taskId)
@@ -302,9 +305,9 @@ async function seedMixedBatch(
   return { selfIds, designerIds }
 }
 
-describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
+describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
   test('混批 defer 盖列 → 承接 rerun done 后 autoDispatch 补发（__system__），嵌套收敛', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
 
@@ -344,7 +347,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
   })
 
   test('越权防护：staged 未点发（无登记）不被自动下发', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     await seedRun(db, taskId, DESIGNER, { status: 'done', hasOutput: true })
@@ -361,7 +364,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
   })
 
   test('撤回防护：unstage 清登记（级联）→ 不再自动发；re-stage 不复活登记', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     const { designerIds } = await seedMixedBatch(db, taskId)
     const selfIds = (await allEntries(db, taskId))
@@ -393,7 +396,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
   })
 
   test('不可恢复 Conflict（task-terminal）→ 清登记 + 不再重试（回手动轨道）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
     await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)

@@ -10,15 +10,13 @@
 //     plan.md T5 实施记录）+ 披露聚合 count（沿 workflow.ts task-ACL 论证，
 //     不泄他人任务 id/status）。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users, workgroups } from '../src/db/schema'
 import { deleteWorkgroup } from '../src/services/workgroups'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -27,7 +25,7 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seed(db: DbClient, ownerId: string): Promise<string> {
+async function seed(db: ProviderNeutralDatabase, ownerId: string): Promise<string> {
   await db.insert(users).values({
     id: ownerId,
     username: `u-${ownerId.slice(-6)}`,
@@ -50,7 +48,7 @@ async function seed(db: DbClient, ownerId: string): Promise<string> {
 }
 
 async function seedTaskRef(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   wgId: string,
   // 注意：'interrupted' 在 shared/lifecycle.ts TERMINAL_TASK_STATUSES 里**属
   // 终态**（daemon 重启遗留、可 resume 但记账为终局）——非终态代表取
@@ -75,9 +73,9 @@ async function seedTaskRef(
   return id
 }
 
-describe('RFC-285 B2 — workgroup 删除中档（E3 收紧）', () => {
+describeEachProvider('RFC-285 B2 — workgroup 删除中档（E3 收紧）', (harness) => {
   test('非终态引用（running / awaiting_human）→ 409 workgroup-in-use，披露仅聚合 count', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = 'u_wg_owner1'
     const wgId = await seed(db, owner)
     await seedTaskRef(db, wgId, 'running')
@@ -101,7 +99,7 @@ describe('RFC-285 B2 — workgroup 删除中档（E3 收紧）', () => {
   })
 
   test('仅终态引用 → 删除成功；任务行存活、workgroupId 悬空（软链现状）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = 'u_wg_owner2'
     const wgId = await seed(db, owner)
     const taskId = await seedTaskRef(db, wgId, 'done')
@@ -118,7 +116,7 @@ describe('RFC-285 B2 — workgroup 删除中档（E3 收紧）', () => {
   })
 
   test('引用翻终态后原被拒的删除转为成功（红→绿对）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = 'u_wg_owner3'
     const wgId = await seed(db, owner)
     const taskId = await seedTaskRef(db, wgId, 'running')

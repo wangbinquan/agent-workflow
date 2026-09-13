@@ -1,15 +1,13 @@
 // RFC-036 — patStore CRUD + lookup invariants.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { createPat, listPatsForUser, lookupActivePat, revokePat } from './helpers/auth/patStore'
 import { users } from '../src/db/schema'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedActiveUser(db: DbClient, id = '01HQPATUSR'): Promise<string> {
+async function seedActiveUser(db: ProviderNeutralDatabase, id = '01HQPATUSR'): Promise<string> {
   await db.insert(users).values({
     id,
     username: id.toLowerCase(),
@@ -28,11 +26,11 @@ async function seedActiveUser(db: DbClient, id = '01HQPATUSR'): Promise<string> 
   return id
 }
 
-describe('patStore', () => {
-  let db: DbClient
+describeEachProvider('patStore', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('createPat returns aws_pat_ token and stores hash + scopes JSON', async () => {

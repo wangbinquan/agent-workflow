@@ -10,17 +10,16 @@
 // 红→绿对：把 memory domain `scopeAuthorization.ts` 的管理判据从 `write | own` 收回 `own`，
 // 「write 档可管」立刻红。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, resourceGrants, workflows } from '../src/db/schema'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createUser } from '../src/services/users'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 function actorFor(id: string, role: 'user' | 'manager' = 'user'): Actor {
@@ -30,8 +29,8 @@ function actorFor(id: string, role: 'user' | 'manager' = 'user'): Actor {
   })
 }
 
-describe('RFC-324 D9 —— 记忆管理权随资源写权分档', () => {
-  let db: DbClient
+describeEachProvider('RFC-324 D9 —— 记忆管理权随资源写权分档', (harness) => {
+  let db: ProviderNeutralDatabase
   let owner = ''
   let reader = ''
   let editor = ''
@@ -40,7 +39,7 @@ describe('RFC-324 D9 —— 记忆管理权随资源写权分档', () => {
   const workflowId = ulid()
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const mk = async (username: string, role: 'user' | 'manager'): Promise<string> =>
       (
         await createUser(db, {

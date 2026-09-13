@@ -15,11 +15,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { users, workflows } from '../src/db/schema'
 import { resolveRefsUsableByName } from '../src/services/resourceRefs'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src')
 
 function actorOf(id: string): Actor {
@@ -29,13 +29,13 @@ function actorOf(id: string): Actor {
   })
 }
 
-describe('RFC-282 D4 — name-domain grandfathering lives in the resolver', () => {
-  let db: DbClient
+describeEachProvider('RFC-282 D4 — name-domain grandfathering lives in the resolver', (harness) => {
+  let db: ProviderNeutralDatabase
   const ownerId = ulid()
   const editorId = ulid()
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     for (const id of [ownerId, editorId]) {
       await db.insert(users).values({
         id,

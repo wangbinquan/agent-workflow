@@ -34,23 +34,21 @@
 //     for catching invariant-violating compositions of operations but not
 //     SQLite engine concurrency bugs (those are the engine's problem).
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import fc from 'fast-check'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   INVARIANT_RULES,
   runLifecycleInvariants,
   type LifecycleAlertRow,
 } from '../src/services/lifecycleInvariants'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const VALID_TASK_STATUSES = [
   'pending',
@@ -114,7 +112,7 @@ function actionArb(): fc.Arbitrary<Action> {
   )
 }
 
-async function seedRoot(db: DbClient): Promise<string> {
+async function seedRoot(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_${ulid()}`
   const wfId = `wf_${ulid()}`
   const def = JSON.stringify({
@@ -151,7 +149,7 @@ async function seedRoot(db: DbClient): Promise<string> {
   return taskId
 }
 
-async function applyAction(db: DbClient, taskId: string, a: Action): Promise<void> {
+async function applyAction(db: ProviderNeutralDatabase, taskId: string, a: Action): Promise<void> {
   if (a.kind === 'set_status') {
     await db
       .update(tasks)
@@ -177,7 +175,7 @@ async function applyAction(db: DbClient, taskId: string, a: Action): Promise<voi
   })
 }
 
-async function readStatus(db: DbClient, taskId: string): Promise<string> {
+async function readStatus(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const row = (
     await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
   )[0]
@@ -185,13 +183,13 @@ async function readStatus(db: DbClient, taskId: string): Promise<string> {
   return row.status
 }
 
-describe('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', () => {
+describeEachProvider('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', (harness) => {
   test('random sequences of valid actions never produce invariant findings', async () => {
     // Inner async predicate; fast-check awaits it per generated case.
     const property = fc.asyncProperty(
       fc.array(actionArb(), { minLength: 1, maxLength: 12 }),
       async (actions) => {
-        const db = createInMemoryDb(MIGRATIONS)
+        const db = harness.db
         const taskId = await seedRoot(db)
         // retry_index uniqueness blocker: only one node_run per
         // (task_id, node_id, parent_node_run_id, iteration, retry_index)
@@ -246,7 +244,7 @@ describe('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', () => {
     const property = fc.asyncProperty(
       fc.array(actionArb(), { minLength: 1, maxLength: 12 }),
       async (actions) => {
-        const db = createInMemoryDb(MIGRATIONS)
+        const db = harness.db
         const taskId = await seedRoot(db)
         let nodeRunRetryCounter = 0
         for (const a of actions) {
@@ -303,7 +301,7 @@ describe('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', () => {
     // Anchor case — without this, the fuzz above might pass when ALL
     // sequences happen to fire invariants (degenerate "every input fails"
     // result). This pins the known-good path.
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRoot(db)
 
     await applyAction(db, taskId, { kind: 'set_status', status: 'running' })

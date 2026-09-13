@@ -4,18 +4,17 @@
 // containers of TERMINAL tasks (and iso dirs with no task row = deleted task), and
 // keeps ACTIVE tasks' iso worktrees (they may be in flight).
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { runIsoWorktreeGc } from '../src/services/gc'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedWorkflow(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
+async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
   const id = ulid()
   await db.insert(workflows).values({
     id,
@@ -28,7 +27,7 @@ async function seedWorkflow(db: ReturnType<typeof createInMemoryDb>): Promise<st
 }
 
 async function seedTask(
-  db: ReturnType<typeof createInMemoryDb>,
+  db: ProviderNeutralDatabase,
   id: string,
   workflowId: string,
   status: 'done' | 'running',
@@ -48,16 +47,16 @@ async function seedTask(
   })
 }
 
-describe('RFC-130 PR-E — orphan iso worktree GC', () => {
+describeEachProvider('RFC-130 PR-E — orphan iso worktree GC', (harness) => {
   test('no iso root → no-op', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-isogc-'))
     expect(await runIsoWorktreeGc(db, appHome)).toEqual({ scanned: 0, removed: [] })
     rmSync(appHome, { recursive: true, force: true })
   })
 
   test('removes terminal + orphan-row iso containers, keeps active', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-isogc-'))
     const wf = await seedWorkflow(db)
     const doneTask = ulid()

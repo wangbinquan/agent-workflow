@@ -2,9 +2,8 @@
 
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb } from '../src/db/client'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   __resetBatchImportForTests,
   gcBatches,
@@ -14,8 +13,6 @@ import {
 } from '../src/services/repoBatchImport'
 import type { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 type Resolver = typeof resolveCachedRepo
 
@@ -48,12 +45,12 @@ async function waitForCompleted(batchId: string): Promise<void> {
   throw new Error('timeout')
 }
 
-describe('gcBatches (RFC-033-T2)', () => {
+describeEachProvider('gcBatches (RFC-033-T2)', (harness) => {
   beforeEach(() => __resetBatchImportForTests())
   afterEach(() => __resetBatchImportForTests())
 
   test('evicts completed batch past TTL', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const myDeps: RepoBatchImportDeps = {
       store: composeSqliteRepositoryWorkspaceStore(db),
       resolveCachedRepo: happyResolver(),
@@ -70,7 +67,7 @@ describe('gcBatches (RFC-033-T2)', () => {
   })
 
   test('running batch is never evicted', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     // Resolver never resolves: keeps the batch running.
     const heldResolver: Resolver = (async () =>
       new Promise(() => {

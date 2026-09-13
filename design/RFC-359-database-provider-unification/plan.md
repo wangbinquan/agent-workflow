@@ -7671,3 +7671,59 @@ published silently"；另有 `rfc359-t19h-postgresql-migration-sequence` /
 **前者是对的，但它改变了一个 AC 的口径，所以这一刀我留给用户拍板，没有自行执行。**
 
 裁决之后 AC-6 的真实剩余量是 **450**（530 − 80），其中最大的一块仍是「卡:任务执行拓扑」的 113。
+
+## 5bw. 账本的判据换掉了：**按 AST 数真调用点，不按文本数**
+
+`rfc359-w5-t19f` 的高水位账本一直是纯文本扫描（`/\bcreateInMemoryDb\(|\bnew Database\(/g`）。
+它认不出注释与字符串，于是**写字也算欠债**。实测三处（2026-09-13）：
+
+| 文件                                       | 被记成债的那一处                                          |
+| ------------------------------------------ | --------------------------------------------------------- |
+| `backup.test.ts`                           | 一行注释里提到 `new Database()`                            |
+| `createindb-snapshot-parity.test.ts`       | 文件头注释两次提到 `createInMemoryDb()`——它正是锁这个工厂的用例，绕不开要写出名字 |
+| `subagent-live-capture-source.test.ts`     | `expect(src).not.toContain('new Database(')`——一条**禁止**建库的源码断言 |
+
+误计不只是数字不准，它让「把账本改到 0」**做不到**：除非去改那些本该这么写的注释与断言。
+守卫自己也因此不得不自我豁免。这条坑在本 RFC 已经重复踩到第五次（前四次都是「我写的注释被数进去了」，
+处置都是改注释措辞），所以这次改的是**判据本身**：
+
+- 只认真正会执行的节点——`createInMemoryDb(...)` 的 `CallExpression`、`new Database(...)` 的 `NewExpression`；
+- **模板字面量仍然数**：worker 源码经常以模板串写在用例里再落盘执行
+  （`e2e-sqlite-fixture-lock-contention.test.ts` 的 `HOLDER_SOURCE`），那是货真价实的单引擎构造，
+  只是推迟到子进程；不数它等于给「把单引擎测试搬进字符串」开一个后门；
+- 守卫的**自我豁免退役**（`EXEMPT` 账本 2 → 1，只剩 harness 自己的家 `helpers/eachProvider.ts`）。
+
+代价：2103 个文件全 AST 解析一遍实测 ~1.5s，落在守卫既有的 30s 预算里还有充足余量
+（`typescript` 的 `createSourceFile` 本来就是本仓守卫的既有写法，见 `census.ts` / `rfc317-*`）。
+
+账本随之 528 → 527（净减 1 个文件条目 / 4 个调用点，全是上面三处误计）。
+
+## 5bx. 批量迁移的工具化：两次「文本替换」翻车，最后落在全 AST 变换上
+
+92 个文件是「同一个形状」的单引擎用例（单一顶层 `describe` + `const MIGRATIONS` + `createInMemoryDb(MIGRATIONS)`），
+手迁一个 5 分钟、92 个就是大半天，所以写了个变换器。**前两版都翻车，值得记下来**：
+
+**第一版（纯正则）**：把 `createInMemoryDb(MIGRATIONS)` 全文替换成 `harness.db`，`describe(` 换成
+`describeEachProvider(`。23 个文件跑出 56 fail，两类系统性错：
+
+1. `beforeEach` 在**模块作用域**（不在那个 `describe` 里）——替换后 `harness is not defined`；
+2. 库在 **describe 体里**直接建（`const db = createInMemoryDb(...)` 挨着 `describe` 的第一行）——
+   harness 有显式守卫：`ProviderHarness 只能在 test 体内读取（beforeEach 之后才有库）`。
+
+**第二版（正则 + AST 选文件）**：用 AST 判「每个构造点都在顶层 describe 的体内、且都在
+`beforeEach` / `test` 回调里」，选出 43 个安全文件——但变换本身仍是文本替换，于是
+`\bDbClient\b → ProviderNeutralDatabase` 这条**把源码断言里的字符串也改了**：
+`rfc349-collaboration-runtime-mechanics.test.ts` 的
+`expect(contract).not.toContain('DbClient')` 变成了 `not.toContain('ProviderNeutralDatabase')`，
+判据当场反转（那份合同**必须**含 `ProviderNeutralDatabase`）。同一个文件还被塞进了重复 import——
+它本来就 import 过 `ProviderNeutralDatabase` 和 `describeEachProvider`。
+
+**与 §5bw 是同一条教训的两面**：判据（数债）和变换（改代码）都不能把「文本里出现某个名字」
+当成「代码里用了某个符号」。
+
+**第三版（全 AST）**：
+- 改名只打在 `TypeReferenceNode` 的 `DbClient` 上，字符串与注释一概不碰；
+- `ReturnType<typeof createInMemoryDb>` 整个类型引用换成 `ProviderNeutralDatabase`；
+- 先读一遍现有 import，已经有 `ProviderNeutralDatabase` / `describeEachProvider` 的就不再插入；
+- 所有改动收成 `{start, end, text}` 编辑列表、按位置**倒序**施加，避免位移串位；
+- 收尾才用正则清 `describe` / `resolve` 这两个变成死的 import（它们是纯 import 行，文本安全）。

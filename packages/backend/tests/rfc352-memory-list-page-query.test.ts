@@ -9,11 +9,9 @@
 // 因此本文件的主断言是**等价性**：同一份数据、同一个调用者，逐页拼起来必须与全量逐条相同，
 // 且分页项的字段集与全量项**逐字相同**（游标用的 `createdAt` 只活在内部，绝不能漏上 wire）。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { agents, memories } from '../src/db/schema'
@@ -21,8 +19,6 @@ import { composeIdentityAccess } from '../src/modules/identity-access/compositio
 import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
 import type { MemoryCatalogOperations } from '../src/modules/memory/public/catalog'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function actorOfRole(role: 'admin' | 'user', id = `u_${role}`): Actor {
   return buildActor({
@@ -145,9 +141,9 @@ describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
   })
 })
 
-describe('RFC-352 T8 — 分页与全量等价', () => {
+describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
   test('候选收窄（RFC-285 Q4）在分页路径上照样生效', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await db.insert(memories).values({
       id: 'm_candidate',
       scopeType: 'global',
@@ -181,7 +177,7 @@ describe('RFC-352 T8 — 分页与全量等价', () => {
 
   test('资源 scope 不可见的行不进页，且不因此让页「缺位」', async () => {
     // 外人看不见私有 agent 名下的记忆——分页必须把它们跳过去继续凑，而不是返回带空洞的一页。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
     await db.insert(agents).values({
       id: 'agt_private',

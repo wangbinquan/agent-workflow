@@ -14,11 +14,11 @@
 // 红→绿对：把 `requireTaskMember` 的 `hasActingMembership` 换回 `hasMembership`，
 // 「observer 不能回答评审」那条立刻绿转红。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { taskCollaborators, tasks, workflows } from '../src/db/schema'
 import { createUser } from '../src/services/users'
 import {
@@ -32,7 +32,6 @@ import {
 } from '../src/services/taskCollab'
 import { ForbiddenError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 function actorFor(id: string): Actor {
@@ -42,8 +41,8 @@ function actorFor(id: string): Actor {
   })
 }
 
-describe('RFC-324 —— 任务观察者档', () => {
-  let db: DbClient
+describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
+  let db: ProviderNeutralDatabase
   let owner = ''
   let collaborator = ''
   let observer = ''
@@ -81,7 +80,7 @@ describe('RFC-324 —— 任务观察者档', () => {
   }
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const mk = async (username: string): Promise<string> =>
       (
         await createUser(db, {

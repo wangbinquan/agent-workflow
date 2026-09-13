@@ -17,21 +17,20 @@
 // 与实测**逐字相等**。**增**了红——有人又写了一条只验证 SQLite 的判据；**减**了也红——收敛发生了，
 // 把账本一起改小，让每一次迁移都留下一次有署名的提交记录。
 //
-// **两处豁免**：`helpers/eachProvider.ts` 是 harness 自己的家（SQLite 侧的库正是它用这个工厂造的）；
-// 本文件正文里成段提到这个符号，扫自己等于自造债。除此之外整棵 `tests/` 树一视同仁——
-// 夹具（`helpers/*.ts`）与用例同等对待，夹具写死引擎同样让它的全部下游只剩一个引擎的覆盖。
+// **一处豁免**：`helpers/eachProvider.ts` 是 harness 自己的家——SQLite 侧的库正是它用这个工厂造的。
+// 除此之外整棵 `tests/` 树一视同仁：夹具（`helpers/*.ts`）与用例同等对待，夹具写死引擎同样让它的
+// 全部下游只剩一个引擎的覆盖。**本文件不再自我豁免**——判据改成按 AST 数真调用点之后（见
+// `countCallSites`），正文里成段提到这两个符号不再被记成债，自我豁免也就没有存在理由了。
 
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import ts from 'typescript'
 
 const TESTS = resolve(import.meta.dir, '..')
 
-/** harness 自己 + 本守卫：正文里提到这个符号，不算调用点。 */
-const EXEMPT: ReadonlySet<string> = new Set([
-  'helpers/eachProvider.ts',
-  'architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts',
-])
+/** harness 自己的家：它按定义就要建 SQLite 库。 */
+const EXEMPT: ReadonlySet<string> = new Set(['helpers/eachProvider.ts'])
 
 /** 整棵 `tests/` 树的 `.ts` 枚举——既是语料下限的分母，也是下面逐文件计数的唯一输入。 */
 function enumerateTestSources(): string[] {
@@ -65,7 +64,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'architecture/rfc329-mcp-surface-guard.test.ts: 1',
   'architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts: 2',
   'auth-session.test.ts: 4',
-  'backup.test.ts: 3',
+  'backup.test.ts: 2',
   'callgraph-multirepo-prefix.test.ts: 1',
   'change-narrative.test.ts: 8',
   'clarify-baseline-rest-ws.test.ts: 5',
@@ -74,7 +73,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'cli.test.ts: 2',
   'commit-push-runner.test.ts: 1',
   'contracts/harness.ts: 1',
-  'createindb-snapshot-parity.test.ts: 8',
+  'createindb-snapshot-parity.test.ts: 6',
   'digital-employee-agent-template-reconcile.test.ts: 2',
   'distill-session-capture.test.ts: 1',
   'e2e-sqlite-fixture-lock-contention.test.ts: 3',
@@ -183,10 +182,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'migration-0221-rfc342-memory-scope-move-events.test.ts: 1',
   'migration-0222-rfc341-collaboration-cutover.test.ts: 2',
   'opencode-session-walk.test.ts: 1',
-  'pats.test.ts: 1',
   'plugins-http.test.ts: 1',
-  'repo-batch-import-gc.test.ts: 2',
-  'repo-batch-import-retry.test.ts: 7',
   'rerun-prior-output-e2e.test.ts: 1',
   'resume-multi-repo-rollback.test.ts: 1',
   'resume-task-idempotent.test.ts: 1',
@@ -199,7 +195,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'review-iterate-drops-prior-clarify-history.test.ts: 1',
   'review-iterate-file-path-in-prompt.test.ts: 1',
   'review-iterate-sibling-cascade.test.ts: 1',
-  'review-multidoc-inherit.test.ts: 1',
   'review-state-machine.test.ts: 1',
   'reviews-comment-patch.test.ts: 1',
   'reviews-iterate-mints-new-run.test.ts: 1',
@@ -238,13 +233,11 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc127-borrow.test.ts: 1',
   'rfc128-p5-d-autodispatch.test.ts: 28',
   'rfc130-crash-replay.test.ts: 1',
-  'rfc130-iso-gc.test.ts: 2',
   'rfc130-merge-agent-scheduler.test.ts: 1',
   'rfc130-shard-rerun-undo.test.ts: 4',
   'rfc130-wrapper-private-canonical.test.ts: 1',
   'rfc131-review-reject-aging-prior-output.test.ts: 1',
   'rfc135-runtimes-status.test.ts: 1',
-  'rfc140-one-click-dispatch-all.test.ts: 4',
   'rfc142-review-rounds.test.ts: 2',
   'rfc144-merge-state-cas.test.ts: 1',
   'rfc144-migration-0076.test.ts: 1',
@@ -259,13 +252,11 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc165-agent-launch.test.ts: 5',
   'rfc165-migration-0085.test.ts: 1',
   'rfc165-optional-clarify.test.ts: 1',
-  'rfc165-scheduled-heal.test.ts: 1',
   'rfc165-scheduled-kinds.test.ts: 3',
   'rfc165-scratch-space.test.ts: 1',
   'rfc165-workspace-gc.test.ts: 1',
   'rfc167-dw-e2e.test.ts: 2',
   'rfc167-dynamic-workflow-engine.test.ts: 3',
-  'rfc170-acl-revision-cas.test.ts: 1',
   'rfc172-dispatch-shard.test.ts: 18',
   'rfc181-autonomous-hardening.test.ts: 2',
   'rfc183-clarify-invite-accept-symmetry.test.ts: 1',
@@ -285,7 +276,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc204-cached-repo-wire-and-reuse.test.ts: 3',
   'rfc204-cold-clone-seal.test.ts: 2',
   'rfc204-credential-sealing.test.ts: 8',
-  'rfc205-mirror-origin-sanitize.test.ts: 1',
   'rfc207-runtime-accounting.test.ts: 1',
   'rfc210-commitpush-nested-precommitted.test.ts: 1',
   'rfc210-commitpush-subrepo.test.ts: 1',
@@ -303,7 +293,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc221-auth-policy.test.ts: 10',
   'rfc221-login-policy-routes.test.ts: 1',
   'rfc222-task-delete.test.ts: 1',
-  'rfc223-import-refs.test.ts: 1',
   'rfc223-owner-transfer.test.ts: 2',
   'rfc223-pr2-refs.test.ts: 2',
   'rfc223-pr3a-consumers.test.ts: 1',
@@ -311,7 +300,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc223-pr5-boot-restore-wiring.test.ts: 3',
   'rfc223-pr6-injection-identity.test.ts: 1',
   'rfc223-pr9-cross-tenant-adversarial.test.ts: 5',
-  'rfc223-reference-write-fence.test.ts: 1',
   'rfc223-reverse-delete-races.test.ts: 1',
   'rfc223-scheduled-target-races.test.ts: 2',
   'rfc225-workgroup-revision.test.ts: 3',
@@ -380,9 +368,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc282-b2-resolve-injection.test.ts: 2',
   'rfc282-d1-acl-inline-convergence.test.ts: 2',
   'rfc282-d2-granted-ids-single-source.test.ts: 1',
-  'rfc282-d4-ref-fail-open-fixes.test.ts: 1',
   'rfc284-batchc-resource-dedup.test.ts: 5',
-  'rfc285-b2-delete-tier.test.ts: 3',
   'rfc285-b3-inherited-actor.test.ts: 1',
   'rfc285-b7-memory-matrix.test.ts: 10',
   'rfc287-t11-file-scheme-rejected.test.ts: 3',
@@ -435,7 +421,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc311-retention-sweep.test.ts: 1',
   'rfc311-task-archive.test.ts: 5',
   'rfc311-task-page-fastpath.test.ts: 1',
-  'rfc311-workgroup-badge-acl.test.ts: 1',
   'rfc312-default-grant.test.ts: 1',
   'rfc312-impl-gate-fixes.test.ts: 5',
   'rfc312-presence-channel.test.ts: 3',
@@ -452,8 +437,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc321-repository-transport-credentials.test.ts: 3',
   'rfc321-repository-transport-http.test.ts: 1',
   'rfc323-platform-pipeline-collection.test.ts: 1',
-  'rfc324-memory-editor-grant.test.ts: 1',
-  'rfc324-task-observer.test.ts: 1',
   'rfc326-review-decision-batch.test.ts: 2',
   'rfc326-review-decision-transaction.test.ts: 1',
   'rfc326-tx-primitives-equivalence.test.ts: 2',
@@ -469,7 +452,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc338-maintenance-slices.test.ts: 4',
   'rfc338-maintenance-status.test.ts: 2',
   'rfc341-committed-event-store.test.ts: 1',
-  'rfc342-memory-scope-move.test.ts: 1',
   'rfc343-intent-apply-correctness.test.ts: 1',
   'rfc345-resource-acl-revalidation.test.ts: 1',
   'rfc347-identity-access-runtime.test.ts: 4',
@@ -501,12 +483,10 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-sqlite-logical-source.test.ts: 3',
   'rfc349-sqlite-migration-compatibility.test.ts: 2',
   'rfc349-task-execution-provider-adapters.test.ts: 3',
-  'rfc349-task-execution-read-models-postgresql-adapter.test.ts: 1',
   'rfc349-task-transaction-participants.test.ts: 1',
   'rfc349-websocket-provider.test.ts: 1',
   'rfc350-idle-timeout-integration.test.ts: 1',
   'rfc351-sqlite-write-transaction-immediate.test.ts: 1',
-  'rfc352-memory-list-page-query.test.ts: 2',
   'rfc354-clarify-idle-skip.test.ts: 1',
   'rfc354-nested-depth3-frames.test.ts: 1',
   'rfc354-nested-failure-modes.test.ts: 1',
@@ -537,8 +517,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'runtime-claude-e2e.test.ts: 1',
   'runtime-extra-args.test.ts: 3',
   'runtime-session-lease.test.ts: 1',
-  'scheduled-task-scheduler.test.ts: 1',
-  'scheduled-tasks-crud.test.ts: 1',
   'scheduled-tasks-run-now.test.ts: 1',
   'scheduled-tasks-ws.test.ts: 1',
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1',
@@ -553,7 +531,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'scheduler-boundary-canceled-fanout-status.test.ts: 1',
   'scheduler-boundary-resume-retryindex-vs-id.test.ts: 1',
   'scheduler-commit-push.test.ts: 1',
-  'scheduler-cross-clarify-no-runaway.test.ts: 2',
   'scheduler-default-retries.test.ts: 1',
   'scheduler.test.ts: 1',
   'session-capture-sqlite.test.ts: 4',
@@ -563,19 +540,14 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'skill-version-owner-fence.test.ts: 3',
   'skill-zip-commit.test.ts: 1',
   'skills-import-zip-http.test.ts: 1',
-  'sqlite-concurrency-fuzz.test.ts: 3',
-  'start-task-deps.test.ts: 2',
   'start-task-multi-repo-gates.test.ts: 1',
   'start-task-url.test.ts: 1',
   'structural-diff-callchain-multi-repo.test.ts: 1',
   'structural-diff-node-multi-repo.test.ts: 1',
-  'subagent-live-capture-source.test.ts: 1',
   'subagent-live-capture.test.ts: 4',
-  'task-collab-launch.test.ts: 1',
   'task-diff-multi-repo-truncation.test.ts: 1',
   'task-diff-multi-repo.test.ts: 1',
   'task-file-content.test.ts: 1',
-  'task-launch-gate.test.ts: 1',
   'task-start-git-identity.test.ts: 1',
   'task-start-pre-worktree.test.ts: 1',
   'task-start-working-branch.test.ts: 1',
@@ -583,7 +555,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'terminal-maintenance-watermark-coverage.test.ts: 2',
   'transition-cas-route-409.test.ts: 2',
   'upgrade-rolling.test.ts: 7',
-  'webhook-trigger-digital-employee-validation.test.ts: 1',
   'webhook-trigger-validation-acl-order.test.ts: 1',
   'wg-readonly-claim-and-pause-reason.test.ts: 1',
   'workflows.test.ts: 2',
@@ -610,19 +581,66 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
  */
 const SINGLE_ENGINE_CONSTRUCTION = /\bcreateInMemoryDb\(|\bnew Database\(/g
 
+/**
+ * 一个文件里的真调用点数。**按 AST 数，不按文本数**——判据说的是「调用点」，那就只认
+ * 真正会执行的调用：`createInMemoryDb(...)` 的调用表达式、`new Database(...)` 的构造表达式。
+ *
+ * 为什么换掉纯文本扫描：文本扫描认不出注释和字符串，于是**写字也算欠债**。实测踩到三处
+ * （2026-09-13）：`backup.test.ts` 的一行注释里提到 `new Database()`；
+ * `createindb-snapshot-parity.test.ts` 的文件头注释两次提到 `createInMemoryDb()`——它正是
+ * 锁这个工厂的快照优化的用例，绕不开要写出名字；`subagent-live-capture-source.test.ts` 的
+ * `expect(src).not.toContain('new Database(')`——一条**禁止**建库的源码断言，被记成了建库。
+ * 这类误计不只是数字不准：它让「把账本改到 0」这件事**做不到**——除非去改那些本该这么写的
+ * 注释与断言。本守卫自己之前也因此不得不自我豁免。这条坑在本 RFC 已经重复踩到第五次，
+ * 所以改的是判据本身，不是那几个文件的措辞。
+ *
+ * **模板字面量仍然数**：worker 源码经常以模板串写在用例里再落盘执行
+ * （`e2e-sqlite-fixture-lock-contention.test.ts` 的 `HOLDER_SOURCE` 就是），那是货真价实的
+ * 单引擎构造，只是推迟到子进程。不数它等于给「把单引擎测试搬进字符串」开一个后门。
+ */
+function countCallSites(rel: string, text: string): number {
+  const source = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  let hits = 0
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'createInMemoryDb'
+    ) {
+      hits += 1
+    } else if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'Database'
+    ) {
+      hits += 1
+    } else if (
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddle(node) ||
+      ts.isTemplateTail(node)
+    ) {
+      hits += (node.text.match(SINGLE_ENGINE_CONSTRUCTION) ?? []).length
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return hits
+}
+
 let cachedRows: readonly string[] | undefined
 
 /**
  * `<路径>: <调用点数>`，字典序。整棵树只读一遍并缓存——全树源码扫描类守卫不缓存的话，
  * 每个用例都重读一遍，CI 上按秒累加（`docs/dev-gotchas.md` 记过这条）。
+ * 2103 个文件全解析一遍实测 ~1.5s，落在下面那条 30s 预算里还有充足余量。
  */
 function callSiteRows(): readonly string[] {
   if (cachedRows !== undefined) return cachedRows
   const rows: string[] = []
   for (const rel of CORPUS_FILES) {
     if (EXEMPT.has(rel)) continue
-    const hits = (readFileSync(join(TESTS, rel), 'utf8').match(SINGLE_ENGINE_CONSTRUCTION) ?? [])
-      .length
+    const hits = countCallSites(rel, readFileSync(join(TESTS, rel), 'utf8'))
     if (hits > 0) rows.push(`${rel}: ${hits}`)
   }
   cachedRows = rows.sort()

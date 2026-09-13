@@ -27,18 +27,17 @@
 // If any of these go red the runaway pending-row accumulation bug is
 // resurfacing — investigate before relaxing.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function defaultDef(): WorkflowDefinition {
   return {
@@ -82,7 +81,7 @@ function defaultDef(): WorkflowDefinition {
   }
 }
 
-async function seedTaskAndWorkflow(db: DbClient): Promise<string> {
+async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
   const def = defaultDef()
   await db.insert(workflows).values({
@@ -117,7 +116,7 @@ afterEach(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
+describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify rows', (harness) => {
   test('buildScopeUpstreams treats questioner→cross.questions as a dataflow dep (NOT skipped as channel edge)', async () => {
     // Source-text lock on the DAG graph decision: the predicate that
     // skips RFC-023's `__clarify__ →` channel edges MUST gate on the
@@ -160,7 +159,7 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
   })
 
   test('CrossClarifyNodeExecutor mechanics are idempotent: NO new pending row when a live row already exists', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTaskAndWorkflow(db)
     // Seed a pre-existing pending cross-clarify row (simulating the
     // runner having created one via createClarifyRound on a
@@ -215,7 +214,7 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     // but BEFORE any dispatch, the DB has zero cross-clarify node_runs.
     // The runner is the only path that should mint rows for cross-clarify
     // (via createClarifyRound when questioner emits clarify).
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTaskAndWorkflow(db)
     const rows = await db
       .select()
