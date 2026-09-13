@@ -2,6 +2,30 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 5，**逮到一条用户可见的引擎分叉**；账本 **405** / open **101**）
+>
+> 落档 plan §5dm。**`b41a8cab2` 的 CI 全绿**。
+>
+> 顺着「`execution-contract-platform` 为什么迁不动」查出来的不是测试问题：
+> `DigitalEmployeeExecutionParticipant.inspectHumanReview` 是**同步且可选**的端口，
+> 只有 SQLite 那侧的 composition 实现了它——`composePostgresqlDigitalEmployeeExecution`
+> **根本没有这个方法**。消费者取不到就按 round 状态推断，而 **`waiting` 只有这个方法给得出**。
+> 于是同一个案子：SQLite 上显示「等待人审」，PostgreSQL 上显示「规划中」——**用户可见、无声**。
+>
+> 成因是那个 `?` 与那个「同步」：端口同步 ⇒ 手里没有可同步查询的库的 PG composition 实现不了它；
+> 端口可选 ⇒ 少实现一个方法**没有任何地方会红**。
+>
+> 处置：判定收成一份 **async 中立实现**，两侧 composition 都装（PG 侧按 `humanReview` 端口接，
+> daemon 装配处绑同一份实现）；消费者那一跳从同步 `flatMap` 改成 `Promise.all(map).flat()`。
+> 判据 `rfc359-w12-digital-employee-human-review-parity.test.ts` 锁两件事：五个状态逐字相同 +
+> **装配锁**（两侧都必须交出这个方法）。实测删掉 PG 侧那个方法当场红 4 格、补回即绿。
+>
+> 另：`startEventsArchiver` 的 `db: DbClient` 是纯粹多余的收紧（体内只转交给早已中立的
+> `archiveEvents`），放宽一行收掉 `rfc311-maintenance-boot-tick` 的 4 条。
+>
+> **本批带一对一次性 `allowGrowth`**（cross-context 5264→5266 / exceptions 4730→4732，
+> 都是这次合一的直接代价），**下一个不涨的 commit 上必须删掉**。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 4，三个大文件一批收掉 **49 个调用点**；账本 **406** / open **102**）
 >
 > 落档 plan §5dl。`rfc128-p5-d-autodispatch`(28) + `rfc333-task-participants`(14) +

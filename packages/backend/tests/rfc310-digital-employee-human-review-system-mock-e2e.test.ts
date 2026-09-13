@@ -302,7 +302,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       const taskId = receipt.executionRef
       taskIds.push(taskId)
 
-      expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
       expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
         status: 'awaiting_review',
         catalogVisibility: 'internal',
@@ -359,7 +359,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       })
       await wakeHumanGateContinuation(rejected.taskId, rejected.continuationRef, startDeps)
 
-      expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('2')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
@@ -411,7 +411,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       })
       await wakeHumanGateContinuation(iterated.taskId, iterated.continuationRef, startDeps)
 
-      expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('3')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
@@ -455,7 +455,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         (await listTaskItems(db, { catalogVisibility: 'public' })).map((item) => item.id),
       ).not.toContain(taskId)
-      expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('approved')
+      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('approved')
       expect(
         db
           .select()

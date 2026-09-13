@@ -31,7 +31,9 @@ import { join, resolve } from 'node:path'
 import { count } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, openDb, type DbClient } from '../src/db/client'
+import { openDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { startEventsArchiver } from '../src/services/eventsArchive'
 import { startTaskArchiveSweeper } from '../src/services/taskArchive'
@@ -68,7 +70,7 @@ async function until(
   }
 }
 
-async function seedEvents(db: DbClient, n: number): Promise<void> {
+async function seedEvents(db: ProviderNeutralDatabase, n: number): Promise<void> {
   const workflowId = ulid()
   const taskId = ulid()
   const nodeRunId = ulid()
@@ -103,7 +105,7 @@ async function seedEvents(db: DbClient, n: number): Promise<void> {
   }
 }
 
-async function eventRows(db: DbClient): Promise<number> {
+async function eventRows(db: ProviderNeutralDatabase): Promise<number> {
   return (await db.select({ n: count() }).from(nodeRunEvents))[0]?.n ?? 0
 }
 
@@ -117,9 +119,9 @@ const ROWS_ONLY = {
   },
 }
 
-describe('RFC-311 余项 ① —— 维护循环必须有 boot 首拍', () => {
+describeEachProvider('RFC-311 余项 ① —— 维护循环必须有 boot 首拍', (harness) => {
   test('事件归档器：boot 后 bootDelayMs 内就跑第一拍，不必等满一个周期', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const logsDir = join(tmp('aw-boot-tick-'), 'logs')
     await seedEvents(db, 50)
     expect(await eventRows(db)).toBe(50)
@@ -132,7 +134,7 @@ describe('RFC-311 余项 ① —— 维护循环必须有 boot 首拍', () => {
   })
 
   test('事件归档器：stop() 撤得掉还没触发的 boot 首拍', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const logsDir = join(tmp('aw-boot-tick-'), 'logs')
     await seedEvents(db, 50)
 
@@ -145,7 +147,7 @@ describe('RFC-311 余项 ① —— 维护循环必须有 boot 首拍', () => {
   })
 
   test('终态任务 sweeper：boot 后 bootDelayMs 内读一次配置并跑第一拍', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     let reads = 0
     // enabled:false ⇒ runTaskArchiveSweep 在碰任何目录之前就 return（taskArchive.ts:495），
     // 所以这条用例只观察「首拍有没有发生」，不产生任何文件系统副作用。
@@ -164,7 +166,7 @@ describe('RFC-311 余项 ① —— 维护循环必须有 boot 首拍', () => {
   })
 
   test('终态任务 sweeper：stop() 撤得掉还没触发的 boot 首拍', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     let reads = 0
     const ticker = startTaskArchiveSweeper(
       createDrizzleTaskArchiveMaintenanceCommand(db),

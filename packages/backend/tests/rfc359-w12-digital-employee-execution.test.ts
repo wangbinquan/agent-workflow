@@ -33,6 +33,7 @@ import { composePostgresqlResourceLimitOperations } from '@/modules/system-opera
 import {
   composeDigitalEmployeeExecution,
   composePostgresqlDigitalEmployeeExecution,
+  inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import type { DigitalEmployeeWorkspacePort } from '@/modules/task-execution/composition/required-ports'
 import {
@@ -252,6 +253,11 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
             tasks: provider.routes.tasks,
             readModels: provider.readModels,
             resourceUsage: { read: (taskId) => readTaskResourceUsage(limits, taskId) },
+            // RFC-359：PG 侧此前**根本没有** `inspectHumanReview`，闸门在 PG 上报不出 `waiting`。
+            // 现在装的是与 SQLite 侧同一个中立实现。
+            humanReview: {
+              inspect: (executionRef) => inspectDigitalEmployeeHumanReviewState(db, executionRef),
+            },
             agents: {
               async get(id) {
                 const row = (

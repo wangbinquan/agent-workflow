@@ -629,12 +629,14 @@ describe('platform execution contracts', () => {
       startedAt: 1,
     })
 
-    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBeNull()
+    expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBeNull()
     db.update(tasks)
       .set({ inputs: JSON.stringify({ [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: 'frozen prompt' }) })
       .where(eq(tasks.id, 'review-projection-task'))
       .run()
-    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('planning')
+    expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      'planning',
+    )
 
     await db.insert(nodeRuns).values({
       id: 'review-projection-run',
@@ -645,17 +647,23 @@ describe('platform execution contracts', () => {
       reviewIteration: 0,
       status: 'awaiting_review',
     })
-    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('waiting')
+    expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      'waiting',
+    )
     db.update(nodeRuns)
       .set({ status: 'done' })
       .where(eq(nodeRuns.id, 'review-projection-run'))
       .run()
-    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('approved')
+    expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      'approved',
+    )
     db.update(nodeRuns)
       .set({ status: 'failed' })
       .where(eq(nodeRuns.id, 'review-projection-run'))
       .run()
-    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('failed')
+    expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      'failed',
+    )
   })
 
   test('a failed reviewed execution reports the task failure before derived plan validation', async () => {

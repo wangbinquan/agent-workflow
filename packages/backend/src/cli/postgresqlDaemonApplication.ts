@@ -147,7 +147,10 @@ import {
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
-import { composePostgresqlDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import {
+  composePostgresqlDigitalEmployeeExecution,
+  inspectDigitalEmployeeHumanReviewState,
+} from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
   composeTaskIdleTimeoutOperations,
@@ -1492,6 +1495,11 @@ export async function composePostgresqlApplication(
           .get()
         return row ?? null
       },
+    },
+    // RFC-359：计划人审闸门的状态读装的是与 SQLite 侧**同一个**中立实现；此前 PG 侧根本没有这个
+    // 方法，闸门只能按 round 状态推断、永远报不出 `waiting`（同一个案子两个引擎显示不同）。
+    humanReview: {
+      inspect: (executionRef) => inspectDigitalEmployeeHumanReviewState(input.db, executionRef),
     },
     workspace: employeeWorkspace,
     executionContracts,

@@ -44084,6 +44084,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8ee6b2871b6f3bdb4b63",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectDigitalEmployeeHumanReviewState",
+      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toSymbol": "inspectDigitalEmployeeHumanReviewState",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -55163,6 +55180,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#createSecretBoxFromKey",
       "toPath": "packages/backend/src/auth/secretBox.ts",
       "toSymbol": "createSecretBoxFromKey",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b358b751bed8a0784bca",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -80412,9 +80446,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4730,
+    "architectureExceptions": 4732,
     "implementationSccs": 0,
-    "observedEdges": 5264,
+    "observedEdges": 5266,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -126569,6 +126603,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:8ee6b2871b6f3bdb4b63",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
+      "syntax": "static-import",
+      "targetSymbol": "inspectDigitalEmployeeHumanReviewState",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectDigitalEmployeeHumanReviewState"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "id": "import:8ef7e5381af7f49fa8ee",
@@ -138293,6 +138343,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/secretBox.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#createSecretBoxFromKey"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
+      "id": "import:b358b751bed8a0784bca",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -165184,7 +165250,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bff00ab14790e319ae720e2c6a7798e9c21dee1cbcb2769deeae381fd46e169c",
+  "sourceDigest": "sha256:5dde75758488cc508c1a5a04e87ed70921c4be50ee75f0b6000453f8af01cb1d",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

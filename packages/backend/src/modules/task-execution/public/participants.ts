@@ -370,6 +370,7 @@ export type DigitalEmployeeHumanReviewState = 'planning' | 'waiting' | 'approved
 export interface DigitalEmployeeExecutionParticipant {
   launch(planJson: string, attemptJson: string): Promise<{ readonly executionRef: string }>
   inspect(executionRef: string): Promise<DigitalEmployeeExecutionResult>
-  inspectHumanReview?(executionRef: string): DigitalEmployeeHumanReviewState | null
+  /** RFC-359：两侧 composition 都必须提供——PG 侧此前缺席，闸门在 PG 上报不出 `waiting`。 */
+  inspectHumanReview?(executionRef: string): Promise<DigitalEmployeeHumanReviewState | null>
   cancel(executionRef: string): Promise<void>
 }

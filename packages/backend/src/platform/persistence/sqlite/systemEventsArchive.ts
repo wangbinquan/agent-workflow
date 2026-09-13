@@ -595,7 +595,9 @@ function jsonlPath(logsDir: string, taskId: string, nodeRunId: string): string {
  * 一轮归档在 2.6GB 库上实测 4-6s，撞在启动上没有必要。
  */
 export function startEventsArchiver(
-  db: DbClient,
+  // RFC-359：这里只把 db 转交给 `archiveEvents`，而后者早就收中立客户端了——
+  // `DbClient` 是一个纯粹多余的收紧，两个引擎的归档器都该能从这里起。
+  db: ProviderNeutralDatabase,
   loadConfig: () => Pick<Config, 'eventsArchiveThresholds'>,
   logsDir: string,
   intervalMs: number = HOUR_MS,

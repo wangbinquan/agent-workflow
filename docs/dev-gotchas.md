@@ -6789,3 +6789,14 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   **拒绝 DDL**（`postgresql-ddl-through-business-client`），要走 `harness.executeFixtureDdl`；
   ②两个引擎的 DDL 与 DROP 语法都不同；③**必须配 try/finally 删掉**——PG 的库是整份测试共用的真库，
   用例之间只清表不回滚 DDL。
+
+- **「可选 + 同步」的端口是引擎分叉的温床**。RFC-359 实撞：
+  `DigitalEmployeeExecutionParticipant.inspectHumanReview?(ref): State | null` ——同步意味着手里
+  没有可同步查询的库的那一侧（PostgreSQL composition 全是端口、不带 db）**实现不了**它；可选意味着
+  少实现一个方法**没有任何地方会红**。结果是同一个案子在 SQLite 上显示「等待人审」、在 PG 上显示
+  「规划中」，用户可见、无声。给参与者加可选方法时问两句：**另一侧装得上吗？装不上会不会有人红？**
+  没有第二个答案就别用 `?`，也别用同步签名。
+
+- **判「某一侧 composition 少实现了一个方法」要靠装配锁**：写一条把两侧都构造出来、断言
+  `typeof participant.method === 'function'` 的用例（其余依赖全给 `null as never`，反正不碰）。
+  行为用例覆盖不到这种缺席——缺席的那一侧根本走不到行为断言。

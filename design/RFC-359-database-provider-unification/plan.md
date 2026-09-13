@@ -9031,3 +9031,56 @@ bun 记成「Unhandled error between tests」，**全部用例通过、进程照
 
 **定式**：凡是判据依赖「新行 id 比旧行大」的用例，id 必须来自同一个 monotonic 工厂——
 不要让一半 id 出自 `monotonicFactory()`、另一半出自生产代码里的随机 `ulid()`。
+
+## 5dm. 一条**用户可见**的引擎分叉：数字员工计划人审闸门在 PostgreSQL 上永远报不出 `waiting`
+
+顺着 `execution-contract-platform.test.ts` 迁不动往回查，发现的不是测试问题：
+
+```
+DigitalEmployeeExecutionParticipant.inspectHumanReview?(ref): State | null   // ← **同步**、且可选
+composeDigitalEmployeeExecution         → 实现了它（拿 db 同步查两张表）
+composePostgresqlDigitalEmployeeExecution → **根本没有这个方法**
+```
+
+消费者 `runtimeService.#projectCaseDetail` 写的是
+`this.#execution.inspectHumanReview?.(ref) ?? null`，取不到就按 round 状态推断
+（`planning` / `approved` / `failed`）。**`waiting` 只有 `inspectHumanReview` 才给得出**。
+于是同一个案子：SQLite 上显示「等待人审」，PostgreSQL 上显示「规划中」——用户可见、无声、
+两个引擎一个好一个不好，正是本 RFC 的目标形态的反面。
+
+**成因是那个 `?` 与那个「同步」**：端口是同步的，而 PG 侧的 composition 建在端口之上、手里没有可同步
+查询的库；端口又是可选的，所以少实现一个方法**没有任何地方会红**。
+
+### 处置：一份中立实现，两侧都装
+
+1. `inspectDigitalEmployeeHumanReviewState` 改成 **async + `ProviderNeutralDatabase`**
+   （它查的是 `tasks` + `nodeRuns`，本来就没有方言）。
+2. `DigitalEmployeeExecutionParticipant.inspectHumanReview` 与 `ReactionExecutionPort` 同步改 async。
+3. PG 侧 deps 新增 `humanReview` 端口（那份 deps 刻意不带 db，全是端口），
+   PG daemon 装配处把**同一个**中立实现绑到 PG 客户端上。
+4. 消费者那一跳原本在同步 `flatMap` 回调里，改成 `Promise.all(map(...)).flat()`
+   ——各 work item 的闸门状态互不依赖，可以并发取。
+
+### 判据：`rfc359-w12-digital-employee-human-review-parity.test.ts`
+
+两件事各自锁死，**两个引擎各跑一遍**：①五个状态逐字相同（planning / waiting / approved /
+failed / null，含五种失败态）；②**装配锁**——两侧 composition 都必须交出 `inspectHumanReview`，
+再加一条「PG 侧的端口确实被转交」。实测：把 PG 侧那个方法删掉，②当场红 4 格（两个引擎各 2），
+补回即绿——那个 `?` 造成的「少实现一个方法没人红」从此不成立。
+
+### 顺带：`startEventsArchiver` 的 `db: DbClient` 是纯粹多余的收紧
+
+它的函数体只把 db 转交给 `archiveEvents`，而后者**早就**收 `ProviderNeutralDatabase`。
+放宽一行，`rfc311-maintenance-boot-tick` 的事件归档那半就整块双引擎了（4 条）。
+文件另一半（WAL checkpoint 循环）按定义是 SQLite 专属——它开的是真文件库、断言 `-wal` 被
+TRUNCATE 归零——保持原生 `describe`，两种块并存（§5dh 的定式）。
+
+**账本**：405 / open 101。
+
+### 本批的 `allowGrowth`（下一个不涨的 commit 上必须删掉）
+
+`rfc294-cross-context-observed-imports` 5264 → 5266、`rfc294-architecture-exceptions` 4730 → 4732。
+两条边都是上面这次合一的直接代价：①PG daemon 装配根多引一个符号
+`inspectDigitalEmployeeHumanReviewState`（把中立实现装进 PG 泳道，正是装配根该做的事）；
+②该 composition 文件多一条 `@/db/query` 的**类型**边（中立签名的必要条件）。
+两条都随 W4-E1 的 public 用例切换一并退役。

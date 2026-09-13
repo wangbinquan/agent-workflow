@@ -14,10 +14,12 @@ import {
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
 import type {
   DigitalEmployeeExecutionMetering,
   DigitalEmployeeExecutionParticipant,
+  DigitalEmployeeHumanReviewState,
 } from '../public/participants'
 import {
   executionContractAgentImplementationSchema,
@@ -232,11 +234,21 @@ export function buildDigitalEmployeePlanPrompt(
     .join('\n\n')
 }
 
-export function inspectDigitalEmployeeHumanReviewState(
-  db: DbClient,
+/**
+ * 数字员工「计划人审」闸门的对外状态。
+ *
+ * RFC-359：这一条曾经是**同步**的、且只有 SQLite 那侧的 composition 提供——
+ * `composePostgresqlDigitalEmployeeExecution` 根本没有实现 `inspectHumanReview`，于是
+ * PostgreSQL 上这个闸门永远退回按 round 状态推断，**报不出 `waiting`**：同一个案子在 SQLite 上
+ * 显示「等待人审」，在 PG 上显示「规划中」。这是用户可见的行为分叉，也正是本 RFC 要消灭的形态。
+ * 现在改成 async 的一份中立实现（查的是 `tasks` + `nodeRuns`，本来就没有方言），两侧 composition
+ * 都装它。
+ */
+export async function inspectDigitalEmployeeHumanReviewState(
+  db: ProviderNeutralDatabase,
   executionRef: string,
-): 'planning' | 'waiting' | 'approved' | 'failed' | null {
-  const task = db
+): Promise<'planning' | 'waiting' | 'approved' | 'failed' | null> {
+  const task = await db
     .select({ inputs: tasks.inputs })
     .from(tasks)
     .where(eq(tasks.id, executionRef))
@@ -254,7 +266,7 @@ export function inspectDigitalEmployeeHumanReviewState(
   ) {
     return null
   }
-  const reviewRun = db
+  const reviewRun = await db
     .select({ status: nodeRuns.status })
     .from(nodeRuns)
     .where(
@@ -656,8 +668,8 @@ export function composeDigitalEmployeeExecution(deps: {
       return { kind: 'completed', executionRef, outputJson: output, metering }
     },
 
-    inspectHumanReview(executionRef) {
-      return inspectDigitalEmployeeHumanReviewState(deps.db, executionRef)
+    async inspectHumanReview(executionRef) {
+      return await inspectDigitalEmployeeHumanReviewState(deps.db, executionRef)
     },
 
     async cancel(executionRef) {
@@ -708,6 +720,15 @@ export interface PostgresqlDigitalEmployeeExecutionDependencies {
       readonly roundRef: string | null
       readonly autoRecoverySuspended: boolean
     } | null>
+  }>
+  /**
+   * RFC-359：计划人审闸门的状态读。SQLite 侧的 composition 直接拿 db 算，PG 侧这份 deps 不带 db，
+   * 所以按端口接进来——装配处把同一个中立实现 `inspectDigitalEmployeeHumanReviewState` 绑到
+   * PG 客户端上。此前这个方法在 PG 侧**根本不存在**，闸门只能按 round 状态推断、永远报不出
+   * `waiting`。
+   */
+  readonly humanReview: Readonly<{
+    inspect(executionRef: string): Promise<DigitalEmployeeHumanReviewState | null>
   }>
   readonly workspace?: DigitalEmployeeWorkspacePort
   readonly executionContracts: ExecutionContractParticipant & ExecutionContractProjectionParticipant
@@ -1057,6 +1078,10 @@ export function composePostgresqlDigitalEmployeeExecution(
         )
       }
       return { kind: 'completed', executionRef, outputJson: output, metering }
+    },
+
+    async inspectHumanReview(executionRef) {
+      return await deps.humanReview.inspect(executionRef)
     },
 
     async cancel(executionRef: string) {

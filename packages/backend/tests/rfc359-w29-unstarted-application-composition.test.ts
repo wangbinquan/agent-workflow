@@ -437,6 +437,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // 「`WeakMap<authority, Actor>` + `{ resolve }` 解析器 + `systemOverview` 常量 + 包一层
   // `execute` 填 map」的胶水整段删掉了（目录概览端口现在直接收请求者投影），换成一条
   // `composeSystemOverviewQuery({...})` 赋值。降，不是升。
+  //
+  // RFC-359（2026-09-13）：语句条数**不变**（160），摘要变了——
+  // `composePostgresqlDigitalEmployeeExecution({...})` 的实参多了一项
+  // `humanReview: { inspect: (ref) => inspectDigitalEmployeeHumanReviewState(input.db, ref) }`。
+  // 那是在补一处**用户可见的引擎分叉**：PG 侧的 composition 此前根本没有 `inspectHumanReview`，
+  // 于是计划人审闸门在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、
+  // PG 显示「规划中」）。装的是与 SQLite 侧同一份中立实现，见 plan §5dm。
   test('daemon phase retains the complete original 160-statement graph and ordered effects', () => {
     const body = functionBody(pg, 'composePostgresqlApplication')
     const phaseBlocks = body.statements.filter(
@@ -447,7 +454,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(160)
     expect(digest(restored, pg)).toBe(
-      '3a7cc0566a3edbf3d3b8ba60dd30a5a805dc72e92627fb882fb7323e552c68e7',
+      'fcb309f13aa64874e605d6567c07090f603f5b20f6bcc8cd0d42f5a6830141a2',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

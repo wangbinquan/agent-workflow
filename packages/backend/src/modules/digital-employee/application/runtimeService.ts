@@ -1242,67 +1242,80 @@ export class DigitalEmployeeRuntimeService {
     const activeRound = rounds.find((round) =>
       ['planned', 'running', 'settling'].includes(round.state),
     )
-    const reviewGates = descriptor.authoringManifest.workItems.flatMap<{
-      parentWorkItemRef: string
-      optionRef: string
-      state: 'not-reached' | 'skipped' | 'planning' | 'waiting' | 'approved' | 'failed'
-      executionRef: string | null
-    }>((item) => {
-      if (item.humanReview === null) return []
-      const round = [...rounds]
-        .filter((candidate) => candidate.workItemRef === item.workItemRef)
-        .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
-        .at(-1)
-      if (round === undefined) {
-        return [
-          {
-            parentWorkItemRef: item.workItemRef,
-            optionRef: item.humanReview.optionRef,
-            state: 'not-reached' as const,
-            executionRef: null,
-          },
-        ]
-      }
-      let enabled = false
-      try {
-        const rawPlan = JSON.parse(round.planJson) as { inputEnvelopeJson?: unknown }
-        if (typeof rawPlan.inputEnvelopeJson === 'string') {
-          const envelope = JSON.parse(rawPlan.inputEnvelopeJson) as { humanReview?: unknown }
-          enabled = envelope.humanReview !== null && envelope.humanReview !== undefined
-        }
-      } catch {
-        enabled = false
-      }
-      if (!enabled) {
-        return [
-          {
-            parentWorkItemRef: item.workItemRef,
-            optionRef: item.humanReview.optionRef,
-            state: 'skipped' as const,
-            executionRef: round.executionRef,
-          },
-        ]
-      }
-      const taskState =
-        round.executionRef === null
-          ? null
-          : (this.#execution.inspectHumanReview?.(round.executionRef) ?? null)
-      const state =
-        taskState ??
-        (round.state === 'completed'
-          ? 'approved'
-          : round.state === 'failed' || round.state === 'obsolete'
-            ? 'failed'
-            : 'planning')
-      return [
-        {
-          parentWorkItemRef: item.workItemRef,
-          optionRef: item.humanReview.optionRef,
-          state,
-          executionRef: round.executionRef,
-        },
-      ]
-    })
+    // RFC-359：`inspectHumanReview` 改成 async（此前它是同步的，于是 PG 侧的 composition
+    // 根本提供不了它、闸门永远报不出 `waiting`）。这里相应从 flatMap 改成
+    // `Promise.all(map(...)).flat()`——每个 work item 的闸门状态互不依赖，可以并发取。
+    const reviewGates = (
+      await Promise.all(
+        descriptor.authoringManifest.workItems.map<
+          Promise<
+            {
+              parentWorkItemRef: string
+              optionRef: string
+              state: 'not-reached' | 'skipped' | 'planning' | 'waiting' | 'approved' | 'failed'
+              executionRef: string | null
+            }[]
+          >
+        >(async (item) => {
+          if (item.humanReview === null) return []
+          const round = [...rounds]
+            .filter((candidate) => candidate.workItemRef === item.workItemRef)
+            .sort(
+              (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+            )
+            .at(-1)
+          if (round === undefined) {
+            return [
+              {
+                parentWorkItemRef: item.workItemRef,
+                optionRef: item.humanReview.optionRef,
+                state: 'not-reached' as const,
+                executionRef: null,
+              },
+            ]
+          }
+          let enabled = false
+          try {
+            const rawPlan = JSON.parse(round.planJson) as { inputEnvelopeJson?: unknown }
+            if (typeof rawPlan.inputEnvelopeJson === 'string') {
+              const envelope = JSON.parse(rawPlan.inputEnvelopeJson) as { humanReview?: unknown }
+              enabled = envelope.humanReview !== null && envelope.humanReview !== undefined
+            }
+          } catch {
+            enabled = false
+          }
+          if (!enabled) {
+            return [
+              {
+                parentWorkItemRef: item.workItemRef,
+                optionRef: item.humanReview.optionRef,
+                state: 'skipped' as const,
+                executionRef: round.executionRef,
+              },
+            ]
+          }
+          const taskState =
+            round.executionRef === null
+              ? null
+              : ((await this.#execution.inspectHumanReview?.(round.executionRef)) ?? null)
+          const state =
+            taskState ??
+            (round.state === 'completed'
+              ? 'approved'
+              : round.state === 'failed' || round.state === 'obsolete'
+                ? 'failed'
+                : 'planning')
+          return [
+            {
+              parentWorkItemRef: item.workItemRef,
+              optionRef: item.humanReview.optionRef,
+              state,
+              executionRef: round.executionRef,
+            },
+          ]
+        }),
+      )
+    ).flat()
     const channels = await Promise.all(
       (await this.#store.listChannels(caseId))
         .filter((channel) => channel.parentCaseId === caseId)

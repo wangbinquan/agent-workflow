@@ -125,7 +125,9 @@ export interface ReactionExecutionPort {
     },
   ): Promise<{ readonly executionRef: string }>
   inspect(executionRef: string): Promise<ReactionExecutionSnapshot>
-  inspectHumanReview?(executionRef: string): 'planning' | 'waiting' | 'approved' | 'failed' | null
+  inspectHumanReview?(
+    executionRef: string,
+  ): Promise<'planning' | 'waiting' | 'approved' | 'failed' | null>
   cancel(executionRef: string): Promise<void>
 }
 
