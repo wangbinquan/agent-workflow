@@ -1,11 +1,10 @@
 // RFC-349 — Integration provider adapters keep verified-ingress dedupe and
 // MR launch admission atomic while exposing one Promise application contract.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import type { CodeHostEvent } from '@agent-workflow/shared'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import type { Actor } from '@/auth/actor'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type {
@@ -33,8 +32,6 @@ interface Response {
   readonly values?: readonly (readonly unknown[])[]
   readonly count?: number
 }
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function rows(response: Response): SqlRows {
   const objects = [...(response.objects ?? [])] as Array<Record<string, unknown>> & {
@@ -184,25 +181,23 @@ afterEach(() => {
   selectDatabaseSchemaProvider('sqlite')
 })
 
-describe('RFC-349 Integration provider adapters', () => {
+describeEachProvider('RFC-349 Integration provider adapters', (harness) => {
   test('scheduled-task atomic create has one behavior oracle for SQLite and PostgreSQL', async () => {
-    const sqlite = createInMemoryDb(MIGRATIONS)
-    try {
-      let sqliteResourceLoads = 0
-      await assertScheduledCreateBehavior(
-        createScheduledTaskPersistence(sqlite, {
-          async loadAuthorized(_transaction, pair, requests) {
-            sqliteResourceLoads += 1
-            expect(pair.authority).toBeDefined()
-            expect(requests).toEqual([integrationTriggerRequest])
-            return [integrationTriggerSnapshot]
-          },
-        }),
-      )
-      expect(sqliteResourceLoads).toBe(1)
-    } finally {
-      sqlite.$client.close()
-    }
+    // RFC-359 AC-6：原来的 try/finally 只是为了在 finally 里关掉自建的 SQLite 库；
+    // 双引擎 harness 自己管库的生命周期，那对 try/finally 一并去掉。
+    const sqlite = harness.db
+    let sqliteResourceLoads = 0
+    await assertScheduledCreateBehavior(
+      createScheduledTaskPersistence(sqlite, {
+        async loadAuthorized(_transaction, pair, requests) {
+          sqliteResourceLoads += 1
+          expect(pair.authority).toBeDefined()
+          expect(requests).toEqual([integrationTriggerRequest])
+          return [integrationTriggerSnapshot]
+        },
+      }),
+    )
+    expect(sqliteResourceLoads).toBe(1)
 
     const postgresql = fixture([
       {},

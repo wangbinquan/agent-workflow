@@ -8125,3 +8125,30 @@ body 却仍在 `createInMemoryDb(MIGRATIONS)`——它们名义上双引擎，�
 两条都留在账本上并把理由写进文件；等「测试夹具怎么在 PG 上造违反完整性的行」有统一答案再迁。
 
 账本 462 → 461。
+
+## 5cm. `$client.close()` 不算「用了裸驱动」——放宽检测口径后再看这一桶
+
+`$client` 一律拒收的口径太粗。实测：非 migration 的 194 个用 `$client` 的文件里，
+**99 个唯一的用法就是 `close()`**——那只是「我自己建的库，用完关掉」的收尾，
+而双引擎 harness 自己管库的生命周期，这类调用迁移时直接删掉即可，不构成阻塞。
+
+检测口径改成「除 `close` 外还有别的 `$client.*` 才拒」，变换器同批学会删掉纯粹的
+`$client.close()` 语句。两个坑：
+
+- **正则要容换行**：`db.$client\n  .query(...)` 这种写法下 `/\$client\.([A-Za-z]+)/` 匹配不到，
+  于是 `rfc312-presence-channel` 被误判成 close-only（它其实用 `$client.query` 塞原始 INSERT）。
+  改成 `/\$client\s*\.\s*([A-Za-z]+)/`。
+- **删掉 close 会留下空块**：`rfc349-integration-provider-adapters` 的 `try { … } finally { db.$client.close() }`
+  删完剩一个空 `finally {}`，`no-empty` 当场红。这类要连 try/finally 一起去掉。
+
+本波只有 `rfc349-integration-provider-adapters` 跑绿落地（14 pass / 0 fail）；
+`rfc204-cold-clone-seal` / `rfc307-demo-seed` / `rfc312-presence-channel` /
+`rfc349-execution-peripheral-provider` / `rfc243-list-child-count` 各自还卡 callee 形参、
+原始 SQL 或嵌套 harness，原样退回。
+
+**另有一处存量假覆盖已清零**：全树扫描「`describeEachProvider` 体内还在 `createInMemoryDb`」，
+现在只剩 `rfc311-task-page-fastpath` 一处，而它是**有意**的——那条用例开头就
+`if (harness.capabilities.provider !== 'sqlite') return`，随后跑 `EXPLAIN QUERY PLAN`，
+是 SQLite 专属的查询计划断言。
+
+账本 461 → 460。
