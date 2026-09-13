@@ -28,7 +28,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                                                                                         | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1968测试文件、573构库文件/1131调用、483无harness/547有harness；W55新迁14旧文件51个DB声明/278 matcher，保65原声明/339 matcher、14原单次及全部预算。新增2文件9pure；真实新双库行为待托管，入口数不等于待迁普通业务量。                                                                                 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 重采**：`rfc359-w5-t19f` 账本 530 → 468（判据同批从文本扫改成 AST 数真调用点，注释与源码断言不再误计，守卫自我豁免退役）。本 session 迁 62 个文件，逐个过 `bun run typecheck` + 双引擎实跑。剩余 468 按拦路石清点（§5ce）：`migration-*` 80（**按定义不该双引擎**）、`createTaskExecutionTestTopology` 73（需一次设计，两个引擎执行模型不同，见 §5ce）、裸 `$client`/raw SQL 78、HTTP 形状 39、残留 198（绝大多数卡 callee 形参，§5bz 那张表）。另有 41 个 `new Database(` 开**真实文件**（备份/还原/VACUUM INTO/外部 store/worker 夹具）判的就是 SQLite 文件自身行为，属产品真正的 SQLite 专属面。 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34/6，13后端10/3；主2353/15、原2227全过，独立2/2及hook18/18、原RFC259两OS、两个原Playwright身份两OS通过。W55最终39core编译、metadata63/111与canonical13/55通过且候选稳定，首轮缺import失败保留；完整新SHA待托管，发布后仅修流水线。 | 待办   |
@@ -7942,3 +7942,33 @@ PostgresqlMigrationSequenceError: index-only upgrade changed a row, codec, key o
 用例数对不上。判缩进要用 `^[ \t]+`，别用 `\s`。
 
 账本 472 → 468。
+
+## 5ce. 剩下 468 条的**真实构成**（按拦路石清点，不是按文件名猜）
+
+| 桶                        | 文件 | 调用点 | 性质                                                                 |
+| ------------------------- | ---- | ------ | -------------------------------------------------------------------- |
+| `migration-*.test.ts`     | 80   | 149    | **按定义不该双引擎**：判的是 SQLite 迁移链本身；PG 的 schema 来自 drizzle 声明，两侧对账由 W5-T19g 独立负责 |
+| `createTaskExecutionTestTopology` | 73 | 137 | 见下，需要一次设计                                                   |
+| 裸 `$client` / raw SQL    | 78   | 169    | 逐文件中立化（`executeFixtureDdl` / drizzle 类型化写）                |
+| HTTP 形状                 | 39   | 92     | 换 `describeEachProviderHttpApplication`                             |
+| 残留                      | 198  | 426    | 绝大多数卡在 callee 形参，同 §5bz 那张表                             |
+
+`new Database(` 那 45 个散在上面各桶里，其中**开真实文件**的 41 个（备份 / 还原 / VACUUM INTO /
+外部 opencode store / worker 夹具）判的就是 **SQLite 文件本身的行为**，属于产品里真正的 SQLite 专属面，
+不该也不能双引擎。
+
+### `createTaskExecutionTestTopology` 这 73 个为什么需要一次设计
+
+实测 203 个调用点里 **202 个只取 `schedulerDriver`**（1 个取整个 topology），
+且 **201 个传 `driver: 'real'`**——即它们真的要那个由 db 装出来的调度驱动。
+
+难点不在夹具，在**两个引擎的执行模型本来就不同**：SQLite 侧可以直接拿
+`composeTaskExecutionTestRuntime(db).topology.schedulerDriver` 就 `drive`；PostgreSQL 侧的
+`schedulerDriver.drive` 要在**已认领的 ownership + executionContext** 里跑——
+`tests/helpers/providerTaskExecutionTestTopology.ts` 正是为此写的：它先 `submitContinuation`
+拿 intent，再用 `DefaultTaskDriveCoordinator` + `createPostgresqlTaskDriverLifecyclePort`
+走完 claim / attach / drive / release，所以它对外只给 `runTask`，**不给 `schedulerDriver`**。
+
+所以这 73 个不是「换个 harness」能了的，要先决定：把这些用例从「拿驱动自己 drive」改写成
+「提交 runTask」，还是在 provider 拓扑上补一个**自带认领**的 `schedulerDriver` 外观。
+前者改动面大但语义正；后者省事但把 PG 的 ownership 语义藏进夹具。**留作独立一步，本 session 不动。**
