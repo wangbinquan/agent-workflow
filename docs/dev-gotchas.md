@@ -6590,3 +6590,29 @@ PostgreSQL 是一次真实往返：**本机够、忙分片不够**，CI 的 ubun
 **这条与本文件另一条「负向断言在 PG 上会因为错的理由绿」是同一个根**：
 fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「断言空」的陷阱，
 这条讲的是「用睡眠掩盖它」的陷阱——**后者更隐蔽，因为它在本机永远是绿的**。
+
+- **`bun run scripts/source-guard-sweep.ts --run` 要带 `AW_TEST_POSTGRESQL_URL`**（RFC-359 之后）。
+  不带的话，所有走 `describeEachProvider` 的守卫文件会以
+  「PostgreSQL 未配置——双引擎是缺省，缺库即红」整批失败——那是 harness 的**设计判据**
+  （`tests/helpers/eachProvider.ts`：缺库即红、不 skip），不是回归，别去查代码。
+  只想跑 SQLite 一侧时显式 `AW_TEST_PROVIDERS=sqlite`。
+
+- **跨引擎断言「数据库这一层为什么失败」要沿 `cause` 链找**，不能直接
+  `rejects.toThrow('<原因>')`：两个 provider 把底层错误包到了不同深度。SQLite 上错误就是最外层
+  那个；PostgreSQL 上 drizzle 抛 `DrizzleQueryError`，最外层 message 被换成
+  `Failed query: <SQL>\nparams: …`，真正的 `RAISE EXCEPTION` 文案 / 约束名只在 `cause` 里
+  （实测 `cause` 是 postgres.js 的 `PostgresError`）。只看最外层的判据在 PG 上必然红，而且红出来的
+  还是一段与故障无关的 SQL 文本。用 `tests/helpers/databaseFailure.ts` 的
+  `expectDatabaseFailure(run, expected)`。
+
+- **把测试迁到 `describeEachProvider` 时，`createInMemoryDb` 的第二个实参不能吞**。
+  `{ bootstrap: 'required' }` 带的是「**不**把 `auth_login_policy` 标成已 bootstrap」的语义，
+  必须转成 describe 的选项才保得住；`{ bootstrap: 'ready' }` 与 harness 默认等价，可以丢。
+  注意 `describeEachProvider` 的签名是 **`(name, body, options)`**——options 是**第三个**形参，
+  按 `(name, options, body)` 写会在运行期得到 `body is not a function`。
+
+- **退役 bun:sqlite 的同步终结子（`.all()` / `.get()` / `.run()`）时，`await` 会往外传播**。
+  一个原本同步的模块级 `seedTask()` 内部一旦要 `await`，它自己要变 `async`、文件内**每个**调用点
+  都要补 `await`、显式返回类型还要包成 `Promise<T>`（否则 TS1064
+  “The return type of an async function must be the global Promise<T> type”）。
+  只改终结子不补传播的话，`bun test` 可能照样绿（Promise 被当真值用），**tsc 才会红**。

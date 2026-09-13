@@ -25,13 +25,14 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { and, eq, sql } from 'drizzle-orm'
+
+import { and, eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { expectDatabaseFailure } from './helpers/databaseFailure'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -68,8 +69,6 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const DESIGNER = 'designer'
 const QUESTIONER = 'questioner'
@@ -315,55 +314,58 @@ afterAll(() => resetBroadcastersForTests())
 // ---------------------------------------------------------------------------
 // A — answer outcomes (RFC-132: control-channel seal parks; quick channel dispatches).
 // ---------------------------------------------------------------------------
-describe('RFC-120 T9 — answer outcomes (control-channel park vs quick-channel dispatch)', () => {
-  test('control-channel seal (designer scope) → PARK: NO rerun + undispatched entry', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    const sealed = await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
+describeEachProvider(
+  'RFC-120 T9 — answer outcomes (control-channel park vs quick-channel dispatch)',
+  (harness) => {
+    test('control-channel seal (designer scope) → PARK: NO rerun + undispatched entry', async () => {
+      const db = harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      const sealed = await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      expect(sealed.roundFullySealed).toBe(true)
+      // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign
+      // (targets the graph designer node, reproducing the old designer-by-default shape).
+      await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
+      // the answer IS recorded (round answered) but NO designer rerun minted
+      const designerRuns = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
+      expect(designerRuns.length).toBe(1) // draft only — parked
+      // the designer task_questions entry was created eagerly + undispatched
+      const designerEntries = await db
+        .select()
+        .from(taskQuestions)
+        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
+      expect(designerEntries.length).toBe(1)
+      expect(designerEntries[0]?.triggerRunId).toBeNull()
+      expect(designerEntries[0]?.defaultTargetNodeId).toBe(DESIGNER)
+      // the park gate now sees the designer as an undispatched target
+      expect([...(await loadUndispatchedDesignerTargets(db, taskId))]).toEqual([DESIGNER])
     })
-    expect(sealed.roundFullySealed).toBe(true)
-    // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign
-    // (targets the graph designer node, reproducing the old designer-by-default shape).
-    await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
-    // the answer IS recorded (round answered) but NO designer rerun minted
-    const designerRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
-    expect(designerRuns.length).toBe(1) // draft only — parked
-    // the designer task_questions entry was created eagerly + undispatched
-    const designerEntries = await db
-      .select()
-      .from(taskQuestions)
-      .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
-    expect(designerEntries.length).toBe(1)
-    expect(designerEntries[0]?.triggerRunId).toBeNull()
-    expect(designerEntries[0]?.defaultTargetNodeId).toBe(DESIGNER)
-    // the park gate now sees the designer as an undispatched target
-    expect([...(await loadUndispatchedDesignerTargets(db, taskId))]).toEqual([DESIGNER])
-  })
 
-  test('quick-channel questioner-only answer → questioner rerun via dispatch + gate empty', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    const ret = await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
-      actor: { userId: 'u1', role: 'owner' },
+    test('quick-channel questioner-only answer → questioner rerun via dispatch + gate empty', async () => {
+      const db = harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      const ret = await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+        actor: { userId: 'u1', role: 'owner' },
+      })
+      // the questioner rerun is minted through the unified dispatch (not an immediate mint).
+      expect(ret.dispatch.reruns.some((r) => r.targetNodeId === QUESTIONER)).toBe(true)
+      // no designer entry → no park
+      expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0)
     })
-    // the questioner rerun is minted through the unified dispatch (not an immediate mint).
-    expect(ret.dispatch.reruns.some((r) => r.targetNodeId === QUESTIONER)).toBe(true)
-    // no designer entry → no park
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0)
-  })
-})
+  },
+)
 
 // ---------------------------------------------------------------------------
 // B — PARK gate (pure deriveFrontier).
@@ -444,73 +446,76 @@ describe('RFC-120 T9 — frontier park gate', () => {
 // ---------------------------------------------------------------------------
 // C — T2 invariant + S2 stuck detector exemption.
 // ---------------------------------------------------------------------------
-describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt (control)', () => {
-  test('T2: deferred task awaiting_human + undispatched designer → no T2 alert', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
+describeEachProvider(
+  'RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt (control)',
+  (harness) => {
+    test('T2: deferred task awaiting_human + undispatched designer → no T2 alert', async () => {
+      const db = harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
+      // derives it from scope) — this is what T2 must treat as a valid park.
+      await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
+      // park the task (the scheduler would do this at quiescence)
+      await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+      const result = await runLifecycleInvariants({
+        operations: taskRecoveryOperations(db),
+        scope: { taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(0)
     })
-    // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
-    // derives it from scope) — this is what T2 must treat as a valid park.
-    await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
-    // park the task (the scheduler would do this at quiescence)
-    await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(db),
-      scope: { taskId },
-    })
-    expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(0)
-  })
 
-  test('T2 control: fully-DISPATCHED task awaiting_human + no awaiting_human run → T2 fires', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: false })
-    // The unified quick channel dispatches everything (designer + questioner) → no park.
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
-      actor: { userId: 'u1', role: 'owner' },
+    test('T2 control: fully-DISPATCHED task awaiting_human + no awaiting_human run → T2 fires', async () => {
+      const db = harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: false })
+      // The unified quick channel dispatches everything (designer + questioner) → no park.
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+        actor: { userId: 'u1', role: 'owner' },
+      })
+      await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+      const result = await runLifecycleInvariants({
+        operations: taskRecoveryOperations(db),
+        scope: { taskId },
+      })
+      // fully dispatched → loadUndispatchedDesignerTargets is empty → T2 fires as before
+      expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(1)
     })
-    await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(db),
-      scope: { taskId },
-    })
-    // fully dispatched → loadUndispatchedDesignerTargets is empty → T2 fires as before
-    expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(1)
-  })
 
-  test('S2: deferred task awaiting_human + undispatched designer → no S2 finding', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
+    test('S2: deferred task awaiting_human + undispatched designer → no S2 finding', async () => {
+      const db = harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
+      // derives it from scope) — S2 must exempt this valid deferred park.
+      await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
+      // park + age past the freshness gate (startedAt long ago, no events)
+      await db
+        .update(tasks)
+        .set({ status: 'awaiting_human', startedAt: Date.now() - 60 * 60 * 1000 })
+        .where(eq(tasks.id, taskId))
+      const result = await runStuckTaskDetector({
+        operations: taskRecoveryOperations(db),
+        stuckThresholdMs: 1000,
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(0)
     })
-    // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
-    // derives it from scope) — S2 must exempt this valid deferred park.
-    await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
-    // park + age past the freshness gate (startedAt long ago, no events)
-    await db
-      .update(tasks)
-      .set({ status: 'awaiting_human', startedAt: Date.now() - 60 * 60 * 1000 })
-      .where(eq(tasks.id, taskId))
-    const result = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
-      stuckThresholdMs: 1000,
-    })
-    expect(result.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(0)
-  })
-})
+  },
+)
 
 // ---------------------------------------------------------------------------
 // D — dispatchTaskQuestions (mint / stamp / release + CAS idempotency).
@@ -521,8 +526,8 @@ describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt 
 // CAS 防重（双次 dispatch 不双 mint）。RFC-128 把 designer 域逐题下发铺到全角色时，这些
 // 整轮 answered 之后才下发的不变量不可放松（P1 仅把「整轮 answered 后」的前置改为「该题
 // 已 sealed 后」，CAS / frontier mint / 一节点一条 rerun 的语义须逐字保留）。
-describe('RFC-120 T9 — dispatchTaskQuestions', () => {
-  async function seedDeferredAnswered(db: DbClient) {
+describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
+  async function seedDeferredAnswered(db: ProviderNeutralDatabase) {
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
@@ -544,7 +549,7 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
   const actor = { userId: 'u1', role: 'owner' as const }
 
   test('dispatch stamps dispatched_at + mints the frontier rerun + releases the gate (NO trigger_run_id at dispatch)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
 
     const result = await dispatchTaskQuestions(db, taskId, [entryId], actor)
@@ -574,7 +579,7 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
   })
 
   test('CAS idempotency: double dispatch does not double-mint', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
 
     const first = await dispatchTaskQuestions(db, taskId, [entryId], actor)
@@ -590,7 +595,7 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
   })
 
   test('RFC-333 decision atomically stamps, mints, releases and returns one replayable receipt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
     const command = {
       db,
@@ -648,21 +653,38 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
   })
 
   test('RFC-333 intent fault rolls question stamp, rerun, task release and operation back', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
     const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
     const beforeOperations = (await db.select().from(collaborationGateOperations)).length
-    db.run(sql`
-      CREATE TRIGGER rfc333_fail_question_intent
-      BEFORE INSERT ON task_execution_intents
-      BEGIN SELECT RAISE(ABORT, 'rfc333-question-intent-fault'); END
-    `)
+    // 注入「intent 写入必失败」的故障：两个引擎的写法不同——SQLite 直接 RAISE(ABORT)，
+    // PostgreSQL 需要一个 plpgsql 触发器函数——但抛出的错误文案与判据完全一致。
+    // fixture DDL 只能走 harness 的专用入口（业务客户端不接受 DDL）。
+    if (harness.capabilities.provider === 'sqlite') {
+      await harness.executeFixtureDdl(
+        'CREATE TRIGGER rfc333_fail_question_intent ' +
+          'BEFORE INSERT ON task_execution_intents ' +
+          "BEGIN SELECT RAISE(ABORT, 'rfc333-question-intent-fault'); END",
+      )
+    } else {
+      await harness.executeFixtureDdl(
+        'CREATE OR REPLACE FUNCTION rfc333_fail_question_intent() RETURNS trigger AS $$ ' +
+          "BEGIN RAISE EXCEPTION 'rfc333-question-intent-fault'; END; $$ LANGUAGE plpgsql",
+      )
+      await harness.executeFixtureDdl(
+        'CREATE TRIGGER rfc333_fail_question_intent ' +
+          'BEFORE INSERT ON task_execution_intents ' +
+          'FOR EACH ROW EXECUTE FUNCTION rfc333_fail_question_intent()',
+      )
+    }
 
-    await expect(
-      dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
-        idempotencyKey: 'question-dispatch-fault',
-      }),
-    ).rejects.toThrow('rfc333-question-intent-fault')
+    await expectDatabaseFailure(
+      () =>
+        dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
+          idempotencyKey: 'question-dispatch-fault',
+        }),
+      'rfc333-question-intent-fault',
+    )
 
     expect(
       (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
@@ -682,10 +704,10 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
 // E — Codex impl-gate folds: H1 (graph-node granularity vs round-scoped
 // consumption), H2 (atomic claim+mint, no orphan/phantom), H3 (unsafe targets).
 // ---------------------------------------------------------------------------
-describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () => {
+describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', (harness) => {
   const actor = { userId: 'u1', role: 'owner' as const }
 
-  async function designerEntries(db: DbClient, taskId: string) {
+  async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
     return db
       .select()
       .from(taskQuestions)
@@ -693,7 +715,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   }
 
   test('a round → one node: dispatching its designer questions mints exactly ONE frontier rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
@@ -728,7 +750,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('H1(re-gate): subset dispatch does NOT park the node while q1 is in-flight (q1 runs, q2 stays staged); re-parks once q1 is consumed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
@@ -767,7 +789,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('H1(re-gate): a node with an in-flight dispatched question is DISPATCHABLE in deriveFrontier (not parked)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
@@ -807,7 +829,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('(a) one batch of two same-node questions → exactly ONE rerun rendering BOTH', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
@@ -839,7 +861,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('(b) dispatching q2 while the node has an IN-FLIGHT rerun → rejected task-question-node-dispatch-in-flight (nothing stamped)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
@@ -883,7 +905,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('(c) after the node rerun is DONE, dispatching q2 succeeds with a fresh rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
@@ -919,7 +941,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('(failed-run guard) q1 bound + its handler run FAILED (unconsumed) → dispatching q2 to the SAME node is REJECTED', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
@@ -977,7 +999,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('(dispatch/reassign race) a concurrent reassign before the tx → ROLLS BACK task-question-target-changed; re-run with the new target succeeds', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // OTHER (the reassign target B) needs a prior run to be a valid frontier mint target.
     await db.insert(nodeRuns).values({
@@ -1066,7 +1088,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('a stamped frontier rerun always resolves to an EXISTING node_run (no phantom / orphan)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
@@ -1095,7 +1117,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   // __external_feedback__ edge SUCCEEDS; the target OTHER is the frontier (no affected ancestor),
   // and ITS rerun (running OTHER's OWN agent) binds + injects the answer from its per-node queue.
   test('reassign to a run-but-no-edge node → 去借壳: mint the TARGET itself (own agent); the target queue injection carries + binds the answer', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // OTHER has a prior node_run + no feedback edge — a valid reassign target.
     await db.insert(nodeRuns).values({
@@ -1149,7 +1171,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('never-run reassign target → REJECTED (去借壳: the rerun mints ON the target, which has no prior run to inherit)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // OTHER has NO prior node_run.
     await sealRoundQuestions({
@@ -1184,7 +1206,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   })
 
   test('per-node queue is authoritative for deferred (去借壳): the TARGET injects the reassigned question (mint on target, own agent); the origin designer has no queue', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await db.insert(nodeRuns).values({
       id: ulid(),
@@ -2149,11 +2171,11 @@ describeEachProviderHttpApplication(
 // scheduler cascade (RFC-074 provenance freshness) re-dispatches B against A's fresh
 // output, and B drains ITS queue at rerun.
 // ---------------------------------------------------------------------------
-describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => {
+describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumption', (harness) => {
   const actor = { userId: 'u1', role: 'owner' as const }
   const DOWN = 'down'
 
-  async function designerEntries(db: DbClient, taskId: string) {
+  async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
     return db
       .select()
       .from(taskQuestions)
@@ -2164,7 +2186,7 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
    *  cc_a/q_a → DESIGNER (default), cc_b/q_b → DOWN (default; RFC-127 借壳 — was an
    *  override-to-DOWN). DESIGNER + DOWN each have a prior `done` run (DOWN's draft consumes
    *  DESIGNER's done — so a DESIGNER rerun demotes DOWN, RFC-074). */
-  async function seedFrontierChain(db: DbClient): Promise<{
+  async function seedFrontierChain(db: ProviderNeutralDatabase): Promise<{
     taskId: string
     ccA: string
     ccB: string
@@ -2278,7 +2300,7 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
   /** Answer both sources (designer-scoped, deferred), dispatch both. RFC-127 借壳: cc_b's DEFAULT
    *  designer is already DOWN (the seed wires cc_b → DOWN) — no override needed; entryA's home is
    *  DESIGNER, entryB's home is DOWN. Returns the dispatch result + the two entries. */
-  async function answerAndDispatch(db: DbClient) {
+  async function answerAndDispatch(db: ProviderNeutralDatabase) {
     const seed = await seedFrontierChain(db)
     await sealRoundQuestions({
       db,
@@ -2307,7 +2329,7 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
   }
 
   test('FRONTIER: A upstream of B, both have dispatched designer questions → dispatch mints ONLY A (zero on B)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { seed, result } = await answerAndDispatch(db)
 
     // Exactly ONE frontier rerun — on A (DESIGNER). B (DOWN) is left for the cascade.
@@ -2347,7 +2369,7 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
   })
 
   test('cascade: once A reruns fresh, deriveFrontier re-dispatches the downstream B (B minted by the SCHEDULER, not dispatch)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { seed } = await answerAndDispatch(db)
     // Simulate A's frontier rerun completing FRESH (a new done id > the old draft id).
     const designerRerunDone = ulid()
@@ -2391,7 +2413,7 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
   })
 
   test("PER-NODE QUEUE: B's rerun injects + binds B's OWN question's answer (bound at the rerun, not at dispatch)", async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { seed, entryB } = await answerAndDispatch(db)
     // The cascade mints DOWN's rerun (a fresh pending run on DOWN).
     const downRerunId = ulid()
@@ -2420,7 +2442,7 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
   })
 
   test("CONSUMPTION: A done+output → only A's bound question leaves the queue; B's (downstream) question is untouched", async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { seed, entryA, entryB } = await answerAndDispatch(db)
     const designerRerunId = (
       await db
@@ -2468,127 +2490,130 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
 // lock the new shape: the flat queue context builds for both handoff forms and carries NO
 // suppress signal. (The xcc render pair below is the legacy cross-clarify path — unchanged.)
 // ---------------------------------------------------------------------------
-describe('RFC-120 §18 → RFC-141 — prior output on override handoffs (deferred)', () => {
-  const actor = { userId: 'u1', role: 'owner' as const }
+describeEachProvider(
+  'RFC-120 §18 → RFC-141 — prior output on override handoffs (deferred)',
+  (harness) => {
+    const actor = { userId: 'u1', role: 'owner' as const }
 
-  async function designerEntries(db: DbClient, taskId: string) {
-    return db
-      .select()
-      .from(taskQuestions)
-      .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
-  }
+    async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
+      return db
+        .select()
+        .from(taskQuestions)
+        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
+    }
 
-  test('RFC-141: a reassigned handoff builds the flat queue context WITHOUT any suppress signal (prior output injects)', async () => {
-    // HISTORY: RFC-131 T4 去借壳 moved the rerun to the target OTHER, and RFC-120 §18 flagged this
-    // shape suppressPriorOutput=true (OTHER must not be told to update its own artifact). RFC-141
-    // removed the flag — OTHER now gets its own prior output as background; this test locks that
-    // the context still builds and the suppress member is gone at runtime.
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: OTHER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 500,
+    test('RFC-141: a reassigned handoff builds the flat queue context WITHOUT any suppress signal (prior output injects)', async () => {
+      // HISTORY: RFC-131 T4 去借壳 moved the rerun to the target OTHER, and RFC-120 §18 flagged this
+      // shape suppressPriorOutput=true (OTHER must not be told to update its own artifact). RFC-141
+      // removed the flag — OTHER now gets its own prior output as background; this test locks that
+      // the context still builds and the suppress member is gone at runtime.
+      const db = harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: OTHER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 500,
+      })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+        directive: 'continue',
+      })
+      // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+      await reassignTaskQuestion(db, entry.id, OTHER, actor) // default DESIGNER, reassigned to OTHER (run moves)
+      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      expect(result.reruns[0]?.targetNodeId).toBe(OTHER) // 去借壳: run minted ON the target OTHER
+      // Production dispatches a SEALED designer entry (stage gate) — reflect that so the unified queue
+      // injector selects it.
+      await db
+        .update(taskQuestions)
+        .set({ sealedAt: Date.now() })
+        .where(eq(taskQuestions.id, entry.id))
+      const ctx = await buildClarifyQueueContext({
+        db,
+        definition: liveDef(),
+        taskId,
+        consumerNodeId: OTHER,
+        dispatchedRunId: result.reruns[0]!.nodeRunId,
+        iteration: 0,
+      })
+      // the reassigned Q&A still injects…
+      expect(ctx).toBeDefined()
+      expect(ctx!.block.length).toBeGreaterThan(0)
+      // …and the RFC-120 §18 suppress member is gone (runtime lock backing the type-level removal).
+      expect(Object.keys(ctx!)).not.toContain('suppressPriorOutput')
     })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
-      directive: 'continue',
-    })
-    // RFC-162: add the designer handler (default DESIGNER) via reassign, then re-target it to OTHER.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-    await reassignTaskQuestion(db, entry.id, OTHER, actor) // default DESIGNER, reassigned to OTHER (run moves)
-    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    expect(result.reruns[0]?.targetNodeId).toBe(OTHER) // 去借壳: run minted ON the target OTHER
-    // Production dispatches a SEALED designer entry (stage gate) — reflect that so the unified queue
-    // injector selects it.
-    await db
-      .update(taskQuestions)
-      .set({ sealedAt: Date.now() })
-      .where(eq(taskQuestions.id, entry.id))
-    const ctx = await buildClarifyQueueContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerNodeId: OTHER,
-      dispatchedRunId: result.reruns[0]!.nodeRunId,
-      iteration: 0,
-    })
-    // the reassigned Q&A still injects…
-    expect(ctx).toBeDefined()
-    expect(ctx!.block.length).toBeGreaterThan(0)
-    // …and the RFC-120 §18 suppress member is gone (runtime lock backing the type-level removal).
-    expect(Object.keys(ctx!)).not.toContain('suppressPriorOutput')
-  })
 
-  test('RFC-141: a genuine graph-designer round builds the same suppress-free context (both handoff shapes uniform)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: intermediaryNodeRunId,
-      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
-      directive: 'continue',
+    test('RFC-141: a genuine graph-designer round builds the same suppress-free context (both handoff shapes uniform)', async () => {
+      const db = harness.db
+      const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+        directive: 'continue',
+      })
+      // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
+      await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const entry = (await designerEntries(db, taskId))[0]!
+      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      // Production dispatches a SEALED designer entry (stage gate). A genuine graph designer used to
+      // be the suppressPriorOutput=false shape; RFC-141 removed the member for BOTH shapes.
+      await db
+        .update(taskQuestions)
+        .set({ sealedAt: Date.now() })
+        .where(eq(taskQuestions.id, entry.id))
+      const ctx = await buildClarifyQueueContext({
+        db,
+        definition: liveDef(),
+        taskId,
+        consumerNodeId: DESIGNER,
+        dispatchedRunId: result.reruns[0]!.nodeRunId,
+        iteration: 0,
+      })
+      expect(ctx).toBeDefined()
+      expect(ctx!.block.length).toBeGreaterThan(0)
+      expect(Object.keys(ctx!)).not.toContain('suppressPriorOutput')
     })
-    // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
-    await seedDesignerEntries(db, taskId, DESIGNER, actor)
-    const entry = (await designerEntries(db, taskId))[0]!
-    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    // Production dispatches a SEALED designer entry (stage gate). A genuine graph designer used to
-    // be the suppressPriorOutput=false shape; RFC-141 removed the member for BOTH shapes.
-    await db
-      .update(taskQuestions)
-      .set({ sealedAt: Date.now() })
-      .where(eq(taskQuestions.id, entry.id))
-    const ctx = await buildClarifyQueueContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerNodeId: DESIGNER,
-      dispatchedRunId: result.reruns[0]!.nodeRunId,
-      iteration: 0,
+
+    // RFC-148 (RFC-132 收尾): the crossClarifyContext render path is DELETED —
+    // designer Q&A rides the flat clarify block; prior output rides
+    // priorOutputUpdate. The two render cases that exercised the dead path are
+    // replaced by a negative lock: the dead surface must not come back.
+    test('render: the External Feedback dead path stays dead (RFC-148)', () => {
+      const promptSrc = readFileSync(
+        join(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
+        'utf8',
+      )
+      expect(promptSrc).not.toContain('crossClarifyContext')
+      expect(promptSrc).not.toContain('## External Feedback')
     })
-    expect(ctx).toBeDefined()
-    expect(ctx!.block.length).toBeGreaterThan(0)
-    expect(Object.keys(ctx!)).not.toContain('suppressPriorOutput')
-  })
 
-  // RFC-148 (RFC-132 收尾): the crossClarifyContext render path is DELETED —
-  // designer Q&A rides the flat clarify block; prior output rides
-  // priorOutputUpdate. The two render cases that exercised the dead path are
-  // replaced by a negative lock: the dead surface must not come back.
-  test('render: the External Feedback dead path stays dead (RFC-148)', () => {
-    const promptSrc = readFileSync(
-      join(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
-      'utf8',
-    )
-    expect(promptSrc).not.toContain('crossClarifyContext')
-    expect(promptSrc).not.toContain('## External Feedback')
-  })
-
-  test('source lock: the scheduler no longer gates prior-output on ANY ownership signal (RFC-141)', () => {
-    const src = readFileSync(
-      join(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
-    // RFC-132 (PR-C) replaced the cross-clarify graphOwned attach gate with the flat queue's
-    // suppressPriorOutput; RFC-141 removed that too. Negative locks so neither gate re-grows.
-    expect(src).not.toContain('crossClarifyContext?.graphOwned')
-    expect(src).not.toContain('clarifyQueue?.suppressPriorOutput')
-    expect(src).not.toContain('!suppressPriorOutput')
-  })
-})
+    test('source lock: the scheduler no longer gates prior-output on ANY ownership signal (RFC-141)', () => {
+      const src = readFileSync(
+        join(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'task-execution',
+          'composition',
+          'nodeMechanics.ts',
+        ),
+        'utf8',
+      )
+      // RFC-132 (PR-C) replaced the cross-clarify graphOwned attach gate with the flat queue's
+      // suppressPriorOutput; RFC-141 removed that too. Negative locks so neither gate re-grows.
+      expect(src).not.toContain('crossClarifyContext?.graphOwned')
+      expect(src).not.toContain('clarifyQueue?.suppressPriorOutput')
+      expect(src).not.toContain('!suppressPriorOutput')
+    })
+  },
+)

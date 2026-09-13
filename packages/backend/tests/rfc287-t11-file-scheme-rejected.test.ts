@@ -16,12 +16,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { StartTaskSchema } from '@agent-workflow/shared'
 import { selectDueRepos } from '@/services/submoduleRefresh'
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { cachedRepos } from '@/db/schema'
 import { ulid } from 'ulid'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function startBody(repoUrl: string): Record<string, unknown> {
   return { workflowId: '01JQZ0000000000000000000AA', name: 'probe', repoUrl }
@@ -57,9 +55,9 @@ describe('RFC-287 T11 ① — 启动面按非法参数拒 file://', () => {
   })
 })
 
-describe('RFC-287 T11 ② — 后台自动保鲜也不再碰 file:// 存量镜像', () => {
+describeEachProvider('RFC-287 T11 ② — 后台自动保鲜也不再碰 file:// 存量镜像', (harness) => {
   test('到期集合里 file:// 行被剔除，其余照常', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const now = 1_700_000_000_000
     const rows = [
       { url: 'file:///tmp/legacy-mirror', keep: false },
@@ -179,10 +177,10 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
 })
 
 // 三轮门（Codex 契约面）P3：刷新的 fail-closed 分支曾把两件完全不同的事共用一个码。
-describe('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', () => {
+describeEachProvider('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', (harness) => {
   test('url_redacted 为 NULL 报 repo-url-unavailable，而不是 file 错误', async () => {
     const { refreshCachedRepo } = await import('@/services/gitRepoCache')
-    const db = createInMemoryDb(resolve(import.meta.dir, '..', 'db', 'migrations'))
+    const db = harness.db
     const id = ulid()
     await db.insert(cachedRepos).values({
       id,
@@ -207,7 +205,7 @@ describe('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', () => {
 
   test('真的 file:// 行仍报 repo-url-file-scheme-unsupported（拆码没拆错方向）', async () => {
     const { refreshCachedRepo } = await import('@/services/gitRepoCache')
-    const db = createInMemoryDb(resolve(import.meta.dir, '..', 'db', 'migrations'))
+    const db = harness.db
     const id = ulid()
     await db.insert(cachedRepos).values({
       id,

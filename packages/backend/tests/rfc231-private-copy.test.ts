@@ -17,7 +17,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
@@ -54,7 +55,6 @@ import {
 } from '../src/services/workflow'
 import { copyWorkgroup, createWorkgroup, workgroupRevisionOf } from '../src/services/workgroups'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const EMPTY_DEFINITION: WorkflowDefinition = {
@@ -77,36 +77,37 @@ function actor(id: string): Actor {
   })
 }
 
-function seedUsers(db: DbClient, ids: readonly string[]): void {
+async function seedUsers(db: ProviderNeutralDatabase, ids: readonly string[]): Promise<void> {
   const now = Date.now()
-  db.insert(users)
-    .values(
-      ids.map((id) => ({
-        id,
-        username: id,
-        displayName: id,
-        role: 'user' as const,
-        status: 'active' as const,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    )
-    .run()
+  await db.insert(users).values(
+    ids.map((id) => ({
+      id,
+      username: id,
+      displayName: id,
+      role: 'user' as const,
+      status: 'active' as const,
+      createdAt: now,
+      updatedAt: now,
+    })),
+  )
 }
 
-function grant(db: DbClient, type: AclResourceType, resourceId: string, userId: string): void {
-  db.insert(resourceGrants)
-    .values({
-      resourceType: type,
-      resourceId,
-      userId,
-      addedBy: 'alice',
-      addedAt: Date.now(),
-    })
-    .run()
+async function grant(
+  db: ProviderNeutralDatabase,
+  type: AclResourceType,
+  resourceId: string,
+  userId: string,
+): Promise<void> {
+  await db.insert(resourceGrants).values({
+    resourceType: type,
+    resourceId,
+    userId,
+    addedBy: 'alice',
+    addedAt: Date.now(),
+  })
 }
 
-function mcpBinding(db: DbClient, principal: Actor): McpServiceBinding {
+function mcpBinding(db: ProviderNeutralDatabase, principal: Actor): McpServiceBinding {
   const catalog = composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -128,7 +129,11 @@ function mcpBinding(db: DbClient, principal: Actor): McpServiceBinding {
   return Object.freeze({ catalog, authority })
 }
 
-function pluginBinding(db: DbClient, principal: Actor, pluginsDir: string): PluginServiceBinding {
+function pluginBinding(
+  db: ProviderNeutralDatabase,
+  principal: Actor,
+  pluginsDir: string,
+): PluginServiceBinding {
   return composePluginServiceBindingForTest(db, {
     actor: principal,
     pluginsDir,
@@ -218,10 +223,10 @@ describe('RFC-264 copy names keep their script', () => {
   })
 })
 
-describe('RFC-231 private create invariant', () => {
+describeEachProvider('RFC-231 private create invariant', (harness) => {
   test('all six canonical create services stamp owner/private/revision 0', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedUsers(db, ['alice'])
+    const db = harness.db
+    await seedUsers(db, ['alice'])
     const alice = actor('alice')
     const appHome = await mkdtemp(join(tmpdir(), 'rfc231-private-'))
     resetNpmProbeCacheForTests()
@@ -272,12 +277,12 @@ describe('RFC-231 private create invariant', () => {
       )
 
       const rows = [
-        db.select().from(agents).where(eq(agents.id, createdAgent.id)).get(),
-        db.select().from(skills).where(eq(skills.id, createdSkill.id)).get(),
-        db.select().from(mcps).where(eq(mcps.id, createdMcp.id)).get(),
-        db.select().from(plugins).where(eq(plugins.id, createdPlugin.id)).get(),
-        db.select().from(workflows).where(eq(workflows.id, createdWorkflow.id)).get(),
-        db.select().from(workgroups).where(eq(workgroups.id, createdWorkgroup.id)).get(),
+        (await db.select().from(agents).where(eq(agents.id, createdAgent.id)))[0],
+        (await db.select().from(skills).where(eq(skills.id, createdSkill.id)))[0],
+        (await db.select().from(mcps).where(eq(mcps.id, createdMcp.id)))[0],
+        (await db.select().from(plugins).where(eq(plugins.id, createdPlugin.id)))[0],
+        (await db.select().from(workflows).where(eq(workflows.id, createdWorkflow.id)))[0],
+        (await db.select().from(workgroups).where(eq(workgroups.id, createdWorkgroup.id)))[0],
       ]
       for (const row of rows) {
         expect(row).toMatchObject({
@@ -293,8 +298,8 @@ describe('RFC-231 private create invariant', () => {
   })
 
   test('actor-backed creates derive owner from the exact admitted authority', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedUsers(db, ['alice', 'bob'])
+    const db = harness.db
+    await seedUsers(db, ['alice', 'bob'])
     const created = await createMcp(
       mcpBinding(db, actor('bob')),
       CreateMcpSchema.parse({
@@ -303,19 +308,21 @@ describe('RFC-231 private create invariant', () => {
         config: { command: ['printf'] },
       }),
     )
-    expect(db.select().from(mcps).where(eq(mcps.id, created.id)).get()?.ownerUserId).toBe('bob')
+    expect((await db.select().from(mcps).where(eq(mcps.id, created.id)))[0]?.ownerUserId).toBe(
+      'bob',
+    )
   })
 
   test('workflow create rechecks the actor reference gate after public access is tightened', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedUsers(db, ['alice', 'target-owner'])
+    const db = harness.db
+    await seedUsers(db, ['alice', 'target-owner'])
     const owner = actor('target-owner')
     const target = await createAgent(
       db,
       { name: 'tightened-agent', ...AGENT_INPUT },
       { ownerUserId: 'target-owner', actor: owner },
     )
-    db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, target.id)).run()
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, target.id))
 
     await expect(
       createWorkflow(
@@ -340,15 +347,15 @@ describe('RFC-231 private create invariant', () => {
         {
           ownerUserId: 'alice',
           actor: actor('alice'),
-          beforeWriteTransaction: () => {
-            db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id)).run()
+          beforeWriteTransaction: async () => {
+            await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id))
           },
         },
       ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
-    expect(db.select().from(workflows).where(eq(workflows.name, 'dynamic-save-race')).get()).toBe(
-      undefined,
-    )
+    expect(
+      (await db.select().from(workflows).where(eq(workflows.name, 'dynamic-save-race')))[0],
+    ).toBe(undefined)
   })
 
   test('production writer inventory stays classified as user-private or builtin-public', async () => {
@@ -434,10 +441,10 @@ describe('RFC-231 private create invariant', () => {
   })
 })
 
-describe('RFC-231 Workflow exact copy', () => {
+describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
   test('a viewer becomes private owner, all refs are re-authorized, and names increment', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedUsers(db, ['alice', 'bob'])
+    const db = harness.db
+    await seedUsers(db, ['alice', 'bob'])
     const alice = actor('alice')
     const bob = actor('bob')
     const sourceAgent = await createAgent(
@@ -466,19 +473,19 @@ describe('RFC-231 Workflow exact copy', () => {
       },
       { ownerUserId: 'alice', actor: alice },
     )
-    grant(db, 'workflow', source.id, 'bob')
+    await grant(db, 'workflow', source.id, 'bob')
     const request = {
       expectedVersion: source.version,
       expectedSnapshotHash: source.snapshotHash,
     }
-    const countBefore = db.select({ id: workflows.id }).from(workflows).all().length
+    const countBefore = (await db.select({ id: workflows.id }).from(workflows)).length
 
     await expect(copyWorkflow(db, source.id, request, bob)).rejects.toMatchObject({
       code: 'acl-missing-refs',
     })
-    expect(db.select({ id: workflows.id }).from(workflows).all()).toHaveLength(countBefore)
+    expect(await db.select({ id: workflows.id }).from(workflows)).toHaveLength(countBefore)
 
-    grant(db, 'agent', sourceAgent.id, 'bob')
+    await grant(db, 'agent', sourceAgent.id, 'bob')
     const first = await copyWorkflow(db, source.id, request, bob)
     expect(first).toMatchObject({
       name: 'secure-flow-copy',
@@ -491,9 +498,11 @@ describe('RFC-231 Workflow exact copy', () => {
     })
     expect(first.id).not.toBe(source.id)
     expect(
-      db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, first.id)).all(),
+      await db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, first.id)),
     ).toEqual([])
-    expect(db.select().from(workflows).where(eq(workflows.id, first.id)).get()?.aclRevision).toBe(0)
+    expect(
+      (await db.select().from(workflows).where(eq(workflows.id, first.id)))[0]?.aclRevision,
+    ).toBe(0)
 
     const firstRevision = workflowRevisionOf(first)
     const second = await copyWorkflow(
@@ -511,19 +520,18 @@ describe('RFC-231 Workflow exact copy', () => {
   })
 
   test('visibility precedes parsing, stale revisions fail, and legacy names become create-safe', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedUsers(db, ['alice', 'bob'])
+    const db = harness.db
+    await seedUsers(db, ['alice', 'bob'])
     const bob = actor('bob')
     const corruptId = ulid()
-    db.insert(workflows)
-      .values({
-        id: corruptId,
-        name: 'corrupt-private',
-        definition: '{not-json',
-        ownerUserId: 'alice',
-        visibility: 'private',
-      })
-      .run()
+    await db.insert(workflows).values({
+      id: corruptId,
+      name: 'corrupt-private',
+      definition: '{not-json',
+      ownerUserId: 'alice',
+      visibility: 'private',
+    })
+
     await expect(
       copyWorkflow(
         db,
@@ -534,16 +542,15 @@ describe('RFC-231 Workflow exact copy', () => {
     ).rejects.toMatchObject({ code: 'workflow-not-found' })
 
     const legacyId = ulid()
-    db.insert(workflows)
-      .values({
-        id: legacyId,
-        name: 'Legacy Flow / 中文',
-        description: 'legacy',
-        definition: serializeWorkflowDefinitionStorageV1(EMPTY_DEFINITION),
-        ownerUserId: 'alice',
-        visibility: 'public',
-      })
-      .run()
+    await db.insert(workflows).values({
+      id: legacyId,
+      name: 'Legacy Flow / 中文',
+      description: 'legacy',
+      definition: serializeWorkflowDefinitionStorageV1(EMPTY_DEFINITION),
+      ownerUserId: 'alice',
+      visibility: 'public',
+    })
+
     const legacy = await getWorkflow(db, legacyId)
     expect(legacy).not.toBeNull()
     const revision = workflowRevisionOf(legacy!)
@@ -575,10 +582,10 @@ describe('RFC-231 Workflow exact copy', () => {
   })
 })
 
-describe('RFC-231 Workgroup exact copy', () => {
+describeEachProvider('RFC-231 Workgroup exact copy', (harness) => {
   test('roster ids are reminted, canonical labels refreshed, and human activity is fenced', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedUsers(db, ['alice', 'bob', 'reviewer'])
+    const db = harness.db
+    await seedUsers(db, ['alice', 'bob', 'reviewer'])
     const alice = actor('alice')
     const bob = actor('bob')
     const sourceAgent = await createAgent(
@@ -616,24 +623,25 @@ describe('RFC-231 Workgroup exact copy', () => {
       }),
       { ownerUserId: 'alice', actor: alice },
     )
-    grant(db, 'workgroup', source.id, 'bob')
+    await grant(db, 'workgroup', source.id, 'bob')
     const sourceRevision = workgroupRevisionOf(source)
     const request = {
       expectedVersion: sourceRevision.version,
       expectedSnapshotHash: sourceRevision.snapshotHash,
     }
-    const countBefore = db.select({ id: workgroups.id }).from(workgroups).all().length
+    const countBefore = (await db.select({ id: workgroups.id }).from(workgroups)).length
 
     await expect(copyWorkgroup(db, source.id, request, bob)).rejects.toMatchObject({
       code: 'acl-missing-refs',
     })
-    expect(db.select({ id: workgroups.id }).from(workgroups).all()).toHaveLength(countBefore)
+    expect(await db.select({ id: workgroups.id }).from(workgroups)).toHaveLength(countBefore)
 
-    grant(db, 'agent', sourceAgent.id, 'bob')
-    db.update(agents)
+    await grant(db, 'agent', sourceAgent.id, 'bob')
+    await db
+      .update(agents)
       .set({ name: 'roster-agent-renamed' })
       .where(eq(agents.id, sourceAgent.id))
-      .run()
+
     const copied = await copyWorkgroup(db, source.id, request, bob)
     expect(copied).toMatchObject({
       name: 'review-squad-copy',
@@ -660,20 +668,20 @@ describe('RFC-231 Workgroup exact copy', () => {
       'lead',
     )
     expect(
-      db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, copied.id)).all(),
+      await db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, copied.id)),
     ).toEqual([])
     expect(
-      db.select().from(workgroups).where(eq(workgroups.id, copied.id)).get()?.aclRevision,
+      (await db.select().from(workgroups).where(eq(workgroups.id, copied.id)))[0]?.aclRevision,
     ).toBe(0)
     expect(
-      db.select().from(workgroupMembers).where(eq(workgroupMembers.workgroupId, copied.id)).all(),
+      await db.select().from(workgroupMembers).where(eq(workgroupMembers.workgroupId, copied.id)),
     ).toHaveLength(source.members.length)
 
     await expect(
       copyWorkgroup(db, source.id, { ...request, expectedSnapshotHash: '0'.repeat(64) }, bob),
     ).rejects.toMatchObject({ code: 'resource-operation-stale' })
 
-    db.update(users).set({ status: 'disabled' }).where(eq(users.id, 'reviewer')).run()
+    await db.update(users).set({ status: 'disabled' }).where(eq(users.id, 'reviewer'))
     await expect(copyWorkgroup(db, source.id, request, bob)).rejects.toMatchObject({
       code: 'workgroup-member-user-invalid',
     })

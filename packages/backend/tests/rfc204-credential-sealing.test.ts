@@ -13,11 +13,12 @@
 //     it must never re-clone; otherwise an unreachable remote could block an
 //     upgrade for a whole clone timeout.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
+
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { cachedRepos, scheduledTasks, taskRepos, tasks, workflows } from '../src/db/schema'
 import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
@@ -31,84 +32,85 @@ function hashOf(url: string): string {
   ).hash
 }
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const KEY = Buffer.alloc(32, 7)
 const box = createSecretBoxFromKey(KEY)
 const TOKEN = 'ghp_ATRESTSECRET'
 const CRED_URL = `https://x-access-token:${TOKEN}@github.com/acme/private.git`
 
 function ensureSealed(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   secretBox: Parameters<typeof ensureCredentialsSealed>[1],
   options?: Parameters<typeof ensureCredentialsSealed>[2],
 ): ReturnType<typeof ensureCredentialsSealed> {
   return ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), secretBox, options)
 }
 
-function seedRepo(db: DbClient, id: string, url: string, hash = hashOf(url)): void {
+async function seedRepo(
+  db: ProviderNeutralDatabase,
+  id: string,
+  url: string,
+  hash = hashOf(url),
+): Promise<void> {
   const now = Date.now()
-  db.insert(cachedRepos)
-    .values({
-      id,
-      urlHash: hash,
-      urlEnc: box.seal(url),
-      urlRedacted: redactGitUrl(url),
-      localPath: `/tmp/repos/${hash}`,
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  await db.insert(cachedRepos).values({
+    id,
+    urlHash: hash,
+    urlEnc: box.seal(url),
+    urlRedacted: redactGitUrl(url),
+    localPath: `/tmp/repos/${hash}`,
+    lastFetchedAt: now,
+    createdAt: now,
+  })
 }
 
-function seedTask(db: DbClient, repoUrl: string | null): string {
+async function seedTask(db: ProviderNeutralDatabase, repoUrl: string | null): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const now = Date.now()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({ id: wfId, name: 'wf', definition: '{}', version: 1, createdAt: now, updatedAt: now })
-    .run()
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      repoUrl,
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'done',
-      inputs: '{}',
-      startedAt: now,
-    })
-    .run()
-  db.insert(taskRepos)
-    .values({
-      taskId,
-      repoIndex: 0,
-      repoPath: '/tmp/wt',
-      repoUrl,
-      branch: `agent-workflow/${taskId}`,
-      worktreePath: '/tmp/wt',
-      worktreeDirName: '',
-    })
-    .run()
+
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    repoUrl,
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'done',
+    inputs: '{}',
+    startedAt: now,
+  })
+
+  await db.insert(taskRepos).values({
+    taskId,
+    repoIndex: 0,
+    repoPath: '/tmp/wt',
+    repoUrl,
+    branch: `agent-workflow/${taskId}`,
+    worktreePath: '/tmp/wt',
+    worktreeDirName: '',
+  })
+
   return taskId
 }
 
-describe('RFC-204 T7 — credential sealing gate', async () => {
-  let db: DbClient
+describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('keeps a current sealed credential readable without a plaintext column', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
+    await seedRepo(db, 'cr-1', CRED_URL)
     const r = await ensureSealed(db, box)
     expect(r.sealed).toBe(0)
 
-    const row = db.select().from(cachedRepos).all()[0]!
+    const row = (await db.select().from(cachedRepos))[0]!
     expect(row.urlEnc).not.toBeNull()
     expect(row.urlRedacted).toBe('https://***@github.com/acme/private.git')
     // the ciphertext must not simply be the secret in disguise
@@ -118,45 +120,39 @@ describe('RFC-204 T7 — credential sealing gate', async () => {
   })
 
   test('no row anywhere still holds the token', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
-    seedTask(db, CRED_URL)
+    await seedRepo(db, 'cr-1', CRED_URL)
+    await seedTask(db, CRED_URL)
     await ensureSealed(db, box)
 
     const dump = JSON.stringify([
-      db.select().from(cachedRepos).all(),
-      db.select().from(tasks).all(),
-      db.select().from(taskRepos).all(),
+      await db.select().from(cachedRepos),
+      await db.select().from(tasks),
+      await db.select().from(taskRepos),
     ])
     expect(dump).not.toContain(TOKEN)
   })
 
   test('is idempotent — a second run changes nothing', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
+    await seedRepo(db, 'cr-1', CRED_URL)
     const first = await ensureSealed(db, box)
     expect(first.sealed).toBe(0)
-    const before = JSON.stringify(db.select().from(cachedRepos).all())
+    const before = JSON.stringify(await db.select().from(cachedRepos))
 
     const second = await ensureSealed(db, box)
     expect(second.sealed).toBe(0)
-    expect(JSON.stringify(db.select().from(cachedRepos).all())).toBe(before)
+    expect(JSON.stringify(await db.select().from(cachedRepos))).toBe(before)
   })
 
   test('links task rows to their mirror by hash', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
-    const taskId = seedTask(db, CRED_URL)
+    await seedRepo(db, 'cr-1', CRED_URL)
+    const taskId = await seedTask(db, CRED_URL)
     // precondition: unlinked
-    expect(db.select().from(tasks).all()[0]?.cachedRepoId).toBeNull()
+    expect((await db.select().from(tasks))[0]?.cachedRepoId).toBeNull()
 
     await ensureSealed(db, box)
 
-    expect(
-      db
-        .select()
-        .from(tasks)
-        .all()
-        .find((t) => t.id === taskId)?.cachedRepoId,
-    ).toBe('cr-1')
-    expect(db.select().from(taskRepos).all()[0]?.cachedRepoId).toBe('cr-1')
+    expect((await db.select().from(tasks)).find((t) => t.id === taskId)?.cachedRepoId).toBe('cr-1')
+    expect((await db.select().from(taskRepos))[0]?.cachedRepoId).toBe('cr-1')
   })
 
   test('ORDER: a query-form row is linked before its column is re-redacted', async () => {
@@ -164,56 +160,57 @@ describe('RFC-204 T7 — credential sealing gate', async () => {
     // what a pre-RFC-204 task row looks like. If the scrub ran first the raw
     // value would be gone and the hash could never match its cache row again.
     const qUrl = `https://github.com/acme/p.git?access_token=${TOKEN}`
-    seedRepo(db, 'cr-q', qUrl)
-    seedTask(db, qUrl)
+    await seedRepo(db, 'cr-q', qUrl)
+    await seedTask(db, qUrl)
 
     await ensureSealed(db, box)
 
-    expect(db.select().from(tasks).all()[0]?.cachedRepoId).toBe('cr-q')
+    expect((await db.select().from(tasks))[0]?.cachedRepoId).toBe('cr-q')
     // and the token is gone from the task column afterwards
-    const dump = JSON.stringify(db.select().from(tasks).all())
+    const dump = JSON.stringify(await db.select().from(tasks))
     expect(dump).not.toContain(TOKEN)
   })
 
   test('NETWORK-FREE: a row whose mirror is unreachable is still sealed', async () => {
     // No git binary is ever invoked — the local path does not even exist. A gate
     // that re-resolved the URL would hang the daemon boot here.
-    seedRepo(db, 'cr-gone', CRED_URL)
+    await seedRepo(db, 'cr-gone', CRED_URL)
     const r = await ensureSealed(db, box)
     expect(r.sealed).toBe(0)
-    expect(db.select().from(cachedRepos).all()[0]?.urlEnc).not.toBeNull()
+    expect((await db.select().from(cachedRepos))[0]?.urlEnc).not.toBeNull()
   })
 
   test('without a SecretBox ciphertext is preserved but cannot be read', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
+    await seedRepo(db, 'cr-1', CRED_URL)
     const r = await ensureSealed(db, undefined)
     expect(r.sealed).toBe(0)
-    const row = db.select().from(cachedRepos).all()[0]!
+    const row = (await db.select().from(cachedRepos))[0]!
     expect(row.urlEnc).not.toBeNull()
     expect(unsealRepoUrl(row, undefined)).toBeNull()
   })
 
   test('a sealed row read without the key fails closed rather than guessing', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
+    await seedRepo(db, 'cr-1', CRED_URL)
     await ensureSealed(db, box)
-    const row = db.select().from(cachedRepos).all()[0]!
+    const row = (await db.select().from(cachedRepos))[0]!
     expect(unsealRepoUrl(row, undefined)).toBeNull()
     // wrong key → also null, never a partial/garbage URL
     expect(unsealRepoUrl(row, createSecretBoxFromKey(Buffer.alloc(32, 9)))).toBeNull()
   })
 })
 
-describe('RFC-204 T5 — scheduled launch payloads hold no credential', async () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
+describeEachProvider(
+  'RFC-204 T5 — scheduled launch payloads hold no credential',
+  async (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
 
-  function seedSchedule(payload: unknown): string {
-    const id = ulid()
-    const now = Date.now()
-    db.insert(scheduledTasks)
-      .values({
+    async function seedSchedule(payload: unknown): Promise<string> {
+      const id = ulid()
+      const now = Date.now()
+      await db.insert(scheduledTasks).values({
         id,
         name: 'nightly',
         ownerUserId: '__system__',
@@ -225,68 +222,58 @@ describe('RFC-204 T5 — scheduled launch payloads hold no credential', async ()
         createdAt: now,
         updatedAt: now,
       })
-      .run()
-    return id
-  }
 
-  test('a stored credentialed repoUrl is rewritten to a cachedRepoId reference', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
-    const id = seedSchedule({ workflowId: 'w', name: 'n', repoUrl: CRED_URL, inputs: {} })
+      return id
+    }
 
-    await ensureSealed(db, box)
+    test('a stored credentialed repoUrl is rewritten to a cachedRepoId reference', async () => {
+      await seedRepo(db, 'cr-1', CRED_URL)
+      const id = await seedSchedule({ workflowId: 'w', name: 'n', repoUrl: CRED_URL, inputs: {} })
 
-    const row = db
-      .select()
-      .from(scheduledTasks)
-      .all()
-      .find((r) => r.id === id)!
-    expect(row.launchPayload).not.toContain(TOKEN)
-    const after = JSON.parse(row.launchPayload) as Record<string, unknown>
-    // still launchable — just by id now, which the launch schema accepts
-    expect(after['cachedRepoId']).toBe('cr-1')
-    expect(after['repoUrl']).toBeUndefined()
-  })
+      await ensureSealed(db, box)
 
-  test('multi-repo entries are converted too', async () => {
-    seedRepo(db, 'cr-1', CRED_URL)
-    const id = seedSchedule({
-      workflowId: 'w',
-      name: 'n',
-      repos: [{ repoUrl: CRED_URL, ref: 'main' }],
-      inputs: {},
+      const row = (await db.select().from(scheduledTasks)).find((r) => r.id === id)!
+      expect(row.launchPayload).not.toContain(TOKEN)
+      const after = JSON.parse(row.launchPayload) as Record<string, unknown>
+      // still launchable — just by id now, which the launch schema accepts
+      expect(after['cachedRepoId']).toBe('cr-1')
+      expect(after['repoUrl']).toBeUndefined()
     })
 
-    await ensureSealed(db, box)
+    test('multi-repo entries are converted too', async () => {
+      await seedRepo(db, 'cr-1', CRED_URL)
+      const id = await seedSchedule({
+        workflowId: 'w',
+        name: 'n',
+        repos: [{ repoUrl: CRED_URL, ref: 'main' }],
+        inputs: {},
+      })
 
-    const row = db
-      .select()
-      .from(scheduledTasks)
-      .all()
-      .find((r) => r.id === id)!
-    expect(row.launchPayload).not.toContain(TOKEN)
-    const repos = (JSON.parse(row.launchPayload) as { repos: Array<Record<string, unknown>> }).repos
-    expect(repos[0]?.cachedRepoId).toBe('cr-1')
-    expect(repos[0]?.ref).toBe('main') // ref survives the rewrite
-  })
+      await ensureSealed(db, box)
 
-  test('a payload with no matching mirror is left launchable (not destroyed)', async () => {
-    // No cache row: the URL is the only way to launch it, so the gate must not
-    // strip it. The read-side mapper is what keeps it off the wire.
-    const id = seedSchedule({ workflowId: 'w', name: 'n', repoUrl: CRED_URL, inputs: {} })
-    await ensureSealed(db, box)
-    const row = db
-      .select()
-      .from(scheduledTasks)
-      .all()
-      .find((r) => r.id === id)!
-    expect(JSON.parse(row.launchPayload)['repoUrl']).toBe(CRED_URL)
-  })
-})
+      const row = (await db.select().from(scheduledTasks)).find((r) => r.id === id)!
+      expect(row.launchPayload).not.toContain(TOKEN)
+      const repos = (JSON.parse(row.launchPayload) as { repos: Array<Record<string, unknown>> })
+        .repos
+      expect(repos[0]?.cachedRepoId).toBe('cr-1')
+      expect(repos[0]?.ref).toBe('main') // ref survives the rewrite
+    })
 
-describe('RFC-204 — the delete guard sees schedule references', async () => {
-  let db: DbClient
+    test('a payload with no matching mirror is left launchable (not destroyed)', async () => {
+      // No cache row: the URL is the only way to launch it, so the gate must not
+      // strip it. The read-side mapper is what keeps it off the wire.
+      const id = await seedSchedule({ workflowId: 'w', name: 'n', repoUrl: CRED_URL, inputs: {} })
+      await ensureSealed(db, box)
+      const row = (await db.select().from(scheduledTasks)).find((r) => r.id === id)!
+      expect(JSON.parse(row.launchPayload)['repoUrl']).toBe(CRED_URL)
+    })
+  },
+)
+
+describeEachProvider('RFC-204 — the delete guard sees schedule references', async (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('a schedule referencing the mirror by id counts as a reference', async () => {
@@ -294,35 +281,34 @@ describe('RFC-204 — the delete guard sees schedule references', async () => {
     // on the cache row, so the delete guard has to count them — otherwise
     // deleting the mirror silently breaks the next fire with
     // cached-repo-not-found.
-    seedRepo(db, 'cr-1', CRED_URL)
+    await seedRepo(db, 'cr-1', CRED_URL)
     const now = Date.now()
-    db.insert(scheduledTasks)
-      .values({
-        id: ulid(),
-        name: 'nightly',
-        ownerUserId: '__system__',
-        launchKind: 'workflow',
-        launchPayload: JSON.stringify({ workflowId: 'w', name: 'n', cachedRepoId: 'cr-1' }),
-        scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 3600000 }),
-        enabled: true,
-        nextRunAt: now,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
+    await db.insert(scheduledTasks).values({
+      id: ulid(),
+      name: 'nightly',
+      ownerUserId: '__system__',
+      launchKind: 'workflow',
+      launchPayload: JSON.stringify({ workflowId: 'w', name: 'n', cachedRepoId: 'cr-1' }),
+      scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 3600000 }),
+      enabled: true,
+      nextRunAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
 
-    const rows = db.select().from(scheduledTasks).all()
+    const rows = await db.select().from(scheduledTasks)
     expect(rows[0]?.launchPayload).toContain('"cachedRepoId":"cr-1"')
   })
 })
 
-describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk path', async () => {
-  test('startup seals but does NOT block; backup context throws (token would ship)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // Historical row onboarded from a ?access_token= URL — the token is slugged
-    // into local_path, which VACUUM INTO copies verbatim into the backup.
-    db.insert(cachedRepos)
-      .values({
+describeEachProvider(
+  'RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk path',
+  async (harness) => {
+    test('startup seals but does NOT block; backup context throws (token would ship)', async () => {
+      const db = harness.db
+      // Historical row onboarded from a ?access_token= URL — the token is slugged
+      // into local_path, which VACUUM INTO copies verbatim into the backup.
+      await db.insert(cachedRepos).values({
         id: ulid(),
         urlHash: 'h1',
         urlEnc: box.seal('https://h/r.git?access_token=TOPSECRET'),
@@ -332,26 +318,24 @@ describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk p
         lastFetchedAt: 1,
         createdAt: 1,
       })
-      .run()
 
-    // Startup context (no flag): must NOT block — the daemon has to boot. It
-    // keeps the sealed URL and leaves urlRedacted with the query key.
-    await expect(ensureSealed(db, box)).resolves.toBeDefined()
+      // Startup context (no flag): must NOT block — the daemon has to boot. It
+      // keeps the sealed URL and leaves urlRedacted with the query key.
+      await expect(ensureSealed(db, box)).resolves.toBeDefined()
 
-    // Backup context: refuse — the local_path still embeds the plaintext token.
-    let code: string | undefined
-    try {
-      await ensureSealed(db, box, { blockOnCredentialedPath: true })
-    } catch (e) {
-      code = (e as { code?: string }).code
-    }
-    expect(code).toBe('backup-credentialed-path')
-  })
+      // Backup context: refuse — the local_path still embeds the plaintext token.
+      let code: string | undefined
+      try {
+        await ensureSealed(db, box, { blockOnCredentialedPath: true })
+      } catch (e) {
+        code = (e as { code?: string }).code
+      }
+      expect(code).toBe('backup-credentialed-path')
+    })
 
-  test('a credential-free cached repo never blocks a backup', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    db.insert(cachedRepos)
-      .values({
+    test('a credential-free cached repo never blocks a backup', async () => {
+      const db = harness.db
+      await db.insert(cachedRepos).values({
         id: ulid(),
         urlHash: 'h2',
         urlEnc: box.seal('https://h/clean.git'),
@@ -361,16 +345,18 @@ describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk p
         lastFetchedAt: 1,
         createdAt: 1,
       })
-      .run()
-    await expect(ensureSealed(db, box, { blockOnCredentialedPath: true })).resolves.toBeDefined()
-  })
-})
 
-describe('RFC-204 impl-gate P0-3 — backup refuses a scheduled plaintext credentialed repoUrl', async () => {
-  function insertSchedule(db: DbClient, payload: object): void {
-    const now = Date.now()
-    db.insert(scheduledTasks)
-      .values({
+      await expect(ensureSealed(db, box, { blockOnCredentialedPath: true })).resolves.toBeDefined()
+    })
+  },
+)
+
+describeEachProvider(
+  'RFC-204 impl-gate P0-3 — backup refuses a scheduled plaintext credentialed repoUrl',
+  async (harness) => {
+    async function insertSchedule(db: ProviderNeutralDatabase, payload: object): Promise<void> {
+      const now = Date.now()
+      await db.insert(scheduledTasks).values({
         id: ulid(),
         name: 'nightly',
         ownerUserId: '__system__',
@@ -382,33 +368,33 @@ describe('RFC-204 impl-gate P0-3 — backup refuses a scheduled plaintext creden
         createdAt: now,
         updatedAt: now,
       })
-      .run()
-  }
-
-  test('startup does not block; backup refuses a credentialed repoUrl with no cache row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // A userinfo-credentialed repoUrl, no matching cached_repos row → 2b can't
-    // migrate it to a cachedRepoId, so it stays plaintext in the payload.
-    insertSchedule(db, { workflowId: 'w', name: 'n', repoUrl: 'https://user:tok@h/r.git' })
-    await expect(ensureSealed(db, box)).resolves.toBeDefined() // daemon boots
-    let code: string | undefined
-    try {
-      await ensureSealed(db, box, { blockOnCredentialedPath: true })
-    } catch (e) {
-      code = (e as { code?: string }).code
     }
-    expect(code).toBe('backup-credentialed-path')
-  })
 
-  test('a cachedRepoId payload (no plaintext repoUrl) never blocks a backup', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    insertSchedule(db, { workflowId: 'w', name: 'n', cachedRepoId: 'cr-1' })
-    await expect(ensureSealed(db, box, { blockOnCredentialedPath: true })).resolves.toBeDefined()
-  })
+    test('startup does not block; backup refuses a credentialed repoUrl with no cache row', async () => {
+      const db = harness.db
+      // A userinfo-credentialed repoUrl, no matching cached_repos row → 2b can't
+      // migrate it to a cachedRepoId, so it stays plaintext in the payload.
+      await insertSchedule(db, { workflowId: 'w', name: 'n', repoUrl: 'https://user:tok@h/r.git' })
+      await expect(ensureSealed(db, box)).resolves.toBeDefined() // daemon boots
+      let code: string | undefined
+      try {
+        await ensureSealed(db, box, { blockOnCredentialedPath: true })
+      } catch (e) {
+        code = (e as { code?: string }).code
+      }
+      expect(code).toBe('backup-credentialed-path')
+    })
 
-  test('a credential-free repoUrl (public https) never blocks a backup', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    insertSchedule(db, { workflowId: 'w', name: 'n', repoUrl: 'https://h/public.git' })
-    await expect(ensureSealed(db, box, { blockOnCredentialedPath: true })).resolves.toBeDefined()
-  })
-})
+    test('a cachedRepoId payload (no plaintext repoUrl) never blocks a backup', async () => {
+      const db = harness.db
+      await insertSchedule(db, { workflowId: 'w', name: 'n', cachedRepoId: 'cr-1' })
+      await expect(ensureSealed(db, box, { blockOnCredentialedPath: true })).resolves.toBeDefined()
+    })
+
+    test('a credential-free repoUrl (public https) never blocks a backup', async () => {
+      const db = harness.db
+      await insertSchedule(db, { workflowId: 'w', name: 'n', repoUrl: 'https://h/public.git' })
+      await expect(ensureSealed(db, box, { blockOnCredentialedPath: true })).resolves.toBeDefined()
+    })
+  },
+)

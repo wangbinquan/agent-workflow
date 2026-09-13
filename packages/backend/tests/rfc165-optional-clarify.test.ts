@@ -29,15 +29,15 @@ import { readFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -64,11 +64,10 @@ function makeAgent(): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-optional-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -98,7 +97,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertPendingNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertPendingNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'asker', status: 'pending' })
   return id
@@ -150,10 +149,10 @@ function runOptionalNode(h: Harness, nodeRunId: string, env: Record<string, stri
   )
 }
 
-describe('RFC-165 O1 — runner accepts either envelope under optional', () => {
+describeEachProvider('RFC-165 O1 — runner accepts either envelope under optional', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

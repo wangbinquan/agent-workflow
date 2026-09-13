@@ -13,45 +13,48 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 
-describe('RFC-127 node_runs.agent_override_name persistence (migration 0067)', () => {
-  const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-  const TASK_ID = 'task-borrow'
-  let db: DbClient
-  beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
-    await db.run(sql`
+describeEachProvider(
+  'RFC-127 node_runs.agent_override_name persistence (migration 0067)',
+  (harness) => {
+    const TASK_ID = 'task-borrow'
+    let db: ProviderNeutralDatabase
+    beforeEach(async () => {
+      db = harness.db
+      await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
+      await db.run(sql`
       INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
         base_branch, branch, status, inputs, started_at, schema_version)
       VALUES (${TASK_ID}, 'b', 'wf', '{}', '/tmp/r', '/tmp/w', 'main', 'b', 'running', '{}', 1, 1)
     `)
-  })
-
-  test('override persists; default null', async () => {
-    const id = await mintNodeRun(db, {
-      taskId: TASK_ID,
-      nodeId: 'n1',
-      status: 'pending',
-      cause: 'initial',
-      overrides: { agentOverrideName: 'agent-x' },
     })
-    const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
-    expect(row.agentOverrideName).toBe('agent-x')
 
-    const id2 = await mintNodeRun(db, {
-      taskId: TASK_ID,
-      nodeId: 'n2',
-      status: 'pending',
-      cause: 'initial',
+    test('override persists; default null', async () => {
+      const id = await mintNodeRun(db, {
+        taskId: TASK_ID,
+        nodeId: 'n1',
+        status: 'pending',
+        cause: 'initial',
+        overrides: { agentOverrideName: 'agent-x' },
+      })
+      const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+      expect(row.agentOverrideName).toBe('agent-x')
+
+      const id2 = await mintNodeRun(db, {
+        taskId: TASK_ID,
+        nodeId: 'n2',
+        status: 'pending',
+        cause: 'initial',
+      })
+      const row2 = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id2)))[0]!
+      expect(row2.agentOverrideName).toBeNull()
     })
-    const row2 = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id2)))[0]!
-    expect(row2.agentOverrideName).toBeNull()
-  })
-})
+  },
+)
 
 // RFC-132 ③: TaskExecution 不再应用 borrow(节点恒跑自己的 agent);retry/revival 行的
 // override 恒 null。锁定 buildBorrowedAgent 与 borrow 应用分支不复活。

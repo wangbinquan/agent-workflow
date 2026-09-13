@@ -6,14 +6,13 @@
 // (next_run_at / last_* / consecutive_failures) — a manual test-run never
 // advances the clock nor auto-disables. Works on a disabled schedule (manual
 // override). Route gate = same owner/admin visibility as the other routes.
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { scheduledTasks, workflows } from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderNeutralDatabase } from '../src/db/query'
@@ -30,7 +29,6 @@ import {
   withIntegrationTriggerResources,
 } from './helpers/integrationTriggerResourceBinding'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 const DEF: CreateWorkflow['definition'] = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
 const TRIGGER_DEF: CreateWorkflow['definition'] = {
@@ -74,13 +72,13 @@ function actorFor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
-  let db: DbClient
+describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (harness) => {
+  let db: ProviderNeutralDatabase
   let wfId = ''
   let bobId = ''
   let identityAccess: ReturnType<typeof withIntegrationTriggerResources>
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     identityAccess = withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db }))
     const bob = await createUser(db, {
       username: 'bob',

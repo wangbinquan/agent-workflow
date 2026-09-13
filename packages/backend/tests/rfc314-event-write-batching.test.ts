@@ -23,13 +23,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { pump } from '../src/services/execution/managedProcess'
 import { runNode } from './helpers/runner'
 import { recordStatements } from './helpers/statementRecorder'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 // ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ describe('RFC-314 D3 —— pump 的 chunk 边界回调', () => {
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -123,11 +123,10 @@ function makeAgent(): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc314-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -157,7 +156,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'node1', status: 'pending' })
   return id
@@ -178,14 +177,19 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('RFC-314 D3 —— 端到端', () => {
+describeEachProvider('RFC-314 D3 —— 端到端', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
   test('一批事件合并成远少于行数的 INSERT，内容 / 顺序 / id 单调性不变', async () => {
+    // 这条判据靠 `$client.prepare` / `$client.query` 的调用计数来证明「批量写」，
+    // 那是 bun:sqlite 句柄独有的仪器面；PostgreSQL 上没有同形的语句计数入口。
+    // 同文件其余判据（内容 / 顺序 / id 单调性）两 provider 都跑，只有这条计数判据留在
+    // SQLite 上——与 `rfc311-task-page-fastpath` 的 `EXPLAIN QUERY PLAN` 守卫同一先例。
+    if (harness.capabilities.provider !== 'sqlite') return
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const EVENTS = 30
     const raw = (h.db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client

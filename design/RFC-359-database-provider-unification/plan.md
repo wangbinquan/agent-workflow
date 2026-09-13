@@ -28,7 +28,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                                                                                         | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 重采 + 分层更正**：账本 530 → 460（判据同批从文本扫改成 AST 数真调用点）。剩余 460 按**该不该双引擎**分层（§5co）：`migration-*` **97**（判的是 SQLite 迁移链本身，对账归 W5-T19g）、测 **SQLite 执行引擎**的 **85**（`TaskRouteOperations` 已登记为「不该合」，PG 生产走 `taskExecutionProvider.cancellation`，不走这条路径）——这两类**按裁决就该单引擎**；加上 41 个 `new Database(` 开真实文件（备份/还原/VACUUM INTO/外部 store）同样按定义单引擎。**真正的剩余迁移面是 278 个**，主要卡在 callee 形参（§5bz / §5cn 那张表，去掉误报的第一组）。 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 重采 + 分层更正**：账本 530 → 460（判据同批从文本扫改成 AST 数真调用点），同日续收至 **439**（§5cr / §5cs / §5ct）。剩余按**该不该双引擎**分层（§5co）：`migration-*` **97**（判的是 SQLite 迁移链本身，对账归 W5-T19g）、测 **SQLite 执行引擎**的 **85**（`TaskRouteOperations` 已登记为「不该合」，PG 生产走 `taskExecutionProvider.cancellation`，不走这条路径）——这两类**按裁决就该单引擎**；加上 41 个 `new Database(` 开真实文件（备份/还原/VACUUM INTO/外部 store）同样按定义单引擎。**真正的剩余迁移面是 278 个**，主要卡在 callee 形参（§5bz / §5cn 那张表，去掉误报的第一组）。 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34/6，13后端10/3；主2353/15、原2227全过，独立2/2及hook18/18、原RFC259两OS、两个原Playwright身份两OS通过。W55最终39core编译、metadata63/111与canonical13/55通过且候选稳定，首轮缺import失败保留；完整新SHA待托管，发布后仅修流水线。 | 待办   |
@@ -8318,3 +8318,62 @@ deadlock, constraint and storage faults roll back row plus receipt before exact 
 新名字（例如两个旧名都要退役）时才新增符号，且要预期两本 census 账各涨一格。
 
 12 个 webhook 相关套件 133 pass / 0 fail（双引擎）。
+
+## 5ct. 「构造点本来就在 describe 体内」那一桶（458 → 439），以及跨引擎断言错误原因的正确姿势
+
+这一批的形状最省事：`createInMemoryDb(MIGRATIONS)` 已经落在顶层 `describe` 的 `beforeEach`
+或 `test` 体内，把顶层 `describe` 换成 `describeEachProvider(name, (harness) => …)` 之后
+`harness` 天然在作用域里，构造点直接替换成 `harness.db` 即可。变换器（AST，非正则）另外做四件事：
+句柄类型 `DbClient` → `ProviderNeutralDatabase`、退役 `MIGRATIONS`（含**被 import 进来**的那种）、
+清掉因此失去唯一用途的 `resolve` / `describe` / `beforeEach` 等 import、以及把 bun:sqlite 独有的
+同步终结子（`.all()` / `.get()` / `.run()`）换成 `await`。
+
+**同步终结子的 `await` 会往外传播**，这是这一批最容易做半截的地方：一个原本同步的模块级
+`seedTask()` 一旦内部要 `await`，它自己要变 `async`，文件内**每一个调用点**都要补 `await`，
+而它的显式返回类型 `SeededTask` 还得包成 `Promise<SeededTask>`（否则 TS1064）。变换器把这条
+传播做成不动点迭代——先收集「因终结子而必须 async」的函数，再按名字找文件内调用点补 `await`
+并把调用者一并标成 async，反复到收敛。`rfc204-credential-sealing` 一个文件就退役 27 个终结子、
+4 个函数转 async、20 个调用点补 `await`。
+
+### 拦路石的分布（38 个候选实测）
+
+按 typecheck 分成两类，**硬的就地回滚、软的就地修**：
+
+- **硬（17 个）**：形参写死 `DbClient` / `BunSQLiteDatabase` 的下游 API——`runTask`、
+  `createApp`、`$client` 仪器面。这些按 §5co 的裁决**本来就该单引擎**，回滚不留债。
+- **软（8 个）**：只是自己还在用同步终结子。`termfix2` 一把修完。
+
+### 两处**此前零覆盖**的真实跨引擎落差（迁移照出来的，不是顺手改的）
+
+1. `rfc120-deferred-dispatch`「RFC-333 intent 故障回滚」的故障注入写死了 SQLite 的
+   `CREATE TRIGGER … BEGIN SELECT RAISE(ABORT, 'rfc333-question-intent-fault'); END`。
+   PostgreSQL 要一个 plpgsql 触发器函数才能抛出等价异常；而且这类 fixture DDL **只能走
+   `harness.executeFixtureDdl`**，业务客户端会以 `postgresql-ddl-through-business-client` 拒绝。
+2. `rfc349-auth-provider-contract` 把 `auth.provider` 写死断言成 `'sqlite'`，且它的
+   `createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })` 带了 bootstrap 语义——
+   **变换器默认会把第二个实参吞掉**。`describeEachProvider` 的 bootstrap 是**第三个**形参
+   （签名是 `(name, body, options)`，不是 `(name, options, body)`），传错位置会得到
+   `body is not a function`。
+
+**新工具：`tests/helpers/databaseFailure.ts`**。跨引擎断言「数据库这一层为什么失败」不能直接
+`rejects.toThrow('…')`：两个 provider 把底层错误包到了不同深度——SQLite 上错误就是最外层那个，
+PostgreSQL 上 drizzle 抛 `DrizzleQueryError`，最外层 message 被换成
+`Failed query: <SQL>\nparams: …`，真正的 `RAISE EXCEPTION` 文案只在 `cause` 里
+（实测 `cause` 是 postgres.js 的 `PostgresError`）。只看最外层的判据在 PG 上必然红，
+而且红出来的还是一段与故障无关的 SQL 文本。`expectDatabaseFailure(run, expected)` 沿整条
+`cause` 链找，两个引擎同一写法。
+
+### 一条留在 SQLite 上的判据（登记，不是漏迁）
+
+`rfc314-event-write-batching`「一批事件合并成远少于行数的 INSERT」靠 `$client.prepare` /
+`$client.query` 的**调用计数**证明批量写，那是 bun:sqlite 句柄独有的仪器面。同文件其余判据
+（内容 / 顺序 / id 单调性）两引擎都跑，只有这条计数判据加 `if (harness.capabilities.provider
+!== 'sqlite') return`——与 `rfc311-task-page-fastpath` 的 `EXPLAIN QUERY PLAN` 守卫同一先例。
+
+### 一个必须记住的变换器前置条件
+
+**`createInMemoryDb` 的第二个实参不能吞**。这一批 4 个文件带了第二实参，其中
+`{ bootstrap: 'ready' }` 与 harness 默认行为等价（`eachProvider.ts` 只在
+`options.bootstrap === 'required'` 时**不**把 `auth_login_policy` 标成已 bootstrap），
+可以安全丢弃；`{ bootstrap: 'required' }` 必须转成 describe 的 options。
+变换器此后要么把选项转交过去、要么拒绝该文件，不允许静默丢。

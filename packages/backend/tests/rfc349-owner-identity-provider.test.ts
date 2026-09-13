@@ -1,11 +1,11 @@
 // RFC-349 — owner projections and owner/name conflicts are provider-neutral;
 // SQL remains in Identity Access infrastructure.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { users } from '@/db/schema'
 import { createOwnerIdentityQueries } from '@/modules/identity-access/application/ports/ownerIdentityQueries'
@@ -18,8 +18,6 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function source(relativePath: string): string {
   return readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
@@ -72,7 +70,7 @@ afterEach(() => {
   selectDatabaseSchemaProvider('sqlite')
 })
 
-describe('RFC-349 owner identity provider seam', () => {
+describeEachProvider('RFC-349 owner identity provider seam', (harness) => {
   test('application owns filtering, bounded batches and malformed-row degradation', async () => {
     const batches: string[][] = []
     const queries = createOwnerIdentityQueries({
@@ -103,7 +101,7 @@ describe('RFC-349 owner identity provider seam', () => {
   })
 
   test('SQLite and PostgreSQL expose the same Promise query contract', async () => {
-    const sqlite = createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })
+    const sqlite = harness.db
     await sqlite.insert(users).values({
       id: 'owner-sqlite',
       username: 'owner-sqlite',

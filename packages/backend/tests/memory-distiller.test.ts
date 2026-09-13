@@ -13,7 +13,8 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Agent } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   memories,
   memoryDistillJobs,
@@ -40,8 +41,6 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 type MemoryTestContext = ReturnType<typeof createSqliteMemoryDistillTestContext>
 
 function distillDeps(memory: MemoryTestContext) {
@@ -60,35 +59,33 @@ interface SeededTask {
   workflowId: string
 }
 
-function seedTask(db: DbClient): SeededTask {
+async function seedTask(db: ProviderNeutralDatabase): Promise<SeededTask> {
   const wfId = ulid()
-  db.insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  await db.insert(workflows).values({
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
+
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: 'fixture-task',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'fixture-task',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
+
   return { taskId, workflowId: wfId }
 }
 
@@ -229,42 +226,40 @@ later draft:
   })
 })
 
-describe('loadSourceEvents + loadScopeContexts', () => {
-  let db: DbClient
+describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
+  let db: ProviderNeutralDatabase
   let memory: MemoryTestContext
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
   test('loads clarify + review + feedback rows by id and groups them by kind', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     // Seed a parent node_run so clarify session has a valid FK target.
     const sourceRunId = ulid()
-    db.insert(nodeRuns)
-      .values({
-        id: sourceRunId,
-        taskId,
-        nodeId: 'agent-1',
-        iteration: 0,
-        retryIndex: 0,
-        reviewIteration: 0,
-        status: 'awaiting_human',
-      })
-      .run()
+    await db.insert(nodeRuns).values({
+      id: sourceRunId,
+      taskId,
+      nodeId: 'agent-1',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'awaiting_human',
+    })
+
     const clarifyRunId = ulid()
-    db.insert(nodeRuns)
-      .values({
-        id: clarifyRunId,
-        taskId,
-        nodeId: 'clarify-1',
-        iteration: 0,
-        retryIndex: 0,
-        reviewIteration: 0,
-        status: 'awaiting_human',
-      })
-      .run()
+    await db.insert(nodeRuns).values({
+      id: clarifyRunId,
+      taskId,
+      nodeId: 'clarify-1',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'awaiting_human',
+    })
+
     const clarifyId = ulid()
     await insertClarifyRoundRaw(db, {
       kind: 'self' as const,
@@ -281,16 +276,14 @@ describe('loadSourceEvents + loadScopeContexts', () => {
       status: 'answered',
     })
     const feedbackId = ulid()
-    db.insert(taskFeedback)
-      .values({
-        id: feedbackId,
-        taskId,
-        authorUserId: null,
-        bodyMd: 'remember this',
-        createdAt: Date.now(),
-        distilled: 1,
-      })
-      .run()
+    await db.insert(taskFeedback).values({
+      id: feedbackId,
+      taskId,
+      authorUserId: null,
+      bodyMd: 'remember this',
+      createdAt: Date.now(),
+      distilled: 1,
+    })
 
     const job = rowToDistillJob({
       id: ulid(),
@@ -346,46 +339,43 @@ describe('loadSourceEvents + loadScopeContexts', () => {
 
   test('loadScopeContexts collects approved memories per scope and aggregates the tag pool', async () => {
     // Seed two approved memories on different scopes + one candidate (excluded).
-    db.insert(memories)
-      .values({
-        id: ulid(),
-        scopeType: 'global',
-        scopeId: null,
-        title: 'g-mem',
-        bodyMd: 'body',
-        tags: JSON.stringify(['tag-a', 'tag-b']),
-        status: 'approved',
-        sourceKind: 'manual',
-        createdAt: Date.now(),
-      })
-      .run()
-    db.insert(memories)
-      .values({
-        id: ulid(),
-        scopeType: 'agent',
-        scopeId: 'a1',
-        title: 'a-mem',
-        bodyMd: 'body',
-        tags: JSON.stringify(['tag-c']),
-        status: 'approved',
-        sourceKind: 'manual',
-        createdAt: Date.now(),
-      })
-      .run()
+    await db.insert(memories).values({
+      id: ulid(),
+      scopeType: 'global',
+      scopeId: null,
+      title: 'g-mem',
+      bodyMd: 'body',
+      tags: JSON.stringify(['tag-a', 'tag-b']),
+      status: 'approved',
+      sourceKind: 'manual',
+      createdAt: Date.now(),
+    })
+
+    await db.insert(memories).values({
+      id: ulid(),
+      scopeType: 'agent',
+      scopeId: 'a1',
+      title: 'a-mem',
+      bodyMd: 'body',
+      tags: JSON.stringify(['tag-c']),
+      status: 'approved',
+      sourceKind: 'manual',
+      createdAt: Date.now(),
+    })
+
     // Candidate must NOT appear.
-    db.insert(memories)
-      .values({
-        id: ulid(),
-        scopeType: 'global',
-        scopeId: null,
-        title: 'cand',
-        bodyMd: 'body',
-        tags: JSON.stringify(['tag-z']),
-        status: 'candidate',
-        sourceKind: 'manual',
-        createdAt: Date.now(),
-      })
-      .run()
+    await db.insert(memories).values({
+      id: ulid(),
+      scopeType: 'global',
+      scopeId: null,
+      title: 'cand',
+      bodyMd: 'body',
+      tags: JSON.stringify(['tag-z']),
+      status: 'candidate',
+      sourceKind: 'manual',
+      createdAt: Date.now(),
+    })
+
     const ctx = await loadScopeContexts(memory.store, {
       agentIds: ['a1'],
       workflowId: null,
@@ -463,11 +453,11 @@ describe('buildDistillerUserPrompt', () => {
   })
 })
 
-describe('validateAndPersistCandidate', () => {
-  let db: DbClient
+describeEachProvider('validateAndPersistCandidate', (harness) => {
+  let db: ProviderNeutralDatabase
   let memory: MemoryTestContext
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
@@ -507,7 +497,7 @@ describe('validateAndPersistCandidate', () => {
     expect(ok!.memory.tags).toEqual(['x', 'y', 'z'])
     expect(ok!.memory.distillAction).toBe('new')
     expect(ok!.memory.sourceKind).toBe('clarify')
-    const rowCount = db.select().from(memories).all().length
+    const rowCount = (await db.select().from(memories)).length
     expect(rowCount).toBe(1)
   })
 
@@ -540,42 +530,41 @@ describe('validateAndPersistCandidate', () => {
       job,
     )
     expect(r).toBeNull()
-    expect(db.select().from(memories).all().length).toBe(0)
+    expect((await db.select().from(memories)).length).toBe(0)
   })
 })
 
-describe('runDistill orchestration (mocked spawnFn)', () => {
-  let db: DbClient
+describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
+  let db: ProviderNeutralDatabase
   let memory: MemoryTestContext
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
   test('happy path: spawn returns one candidate envelope → persisted as candidate', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const jobId = ulid()
-    db.insert(memoryDistillJobs)
-      .values({
-        id: jobId,
-        debounceKey: `${taskId}:clarify`,
-        sourceKind: 'clarify',
-        sourceEventId: 'c1',
-        taskId,
-        scopeResolvedJson: JSON.stringify({
-          agentIds: [],
-          workflowId: null,
-          repoId: null,
-          includeGlobal: true,
-        }),
-        status: 'running',
-        attempts: 0,
-        nextRunAt: Date.now(),
-        createdAt: Date.now(),
-      })
-      .run()
-    const jobRow = db.select().from(memoryDistillJobs).all()[0]!
+    await db.insert(memoryDistillJobs).values({
+      id: jobId,
+      debounceKey: `${taskId}:clarify`,
+      sourceKind: 'clarify',
+      sourceEventId: 'c1',
+      taskId,
+      scopeResolvedJson: JSON.stringify({
+        agentIds: [],
+        workflowId: null,
+        repoId: null,
+        includeGlobal: true,
+      }),
+      status: 'running',
+      attempts: 0,
+      nextRunAt: Date.now(),
+      createdAt: Date.now(),
+    })
+
+    const jobRow = (await db.select().from(memoryDistillJobs))[0]!
     const spawnFn: DistillerSpawnFn = async (input) => {
       // RFC-280 T4（落差⑤）：throwaway cwd 迁 appHome scratch，不再 OS tmpdir。
       expect(input.cwd).toContain('distiller-')
@@ -607,35 +596,34 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       spawnFn,
     })
     expect(r.candidatesCreated).toBe(1)
-    const inserted = db.select().from(memories).all()
+    const inserted = await db.select().from(memories)
     expect(inserted.length).toBe(1)
     expect(inserted[0]!.status).toBe('candidate')
   })
 
   test('closed loop: distilled candidate stays out until approval, then injects into a subsequent task', async () => {
-    const source = seedTask(db)
+    const source = await seedTask(db)
     const jobId = ulid()
-    db.insert(memoryDistillJobs)
-      .values({
-        id: jobId,
-        debounceKey: `${source.taskId}:feedback`,
-        sourceKind: 'feedback',
-        sourceEventId: 'feedback-closed-loop',
-        taskId: source.taskId,
-        scopeResolvedJson: JSON.stringify({
-          agentIds: [],
-          workflowId: source.workflowId,
-          repoId: null,
-          includeGlobal: true,
-        }),
-        status: 'running',
-        attempts: 0,
-        nextRunAt: Date.now(),
-        createdAt: Date.now(),
-      })
-      .run()
+    await db.insert(memoryDistillJobs).values({
+      id: jobId,
+      debounceKey: `${source.taskId}:feedback`,
+      sourceKind: 'feedback',
+      sourceEventId: 'feedback-closed-loop',
+      taskId: source.taskId,
+      scopeResolvedJson: JSON.stringify({
+        agentIds: [],
+        workflowId: source.workflowId,
+        repoId: null,
+        includeGlobal: true,
+      }),
+      status: 'running',
+      attempts: 0,
+      nextRunAt: Date.now(),
+      createdAt: Date.now(),
+    })
+
     const job = rowToDistillJob(
-      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get()!,
+      (await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)))[0]!,
     )
     const spawnFn: DistillerSpawnFn = async (input) => ({
       exitCode: 0,
@@ -665,26 +653,25 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       candidatesCreated: 1,
     })
 
-    const candidate = db.select().from(memories).where(eq(memories.distillJobId, jobId)).get()!
+    const candidate = (await db.select().from(memories).where(eq(memories.distillJobId, jobId)))[0]!
     expect(candidate.status).toBe('candidate')
 
     const nextTaskId = ulid()
-    db.insert(tasks)
-      .values({
-        id: nextTaskId,
-        name: 'fixture-next-task',
-        workflowId: source.workflowId,
-        workflowSnapshot: '{}',
-        repoPath: '/tmp/wt-next',
-        worktreePath: '/tmp/wt-next',
-        baseBranch: 'main',
-        branch: `agent-workflow/${nextTaskId}`,
-        baseCommit: null,
-        status: 'running',
-        inputs: '{}',
-        startedAt: Date.now(),
-      })
-      .run()
+    await db.insert(tasks).values({
+      id: nextTaskId,
+      name: 'fixture-next-task',
+      workflowId: source.workflowId,
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/wt-next',
+      worktreePath: '/tmp/wt-next',
+      baseBranch: 'main',
+      branch: `agent-workflow/${nextTaskId}`,
+      baseCommit: null,
+      status: 'running',
+      inputs: '{}',
+      startedAt: Date.now(),
+    })
+
     const primaryAgent = {
       id: 'closed-loop-agent',
       name: 'closed-loop-agent',
@@ -725,7 +712,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
   })
 
   test('forwards the resolved protocol/binary/model/IS_SANDBOX toggle to spawnFn', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const jobRow = {
       id: ulid(),
       debounceKey: `${taskId}:clarify`,
@@ -768,7 +755,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
   })
 
   test('non-zero exit propagates as thrown error (scheduler retries / records last_error)', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const jobRow = {
       id: ulid(),
       debounceKey: `${taskId}:clarify`,
@@ -796,7 +783,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
   })
 
   test('cleanup failure preserves the outer cwd and reports an ordinary cleanup error', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const job = rowToDistillJob({
       id: ulid(),
       debounceKey: `${taskId}:clarify`,
@@ -840,7 +827,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
   })
 
   test('an indeterminate spawn failure preserves its outer cwd instead of erasing live run inputs', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const job = rowToDistillJob({
       id: ulid(),
       debounceKey: `${taskId}:clarify`,

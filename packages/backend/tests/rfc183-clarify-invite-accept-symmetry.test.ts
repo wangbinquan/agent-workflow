@@ -32,19 +32,19 @@ import { readFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resolveEffectiveClarifyChannel } from '../src/services/clarifyRounds'
 import { continuesClarifyLineage } from '../src/services/nodeRunMint'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 // --- harness（沿用 rfc123-stop-enforcement 的 runNode 直驱形态） -------------
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -72,11 +72,10 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc183-symmetry-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -106,7 +105,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertPendingNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertPendingNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'asker', status: 'pending' })
   return id
@@ -163,48 +162,57 @@ function runClarifyingNode(
 
 // --- A. 主证：suppressed 拒绝（红→绿） ---------------------------------------
 
-describe('RFC-183 A: suppressed 重产出轮拒绝自愿反问（self 与 cross 一致）', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(() => h.cleanup())
+describeEachProvider(
+  'RFC-183 A: suppressed 重产出轮拒绝自愿反问（self 与 cross 一致）',
+  (harness) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(harness.db)
+    })
+    afterEach(() => h.cleanup())
 
-  test("self：directive='suppressed' + 合法 clarify → failed clarify-forbidden（重产出措辞）、无 clarify 结果", async () => {
-    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
-    const result = await runClarifyingNode(h, nodeRunId, { kind: 'self', directive: 'suppressed' })
-    expect(result.status).toBe('failed')
-    expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
-    expect(result.errorMessage ?? '').toContain('re-production round does not accept ask-back')
-    expect(result.clarify).toBeUndefined()
-    const row = (await h.db.select().from(nodeRuns))[0]
-    expect(row?.failureCode).toBe('clarify-forbidden')
-  })
+    test("self：directive='suppressed' + 合法 clarify → failed clarify-forbidden（重产出措辞）、无 clarify 结果", async () => {
+      const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+      const result = await runClarifyingNode(h, nodeRunId, {
+        kind: 'self',
+        directive: 'suppressed',
+      })
+      expect(result.status).toBe('failed')
+      expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
+      expect(result.errorMessage ?? '').toContain('re-production round does not accept ask-back')
+      expect(result.clarify).toBeUndefined()
+      const row = (await h.db.select().from(nodeRuns))[0]
+      expect(row?.failureCode).toBe('clarify-forbidden')
+    })
 
-  test("cross：directive='suppressed' 同拒——不进入解析、不建 cross session 的 runner 半边", async () => {
-    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
-    const result = await runClarifyingNode(h, nodeRunId, { kind: 'cross', directive: 'suppressed' })
-    expect(result.status).toBe('failed')
-    expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
-    expect(result.clarify).toBeUndefined()
-  })
+    test("cross：directive='suppressed' 同拒——不进入解析、不建 cross session 的 runner 半边", async () => {
+      const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+      const result = await runClarifyingNode(h, nodeRunId, {
+        kind: 'cross',
+        directive: 'suppressed',
+      })
+      expect(result.status).toBe('failed')
+      expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
+      expect(result.clarify).toBeUndefined()
+    })
 
-  test('stopped 措辞不漂移（RFC-123 逐字节保留，与 suppressed 新措辞可分辨）', async () => {
-    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
-    const result = await runClarifyingNode(h, nodeRunId, { kind: 'self', directive: 'stopped' })
-    expect(result.status).toBe('failed')
-    expect(result.errorMessage).toBe(
-      'clarify-forbidden: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>',
-    )
-  })
-})
+    test('stopped 措辞不漂移（RFC-123 逐字节保留，与 suppressed 新措辞可分辨）', async () => {
+      const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+      const result = await runClarifyingNode(h, nodeRunId, { kind: 'self', directive: 'stopped' })
+      expect(result.status).toBe('failed')
+      expect(result.errorMessage).toBe(
+        'clarify-forbidden: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>',
+      )
+    })
+  },
+)
 
 // --- B. delegated：接受权外置，runner 零裁决 ----------------------------------
 
-describe("RFC-183 B: 'delegated'（host 轮）——runner 不按 directive 拒", () => {
+describeEachProvider("RFC-183 B: 'delegated'（host 轮）——runner 不按 directive 拒", (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
@@ -234,23 +242,26 @@ describe("RFC-183 B: 'delegated'（host 轮）——runner 不按 directive 拒"
 
 // --- C. 未接线前置拒（P2#3） --------------------------------------------------
 
-describe("RFC-183 C: kind:'none' 自愿反问由 runner 前置拒（分片/聚合直调方不再见伪 done）", () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(() => h.cleanup())
+describeEachProvider(
+  "RFC-183 C: kind:'none' 自愿反问由 runner 前置拒（分片/聚合直调方不再见伪 done）",
+  (harness) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(harness.db)
+    })
+    afterEach(() => h.cleanup())
 
-  test('合法 clarify + 无通道 → failed clarify-no-channel、无 clarify 结果、无 failureCode（无 followup）', async () => {
-    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
-    const result = await runClarifyingNode(h, nodeRunId, { kind: 'none' })
-    expect(result.status).toBe('failed')
-    expect(result.errorMessage ?? '').toMatch(/^clarify-no-channel/)
-    expect(result.clarify).toBeUndefined()
-    const row = (await h.db.select().from(nodeRuns))[0]
-    expect(row?.failureCode).toBeNull()
-  })
-})
+    test('合法 clarify + 无通道 → failed clarify-no-channel、无 clarify 结果、无 failureCode（无 followup）', async () => {
+      const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+      const result = await runClarifyingNode(h, nodeRunId, { kind: 'none' })
+      expect(result.status).toBe('failed')
+      expect(result.errorMessage ?? '').toMatch(/^clarify-no-channel/)
+      expect(result.clarify).toBeUndefined()
+      const row = (await h.db.select().from(nodeRuns))[0]
+      expect(row?.failureCode).toBeNull()
+    })
+  },
+)
 
 // --- D. 血统补丁（P2#1 + P2#4）：纯函数 + 与 RFC-122 oracle 合成 ---------------
 

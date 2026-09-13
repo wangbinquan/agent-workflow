@@ -32,7 +32,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import {
@@ -41,7 +42,6 @@ import {
 } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import type { Logger } from '../src/util/log'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 // ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ describe('RFC-184 — wgHostRolePorts', () => {
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -181,11 +181,10 @@ const LEADER_ENVELOPE =
   `<port name="wg_decision">{"action":"continue"}</port>\n` +
   '</workflow-output>'
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-wg-host-iso-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -217,7 +216,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
     id,
@@ -288,14 +287,14 @@ function runLeader(
   )
 }
 
-async function outputRows(db: DbClient, nodeRunId: string) {
+async function outputRows(db: ProviderNeutralDatabase, nodeRunId: string) {
   return db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
 }
 
-describe('RFC-184 — host projection over real runNode', () => {
+describeEachProvider('RFC-184 — host projection over real runNode', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

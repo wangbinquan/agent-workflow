@@ -27,7 +27,8 @@ import { readFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import {
@@ -35,7 +36,6 @@ import {
   type PreviousAttemptShape,
 } from '../src/modules/task-execution/composition/nodeMechanics'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 // --- A. decideEnvelopeFollowup pure ----------------------------------------
@@ -66,7 +66,7 @@ describe('RFC-123 A: decideEnvelopeFollowup clarify-forbidden', () => {
 // --- B / C. runner enforcement ---------------------------------------------
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -94,11 +94,10 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc123-stop-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -128,7 +127,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertPendingNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertPendingNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'asker', status: 'pending' })
   return id
@@ -188,30 +187,33 @@ function runStoppedNode(h: Harness, nodeRunId: string, opts: { stopped?: true })
   )
 }
 
-describe('RFC-123 B/C: runner rejects disobedient clarify only when explicitly stopped', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(() => h.cleanup())
+describeEachProvider(
+  'RFC-123 B/C: runner rejects disobedient clarify only when explicitly stopped',
+  (harness) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(harness.db)
+    })
+    afterEach(() => h.cleanup())
 
-  test("B: directive='stopped' + agent emits clarify → failed clarify-forbidden, no clarify result", async () => {
-    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
-    const result = await runStoppedNode(h, nodeRunId, { stopped: true })
-    expect(result.status).toBe('failed')
-    expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
-    expect(result.clarify).toBeUndefined()
-  })
+    test("B: directive='stopped' + agent emits clarify → failed clarify-forbidden, no clarify result", async () => {
+      const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+      const result = await runStoppedNode(h, nodeRunId, { stopped: true })
+      expect(result.status).toBe('failed')
+      expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
+      expect(result.clarify).toBeUndefined()
+    })
 
-  test("C (RFC-183 反转): directive='suppressed' + agent emits clarify → rejected too (re-production wording)", async () => {
-    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
-    const result = await runStoppedNode(h, nodeRunId, {})
-    expect(result.status).toBe('failed')
-    expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
-    expect(result.errorMessage ?? '').toContain('re-production round does not accept ask-back')
-    expect(result.clarify).toBeUndefined()
-  })
-})
+    test("C (RFC-183 反转): directive='suppressed' + agent emits clarify → rejected too (re-production wording)", async () => {
+      const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+      const result = await runStoppedNode(h, nodeRunId, {})
+      expect(result.status).toBe('failed')
+      expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
+      expect(result.errorMessage ?? '').toContain('re-production round does not accept ask-back')
+      expect(result.clarify).toBeUndefined()
+    })
+  },
+)
 
 // --- D. source wiring guards ------------------------------------------------
 

@@ -2,15 +2,13 @@
 // one Promise surface; the persistence is one provider-neutral implementation
 // (RFC-359 W4-D9), exercised on both engines by rfc359-w4-d9-adapters.test.ts.
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
 import { createTokenCallAudit } from '@/auth/composition'
-import { createInMemoryDb } from '@/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 function source(relativePath: string): string {
   return readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
@@ -31,7 +29,7 @@ function patActor() {
   })
 }
 
-describe('RFC-349 token-call audit provider participant', () => {
+describeEachProvider('RFC-349 token-call audit provider participant', (harness) => {
   test('legacy service is a facade and application contract has no provider handle', () => {
     const facade = source('src/services/tokenAudit.ts')
     const application = source('src/auth/application/tokenCallAudit.ts')
@@ -47,7 +45,7 @@ describe('RFC-349 token-call audit provider participant', () => {
   })
 
   test('SQLite participant preserves attribution, snapshot redaction and bounded retention', async () => {
-    const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })
+    const db = harness.db
     const audit = createTokenCallAudit(db)
     const id = await audit.record(
       {

@@ -22,7 +22,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createIsoUnderLock,
@@ -34,8 +35,6 @@ import { discardNodeIso, type CanonRepo, type IsoHandle } from '../src/services/
 import { runGit, snapshotFullState } from '../src/util/git'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { IsolatedAgentRunBinding } from '../src/services/isolatedAgentRun'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function initRepo(seed: Record<string, string>): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc188-'))
@@ -72,7 +71,7 @@ function stubWriteSem(): { run<T>(fn: () => Promise<T>): Promise<T>; maxDepth: (
   }
 }
 
-async function seedTaskRow(db: DbClient, worktreePath: string): Promise<string> {
+async function seedTaskRow(db: ProviderNeutralDatabase, worktreePath: string): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -102,11 +101,11 @@ function canonRepos(worktreePath: string): CanonRepo[] {
   return [{ repoPath: worktreePath, worktreePath, worktreeDirName: '', baseBranch: 'main' }]
 }
 
-function isolatedRunBinding(db: DbClient): IsolatedAgentRunBinding {
+function isolatedRunBinding(db: ProviderNeutralDatabase): IsolatedAgentRunBinding {
   return Object.freeze({ persistence: createTaskExecutionPersistence(db) })
 }
 
-async function mintedRow(db: DbClient, taskId: string): Promise<string> {
+async function mintedRow(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
     id,
@@ -118,60 +117,115 @@ async function mintedRow(db: DbClient, taskId: string): Promise<string> {
   return id
 }
 
-describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净合并）', () => {
-  test('iso 在锁窗口内创建；产物经 settle 落 canonical、merge_state=merged', async () => {
-    const repo = await initRepo({ 'seed.txt': 's\n' })
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTaskRow(db, repo)
-    const runId = await mintedRow(db, taskId)
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home-'))
-    const writeSem = stubWriteSem()
-    const binding = isolatedRunBinding(db)
-
-    const iso: IsoHandle = await createIsoUnderLock({
-      writeSem,
-      appHome,
-      taskId,
-      binding,
-      isoKeyRunId: runId,
-      canonRepos: canonRepos(repo),
-    })
-    expect(writeSem.maxDepth()).toBeGreaterThanOrEqual(1)
-    await persistIsoBase(binding, runId, 1, iso)
-    writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'out.txt'), 'from-agent\n')
-
-    const settle = await mergeBackAndSettle({
-      binding,
-      writeSem,
-      handle: iso,
-      nodeRunId: runId,
-      repoCount: 1,
-      via: 'live',
-      conflictResolver: () => {
-        throw new Error('clean merge must not consult the resolver')
-      },
-    })
-    expect(settle.kind).toBe('merged')
-    expect(readFileSync(join(repo, 'out.txt'), 'utf8')).toBe('from-agent\n')
-    const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
-    expect(row?.mergeState).toBe('merged')
-    // node tree 已持久化（isolating→pending-merge→merged 全链 CAS 走通）。
-    expect(row?.isoNodeTree).toBeTruthy()
-    await discardNodeIso(iso)
-    rmSync(repo, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
-  })
-
-  test('冲突：resolver 判不解 → park conflict-human + detail 透传；判解 → merged', async () => {
-    const repo = await initRepo({ 'f.txt': 'base\n' })
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTaskRow(db, repo)
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home2-'))
-    const writeSem = stubWriteSem()
-    const binding = isolatedRunBinding(db)
-
-    for (const resolved of [false, true]) {
+describeEachProvider(
+  'RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净合并）',
+  (harness) => {
+    test('iso 在锁窗口内创建；产物经 settle 落 canonical、merge_state=merged', async () => {
+      const repo = await initRepo({ 'seed.txt': 's\n' })
+      const db = harness.db
+      const taskId = await seedTaskRow(db, repo)
       const runId = await mintedRow(db, taskId)
+      const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home-'))
+      const writeSem = stubWriteSem()
+      const binding = isolatedRunBinding(db)
+
+      const iso: IsoHandle = await createIsoUnderLock({
+        writeSem,
+        appHome,
+        taskId,
+        binding,
+        isoKeyRunId: runId,
+        canonRepos: canonRepos(repo),
+      })
+      expect(writeSem.maxDepth()).toBeGreaterThanOrEqual(1)
+      await persistIsoBase(binding, runId, 1, iso)
+      writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'out.txt'), 'from-agent\n')
+
+      const settle = await mergeBackAndSettle({
+        binding,
+        writeSem,
+        handle: iso,
+        nodeRunId: runId,
+        repoCount: 1,
+        via: 'live',
+        conflictResolver: () => {
+          throw new Error('clean merge must not consult the resolver')
+        },
+      })
+      expect(settle.kind).toBe('merged')
+      expect(readFileSync(join(repo, 'out.txt'), 'utf8')).toBe('from-agent\n')
+      const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
+      expect(row?.mergeState).toBe('merged')
+      // node tree 已持久化（isolating→pending-merge→merged 全链 CAS 走通）。
+      expect(row?.isoNodeTree).toBeTruthy()
+      await discardNodeIso(iso)
+      rmSync(repo, { recursive: true, force: true })
+      rmSync(appHome, { recursive: true, force: true })
+    })
+
+    test('冲突：resolver 判不解 → park conflict-human + detail 透传；判解 → merged', async () => {
+      const repo = await initRepo({ 'f.txt': 'base\n' })
+      const db = harness.db
+      const taskId = await seedTaskRow(db, repo)
+      const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home2-'))
+      const writeSem = stubWriteSem()
+      const binding = isolatedRunBinding(db)
+
+      for (const resolved of [false, true]) {
+        const runId = await mintedRow(db, taskId)
+        const iso = await createIsoUnderLock({
+          writeSem,
+          appHome,
+          taskId,
+          binding,
+          isoKeyRunId: runId,
+          canonRepos: canonRepos(repo),
+        })
+        await persistIsoBase(binding, runId, 1, iso)
+        // iso 与 canonical 同文件分叉 → 真冲突。
+        writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'f.txt'), `iso-${resolved}\n`)
+        writeFileSync(join(repo, 'f.txt'), `canon-${resolved}\n`)
+
+        let sawConflicts = 0
+        const settle = await mergeBackAndSettle({
+          binding,
+          writeSem,
+          handle: iso,
+          nodeRunId: runId,
+          repoCount: 1,
+          via: 'live',
+          conflictResolver: async (conflicts) => {
+            sawConflicts = conflicts.length
+            return { allResolved: resolved, detail: resolved ? '' : 'f.txt unresolved' }
+          },
+        })
+        expect(sawConflicts).toBe(1)
+        const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
+        if (resolved) {
+          expect(settle.kind).toBe('merged')
+          expect(row?.mergeState).toBe('merged')
+        } else {
+          expect(settle.kind).toBe('conflict-human')
+          expect(settle.detail).toContain('f.txt')
+          expect(row?.mergeState).toBe('conflict-human')
+        }
+        await discardNodeIso(iso)
+        // 复原 canonical，供下一轮。
+        await runGit(repo, ['checkout', '--', '.'])
+      }
+      rmSync(repo, { recursive: true, force: true })
+      rmSync(appHome, { recursive: true, force: true })
+    })
+
+    test('replay：传持久 nodeTrees 跳过快照（iso 工作树可以已消失），merged via=replay', async () => {
+      const repo = await initRepo({ 'seed.txt': 's\n' })
+      const db = harness.db
+      const taskId = await seedTaskRow(db, repo)
+      const runId = await mintedRow(db, taskId)
+      const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home3-'))
+      const writeSem = stubWriteSem()
+      const binding = isolatedRunBinding(db)
+
       const iso = await createIsoUnderLock({
         writeSem,
         appHome,
@@ -181,91 +235,39 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
         canonRepos: canonRepos(repo),
       })
       await persistIsoBase(binding, runId, 1, iso)
-      // iso 与 canonical 同文件分叉 → 真冲突。
-      writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'f.txt'), `iso-${resolved}\n`)
-      writeFileSync(join(repo, 'f.txt'), `canon-${resolved}\n`)
+      writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'crash.txt'), 'survived\n')
+      // 模拟 runner 成功后崩溃：pin 树、置 pending-merge、丢 iso 工作树。
+      const nodeTree = await snapshotFullState(iso.repos[0]!.isoWorktreePath)
+      await db
+        .update(nodeRuns)
+        .set({ mergeState: 'pending-merge', isoNodeTree: nodeTree })
+        .where(eq(nodeRuns.id, runId))
+      await discardNodeIso(iso)
 
-      let sawConflicts = 0
       const settle = await mergeBackAndSettle({
         binding,
         writeSem,
-        handle: iso,
+        handle: iso, // rebuildIsoHandle 等价物：repos 元数据仍在
         nodeRunId: runId,
         repoCount: 1,
-        via: 'live',
-        conflictResolver: async (conflicts) => {
-          sawConflicts = conflicts.length
-          return { allResolved: resolved, detail: resolved ? '' : 'f.txt unresolved' }
+        nodeTrees: { '': nodeTree },
+        via: 'replay',
+        conflictResolver: () => {
+          throw new Error('clean replay must not consult the resolver')
         },
       })
-      expect(sawConflicts).toBe(1)
-      const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
-      if (resolved) {
-        expect(settle.kind).toBe('merged')
-        expect(row?.mergeState).toBe('merged')
-      } else {
-        expect(settle.kind).toBe('conflict-human')
-        expect(settle.detail).toContain('f.txt')
-        expect(row?.mergeState).toBe('conflict-human')
-      }
-      await discardNodeIso(iso)
-      // 复原 canonical，供下一轮。
-      await runGit(repo, ['checkout', '--', '.'])
-    }
-    rmSync(repo, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
-  })
-
-  test('replay：传持久 nodeTrees 跳过快照（iso 工作树可以已消失），merged via=replay', async () => {
-    const repo = await initRepo({ 'seed.txt': 's\n' })
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTaskRow(db, repo)
-    const runId = await mintedRow(db, taskId)
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home3-'))
-    const writeSem = stubWriteSem()
-    const binding = isolatedRunBinding(db)
-
-    const iso = await createIsoUnderLock({
-      writeSem,
-      appHome,
-      taskId,
-      binding,
-      isoKeyRunId: runId,
-      canonRepos: canonRepos(repo),
+      expect(settle.kind).toBe('merged')
+      expect(readFileSync(join(repo, 'crash.txt'), 'utf8')).toBe('survived\n')
+      rmSync(repo, { recursive: true, force: true })
+      rmSync(appHome, { recursive: true, force: true })
     })
-    await persistIsoBase(binding, runId, 1, iso)
-    writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'crash.txt'), 'survived\n')
-    // 模拟 runner 成功后崩溃：pin 树、置 pending-merge、丢 iso 工作树。
-    const nodeTree = await snapshotFullState(iso.repos[0]!.isoWorktreePath)
-    await db
-      .update(nodeRuns)
-      .set({ mergeState: 'pending-merge', isoNodeTree: nodeTree })
-      .where(eq(nodeRuns.id, runId))
-    await discardNodeIso(iso)
+  },
+)
 
-    const settle = await mergeBackAndSettle({
-      binding,
-      writeSem,
-      handle: iso, // rebuildIsoHandle 等价物：repos 元数据仍在
-      nodeRunId: runId,
-      repoCount: 1,
-      nodeTrees: { '': nodeTree },
-      via: 'replay',
-      conflictResolver: () => {
-        throw new Error('clean replay must not consult the resolver')
-      },
-    })
-    expect(settle.kind).toBe('merged')
-    expect(readFileSync(join(repo, 'crash.txt'), 'utf8')).toBe('survived\n')
-    rmSync(repo, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
-  })
-})
-
-describe('RFC-188 C — markMergeFailed try-variant', () => {
+describeEachProvider('RFC-188 C — markMergeFailed try-variant', (harness) => {
   test('pending-merge → merge-failed 落地；非法起点仅告警不抛（原始错误不被掩盖）', async () => {
     const repo = await initRepo({ 'seed.txt': 's\n' })
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTaskRow(db, repo)
     const runId = await mintedRow(db, taskId)
     const binding = isolatedRunBinding(db)

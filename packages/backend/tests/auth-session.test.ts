@@ -1,6 +1,6 @@
 // RFC-036 — three-track auth middleware integration.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
@@ -9,15 +9,15 @@ import { actorOf, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
 import { multiAuth } from '../src/auth/session'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { users } from '../src/db/schema'
 import { errorHandler } from '../src/util/errors'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 
-function buildApp(db: DbClient): Hono {
+function buildApp(db: ProviderNeutralDatabase): Hono {
   const app = new Hono()
   app.use(
     '/api/*',
@@ -40,7 +40,7 @@ function buildApp(db: DbClient): Hono {
   return app
 }
 
-async function seedUser(db: DbClient, id: string, role: 'admin' | 'user' = 'user') {
+async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
   await db.insert(users).values({
     id,
     username: id.toLowerCase(),
@@ -58,11 +58,11 @@ async function seedUser(db: DbClient, id: string, role: 'admin' | 'user' = 'user
   })
 }
 
-describe('multiAuth — daemon token track', () => {
-  let db: DbClient
+describeEachProvider('multiAuth — daemon token track', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('valid daemon token resolves to __system__ admin actor', async () => {
@@ -106,11 +106,11 @@ describe('multiAuth — daemon token track', () => {
   })
 })
 
-describe('multiAuth — session token track', () => {
-  let db: DbClient
+describeEachProvider('multiAuth — session token track', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('valid session token → user actor with role permissions', async () => {
@@ -150,11 +150,11 @@ describe('multiAuth — session token track', () => {
   })
 })
 
-describe('multiAuth — PAT track', () => {
-  let db: DbClient
+describeEachProvider('multiAuth — PAT track', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('PAT narrows permissions to the configured scopes', async () => {
@@ -209,11 +209,11 @@ describe('multiAuth — PAT track', () => {
   })
 })
 
-describe('multiAuth — no token / malformed header', () => {
-  let db: DbClient
+describeEachProvider('multiAuth — no token / malformed header', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('missing Authorization → 401', async () => {

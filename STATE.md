@@ -2,6 +2,53 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-13 夜，AC-6 账本 **458 → 439**；「构造点已在 describe 体内」那一桶 + 两条真 PG 落差）
+>
+> 落档在 `design/RFC-359-database-provider-unification/plan.md` §5ct。
+>
+> ### 1. 这一桶的形状与变换器
+>
+> `createInMemoryDb(MIGRATIONS)` 本来就写在顶层 `describe` 的 `beforeEach` / `test` 体内——
+> 把顶层 `describe` 换成 `describeEachProvider(name, (harness) => …)`，`harness` 天然在作用域里，
+> 构造点直接落到 `harness.db`。变换器（全 AST）另做四件：`DbClient` → `ProviderNeutralDatabase`、
+> 退役 `MIGRATIONS`（含 import 形式）、清掉失去唯一用途的 import、把 bun:sqlite 独有的同步终结子
+> （`.all()` / `.get()` / `.run()`）换成 `await`。
+>
+> ### 2. 同步终结子的 `await` **会往外传播**——这是最容易做半截的地方
+>
+> 一个原本同步的模块级 `seedTask()` 内部要 `await`，它自己得变 `async`，文件内每个调用点都要补
+> `await`，显式返回类型还要包成 `Promise<T>`（否则 TS1064）。变换器把这条做成不动点迭代。
+> `rfc204-credential-sealing` 一个文件退役 27 个终结子 / 4 个函数转 async / 20 个调用点补 `await`。
+>
+> ### 3. 38 个候选按 typecheck 二分：硬的回滚、软的就地修
+>
+> **硬 17 个**——下游形参写死 `DbClient`（`runTask` / `createApp` / `$client` 仪器面），按 §5co
+> 的裁决**本来就该单引擎**，回滚不留债。**软 8 个**——只是自己还在用同步终结子，一把修完。
+>
+> ### 4. 照出两条**此前零覆盖**的真 PG 落差（都已修）
+>
+> - `rfc120-deferred-dispatch` 的 RFC-333 故障注入写死 SQLite 的 `RAISE(ABORT, …)`；PG 要 plpgsql
+>   触发器函数，且这类 fixture DDL **只能走 `harness.executeFixtureDdl`**（业务客户端会拒绝 DDL）。
+> - `rfc349-auth-provider-contract` 把 `auth.provider` 写死断言成 `'sqlite'`。
+>
+> **新工具 `tests/helpers/databaseFailure.ts`**：跨引擎断言「数据库为什么失败」不能直接
+> `rejects.toThrow(…)`——PG 上 drizzle 抛 `DrizzleQueryError`，最外层 message 被换成
+> `Failed query: <SQL>`，真正的原因在 `cause` 里。`expectDatabaseFailure(run, expected)` 沿 cause 链找。
+>
+> ### 5. 两条要记住的坑
+>
+> - **变换器不能吞掉 `createInMemoryDb` 的第二个实参**。`{ bootstrap: 'required' }` 必须转成
+>   describe 的选项，而 `describeEachProvider` 的签名是 `(name, body, options)`——
+>   **options 是第三个形参**，放第二位会得到 `body is not a function`。
+> - **`source-guard-sweep` 要带 `AW_TEST_POSTGRESQL_URL` 跑**；不带的话双引擎文件会以
+>   「PostgreSQL 未配置——缺库即红」整批失败，那是 harness 的设计判据，不是回归。
+>
+> ### 6. 登记一条留在 SQLite 上的判据
+>
+> `rfc314-event-write-batching` 的「语句条数」判据靠 `$client.prepare` 计数证明批量写，
+> 那是 bun:sqlite 独有的仪器面；同文件其余判据两引擎都跑。与 `rfc311-task-page-fastpath`
+> 的 `EXPLAIN QUERY PLAN` 守卫同一先例。
+>
 > ## 📌 RFC-359 最新一段（2026-09-13 下半场，AC-6 账本 **530 → 460**；判据换 AST + 批量迁移 + 三条架构缺口）
 >
 > 主干从 `405e43bf7` 推到 `d8f41b642`，本段 18 个提交（末尾这条 STATE 更新在外）；中途推红三次，都当场修了，见下「三次推红」。

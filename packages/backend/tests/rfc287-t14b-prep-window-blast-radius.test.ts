@@ -12,9 +12,8 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { MIGRATIONS } from './migration-freeze'
 import { openContainedFile } from '@/services/worktreeFileContent'
 import { resolveRepoTarget } from '@/services/codeIntel/fileSymbols'
 
@@ -108,7 +107,7 @@ describe('AC-10 读洞③④：code-intel 取根时必须拒「还没有工作�
   })
 })
 
-describe('G7 —— 身份登记不得堵在克隆锁后面', () => {
+describeEachProvider('G7 —— 身份登记不得堵在克隆锁后面', (harness) => {
   // 二轮门后由门禁抓到的真回归（本地绿、门禁红）：`ensureCachedRepoIdentity` 一度与
   // 克隆共用 `withUrlLock`。那把锁的临界区里跑 `git clone`，一次可能几分钟；于是
   // **同一 URL** 上只要有人正在克隆，后来者的请求路径就一直堵到克隆结束——G7 承诺的
@@ -118,7 +117,7 @@ describe('G7 —— 身份登记不得堵在克隆锁后面', () => {
   // 直接按**行为**验，不靠时序碰巧：先起一个注定要耗满 timeout 的 resolveCachedRepo
   // 占住克隆锁，再对**同一个 URL** 登记身份，看它是不是立刻回来。
   test('克隆锁被占住时，同一 URL 的身份登记仍立刻返回', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const appHome = mkdtempSync(join(tmpdir(), 'aw-idlock-'))
     // 不可路由地址：克隆会一直卡到 cloneTimeoutMs。
     const url = 'http://10.255.255.1:9/identity-lock-probe.git'
