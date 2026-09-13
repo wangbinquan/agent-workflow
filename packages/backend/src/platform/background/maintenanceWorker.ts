@@ -36,10 +36,7 @@ import type {
   PluginGenerationGcCommand,
   ResourcePackageApplyMaintenanceCommand,
 } from '@/modules/resource-catalog/public/commands'
-import {
-  composePostgresqlWebhookDeliveryPersistence,
-  composeSqliteWebhookDeliveryPersistence,
-} from '@/modules/integration/composition/webhookDelivery'
+import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import type { IntegrationMaintenanceCommands } from '@/modules/integration/public/commands'
 import {
@@ -556,7 +553,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       const client = createPostgresqlDatabaseClient(runtime)
       store = createMaintenanceRunStore(client)
       integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
-        composePostgresqlWebhookDeliveryPersistence(client),
+        composeWebhookDeliveryPersistenceFor(client),
       )
       const taskExecution = createPostgresqlTaskExecutionPersistence(client)
       taskRecoveryOperations = taskExecution.recoveryAdministration
@@ -665,7 +662,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(sqliteDb)
       digitalEmployeeMaintenance = composeDigitalEmployeeMaintenanceCommands(sqliteDb)
       integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
-        composeSqliteWebhookDeliveryPersistence(sqliteDb),
+        composeWebhookDeliveryPersistenceFor(sqliteDb),
       )
       const taskExecution = createSqliteTaskExecutionPersistence(sqliteDb)
       taskRecoveryOperations = taskExecution.recoveryAdministration

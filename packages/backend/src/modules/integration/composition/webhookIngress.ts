@@ -1,5 +1,4 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   AcceptedVerifiedDelivery,
   VerifiedWebhookDeliveryInput,
@@ -49,29 +48,4 @@ export function composeWebhookDeliveryRuntimeFor(
     ...ingress,
     queries: createWebhookDeliveryQueries(db),
   })
-}
-
-/** 旧名保留为装配别名，bootstrap 收敛后删除。 */
-export function composeSqliteWebhookIngressPersistence(
-  db: ProviderNeutralDatabase,
-): WebhookIngressPersistence {
-  return composeWebhookIngressPersistenceFor(db)
-}
-
-export function composeSqliteWebhookDeliveryRuntime(
-  db: ProviderNeutralDatabase,
-): WebhookDeliveryRuntime {
-  return composeWebhookDeliveryRuntimeFor(db)
-}
-
-export function composePostgresqlWebhookIngressPersistence(
-  db: PostgresqlDatabaseClient,
-): WebhookIngressPersistence {
-  return composeWebhookIngressPersistenceFor(db)
-}
-
-export function composePostgresqlWebhookDeliveryRuntime(
-  db: PostgresqlDatabaseClient,
-): WebhookDeliveryRuntime {
-  return composeWebhookDeliveryRuntimeFor(db)
 }

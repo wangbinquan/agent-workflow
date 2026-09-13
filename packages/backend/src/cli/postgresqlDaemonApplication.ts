@@ -223,7 +223,7 @@ import { composeIntentResourceCatalogFor } from '@/modules/intent/application/re
 import { composePostgresqlFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { composePostgresqlIntentMaintenanceSnapshotQueries } from '@/modules/intent/composition/maintenance'
 import { composePostgresqlTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
-import { composePostgresqlScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
+import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import {
   composeWebhookLaunchAdmission,
   composeWebhookTriggerValidation,
@@ -236,10 +236,10 @@ import {
 } from '@/modules/integration/composition/webhookDispatch'
 import { composePostgresqlWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import {
-  composePostgresqlWebhookDeliveryRuntime,
-  composePostgresqlWebhookIngressPersistence,
+  composeWebhookDeliveryRuntimeFor,
+  composeWebhookIngressPersistenceFor,
 } from '@/modules/integration/composition/webhookIngress'
-import { composePostgresqlWebhookDeliveryPersistence } from '@/modules/integration/composition/webhookDelivery'
+import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import { composePostgresqlMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { createPostgresqlWebhookRepositoryResolver } from '@/modules/integration/infrastructure/webhookRepositoryResolver'
 import {
@@ -461,7 +461,7 @@ export interface PostgresqlDaemonApplicationRuntime {
    * `AppDeps.collaborationContext` 塞回去——那个形状把用例钉死在 SQLite 上。
    */
   readonly collaborationContext: CollaborationRouteContext
-  readonly scheduledTasks: ReturnType<typeof composePostgresqlScheduledTaskRuntime>
+  readonly scheduledTasks: ReturnType<typeof composeScheduledTaskRuntimeFor>
   readonly scheduledTaskIdentityAccess: TaskExecutionBackgroundStartDependencies['scheduled']['identityAccess']
   readonly memory: ReturnType<typeof composePostgresqlMemoryOperations>
   readonly developmentAutomation: ReturnType<typeof composeDevelopmentAutomation>
@@ -1226,7 +1226,7 @@ export async function composePostgresqlApplication(
   const integrationTriggerSnapshots = composePostgresqlIntegrationTriggerResourceSnapshotFactory({
     assertNotBuiltin,
   })
-  const scheduledTaskRuntime = composePostgresqlScheduledTaskRuntime({
+  const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db: input.db,
     resourceSnapshots: integrationTriggerSnapshots,
     validation: Object.freeze({
@@ -1243,7 +1243,7 @@ export async function composePostgresqlApplication(
       },
       assertAgentIntegrity: (agentIds) =>
         classicCatalogs.agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
-    } satisfies Parameters<typeof composePostgresqlScheduledTaskRuntime>[0]['validation']),
+    } satisfies Parameters<typeof composeScheduledTaskRuntimeFor>[0]['validation']),
     resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
   })
   const integrationIdentityAccess = Object.freeze({
@@ -1262,7 +1262,7 @@ export async function composePostgresqlApplication(
       return { caseId: result.caseRef.id }
     },
   })
-  const webhookDeliveryRuntime = composePostgresqlWebhookDeliveryRuntime(input.db)
+  const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
   const webhookTerminalControl = composePostgresqlMrTerminalControl({
     db: input.db,
     taskTermination: composePostgresqlTaskSourceTermination(input.db),
@@ -1270,7 +1270,7 @@ export async function composePostgresqlApplication(
   if (phase.kind === 'daemon') {
     await webhookTerminalControl.reconcileOnBoot()
     const recoveredDeliveries = await recoverInterruptedDeliveries(
-      composePostgresqlWebhookDeliveryPersistence(input.db),
+      composeWebhookDeliveryPersistenceFor(input.db),
     )
     if (recoveredDeliveries > 0) {
       log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
@@ -1296,7 +1296,7 @@ export async function composePostgresqlApplication(
   }
   const composedWebhookDispatcher = createWebhookDispatcher({
     persistence: composePostgresqlWebhookDispatchPersistence(input.db),
-    deliveryPersistence: composePostgresqlWebhookDeliveryPersistence(input.db),
+    deliveryPersistence: composeWebhookDeliveryPersistenceFor(input.db),
     identityAccess: integrationIdentityAccess,
     async resolveEventTargetAuthority(userId) {
       const admitted = await identityAccess.localOperator.forLegacyHttpUser(userId)
@@ -1898,7 +1898,7 @@ export async function composePostgresqlApplication(
     }),
     documentation: Object.freeze({ configPath: input.configPath }),
     webhookIngress: Object.freeze({
-      webhookIngressPersistence: composePostgresqlWebhookIngressPersistence(input.db),
+      webhookIngressPersistence: composeWebhookIngressPersistenceFor(input.db),
       secretBox: input.secretBox,
       digitalEmployeeEventCenter: eventCenter,
       webhookDispatcher,

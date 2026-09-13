@@ -8489,23 +8489,6 @@
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
-      "id": "exception:import:19cb4be5facd191572d8",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeSqliteScheduledTaskRuntime",
-      "toPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "toSymbol": "composeSqliteScheduledTaskRuntime",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
       "id": "exception:import:19e863b257360c924845",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
@@ -8736,23 +8719,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineQueryOperation",
       "toPath": "packages/backend/src/platform/operations/definitions.ts",
       "toSymbol": "defineQueryOperation",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#$file",
-      "fromPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1a71fb9390772a99c405",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -14932,6 +14898,23 @@
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
+      "id": "exception:import:2f29555912e8ccb34160",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeWebhookDeliveryPersistenceFor",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
+      "toSymbol": "composeWebhookDeliveryPersistenceFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
       "id": "exception:import:2f305118cc2da9db657c",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
@@ -18159,23 +18142,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "fromPath": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:39a7d342e881017da69a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composePostgresqlWebhookDeliveryPersistence",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toSymbol": "composePostgresqlWebhookDeliveryPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "fromSymbol": "$file",
@@ -19468,6 +19434,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3da6f73d0350c85736ff",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookDeliveryRuntimeFor",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toSymbol": "composeWebhookDeliveryRuntimeFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "fromPath": "packages/backend/src/services/task.ts",
       "fromSymbol": "$file",
@@ -20620,6 +20603,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "mcps",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:41bc787104d8a185ba42",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressPersistenceFor",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toSymbol": "composeWebhookIngressPersistenceFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -22407,23 +22407,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:46b20aeb2e9b0abfc414",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composePostgresqlWebhookDeliveryPersistence",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toSymbol": "composePostgresqlWebhookDeliveryPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/repoGroup.ts#$file",
@@ -22473,23 +22456,6 @@
       "toPath": "packages/backend/src/auth/actor.ts",
       "toSymbol": "Actor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:46e20a57da7157b5afda",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composePostgresqlScheduledTaskRuntime",
-      "toPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "toSymbol": "composePostgresqlScheduledTaskRuntime",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -22710,23 +22676,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
       "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toSymbol": "DatabaseTransaction",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#$file",
-      "fromPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:47df07693825a3afcab9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -24124,23 +24073,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#$file",
-      "fromPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4cbe1583e031c624630f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -24495,6 +24427,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts#composeDigitalEmployeeAgentTemplateCatalogFor",
       "toPath": "packages/backend/src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts",
       "toSymbol": "composeDigitalEmployeeAgentTemplateCatalogFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4e4201dd34b5e2dc3db7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeWebhookDeliveryPersistenceFor",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
+      "toSymbol": "composeWebhookDeliveryPersistenceFor",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -26234,23 +26183,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:53c35011c7765c38063e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeSqliteWebhookDeliveryRuntime",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toSymbol": "composeSqliteWebhookDeliveryRuntime",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts",
       "fromSymbol": "$file",
@@ -27046,23 +26978,6 @@
       "toPath": "packages/backend/src/auth/session.ts",
       "toSymbol": "actorOfDirectAuthority",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:57501a42fdb9a15813a7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composePostgresqlWebhookIngressPersistence",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toSymbol": "composePostgresqlWebhookIngressPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -28576,6 +28491,23 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5ba9f650d79df679f8e6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeScheduledTaskRuntimeFor",
+      "toPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
+      "toSymbol": "composeScheduledTaskRuntimeFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -31704,23 +31636,6 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:660c0e9d56275bef3afd",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeSqliteWebhookDeliveryPersistence",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toSymbol": "composeSqliteWebhookDeliveryPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -44509,23 +44424,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:901e6cd8141bb84ba17d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeSqliteWebhookIngressPersistence",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toSymbol": "composeSqliteWebhookIngressPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts",
       "fromSymbol": "$file",
@@ -44572,6 +44470,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/commands.ts#MemoryDistillCommands",
       "toPath": "packages/backend/src/modules/memory/public/commands.ts",
       "toSymbol": "MemoryDistillCommands",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:904ea7f3ebfb7c233d32",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressPersistenceFor",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toSymbol": "composeWebhookIngressPersistenceFor",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -48349,23 +48264,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "fromPath": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9c9c3504dbea7a076066",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeSqliteWebhookDeliveryPersistence",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toSymbol": "composeSqliteWebhookDeliveryPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
@@ -51360,23 +51258,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#$file",
-      "fromPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a6588510640b5eff4a5b",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
       "fromPath": "packages/backend/src/routes/digitalEmployees.ts",
       "fromSymbol": "$file",
@@ -53736,6 +53617,23 @@
       "toPath": "packages/backend/src/modules/collaboration/public/types.ts",
       "toSymbol": "PreparedHumanGateRef",
       "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ae735a1cbb52147e406b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeScheduledTaskRuntimeFor",
+      "toPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
+      "toSymbol": "composeScheduledTaskRuntimeFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -58190,6 +58088,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "plugins",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bc4a43b217e9387664d5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookDeliveryRuntimeFor",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toSymbol": "composeWebhookDeliveryRuntimeFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -63311,6 +63226,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cbc0e93dfd0c19e548a8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeWebhookDeliveryPersistenceFor",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
+      "toSymbol": "composeWebhookDeliveryPersistenceFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -67935,6 +67867,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d88308749db8e4efc4c8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeScheduledTaskRuntimeFor",
+      "toPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
+      "toSymbol": "composeScheduledTaskRuntimeFor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "fromSymbol": "$file",
@@ -69596,23 +69545,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
       "toPath": "packages/backend/src/modules/memory/public/types.ts",
       "toSymbol": "formatMemoryBlockFromSnapshot",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ddd49d21142d56edf635",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composePostgresqlWebhookDeliveryRuntime",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toSymbol": "composePostgresqlWebhookDeliveryRuntime",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -71858,23 +71790,6 @@
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toSymbol": "nodeRuns",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
-      "fromPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e595443ae6f4d5e3a84c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -78048,23 +77963,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f8d1671fefd8a4e7827c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeSqliteScheduledTaskRuntime",
-      "toPath": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "toSymbol": "composeSqliteScheduledTaskRuntime",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/package.ts#$file",
@@ -80429,9 +80327,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4731,
+    "architectureExceptions": 4725,
     "implementationSccs": 0,
-    "observedEdges": 5265,
+    "observedEdges": 5259,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -89033,22 +88931,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:19cb4be5facd191572d8",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/scheduledTasks",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteScheduledTaskRuntime",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeSqliteScheduledTaskRuntime"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/skillVersionCommitParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/skillVersionCommitParticipant.ts#$file",
@@ -89286,22 +89168,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/operations/definitions.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineQueryOperation"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "integration",
-      "fromFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#$file",
-      "id": "import:1a71fb9390772a99c405",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -95884,6 +95750,22 @@
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:2f29555912e8ccb34160",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookDelivery",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookDeliveryPersistenceFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeWebhookDeliveryPersistenceFor"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "id": "import:2f305118cc2da9db657c",
       "owner": "bootstrap",
       "removeAfterWave": "W4-E7",
@@ -99272,22 +99154,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "id": "import:39a7d342e881017da69a",
-      "owner": "platform",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookDelivery",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlWebhookDeliveryPersistence",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composePostgresqlWebhookDeliveryPersistence"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts",
@@ -100634,6 +100500,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:3da6f73d0350c85736ff",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookIngress",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookDeliveryRuntimeFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookDeliveryRuntimeFor"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/task.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "id": "import:3da8b8b5d3f37e68044e",
@@ -101782,6 +101664,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:41bc787104d8a185ba42",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookIngress",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookIngressPersistenceFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressPersistenceFor"
     },
     {
       "edgeKind": "type",
@@ -103608,22 +103506,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:46b20aeb2e9b0abfc414",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookDelivery",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlWebhookDeliveryPersistence",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composePostgresqlWebhookDeliveryPersistence"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/repoGroup.ts",
@@ -103670,22 +103552,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/actor.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:46e20a57da7157b5afda",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/scheduledTasks",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlScheduledTaskRuntime",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composePostgresqlScheduledTaskRuntime"
     },
     {
       "edgeKind": "type",
@@ -103974,22 +103840,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "integration",
-      "fromFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#$file",
-      "id": "import:47df07693825a3afcab9",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "type",
@@ -105416,22 +105266,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "integration",
-      "fromFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#$file",
-      "id": "import:4cbe1583e031c624630f",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -105846,6 +105680,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts#composeDigitalEmployeeAgentTemplateCatalogFor"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "id": "import:4e4201dd34b5e2dc3db7",
+      "owner": "platform",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookDelivery",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookDeliveryPersistenceFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeWebhookDeliveryPersistenceFor"
     },
     {
       "edgeKind": "value",
@@ -107657,22 +107507,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:53c35011c7765c38063e",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookIngress",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteWebhookDeliveryRuntime",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeSqliteWebhookDeliveryRuntime"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts#$file",
@@ -108550,22 +108384,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/session.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#actorOfDirectAuthority"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:57501a42fdb9a15813a7",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookIngress",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlWebhookIngressPersistence",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composePostgresqlWebhookIngressPersistence"
     },
     {
       "edgeKind": "type",
@@ -110118,6 +109936,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:5ba9f650d79df679f8e6",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/scheduledTasks",
+      "syntax": "static-import",
+      "targetSymbol": "composeScheduledTaskRuntimeFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeScheduledTaskRuntimeFor"
     },
     {
       "edgeKind": "value",
@@ -113622,22 +113456,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:660c0e9d56275bef3afd",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookDelivery",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteWebhookDeliveryPersistence",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeSqliteWebhookDeliveryPersistence"
     },
     {
       "edgeKind": "value",
@@ -127049,22 +126867,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:901e6cd8141bb84ba17d",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookIngress",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteWebhookIngressPersistence",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeSqliteWebhookIngressPersistence"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts#$file",
@@ -127126,6 +126928,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/application/ports/resourceLimitPersistence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/resourceLimitPersistence.ts#ResourceLimitTask"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:904ea7f3ebfb7c233d32",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookIngress",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookIngressPersistenceFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressPersistenceFor"
     },
     {
       "edgeKind": "value",
@@ -131112,22 +130930,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "id": "import:9c9c3504dbea7a076066",
-      "owner": "platform",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookDelivery",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteWebhookDeliveryPersistence",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeSqliteWebhookDeliveryPersistence"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/mcps.ts",
@@ -134313,22 +134115,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "integration",
-      "fromFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#$file",
-      "id": "import:a6588510640b5eff4a5b",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts#$file",
@@ -136822,6 +136608,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:ae735a1cbb52147e406b",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/scheduledTasks",
+      "syntax": "static-import",
+      "targetSymbol": "composeScheduledTaskRuntimeFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeScheduledTaskRuntimeFor"
     },
     {
       "edgeKind": "value",
@@ -141446,6 +141248,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:bc4a43b217e9387664d5",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookIngress",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookDeliveryRuntimeFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookDeliveryRuntimeFor"
     },
     {
       "edgeKind": "type",
@@ -146777,6 +146595,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:cbc0e93dfd0c19e548a8",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookDelivery",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookDeliveryPersistenceFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#composeWebhookDeliveryPersistenceFor"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#$file",
@@ -151593,6 +151427,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:d88308749db8e4efc4c8",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/scheduledTasks",
+      "syntax": "static-import",
+      "targetSymbol": "composeScheduledTaskRuntimeFor",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeScheduledTaskRuntimeFor"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#$file",
@@ -153398,22 +153248,6 @@
       "toContext": "memory",
       "toFile": "packages/backend/src/modules/memory/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:ddd49d21142d56edf635",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookIngress",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlWebhookDeliveryRuntime",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composePostgresqlWebhookDeliveryRuntime"
     },
     {
       "edgeKind": "value",
@@ -155846,22 +155680,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "integration",
-      "fromFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
-      "id": "import:e595443ae6f4d5e3a84c",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
       "edgeKind": "type",
@@ -162248,22 +162066,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:f8d1671fefd8a4e7827c",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/scheduledTasks",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteScheduledTaskRuntime",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/scheduledTasks.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#composeSqliteScheduledTaskRuntime"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/package.ts",
@@ -165217,7 +165019,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:50883e24d743a03a682b9397a6359548e33b7fefce686f75e328ef1498de718b",
+  "sourceDigest": "sha256:9b7e679cf96fa6805b9ddcabab3ab2e4ebd0a64b1c7fac4da4774ae0e609232f",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

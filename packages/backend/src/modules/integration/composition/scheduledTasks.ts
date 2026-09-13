@@ -1,8 +1,6 @@
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { IntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   IntegrationTriggerResourceBinding,
   IntegrationTriggerValidationRuntime,
@@ -73,17 +71,4 @@ export function composeIntegrationTriggerResourceQueries(
   resourceSnapshots: IntegrationTriggerResourceSnapshotFactory,
 ): IntegrationTriggerResourceQueries {
   return createIntegrationTriggerResources(db, resourceSnapshots)
-}
-
-/** RFC-359：旧名保留为装配别名，bootstrap 收敛后删除。 */
-export function composeSqliteScheduledTaskRuntime(
-  input: Omit<ScheduledTaskRuntimeInput, 'db'> & { readonly db: DbClient },
-): ScheduledTaskRuntime {
-  return composeScheduledTaskRuntimeFor(input)
-}
-
-export function composePostgresqlScheduledTaskRuntime(
-  input: Omit<ScheduledTaskRuntimeInput, 'db'> & { readonly db: PostgresqlDatabaseClient },
-): ScheduledTaskRuntime {
-  return composeScheduledTaskRuntimeFor(input)
 }

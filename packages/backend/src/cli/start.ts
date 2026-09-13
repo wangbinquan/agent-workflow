@@ -247,7 +247,7 @@ import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
 import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import type { SkillCatalogBootParticipant } from '@/modules/resource-catalog/public/participants'
-import { composeSqliteWebhookDeliveryPersistence } from '@/modules/integration/composition/webhookDelivery'
+import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import {
   createCollaborationCommandContext,
   createSqliteHumanGateContinuationRecoveryQueries,
@@ -259,7 +259,7 @@ import {
   createReviewDecisionCommand,
 } from '@/modules/collaboration/composition/decisionCommands'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
+import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
@@ -1911,7 +1911,7 @@ async function composeSqliteProviderSession(
   const taskExecutionPersistence = taskExecutionProvider.persistence
   const taskExecutionRuntime = taskExecutionProvider.runtime
   const collaborationContext = taskExecutionProvider.collaboration
-  const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
+  const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db,
     resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     validation: Object.freeze({
@@ -2294,7 +2294,7 @@ async function composeSqliteProviderSession(
   // auto-resume can attach a new task driver.
   const webhookTerminalControl = composeMrTerminalControl(db)
   await webhookTerminalControl.reconcileOnBoot()
-  const webhookDeliveryPersistence = composeSqliteWebhookDeliveryPersistence(db)
+  const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)
   const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)
   if (recoveredDeliveries > 0) {
     log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })

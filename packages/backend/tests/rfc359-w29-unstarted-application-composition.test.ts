@@ -438,6 +438,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // `execute` 填 map」的胶水整段删掉了（目录概览端口现在直接收请求者投影），换成一条
   // `composeSystemOverviewQuery({...})` 赋值。降，不是升。
   //
+  // RFC-359（2026-09-13，第三次）：语句条数仍是 160，摘要再次变化——四对**函数体逐字相同**的
+  // 装配别名退役，PG 根改调同名的中立实现：`composePostgresqlWebhookDeliveryRuntime` →
+  // `composeWebhookDeliveryRuntimeFor`、`…WebhookIngressPersistence` → `…For`、
+  // `…WebhookDeliveryPersistence` → `…For`、`…ScheduledTaskRuntime` → `…For`（plan §5ds）。
+  //
   // RFC-359（2026-09-13，第二次）：语句条数仍是 160，摘要再次变化——
   // `composePostgresqlWebhookTerminalWorkspacePrunePolicy` 改名为
   // `composeWebhookTerminalWorkspacePrunePolicy`。那两个 compose 函数的**函数体逐字相同**，
@@ -460,7 +465,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(160)
     expect(digest(restored, pg)).toBe(
-      '2df39c6901c2153cc0da2337511aa08ffc2a5a9fe8b68ac37016251010c358ed',
+      '9ba507ddcabab9d9495d9212a1a1e12a17bdb42275f378bd53f8c55112ee4bff',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -471,13 +476,20 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   test('SQLite phase preserves complete original composition and captures the real initialization', () => {
     // RFC-359 W57：`overviewQuery` 不再在这一层装配——它要的 `scheduledTaskRuntime.overview`
     // 要到 `composeSqliteApiRouteMounts` 才齐备，装配挪到了那里（依赖在哪层齐备就在哪层装）。
+    //
+    // RFC-359（2026-09-13）：摘要变了——同一批别名退役，SQLite 根这一侧改调
+    // `composeWebhookDeliveryRuntimeFor` / `composeWebhookIngressPersistenceFor` /
+    // `composeWebhookDeliveryPersistenceFor` / `composeScheduledTaskRuntimeFor`（plan §5ds）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      'db69fbb5cfe4a99cc835e8fc7f20aa920a9bb4a796f34c576983037faafadbf8',
+      'f26dd56c99dbd90b81bf4ac1d234b51c6fdf595901a37779849e87e50876bea2',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
+    //
+    // RFC-359（2026-09-13）：摘要变了——同一批别名退役波及这一层的
+    // `composeSqliteWebhookIngressPersistence` → `composeWebhookIngressPersistenceFor`（plan §5ds）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'f904bc047d8101ee0823be686e8d595c8b3f31555170a43a84b0f4fd9d9d5eb4',
+      '35e25893a6379b349864a02a260151c3299ad917a2d42967671c8fec6f4631bc',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '3e6131c32a868090e7236eb8e554605e8b46a5df15a149671acd396c0a072194',

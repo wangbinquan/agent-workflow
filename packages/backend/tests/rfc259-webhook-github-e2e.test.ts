@@ -27,7 +27,7 @@ import {
 } from '../src/services/webhook/webhookDispatch'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
-import { composeSqliteWebhookIngressPersistence } from '../src/modules/integration/composition/webhookIngress'
+import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
 import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
@@ -135,7 +135,7 @@ async function harness() {
   })
   const app = new Hono()
   mountWebhookIngressRoutes(app, {
-    webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
+    webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
     secretBox: box,
     digitalEmployeeEventCenter: eventCenter,
     webhookDispatcher: dispatcher,

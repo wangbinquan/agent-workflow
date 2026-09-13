@@ -1,6 +1,4 @@
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { WebhookDeliveryPersistencePort } from '../application/ports/webhookDeliveryPersistence'
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 
@@ -16,17 +14,4 @@ export function composeWebhookDeliveryPersistenceFor(
   db: ProviderNeutralDatabase,
 ): WebhookDeliveryPersistencePort {
   return composeWebhookDeliveryPersistence(createWebhookDeliveryPersistence(db))
-}
-
-/** 旧名保留为装配别名，bootstrap 收敛后删除。 */
-export function composeSqliteWebhookDeliveryPersistence(
-  db: DbClient,
-): WebhookDeliveryPersistencePort {
-  return composeWebhookDeliveryPersistenceFor(db)
-}
-
-export function composePostgresqlWebhookDeliveryPersistence(
-  db: PostgresqlDatabaseClient,
-): WebhookDeliveryPersistencePort {
-  return composeWebhookDeliveryPersistenceFor(db)
 }

@@ -9276,3 +9276,34 @@ export function composePostgresqlWebhookTerminalWorkspacePrunePolicy(input: { db
 （`busyRatio > max(0.1, idleRatio * 10)`）。负载会同时压低两者，所以两条曲线离得有多远与机器负载
 无关，而那正是 `[db-slow]` 里那个 cpuMs 要让运维分辨的事。本机实测 idle 0.0033 / busy 1.0000，
 CI 那次的 0.38 也照样过；真出回归（CPU-bound 语句记到 cpuMs≈0）仍然红。
+
+## 5ds. 全树扫「**函数体逐字相同**的 provider 孪生」：14 → 10（本批退役 4 对）
+
+§5dr 那一对不是孤例。把判据写成机械扫描——**同一个 base 名、一侧 sqlite 一侧 postgresql、
+函数体去掉空白后逐字节相同**——全树 162 个 provider 命名的函数里扫出 **14 对**。
+它们全都只是转交给一个已经存在的中立实现，多数文件里还留着一行注释写明退役条件：
+
+> `/** RFC-359：旧名保留为装配别名，bootstrap 收敛后删除。 */`
+
+本批还掉其中四对（都在 `modules/integration/composition/`，一次改完同一个模块的装配面）：
+
+| base                        | 中立目标                                | 调用点 |
+| --------------------------- | --------------------------------------- | ------ |
+| `WebhookDeliveryRuntime`    | `composeWebhookDeliveryRuntimeFor`      | 2 根 + 1 守卫 |
+| `WebhookIngressPersistence` | `composeWebhookIngressPersistenceFor`   | 2 根 + 4 测试 |
+| `WebhookDeliveryPersistence`| `composeWebhookDeliveryPersistenceFor`  | 3 根 + 1 守卫 |
+| `ScheduledTaskRuntime`      | `composeScheduledTaskRuntimeFor`        | 3 根 + 2 测试 |
+
+八个别名连同那行「bootstrap 收敛后删除」的注释一起删掉；不再被引用的
+`DbClient` / `PostgresqlDatabaseClient` 类型 import 随之退出这三个文件。
+`rfc359-w5-provider-runtime-exercised` 的组合根下限 80 → 76 —— **降是对的方向**，
+这个数随合一持续下降；那条断言照旧贴着当前值钉，每次退役都要在那里留一次有署名的记录。
+
+**剩下 10 对**（下一批继续）：`CapabilityTemplateOperations` / `CodeCapabilityDemoSeedParticipant` /
+`CollaborationRouteOperations` / `DemoResourceCatalogSeedParticipant` / `LegacyCodeReadProviders` /
+`RealtimeRuntime` / `ResourceCatalog` / `WebhookEndpointServiceDependencies` /
+`WorkspaceMaintenanceCommand` / `EventsArchiveStore`。
+
+**扫描脚本的判据**（可复跑）：`compose|create|make|build` + `Sqlite|LegacySqlite|Postgresql` + 同一个
+base；两侧函数体 `replace(/\s+/g, ' ').trim()` 后全等。这条判据挑不出「体不同但语义相同」的那些
+（那类要靠 §5dp 的成对账本与对拍），但它挑出来的每一条都是**无可争辩**的纯名字重复。

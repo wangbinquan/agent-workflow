@@ -61,7 +61,7 @@ import { createDevelopmentAdapterStore } from '@/modules/integration/infrastruct
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeSqliteWebhookDispatchCore } from '@/modules/integration/composition/webhookDispatch'
-import { composeSqliteWebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
+import { composeWebhookIngressPersistenceFor } from '@/modules/integration/composition/webhookIngress'
 import { createWebhookDispatchExecutionRuntime } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
@@ -324,7 +324,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     const webhookApp = new Hono()
     mountWebhookIngressRoutes(webhookApp, {
-      webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
+      webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
       secretBox: webhookSecretBox,
       webhookDispatcher,
       digitalEmployeeEventCenter: eventCenter,

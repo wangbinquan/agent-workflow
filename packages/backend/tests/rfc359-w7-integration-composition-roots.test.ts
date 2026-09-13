@@ -45,15 +45,9 @@ import {
   composeSqlitePipelineEvidenceRunner,
 } from '@/modules/integration/composition/pipelineEvidence'
 import { composePostgresqlRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import {
-  composePostgresqlScheduledTaskRuntime,
-  composeSqliteScheduledTaskRuntime,
-} from '@/modules/integration/composition/scheduledTasks'
+import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
-import {
-  composePostgresqlWebhookDeliveryPersistence,
-  composeSqliteWebhookDeliveryPersistence,
-} from '@/modules/integration/composition/webhookDelivery'
+import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import {
   composePostgresqlWebhookDispatchPersistence,
   composePostgresqlWebhookTriggerServiceDependencies,
@@ -66,9 +60,8 @@ import {
   composeSqliteWebhookEndpointServiceDependencies,
 } from '@/modules/integration/composition/webhookEndpoints'
 import {
-  composePostgresqlWebhookDeliveryRuntime,
-  composePostgresqlWebhookIngressPersistence,
-  composeSqliteWebhookDeliveryRuntime,
+  composeWebhookDeliveryRuntimeFor,
+  composeWebhookIngressPersistenceFor,
 } from '@/modules/integration/composition/webhookIngress'
 import { composePostgresqlMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
@@ -226,8 +219,8 @@ async function errorCodeOf(fn: () => Promise<unknown>): Promise<string> {
 describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 / 触发器', (harness) => {
   test('webhookDelivery：两个别名各构造一次，insert 去重 + mark + touch + GC 切片都落真库', async () => {
     const endpointId = await seedEndpoint(harness.db)
-    const sqlite = composeSqliteWebhookDeliveryPersistence(asSqlite(harness.db))
-    const postgresql = composePostgresqlWebhookDeliveryPersistence(asPostgresql(harness.db))
+    const sqlite = composeWebhookDeliveryPersistenceFor(asSqlite(harness.db))
+    const postgresql = composeWebhookDeliveryPersistenceFor(asPostgresql(harness.db))
 
     const eventUuid = `evt_${ulid()}`
     const first = await sqlite.insert({ endpointId, eventUuid, status: 'received' })
@@ -331,8 +324,8 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
   test('webhookDispatch 触发器服务依赖：两个别名装出的 administration / dispatchPersistence 都能读写', async () => {
     const owner = await seedUser(harness.db)
     const endpointId = await seedEndpoint(harness.db)
-    // 定时任务运行时同时是本轮要还的另一条债（scheduledTasks.ts#composePostgresqlScheduledTaskRuntime）。
-    const scheduled = composePostgresqlScheduledTaskRuntime({
+    // 定时任务运行时同时是本轮要还的另一条债（scheduledTasks.ts#composeScheduledTaskRuntimeFor）。
+    const scheduled = composeScheduledTaskRuntimeFor({
       db: asPostgresql(harness.db),
       resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
       validation: {
@@ -361,7 +354,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
 
   test('scheduledTasks 运行时：持久化面可列举，overview 按权限点决定是否给数', async () => {
     const admin = await seedUser(harness.db, 'admin')
-    const runtime = composePostgresqlScheduledTaskRuntime({
+    const runtime = composeScheduledTaskRuntimeFor({
       db: asPostgresql(harness.db),
       resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
       validation: {
@@ -395,7 +388,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     // `rfc359-w5-provider-runtime-exercised` 立刻把它记成「只装配不构造」。
     // 两个别名的函数体逐字相同（都转交 `composeScheduledTaskRuntimeFor`），这里对同一个空库
     // 跑同一组读，确认它们回同样的结果。
-    const sqliteRuntime = composeSqliteScheduledTaskRuntime({
+    const sqliteRuntime = composeScheduledTaskRuntimeFor({
       db: asSqlite(harness.db),
       resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
       validation: {
@@ -459,9 +452,9 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
 
   test('webhookIngress 运行时：端点读、投递写、已验证投递接收、审计分页一体', async () => {
     const endpointId = await seedEndpoint(harness.db)
-    const sqliteRuntime = composeSqliteWebhookDeliveryRuntime(asSqlite(harness.db))
-    const postgresqlRuntime = composePostgresqlWebhookDeliveryRuntime(asPostgresql(harness.db))
-    const postgresqlIngress = composePostgresqlWebhookIngressPersistence(asPostgresql(harness.db))
+    const sqliteRuntime = composeWebhookDeliveryRuntimeFor(asSqlite(harness.db))
+    const postgresqlRuntime = composeWebhookDeliveryRuntimeFor(asPostgresql(harness.db))
+    const postgresqlIngress = composeWebhookIngressPersistenceFor(asPostgresql(harness.db))
 
     expect((await sqliteRuntime.endpoints.get(endpointId))?.id).toBe(endpointId)
     expect(await postgresqlIngress.endpoints.get('we_missing')).toBeNull()
@@ -736,18 +729,18 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
     composePostgresqlPipelineEvidenceRunner,
     composeSqlitePipelineEvidenceRunner,
     composePostgresqlRequirementSourceRunner,
-    composePostgresqlScheduledTaskRuntime,
+    composeScheduledTaskRuntimeFor,
     composeWebhookTerminalWorkspacePrunePolicy,
-    composePostgresqlWebhookDeliveryPersistence,
-    composeSqliteWebhookDeliveryPersistence,
+    composeWebhookDeliveryPersistenceFor,
+    composeWebhookDeliveryPersistenceFor,
     composePostgresqlWebhookDispatchPersistence,
     composePostgresqlWebhookTriggerServiceDependencies,
     composeSqliteWebhookTriggerServiceDependencies,
     composePostgresqlWebhookEndpointServiceDependencies,
     composeSqliteWebhookEndpointServiceDependencies,
-    composePostgresqlWebhookDeliveryRuntime,
-    composePostgresqlWebhookIngressPersistence,
-    composeSqliteWebhookDeliveryRuntime,
+    composeWebhookDeliveryRuntimeFor,
+    composeWebhookIngressPersistenceFor,
+    composeWebhookDeliveryRuntimeFor,
     composePostgresqlMrTerminalControl,
     composePostgresqlTaskSourceTermination,
   ]

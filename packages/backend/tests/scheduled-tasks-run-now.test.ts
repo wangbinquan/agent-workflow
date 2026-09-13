@@ -272,7 +272,7 @@ describeEachProviderHttpApplication(
       )
       // RFC-359 AC-6：种子改成中立 insert。原来走的
       // `createScheduledTaskWithIntegrationTriggerResources` 里是
-      // `composeSqliteScheduledTaskRuntime` / `composeResourceCatalogFor`——bun:sqlite
+      // `composeScheduledTaskRuntimeFor` / `composeResourceCatalogFor`——bun:sqlite
       // 专有，中立句柄传不进去。而本 describe 的被测对象是 **run-now 路由门**
       // （owner 201 / admin 201 / 陌生人 404 / 坏载荷 422），不是「创建定时任务」那条路；
       // 用服务层去建种子只是顺手，不是判据的一部分。直接落行既中立又更贴题。

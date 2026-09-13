@@ -15,7 +15,7 @@ import type {
 } from '../src/services/webhook/dispatcherTypes'
 import type { EventCenterModule } from '../src/modules/event-center/composition'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
-import { composeSqliteWebhookIngressPersistence } from '../src/modules/integration/composition/webhookIngress'
+import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
 import { composeEventCenter } from '../src/modules/event-center/composition'
 import {
   createCodeHostWebhookDeliveryConsumer,
@@ -99,7 +99,7 @@ async function harness(opts?: {
     }))
   const app = new Hono()
   mountWebhookIngressRoutes(app, {
-    webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
+    webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
     secretBox: box,
     digitalEmployeeEventCenter: eventCenter,
     ...(opts?.omitDispatcher ? {} : { webhookDispatcher: dispatcher }),
@@ -402,7 +402,7 @@ describe('RFC-257 T5 · 限流（fake clock）与装配自我跳过', () => {
     mountWebhookIngressRoutes(
       app,
       {
-        webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
+        webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
         secretBox: box,
         webhookDispatcher: fake.dispatcher,
         digitalEmployeeEventCenter: {

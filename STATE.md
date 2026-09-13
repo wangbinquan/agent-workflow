@@ -2,6 +2,18 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 10，全树扫「函数体逐字相同的孪生」：**14 → 10**）
+>
+> 落档 plan §5ds。§5dr 那一对不是孤例。判据写成机械扫描（同一个 base 名、一侧 sqlite 一侧
+> postgresql、函数体去掉空白后**逐字节相同**），全树 162 个 provider 命名的函数里扫出 **14 对**
+> ——它们全都只是转交给一个已经存在的中立实现，多数文件里还留着
+> 「旧名保留为装配别名，bootstrap 收敛后删除」那行注释。
+>
+> 本批还掉四对（`WebhookDeliveryRuntime` / `WebhookIngressPersistence` /
+> `WebhookDeliveryPersistence` / `ScheduledTaskRuntime`，都在 `modules/integration/composition/`），
+> 八个别名连同那行注释一起删；`rfc359-w5-provider-runtime-exercised` 的组合根下限 80 → 76
+> （**降是对的方向**，每次退役在那里留一次有署名的记录）。**剩 10 对**，下一批继续。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 9，收掉一对**函数体逐字相同**的孪生；账本 **400** / open **94**）
 >
 > 落档 plan §5dr。`composeSqlite/PostgresqlWebhookTerminalWorkspacePrunePolicy` 两个函数体**逐字

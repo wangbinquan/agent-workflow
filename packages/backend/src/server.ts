@@ -385,7 +385,7 @@ import {
 import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import {
   composeIntegrationTriggerResourceQueries,
-  composeSqliteScheduledTaskRuntime,
+  composeScheduledTaskRuntimeFor,
 } from '@/modules/integration/composition/scheduledTasks'
 import { composeSqliteWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integration/composition/webhookDispatch'
@@ -399,8 +399,8 @@ import {
   createRepositoryEndpointDiscovery,
 } from '@/modules/integration/composition'
 import {
-  composeSqliteWebhookDeliveryRuntime,
-  composeSqliteWebhookIngressPersistence,
+  composeWebhookDeliveryRuntimeFor,
+  composeWebhookIngressPersistenceFor,
   type WebhookIngressPersistence,
 } from '@/modules/integration/composition/webhookIngress'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
@@ -1815,7 +1815,7 @@ export function composeSqliteApplicationDeps(
     deps.providerCore?.healthDatabase ??
     createHealthDatabaseReadModel(deps.db)
   const webhookIngressPersistence =
-    deps.webhookIngressPersistence ?? composeSqliteWebhookIngressPersistence(deps.db)
+    deps.webhookIngressPersistence ?? composeWebhookIngressPersistenceFor(deps.db)
   const runtimeRegistry =
     deps.runtimeRegistry ??
     deps.providerCore?.runtimeRegistry ??
@@ -2591,14 +2591,14 @@ function composeSqliteApiRouteMounts(
       taskBroadcaster.broadcast(TASK_CHANNEL(taskId), { id: -1, ...event })
     },
   })
-  const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
+  const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db: deps.db,
     resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     validation: Object.freeze({
       assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(deps.db, workflow),
       assertAgentIntegrity: (agentIds) =>
         agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
-    } satisfies Parameters<typeof composeSqliteScheduledTaskRuntime>[0]['validation']),
+    } satisfies Parameters<typeof composeScheduledTaskRuntimeFor>[0]['validation']),
     resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
   })
   // RFC-359 W57 —— `/api/overview` 两个 provider 共用这一份装配（PG 侧见
@@ -2643,7 +2643,7 @@ function composeSqliteApiRouteMounts(
     deps.configPath,
     scheduledTaskRuntime.operations,
   )
-  const webhookDeliveryRuntime = composeSqliteWebhookDeliveryRuntime(deps.db)
+  const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(deps.db)
   const capabilityTemplatePersistence = createSqliteCapabilityTemplatePersistence(deps.db)
   const capabilityTemplateAccess = Object.freeze({
     filterVisible: (actor, rows) => filterVisibleRows(deps.db, actor, 'capability_template', rows),
