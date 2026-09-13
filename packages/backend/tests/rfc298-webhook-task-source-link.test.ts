@@ -5,17 +5,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 // supported, corrupt rows fail closed, and inherited child context works
 // without any webhook trigger/delivery join.
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import type { TriggerContext } from '@agent-workflow/shared'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { getTask, listTasks } from '../src/services/task'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-type TestDb = ReturnType<typeof createInMemoryDb>
 
 function seedWorkflowWrite(db: ProviderNeutralDatabase) {
   const id = ulid()
@@ -31,10 +25,6 @@ function seedWorkflowWrite(db: ProviderNeutralDatabase) {
     })
     .run()
   return { id, write }
-}
-
-function seedWorkflow(db: TestDb): string {
-  return seedWorkflowWrite(db).id
 }
 
 function seedTaskWrite(
@@ -73,14 +63,6 @@ function seedTaskWrite(
     })
     .run()
   return { id, write }
-}
-
-function seedTask(
-  db: TestDb,
-  workflowId: string,
-  options: Parameters<typeof seedTaskWrite>[2] = {},
-): string {
-  return seedTaskWrite(db, workflowId, options).id
 }
 
 type FixtureLineage = {
@@ -204,14 +186,17 @@ describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
   })
 })
 
-describe('RFC-298 getTask webhook source projection', () => {
+// RFC-359 AC-6：这一条原来自建单引擎库 + 同步种子，而同文件另外两个 describe 早已双引擎。
+// 改吃 harness 的库与既有的 `createProviderSeeds()`（异步种子），两个引擎各跑一遍。
+describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
   test('non-webhook, corrupt and all-unsafe contexts fail closed to null', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflowId = seedWorkflow(db)
+    const db = harness.db
+    const { seedWorkflow, seedTask } = createProviderSeeds()
+    const workflowId = await seedWorkflow(db)
     const cases = [
-      seedTask(db, workflowId),
-      seedTask(db, workflowId, { triggerContextJson: '{broken' }),
-      seedTask(db, workflowId, {
+      await seedTask(db, workflowId),
+      await seedTask(db, workflowId, { triggerContextJson: '{broken' }),
+      await seedTask(db, workflowId, {
         triggerContextJson: canonical({
           event_type: 'note',
           comment_url: 'data:text/plain,no',
@@ -219,7 +204,7 @@ describe('RFC-298 getTask webhook source projection', () => {
           project_web_url: 'file:///tmp/project',
         }),
       }),
-      seedTask(db, workflowId, {
+      await seedTask(db, workflowId, {
         triggerContextJson: JSON.stringify({
           trigger: { webhook: { event_type: 'note', unknown: 'strict-schema-rejects-me' } },
         }),

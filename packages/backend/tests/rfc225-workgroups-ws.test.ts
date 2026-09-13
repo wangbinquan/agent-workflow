@@ -1,9 +1,8 @@
 // RFC-225 — workgroup WS producer and per-frame ACL regression locks.
 
 import type { WorkgroupsWsMessage } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { resourceGrants, users, workgroups } from '../src/db/schema'

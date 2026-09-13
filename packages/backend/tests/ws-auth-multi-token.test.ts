@@ -15,8 +15,7 @@
 // the upgrade-time auth surface.
 
 import type { Server } from 'bun'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>

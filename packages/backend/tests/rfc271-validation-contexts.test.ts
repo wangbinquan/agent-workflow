@@ -13,9 +13,7 @@
 // context、之后才冻结，于是「校验的那一份」与「执行的那一份」是两次独立解析。
 
 import { describe, expect, test } from 'bun:test'
-import { join } from 'node:path'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workflows } from '../src/db/schema'
@@ -24,8 +22,6 @@ import {
   loadWorkflowValidationContext,
   validateWorkflowDef,
 } from '../src/services/workflow.validator'
-
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 
 type Node = WorkflowDefinition['nodes'][number]
 const node = (f: Record<string, unknown>): Node => f as unknown as Node
@@ -105,38 +101,40 @@ describe('① 编辑器 / 保存期：advisory，走 live，不冻结', () => {
       // live 名字规则选中 W_TOPIC（入端口 topic），而边喂的是 subject ⇒ 报错。
       expect(errorCodes(r)).toContain('call-workflow-input-unwired')
     })
-  })
 
-  test('保存者与启动者不同是**允许**的：保存期结果与启动绑定可以不一致，且不报错', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W_SUBJECT, 'audit', child('subject'))
+    // RFC-359 AC-6：这一条原来挂在外层普通 describe 上、自建单引擎库，而它用的 `seed()`
+    // 本来就收中立句柄——并进相邻的 provider 块即可两个引擎各跑一遍。
+    test('保存者与启动者不同是**允许**的：保存期结果与启动绑定可以不一致，且不报错', async () => {
+      const db = harness.db
+      await seed(db, W_SUBJECT, 'audit', child('subject'))
 
-    const d = rootCalling({ name: 'audit', id: W_SUBJECT })
-    // 保存期（live，无 Actor）：解析得到 W_SUBJECT，干净通过。
-    const saveTime = validateWorkflowDef(
-      d,
-      await loadWorkflowValidationContext(db, { definition: d }),
-    )
-    expect(errorCodes(saveTime)).toEqual([])
+      const d = rootCalling({ name: 'audit', id: W_SUBJECT })
+      // 保存期（live，无 Actor）：解析得到 W_SUBJECT，干净通过。
+      const saveTime = validateWorkflowDef(
+        d,
+        await loadWorkflowValidationContext(db, { definition: d }),
+      )
+      expect(errorCodes(saveTime)).toEqual([])
 
-    // 启动期（冻结闭包里换成了另一份定义——模拟启动者只看得见另一行）：
-    // 校验按冻结那份走，得到不同结论。**两者都不算 bug**，语境不同而已。
-    const frozen = JSON.stringify({
-      closureVersion: 2,
-      workflows: {
-        [callEdgeKey(ROOT, 'c1')]: { id: W_TOPIC, version: 1, definition: child('topic') },
-      },
-      workgroups: {},
+      // 启动期（冻结闭包里换成了另一份定义——模拟启动者只看得见另一行）：
+      // 校验按冻结那份走，得到不同结论。**两者都不算 bug**，语境不同而已。
+      const frozen = JSON.stringify({
+        closureVersion: 2,
+        workflows: {
+          [callEdgeKey(ROOT, 'c1')]: { id: W_TOPIC, version: 1, definition: child('topic') },
+        },
+        workgroups: {},
+      })
+      const launchTime = validateWorkflowDef(
+        d,
+        await loadWorkflowValidationContext(db, {
+          definition: d,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+          frozenClosureJson: frozen,
+        }),
+      )
+      expect(errorCodes(launchTime)).toContain('call-workflow-input-unwired')
     })
-    const launchTime = validateWorkflowDef(
-      d,
-      await loadWorkflowValidationContext(db, {
-        definition: d,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-        frozenClosureJson: frozen,
-      }),
-    )
-    expect(errorCodes(launchTime)).toContain('call-workflow-input-unwired')
   })
 })
 
