@@ -28,7 +28,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                                                                                         | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 重采**：`rfc359-w5-t19f` 账本 530 → 468（判据同批从文本扫改成 AST 数真调用点，注释与源码断言不再误计，守卫自我豁免退役）。本 session 迁 62 个文件，逐个过 `bun run typecheck` + 双引擎实跑。剩余 468 按拦路石清点（§5ce）：`migration-*` 80（**按定义不该双引擎**）、`createTaskExecutionTestTopology` 73（需一次设计，两个引擎执行模型不同，见 §5ce）、裸 `$client`/raw SQL 78、HTTP 形状 39、残留 198（绝大多数卡 callee 形参，§5bz 那张表）。另有 41 个 `new Database(` 开**真实文件**（备份/还原/VACUUM INTO/外部 store/worker 夹具）判的就是 SQLite 文件自身行为，属产品真正的 SQLite 专属面。 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 重采 + 分层更正**：账本 530 → 460（判据同批从文本扫改成 AST 数真调用点）。剩余 460 按**该不该双引擎**分层（§5co）：`migration-*` **97**（判的是 SQLite 迁移链本身，对账归 W5-T19g）、测 **SQLite 执行引擎**的 **85**（`TaskRouteOperations` 已登记为「不该合」，PG 生产走 `taskExecutionProvider.cancellation`，不走这条路径）——这两类**按裁决就该单引擎**；加上 41 个 `new Database(` 开真实文件（备份/还原/VACUUM INTO/外部 store）同样按定义单引擎。**真正的剩余迁移面是 278 个**，主要卡在 callee 形参（§5bz / §5cn 那张表，去掉误报的第一组）。 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34/6，13后端10/3；主2353/15、原2227全过，独立2/2及hook18/18、原RFC259两OS、两个原Playwright身份两OS通过。W55最终39core编译、metadata63/111与canonical13/55通过且候选稳定，首轮缺import失败保留；完整新SHA待托管，发布后仅修流水线。 | 待办   |
@@ -8173,10 +8173,10 @@ body 却仍在 `createInMemoryDb(MIGRATIONS)`——它们名义上双引擎，�
 |  6 | `composeSqliteAgentLaunchResourceOperations` | §5ch 记的装配签名不对称 |
 |  5 | `createTaskExecutionContext` | `modules/task-execution/composition/sqliteTaskExecutionContext.ts` |
 
-**结论很清楚：`services/task.ts` 的 `resumeTask` / `retryNode` / `cancelTask` 三个一起卡住 42 个文件，
-是剩余 AC-6 里最大的单点。** 它们和 `StartTaskDeps.db`（§5ci）在同一片——942c9fc50 实测过，
-把那条 legacy 别名一刀放宽会让 `services/task.ts` 炸 34 个错，因为它的函数体真在用 SQLite 同步面。
-所以下一波的正解是**先把 `services/task.ts` 那片搬到中立事务口**，而不是继续在测试侧绕。
+**⚠️ 这张表按「卡住多少文件」排序，但排第一的那组是误报**——`resumeTask` / `retryNode` /
+`cancelTask` 卡住的 42 个（连同整类 85 个）文件测的是 **SQLite 那台执行引擎**，而
+`TaskRouteOperations` 这一对早已被本 plan 判为「不该合」、PG 生产也不走这条路径。
+它们**按裁决就该单引擎**，不是待迁量。详见 §5co 的更正段。真正该按这张表推进的是它下面那几行。
 
 `composeSqliteWebhookDispatchCore`（8）第二大：它自己只是转交，卡点在
 `createSqliteWebhookRepositoryResolver` 体内两处 `.get()`；那个函数有 PG 孪生，
@@ -8211,7 +8211,42 @@ body 却仍在 `createInMemoryDb(MIGRATIONS)`——它们名义上双引擎，�
 文件里已有两处注释（`:3317`、`:5877`）记着前几波是**分片**把事务边界从 `dbTxSync` 换到中立原语的，
 这一刀按同样的方式分片做。
 
-**下一波的任务形状（已定形）**：
-- T-TASK1：`cancelTask` 的同步预检定去留（顺序契约怎么保），这是唯一需要决策的一格；
-- T-TASK2：那 9 个转交点连同 `StartTaskDeps.db` 一起放宽；
-- T-TASK3：42 个账本文件按既有变换器批量迁入。
+### ⚠️ 上面那段的**方向是错的**，就地更正（2026-09-13）
+
+写完才回查本 plan 的既有裁决：`TaskRouteOperations` 这一对**早已被判为「不该合」**，
+就记在 §「判定为**不该合**的对：从 3 对增到 7 对」里，理由逐字是——
+
+> **两台执行引擎**：SQLite 侧带模块级可变全局 + 2 处 `dbTxSync` + 自驱进程内 scheduler，
+> PG 侧一律委托端口 + serializable 事务 + 已提交事件出站。合一的前置是 `services/task.ts`
+> 的调度耦合与同步事务面——正是本节记的结构性阻塞。
+
+核对生产装配，这条裁决确实成立：**PostgreSQL 根**把取消接到
+`taskExecutionProvider.cancellation.cancel({ taskId, cause })`
+（`cli/postgresqlDaemonApplication.ts:1452 / 1460 / 1616`），而 `resumeTask` / `retryNode` 的
+消费者**全在 `src/platform/persistence/sqlite/` 下面**。两侧的路由操作面同名同形
+（`cancel` / `resume` / `retry` / `get` / `listItems` / `nodeRuns` / `events` / `diff` / `stdout` /
+`delete` / `launchWorkflow` / `launchMultipart` / `syncWorkflow` / `repairOptions` / `applyRepair` /
+`getMembers` / `replaceMembers` / … 逐个对得上），但**是两份实现**：
+`sqliteTaskRouteOperations.ts`(276) 转发进 `services/task.ts`(7696)，对面是自足的
+`postgresqlTaskRouteOperations.ts`(2563)。两个文件 23 / 54 条 import 只共享 13 条，
+PG 那侧多出来的几乎全是 `application/ports/*` 与 `domain/*`——它才是朝 RFC-294 目标架构写的那一份。
+
+**所以那 42 个（连同整类共 85 个）账本文件不是「还没迁」，是「按裁决就该单引擎」**：
+它们测的是 SQLite 那台执行引擎，而 PG 生产根本不走它。把它们套上 `describeEachProvider`
+等于**拿 PG 库去跑 SQLite 引擎**——那不是 parity 覆盖，是给一条 PG 上不存在的路径刷绿。
+这一对的 parity 由它自己那份已登记的双引擎对拍负责（「『不合』不等于『不管』」那条）。
+
+T-TASK1/2/3 作废。`cancelTask` 那条同步预检的取证仍然有效、也仍然是该对合一时要解的一格，
+但它属于**那对的合一前置**，不是 AC-6 的迁移任务。
+
+### AC-6 剩余 460 的正确分层（按「该不该迁」，不是按「能不能迁」）
+
+| 类别 | 文件 | 该不该双引擎 |
+| --- | --- | --- |
+| `migration-*` | 97 | **不该**：判的是 SQLite 迁移链本身，PG 的 schema 来自 drizzle 声明，对账由 W5-T19g 负责 |
+| 测 **SQLite 执行引擎**（`resumeTask` / `retryNode` / `cancelTask` / `startTask` / 执行拓扑） | 85 | **不该**：`TaskRouteOperations` 已登记为「不该合」，PG 生产不走这条路径 |
+| 其余 | 278 | **该**，也是真正的迁移面 |
+
+加上 41 个 `new Database(` 开**真实文件**（备份 / 还原 / VACUUM INTO / 外部 store）同样按定义单引擎，
+**AC-6 真正的剩余工作量是那 278 个**，不是 460。这条分层此前没有写出来，导致 §5cn 把一个
+已被裁决的结构性阻塞当成了「最大的单点」去排序。

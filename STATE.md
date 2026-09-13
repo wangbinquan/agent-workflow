@@ -37,16 +37,23 @@
 >   201 个要 `'real'`；两个引擎的执行模型不同（PG 的 drive 必须在已认领的 ownership 里跑）。
 >   要么改写成提交 `runTask`，要么给 provider 拓扑补一个自带认领的外观（plan §5ce）。
 >
-> ### 5. 剩下 460 条的构成与**下一刀**（plan §5ce / §5cn / §5co）
+> ### 5. 剩下 460 条按**该不该双引擎**分层（plan §5co，含一条对我自己的更正）
 >
-> `migration-*` 80（**按定义不该双引擎**）、task-topology 73（要设计）、裸 `$client` 78、
-> HTTP 形状 37、残留约 190（绝大多数卡 callee 形参）。另有 41 个 `new Database(` 开**真实文件**
-> （备份 / 还原 / VACUUM INTO / 外部 store），判的就是 SQLite 文件自身行为，不该也不能双引擎。
+> | 类别 | 文件 | 该不该 |
+> | --- | --- | --- |
+> | `migration-*` | 97 | **不该**（判的是 SQLite 迁移链本身，对账归 W5-T19g） |
+> | 测 **SQLite 执行引擎**（`resumeTask`/`retryNode`/`cancelTask`/`startTask`/执行拓扑） | 85 | **不该** |
+> | 其余 | 278 | **该**，真正的迁移面 |
 >
-> **下一刀是 `services/task.ts`**：`resumeTask` 19 + `retryNode` 14 + `cancelTask` 9 = **42 个账本文件**
-> 卡在它上面，是最大的单点。实测：那两个函数**自己的体零同步终结符**，外溢只有 9 个错、全在同文件内的
-> 一层浅转交；**唯一需要决策的一格是 `cancelTask:4136-4141` 那条有意的同步预检**——它保住「首次 yield
-> 之前先注册 FIFO 写槽」的顺序契约，改 await 会让函数提前让出。定形成 **T-TASK1/2/3**（plan §5co）。
+> 第二类是本段最重要的一条更正：我一度把 `services/task.ts` 排成「最大的单点」并定了 T-TASK1/2/3，
+> **方向是错的**——本 plan 早已把 `TaskRouteOperations` 判为「不该合」（两台执行引擎），
+> 核对生产装配也确实如此：PG 根把取消接到 `taskExecutionProvider.cancellation.cancel`
+> （`postgresqlDaemonApplication.ts:1452/1460/1616`），`resumeTask`/`retryNode` 的消费者
+> **全在 `src/platform/persistence/sqlite/` 下**。把这 85 个套上 `describeEachProvider`
+> 等于拿 PG 库去跑 SQLite 引擎，是给一条 PG 上不存在的路径刷绿。T-TASK1/2/3 已作废。
+>
+> 再加 41 个 `new Database(` 开真实文件（备份/还原/VACUUM INTO/外部 store）同样按定义单引擎，
+> **AC-6 真正的剩余工作量是 278 个**，主要卡在 callee 形参（plan §5bz / §5cn 那张表，去掉误报的第一组）。
 >
 > 本段顺带修掉的 PG-only / 覆盖类问题：raw SQL 在 PG 上把 bigint 取回成字符串、嵌套 harness
 > （`cannot drop the currently open database`）、**一处存量假覆盖**（`describeEachProvider` 体内还在
