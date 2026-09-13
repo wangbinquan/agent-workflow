@@ -15,16 +15,17 @@
 //   H7 degraded row repair: partial PUT keeping the broken field → 422
 //      'scheduled-task-needs-repair'; full-field PUT repairs and clears the
 //      rfc165 lastError breadcrumb.
-import { beforeEach, describe, expect, test, beforeAll } from 'bun:test'
+import { beforeEach, expect, test, beforeAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { StartTaskSchema } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { scheduledTasks, users, workflows } from '../src/db/schema'
 import {
   getScheduledTask,
@@ -35,9 +36,7 @@ import { runGit } from '../src/util/git'
 import { pathToFileURL } from 'node:url'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-let db: DbClient
+let db: ProviderNeutralDatabase
 let tmp: string
 
 async function seedRepo(name: string): Promise<string> {
@@ -92,9 +91,9 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
-describe('RFC-165 T4 — scheduled payload heal + tolerant repair', () => {
+describeEachProvider('RFC-165 T4 — scheduled payload heal + tolerant repair', (harness) => {
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     tmp = mkdtempSync(join(tmpdir(), 'aw-rfc165-heal-'))
   })
 

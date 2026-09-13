@@ -1,12 +1,15 @@
 import type { Actor } from '../../src/auth/actor'
-import type { DbClient } from '../../src/db/client'
+// RFC-359 AC-6：`db` 放宽到 `ProviderNeutralDatabase`，装配也换成中立那一份
+// （`composeResourceCatalogFor` / `composeScheduledTaskRuntimeFor`——`composeSqlite*` 本来就只是
+// 它们的装配别名，函数体逐字相同）。定时任务这一族的三个测试文件全卡在这个夹具上。
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import {
   composeIdentityAccess,
   type IdentityAccessRuntime,
 } from '../../src/modules/identity-access/composition'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '../../src/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
-import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { assertNotBuiltin } from '../../src/services/systemResources'
@@ -24,7 +27,7 @@ import {
   updateScheduledTask as updateScheduledTaskService,
 } from '../../src/services/scheduledTasks'
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
-import { composeSqliteScheduledTaskRuntime } from '../../src/modules/integration/composition/scheduledTasks'
+import { composeScheduledTaskRuntimeFor } from '../../src/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '../../src/services/taskLaunchGate'
 import { assertAgentResourceIntegrity } from '../../src/modules/resource-catalog/application/agents/agentResourceIntegrity'
 import { triggerRevalidation } from '../../src/ws/revalidationHook'
@@ -33,7 +36,7 @@ export function integrationTriggerResourceBinding() {
   return composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin })
 }
 
-export function taskExecutionResourceBinding(db: DbClient) {
+export function taskExecutionResourceBinding(db: ProviderNeutralDatabase) {
   return createTaskExecutionResourceBinding(db, {
     inTransaction(tx, pair) {
       return composeTaskExecutionResourceBinding(taskExecutionResourceDependencies).inTransaction(
@@ -44,13 +47,13 @@ export function taskExecutionResourceBinding(db: DbClient) {
   })
 }
 
-export function scheduledTaskRuntime(db: DbClient) {
-  const resourceCatalog = composeSqliteResourceCatalog({ db })
+export function scheduledTaskRuntime(db: ProviderNeutralDatabase) {
+  const resourceCatalog = composeResourceCatalogFor({ db })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
     authorization: resourceCatalog.authorization,
   })
-  return composeSqliteScheduledTaskRuntime({
+  return composeScheduledTaskRuntimeFor({
     db,
     resourceSnapshots: integrationTriggerResourceBinding(),
     validation: {
@@ -63,7 +66,7 @@ export function scheduledTaskRuntime(db: DbClient) {
 }
 
 export function integrationTriggerResourceAuthority(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   runtime = scheduledTaskRuntime(db),
 ): IntegrationTriggerResourceAuthority {
@@ -80,7 +83,7 @@ export function integrationTriggerResourceAuthority(
   })
 }
 
-export function integrationTriggerOptions(db: DbClient, actor: Actor) {
+export function integrationTriggerOptions(db: ProviderNeutralDatabase, actor: Actor) {
   const runtime = scheduledTaskRuntime(db)
   return Object.freeze({
     operations: runtime.operations,
@@ -96,7 +99,7 @@ type CreateScheduledTaskOptions = Omit<
 >
 
 export function createScheduledTaskWithIntegrationTriggerResources(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: CreateScheduledTaskInput,
   options: CreateScheduledTaskOptions,
 ) {
@@ -114,7 +117,7 @@ type UpdateScheduledTaskOptions = Omit<
 >
 
 export function updateScheduledTaskWithIntegrationTriggerResources(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   input: UpdateScheduledTaskInput,
   options: UpdateScheduledTaskOptions,
@@ -126,35 +129,35 @@ export function updateScheduledTaskWithIntegrationTriggerResources(
   })
 }
 
-export function listScheduledTasks(db: DbClient) {
+export function listScheduledTasks(db: ProviderNeutralDatabase) {
   return listScheduledTasksService(scheduledTaskRuntime(db).operations)
 }
 
 export function listScheduledTaskItems(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Parameters<typeof listScheduledTaskItemsService>[1],
 ) {
   return listScheduledTaskItemsService(scheduledTaskRuntime(db).operations, actor)
 }
 
-export function getScheduledTask(db: DbClient, id: string) {
+export function getScheduledTask(db: ProviderNeutralDatabase, id: string) {
   return getScheduledTaskService(scheduledTaskRuntime(db).operations, id)
 }
 
-export function getScheduledTaskRow(db: DbClient, id: string) {
+export function getScheduledTaskRow(db: ProviderNeutralDatabase, id: string) {
   return getScheduledTaskRowService(scheduledTaskRuntime(db).operations, id)
 }
 
-export function deleteScheduledTask(db: DbClient, id: string) {
+export function deleteScheduledTask(db: ProviderNeutralDatabase, id: string) {
   return deleteScheduledTaskService(scheduledTaskRuntime(db).operations, id)
 }
 
-export function healScheduledLaunchPayloads(db: DbClient) {
+export function healScheduledLaunchPayloads(db: ProviderNeutralDatabase) {
   return healScheduledLaunchPayloadsService(scheduledTaskRuntime(db).operations)
 }
 
 export function fireSchedule(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   row: Parameters<typeof fireScheduleService>[1],
   buildLaunch: Parameters<typeof fireScheduleService>[2],
   now: number,
@@ -174,7 +177,7 @@ export function fireSchedule(
 }
 
 export function runScheduleNow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   buildLaunch: Parameters<typeof runScheduleNowService>[2],
   identityAccess: Parameters<typeof runScheduleNowService>[3],
@@ -190,7 +193,7 @@ export function runScheduleNow(
 }
 
 export function withIntegrationTriggerResources<T extends IdentityAccessRuntime>(
-  _db: DbClient,
+  _db: ProviderNeutralDatabase,
   identityAccess: T,
 ): T &
   Readonly<{
@@ -216,7 +219,7 @@ export function eventTargetAuthorityResolver(identityAccess: IdentityAccessRunti
 }
 
 export function integrationTriggerWebhookAuthorityDependencies(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   identityAccess: IdentityAccessRuntime,
 ) {
   return Object.freeze({

@@ -5562,29 +5562,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskLaunchGate.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:e35bdd6dbebe8b3545e4"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskLaunchGate.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/taskWorkspacePhase.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations",
       "specifier": "@/modules/task-execution/application/ports/taskRecoveryOperations",
@@ -7498,6 +7475,29 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskLaunchGate.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。RFC-359 AC-6：形参放宽到中立客户端后，这条边从 `legacySqliteTaskDatabase#LegacySqliteTaskDatabase` 换成 legacy transport 已有的 `LegacyProviderNeutralDatabase`（与 `services/taskArchive.ts` 同形），边数与符号数都不增不减。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b1e61d311b223d7764b9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskLaunchGate.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/taskQuestionDispatch.ts",
       "to": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch",
       "specifier": "@/modules/collaboration/infrastructure/taskQuestionDispatch",
@@ -8792,15 +8792,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c45c601948a6daf73fb62bb3782d6f3d5af7c2b573605ce9e767f4459fb0c5cc",
+    "sourceDigest": "sha256:b0c0b5caf89d2231cd60b2e2f1fd571a8ee3f7fd23e56c0a87cc7fae7bde0cce",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "2230fe9773ca3516630727e9945506f3b3df1df7",
-    "contentDigest": "sha256:ae572277a935f1d0fd698fbac5e08108922951f270e45db153c035183a874dd6",
+    "currentSnapshotSha": "942c9fc50065730fecaa82c6607a2b22a73dbd1a",
+    "contentDigest": "sha256:48104fb73dd95b3628fee22e93f54424fb271a8a2c6224048f7225308aeb9fff",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

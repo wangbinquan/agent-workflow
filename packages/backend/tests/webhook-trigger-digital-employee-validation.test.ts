@@ -1,10 +1,9 @@
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   employeeDefinitionRevisions,
   employeeDefinitions,
@@ -18,11 +17,9 @@ import {
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('Webhook Digital Employee trigger validation', () => {
+describeEachProvider('Webhook Digital Employee trigger validation', (harness) => {
   test('malformed persisted definitions fail with deterministic validation codes, never raw JSON errors', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = await createUser(db, {
       username: 'employee-trigger-owner',
       displayName: 'employee trigger owner',

@@ -5987,7 +5987,7 @@
     {
       "boundaryEdgeIds": [
         "import:a77d66292804bb07c3f6",
-        "import:e35bdd6dbebe8b3545e4"
+        "import:b1e61d311b223d7764b9"
       ],
       "exportedSymbols": [
         "assertWorkflowLaunchable",
@@ -6748,5 +6748,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c45c601948a6daf73fb62bb3782d6f3d5af7c2b573605ce9e767f4459fb0c5cc"
+  "sourceDigest": "sha256:b0c0b5caf89d2231cd60b2e2f1fd571a8ee3f7fd23e56c0a87cc7fae7bde0cce"
 }

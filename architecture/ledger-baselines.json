@@ -510,10 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 502,
-      "allowGrowth": {
-        "why": "RFC-359 —— 一次性，修 2230fe977 把 main 推红。那一批 27 个迁移里有 11 个过不了 typecheck：它们把 `harness.db`（`ProviderNeutralDatabase`）传给了形参仍写死 `DbClient` / `LegacySqliteTaskDatabase` 的既有函数。`bun test` **不做类型检查**，所以双引擎全绿的同时 tsc 是红的，我漏跑了 typecheck。本次把那 11 个退回单引擎恢复 main 绿，债从 500 回到 502（退回 +11、本批新迁 -9）。正解是按 callee 形参放宽重新迁入，那是下一波的事；本条 allowGrowth 下一提即退役。"
-      },
+      "baseline": 495,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -814,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5268,
+      "baseline": 5267,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -835,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4734,
+      "baseline": 4733,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -875,7 +872,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c45c601948a6daf73fb62bb3782d6f3d5af7c2b573605ce9e767f4459fb0c5cc",
+    "sourceDigest": "sha256:b0c0b5caf89d2231cd60b2e2f1fd571a8ee3f7fd23e56c0a87cc7fae7bde0cce",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -888,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "2230fe9773ca3516630727e9945506f3b3df1df7",
-    "contentDigest": "sha256:8f4efd2f5b64809dc9b07053c53fb0541f0b6f043c7bee9ab142e445425e1604",
+    "currentSnapshotSha": "942c9fc50065730fecaa82c6607a2b22a73dbd1a",
+    "contentDigest": "sha256:126db598c7ad6b460f715b624c834ccfa38fd2c003507fe338011706eb8e85b9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

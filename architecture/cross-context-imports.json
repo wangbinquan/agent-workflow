@@ -4251,6 +4251,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0d43c2ee7360e9bc0dde",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlPersistence.ts#$file",
@@ -50457,23 +50474,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a313acbb089a7e5255c3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -54636,6 +54636,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourceRequestContext",
       "toPath": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "toSymbol": "ResourceRequestContext",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
+      "fromPath": "packages/backend/src/services/taskLaunchGate.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b1e61d311b223d7764b9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
+      "toSymbol": "LegacyProviderNeutralDatabase",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -71095,23 +71112,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
-      "fromPath": "packages/backend/src/services/taskLaunchGate.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e35bdd6dbebe8b3545e4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts",
-      "toSymbol": "LegacySqliteTaskDatabase",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -76025,23 +76025,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f263dfac1a61bc5ccb32",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#$file",
@@ -80480,9 +80463,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4734,
+    "architectureExceptions": 4733,
     "implementationSccs": 0,
-    "observedEdges": 5268,
+    "observedEdges": 5267,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -84633,6 +84616,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts#$file",
+      "id": "import:0d43c2ee7360e9bc0dde",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -133323,22 +133322,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts#$file",
-      "id": "import:a313acbb089a7e5255c3",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -137833,6 +137816,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourceRequestContext"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/taskLaunchGate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
+      "id": "import:b1e61d311b223d7764b9",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "syntax": "static-import",
+      "targetSymbol": "LegacyProviderNeutralDatabase",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -155051,22 +155050,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemMaintenanceDisk.ts#cleanupRetiredStores"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/taskLaunchGate.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
-      "id": "import:e35bdd6dbebe8b3545e4",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
-      "syntax": "static-import",
-      "targetSymbol": "LegacySqliteTaskDatabase",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
@@ -160137,22 +160120,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#$file",
-      "id": "import:f263dfac1a61bc5ccb32",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -165316,7 +165283,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c45c601948a6daf73fb62bb3782d6f3d5af7c2b573605ce9e767f4459fb0c5cc",
+  "sourceDigest": "sha256:b0c0b5caf89d2231cd60b2e2f1fd571a8ee3f7fd23e56c0a87cc7fae7bde0cce",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

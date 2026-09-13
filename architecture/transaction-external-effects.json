@@ -2030,8 +2030,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#transaction:170",
-      "line": 170,
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#transaction:169",
+      "line": 169,
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#resolveImportRefs",
       "status": "clear",
       "symbol": "resolveImportRefs",
@@ -3311,7 +3311,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c45c601948a6daf73fb62bb3782d6f3d5af7c2b573605ce9e767f4459fb0c5cc",
+  "sourceDigest": "sha256:b0c0b5caf89d2231cd60b2e2f1fd571a8ee3f7fd23e56c0a87cc7fae7bde0cce",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

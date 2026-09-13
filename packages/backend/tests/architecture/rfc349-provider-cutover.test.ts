@@ -52,7 +52,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: export:LegacySqliteTaskAuthorizationRef,export:LegacyTaskOwnershipScope',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: legacySqliteDefaultTaskAuthorizationRef,legacySqliteTaskAuthorizationCondition,legacySqliteTaskOwnershipScopeCondition,legacySqliteVisibleTaskIdsOf',
   'packages/backend/src/services/taskDelete.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacySqliteTaskDatabase,eq,inArray,sql,taskCollaborators,taskFeedback,taskRepos,tasks',
-  'packages/backend/src/services/taskLaunchGate.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
+  'packages/backend/src/services/taskLaunchGate.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase',
 ] as const
 
 /** Only these roots may resolve the durable provider generation. */

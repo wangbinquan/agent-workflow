@@ -45,7 +45,10 @@ import {
   composeSqlitePipelineEvidenceRunner,
 } from '@/modules/integration/composition/pipelineEvidence'
 import { composePostgresqlRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import { composePostgresqlScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
+import {
+  composePostgresqlScheduledTaskRuntime,
+  composeSqliteScheduledTaskRuntime,
+} from '@/modules/integration/composition/scheduledTasks'
 import { composePostgresqlWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import {
   composePostgresqlWebhookDeliveryPersistence,
@@ -385,6 +388,26 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     expect([...(await runtime.operations.persistence.listGrantedResourceIds(admin.id))]).toEqual([])
     // 资源查询面装的是同一份中立实现：空请求集合上返回空快照，不需要事务。
     expect(typeof runtime.integrationTriggerResources.loadAuthorized).toBe('function')
+
+    // RFC-359 AC-6：SQLite 那个别名也要被**真的构造**一次。它此前唯一的测试消费者是
+    // `tests/helpers/integrationTriggerResourceBinding.ts`，那个夹具放宽到中立客户端后改装
+    // `composeScheduledTaskRuntimeFor`，于是这个别名在测试面上归零——
+    // `rfc359-w5-provider-runtime-exercised` 立刻把它记成「只装配不构造」。
+    // 两个别名的函数体逐字相同（都转交 `composeScheduledTaskRuntimeFor`），这里对同一个空库
+    // 跑同一组读，确认它们回同样的结果。
+    const sqliteRuntime = composeSqliteScheduledTaskRuntime({
+      db: asSqlite(harness.db),
+      resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      validation: {
+        assertWorkflowLaunchable: async () => {},
+        assertAgentIntegrity: async () => {},
+      },
+      resourceAclChanged: () => {},
+    })
+    expect(await sqliteRuntime.operations.persistence.list()).toEqual([])
+    expect(await sqliteRuntime.overview.countScheduled(actor)).toBe(0)
+    expect(await sqliteRuntime.operations.persistence.get(`st_${ulid()}`)).toBeNull()
+    expect(typeof sqliteRuntime.integrationTriggerResources.loadAuthorized).toBe('function')
   })
 })
 

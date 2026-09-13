@@ -22,7 +22,6 @@ import {
 } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 
 import { users } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
@@ -91,7 +90,7 @@ export interface ResolvedImportRefs {
 }
 
 export async function resolveAgentImportRefs(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   request: ResolveAgentImportRefsRequest,
 ): Promise<ResolveAgentImportRefsResult> {

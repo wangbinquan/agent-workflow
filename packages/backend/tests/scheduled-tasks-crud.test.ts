@@ -4,13 +4,13 @@
 // (invisible/builtin → error) + rejects required-upload workflows + computes the
 // initial next_run_at; update re-gates when the result is enabled + recomputes
 // next_run_at + resets consecutive_failures; row corruption is caught.
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { scheduledTasks, workflows } from '../src/db/schema'
 import {
   deleteScheduledTask,
@@ -25,7 +25,6 @@ import { createWorkflow } from '../src/services/workflow'
 import { NotFoundError, ValidationError } from '../src/util/errors'
 import type { CreateWorkflow } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DEF: CreateWorkflow['definition'] = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
 const UPLOAD_DEF: CreateWorkflow['definition'] = {
   $schema_version: 1,
@@ -63,11 +62,11 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'America/New_York' } as const
 
-describe('RFC-159 scheduled-task CRUD', () => {
-  let db: DbClient
+describeEachProvider('RFC-159 scheduled-task CRUD', (harness) => {
+  let db: ProviderNeutralDatabase
   let wfId = ''
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const wf = await createWorkflow(
       db,
       { name: 'wf', description: '', definition: DEF },

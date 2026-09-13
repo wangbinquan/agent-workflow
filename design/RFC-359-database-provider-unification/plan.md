@@ -7777,3 +7777,51 @@ bigint 列取回成**字符串**，`toBe(number)` 当场失败——改成 drizz
 - `rfc282-d2-granted-ids-single-source.test.ts` —— 判据本身就是「**同步** in-tx 变体与异步变体逐字
   相等」，同步那份（`dbTxSync` + `sqliteResourceGrantRepository`）在 PG 上根本不存在。这条债会随
   那个 SQLite 专属同步原语退役而自然消失，不该靠改判据抹掉。
+
+## 5bz. 按 callee 形参放宽——AC-6 卡住的从来不是测试，是被调用方
+
+§5by 列的那张表逐个处置完，7 个文件重新接上双引擎（账本 502 → 495，`allowGrowth` 同批退役）。
+**放宽的是形参，不是加 cast**——`as DbClient` 那种写法只会把「PG 上跑不通」推迟到运行时。
+
+| 放宽的东西                                            | 位置                                        | 解锁                                                   |
+| ----------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------ |
+| `assertWorkflowLaunchable` / `assertWorkflowSnapshotLaunchable` | `services/taskLaunchGate.ts`       | `task-launch-gate` + 定时任务那三个（夹具要转交它）     |
+| `resolveAgentImportRefs`                               | `…/legacy/importRefs.ts`                    | `rfc223-import-refs`                                    |
+| `importWorkflowYaml` / `workflowDefinitionToSelectors` 等三处 | `…/legacy/workflow.yaml.ts`          | `rfc223-import-refs`、`rfc223-reference-write-fence`    |
+| `tests/helpers/integrationTriggerResourceBinding.ts`（整份夹具） | 测试夹具                          | `scheduled-tasks-crud`、`rfc165-scheduled-heal`、`webhook-trigger-digital-employee-validation` |
+| `tests/helpers/scheduledTaskScheduler.ts`              | 测试夹具                                    | `scheduled-task-scheduler`                              |
+
+它们的函数体本来就中立（`getWorkflow` / `canViewResource` / `loadWorkflowValidationContext` /
+`resolveImportRefs` 全是 `ProviderNeutralDatabase`），卡住的只是**写在形参上的那个类型**。
+夹具那两份连装配也换成了中立的一份：`composeResourceCatalogFor` / `composeScheduledTaskRuntimeFor`
+——`composeSqlite*` 本来就只是它们的装配别名，函数体逐字相同。
+
+### 三条架构守卫的连锁反应，值得单独记
+
+放宽形参会**动到守卫看得见的形状**，一次改动连着触发三条：
+
+1. **`rfc349-provider-cutover`「业务面只持有 port、不持有 DB 机制」**：`services/*.ts` 里**不许出现
+   `@/db/*` 的 import**——直接 `import type { ProviderNeutralDatabase } from '@/db/query'` 当场违规。
+   正解是走 legacy transport 已有的中立别名
+   `LegacyProviderNeutralDatabase`（`services/taskArchive.ts` 就是这么写的）。
+2. **`rfc317-module-boundary` 的 inbound 边账本**：换 import 目标 = 换一条边。census 按
+   `(from, to, specifier, 符号)` 的哈希认条目，符号一变旧条目就**被投影掉**，而守卫扫源码仍看得见
+   这条边 ⇒ 必须把 `commons-debt.json` 里那条一起改指新目标（边数不增不减）。
+   中途试过在 `legacySqliteTaskDatabase.ts` 里新开一个 `NeutralTaskDatabase` 别名，
+   那会让 `rfc294-module-symbol-owners` 从 24942 涨到 24943 —— **新增一个导出符号也是涨账本**，
+   要么背 `allowGrowth`，要么换个不新增符号的写法。最后选了后者。
+3. **`rfc359-w5-provider-runtime-exercised`「组合根必须被测试真正构造过」**：夹具改装中立那份之后，
+   `composeSqliteScheduledTaskRuntime` 在**测试面**上归零引用（生产面 `server.ts` / `cli/start.ts`
+   还在用），立刻被记成「只装配不构造」。处置按守卫自己说的来——在
+   `rfc359-w7-integration-composition-roots` 里给它补一次**真的构造 + 真的读**，
+   与它的 PG 孪生并排跑同一组断言，而不是加一条 `toContain('composeSqlite…(')` 的文本锁。
+
+### 仍未解、留给下一波的三处
+
+- `buildStartTaskDeps` + `StartTaskDeps.db`（`services/startTaskDeps.ts`）—— 卡 `start-task-deps`；
+- `taskRecoveryOperations` 夹具里的 `dbTxSync(db, …)`（SQLite 专属同步事务）—— 卡 `sqlite-concurrency-fuzz`；
+- `transitionTaskStatusByEvent`（`platform/persistence/sqlite/taskLifecycle.ts`）—— 卡 `review-multidoc-inherit`。
+
+以及那张表里未动的 `LegacySqliteTaskDatabase` 一刀放宽：`legacySqliteTransportMechanisms.ts` 那条
+独立再导出一旦也统一，`services/task.ts` 会炸 34 个——它的函数体真在用 SQLite 同步面，
+得先把那一片搬到中立事务口。

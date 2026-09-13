@@ -30,7 +30,7 @@ import {
 import { inArray } from 'drizzle-orm'
 import { parse as parseYaml } from 'yaml'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, users } from '@/db/schema'
 import {
   canViewResource,
@@ -139,7 +139,7 @@ export function previewWorkflowYaml(yamlText: string): Omit<YamlImportPreview, '
  * name and owner hint; installation-local ids never leave this boundary.
  */
 export async function workflowDefinitionToSelectors(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   definition: WorkflowDefinition,
 ): Promise<WorkflowDefinitionSelector> {
@@ -249,7 +249,7 @@ export async function workflowDefinitionToSelectors(
 }
 
 export async function importWorkflowYaml(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   request: ImportWorkflowRequest,
   principal: WorkflowWritePrincipal,
   hooks: WorkflowImportHooks = {},
@@ -384,7 +384,7 @@ function callWorkgroupSelectorOf(
 }
 
 async function resolveImportedWorkflowNodeRefs(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Extract<WorkflowWritePrincipal, { kind: 'actor' }>['actor'],
   def: WorkflowDefinitionSelector,
   selections: readonly ImportRefSelection[],
