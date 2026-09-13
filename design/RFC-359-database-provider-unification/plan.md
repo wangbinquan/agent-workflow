@@ -7972,3 +7972,30 @@ PostgresqlMigrationSequenceError: index-only upgrade changed a row, codec, key o
 所以这 73 个不是「换个 harness」能了的，要先决定：把这些用例从「拿驱动自己 drive」改写成
 「提交 runTask」，还是在 provider 拓扑上补一个**自带认领**的 `schedulerDriver` 外观。
 前者改动面大但语义正；后者省事但把 PG 的 ownership 语义藏进夹具。**留作独立一步，本 session 不动。**
+
+## 5cf. HTTP 那 39 个：先分清「真该迁」和「已经论证过不该迁」
+
+按「文件里有没有已经写好的双引擎块」把 39 个分两半：
+
+- **已有双引擎块、只剩残留单引擎 describe 的 15 个**：残留往往是**有意保留**的。
+  典型 `rfc221-login-policy-routes` —— 那条单引擎用例的文件内注释已经逐条论证过：
+  被测状态（装配里没有 `secretBox` ⇒ `oidcProviders === null` ⇒ 两个 503）
+  **在两个引擎的真实部署里都不存在**（`cli/start.ts` 在选 provider 之前就 `createSecretBox`），
+  它不是「一个引擎好一个不好」，是两个组合根的**装配签名不对称**，正解是把 SQLite 根的
+  `secretBox` 也收成必填（要改 47 个测试文件的 `createApp` 入参，见 §5bg）。这类不要动。
+- **整份单引擎的 24 个**：才是真迁移面。
+
+本波手迁两个**不走 `createApp`** 的（它们只是自己 `new Hono()` 挂路由，所以不需要 HTTP 作用域）：
+
+- `rfc349-auth-caller-closure` —— 拆成两块：只读源码文本那条留普通 `describe`，
+  两条真建库的进 `describeEachProvider` 并带上 `{ bootstrap: 'required' }`（它们要走 `completeBootstrap`）。
+- `transition-cas-route-409` —— `seedNodeRun` 从「自己建库」改成收 `db` 形参，两个顶层 describe 各自转换。
+
+**剩下走 `createApp` 的那些还缺覆盖口**：`rfc338-maintenance-status` 要
+`maintenanceStatus` / `databaseTelemetry` 两个注入口，而 `ProviderHttpApplicationInput` 的
+`Pick` 里目前只有 5 个（`buildScheduleLaunch` / `runtimeDiagnosticTestDependencies` /
+`webhookDispatcher` / `mcpRuntimeTestDependencies` / `intentTestDependencies`）。
+补第 6、7 个的姿势与前 5 个一样（先确认 PG 根也透传），连带要更新
+`rfc359-w29-unstarted-application-composition` 的结构摘要——那条守卫在 98545e3f8 上推红过一次。
+
+账本 468 → 466。

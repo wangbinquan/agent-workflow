@@ -9,19 +9,18 @@
 // boundary (errorHandler doesn't double-wrap / smother / mistype the
 // response).
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { ConcurrentNodeRunTransition, transitionNodeRunStatus } from '../src/services/lifecycle'
 import { errorHandler } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 async function seedNodeRun(
+  db: ProviderNeutralDatabase,
   status:
     | 'pending'
     | 'running'
@@ -31,8 +30,7 @@ async function seedNodeRun(
     | 'failed'
     | 'canceled'
     | 'interrupted',
-): Promise<{ db: ReturnType<typeof createInMemoryDb>; nodeRunId: string }> {
-  const db = createInMemoryDb(MIGRATIONS)
+): Promise<{ nodeRunId: string }> {
   await db.insert(workflows).values({ id: 'w', name: 'w', definition: '{}' })
   const taskId = ulid()
   await db.insert(tasks).values({
@@ -59,81 +57,89 @@ async function seedNodeRun(
     status,
     startedAt: status === 'pending' ? null : Date.now(),
   })
-  return { db, nodeRunId }
+  return { nodeRunId }
 }
 
-describe('RFC-053 — IllegalNodeRunTransition in a route → HTTP 422 + structured code', () => {
-  test('approve-review on a `running` row → 422 illegal-node-run-transition', async () => {
-    const { db, nodeRunId } = await seedNodeRun('running')
-    const app = new Hono()
-    app.onError(errorHandler)
-    app.post('/test/approve/:id', async (c) => {
-      const id = c.req.param('id')
-      await transitionNodeRunStatus({
-        db,
-        nodeRunId: id,
-        event: { kind: 'approve-review' }, // only legal from awaiting_review
+describeEachProvider(
+  'RFC-053 — IllegalNodeRunTransition in a route → HTTP 422 + structured code',
+  (harness) => {
+    test('approve-review on a `running` row → 422 illegal-node-run-transition', async () => {
+      const db = harness.db
+      const { nodeRunId } = await seedNodeRun(db, 'running')
+      const app = new Hono()
+      app.onError(errorHandler)
+      app.post('/test/approve/:id', async (c) => {
+        const id = c.req.param('id')
+        await transitionNodeRunStatus({
+          db,
+          nodeRunId: id,
+          event: { kind: 'approve-review' }, // only legal from awaiting_review
+        })
+        return c.json({ ok: true })
       })
-      return c.json({ ok: true })
+      const r = await app.request(`/test/approve/${nodeRunId}`, { method: 'POST' })
+      expect(r.status).toBe(422)
+      const body = (await r.json()) as { ok: false; code: string; message: string }
+      expect(body.code).toBe('illegal-node-run-transition')
+      expect(body.message).toMatch(/approve-review/)
     })
-    const r = await app.request(`/test/approve/${nodeRunId}`, { method: 'POST' })
-    expect(r.status).toBe(422)
-    const body = (await r.json()) as { ok: false; code: string; message: string }
-    expect(body.code).toBe('illegal-node-run-transition')
-    expect(body.message).toMatch(/approve-review/)
-  })
 
-  test('mark-running on a terminal `done` row → 422', async () => {
-    const { db, nodeRunId } = await seedNodeRun('done')
-    const app = new Hono()
-    app.onError(errorHandler)
-    app.post('/test/start/:id', async (c) => {
-      const id = c.req.param('id')
-      await transitionNodeRunStatus({
-        db,
-        nodeRunId: id,
-        event: { kind: 'mark-running' },
-        extra: { startedAt: Date.now() },
+    test('mark-running on a terminal `done` row → 422', async () => {
+      const db = harness.db
+      const { nodeRunId } = await seedNodeRun(db, 'done')
+      const app = new Hono()
+      app.onError(errorHandler)
+      app.post('/test/start/:id', async (c) => {
+        const id = c.req.param('id')
+        await transitionNodeRunStatus({
+          db,
+          nodeRunId: id,
+          event: { kind: 'mark-running' },
+          extra: { startedAt: Date.now() },
+        })
+        return c.json({ ok: true })
       })
-      return c.json({ ok: true })
+      const r = await app.request(`/test/start/${nodeRunId}`, { method: 'POST' })
+      expect(r.status).toBe(422)
+      const body = (await r.json()) as { code: string }
+      expect(body.code).toBe('illegal-node-run-transition')
     })
-    const r = await app.request(`/test/start/${nodeRunId}`, { method: 'POST' })
-    expect(r.status).toBe(422)
-    const body = (await r.json()) as { code: string }
-    expect(body.code).toBe('illegal-node-run-transition')
-  })
-})
+  },
+)
 
-describe('RFC-053 — ConcurrentNodeRunTransition in a route → HTTP 409 + structured code', () => {
-  test('directly thrown from a handler → errorHandler maps to 409', async () => {
-    const app = new Hono()
-    app.onError(errorHandler)
-    app.post('/test/race/:id', () => {
-      throw new ConcurrentNodeRunTransition('nr1', 'pending', 'mark-running')
-    })
-    const r = await app.request('/test/race/nr1', { method: 'POST' })
-    expect(r.status).toBe(409)
-    const body = (await r.json()) as { ok: false; code: string; message: string }
-    expect(body.code).toBe('concurrent-node-run-transition')
-    expect(body.message).toMatch(/changed concurrently/)
-  })
-
-  test('NotFoundError from missing nodeRunId → 404 node-run-not-found', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = new Hono()
-    app.onError(errorHandler)
-    app.post('/test/missing/:id', async (c) => {
-      const id = c.req.param('id')
-      await transitionNodeRunStatus({
-        db,
-        nodeRunId: id,
-        event: { kind: 'mark-running' },
+describeEachProvider(
+  'RFC-053 — ConcurrentNodeRunTransition in a route → HTTP 409 + structured code',
+  (harness) => {
+    test('directly thrown from a handler → errorHandler maps to 409', async () => {
+      const app = new Hono()
+      app.onError(errorHandler)
+      app.post('/test/race/:id', () => {
+        throw new ConcurrentNodeRunTransition('nr1', 'pending', 'mark-running')
       })
-      return c.json({ ok: true })
+      const r = await app.request('/test/race/nr1', { method: 'POST' })
+      expect(r.status).toBe(409)
+      const body = (await r.json()) as { ok: false; code: string; message: string }
+      expect(body.code).toBe('concurrent-node-run-transition')
+      expect(body.message).toMatch(/changed concurrently/)
     })
-    const r = await app.request('/test/missing/does-not-exist', { method: 'POST' })
-    expect(r.status).toBe(404)
-    const body = (await r.json()) as { code: string }
-    expect(body.code).toBe('node-run-not-found')
-  })
-})
+
+    test('NotFoundError from missing nodeRunId → 404 node-run-not-found', async () => {
+      const db = harness.db
+      const app = new Hono()
+      app.onError(errorHandler)
+      app.post('/test/missing/:id', async (c) => {
+        const id = c.req.param('id')
+        await transitionNodeRunStatus({
+          db,
+          nodeRunId: id,
+          event: { kind: 'mark-running' },
+        })
+        return c.json({ ok: true })
+      })
+      const r = await app.request('/test/missing/does-not-exist', { method: 'POST' })
+      expect(r.status).toBe(404)
+      const body = (await r.json()) as { code: string }
+      expect(body.code).toBe('node-run-not-found')
+    })
+  },
+)
