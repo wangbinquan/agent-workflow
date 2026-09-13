@@ -796,7 +796,8 @@ export async function setTaskStatus(args: {
  * false — the caller semantics are identical to a lost race.
  */
 export async function trySetTaskStatus(args: {
-  db: DbClient
+  // RFC-359 AC-6：同 `setTaskStatus`，它整个就是把参数转交过去，函数体零方言。
+  db: ProviderNeutralDatabase
   taskId: string
   to: TaskStatus
   allowedFrom: readonly TaskStatus[]

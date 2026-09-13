@@ -8152,3 +8152,35 @@ body 却仍在 `createInMemoryDb(MIGRATIONS)`——它们名义上双引擎，�
 是 SQLite 专属的查询计划断言。
 
 账本 461 → 460。
+
+## 5cn. 按「卡住多少个账本文件」给窄形参 callee 排了个序
+
+不再逐个文件试错——直接静态扫：src 里**形参写 `DbClient` / `LegacySqliteTaskDatabase` 的导出函数
+共 98 个**，再看账本上（去掉 migration 那 80 个）哪些文件引用了它们。前十二名：
+
+| 卡住的账本文件数 | callee | 位置 |
+| --- | --- | --- |
+| 19 | `resumeTask` | `services/task.ts` |
+| 14 | `retryNode` | `services/task.ts` |
+| 11 | `dbTxSync` | `db/txSync.ts`（SQLite 专属同步事务原语，按定义不放宽） |
+|  9 | `cancelTask` | `services/task.ts` |
+|  9 | `createSqliteTaskExecutionPersistence` | `modules/task-execution/composition/taskExecutionPersistence.ts` |
+|  9 | `startWorkgroupTask` | `…/legacy/workgroup/launch.ts` |
+|  8 | `setTaskStatus` | ✅ 本波已放宽 |
+|  8 | `composeSqliteWebhookDispatchCore` | `modules/integration/composition/webhookDispatch.ts` |
+|  6 | `trySetTaskStatus` | ✅ 本提交放宽（零外溢） |
+|  6 | `composeSqliteResourceCatalog` | 已有中立的 `composeResourceCatalogFor`，调用方换名即可 |
+|  6 | `composeSqliteAgentLaunchResourceOperations` | §5ch 记的装配签名不对称 |
+|  5 | `createTaskExecutionContext` | `modules/task-execution/composition/sqliteTaskExecutionContext.ts` |
+
+**结论很清楚：`services/task.ts` 的 `resumeTask` / `retryNode` / `cancelTask` 三个一起卡住 42 个文件，
+是剩余 AC-6 里最大的单点。** 它们和 `StartTaskDeps.db`（§5ci）在同一片——942c9fc50 实测过，
+把那条 legacy 别名一刀放宽会让 `services/task.ts` 炸 34 个错，因为它的函数体真在用 SQLite 同步面。
+所以下一波的正解是**先把 `services/task.ts` 那片搬到中立事务口**，而不是继续在测试侧绕。
+
+`composeSqliteWebhookDispatchCore`（8）第二大：它自己只是转交，卡点在
+`createSqliteWebhookRepositoryResolver` 体内两处 `.get()`；那个函数有 PG 孪生，
+两边收敛后可以像 §5cb 的实时孪生一样合成一份。
+
+`composeSqliteResourceCatalog`（6）最便宜：中立的 `composeResourceCatalogFor` 早就在，
+调用方改个名字就行（§5bz 已在两个夹具上这么做过）。

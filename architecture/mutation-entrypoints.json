@@ -41306,7 +41306,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c2f60f2b44d798c8a909d678aa68c977223c2ce75f9d24d688403a2ca8032f3a",
+  "sourceDigest": "sha256:a48377176f0859ebaf1e9991cebc8f152cac90a622767de24962c3e865173348",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43768,8 +43768,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1071:nodeRuns",
-        "line": 1071,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1072:nodeRuns",
+        "line": 1072,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#abandonSupersededMergeStates",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -43848,8 +43848,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#958:nodeRuns",
-        "line": 958,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#959:nodeRuns",
+        "line": 959,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
