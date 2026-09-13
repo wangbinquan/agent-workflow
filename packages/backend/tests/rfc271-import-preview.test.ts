@@ -18,13 +18,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { stringify } from 'yaml'
 import type { ResourceBundle } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
 import { mcps, users } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
@@ -40,7 +38,6 @@ import { buildPackagePreview } from './helpers/resourcePackageProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
 
@@ -257,7 +254,7 @@ describe('① 解包与防夹带', () => {
   })
 })
 
-describe('② 预检：候选、可选动作、归属', () => {
+describeEachProvider('② 预检：候选、可选动作、归属', (harness) => {
   const seedMcp = async (
     db: ProviderNeutralDatabase,
     owner: string,
@@ -265,25 +262,22 @@ describe('② 预检：候选、可选动作、归属', () => {
     visibility: 'public' | 'private' = 'public',
   ): Promise<string> => {
     const id = ulid()
-    await db
-      .insert(mcps)
-      .values({
-        id,
-        name,
-        description: '',
-        type: 'remote',
-        config: '{}',
-        enabled: true,
-        ownerUserId: owner,
-        visibility,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      .run()
+    await db.insert(mcps).values({
+      id,
+      name,
+      description: '',
+      type: 'remote',
+      config: '{}',
+      enabled: true,
+      ownerUserId: owner,
+      visibility,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
     return id
   }
 
-  describeEachProvider('本地没有同名 ⇒ 只能 new', (harness) => {
+  describe('本地没有同名 ⇒ 只能 new', () => {
     test('本地没有同名 ⇒ 只能 new', async () => {
       const db = harness.db
       const pkg = await parseResourcePackage(packageZip())
@@ -298,7 +292,7 @@ describe('② 预检：候选、可选动作、归属', () => {
   })
 
   test('有自己的同名 ⇒ new / reuse / overwrite 三选', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedMcp(db, 'u1', 'tools')
     const pkg = await parseResourcePackage(packageZip())
     const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
@@ -307,7 +301,7 @@ describe('② 预检：候选、可选动作、归属', () => {
   })
 
   test('**只有别人的同名 ⇒ 没有 overwrite 选项**（「别人的不给覆盖选项」）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedMcp(db, 'u-other', 'tools')
     const pkg = await parseResourcePackage(packageZip())
     const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
@@ -317,7 +311,7 @@ describe('② 预检：候选、可选动作、归属', () => {
   })
 
   test('候选**可以多个**（名字是 (owner,name) 复合唯一）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedMcp(db, 'u1', 'tools')
     await seedMcp(db, 'u-other', 'tools')
     const pkg = await parseResourcePackage(packageZip())
@@ -326,7 +320,7 @@ describe('② 预检：候选、可选动作、归属', () => {
     expect(preview.entries[0]?.candidates.filter((c) => c.owned)).toHaveLength(1)
   })
 
-  describeEachProvider('建议名避开已占用的名字', (harness) => {
+  describe('建议名避开已占用的名字', () => {
     test('建议名避开已占用的名字', async () => {
       const db = harness.db
       await seedMcp(db, 'u1', 'tools')
@@ -337,7 +331,7 @@ describe('② 预检：候选、可选动作、归属', () => {
   })
 
   test('隐藏的他人同名资源与不存在同形，不通过 suggestedName 泄漏名字', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const pkg = await parseResourcePackage(packageZip())
     const actor = actorOf('u1')
     const absent = await buildPackagePreview(db, actor, pkg, { box, importId: 'imp-absent' })
@@ -351,7 +345,7 @@ describe('② 预检：候选、可选动作、归属', () => {
   })
 
   test('没有任何写权限时仍返回完整预检，并列出 new 所缺权限', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const pkg = await parseResourcePackage(packageZip())
     const preview = await buildPackagePreview(db, actorOf('u1', []), pkg, {
       box,
@@ -366,7 +360,7 @@ describe('② 预检：候选、可选动作、归属', () => {
   })
 
   test('root 与完整 secret 引用进入 wire，entry 只拿与自身 type/name 匹配的字段', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const matchingSecret = {
       resourceType: 'mcp' as const,
       resourceName: 'tools',
@@ -394,9 +388,9 @@ describe('② 预检：候选、可选动作、归属', () => {
   })
 })
 
-describe('② previewToken —— 签死的是**基线**，不是包摘要', () => {
+describeEachProvider('② previewToken —— 签死的是**基线**，不是包摘要', (harness) => {
   test('往返：签发的 token 能验回同一份基线', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const pkg = await parseResourcePackage(packageZip())
     const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
     const verified = verifyPreviewToken(box, preview.previewToken)
@@ -407,7 +401,7 @@ describe('② previewToken —— 签死的是**基线**，不是包摘要', () 
   })
 
   test('**换掉某条的 expect** ⇒ 与签名基线对不上（这正是「只签 digest」挡不住的那一招）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const pkg = await parseResourcePackage(packageZip())
     const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
     const verified = verifyPreviewToken(box, preview.previewToken)
@@ -466,7 +460,7 @@ describe('② previewToken —— 签死的是**基线**，不是包摘要', () 
   })
 })
 
-describe('③ human 成员：wire 保留 alias，签名按源用户收口', () => {
+describeEachProvider('③ human 成员：wire 保留 alias，签名按源用户收口', (harness) => {
   const aliases = [
     {
       memberType: 'human' as const,
@@ -485,19 +479,17 @@ describe('③ human 成员：wire 保留 alias，签名按源用户收口', () =
   ]
 
   test('无 users:search 的普通 actor 猜中 active username 也不泄漏内部 UUID', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    db.insert(users)
-      .values({
-        id: 'local-alice',
-        username: 'alice',
-        displayName: 'Alice',
-        role: 'user',
-        status: 'active',
-        passwordHash: 'test-only',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      .run()
+    const db = harness.db
+    await db.insert(users).values({
+      id: 'local-alice',
+      username: 'alice',
+      displayName: 'Alice',
+      role: 'user',
+      status: 'active',
+      passwordHash: 'test-only',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
     const pkg = await parseResourcePackage(
       packageZip({ ops: [workgroupOp([aliases[0]!])], rootRef: 'local:workgroup-squad' }),
     )
@@ -518,7 +510,7 @@ describe('③ human 成员：wire 保留 alias，签名按源用户收口', () =
   })
 
   test('同一 username 的多 alias 逐行下发，但 token baseline 只有一个 tuple', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const pkg = await parseResourcePackage(
       packageZip({ ops: [workgroupOp(aliases)], rootRef: 'local:workgroup-squad' }),
     )
@@ -564,7 +556,7 @@ describe('③ human 成员：wire 保留 alias，签名按源用户收口', () =
   })
 
   test('human alias 被指定为 leader 时预检拒绝：canonical leader 必须是 agent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const pkg = await parseResourcePackage(
       packageZip({
         ops: [workgroupOp([aliases[0]!], 'reviewer')],

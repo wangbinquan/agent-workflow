@@ -8098,3 +8098,30 @@ inspectHumanReview?(executionRef: string): DigitalEmployeeHumanReviewState | nul
 test 一份」**，凡是原来靠「自己建、自己命名」拿到隔离的夹具都要重新过一遍。
 
 账本 464 → 462。
+
+## 5cl. 变换器的第四条前置条件（与一个自造 bug），以及两条「造违反完整性的行」的坑
+
+**自造 bug**：§5cd 加的「不要包住已含 provider 块的 describe」只做了一半——那个顶层块被跳过了，
+但 `visit()` 仍然把它体内的 `createInMemoryDb(...)` 换成了 `harness.db`，于是生成出
+`Cannot find name 'harness'`。修法是记下被跳过的块的区间，`visit()` 遇到落在区间里的节点直接返回；
+同时那种文件**不能**删 `db/client` 的 import 与 `MIGRATIONS` 常量（留着的那几个块还要用），
+只能在 import 前**插入**新的两行。
+
+**顺带照出一处存量假覆盖**：`rfc271-import-preview` 里两个**已经**是 `describeEachProvider` 的嵌套块，
+body 却仍在 `createInMemoryDb(MIGRATIONS)`——它们名义上双引擎，实际两轮都跑 SQLite。
+处置同 §5cb：把嵌套块降级成普通 `describe`，外层转成单一 provider 块覆盖整个文件。
+42 pass / 0 fail（双引擎），调用点 11 → 0。
+
+**两条确认单引擎的「造违反完整性的行」夹具**：
+
+- `memory-distiller-source-context` 的孤儿 round（describe 名里就写着 SQLite orphan fixture）——
+  `clarify_rounds.asking_node_run_id → node_runs.id` 这条 FK **两个引擎都有**，SQLite 靠
+  `PRAGMA foreign_keys = OFF` 临时关掉再删桩；PostgreSQL 上没有夹具层面干净的等价做法：
+  约束名是生成的（没法 `DROP CONSTRAINT`），`SET session_replication_role = replica` 是会话级、
+  连接池下不可靠。
+- `rfc248-readonly-dirty-visible` 的 `PRAGMA table_info(task_repos)` —— 同 §5cb 的 rfc074 C9，
+  判的是 SQLite 迁移链跑完后的实时 schema。
+
+两条都留在账本上并把理由写进文件；等「测试夹具怎么在 PG 上造违反完整性的行」有统一答案再迁。
+
+账本 462 → 461。

@@ -334,7 +334,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc271-export-fence.test.ts: 1',
   'rfc271-import-commit.test.ts: 25',
   'rfc271-import-http.test.ts: 3',
-  'rfc271-import-preview.test.ts: 11',
   'rfc271-overwrite-ownership.test.ts: 1',
   'rfc271-resource-package-hardening.test.ts: 7',
   'rfc271-roundtrip.test.ts: 1',

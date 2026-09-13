@@ -20,9 +20,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
-import { createInMemoryDb } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   clarifyRounds,
@@ -42,9 +40,9 @@ import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaborat
 import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { appHome } from '../src/util/paths'
+import { createInMemoryDb } from '../src/db/client'
+import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase, root = appHome()) {
   return {
@@ -420,6 +418,12 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
 // This fixture deliberately disables SQLite foreign keys to construct an orphan
 // that ordinary persisted rows cannot contain. Keep this engine mechanism case
 // single-run; the valid source-context flows above use both real providers.
+// RFC-359 AC-6 例外：单引擎，名字里就写着。这条要构造一个**违反外键**的孤儿 round
+// （`clarify_rounds.asking_node_run_id → node_runs.id`，**两个引擎都有**这条 FK），
+// 靠 `PRAGMA foreign_keys = OFF` 临时关掉约束再删桩。PostgreSQL 上没有等价的、
+// 夹具层面干净的做法：约束名是生成的（没法 DROP CONSTRAINT），
+// `SET session_replication_role = replica` 是会话级、连接池下不可靠。
+// 留在账本上；等「测试夹具怎么在 PG 上造违反完整性的行」有统一答案再迁。
 describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () => {
   test('returns null + reason when source node_run does not exist', async () => {
     const db = createInMemoryDb(MIGRATIONS)
