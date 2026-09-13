@@ -660,6 +660,11 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     // 注入「intent 写入必失败」的故障：两个引擎的写法不同——SQLite 直接 RAISE(ABORT)，
     // PostgreSQL 需要一个 plpgsql 触发器函数——但抛出的错误文案与判据完全一致。
     // fixture DDL 只能走 harness 的专用入口（业务客户端不接受 DDL）。
+    //
+    // **必须在 finally 里删掉**：SQLite 每个用例拿的是一个全新的内存库，触发器随库消失；
+    // PostgreSQL 的库是本文件共用的真库，用例之间只清表**不回滚 DDL**，留着的触发器会让
+    // 之后每一个写 `task_execution_intents` 的用例全红（CI shard 5/8 实测，本地因用例顺序
+    // 不同没暴露）。
     if (harness.capabilities.provider === 'sqlite') {
       await harness.executeFixtureDdl(
         'CREATE TRIGGER rfc333_fail_question_intent ' +
@@ -678,25 +683,38 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       )
     }
 
-    await expectDatabaseFailure(
-      () =>
-        dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
-          idempotencyKey: 'question-dispatch-fault',
-        }),
-      'rfc333-question-intent-fault',
-    )
+    try {
+      await expectDatabaseFailure(
+        () =>
+          dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
+            idempotencyKey: 'question-dispatch-fault',
+          }),
+        'rfc333-question-intent-fault',
+      )
 
-    expect(
-      (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
-    ).toMatchObject({ dispatchedAt: null, dispatchedBy: null })
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
-      status: 'awaiting_human',
-    })
-    expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
-    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
-      beforeRuns,
-    )
-    expect((await db.select().from(collaborationGateOperations)).length).toBe(beforeOperations)
+      expect(
+        (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
+      ).toMatchObject({ dispatchedAt: null, dispatchedBy: null })
+      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+        status: 'awaiting_human',
+      })
+      expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
+      expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+        beforeRuns,
+      )
+      expect((await db.select().from(collaborationGateOperations)).length).toBe(beforeOperations)
+    } finally {
+      // DROP TRIGGER 的语法两边不同：SQLite 的触发器名是库级的（不带表名），
+      // PostgreSQL 的触发器挂在表上（必须带 `ON <table>`）。
+      if (harness.capabilities.provider === 'sqlite') {
+        await harness.executeFixtureDdl('DROP TRIGGER IF EXISTS rfc333_fail_question_intent')
+      } else {
+        await harness.executeFixtureDdl(
+          'DROP TRIGGER IF EXISTS rfc333_fail_question_intent ON task_execution_intents',
+        )
+        await harness.executeFixtureDdl('DROP FUNCTION IF EXISTS rfc333_fail_question_intent()')
+      }
+    }
   })
 })
 

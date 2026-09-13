@@ -6616,3 +6616,14 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   都要补 `await`、显式返回类型还要包成 `Promise<T>`（否则 TS1064
   “The return type of an async function must be the global Promise<T> type”）。
   只改终结子不补传播的话，`bun test` 可能照样绿（Promise 被当真值用），**tsc 才会红**。
+
+- **在 PostgreSQL 上注入的 fixture DDL 必须在 `finally` 里删掉**（触发器 / 触发器函数 / 临时索引）。
+  SQLite 每个用例拿的是一个**全新的内存库**，DDL 随库消失；PostgreSQL 的库是**整个测试文件共用的
+  真库**，用例之间只清表数据、**不回滚 DDL**。留着的触发器会让之后每一个写那张表的用例全红。
+  2026-09-13 实撞：`rfc120-deferred-dispatch` 的 RFC-333 故障触发器把同文件的
+  「decision atomically stamps…」判据推红在 CI shard 5/8——**本地整文件跑是绿的**，因为
+  **两个引擎的用例执行顺序不一样**：SQLite 侧按文件顺序（decision 在 fault 之前），
+  PostgreSQL 侧实测 fault 先跑、decision 后跑，于是只有 PG 侧看得到污染。
+  推论：**不要用「本地这个文件全绿」证明没有夹具污染**，凡是注入了 DDL 的用例一律 try/finally。
+  另外 `DROP TRIGGER` 的语法两边不同——SQLite 触发器名是库级的（`DROP TRIGGER IF EXISTS <name>`），
+  PostgreSQL 的挂在表上（`DROP TRIGGER IF EXISTS <name> ON <table>`），还要额外删掉触发器函数。
