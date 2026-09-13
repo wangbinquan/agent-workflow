@@ -1,4 +1,3 @@
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -53,11 +52,15 @@ export function composeWebhookDeliveryRuntimeFor(
 }
 
 /** 旧名保留为装配别名，bootstrap 收敛后删除。 */
-export function composeSqliteWebhookIngressPersistence(db: DbClient): WebhookIngressPersistence {
+export function composeSqliteWebhookIngressPersistence(
+  db: ProviderNeutralDatabase,
+): WebhookIngressPersistence {
   return composeWebhookIngressPersistenceFor(db)
 }
 
-export function composeSqliteWebhookDeliveryRuntime(db: DbClient): WebhookDeliveryRuntime {
+export function composeSqliteWebhookDeliveryRuntime(
+  db: ProviderNeutralDatabase,
+): WebhookDeliveryRuntime {
   return composeWebhookDeliveryRuntimeFor(db)
 }
 

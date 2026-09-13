@@ -20,7 +20,8 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
@@ -37,7 +38,6 @@ import type { TaskStatus } from '@agent-workflow/shared'
 import type { StartTaskDeps } from '../src/services/task'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src')
 
 function srcText(rel: string): string {
@@ -158,7 +158,7 @@ describe('RFC-243 T3 — resolveTaskEngine (extracted fork, byte-equal semantics
 
 describe('RFC-243 T1 — startExecution guards', () => {
   // guard paths throw before any db/actor/deps use — safe minimal stubs.
-  const stubDb = null as unknown as DbClient
+  const stubDb = null as unknown as StartTaskDeps['db']
   const stubActor = { user: { id: 'u1' } } as unknown as Actor
   const stubDeps = {} as unknown as StartTaskDeps
 
@@ -204,7 +204,7 @@ describe('RFC-243 T1 — startExecution guards', () => {
 // executionWatch
 // ---------------------------------------------------------------------------
 
-async function seedTask(db: DbClient, status: TaskStatus): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase, status: TaskStatus): Promise<string> {
   const definition = { $schema_version: 4, inputs: [], nodes: [], edges: [] }
   const workflowId = ulid()
   const taskId = ulid()
@@ -229,7 +229,7 @@ async function seedTask(db: DbClient, status: TaskStatus): Promise<string> {
   return taskId
 }
 
-describe('RFC-243 T5 — executionWatch', () => {
+describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
   let uninstallAfterCommitPump: (() => void) | undefined
 
   afterEach(() => {
@@ -238,7 +238,7 @@ describe('RFC-243 T5 — executionWatch', () => {
     resetTaskTerminalWatchersForTests()
   })
 
-  const installExecutionWatchPump = (db: DbClient): void => {
+  const installExecutionWatchPump = (db: ProviderNeutralDatabase): void => {
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onExecutionWatch(_db, taskId, status) {
         notifyTaskTerminal(taskId, status)
@@ -247,19 +247,19 @@ describe('RFC-243 T5 — executionWatch', () => {
   }
 
   test('already-terminal task resolves on the immediate read', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, 'done')
     expect(await watchTaskTerminal(db, taskId)).toEqual({ kind: 'terminal', status: 'done' })
   })
 
   test('missing row resolves `missing` (never hangs)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     expect(await watchTaskTerminal(db, ulid())).toEqual({ kind: 'missing' })
   })
 
   test('lifecycle write resolves watchers for failed (a status the RFC-202 hook ignores)', async () => {
     resetTaskTerminalWatchersForTests()
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     installExecutionWatchPump(db)
     const taskId = await seedTask(db, 'running')
     const watching = watchTaskTerminal(db, taskId, { pollMs: 60_000 })
@@ -276,7 +276,7 @@ describe('RFC-243 T5 — executionWatch', () => {
 
   test('multicast: two watchers both resolve; interrupted counts as terminal', async () => {
     resetTaskTerminalWatchersForTests()
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     installExecutionWatchPump(db)
     const taskId = await seedTask(db, 'running')
     const a = watchTaskTerminal(db, taskId, { pollMs: 60_000 })
@@ -296,7 +296,7 @@ describe('RFC-243 T5 — executionWatch', () => {
 
   test('poll fallback: a row deleted after registration resolves `missing`', async () => {
     resetTaskTerminalWatchersForTests()
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, 'running')
     const watching = watchTaskTerminal(db, taskId, { pollMs: 25 })
     await Bun.sleep(10)
@@ -306,7 +306,7 @@ describe('RFC-243 T5 — executionWatch', () => {
 
   test('abort signal resolves `aborted` and deregisters', async () => {
     resetTaskTerminalWatchersForTests()
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, 'running')
     const ctrl = new AbortController()
     const watching = watchTaskTerminal(db, taskId, { signal: ctrl.signal, pollMs: 60_000 })

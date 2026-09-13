@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos } from '@/db/schema'
 
 /**
@@ -8,7 +8,7 @@ import { cachedRepos } from '@/db/schema'
  * local, already-prepared Git directory. Production composition must use the
  * credential-aware fetch adapter from developmentDeliveryDeps.
  */
-export function staticCachedRepositoryPreparation(db: DbClient): {
+export function staticCachedRepositoryPreparation(db: ProviderNeutralDatabase): {
   readonly prepare: (input: { readonly repositoryId: string }) => Promise<{
     readonly id: string
     readonly localPath: string
@@ -17,15 +17,16 @@ export function staticCachedRepositoryPreparation(db: DbClient): {
 } {
   return {
     async prepare(input) {
-      const row = db
-        .select({
-          id: cachedRepos.id,
-          localPath: cachedRepos.localPath,
-          defaultBranch: cachedRepos.defaultBranch,
-        })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, input.repositoryId))
-        .get()
+      const row = (
+        await db
+          .select({
+            id: cachedRepos.id,
+            localPath: cachedRepos.localPath,
+            defaultBranch: cachedRepos.defaultBranch,
+          })
+          .from(cachedRepos)
+          .where(eq(cachedRepos.id, input.repositoryId))
+      )[0]
       if (row === undefined) {
         throw new Error(`cached repository is unavailable: ${input.repositoryId}`)
       }

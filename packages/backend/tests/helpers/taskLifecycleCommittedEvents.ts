@@ -1,6 +1,6 @@
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   collaborationCommittedEventCodec,
   createCollaborationWsProjector,
@@ -18,9 +18,13 @@ import { registerAfterCommitEventPump } from '@/platform/events/committed/runtim
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
-  readonly onTerminalTask?: (db: DbClient, taskId: string, to: TaskStatus) => void
-  readonly onExecutionWatch?: (db: DbClient, taskId: string, to: TaskStatus) => void
-  readonly onWorkspacePrune?: (db: DbClient, taskId: string, to: 'done' | 'canceled') => void
+  readonly onTerminalTask?: (db: ProviderNeutralDatabase, taskId: string, to: TaskStatus) => void
+  readonly onExecutionWatch?: (db: ProviderNeutralDatabase, taskId: string, to: TaskStatus) => void
+  readonly onWorkspacePrune?: (
+    db: ProviderNeutralDatabase,
+    taskId: string,
+    to: 'done' | 'canceled',
+  ) => void
 }
 
 /**
@@ -30,7 +34,7 @@ export interface TaskLifecycleAfterCommitTestCallbacks {
  * without resurrecting lifecycle's removed ambient hook slots.
  */
 export function installTaskLifecycleAfterCommitTestPump(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   callbacks: TaskLifecycleAfterCommitTestCallbacks,
 ): () => void {
   const pump = createAfterCommitEventPump({

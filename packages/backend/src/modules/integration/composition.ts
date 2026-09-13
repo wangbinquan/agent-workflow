@@ -1,4 +1,4 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { EventCenterCodeHostDeliveryDispatcher } from '@/services/webhook/dispatcherTypes'
 import {
   createCodeHostEventDeliveryAdapter,
@@ -16,7 +16,7 @@ export {
 } from './application/repositoryEndpointDiscovery'
 
 export function createCodeHostWebhookRoutingDirectory(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   continuation?: CodeHostEventContinuationPort,
 ) {
   return createCodeHostEventRoutingAdapter(createCodeHostEventResponseDirectory(db), continuation)
@@ -40,7 +40,7 @@ export function createPostgresqlCodeHostWebhookRoutingDirectory(
 }
 
 export function createCodeHostWebhookDeliveryConsumer(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   dispatcher: EventCenterCodeHostDeliveryDispatcher,
   continuation?: CodeHostEventContinuationPort,
 ) {

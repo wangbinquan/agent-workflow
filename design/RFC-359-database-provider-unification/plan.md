@@ -28,7 +28,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                                                                                         | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 重采 + 分层更正**：账本 530 → 460（判据同批从文本扫改成 AST 数真调用点），同日续收至 **423**（§5cr / §5cs / §5ct / §5cu / §5cv）。剩余按**该不该双引擎**分层（§5co）：`migration-*` **97**（判的是 SQLite 迁移链本身，对账归 W5-T19g）、测 **SQLite 执行引擎**的 **85**（`TaskRouteOperations` 已登记为「不该合」，PG 生产走 `taskExecutionProvider.cancellation`，不走这条路径）——这两类**按裁决就该单引擎**；加上 41 个 `new Database(` 开真实文件（备份/还原/VACUUM INTO/外部 store）同样按定义单引擎。**真正的剩余迁移面是 278 个**，主要卡在 callee 形参（§5bz / §5cn 那张表，去掉误报的第一组）。 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 重采 + 分层更正**：账本 530 → 460（判据同批从文本扫改成 AST 数真调用点），同日续收至 **421**（§5cr / §5cs / §5ct / §5cu / §5cv / §5cw）。剩余按**该不该双引擎**分层（§5co）：`migration-*` **97**（判的是 SQLite 迁移链本身，对账归 W5-T19g）、测 **SQLite 执行引擎**的 **85**（`TaskRouteOperations` 已登记为「不该合」，PG 生产走 `taskExecutionProvider.cancellation`，不走这条路径）——这两类**按裁决就该单引擎**；加上 41 个 `new Database(` 开真实文件（备份/还原/VACUUM INTO/外部 store）同样按定义单引擎。**真正的剩余迁移面是 278 个**，主要卡在 callee 形参（§5bz / §5cn 那张表，去掉误报的第一组）。 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34/6，13后端10/3；主2353/15、原2227全过，独立2/2及hook18/18、原RFC259两OS、两个原Playwright身份两OS通过。W55最终39core编译、metadata63/111与canonical13/55通过且候选稳定，首轮缺import失败保留；完整新SHA待托管，发布后仅修流水线。 | 待办   |
@@ -8477,3 +8477,50 @@ helper 不在任何块里，却会被 provider 用例调用**，那才是真正�
   单独一刀。
 - `rfc304` / `rfc309` / `rfc311-repos-page` / `rfc189-wg-round`：`$client` 仪器面或形参写死
   `DbClient` 的 callee。
+
+## 5cw. 拿窄形参 callee 开刀（这才是剩余迁移面的真正卡点）
+
+§5cn 那张「卡住多少账本文件」的表按**原始计数**排序，会把人带偏：排前四的
+`resumeTask`(19) / `retryNode`(14) / `dbTxSync`(11) / `cancelTask`(9) 合计卡住 53 个文件，
+但那些文件**本来就被别的理由判成单引擎**（`runTask` / topology / `$client` / `new Database(`）。
+把「已被其它理由 sanction 的文件」扣掉之后，净解锁量完全是另一张表：
+
+| 净解锁 | callee | 处置 |
+| --- | --- | --- |
+| 4 | `composeSqliteWebhookIngressPersistence` | 形参放宽（函数体本来就中立） |
+| 3 | `createCodeHostWebhookRoutingDirectory` / `…DeliveryConsumer` | 同上，同一文件 |
+| 3 | `convergeResourceBundleApplies` | 体内有 `dbTxSync` / `$client`，留待单独一刀 |
+| 3 | `convergeIntentApplyJournal` | 体内 3 个同步终结子 + `dbTxSync`，同上 |
+| 2 | `composeSqliteAgentLaunchResourceOperations` | 形参放宽 |
+| 1 | `startWorkgroupTask` | 形参放宽 |
+| — | `resumeTask` / `retryNode` / `cancelTask` / `dbTxSync` | **净解锁 0**，按裁决就该单引擎 |
+
+**排序口径本身是这一段的结论**：给「窄形参 callee」排优先级时，必须先扣掉那些**无论如何都不迁**
+的文件，否则会把整个 sprint 花在解锁一批根本不打算迁的用例上。
+
+### 本波放宽的（函数体早已中立，只有形参写窄）
+
+`modules/integration/composition.ts`（两个 code-host webhook 装配）、
+`modules/integration/composition/webhookIngress.ts`（ingress 持久化 + delivery runtime）、
+`modules/task-execution/composition/agentLaunchResources.ts` 与它背后的
+`infrastructure/agentLaunchResourceOperations.ts`（SQLite 那份孪生的函数体**逐字中立**——
+`await db.insert(...)`、`getAgentById`、`canViewResource`，只有形参写了 `DbClient`）、
+`legacy/workgroup/launch.ts`（`startWorkgroupTask` / `startWorkgroupTaskFromFrozen` /
+`ensureWorkgroupHostWorkflow`）。另外两个测试夹具同批放宽：
+`helpers/taskLifecycleCommittedEvents.ts`、`helpers/staticCachedRepositoryPreparation.ts`。
+
+**一处早就备好的换名**：`launch.ts` 里三处 `composeSqliteResourceCatalog({ db })` 换成
+`composeResourceCatalogFor({ db })`——后者形参本来就是 `ProviderNeutralDatabase`，
+前者只是个转发壳（§5cn 已经点出「调用方改个名字就行」）。
+
+### 两条没有硬啃的边界
+
+- `startExecution` 的形参写的是 `StartTaskDeps['db']`，窄在**任务启动 deps 类型**上，不是一行能放宽的。
+  `rfc243-executor-facade` 只往里传一个 `null` stub，于是把 stub 的类型对齐到形参类型即可。
+- **`rfc310-digital-employee-system-mock-e2e` 卡的根本不是数据库**：它依赖一个 `beforeAll` 起的
+  **共享 system-mock 套件**，里面的 project / repository id 是写死字面量
+  （`rfc310/digital-employee-os-review`、`repo-system-mock-*`，全文 20+ 处，还有断言直接匹配这些
+  字符串）。同一个用例体跑第二遍时 mock 直接回 500
+  `gitlab project '…' is already seeded`。顺带还暴露了**模块级 `mkdtempSync` 根 + 固定子目录名**
+  的老坑：第二遍的 `git add -A` 在已提交的树上找不到改动，`git commit` 失败，报出来的是一句与
+  数据库毫无关系的 git 错误。要迁它得先让 mock 的 id 随用例唯一——单独一刀，不夹在这波里。

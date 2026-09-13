@@ -6651,3 +6651,16 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   `for (const defect of [...]) { const db = createInMemoryDb(...) }` 每轮都要干净库；
   collapse 到一个 `harness.db` 之后第二轮会看见第一轮的行。注意「同一函数作用域只建一次」这条
   常见判据**看不见循环**——循环体不是函数作用域。
+
+- **给「形参写窄的 callee」排优先级时，先扣掉那些无论如何都不迁的调用方**。
+  按「卡住多少个测试文件」的**原始计数**排序会把整个 sprint 花在解锁一批根本不打算迁的用例上：
+  RFC-359 实测，排前四的 `resumeTask` / `retryNode` / `dbTxSync` / `cancelTask` 合计"卡住"53 个文件，
+  **净解锁 0**——那些文件本来就被 `runTask` / topology / `$client` / `new Database(` 判成单引擎了。
+  正确口径是先按「已被其它理由 sanction」过滤，再排序。
+
+- **共享 `beforeAll` 外部套件 + 写死字面量 id 的 e2e，天然跑不了「同一用例体跑两遍」**。
+  `describeEachProvider` 会把用例体在两个引擎上各跑一遍；如果夹具依赖一个进程级共享的
+  system-mock（project / repository id 是写死字符串），第二遍会拿到 `already seeded` 500。
+  同类还有**模块级 `mkdtempSync` 根 + 固定子目录名**：第二遍的 `git add -A` 在已提交的树上
+  找不到改动，`git commit` 失败——而报出来的是一句与数据库毫无关系的 git 错误，很容易查错方向。
+  要迁这类用例，得先让外部 id 与临时根**随用例唯一**。

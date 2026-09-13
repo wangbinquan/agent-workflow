@@ -2,6 +2,38 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 凌晨，AC-6 账本 **423 → 421**；开始拿**窄形参 callee**开刀）
+>
+> 落档 plan §5cw。`d852cbedf` 的 CI 已全绿。
+>
+> ### 1. 排优先级的口径本身是这一段的结论
+>
+> plan §5cn 那张「卡住多少账本文件」的表按**原始计数**排序会把人带偏：排前四的
+> `resumeTask`(19) / `retryNode`(14) / `dbTxSync`(11) / `cancelTask`(9) 合计「卡住」53 个文件，
+> **净解锁 0**——那些文件本来就被 `runTask` / topology / `$client` / `new Database(` 判成单引擎。
+> **先扣掉「无论如何都不迁」的调用方再排序**，真正该开刀的只有 webhook ingress(4) /
+> code-host webhook 目录(3) / agent-launch(2) / `startWorkgroupTask`(1) 这几行，而且全是
+> 「函数体早就中立、只有形参写窄」，一行放宽即可。
+>
+> ### 2. 本波放宽的
+>
+> `modules/integration/composition.ts`、`…/composition/webhookIngress.ts`、
+> `…/task-execution/composition/agentLaunchResources.ts` 与背后的
+> `infrastructure/agentLaunchResourceOperations.ts`、`legacy/workgroup/launch.ts`，
+> 外加两个测试夹具（`helpers/taskLifecycleCommittedEvents.ts`、
+> `helpers/staticCachedRepositoryPreparation.ts`）。另有一处早就备好的换名：`launch.ts` 里三处
+> `composeSqliteResourceCatalog({db})` → `composeResourceCatalogFor({db})`（后者形参本来就中立）。
+>
+> ### 3. 两条没硬啃的边界（都已落档，不是漏做）
+>
+> - `startExecution` 的形参是 `StartTaskDeps['db']`，窄在**任务启动 deps 类型**上，不是一行能放宽的；
+>   `rfc243-executor-facade` 只传 `null` stub，把 stub 类型对齐形参即可。
+> - **`rfc310-digital-employee-system-mock-e2e` 卡的根本不是数据库**：它依赖 `beforeAll` 起的
+>   **共享 system-mock 套件**，project / repository id 是写死字面量（20+ 处，还有断言直接匹配），
+>   同一用例体跑第二遍时 mock 回 500 `already seeded`。顺带暴露**模块级 `mkdtempSync` 根 +
+>   固定子目录名**的老坑：第二遍 `git add -A` 找不到改动、`git commit` 失败，报出来的是一句与
+>   数据库无关的 git 错误。要迁它得先让外部 id 随用例唯一——单独一刀。
+>
 > ## 📌 RFC-359 最新一段（2026-09-13 深夜，AC-6 账本 **430 → 423**；静默 PG 竞态审计清到 **0 真命中**）
 >
 > 落档在 `design/RFC-359-database-provider-unification/plan.md` §5cv。`f09a05bbd` 的 CI 已全绿。

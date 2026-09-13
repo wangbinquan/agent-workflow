@@ -12,7 +12,7 @@ import {
   validateWorkflowDef,
 } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   AgentLaunchResourceOperations,
@@ -40,7 +40,7 @@ function hostWorkflowRow() {
 }
 
 export function createSqliteAgentLaunchResourceOperations(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): AgentLaunchResourceOperations {
   return Object.freeze({
     async loadVisibleAgent(actor: Actor, agentId: string) {

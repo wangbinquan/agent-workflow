@@ -31,8 +31,6 @@ import {
   type WorkflowWritePrincipal,
 } from '../src/services/workflow'
 import { DomainError } from '../src/util/errors'
-import { createInMemoryDb } from '../src/db/client'
-import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   ensureWorkgroupHostWorkflow,
@@ -523,18 +521,21 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
 // RFC-359 AC-6 例外：单引擎。`composeSqliteAgentLaunchResourceOperations(db)` 与它的 PG 孪生
 // **入参形状不同**——PG 那份还要 `agents` / `workflowValidation` 两个端口（SQLite 那份在内部自建），
 // 所以这条不是「换个 harness」能迁的，得先把那两个组合根的装配签名对齐。留在账本上。
-describe('RFC-199 —— 固定的 agent / workgroup 宿主种子走同一条 canonical latest 存储', () => {
-  test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
-    await ensureWorkgroupHostWorkflow(db)
+describeEachProvider(
+  'RFC-199 —— 固定的 agent / workgroup 宿主种子走同一条 canonical latest 存储',
+  (harness) => {
+    test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
+      const db = harness.db
+      await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
+      await ensureWorkgroupHostWorkflow(db)
 
-    const rows = await db
-      .select({ id: workflows.id, definition: workflows.definition })
-      .from(workflows)
-    const byId = new Map(rows.map((row) => [row.id, row.definition]))
-    const expected = serializeWorkflowDefinitionStorageV1(EMPTY_DEFINITION)
-    expect(byId.get(AGENT_HOST_WORKFLOW_ID)).toBe(expected)
-    expect(byId.get(WORKGROUP_HOST_WORKFLOW_ID)).toBe(expected)
-  })
-})
+      const rows = await db
+        .select({ id: workflows.id, definition: workflows.definition })
+        .from(workflows)
+      const byId = new Map(rows.map((row) => [row.id, row.definition]))
+      const expected = serializeWorkflowDefinitionStorageV1(EMPTY_DEFINITION)
+      expect(byId.get(AGENT_HOST_WORKFLOW_ID)).toBe(expected)
+      expect(byId.get(WORKGROUP_HOST_WORKFLOW_ID)).toBe(expected)
+    })
+  },
+)

@@ -39,7 +39,6 @@ import { inArray } from 'drizzle-orm'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
 import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DbClient } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
@@ -48,7 +47,7 @@ import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { assertAgentResourceIntegrity } from '../../../application/agents/agentResourceIntegrity'
 import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
 // fix). Re-exported here for existing test-side importers only; PRODUCTION
@@ -207,7 +206,7 @@ export function resolveWorkgroupCollaborators(
  * not at save time (决策 #21).
  */
 export async function startWorkgroupTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   workgroupId: string,
   input: StartWorkgroupTask,
@@ -215,7 +214,7 @@ export async function startWorkgroupTask(
 ): Promise<Task> {
   const resourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
-    authorization: composeSqliteResourceCatalog({ db }).authorization,
+    authorization: composeResourceCatalogFor({ db }).authorization,
   })
   const group = await getWorkgroupById(db, workgroupId)
   if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
@@ -383,13 +382,13 @@ export interface StartWorkgroupTaskFromFrozenArgs {
 }
 
 export async function startWorkgroupTaskFromFrozen(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   args: StartWorkgroupTaskFromFrozenArgs,
   deps: StartTaskDeps,
 ): Promise<Task> {
   const resourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
-    authorization: composeSqliteResourceCatalog({ db }).authorization,
+    authorization: composeResourceCatalogFor({ db }).authorization,
   })
   const config: WorkgroupRuntimeConfig = buildWorkgroupRuntimeConfig(args.frozenGroup, args.goal)
 
