@@ -2,6 +2,17 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 3，给那条红立守卫：`rfc359-w5-unattended-void-promise`）
+>
+> 落档 plan §5dk-b。修掉一处不够——**没人接的 `void <promise>`** 是一类形态，新守卫按 TypeChecker
+> 扫整棵 `src`：`void <thenable>` 且链上无 `.catch` / 无双参 `.then` 即入账（`.finally` 不算接住）。
+> 逐文件计数，当前 **19 文件 / 47 处**，带十条正负 fixture。
+>
+> **判据只看调用点**：按「被调函数有没有 try/catch」自动免责在本仓不可靠——
+> `maintenanceWorker.processQueue` 的 try 前面有二十多行前置赋值（会被误判成未接住），
+> 而 `dispatchIntentTurn` 的 catch / finally **自己也在写库**、池一关兜底块自己就抛。
+> 已逐条核实安全的三族（intent 的 13 条 / `processQueue` / `tokenCallAudit.record`）写进守卫头注释。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 2，**merge_state 孪生退役** + 修主干红；账本 **409** / open **105**）
 >
 > 落档 plan §5dj / §5dk。**`810f71c52` 把主干推红了**，已在同一批里修掉。

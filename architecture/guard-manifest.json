@@ -1948,6 +1948,18 @@
       "lines": 813
     },
     {
+      "id": "rfc359-w5-unattended-void-promise",
+      "file": "packages/backend/tests/architecture/rfc359-w5-unattended-void-promise.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 500,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 229
+    },
+    {
       "id": "rfc359-w52-resource-package-apply-lock",
       "file": "packages/backend/tests/rfc359-w52-resource-package-apply-lock.test.ts",
       "runner": "bun",
@@ -2483,8 +2495,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "810f71c5245d590436f67747c695a0fc00f49a29",
-    "contentDigest": "sha256:c6ff9751391ab9933637293c92e23a91e9358fcc70585875071ed574e0f9e428",
+    "currentSnapshotSha": "47e14256a705f4116e50744b405ca2cf19fa1eaf",
+    "contentDigest": "sha256:615061eda3330c1967cb1ce5d8e751eb86d97ae385aea62c20912469b0a3c9d7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -8980,3 +8980,23 @@ bun 记成「Unhandled error between tests」，**全部用例通过、进程照
 其余尚未逐条核实——**这是本 RFC 的一条开放缺口**，记在 `docs/audit-backlog.md`，
 正解是给它立一条与 AC-6 同形的账本：**被调函数体整体 try/catch 或链上有 `.catch` = 已接住**，
 其余进「未接住」那一栏，逐条收。
+
+### 5dk-b. 立守卫：`rfc359-w5-unattended-void-promise`
+
+光修一处不够——§5dk 那条红的成因是一**类**形态。新守卫按 TypeChecker 扫整棵 `src`：
+
+- **咬什么**：`void <expr>` 语句，且 `<expr>` 的类型是 thenable，且链上**没有**拒绝处理器。
+  `.catch(…)` 与双参 `.then(ok, err)` 算接住；`.finally(…)` **不算**（它只转手，不消费拒绝）。
+- **账本口径**：逐文件计数（不是行号——行号会被任何无关编辑冲掉）。当前 **19 个文件 / 47 处**。
+- **负 fixture**：五条「必须咬住」+ 五条「必须放行」的内存源码变异，含 `void plain()`
+  这条（非 thenable 不在管辖内）。
+
+**为什么不按「被调函数有没有 try/catch」自动免责**：那个判据在本仓不可靠。
+`maintenanceWorker.processQueue` 的 `try` 前面有二十多行前置赋值（按「函数体是单条 try」判会误判成
+未接住）；反过来 `dispatchIntentTurn` 的 catch 与 finally **自己也在写库**——连接池一关，
+兜底块自己就抛、异常**越过**它逃出来（那个函数的头注释记着 2026-09-12 同类事故，CI ubuntu shard 6/8）。
+**能机械判准的只有调用点那一侧**，所以判据只看调用点，免责也只认调用点上的 `.catch`。
+
+存量里已逐条核实为安全的三族写进了守卫头注释：`modules/intent/**` 的 13 条（都落到已兜住的
+`dispatchIntentTurn`）、`maintenanceWorker.processQueue`、`tokenCallAudit.record`。其余未核。
+退役一条的判据只有一个：在调用点补拒绝处理器，让扫描器不再数到它。

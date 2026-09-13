@@ -507,6 +507,13 @@
       "why": "RFC-359 W5-T19c：boot 链上每个函数的调用点数。再复制一条启动路径必然要多调一次，多一个就红。"
     },
     {
+      "id": "rfc359-w5-unattended-void-promise",
+      "file": "packages/backend/tests/architecture/rfc359-w5-unattended-void-promise.test.ts",
+      "symbol": "UNATTENDED_VOID_PROMISE_DEBT",
+      "baseline": 19,
+      "why": "RFC-359 W5「防复辟」：`void <promise>` 且链上没有 `.catch` / 双参 `.then` 的 fire-and-forget。bun:sqlite 上这类调用往往同步 settle、看不出问题；PostgreSQL 上同一条是真异步查询，库一关就以 `Connection closed` 拒绝、无人接住 → 进程级 unhandled rejection（bun test 记成「Unhandled error between tests」：用例全过、进程退 1，CI run 34768029441 ubuntu 分片 2/12 实撞）。逐文件计数；退役一条的机械判据是在调用点链上补拒绝处理器。"
+    },
+    {
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
@@ -892,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "810f71c5245d590436f67747c695a0fc00f49a29",
-    "contentDigest": "sha256:918f89b1f40c5176f39c422a055a2948b14d043396accb02a55652cbb8908992",
+    "currentSnapshotSha": "47e14256a705f4116e50744b405ca2cf19fa1eaf",
+    "contentDigest": "sha256:75c7fda67cf9f79b6f0f6b78d8edf897cbea5037c49509ec8b889c39c432fbbb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

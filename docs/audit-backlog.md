@@ -5101,6 +5101,15 @@ ubuntu 分片 2/12，`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer`，已�
 `services/execution/managedProcess.ts`(4)、`services/reviewMutationCoordinator.ts`(1)、
 `services/structuralDiff/service.ts`(2)。
 
-**正解**：立一条与 AC-6 同形的账本——机械判据「**被调函数体整体 try/catch**，或链上有 `.catch` /
-双参 `.then` ⇒ 已接住」把 47 条切成「已接住（免责）」与「未接住（债）」两栏，后者逐条收到零。
-扫描脚本见 plan §5dk 描述的 AST 判据（`ts.isVoidExpression` + 链尾 handler 检出）。
+**已立守卫**（同批）：`packages/backend/tests/architecture/rfc359-w5-unattended-void-promise.test.ts`
+——按 TypeChecker 扫整棵 `src`，逐文件计数钉住这 19 个文件 / 47 处，新增当场红。
+**判据只看调用点**：`.catch(…)` 或双参 `.then(ok, err)` 才算接住，`.finally(…)` 不算。
+不按「被调函数有没有 try/catch」自动免责——那在本仓不可靠：`processQueue` 的 try 前面有二十多行
+前置赋值，而 `dispatchIntentTurn` 的 catch/finally 自己也在写库、池一关兜底块自己就抛。
+
+**已逐条核实为安全的三族**（被调函数自己兜住了，账本里留着只是因为调用点没写 `.catch`）：
+`modules/intent/**` 的 13 条（都落到 `dispatchIntentTurn`，其头注释记着 2026-09-12 同类事故）、
+`platform/background/maintenanceWorker.ts` 的 `processQueue`、`tokenCallAudit.record`。
+
+**剩下的活**：其余 ~30 处逐条核实并在调用点补 `.catch`（内部已 try/catch 的补一条永不触发的也无害，
+反而把「这里为什么安全」搬进代码），账本随之降到 0。
