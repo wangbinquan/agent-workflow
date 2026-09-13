@@ -66,10 +66,17 @@ export interface ProviderHttpApplicationScope {
    * `overrides.config` 在装配前并进配置文件——用例需要非默认的守护进程配置
    * （`plantumlEndpoint` 这类）时走这里，不要另建 app home 自己写 config：应用读的是
    * 本作用域现建的那个路径，自写的那份会被整份绕开。
+   *
+   * 其余 key 覆盖 describe 级选项，**按用例**生效。为什么需要：同一个 describe 里常有
+   * 一两条用例要换一个注入值（`runtimeDiagnosticTestDependencies.probeTimeoutMsForTest`
+   * 是实际遇到的第一个——同文件其余用例都要默认超时，只有「探测挂死」那条要 2s）。
+   * 没有这个口子，这类文件就只能整份留在单引擎上。
    */
-  open(overrides?: {
-    readonly config?: Readonly<Record<string, unknown>>
-  }): Promise<OpenedProviderHttpApplication>
+  open(
+    overrides?: {
+      readonly config?: Readonly<Record<string, unknown>>
+    } & Partial<Omit<ProviderHttpApplicationOptions, 'tempPrefix' | 'bootstrap'>>,
+  ): Promise<OpenedProviderHttpApplication>
 }
 
 /**
@@ -124,9 +131,10 @@ export function describeEachProviderHttpApplication(
             process.env.AGENT_WORKFLOW_HOME = appHome
             homeAssigned = true
             const { tempPrefix: _tempPrefix, bootstrap: _bootstrap, ...applicationInput } = options
+            const perCase = overrides ?? {}
             const opened = await createProviderHttpApplication(harness, {
               ...applicationInput,
-              ...(overrides?.config === undefined ? {} : { config: overrides.config }),
+              ...perCase,
               configPath: join(appHome, 'config.json'),
               appHome,
             })

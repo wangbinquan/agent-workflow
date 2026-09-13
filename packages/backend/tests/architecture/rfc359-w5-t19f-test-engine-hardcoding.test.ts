@@ -227,7 +227,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc130-shard-rerun-undo.test.ts: 4',
   'rfc130-wrapper-private-canonical.test.ts: 1',
   'rfc131-review-reject-aging-prior-output.test.ts: 1',
-  'rfc135-runtimes-status.test.ts: 1',
   'rfc142-review-rounds.test.ts: 2',
   'rfc144-merge-state-cas.test.ts: 1',
   'rfc144-migration-0076.test.ts: 1',
@@ -478,7 +477,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'wg-readonly-claim-and-pause-reason.test.ts: 1',
   'workflows.test.ts: 2',
   'worktree-files-proxy.test.ts: 1',
-  'ws.test.ts: 1',
 ]
 
 /**
@@ -673,7 +671,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc097-task-status-cas.test.ts',
   'rfc104-builtin-readonly.test.ts',
   'rfc128-p5-d-autodispatch.test.ts',
-  'rfc135-runtimes-status.test.ts',
   'rfc164-workgroups.test.ts',
   'rfc165-workspace-gc.test.ts',
   'rfc172-dispatch-shard.test.ts',
@@ -770,7 +767,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'wg-readonly-claim-and-pause-reason.test.ts',
   'workflows.test.ts',
   'worktree-files-proxy.test.ts',
-  'ws.test.ts',
 ]
 
 describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降不升）', () => {

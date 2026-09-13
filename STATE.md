@@ -2,6 +2,40 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 上午，总账 **418 → 416**，open **113 → 111**；HTTP/WS 那一桶开工）
+>
+> 落档 plan §5da。
+>
+> ### 1. 先量清楚，再动手——`createApp` 那一桶缺的东西出奇地少
+>
+> 把每个文件 `createApp({...})` 的实参 key 减掉 `ProviderHttpApplicationInput` 已支持的集合：
+> **15 个什么都不缺**；6 个「缺」`secretBox`，而作用域本来就把**应用自己装配的那一份**当
+> `opened.secretBox` 交出来（正是这些用例真正需要的那一份）；剩下 3 个各缺一两个 dep。
+> 也就是说这桶**不是 18 个各自的坑，是一个共用装配**——比机械那桶值得做得多
+> （第 7 波 31 个候选只活 3 个）。
+>
+> ### 2. 作用域缺的唯一一件事：**按用例**覆盖注入值
+>
+> `describeEachProviderHttpApplication` 的选项是 describe 级的，`open()` 此前只收 `config`。
+> 但真实用例常有一两条要换注入值（`rfc135-runtimes-status` 25 条用默认探测超时，只有
+> 「挂死的二进制」那条要 2s）。没有这个口子，这类文件只能整份留单引擎。
+> 现在 `open()` 收 `{ config? } & Partial<Omit<Options,'tempPrefix'|'bootstrap'>>`，
+> 实现里 `...applicationInput, ...perCase`——**一行改动解锁一整类文件**。
+>
+> ### 3. 两个先导迁移（双引擎全绿）
+>
+> `rfc135-runtimes-status` 26 pass、`ws.test.ts` 14 pass。前者有个坑：桩二进制的 tmp 目录
+> **必须留在作用域外**（两个协议默认路径要在装配前写进 config，而 app home 是 `open()` 现建的）；
+> 那条 2s 用例改成**重开同一作用域的应用**而不是再建一个 harness——后者会在同一个库上把内建
+> 运行时 seed 两遍。
+>
+> ### 4. 两个「不该迁但机械判据看不见」的形状（登记，不扩判据）
+>
+> `rfc349-daemon-provider-core` 把两个组合根**摆在一起对拍**，harness 给的是当前引擎那一个库，
+> 喂不了「同一条用例里两个根都在」；`rfc221-login-policy-routes` / `rfc257-webhook-error-codes`
+> 的单引擎理由写在**用例注释**里（§5bg 的装配签名不对称）。全树只有这 2 个是「散文裁决」，
+> **不值得为它们新增 marker 判据**——marker 的风险是「谁都能给自己编理由」，收益只有 2 条。
+>
 > ## 📌 RFC-359 最新一段（2026-09-14，总账 **421 → 418**，open 待办 **126 → 113**；分类判据补了两个洞）
 >
 > 落档 plan §5cy / §5cz。

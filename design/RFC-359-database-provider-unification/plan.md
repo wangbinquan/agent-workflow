@@ -8611,3 +8611,53 @@ helper 不在任何块里，却会被 provider 用例调用**，那才是真正�
 **排期口径**：机械那一桶已经被前几波刮到边际产出很低（第 7 波 31 个候选只survive 3 个），
 真正的下一刀应该是 `createApp` 那 18 个——它们卡在同一个可复用的装配上，
 而不是每个文件各自的坑。
+
+## 5da. HTTP / WebSocket 那一桶：先给作用域开一个**按用例**的注入口（416 / open 111）
+
+§5cz 判定的下一刀是 `createApp` 那 18 个。先做的不是迁文件，是**量清楚它们到底缺什么**：
+把每个文件 `createApp({...})` 的实参 key 抽出来、减掉
+`ProviderHttpApplicationInput` 已经支持的集合，得到的缺口出乎意料地小——
+
+| 缺的 dep | 文件数 |
+| --- | --- |
+| （什么都不缺） | **15** |
+| `secretBox` | 6（而且作用域本来就把**应用自己装配的那一份**当 `opened.secretBox` 交出来，正是这些用例真正需要的那一份） |
+| `maintenanceStatus` / `databaseTelemetry` | 1 |
+| `executionContracts` | 1 |
+| 迁移协调器那一簇（`admission` / `sqlitePath` / …） | 1 |
+
+也就是说这一桶**不是 18 个各自的坑，是一个共用装配**——这正是它比「机械那一桶」更值得做的原因
+（第 7 波 31 个候选只活 3 个）。
+
+### 作用域缺的唯一一件事：**按用例**覆盖注入值
+
+`describeEachProviderHttpApplication` 的选项是 **describe 级**的，`open()` 此前只接受
+`config` 覆盖。而真实用例里常有一两条要换一个注入值：`rfc135-runtimes-status` 同文件 25 条用
+默认探测超时，只有「挂死的二进制要被逐行超时掉」那条要 2s。没有这个口子，这类文件只能整份
+留在单引擎上。
+
+所以把 `open()` 的形参放宽成 `{ config? } & Partial<Omit<Options,'tempPrefix'|'bootstrap'>>`，
+实现里 `...applicationInput, ...perCase`。一行改动，解锁的是**整类**「大部分用例同一装配、
+个别用例换一个注入」的文件。
+
+### 两个先导迁移
+
+- **`rfc135-runtimes-status`**（25 条判据，含探测超时 / 进程树收割）：`tmp` 目录只剩「放桩二进制」
+  一个用途——它必须留在作用域之外，因为两个协议默认路径要在**装配之前**写进 config
+  （`open({ config })` 就是这个口子），而 app home 是 `open()` 现建的。
+  那条 2s 超时的用例改成**重开同一个作用域的应用**（库还是本用例那一个、内建运行时已 seed 过，
+  只有注入值不同），而不是再建一个 harness——后者会在同一个库上把内建运行时 seed 两遍。
+- **`ws.test.ts`**：真 `Bun.serve()` + 真 WebSocket 客户端那套 lifetime 本来就已经收进
+  `describeEachProviderWebSocketApplication`（含**进程级**广播器单例的 afterEach 重置），
+  本文件只是还没用它。14 条判据两引擎全绿。
+
+### 两个**不该迁**、但机械判据看不见的形状（登记，不扩判据）
+
+- `rfc349-daemon-provider-core`：它把 `composeSqliteDaemonProviderCore` 与
+  `composePostgresqlDaemonProviderCore` **摆在一起对拍**，SQLite 那半按定义要建 SQLite 库
+  （而且只 `$client.close()`，按 §5cm 的裁决不算「用了裸驱动面」）。harness 给的是**当前引擎**
+  那一个库，喂不了「同一条用例里两个根都要在」。
+- `rfc221-login-policy-routes` / `rfc257-webhook-error-codes`：用例注释里已经写清了单引擎理由
+  （§5bg 的装配签名不对称）。全树只有这 2 个文件有这种「写在散文里的裁决」，**不值得为它们
+  新增一类 marker 判据**——marker 判据的风险是「谁都能给自己编个理由」，而收益只有 2 条。
+  它们留在 open 名单里，等 §5bg 那一刀连根消掉。

@@ -6685,3 +6685,14 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
 
 - **账本数字下降时，要把「真迁走的」与「判据补洞后归位的」分开写**。两者混在一个 delta 里，
   下一个人会把补洞读成迁移进度，进而高估剩余产能。
+
+- **`describeEachProviderHttpApplication` 的选项是 describe 级的；要按用例换注入值走 `open()` 的覆盖**
+  （`open({ config, runtimeDiagnosticTestDependencies, … })`）。真实文件里常见的形状是「大部分用例
+  同一套装配、个别用例换一个注入」（`rfc135-runtimes-status`：25 条用默认探测超时，只有
+  「挂死的二进制」那条要 2s）。**不要为那一条再建一个 harness**——那会在同一个库上把内建数据
+  seed 两遍。重开同一个作用域的应用即可：库是本用例那一个，只有注入值不同。
+
+- **要在装配前写进 config 的东西（协议默认路径这类），tmp 目录必须留在作用域之外**。
+  app home 是 `open()` 现建的、用例结束时删掉；应用读的是 `open()` 那个 `configPath`，
+  自建 app home 写的 config 会被整份绕开。桩二进制放自己的 tmp 目录，路径经
+  `open({ config })` 喂进去。

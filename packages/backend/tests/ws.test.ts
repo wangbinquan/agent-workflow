@@ -5,66 +5,22 @@
 // services directly (createWorkflow / updateWorkflow / startTask).
 
 import type { Server } from 'bun'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/workflow'
 import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
-import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { buildWebSocketAdapter } from '../src/ws/server'
-import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
+import { describeEachProviderWebSocketApplication } from './helpers/providerWebSocketScope'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   server: AnyServer
   url: string
-  cleanup: () => Promise<void>
-}
-
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/__never_used__.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  const identityAccess = createIdentityAccessRuntime({ db })
-  const ws = buildWebSocketAdapter({
-    daemonToken: TOKEN,
-    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
-    identityAccess,
-  })
-  const server = Bun.serve({
-    port: 0,
-    hostname: '127.0.0.1',
-    async fetch(req: Request, srv): Promise<Response> {
-      const upgraded = await ws.tryUpgrade(req, srv)
-      if (upgraded === true) return undefined as unknown as Response
-      if (upgraded === false) return await app.fetch(req)
-      return upgraded
-    },
-    websocket: ws.handlers,
-  })
-  return {
-    db,
-    server,
-    url: `ws://${server.hostname}:${server.port}`,
-    cleanup: async () => {
-      server.stop(true)
-      resetBroadcastersForTests()
-    },
-  }
 }
 
 /**
@@ -119,228 +75,238 @@ async function waitUntil(pred: () => boolean, capMs = 1000): Promise<void> {
 const hasType = (msgs: unknown[], type: string): boolean =>
   msgs.some((m) => (m as { type?: string }).type === type)
 
-describe('WebSocket channels', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(async () => {
-    await h.cleanup()
-  })
-
-  test('unknown ws channel returns 404 (no upgrade)', async () => {
-    const res = await fetch(`http://${h.server.hostname}:${h.server.port}/ws/bogus`)
-    expect(res.status).toBe(404)
-  })
-
-  test('missing token rejects with 401 (no upgrade)', async () => {
-    const res = await fetch(`http://${h.server.hostname}:${h.server.port}/ws/tasks`)
-    expect(res.status).toBe(401)
-  })
-
-  test('/ws/tasks: hello + receives task.created and task.status', async () => {
-    // This test only asserts the hello frame (no broadcast is triggered), so we
-    // ask for exactly 1 message — collectMessages early-resolves on the hello
-    // instead of idling out the full window.
-    const msgs = await collectMessages(`${h.url}/ws/tasks?token=${TOKEN}`, 1, 1500)
-    expect(msgs.length).toBeGreaterThanOrEqual(1)
-    const first = msgs[0] as { type: string; channel?: string }
-    expect(first.type).toBe('hello')
-    expect(first.channel).toBe('tasks')
-  })
-
-  test('/ws/workflows: hello + workflow.created event after createWorkflow', async () => {
-    const received: unknown[] = []
-    const ws = new WebSocket(`${h.url}/ws/workflows?token=${TOKEN}`)
-    await new Promise<void>((res, rej) => {
-      ws.addEventListener('open', () => res())
-      ws.addEventListener('error', () => rej(new Error('ws error')))
-    })
-    ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
-    // Hello frame is queued before the first broadcast — wait for it.
-    await waitUntil(() => hasType(received, 'hello'))
-
-    await createWorkflow(h.db, {
-      name: 'wf-1',
-      description: '',
-      definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
-    })
-    await waitUntil(() => hasType(received, 'workflow.created'))
-    ws.close()
-
-    const types = received.map((m) => (m as { type: string }).type)
-    expect(types).toContain('hello')
-    expect(types).toContain('workflow.created')
-  })
-
-  test('/ws/workflows: updateWorkflow emits workflow.updated; delete emits workflow.deleted', async () => {
-    const wf = await createWorkflow(h.db, {
-      name: 'wf',
-      description: '',
-      definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+// RFC-359 AC-6：真 `Bun.serve()` + 真 WebSocket 客户端的那套 lifetime 已经收进
+// `describeEachProviderWebSocketApplication`（含**进程级**广播器单例的 afterEach 重置）。
+describeEachProviderWebSocketApplication(
+  'WebSocket channels',
+  {
+    token: TOKEN,
+    daemonToken: TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-ws-channels-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      const opened = await scope.open()
+      h = { db: scope.harness.db, server: opened.server, url: opened.url }
     })
 
-    const received: Array<{ type: string }> = []
-    const ws = new WebSocket(`${h.url}/ws/workflows?token=${TOKEN}`)
-    await new Promise<void>((res) => {
-      ws.addEventListener('open', () => res())
-    })
-    ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
-    await waitUntil(() => hasType(received, 'hello'))
-
-    const receipt = await updateWorkflow(
-      h.db,
-      wf.id,
-      {
-        expectedVersion: wf.version,
-        clientMutationId: ulid(),
-        snapshot: {
-          name: 'wf-renamed',
-          description: wf.description,
-          definition: wf.definition,
-        },
-      },
-      { kind: 'system', reason: 'ws-test' },
-    )
-    await deleteWorkflow(
-      h.db,
-      wf.id,
-      { expectedVersion: receipt.revision.version, clientMutationId: ulid() },
-      { kind: 'system', reason: 'ws-test' },
-    )
-    await waitUntil(
-      () => hasType(received, 'workflow.updated') && hasType(received, 'workflow.deleted'),
-    )
-    ws.close()
-
-    const types = received.map((m) => m.type)
-    expect(types).toContain('workflow.updated')
-    expect(types).toContain('workflow.deleted')
-  })
-
-  test('/ws/tasks/{id}: task.status broadcasts from the committed-event projector', async () => {
-    // Seed a fake task row (avoids spawning the scheduler in this test).
-    const taskId = ulid()
-    await h.db.insert(workflows).values({
-      id: 'wf-x',
-      name: 'wf',
-      definition: '{}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id: taskId,
-      workflowId: 'wf-x',
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/x',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
+    test('unknown ws channel returns 404 (no upgrade)', async () => {
+      const res = await fetch(`http://${h.server.hostname}:${h.server.port}/ws/bogus`)
+      expect(res.status).toBe(404)
     })
 
-    const received: Array<{ type: string; status?: string }> = []
-    const ws = new WebSocket(`${h.url}/ws/tasks/${taskId}?token=${TOKEN}`)
-    await new Promise<void>((res) => {
-      ws.addEventListener('open', () => res())
-    })
-    ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
-    await waitUntil(() => hasType(received, 'hello'))
-
-    await createDatabaseTaskLifecycleWsProjector(h.db).handle({
-      eventId: `task-lifecycle:${taskId}:2`,
-      eventGroupId: `task-lifecycle:${taskId}:2`,
-      eventGroupOrdinal: 0,
-      type: 'task.lifecycle-transitioned.v1',
-      schemaVersion: 1,
-      producer: 'task-execution',
-      family: 'task-lifecycle',
-      aggregate: { kind: 'task', id: taskId, seq: 2 },
-      operationRef: `task-lifecycle:${taskId}:2`,
-      correlationRef: null,
-      causationRef: null,
-      occurredAt: new Date().toISOString(),
-      payload: {
-        taskId,
-        lifecycleRevision: 2,
-        previousStatus: 'running',
-        status: 'done',
-        updatedAt: new Date().toISOString(),
-        errorSummary: null,
-        nodeChanges: [],
-        workspacePruneClaim: null,
-        sourceTerminationEffectRef: null,
-      },
+    test('missing token rejects with 401 (no upgrade)', async () => {
+      const res = await fetch(`http://${h.server.hostname}:${h.server.port}/ws/tasks`)
+      expect(res.status).toBe(401)
     })
 
-    await waitUntil(() => hasType(received, 'task.status') && hasType(received, 'task.done'))
-    ws.close()
-
-    const types = received.map((m) => m.type)
-    expect(types).toContain('hello')
-    expect(types).toContain('task.status')
-    expect(types).toContain('task.done')
-  })
-
-  test('/ws/tasks/{id}?since=N replays node_run_events with id > N', async () => {
-    // Seed a task + node_run + 3 events.
-    const taskId = ulid()
-    await h.db.insert(workflows).values({
-      id: 'wf-y',
-      name: 'wf',
-      definition: '{}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+    test('/ws/tasks: hello + receives task.created and task.status', async () => {
+      // This test only asserts the hello frame (no broadcast is triggered), so we
+      // ask for exactly 1 message — collectMessages early-resolves on the hello
+      // instead of idling out the full window.
+      const msgs = await collectMessages(`${h.url}/ws/tasks?token=${TOKEN}`, 1, 1500)
+      expect(msgs.length).toBeGreaterThanOrEqual(1)
+      const first = msgs[0] as { type: string; channel?: string }
+      expect(first.type).toBe('hello')
+      expect(first.channel).toBe('tasks')
     })
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
 
-      id: taskId,
-      workflowId: 'wf-y',
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/y',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    const nrId = ulid()
-    await h.db
-      .insert(nodeRuns)
-      .values({ id: nrId, taskId, nodeId: 'n1', status: 'done', startedAt: Date.now() })
-    for (let i = 0; i < 3; i++) {
-      await h.db.insert(nodeRunEvents).values({
-        nodeRunId: nrId,
-        ts: Date.now(),
-        kind: 'text',
-        payload: JSON.stringify({ chunk: i }),
+    test('/ws/workflows: hello + workflow.created event after createWorkflow', async () => {
+      const received: unknown[] = []
+      const ws = new WebSocket(`${h.url}/ws/workflows?token=${TOKEN}`)
+      await new Promise<void>((res, rej) => {
+        ws.addEventListener('open', () => res())
+        ws.addEventListener('error', () => rej(new Error('ws error')))
       })
-    }
+      ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
+      // Hello frame is queued before the first broadcast — wait for it.
+      await waitUntil(() => hasType(received, 'hello'))
 
-    // Read back the event ids so we know what to ?since=.
-    const allEvents = await h.db.select().from(nodeRunEvents)
-    const sortedIds = allEvents.map((e) => e.id).sort((a, b) => a - b)
-    const firstId = sortedIds[0] ?? 0
+      await createWorkflow(h.db, {
+        name: 'wf-1',
+        description: '',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+      })
+      await waitUntil(() => hasType(received, 'workflow.created'))
+      ws.close()
 
-    const received: Array<{ type: string; id?: number; payload?: unknown }> = []
-    const ws = new WebSocket(`${h.url}/ws/tasks/${taskId}?token=${TOKEN}&since=${firstId}`)
-    await new Promise<void>((res) => {
-      ws.addEventListener('open', () => res())
+      const types = received.map((m) => (m as { type: string }).type)
+      expect(types).toContain('hello')
+      expect(types).toContain('workflow.created')
     })
-    ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
-    // Exactly 2 events have id > firstId; the server replays them on connect.
-    // Wait until both have arrived (no third can come, so the count stays exact).
-    await waitUntil(() => received.filter((m) => m.type === 'node.event').length >= 2)
-    ws.close()
 
-    const events = received.filter((m) => m.type === 'node.event')
-    expect(events.length).toBe(2) // events with id > firstId
-    expect(events[0]?.id).toBe(sortedIds[1])
-  })
-})
+    test('/ws/workflows: updateWorkflow emits workflow.updated; delete emits workflow.deleted', async () => {
+      const wf = await createWorkflow(h.db, {
+        name: 'wf',
+        description: '',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+      })
+
+      const received: Array<{ type: string }> = []
+      const ws = new WebSocket(`${h.url}/ws/workflows?token=${TOKEN}`)
+      await new Promise<void>((res) => {
+        ws.addEventListener('open', () => res())
+      })
+      ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
+      await waitUntil(() => hasType(received, 'hello'))
+
+      const receipt = await updateWorkflow(
+        h.db,
+        wf.id,
+        {
+          expectedVersion: wf.version,
+          clientMutationId: ulid(),
+          snapshot: {
+            name: 'wf-renamed',
+            description: wf.description,
+            definition: wf.definition,
+          },
+        },
+        { kind: 'system', reason: 'ws-test' },
+      )
+      await deleteWorkflow(
+        h.db,
+        wf.id,
+        { expectedVersion: receipt.revision.version, clientMutationId: ulid() },
+        { kind: 'system', reason: 'ws-test' },
+      )
+      await waitUntil(
+        () => hasType(received, 'workflow.updated') && hasType(received, 'workflow.deleted'),
+      )
+      ws.close()
+
+      const types = received.map((m) => m.type)
+      expect(types).toContain('workflow.updated')
+      expect(types).toContain('workflow.deleted')
+    })
+
+    test('/ws/tasks/{id}: task.status broadcasts from the committed-event projector', async () => {
+      // Seed a fake task row (avoids spawning the scheduler in this test).
+      const taskId = ulid()
+      await h.db.insert(workflows).values({
+        id: 'wf-x',
+        name: 'wf',
+        definition: '{}',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id: taskId,
+        workflowId: 'wf-x',
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/x',
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+
+      const received: Array<{ type: string; status?: string }> = []
+      const ws = new WebSocket(`${h.url}/ws/tasks/${taskId}?token=${TOKEN}`)
+      await new Promise<void>((res) => {
+        ws.addEventListener('open', () => res())
+      })
+      ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
+      await waitUntil(() => hasType(received, 'hello'))
+
+      await createDatabaseTaskLifecycleWsProjector(h.db).handle({
+        eventId: `task-lifecycle:${taskId}:2`,
+        eventGroupId: `task-lifecycle:${taskId}:2`,
+        eventGroupOrdinal: 0,
+        type: 'task.lifecycle-transitioned.v1',
+        schemaVersion: 1,
+        producer: 'task-execution',
+        family: 'task-lifecycle',
+        aggregate: { kind: 'task', id: taskId, seq: 2 },
+        operationRef: `task-lifecycle:${taskId}:2`,
+        correlationRef: null,
+        causationRef: null,
+        occurredAt: new Date().toISOString(),
+        payload: {
+          taskId,
+          lifecycleRevision: 2,
+          previousStatus: 'running',
+          status: 'done',
+          updatedAt: new Date().toISOString(),
+          errorSummary: null,
+          nodeChanges: [],
+          workspacePruneClaim: null,
+          sourceTerminationEffectRef: null,
+        },
+      })
+
+      await waitUntil(() => hasType(received, 'task.status') && hasType(received, 'task.done'))
+      ws.close()
+
+      const types = received.map((m) => m.type)
+      expect(types).toContain('hello')
+      expect(types).toContain('task.status')
+      expect(types).toContain('task.done')
+    })
+
+    test('/ws/tasks/{id}?since=N replays node_run_events with id > N', async () => {
+      // Seed a task + node_run + 3 events.
+      const taskId = ulid()
+      await h.db.insert(workflows).values({
+        id: 'wf-y',
+        name: 'wf',
+        definition: '{}',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id: taskId,
+        workflowId: 'wf-y',
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/y',
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      const nrId = ulid()
+      await h.db
+        .insert(nodeRuns)
+        .values({ id: nrId, taskId, nodeId: 'n1', status: 'done', startedAt: Date.now() })
+      for (let i = 0; i < 3; i++) {
+        await h.db.insert(nodeRunEvents).values({
+          nodeRunId: nrId,
+          ts: Date.now(),
+          kind: 'text',
+          payload: JSON.stringify({ chunk: i }),
+        })
+      }
+
+      // Read back the event ids so we know what to ?since=.
+      const allEvents = await h.db.select().from(nodeRunEvents)
+      const sortedIds = allEvents.map((e) => e.id).sort((a, b) => a - b)
+      const firstId = sortedIds[0] ?? 0
+
+      const received: Array<{ type: string; id?: number; payload?: unknown }> = []
+      const ws = new WebSocket(`${h.url}/ws/tasks/${taskId}?token=${TOKEN}&since=${firstId}`)
+      await new Promise<void>((res) => {
+        ws.addEventListener('open', () => res())
+      })
+      ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
+      // Exactly 2 events have id > firstId; the server replays them on connect.
+      // Wait until both have arrived (no third can come, so the count stays exact).
+      await waitUntil(() => received.filter((m) => m.type === 'node.event').length >= 2)
+      ws.close()
+
+      const events = received.filter((m) => m.type === 'node.event')
+      expect(events.length).toBe(2) // events with id > firstId
+      expect(events[0]?.id).toBe(sortedIds[1])
+    })
+  },
+)
