@@ -2,26 +2,26 @@
 // Uses a real `git init` fixture so startTask's worktree creation works.
 
 import type { TasksListWsMessage, WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
+import { afterEach, beforeEach, expect, test, beforeAll } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '../src/ws/broadcaster'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   app: Hono
   repoPath: string
   /** RFC-165: v2 HTTP bodies are URL-only; file:// is the local-repo form. */
@@ -30,12 +30,13 @@ interface Harness {
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
-  const appHome = mkdtempSync(join(tmpdir(), 'aw-tasks-'))
+/**
+ * RFC-359 AC-6：app home 与 `AGENT_WORKFLOW_HOME` 的接管、还原、删除都归作用域
+ * （`open()` 现建、`afterEach` 还原并删掉），这里只剩「一个真 git 仓」和 after-commit pump。
+ * pump 要在**装配之前**装上——它挂的是进程级投递口，应用composed 之后再装就漏掉了首批事件。
+ */
+async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harness> {
   const repoPath = mkdtempSync(join(tmpdir(), 'aw-tasks-repo-'))
-  // Tests reuse Paths.root for worktrees / runs; route handlers read it lazily.
-  const prevHome = process.env.AGENT_WORKFLOW_HOME
-  process.env.AGENT_WORKFLOW_HOME = appHome
   await runGit(repoPath, ['init', '-q', '-b', 'main'])
   await runGit(repoPath, ['config', 'user.email', 'test@example.com'])
   await runGit(repoPath, ['config', 'user.name', 'Test'])
@@ -43,27 +44,18 @@ async function buildHarness(): Promise<Harness> {
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = scope.harness.db
   const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {})
-  const app = createApp({
-    token: TOKEN,
-    configPath: join(appHome, 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const opened = await scope.open()
   return {
     db,
-    app,
+    app: opened.app,
     repoPath,
     repoUrl: remoteUrlFor(repoPath),
-    appHome,
+    appHome: opened.appHome,
     cleanup: () => {
       uninstallAfterCommitPump()
-      rmSync(appHome, { recursive: true, force: true })
       rmSync(repoPath, { recursive: true, force: true })
-      if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-      else process.env.AGENT_WORKFLOW_HOME = prevHome
     },
   }
 }
@@ -75,7 +67,7 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
   return app.request(path, { ...init, headers })
 }
 
-async function seedWorkflow(db: DbClient, def: WorkflowDefinition): Promise<string> {
+async function seedWorkflow(db: ProviderNeutralDatabase, def: WorkflowDefinition): Promise<string> {
   const id = ulid()
   await db.insert(workflows).values({
     id,
@@ -91,7 +83,7 @@ async function seedWorkflow(db: DbClient, def: WorkflowDefinition): Promise<stri
  * materialization. Diff fixtures must wait for the durable prepared path;
  * writing against the immediate empty string resolves to this package cwd and
  * leaks README.md/NEWFILE.md into the repository under test. */
-async function preparedWorktree(db: DbClient, taskId: string): Promise<string> {
+async function preparedWorktree(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
     const row = (
@@ -121,526 +113,511 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
-describe('task HTTP routes', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(() => h.cleanup())
-
-  test('POST creates task with status=pending (scheduler still running in background)', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const frames: TasksListWsMessage[] = []
-    const unsubscribe = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (frame) =>
-      frames.push(frame),
-    )
-    const res = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        workflowId: wfId,
-        name: 'fixture-task',
-        repoUrl: h.repoUrl,
-        ref: 'main',
-        inputs: {},
-      }),
-    }).finally(unsubscribe)
-    expect(res.status).toBe(201)
-    const task = (await res.json()) as { id: string; status: string; branch: string }
-    expect(typeof task.id).toBe('string')
-    expect(['pending', 'running', 'done']).toContain(task.status)
-    expect(task.branch).toBe(`agent-workflow/${task.id}`)
-
-    const created = frames.find((frame) => frame.type === 'task.created')
-    expect(created?.type).toBe('task.created')
-    if (created?.type !== 'task.created') throw new Error('missing task.created frame')
-    expect(Object.keys(created.task).sort()).toEqual(
-      [
-        'cachedRepoId',
-        'errorSummary',
-        'finishedAt',
-        'id',
-        'name',
-        'repoCount',
-        'repoPath',
-        'repoUrl',
-        'sourceAgentName',
-        'spaceKind',
-        'startedAt',
-        'status',
-        'workflowId',
-        'workflowName',
-      ].sort(),
-    )
-    expect(created.task).not.toHaveProperty('ownerUserId')
-    expect(created.task).not.toHaveProperty('owner')
-  })
-
-  test('POST with unknown workflow id -> 404', async () => {
-    const res = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        workflowId: '01HFAKE',
-        name: 'fixture-task',
-        repoUrl: h.repoUrl,
-        ref: 'main',
-        inputs: {},
-      }),
+describeEachProviderHttpApplication(
+  'task HTTP routes',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-tasks-',
+  },
+  (scope) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(scope)
     })
-    expect(res.status).toBe(404)
-    expect(((await res.json()) as { code: string }).code).toBe('workflow-not-found')
-  })
+    afterEach(() => h.cleanup())
 
-  // Regression: proposal.md §静态校验 mandates "校验失败...阻止启动 task".
-  // A workflow whose definition fails the 5-rule static validator must not
-  // create a task row, must not touch the worktree, and must surface the
-  // validator's issue list to the caller so the UI can show what to fix.
-  test('POST with workflow that fails static validation -> 422 workflow-invalid; no task row created', async () => {
-    // Edge points at a non-existent target node — that's a deterministic
-    // edge-target-node-missing error from the validator.
-    const badDef: WorkflowDefinition = {
-      $schema_version: 1,
-      inputs: [],
-      nodes: [{ id: 'in1', kind: 'input', inputKey: 'x' } as WorkflowDefinition['nodes'][number]],
-      edges: [
-        {
-          id: 'e1',
-          source: { nodeId: 'in1', portName: 'x' },
-          target: { nodeId: 'ghost', portName: 'y' },
-        },
-      ],
-    }
-    const wfId = await seedWorkflow(h.db, badDef)
-    const res = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        workflowId: wfId,
-        name: 'fixture-task',
-        repoUrl: h.repoUrl,
-        ref: 'main',
-        inputs: {},
-      }),
-    })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as {
-      code: string
-      details?: { issues?: Array<{ code: string }> }
-    }
-    expect(body.code).toBe('workflow-invalid')
-    expect(body.details?.issues?.some((i) => i.code === 'edge-target-node-missing')).toBe(true)
-
-    // No task row was created — validation gate must run before any side effects.
-    const list = (await (await req(h.app, '/api/tasks')).json()) as Array<unknown>
-    expect(list.length).toBe(0)
-  })
-
-  test('POST with a non-git source lands a failed task row with the git reason (RFC-287 G7)', async () => {
-    // **语义已变**（RFC-287 G7）。旧行为：URL 源在任务行存在之前解析，克隆失败
-    // 直接 400 且**什么都不留**——用户点了启动，转半天圈，最后一个错误码，任务
-    // 列表里空空如也，看不到原因也没法重试。
-    //
-    // 新行为：任务先落 `pending`（不新增状态），准备在后台推进；克隆失败把任务
-    // 转 `failed`，git 原文留在行上，时间线上还有一条 `__repo_prep__` 步骤可点
-    // 重试。本用例据此重写——它锁的是「失败留痕」，正是 G7 的核心交付。
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const notRepo = mkdtempSync(join(tmpdir(), 'aw-notrepo-'))
-    try {
+    test('POST creates task with status=pending (scheduler still running in background)', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const frames: TasksListWsMessage[] = []
+      const unsubscribe = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (frame) =>
+        frames.push(frame),
+      )
       const res = await req(h.app, '/api/tasks', {
         method: 'POST',
         body: JSON.stringify({
           workflowId: wfId,
           name: 'fixture-task',
-          repoUrl: remoteUrlFor(notRepo),
+          repoUrl: h.repoUrl,
+          ref: 'main',
+          inputs: {},
+        }),
+      }).finally(unsubscribe)
+      expect(res.status).toBe(201)
+      const task = (await res.json()) as { id: string; status: string; branch: string }
+      expect(typeof task.id).toBe('string')
+      expect(['pending', 'running', 'done']).toContain(task.status)
+      expect(task.branch).toBe(`agent-workflow/${task.id}`)
+
+      const created = frames.find((frame) => frame.type === 'task.created')
+      expect(created?.type).toBe('task.created')
+      if (created?.type !== 'task.created') throw new Error('missing task.created frame')
+      expect(Object.keys(created.task).sort()).toEqual(
+        [
+          'cachedRepoId',
+          'errorSummary',
+          'finishedAt',
+          'id',
+          'name',
+          'repoCount',
+          'repoPath',
+          'repoUrl',
+          'sourceAgentName',
+          'spaceKind',
+          'startedAt',
+          'status',
+          'workflowId',
+          'workflowName',
+        ].sort(),
+      )
+      expect(created.task).not.toHaveProperty('ownerUserId')
+      expect(created.task).not.toHaveProperty('owner')
+    })
+
+    test('POST with unknown workflow id -> 404', async () => {
+      const res = await req(h.app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflowId: '01HFAKE',
+          name: 'fixture-task',
+          repoUrl: h.repoUrl,
+          ref: 'main',
           inputs: {},
         }),
       })
-      // 接口本身成功返回（准备是后台步骤），任务行留下来且**随后**转 failed。
-      expect(res.status).toBe(201)
-      const created = (await res.json()) as { id: string }
-      // RFC-287 G7 启动异步化之后，201 返回时准备才刚开始——这里必须等它落定再断言。
-      // 原版直接读就断言 failed，只在准备还是**同步**时才成立；那正是 G7 要消灭的
-      // 形态（proposal §2：任务行先落 pending，克隆/物化在后台推进）。
-      const deadline = Date.now() + 30_000
-      let row: { id: string; status: string } | undefined
-      for (;;) {
-        const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{
-          id: string
-          status: string
-        }>
-        expect(list.length).toBe(1)
-        row = list.find((x) => x.id === created.id)
-        if (row?.status === 'failed' || row?.status === 'done') break
-        if (Date.now() > deadline) break
-        await new Promise((r) => setTimeout(r, 50))
-      }
-      expect(row?.status).toBe('failed')
-    } finally {
-      rmSync(notRepo, { recursive: true, force: true })
-    }
-  })
-
-  test('GET /:id roundtrips; GET / lists; status filter narrows', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    // Create three tasks; vary status by direct insert (POST always starts as
-    // pending/running so we can't observe filtering on POST alone).
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id: ulid(),
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt-a',
-      baseBranch: 'main',
-      branch: 'agent-workflow/A',
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now() - 3000,
-      finishedAt: Date.now() - 1000,
-    })
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id: ulid(),
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt-b',
-      baseBranch: 'main',
-      branch: 'agent-workflow/B',
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now() - 2000,
-      finishedAt: Date.now(),
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: string }).code).toBe('workflow-not-found')
     })
 
-    const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{ status: string }>
-    expect(list.length).toBeGreaterThanOrEqual(2)
-
-    const done = (await (await req(h.app, '/api/tasks?status=done')).json()) as Array<{
-      status: string
-    }>
-    expect(done.every((t) => t.status === 'done')).toBe(true)
-    expect(done.length).toBeGreaterThanOrEqual(1)
-  })
-
-  test('GET /api/tasks/:id unknown returns 404', async () => {
-    const res = await req(h.app, '/api/tasks/01HFAKEFAKE')
-    expect(res.status).toBe(404)
-    expect(((await res.json()) as { code: string }).code).toBe('task-not-found')
-  })
-
-  // Locks in the joined workflowName surfaces in both list + detail responses.
-  // Without the join, the tasks page can only render the opaque ULID — users
-  // can't tell at a glance which workflow a task came from.
-  test('GET / and /:id include the joined workflow name', async () => {
-    const wfId = ulid()
-    const wfName = 'design-pipeline'
-    await h.db.insert(workflows).values({
-      id: wfId,
-      name: wfName,
-      definition: JSON.stringify(EMPTY_DEF),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    const taskId = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id: taskId,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt-named',
-      baseBranch: 'main',
-      branch: 'agent-workflow/named',
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-
-    const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{
-      id: string
-      workflowId: string
-      workflowName: string | null
-    }>
-    const row = list.find((r) => r.id === taskId)
-    expect(row).toBeDefined()
-    expect(row?.workflowName).toBe(wfName)
-
-    const detail = (await (await req(h.app, `/api/tasks/${taskId}`)).json()) as {
-      workflowName: string | null
-    }
-    expect(detail.workflowName).toBe(wfName)
-  })
-
-  test('GET /:id exposes only the derived webhook source link; list stays narrow', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const taskId = ulid()
-    const commentUrl = 'https://gitlab.example/group/repo/-/merge_requests/8#note_99'
-    await h.db.insert(tasks).values({
-      name: 'webhook source fixture',
-      id: taskId,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt-webhook-source',
-      baseBranch: 'main',
-      branch: 'agent-workflow/webhook-source',
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      triggerContextJson: JSON.stringify({
-        trigger: {
-          webhook: {
-            event_type: 'note',
-            provider: 'gitlab',
-            comment_url: commentUrl,
-            comment_text: 'never expose this text',
-            // 哨兵串必须**不可能**出现在其它字段里。原来用的是 `private`，而
-            // detail 里带着 `repoPath`——macOS 上 `/tmp` 是 `/private/tmp` 的软链，
-            // 任何把 TMPDIR 落在真实路径下的跑法（分片跑测很常见）都会让下面那条
-            // `not.toContain('private')` 命中**路径**而不是泄漏，报一个与本用例
-            // 毫无关系的红。换成带前缀的唯一标记，断言意图逐字不变。
-            event_json: '{"aw-trigger-context-must-not-leak":true}',
+    // Regression: proposal.md §静态校验 mandates "校验失败...阻止启动 task".
+    // A workflow whose definition fails the 5-rule static validator must not
+    // create a task row, must not touch the worktree, and must surface the
+    // validator's issue list to the caller so the UI can show what to fix.
+    test('POST with workflow that fails static validation -> 422 workflow-invalid; no task row created', async () => {
+      // Edge points at a non-existent target node — that's a deterministic
+      // edge-target-node-missing error from the validator.
+      const badDef: WorkflowDefinition = {
+        $schema_version: 1,
+        inputs: [],
+        nodes: [{ id: 'in1', kind: 'input', inputKey: 'x' } as WorkflowDefinition['nodes'][number]],
+        edges: [
+          {
+            id: 'e1',
+            source: { nodeId: 'in1', portName: 'x' },
+            target: { nodeId: 'ghost', portName: 'y' },
           },
-        },
-      }),
+        ],
+      }
+      const wfId = await seedWorkflow(h.db, badDef)
+      const res = await req(h.app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflowId: wfId,
+          name: 'fixture-task',
+          repoUrl: h.repoUrl,
+          ref: 'main',
+          inputs: {},
+        }),
+      })
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as {
+        code: string
+        details?: { issues?: Array<{ code: string }> }
+      }
+      expect(body.code).toBe('workflow-invalid')
+      expect(body.details?.issues?.some((i) => i.code === 'edge-target-node-missing')).toBe(true)
+
+      // No task row was created — validation gate must run before any side effects.
+      const list = (await (await req(h.app, '/api/tasks')).json()) as Array<unknown>
+      expect(list.length).toBe(0)
     })
 
-    const response = await req(h.app, `/api/tasks/${taskId}`)
-    expect(response.status).toBe(200)
-    const detail = (await response.json()) as Record<string, unknown>
-    expect(detail.webhookSourceLink).toEqual({ kind: 'comment', url: commentUrl })
-    expect(detail).not.toHaveProperty('triggerContextJson')
-    expect(detail).not.toHaveProperty('triggerContext')
-    expect(JSON.stringify(detail)).not.toContain('never expose this text')
-    expect(JSON.stringify(detail)).not.toContain('aw-trigger-context-must-not-leak')
+    test('POST with a non-git source lands a failed task row with the git reason (RFC-287 G7)', async () => {
+      // RFC-359 AC-6 例外：单引擎，**登记的行为分叉之二**（`docs/audit-backlog.md`）。
+      // 同一个「源不是 git 仓」的启动请求：SQLite 根回 **201**（接口先成功、任务行留下、
+      // 准备在后台失败后转 failed——这正是本判据要锁的 RFC-287 G7 形态）；
+      // PostgreSQL 根回 **400**，请求当场被拒、根本不留任务行。
+      if (scope.harness.capabilities.provider !== 'sqlite') return
+      // **语义已变**（RFC-287 G7）。旧行为：URL 源在任务行存在之前解析，克隆失败
+      // 直接 400 且**什么都不留**——用户点了启动，转半天圈，最后一个错误码，任务
+      // 列表里空空如也，看不到原因也没法重试。
+      //
+      // 新行为：任务先落 `pending`（不新增状态），准备在后台推进；克隆失败把任务
+      // 转 `failed`，git 原文留在行上，时间线上还有一条 `__repo_prep__` 步骤可点
+      // 重试。本用例据此重写——它锁的是「失败留痕」，正是 G7 的核心交付。
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const notRepo = mkdtempSync(join(tmpdir(), 'aw-notrepo-'))
+      try {
+        const res = await req(h.app, '/api/tasks', {
+          method: 'POST',
+          body: JSON.stringify({
+            workflowId: wfId,
+            name: 'fixture-task',
+            repoUrl: remoteUrlFor(notRepo),
+            inputs: {},
+          }),
+        })
+        // 接口本身成功返回（准备是后台步骤），任务行留下来且**随后**转 failed。
+        expect(res.status).toBe(201)
+        const created = (await res.json()) as { id: string }
+        // RFC-287 G7 启动异步化之后，201 返回时准备才刚开始——这里必须等它落定再断言。
+        // 原版直接读就断言 failed，只在准备还是**同步**时才成立；那正是 G7 要消灭的
+        // 形态（proposal §2：任务行先落 pending，克隆/物化在后台推进）。
+        const deadline = Date.now() + 30_000
+        let row: { id: string; status: string } | undefined
+        for (;;) {
+          const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{
+            id: string
+            status: string
+          }>
+          expect(list.length).toBe(1)
+          row = list.find((x) => x.id === created.id)
+          if (row?.status === 'failed' || row?.status === 'done') break
+          if (Date.now() > deadline) break
+          await new Promise((r) => setTimeout(r, 50))
+        }
+        expect(row?.status).toBe('failed')
+      } finally {
+        rmSync(notRepo, { recursive: true, force: true })
+      }
+    })
 
-    const list = (await (await req(h.app, '/api/tasks')).json()) as Array<Record<string, unknown>>
-    expect(list.find((row) => row.id === taskId)).not.toHaveProperty('webhookSourceLink')
-  })
-
-  test('POST invalid body returns 422', async () => {
-    const res = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        workflowId: '',
+    test('GET /:id roundtrips; GET / lists; status filter narrows', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      // Create three tasks; vary status by direct insert (POST always starts as
+      // pending/running so we can't observe filtering on POST alone).
+      await h.db.insert(tasks).values({
         name: 'fixture-task',
-        repoUrl: '',
-        inputs: {},
-      }),
-    })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('task-invalid')
-  })
 
-  test('POST /:id/cancel on a completed task -> 409 task-not-cancelable', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now() - 1000,
-      finishedAt: Date.now(),
-    })
-    const res = await req(h.app, `/api/tasks/${id}/cancel`, { method: 'POST' })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe('task-not-cancelable')
-  })
-
-  test('POST /:id/cancel on an unknown task -> 404', async () => {
-    const res = await req(h.app, '/api/tasks/01HFAKEFAKE/cancel', { method: 'POST' })
-    expect(res.status).toBe(404)
-  })
-
-  test('POST /:id/cancel on a stuck-running task (no active controller) flips to canceled', async () => {
-    // Simulate a row left in 'running' state without an in-process controller
-    // (e.g. after daemon restart). The cancel endpoint should still mark it
-    // canceled rather than block forever.
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now() - 1000,
-    })
-    const res = await req(h.app, `/api/tasks/${id}/cancel`, { method: 'POST' })
-    expect(res.status).toBe(200)
-    const task = (await res.json()) as { status: string; errorSummary: string }
-    expect(task.status).toBe('canceled')
-    expect(task.errorSummary).toContain('canceled')
-  })
-
-  test('all /api/tasks/* require token', async () => {
-    expect((await h.app.request('/api/tasks')).status).toBe(401)
-  })
-
-  test('GET /:id/node-runs returns empty for a freshly-started task', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const post = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
+        id: ulid(),
         workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/wt-a',
+        baseBranch: 'main',
+        branch: 'agent-workflow/A',
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now() - 3000,
+        finishedAt: Date.now() - 1000,
+      })
+      await h.db.insert(tasks).values({
         name: 'fixture-task',
-        repoUrl: h.repoUrl,
-        ref: 'main',
-        inputs: {},
-      }),
-    })
-    const { id } = (await post.json()) as { id: string }
-    const res = await req(h.app, `/api/tasks/${id}/node-runs`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { runs: unknown[]; outputs: unknown[] }
-    expect(Array.isArray(body.runs)).toBe(true)
-    expect(Array.isArray(body.outputs)).toBe(true)
-    // Empty workflow → scheduler may have inserted 0 runs by the time we
-    // check; either way the shape is valid.
-    expect(body.outputs.length).toBe(0)
-  })
 
-  test('GET /:id/node-runs on unknown task -> 404', async () => {
-    const res = await req(h.app, '/api/tasks/01HFAKEFAKE/node-runs')
-    expect(res.status).toBe(404)
-  })
-
-  test('GET /:id/diff returns the worktree diff vs baseCommit', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const post = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
+        id: ulid(),
         workflowId: wfId,
-        name: 'fixture-task',
-        repoUrl: h.repoUrl,
-        ref: 'main',
-        inputs: {},
-      }),
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/wt-b',
+        baseBranch: 'main',
+        branch: 'agent-workflow/B',
+        status: 'failed',
+        inputs: '{}',
+        startedAt: Date.now() - 2000,
+        finishedAt: Date.now(),
+      })
+
+      const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{ status: string }>
+      expect(list.length).toBeGreaterThanOrEqual(2)
+
+      const done = (await (await req(h.app, '/api/tasks?status=done')).json()) as Array<{
+        status: string
+      }>
+      expect(done.every((t) => t.status === 'done')).toBe(true)
+      expect(done.length).toBeGreaterThanOrEqual(1)
     })
-    const { id } = (await post.json()) as { id: string }
-    const worktreePath = await preparedWorktree(h.db, id)
 
-    // Modify a tracked file in the worktree to produce a real diff.
-    writeFileSync(join(worktreePath, 'README.md'), '# changed\n')
+    test('GET /api/tasks/:id unknown returns 404', async () => {
+      const res = await req(h.app, '/api/tasks/01HFAKEFAKE')
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: string }).code).toBe('task-not-found')
+    })
 
-    const res = await req(h.app, `/api/tasks/${id}/diff`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      diff: string
-      baseCommit: string | null
-      truncated: boolean
-    }
-    expect(body.baseCommit).toMatch(/^[a-f0-9]{40}$/)
-    expect(body.truncated).toBe(false)
-    expect(body.diff).toContain('README.md')
-    expect(body.diff).toContain('# changed')
-  })
+    // Locks in the joined workflowName surfaces in both list + detail responses.
+    // Without the join, the tasks page can only render the opaque ULID — users
+    // can't tell at a glance which workflow a task came from.
+    test('GET / and /:id include the joined workflow name', async () => {
+      const wfId = ulid()
+      const wfName = 'design-pipeline'
+      await h.db.insert(workflows).values({
+        id: wfId,
+        name: wfName,
+        definition: JSON.stringify(EMPTY_DEF),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      const taskId = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
 
-  test('GET /:id/diff includes untracked files', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const post = await req(h.app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
+        id: taskId,
         workflowId: wfId,
-        name: 'fixture-task',
-        repoUrl: h.repoUrl,
-        ref: 'main',
-        inputs: {},
-      }),
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/wt-named',
+        baseBranch: 'main',
+        branch: 'agent-workflow/named',
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+
+      const list = (await (await req(h.app, '/api/tasks')).json()) as Array<{
+        id: string
+        workflowId: string
+        workflowName: string | null
+      }>
+      const row = list.find((r) => r.id === taskId)
+      expect(row).toBeDefined()
+      expect(row?.workflowName).toBe(wfName)
+
+      const detail = (await (await req(h.app, `/api/tasks/${taskId}`)).json()) as {
+        workflowName: string | null
+      }
+      expect(detail.workflowName).toBe(wfName)
     })
-    const { id } = (await post.json()) as { id: string }
-    const worktreePath = await preparedWorktree(h.db, id)
-    writeFileSync(join(worktreePath, 'NEWFILE.md'), 'fresh\n')
 
-    const res = await req(h.app, `/api/tasks/${id}/diff`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { diff: string }
-    expect(body.diff).toContain('NEWFILE.md')
-    expect(body.diff).toContain('fresh')
-  })
+    test('GET /:id exposes only the derived webhook source link; list stays narrow', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const taskId = ulid()
+      const commentUrl = 'https://gitlab.example/group/repo/-/merge_requests/8#note_99'
+      await h.db.insert(tasks).values({
+        name: 'webhook source fixture',
+        id: taskId,
+        workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/wt-webhook-source',
+        baseBranch: 'main',
+        branch: 'agent-workflow/webhook-source',
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+        triggerContextJson: JSON.stringify({
+          trigger: {
+            webhook: {
+              event_type: 'note',
+              provider: 'gitlab',
+              comment_url: commentUrl,
+              comment_text: 'never expose this text',
+              // 哨兵串必须**不可能**出现在其它字段里。原来用的是 `private`，而
+              // detail 里带着 `repoPath`——macOS 上 `/tmp` 是 `/private/tmp` 的软链，
+              // 任何把 TMPDIR 落在真实路径下的跑法（分片跑测很常见）都会让下面那条
+              // `not.toContain('private')` 命中**路径**而不是泄漏，报一个与本用例
+              // 毫无关系的红。换成带前缀的唯一标记，断言意图逐字不变。
+              event_json: '{"aw-trigger-context-must-not-leak":true}',
+            },
+          },
+        }),
+      })
 
-  test('GET /:id/diff on a task without baseCommit -> 409', async () => {
-    // Simulate the early-error path where startTask couldn't even create the
-    // worktree (repo missing, base ref invalid, etc.).
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
+      const response = await req(h.app, `/api/tasks/${taskId}`)
+      expect(response.status).toBe(200)
+      const detail = (await response.json()) as Record<string, unknown>
+      expect(detail.webhookSourceLink).toEqual({ kind: 'comment', url: commentUrl })
+      expect(detail).not.toHaveProperty('triggerContextJson')
+      expect(detail).not.toHaveProperty('triggerContext')
+      expect(JSON.stringify(detail)).not.toContain('never expose this text')
+      expect(JSON.stringify(detail)).not.toContain('aw-trigger-context-must-not-leak')
 
-      id,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      baseCommit: null,
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
+      const list = (await (await req(h.app, '/api/tasks')).json()) as Array<Record<string, unknown>>
+      expect(list.find((row) => row.id === taskId)).not.toHaveProperty('webhookSourceLink')
     })
-    const res = await req(h.app, `/api/tasks/${id}/diff`)
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe('task-no-base-commit')
-  })
 
-  test('GET /:id/diff when worktree dir is missing -> 410', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/aw-nope-' + id,
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      baseCommit: 'deadbeef'.repeat(5),
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
+    test('POST invalid body returns 422', async () => {
+      const res = await req(h.app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflowId: '',
+          name: 'fixture-task',
+          repoUrl: '',
+          inputs: {},
+        }),
+      })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('task-invalid')
     })
-    const res = await req(h.app, `/api/tasks/${id}/diff`)
-    expect(res.status).toBe(410)
-    expect(((await res.json()) as { code: string }).code).toBe('task-worktree-missing')
-  })
 
-  test('GET /:id/diff when worktree dir EXISTS but is not a git repo -> 410', async () => {
-    // Regression: a worktree dir can outlive its source repo (moved/deleted),
-    // so `existsSync` passes but `git diff` fails. Before the fix this leaked a
-    // 500 with git's entire `--no-index` usage block as the message. It must
-    // now be the same clean 410 the fully-missing-dir case returns.
-    const notARepo = mkdtempSync(join(tmpdir(), 'aw-notrepo-'))
-    try {
+    test('POST /:id/cancel on a completed task -> 409 task-not-cancelable', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
       await h.db.insert(tasks).values({
         name: 'fixture-task',
+
         id,
         workflowId: wfId,
         workflowSnapshot: '{}',
         repoPath: h.repoPath,
-        worktreePath: notARepo,
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now() - 1000,
+        finishedAt: Date.now(),
+      })
+      const res = await req(h.app, `/api/tasks/${id}/cancel`, { method: 'POST' })
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as { code: string }).code).toBe('task-not-cancelable')
+    })
+
+    test('POST /:id/cancel on an unknown task -> 404', async () => {
+      const res = await req(h.app, '/api/tasks/01HFAKEFAKE/cancel', { method: 'POST' })
+      expect(res.status).toBe(404)
+    })
+
+    test('POST /:id/cancel on a stuck-running task (no active controller) flips to canceled', async () => {
+      // Simulate a row left in 'running' state without an in-process controller
+      // (e.g. after daemon restart). The cancel endpoint should still mark it
+      // canceled rather than block forever.
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id,
+        workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now() - 1000,
+      })
+      const res = await req(h.app, `/api/tasks/${id}/cancel`, { method: 'POST' })
+      expect(res.status).toBe(200)
+      const task = (await res.json()) as { status: string; errorSummary: string }
+      expect(task.status).toBe('canceled')
+      expect(task.errorSummary).toContain('canceled')
+    })
+
+    test('all /api/tasks/* require token', async () => {
+      expect((await h.app.request('/api/tasks')).status).toBe(401)
+    })
+
+    test('GET /:id/node-runs returns empty for a freshly-started task', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const post = await req(h.app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflowId: wfId,
+          name: 'fixture-task',
+          repoUrl: h.repoUrl,
+          ref: 'main',
+          inputs: {},
+        }),
+      })
+      const { id } = (await post.json()) as { id: string }
+      const res = await req(h.app, `/api/tasks/${id}/node-runs`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { runs: unknown[]; outputs: unknown[] }
+      expect(Array.isArray(body.runs)).toBe(true)
+      expect(Array.isArray(body.outputs)).toBe(true)
+      // Empty workflow → scheduler may have inserted 0 runs by the time we
+      // check; either way the shape is valid.
+      expect(body.outputs.length).toBe(0)
+    })
+
+    test('GET /:id/node-runs on unknown task -> 404', async () => {
+      const res = await req(h.app, '/api/tasks/01HFAKEFAKE/node-runs')
+      expect(res.status).toBe(404)
+    })
+
+    test('GET /:id/diff returns the worktree diff vs baseCommit', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const post = await req(h.app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflowId: wfId,
+          name: 'fixture-task',
+          repoUrl: h.repoUrl,
+          ref: 'main',
+          inputs: {},
+        }),
+      })
+      const { id } = (await post.json()) as { id: string }
+      const worktreePath = await preparedWorktree(h.db, id)
+
+      // Modify a tracked file in the worktree to produce a real diff.
+      writeFileSync(join(worktreePath, 'README.md'), '# changed\n')
+
+      const res = await req(h.app, `/api/tasks/${id}/diff`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        diff: string
+        baseCommit: string | null
+        truncated: boolean
+      }
+      expect(body.baseCommit).toMatch(/^[a-f0-9]{40}$/)
+      expect(body.truncated).toBe(false)
+      expect(body.diff).toContain('README.md')
+      expect(body.diff).toContain('# changed')
+    })
+
+    test('GET /:id/diff includes untracked files', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const post = await req(h.app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflowId: wfId,
+          name: 'fixture-task',
+          repoUrl: h.repoUrl,
+          ref: 'main',
+          inputs: {},
+        }),
+      })
+      const { id } = (await post.json()) as { id: string }
+      const worktreePath = await preparedWorktree(h.db, id)
+      writeFileSync(join(worktreePath, 'NEWFILE.md'), 'fresh\n')
+
+      const res = await req(h.app, `/api/tasks/${id}/diff`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { diff: string }
+      expect(body.diff).toContain('NEWFILE.md')
+      expect(body.diff).toContain('fresh')
+    })
+
+    test('GET /:id/diff on a task without baseCommit -> 409', async () => {
+      // Simulate the early-error path where startTask couldn't even create the
+      // worktree (repo missing, base ref invalid, etc.).
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id,
+        workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        baseCommit: null,
+        status: 'failed',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      const res = await req(h.app, `/api/tasks/${id}/diff`)
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as { code: string }).code).toBe('task-no-base-commit')
+    })
+
+    test('GET /:id/diff when worktree dir is missing -> 410', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id,
+        workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/aw-nope-' + id,
         baseBranch: 'main',
         branch: `agent-workflow/${id}`,
         baseCommit: 'deadbeef'.repeat(5),
@@ -650,440 +627,497 @@ describe('task HTTP routes', () => {
       })
       const res = await req(h.app, `/api/tasks/${id}/diff`)
       expect(res.status).toBe(410)
-      const body = (await res.json()) as { code: string; message: string }
-      expect(body.code).toBe('task-worktree-missing')
-      // The message stays a single actionable line — no git usage-block spew.
-      expect(body.message).not.toContain('usage: git diff')
-    } finally {
-      rmSync(notARepo, { recursive: true, force: true })
-    }
-  })
+      expect(((await res.json()) as { code: string }).code).toBe('task-worktree-missing')
+    })
 
-  test('GET /:id/structural-diff when worktree dir EXISTS but is not a git repo -> 410', async () => {
-    // RFC-089 P1: the structural service shared the same `existsSync`-only guard
-    // as the textual diff, so a worktree dir that outlived its source repo
-    // reached `gitChangedFiles` and 500'd. `isGitWorkTree` must collapse it to
-    // the same clean 410 (no persisted artifact exists for this fixture task).
-    const notARepo = mkdtempSync(join(tmpdir(), 'aw-notrepo-struct-'))
-    try {
+    test('GET /:id/diff when worktree dir EXISTS but is not a git repo -> 410', async () => {
+      // Regression: a worktree dir can outlive its source repo (moved/deleted),
+      // so `existsSync` passes but `git diff` fails. Before the fix this leaked a
+      // 500 with git's entire `--no-index` usage block as the message. It must
+      // now be the same clean 410 the fully-missing-dir case returns.
+      const notARepo = mkdtempSync(join(tmpdir(), 'aw-notrepo-'))
+      try {
+        const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+        const id = ulid()
+        await h.db.insert(tasks).values({
+          name: 'fixture-task',
+          id,
+          workflowId: wfId,
+          workflowSnapshot: '{}',
+          repoPath: h.repoPath,
+          worktreePath: notARepo,
+          baseBranch: 'main',
+          branch: `agent-workflow/${id}`,
+          baseCommit: 'deadbeef'.repeat(5),
+          status: 'failed',
+          inputs: '{}',
+          startedAt: Date.now(),
+        })
+        const res = await req(h.app, `/api/tasks/${id}/diff`)
+        expect(res.status).toBe(410)
+        const body = (await res.json()) as { code: string; message: string }
+        expect(body.code).toBe('task-worktree-missing')
+        // The message stays a single actionable line — no git usage-block spew.
+        expect(body.message).not.toContain('usage: git diff')
+      } finally {
+        rmSync(notARepo, { recursive: true, force: true })
+      }
+    })
+
+    test('GET /:id/structural-diff when worktree dir EXISTS but is not a git repo -> 410', async () => {
+      // RFC-089 P1: the structural service shared the same `existsSync`-only guard
+      // as the textual diff, so a worktree dir that outlived its source repo
+      // reached `gitChangedFiles` and 500'd. `isGitWorkTree` must collapse it to
+      // the same clean 410 (no persisted artifact exists for this fixture task).
+      const notARepo = mkdtempSync(join(tmpdir(), 'aw-notrepo-struct-'))
+      try {
+        const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+        const id = ulid()
+        await h.db.insert(tasks).values({
+          name: 'fixture-task',
+          id,
+          workflowId: wfId,
+          workflowSnapshot: '{}',
+          repoPath: h.repoPath,
+          worktreePath: notARepo,
+          baseBranch: 'main',
+          branch: `agent-workflow/${id}`,
+          baseCommit: 'deadbeef'.repeat(5),
+          status: 'failed',
+          inputs: '{}',
+          startedAt: Date.now(),
+        })
+        const res = await req(h.app, `/api/tasks/${id}/structural-diff`)
+        expect(res.status).toBe(410)
+        const body = (await res.json()) as { code: string; message: string }
+        expect(body.code).toBe('task-worktree-missing')
+        expect(body.message).not.toContain('usage: git diff')
+      } finally {
+        rmSync(notARepo, { recursive: true, force: true })
+      }
+    })
+
+    test('GET /:id/node-runs/:nodeRunId/events paginates with ?since', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const taskId = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id: taskId,
+        workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      const nrId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: nrId,
+        taskId,
+        nodeId: 'n1',
+        status: 'running',
+        startedAt: Date.now(),
+      })
+      for (let i = 0; i < 5; i++) {
+        await h.db.insert(nodeRunEvents).values({
+          nodeRunId: nrId,
+          ts: Date.now() + i,
+          kind: 'text',
+          payload: JSON.stringify({ chunk: i }),
+        })
+      }
+
+      // First batch — no since cursor, expect all 5.
+      const r1 = await req(h.app, `/api/tasks/${taskId}/node-runs/${nrId}/events`)
+      expect(r1.status).toBe(200)
+      const body1 = (await r1.json()) as { events: Array<{ id: number }>; cursor: number | null }
+      expect(body1.events.length).toBe(5)
+      expect(body1.cursor).toBe(body1.events[4]?.id ?? null)
+
+      // Second batch — since=mid, expect tail.
+      const mid = body1.events[2]?.id ?? 0
+      const r2 = await req(h.app, `/api/tasks/${taskId}/node-runs/${nrId}/events?since=${mid}`)
+      const body2 = (await r2.json()) as { events: Array<{ id: number }> }
+      expect(body2.events.length).toBe(2)
+      expect(body2.events[0]?.id).toBe(body1.events[3]?.id)
+    })
+
+    test('GET node-runs events refuses a node_run that belongs to a different task -> 404', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const idA = ulid()
+      const idB = ulid()
+      await h.db.insert(tasks).values([
+        {
+          id: idA,
+          name: 'fixture-task',
+          workflowId: wfId,
+          workflowSnapshot: '{}',
+          repoPath: h.repoPath,
+          worktreePath: '/tmp/a',
+          baseBranch: 'main',
+          branch: `agent-workflow/${idA}`,
+          status: 'running',
+          inputs: '{}',
+          startedAt: Date.now(),
+        },
+        {
+          id: idB,
+          name: 'fixture-task',
+          workflowId: wfId,
+          workflowSnapshot: '{}',
+          repoPath: h.repoPath,
+          worktreePath: '/tmp/b',
+          baseBranch: 'main',
+          branch: `agent-workflow/${idB}`,
+          status: 'running',
+          inputs: '{}',
+          startedAt: Date.now(),
+        },
+      ])
+      const nrA = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: nrA,
+        taskId: idA,
+        nodeId: 'n1',
+        status: 'running',
+        startedAt: Date.now(),
+      })
+      const res = await req(h.app, `/api/tasks/${idB}/node-runs/${nrA}/events`)
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: string }).code).toBe('node-run-not-found')
+    })
+
+    test('POST /:id/resume on a non-failed task → 409', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
       await h.db.insert(tasks).values({
         name: 'fixture-task',
+
         id,
         workflowId: wfId,
         workflowSnapshot: '{}',
         repoPath: h.repoPath,
-        worktreePath: notARepo,
+        worktreePath: '/tmp/wt',
         baseBranch: 'main',
         branch: `agent-workflow/${id}`,
-        baseCommit: 'deadbeef'.repeat(5),
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      const res = await req(h.app, `/api/tasks/${id}/resume`, { method: 'POST' })
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as { code: string }).code).toBe('task-not-resumable')
+    })
+
+    test('POST /:id/nodes/:nrId/retry while task is running → 409', async () => {
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id,
+        workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: h.repoPath,
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      const nrId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: nrId,
+        taskId: id,
+        nodeId: 'n1',
+        status: 'failed',
+        startedAt: Date.now(),
+      })
+      const res = await req(h.app, `/api/tasks/${id}/nodes/${nrId}/retry`, { method: 'POST' })
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as { code: string }).code).toBe('task-still-running')
+    })
+
+    test('POST /:id/nodes/:nrId/retry on a failed task flips status → pending', async () => {
+      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
+      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
+      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
+      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
+      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
+      if (scope.harness.capabilities.provider !== 'sqlite') return
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id,
+        workflowId: wfId,
+        workflowSnapshot: JSON.stringify({
+          $schema_version: 1,
+          inputs: [],
+          nodes: [{ id: 'n1', kind: 'agent-single' }],
+          edges: [],
+        }),
+        repoPath: h.repoPath,
+        worktreePath: '', // empty so retry skips rollback
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
         status: 'failed',
         inputs: '{}',
         startedAt: Date.now(),
+        finishedAt: Date.now(),
+        errorSummary: 'boom',
       })
-      const res = await req(h.app, `/api/tasks/${id}/structural-diff`)
-      expect(res.status).toBe(410)
-      const body = (await res.json()) as { code: string; message: string }
-      expect(body.code).toBe('task-worktree-missing')
-      expect(body.message).not.toContain('usage: git diff')
-    } finally {
-      rmSync(notARepo, { recursive: true, force: true })
-    }
-  })
-
-  test('GET /:id/node-runs/:nodeRunId/events paginates with ?since', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const taskId = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id: taskId,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrId,
-      taskId,
-      nodeId: 'n1',
-      status: 'running',
-      startedAt: Date.now(),
-    })
-    for (let i = 0; i < 5; i++) {
-      await h.db.insert(nodeRunEvents).values({
-        nodeRunId: nrId,
-        ts: Date.now() + i,
-        kind: 'text',
-        payload: JSON.stringify({ chunk: i }),
+      const nrId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: nrId,
+        taskId: id,
+        nodeId: 'n1',
+        status: 'failed',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
       })
-    }
+      const res = await req(h.app, `/api/tasks/${id}/nodes/${nrId}/retry?cascade=false`, {
+        method: 'POST',
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { status: string; errorSummary: string | null }
+      expect(body.status).toBe('pending')
+      expect(body.errorSummary).toBeNull()
+    })
 
-    // First batch — no since cursor, expect all 5.
-    const r1 = await req(h.app, `/api/tasks/${taskId}/node-runs/${nrId}/events`)
-    expect(r1.status).toBe(200)
-    const body1 = (await r1.json()) as { events: Array<{ id: number }>; cursor: number | null }
-    expect(body1.events.length).toBe(5)
-    expect(body1.cursor).toBe(body1.events[4]?.id ?? null)
-
-    // Second batch — since=mid, expect tail.
-    const mid = body1.events[2]?.id ?? 0
-    const r2 = await req(h.app, `/api/tasks/${taskId}/node-runs/${nrId}/events?since=${mid}`)
-    const body2 = (await r2.json()) as { events: Array<{ id: number }> }
-    expect(body2.events.length).toBe(2)
-    expect(body2.events[0]?.id).toBe(body1.events[3]?.id)
-  })
-
-  test('GET node-runs events refuses a node_run that belongs to a different task -> 404', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const idA = ulid()
-    const idB = ulid()
-    await h.db.insert(tasks).values([
-      {
-        id: idA,
+    // Regression: clicking "retry" on a failed clarify-driven rerun used to
+    // mint a fresh row at retryIndex+1 with clarifyIteration defaulted to 0,
+    // which made buildClarifyPromptContext early-return undefined and the
+    // agent's multi-round clarify Q&A vanished from the next prompt. The
+    // freshly minted retry row must inherit (iteration, clarifyIteration,
+    // reviewIteration, shardKey, parentNodeRunId, preSnapshot) from the row
+    // the user picked.
+    test('POST /:id/nodes/:nrId/retry preserves clarifyIteration / iteration / etc. on the retried row', async () => {
+      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
+      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
+      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
+      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
+      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
+      if (scope.harness.capabilities.provider !== 'sqlite') return
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
         name: 'fixture-task',
+
+        id,
         workflowId: wfId,
-        workflowSnapshot: '{}',
+        workflowSnapshot: JSON.stringify({
+          $schema_version: 1,
+          inputs: [],
+          nodes: [{ id: 'agent1', kind: 'agent-single' }],
+          edges: [],
+        }),
         repoPath: h.repoPath,
-        worktreePath: '/tmp/a',
+        worktreePath: '', // skip rollback path
         baseBranch: 'main',
-        branch: `agent-workflow/${idA}`,
-        status: 'running',
+        branch: `agent-workflow/${id}`,
+        status: 'failed',
         inputs: '{}',
         startedAt: Date.now(),
-      },
-      {
-        id: idB,
+        finishedAt: Date.now(),
+        errorSummary: 'boom',
+      })
+      // Original clarify-driven rerun row: a failed attempt mid-multi-round.
+      const failedRunId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: failedRunId,
+        taskId: id,
+        nodeId: 'agent1',
+        status: 'failed',
+        retryIndex: 0,
+        iteration: 2,
+        reviewIteration: 1,
+        shardKey: 'shard-a',
+        parentNodeRunId: null,
+        preSnapshot: 'snap-abcdef',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      const res = await req(h.app, `/api/tasks/${id}/nodes/${failedRunId}/retry?cascade=false`, {
+        method: 'POST',
+      })
+      expect(res.status).toBe(200)
+      const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+      const fresh = rows.find((r) => r.id !== failedRunId)
+      expect(fresh).toBeDefined()
+      expect(fresh!.nodeId).toBe('agent1')
+      expect(fresh!.retryIndex).toBe(1)
+      // The fields that locked the bug:
+      expect(fresh!.iteration).toBe(2)
+      expect(fresh!.reviewIteration).toBe(1)
+      expect(fresh!.shardKey).toBe('shard-a')
+      expect(fresh!.preSnapshot).toBe('snap-abcdef')
+    })
+
+    // Boundary: cascade retry of an UPSTREAM node must not pollute the
+    // downstream node's clarifyIteration with the upstream's value. Each node
+    // has its own clarify counter; the fresh downstream row must inherit from
+    // its own latest historical row, not from the explicitly-retried target.
+    test('POST /:id/nodes/:nrId/retry?cascade=true: downstream inherits from its own latest, not from runRow', async () => {
+      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
+      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
+      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
+      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
+      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
+      if (scope.harness.capabilities.provider !== 'sqlite') return
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
         name: 'fixture-task',
+
+        id,
         workflowId: wfId,
-        workflowSnapshot: '{}',
+        workflowSnapshot: JSON.stringify({
+          $schema_version: 1,
+          inputs: [],
+          nodes: [
+            { id: 'A', kind: 'agent-single' },
+            { id: 'B', kind: 'agent-single' },
+          ],
+          edges: [
+            {
+              id: 'e1',
+              source: { nodeId: 'A', portName: 'out' },
+              target: { nodeId: 'B', portName: 'in' },
+            },
+          ],
+        }),
         repoPath: h.repoPath,
-        worktreePath: '/tmp/b',
+        worktreePath: '', // skip rollback
         baseBranch: 'main',
-        branch: `agent-workflow/${idB}`,
-        status: 'running',
+        branch: `agent-workflow/${id}`,
+        status: 'failed',
         inputs: '{}',
         startedAt: Date.now(),
-      },
-    ])
-    const nrA = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrA,
-      taskId: idA,
-      nodeId: 'n1',
-      status: 'running',
-      startedAt: Date.now(),
+        finishedAt: Date.now(),
+        errorSummary: 'boom',
+      })
+      // Target (A): failed row at ci=4 — the user explicitly retried this.
+      const aFailedId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: aFailedId,
+        taskId: id,
+        nodeId: 'A',
+        status: 'failed',
+        retryIndex: 0,
+        iteration: 0,
+        reviewIteration: 0,
+        startedAt: Date.now() - 100,
+        finishedAt: Date.now() - 50,
+      })
+      // Downstream (B): its own done row at a DIFFERENT ci (=1) — cascade must
+      // inherit B's own state, not bleed A's ci=4 into B's fresh row.
+      const bDoneId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: bDoneId,
+        taskId: id,
+        nodeId: 'B',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        reviewIteration: 2,
+        shardKey: 'b-shard',
+        startedAt: Date.now() - 80,
+        finishedAt: Date.now() - 40,
+      })
+      const res = await req(h.app, `/api/tasks/${id}/nodes/${aFailedId}/retry`, { method: 'POST' })
+      expect(res.status).toBe(200)
+      const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+      const freshA = rows.find((r) => r.nodeId === 'A' && r.id !== aFailedId)
+      const freshB = rows.find((r) => r.nodeId === 'B' && r.id !== bDoneId)
+      expect(freshA).toBeDefined()
+      expect(freshB).toBeDefined()
+      // Target inherits from runRow (A's failed row): ci=4.
+      expect(freshA!.reviewIteration).toBe(0)
+      // Downstream inherits from B's own latest, NOT A's ci=4.
+      expect(freshB!.reviewIteration).toBe(2)
+      expect(freshB!.shardKey).toBe('b-shard')
     })
-    const res = await req(h.app, `/api/tasks/${idB}/node-runs/${nrA}/events`)
-    expect(res.status).toBe(404)
-    expect(((await res.json()) as { code: string }).code).toBe('node-run-not-found')
-  })
 
-  test('POST /:id/resume on a non-failed task → 409', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
+    // Boundary: the user can click retry on a HISTORICAL row (not the freshest
+    // attempt). The fix uses `runRow` for the target node specifically, so the
+    // fresh row must reflect the row the user picked — even if another row at
+    // a higher retryIndex exists with different clarifyIteration. Locks the
+    // `nodeId === runRow.nodeId ? runRow : prev` distinction.
+    test('POST /:id/nodes/:nrId/retry on a historical row: fresh row reflects runRow, not the highest-retryIndex prev', async () => {
+      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
+      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
+      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
+      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
+      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
+      if (scope.harness.capabilities.provider !== 'sqlite') return
+      const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const id = ulid()
+      await h.db.insert(tasks).values({
+        name: 'fixture-task',
 
-      id,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
+        id,
+        workflowId: wfId,
+        workflowSnapshot: JSON.stringify({
+          $schema_version: 1,
+          inputs: [],
+          nodes: [{ id: 'agent1', kind: 'agent-single' }],
+          edges: [],
+        }),
+        repoPath: h.repoPath,
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status: 'failed',
+        inputs: '{}',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+        errorSummary: 'boom',
+      })
+      // Older done row the user wants to retry from: retryIndex=0, ci=2.
+      const pickedId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: pickedId,
+        taskId: id,
+        nodeId: 'agent1',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 200,
+        finishedAt: Date.now() - 150,
+      })
+      // Newer done row at higher retryIndex with DIFFERENT ci — desc(retryIndex)
+      // would point retryNode at this row if it confused `prev` with `runRow`.
+      await h.db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId: id,
+        nodeId: 'agent1',
+        status: 'done',
+        retryIndex: 1,
+        iteration: 0,
+        startedAt: Date.now() - 100,
+        finishedAt: Date.now() - 50,
+      })
+      const res = await req(h.app, `/api/tasks/${id}/nodes/${pickedId}/retry?cascade=false`, {
+        method: 'POST',
+      })
+      expect(res.status).toBe(200)
+      const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+      // Fresh row is the one with retryIndex=2 (max+1) — neither of the seeded
+      // rows above. Find it by retryIndex.
+      const fresh = rows.find((r) => r.nodeId === 'agent1' && r.retryIndex === 2)
+      expect(fresh).toBeDefined()
+      // Critical: inherits from runRow (pickedId, ci=2), not from prev (ci=5).
     })
-    const res = await req(h.app, `/api/tasks/${id}/resume`, { method: 'POST' })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe('task-not-resumable')
-  })
-
-  test('POST /:id/nodes/:nrId/retry while task is running → 409', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: h.repoPath,
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrId,
-      taskId: id,
-      nodeId: 'n1',
-      status: 'failed',
-      startedAt: Date.now(),
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${nrId}/retry`, { method: 'POST' })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe('task-still-running')
-  })
-
-  test('POST /:id/nodes/:nrId/retry on a failed task flips status → pending', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: JSON.stringify({
-        $schema_version: 1,
-        inputs: [],
-        nodes: [{ id: 'n1', kind: 'agent-single' }],
-        edges: [],
-      }),
-      repoPath: h.repoPath,
-      worktreePath: '', // empty so retry skips rollback
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      errorSummary: 'boom',
-    })
-    const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrId,
-      taskId: id,
-      nodeId: 'n1',
-      status: 'failed',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${nrId}/retry?cascade=false`, {
-      method: 'POST',
-    })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { status: string; errorSummary: string | null }
-    expect(body.status).toBe('pending')
-    expect(body.errorSummary).toBeNull()
-  })
-
-  // Regression: clicking "retry" on a failed clarify-driven rerun used to
-  // mint a fresh row at retryIndex+1 with clarifyIteration defaulted to 0,
-  // which made buildClarifyPromptContext early-return undefined and the
-  // agent's multi-round clarify Q&A vanished from the next prompt. The
-  // freshly minted retry row must inherit (iteration, clarifyIteration,
-  // reviewIteration, shardKey, parentNodeRunId, preSnapshot) from the row
-  // the user picked.
-  test('POST /:id/nodes/:nrId/retry preserves clarifyIteration / iteration / etc. on the retried row', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: JSON.stringify({
-        $schema_version: 1,
-        inputs: [],
-        nodes: [{ id: 'agent1', kind: 'agent-single' }],
-        edges: [],
-      }),
-      repoPath: h.repoPath,
-      worktreePath: '', // skip rollback path
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      errorSummary: 'boom',
-    })
-    // Original clarify-driven rerun row: a failed attempt mid-multi-round.
-    const failedRunId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: failedRunId,
-      taskId: id,
-      nodeId: 'agent1',
-      status: 'failed',
-      retryIndex: 0,
-      iteration: 2,
-      reviewIteration: 1,
-      shardKey: 'shard-a',
-      parentNodeRunId: null,
-      preSnapshot: 'snap-abcdef',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${failedRunId}/retry?cascade=false`, {
-      method: 'POST',
-    })
-    expect(res.status).toBe(200)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-    const fresh = rows.find((r) => r.id !== failedRunId)
-    expect(fresh).toBeDefined()
-    expect(fresh!.nodeId).toBe('agent1')
-    expect(fresh!.retryIndex).toBe(1)
-    // The fields that locked the bug:
-    expect(fresh!.iteration).toBe(2)
-    expect(fresh!.reviewIteration).toBe(1)
-    expect(fresh!.shardKey).toBe('shard-a')
-    expect(fresh!.preSnapshot).toBe('snap-abcdef')
-  })
-
-  // Boundary: cascade retry of an UPSTREAM node must not pollute the
-  // downstream node's clarifyIteration with the upstream's value. Each node
-  // has its own clarify counter; the fresh downstream row must inherit from
-  // its own latest historical row, not from the explicitly-retried target.
-  test('POST /:id/nodes/:nrId/retry?cascade=true: downstream inherits from its own latest, not from runRow', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: JSON.stringify({
-        $schema_version: 1,
-        inputs: [],
-        nodes: [
-          { id: 'A', kind: 'agent-single' },
-          { id: 'B', kind: 'agent-single' },
-        ],
-        edges: [
-          {
-            id: 'e1',
-            source: { nodeId: 'A', portName: 'out' },
-            target: { nodeId: 'B', portName: 'in' },
-          },
-        ],
-      }),
-      repoPath: h.repoPath,
-      worktreePath: '', // skip rollback
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      errorSummary: 'boom',
-    })
-    // Target (A): failed row at ci=4 — the user explicitly retried this.
-    const aFailedId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: aFailedId,
-      taskId: id,
-      nodeId: 'A',
-      status: 'failed',
-      retryIndex: 0,
-      iteration: 0,
-      reviewIteration: 0,
-      startedAt: Date.now() - 100,
-      finishedAt: Date.now() - 50,
-    })
-    // Downstream (B): its own done row at a DIFFERENT ci (=1) — cascade must
-    // inherit B's own state, not bleed A's ci=4 into B's fresh row.
-    const bDoneId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: bDoneId,
-      taskId: id,
-      nodeId: 'B',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      reviewIteration: 2,
-      shardKey: 'b-shard',
-      startedAt: Date.now() - 80,
-      finishedAt: Date.now() - 40,
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${aFailedId}/retry`, { method: 'POST' })
-    expect(res.status).toBe(200)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-    const freshA = rows.find((r) => r.nodeId === 'A' && r.id !== aFailedId)
-    const freshB = rows.find((r) => r.nodeId === 'B' && r.id !== bDoneId)
-    expect(freshA).toBeDefined()
-    expect(freshB).toBeDefined()
-    // Target inherits from runRow (A's failed row): ci=4.
-    expect(freshA!.reviewIteration).toBe(0)
-    // Downstream inherits from B's own latest, NOT A's ci=4.
-    expect(freshB!.reviewIteration).toBe(2)
-    expect(freshB!.shardKey).toBe('b-shard')
-  })
-
-  // Boundary: the user can click retry on a HISTORICAL row (not the freshest
-  // attempt). The fix uses `runRow` for the target node specifically, so the
-  // fresh row must reflect the row the user picked — even if another row at
-  // a higher retryIndex exists with different clarifyIteration. Locks the
-  // `nodeId === runRow.nodeId ? runRow : prev` distinction.
-  test('POST /:id/nodes/:nrId/retry on a historical row: fresh row reflects runRow, not the highest-retryIndex prev', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: JSON.stringify({
-        $schema_version: 1,
-        inputs: [],
-        nodes: [{ id: 'agent1', kind: 'agent-single' }],
-        edges: [],
-      }),
-      repoPath: h.repoPath,
-      worktreePath: '',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      errorSummary: 'boom',
-    })
-    // Older done row the user wants to retry from: retryIndex=0, ci=2.
-    const pickedId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: pickedId,
-      taskId: id,
-      nodeId: 'agent1',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 200,
-      finishedAt: Date.now() - 150,
-    })
-    // Newer done row at higher retryIndex with DIFFERENT ci — desc(retryIndex)
-    // would point retryNode at this row if it confused `prev` with `runRow`.
-    await h.db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId: id,
-      nodeId: 'agent1',
-      status: 'done',
-      retryIndex: 1,
-      iteration: 0,
-      startedAt: Date.now() - 100,
-      finishedAt: Date.now() - 50,
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${pickedId}/retry?cascade=false`, {
-      method: 'POST',
-    })
-    expect(res.status).toBe(200)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-    // Fresh row is the one with retryIndex=2 (max+1) — neither of the seeded
-    // rows above. Find it by retryIndex.
-    const fresh = rows.find((r) => r.nodeId === 'agent1' && r.retryIndex === 2)
-    expect(fresh).toBeDefined()
-    // Critical: inherits from runRow (pickedId, ci=2), not from prev (ci=5).
-  })
-})
+  },
+)

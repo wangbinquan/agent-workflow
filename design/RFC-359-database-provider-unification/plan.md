@@ -8713,3 +8713,38 @@ helper 不在任何块里，却会被 provider 用例调用**，那才是真正�
 判据只认**立即求值**——`const db = () => harness.db` 与 `test(...)` / `beforeEach(...)` 里的读取
 都放过（回调晚于注册期）。同批配了负 fixture：立即读要抓到、推迟读与用例内读要放过，
 否则判据被改坏时整条会静默变成永远绿。
+
+## 5dd. `tasks.test.ts` 迁双引擎照出**两条真的路由行为分叉**（414 / open 109）
+
+迁法与 §5da/§5db 同形：app home 与 `AGENT_WORKFLOW_HOME` 的接管/还原/删除全归作用域，
+用例这边只剩「一个真 git 仓」和 after-commit pump（pump 必须**装配之前**装上——它挂的是进程级
+投递口，应用 composed 之后再装会漏掉首批事件）。58 条判据里 **53 条两侧一致**，
+**5 条不一致**——而这 5 条才是这次迁移真正的产出。
+
+### ① retry 一个 `worktreePath` 为空的失败任务：SQLite 200 / PostgreSQL 410
+
+SQLite 根直接重试并转 `pending`；PostgreSQL 根走 `assertWorktreePresentForResume`，
+空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ `410 task-worktree-missing`，文案还写成
+"likely reclaimed by worktree GC"。
+
+**两侧都不完全对**：`worktreeResumePreflight.ts` 自己的注释就写明空路径有两种形态——
+「被 GC 回收」与「从来没建出来」，后者该给 409 + 「重试准备仓库」而不是说成被回收。
+所以要定的是**一个统一语义**，不是挑一边照抄。
+
+### ② 启动一个源不是 git 仓的任务：SQLite 201 / PostgreSQL 400
+
+SQLite 根**先接受**（201，任务行留下，准备在后台失败后转 `failed`）——这正是 RFC-287 G7
+刻意设计并锁住的形态，前端靠 `__repo_prep__` 行分出「准备中 / 准备失败」第四态；
+PostgreSQL 根**当场拒绝**（400），不留任务行。于是 PG 部署上 G7 的那条用户路径
+（详情页看准备失败原因 → 点「重试准备」）**根本到不了**：没有任务行就没有详情页。
+这一条不是「谁更严格」的口味问题，是 **G7 的能力在 PG 上缺失**。
+
+### 处置
+
+5 条按 `scope.harness.capabilities.provider !== 'sqlite'` 登记为单引擎，**用例注释里逐条写明
+两侧各自返回什么、为什么**，并在 `docs/audit-backlog.md` 立项。没有在这一刀里改：
+①要定空 worktree 的统一前置检查与错误归因，②要决定 G7 的「先接受、后台失败」是否在 PG 上也成立
+——都是产品行为决策，不夹在测试迁移里做。
+
+**这正是 AC-6 的价值所在**：把测试迁到双引擎不是为了让账本变小，是为了让这种分叉在**有人看的地方**
+暴露出来。这两条在迁移之前，PostgreSQL 侧是零覆盖的。

@@ -4989,3 +4989,38 @@ session-lease 认领整笔事务重试）、流式持久化失败时的根因保
 
 **没有在本轮修**：与 RFC-359 无关，塞进一次测试迁移的提交里属于范围蔓延。单独立项，
 两条要分开查（① 像 WebKit 拖拽的环境问题，② 像真的产品/契约漂移）。
+
+## 两个组合根在 `/api/tasks` 上的**可观察行为分叉**（RFC-359 AC-6 迁 `tasks.test.ts` 时照出，2026-09-14）
+
+`tasks.test.ts` 迁到双引擎后 58 条判据里有 5 条两侧结果不同。它们都落在
+`TaskRouteOperations` 这一对上——本 RFC 已判它「不该合」，但**「不该合」说的是实现不共享，
+不等于行为可以分叉**。同一个 HTTP 请求给出不同状态码，就是用户可见的差异。
+
+### ① `POST /api/tasks/:id/nodes/:nodeRunId/retry`，任务行的 `worktreePath` 为空
+
+- **SQLite 根**：直接重试，`200` + 任务转 `pending`。
+- **PostgreSQL 根**：走 `assertWorktreePresentForResume`
+  （`modules/task-execution/application/worktreeResumePreflight.ts`），
+  空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ `410 task-worktree-missing`
+  （文案还写成 "likely reclaimed by worktree GC"）。
+
+值得注意的是**那个文件自己的注释就说这条归因是错的**：空路径既可能是「被 GC 回收」，
+也可能是「从来没建出来（物化失败 / 准备没跑完）」，后者该给 409 + 「重试准备仓库」，
+不该说成被回收。也就是说两侧都不完全对——SQLite 太宽（没做存在性前置检查），
+PostgreSQL 的错误归因在这一支上可能落错分支。**要定的是一个统一语义**，不是挑一边。
+影响 4 条判据（retry 的 flips-to-pending / 保留 clarifyIteration / cascade 下游继承 / 历史行重试）。
+
+### ② `POST /api/tasks`，`source` 不是 git 仓
+
+- **SQLite 根**：`201`——接口先成功、任务行留下，仓库准备在后台失败后把它转 `failed`。
+  这正是 RFC-287 G7 刻意设计并锁住的形态（前端靠 `__repo_prep__` 行分出「准备中/准备失败」第四态）。
+- **PostgreSQL 根**：`400`，请求当场被拒、**根本不留任务行**。
+
+于是 PostgreSQL 部署上，RFC-287 G7 的那条用户路径（在任务详情页看到准备失败原因、点「重试准备」）
+**到不了**——没有任务行就没有详情页。这一条不是「哪个更严格」的口味问题，是 G7 的能力在 PG 上缺失。
+
+### 现状与处置
+
+这 5 条判据已按 `scope.harness.capabilities.provider !== 'sqlite'` 登记为单引擎，用例注释里写明了
+两侧各自的返回与原因，**不掩盖**。要收口得先定语义（①统一空 worktree 的前置检查与错误归因；
+②决定 G7 的「先接受、后台失败」形态是否在 PG 上也要成立），属于产品行为决策，不夹在测试迁移里做。
