@@ -7727,3 +7727,53 @@ published silently"；另有 `rfc359-t19h-postgresql-migration-sequence` /
 - 先读一遍现有 import，已经有 `ProviderNeutralDatabase` / `describeEachProvider` 的就不再插入；
 - 所有改动收成 `{start, end, text}` 编辑列表、按位置**倒序**施加，避免位移串位；
 - 收尾才用正则清 `describe` / `resolve` 这两个变成死的 import（它们是纯 import 行，文本安全）。
+
+## 5by. `bun test` 不做类型检查——2230fe977 双引擎全绿，tsc 是红的
+
+27 个迁移里 **11 个过不了 typecheck**：它们把 `harness.db`（`ProviderNeutralDatabase`）传给了形参
+仍写死 `DbClient` / `LegacySqliteTaskDatabase` 的既有函数。运行时不报，因为被调用的那些函数体
+恰好只用中立 API（`bun test` 两个引擎都跑绿）；**编译期报**，因为形参类型没放宽。
+
+于是 main 红在 `Lint + Typecheck + Format` 这一格，而我本地只跑了「改过的文件的 eslint + prettier
++ 那几个测试」。**验证清单里从此必须有 `bun run typecheck`**——它是唯一能看见这类问题的门。
+
+卡住的 callee（按错误数）：
+
+| callee                                   | 定义处                                                              | 形参                        |
+| ---------------------------------------- | ------------------------------------------------------------------- | --------------------------- |
+| `healScheduledLaunchPayloads` 等 scheduled-tasks 一族 | `services/scheduledTasks.ts`                             | `DbClient`                  |
+| `assertWorkflowLaunchable` / `buildStartTaskDeps`     | `services/taskLaunchGate.ts` / `services/startTaskDeps.ts` | `LegacySqliteTaskDatabase` |
+| `createEmployeeReactionRoundQueries`      | `modules/digital-employee/composition.ts`                           | `DbClient`（另有 PG 孪生）  |
+| `inspectDigitalEmployeeHumanReviewState`  | `modules/task-execution/composition/digitalEmployeeExecution.ts`    | `DbClient`                  |
+| `transitionTaskStatusByEvent`             | `platform/persistence/sqlite/taskLifecycle.ts`                      | `DbClient`                  |
+| `importWorkflowYaml`                      | `modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts`   | `DbClient`                  |
+
+**实测过一次「一刀放宽」**：`LegacySqliteTaskDatabase = DbClient` 改成 `= ProviderNeutralDatabase`
+后 src 只剩 4 个错（`scheduleLaunch.ts` 3 + `startTaskDeps.ts` 1），但**只消掉 5 个测试侧错误**；
+再把 `legacySqliteTransportMechanisms.ts` 里那条独立的 `export type { DbClient as
+LegacySqliteTaskDatabase }` 一起统一，`services/task.ts` 立刻炸出 34 个——它的函数体真的在用
+SQLite 同步面。所以这不是一个别名的事，是**一波按 callee 逐个放宽**的工作，单独立波次做。
+
+本次处置：11 个退回单引擎、恢复 main 绿；账本 500 → 502（退回 +11、本批新迁 -9），
+按机制走 `allowGrowth` 留一次有署名的记录，下一提退役。
+
+本批**保住并新增**的双引擎迁移（都过 typecheck + 双引擎跑绿）：`rfc210-refresh-recency-self-renewal`
+（顺带修掉一条**只在 SQLite 上成立**的判据：`db.all(sql\`SELECT last_fetched_at …\`)` 在 PG 上把
+bigint 列取回成**字符串**，`toBe(number)` 当场失败——改成 drizzle 类型化 select）、
+`runtime-session-lease`（36 处同步终结符）、`rfc199-workflow-revision` / `rfc225-workgroup-revision` /
+`rfc329-workgroup-pending`（**嵌套 harness** 那一坑：文件里本来就有内层 `describeEachProvider`，
+外层再套一层会开两套 PG 库，报 `cannot drop the currently open database`；正解是把内层降级成普通
+`describe`，让单一外层 harness 覆盖整个文件——测试条数不变，外层用例多跑一个引擎）、
+`rfc223-reverse-delete-races`（把 `skillDeleteOp` 的 `afterPhase` 测试钩子放宽到
+`Promise<void> | void` 并在三个调用点 await——中立库面上「往库里写一行」是 await 的，钩子保持同步
+等于逼着用例只能在 SQLite 的同步写上成立）、`rfc319-ssh-repo-access`、
+`rfc321-repository-publication-transport`、`rfc345-resource-acl-revalidation`、`sessions`。
+
+**两条不该迁、已确认留在账本上的**：
+
+- `rfc349-task-execution-provider-adapters.test.ts` —— 它是**两个适配器的对拍**，用例名直接写着
+  「SQLite aggregate …」/「PostgreSQL …」，内部自带假 PG runtime。整体套上 `describeEachProvider`
+  会让 SQLite 那条用 PG 库跑 `createSqliteTaskExecutionPersistence`，语义当场错。
+- `rfc282-d2-granted-ids-single-source.test.ts` —— 判据本身就是「**同步** in-tx 变体与异步变体逐字
+  相等」，同步那份（`dbTxSync` + `sqliteResourceGrantRepository`）在 PG 上根本不存在。这条债会随
+  那个 SQLite 专属同步原语退役而自然消失，不该靠改判据抹掉。

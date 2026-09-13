@@ -55,7 +55,16 @@ function trashPath(appHome: string, skillId: string, opId: string): string {
 }
 
 export interface SkillDeleteOpHooks {
-  afterPhase?: (phase: 'intent' | 'fs-staged' | 'db-committed', skillId: string) => void
+  /**
+   * RFC-359 AC-6：返回值放宽到 `Promise<void> | void` 并在三个调用点 await。
+   * 这个钩子只有测试在用，而中立库面上「往库里写一行」是 await 的——钩子保持同步等于
+   * 逼着用例只能在 SQLite 的同步写上成立（`rfc223-reverse-delete-races` 正是这么卡住的）。
+   * 同步实现照旧：await 一个非 Promise 是 no-op，三个调用点本来就在 async 函数里。
+   */
+  afterPhase?: (
+    phase: 'intent' | 'fs-staged' | 'db-committed',
+    skillId: string,
+  ) => Promise<void> | void
 }
 
 export interface SkillDeleteFence {
@@ -101,7 +110,7 @@ export async function deleteManagedSkillOp(
     })
   })
   const trash = trashPath(fsOpts.appHome, skill.id, opId)
-  hooks.afterPhase?.('intent', skill.id)
+  await hooks.afterPhase?.('intent', skill.id)
 
   let committed = false
   try {
@@ -117,7 +126,7 @@ export async function deleteManagedSkillOp(
           backupPath: relative(fsOpts.appHome, trash),
         }),
     )
-    hooks.afterPhase?.('fs-staged', skill.id)
+    await hooks.afterPhase?.('fs-staged', skill.id)
 
     // ③ db-committed — DELETE row + advance phase, one tx.
     await session.transaction(async (tx) => {
@@ -138,7 +147,7 @@ export async function deleteManagedSkillOp(
       await advancePhase(tx, opId, 'db-committed')
     })
     committed = true
-    hooks.afterPhase?.('db-committed', skill.id)
+    await hooks.afterPhase?.('db-committed', skill.id)
 
     // done — drop the trash, release the lock.
     rmSync(trash, { recursive: true, force: true })

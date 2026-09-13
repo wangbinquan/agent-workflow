@@ -30,19 +30,19 @@
 //     Mutation check: flip auto-refresh back to touchRecency:true (or drop the
 //     arg) and test #2 goes red — the mirror stays due forever.
 
-import { describe, expect, test, beforeEach, afterEach, beforeAll } from 'bun:test'
+import { expect, test, beforeEach, afterEach, beforeAll } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { eq, sql } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { refreshCachedRepo, resolveCachedRepo } from '@/services/gitRepoCache'
 import { refreshDueRepos, selectDueRepos } from '@/services/submoduleRefresh'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 24 * 60 * 60 * 1000
 const NOW = 1_800_000_000_000
 
@@ -76,116 +76,125 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
-describe('RFC-210 G7 — auto-refresh does not renew its own recency window', () => {
-  let db: DbClient
-  let appHome: string
-  let remoteDir: string
-  let remoteUrl: string
-  let repoId: string
+describeEachProvider(
+  'RFC-210 G7 — auto-refresh does not renew its own recency window',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    let appHome: string
+    let remoteDir: string
+    let remoteUrl: string
+    let repoId: string
 
-  beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-recency-home-'))
-    const r = await buildFixtureRemote()
-    remoteDir = r.dir
-    remoteUrl = r.url
-    // Cold-clone so there is a real, fetchable mirror on disk.
-    const resolved = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
-      { url: remoteUrl },
-    )
-    repoId = resolved.cached.id
-    // Pin a known baseline: fetched at NOW, never auto-refreshed, and reset the
-    // submodule telemetry to NULL so we can later prove the row WAS written.
-    db.update(cachedRepos)
-      .set({ lastFetchedAt: NOW, lastAutoRefreshAt: null, lastSubmoduleSyncOk: null })
-      .where(eq(cachedRepos.id, repoId))
-      .run()
-  })
+    beforeEach(async () => {
+      db = harness.db
+      appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-recency-home-'))
+      const r = await buildFixtureRemote()
+      remoteDir = r.dir
+      remoteUrl = r.url
+      // Cold-clone so there is a real, fetchable mirror on disk.
+      const resolved = await resolveCachedRepo(
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+        { url: remoteUrl },
+      )
+      repoId = resolved.cached.id
+      // Pin a known baseline: fetched at NOW, never auto-refreshed, and reset the
+      // submodule telemetry to NULL so we can later prove the row WAS written.
+      await db
+        .update(cachedRepos)
+        .set({ lastFetchedAt: NOW, lastAutoRefreshAt: null, lastSubmoduleSyncOk: null })
+        .where(eq(cachedRepos.id, repoId))
+    })
 
-  afterEach(() => {
-    for (const d of [appHome, remoteDir]) {
-      try {
-        rmSync(d, { recursive: true, force: true })
-      } catch {
-        /* noop */
+    afterEach(() => {
+      for (const d of [appHome, remoteDir]) {
+        try {
+          rmSync(d, { recursive: true, force: true })
+        } catch {
+          /* noop */
+        }
       }
-    }
-  })
+    })
 
-  test('touchRecency:false holds last_fetched_at but still writes the rest of the row', async () => {
-    // Auto-refresh path: fetch succeeds but recency is deliberately NOT renewed.
-    const res = await refreshCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
-      repoId,
-      {
-        touchRecency: false,
-      },
-    )
-    expect(res.fetchOk).toBe(true)
+    test('touchRecency:false holds last_fetched_at but still writes the rest of the row', async () => {
+      // Auto-refresh path: fetch succeeds but recency is deliberately NOT renewed.
+      const res = await refreshCachedRepo(
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
+        repoId,
+        {
+          touchRecency: false,
+        },
+      )
+      expect(res.fetchOk).toBe(true)
 
-    const [row] = (await db.all(
-      sql`SELECT last_fetched_at AS f, last_submodule_sync_ok AS s FROM cached_repos WHERE id=${repoId}`,
-    )) as Array<{ f: number; s: number | null }>
-    // last_fetched_at is untouched...
-    expect(row?.f).toBe(NOW)
-    // ...but the fetch really ran: the submodule telemetry we NULLed came back.
-    expect(row?.s).not.toBeNull()
-  })
+      const [row] = await db
+        .select({ f: cachedRepos.lastFetchedAt, s: cachedRepos.lastSubmoduleSyncOk })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.id, repoId))
+        .limit(1)
+      // last_fetched_at is untouched...
+      expect(row?.f).toBe(NOW)
+      // ...but the fetch really ran: the submodule telemetry we NULLed came back.
+      expect(row?.s).not.toBeNull()
+    })
 
-  test('default (manual refresh) advances last_fetched_at', async () => {
-    const res = await refreshCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
-      repoId,
-    )
-    expect(res.fetchOk).toBe(true)
-    const [row] = (await db.all(
-      sql`SELECT last_fetched_at AS f FROM cached_repos WHERE id=${repoId}`,
-    )) as Array<{ f: number }>
-    expect(row?.f).toBe(NOW + 5 * DAY)
-  })
+    test('default (manual refresh) advances last_fetched_at', async () => {
+      const res = await refreshCachedRepo(
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
+        repoId,
+      )
+      expect(res.fetchOk).toBe(true)
+      const [row] = await db
+        .select({ f: cachedRepos.lastFetchedAt })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.id, repoId))
+        .limit(1)
+      expect(row?.f).toBe(NOW + 5 * DAY)
+    })
 
-  test('an unused mirror ages out of the recency window across real auto-refresh ticks', async () => {
-    // intervalMs is a short 1h so the "one interval since last auto-refresh" gate
-    // always clears on a daily tick — leaving the 3-day RECENCY window as the sole
-    // thing that can age the mirror out, which is exactly the finding under test.
-    const HOUR = 60 * 60 * 1000
-    const cfg = {
-      submoduleAutoRefresh: { enabled: true, intervalMs: HOUR, onlyRecentDays: 3 },
-    }
-    // Tick the loop once per day. Because auto-refresh holds last_fetched_at at
-    // NOW, the recency window (3 days) is measured from NOW and never slides.
-    const outcomes: Array<{ day: number; refreshed: number; due: number }> = []
-    for (let day = 0; day <= 5; day++) {
-      const at = NOW + day * DAY + 1000
-      const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-        now: at,
-        intervalMs: HOUR,
-        onlyRecentDays: 3,
-      })
-      const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), cfg, {
-        now: () => at,
-        appHome,
-      })
-      outcomes.push({ day, refreshed: res.refreshed, due: due.length })
-    }
+    test('an unused mirror ages out of the recency window across real auto-refresh ticks', async () => {
+      // intervalMs is a short 1h so the "one interval since last auto-refresh" gate
+      // always clears on a daily tick — leaving the 3-day RECENCY window as the sole
+      // thing that can age the mirror out, which is exactly the finding under test.
+      const HOUR = 60 * 60 * 1000
+      const cfg = {
+        submoduleAutoRefresh: { enabled: true, intervalMs: HOUR, onlyRecentDays: 3 },
+      }
+      // Tick the loop once per day. Because auto-refresh holds last_fetched_at at
+      // NOW, the recency window (3 days) is measured from NOW and never slides.
+      const outcomes: Array<{ day: number; refreshed: number; due: number }> = []
+      for (let day = 0; day <= 5; day++) {
+        const at = NOW + day * DAY + 1000
+        const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
+          now: at,
+          intervalMs: HOUR,
+          onlyRecentDays: 3,
+        })
+        const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), cfg, {
+          now: () => at,
+          appHome,
+        })
+        outcomes.push({ day, refreshed: res.refreshed, due: due.length })
+      }
 
-    // Days 0..2 are inside the 3-day recency window → the mirror is fetched.
-    for (const day of [0, 1, 2]) {
-      expect(outcomes[day]?.refreshed).toBe(1)
-    }
-    // By day 4+ the mirror is older than onlyRecentDays and drops out entirely —
-    // this is exactly what self-renewal (bug) would have prevented.
-    expect(outcomes[4]?.due).toBe(0)
-    expect(outcomes[4]?.refreshed).toBe(0)
-    expect(outcomes[5]?.due).toBe(0)
-    expect(outcomes[5]?.refreshed).toBe(0)
+      // Days 0..2 are inside the 3-day recency window → the mirror is fetched.
+      for (const day of [0, 1, 2]) {
+        expect(outcomes[day]?.refreshed).toBe(1)
+      }
+      // By day 4+ the mirror is older than onlyRecentDays and drops out entirely —
+      // this is exactly what self-renewal (bug) would have prevented.
+      expect(outcomes[4]?.due).toBe(0)
+      expect(outcomes[4]?.refreshed).toBe(0)
+      expect(outcomes[5]?.due).toBe(0)
+      expect(outcomes[5]?.refreshed).toBe(0)
 
-    // And last_fetched_at is still exactly the user's baseline — proof the loop
-    // never renewed it.
-    const [row] = (await db.all(
-      sql`SELECT last_fetched_at AS f FROM cached_repos WHERE id=${repoId}`,
-    )) as Array<{ f: number }>
-    expect(row?.f).toBe(NOW)
-  })
-})
+      // And last_fetched_at is still exactly the user's baseline — proof the loop
+      // never renewed it.
+      const [row] = await db
+        .select({ f: cachedRepos.lastFetchedAt })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.id, repoId))
+        .limit(1)
+      expect(row?.f).toBe(NOW)
+    })
+  },
+)

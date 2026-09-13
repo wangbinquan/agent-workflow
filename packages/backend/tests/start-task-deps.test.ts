@@ -5,24 +5,26 @@
 // every call re-reads the config file rather than freezing values at daemon boot.
 // Also locks the opencodeCmd/subagentLiveCapture conditional spreads that the JSON
 // launch relied on (byte-equivalence).
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../src/config'
-import { describeEachProvider } from './helpers/eachProvider'
+import { createInMemoryDb } from '../src/db/client'
 import { buildStartTaskDeps } from '../src/services/startTaskDeps'
 import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
+
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function configWith(cfgPath: string, subagentLiveCapture: unknown): void {
   const base = loadConfig(cfgPath) // creates the file with defaults if missing
   writeFileSync(cfgPath, JSON.stringify({ ...base, subagentLiveCapture }, null, 2))
 }
 
-describeEachProvider('buildStartTaskDeps (RFC-159 T2)', (harness) => {
+describe('buildStartTaskDeps (RFC-159 T2)', () => {
   test('passes db + actorUserId through; threads configPath (RFC-282 C1-2: the scheduler resolves)', () => {
-    const db = harness.db
+    const db = createInMemoryDb(MIGRATIONS)
     const dir = mkdtempSync(join(tmpdir(), 'rfc159-deps-'))
     const cfgPath = join(dir, 'config.json')
     configWith(cfgPath, { pollMs: 999, consecutiveFailureLimit: 7 })
@@ -39,7 +41,7 @@ describeEachProvider('buildStartTaskDeps (RFC-159 T2)', (harness) => {
   })
 
   test('reads subagentLiveCapture from LIVE config (re-read every call)', () => {
-    const db = harness.db
+    const db = createInMemoryDb(MIGRATIONS)
     const dir = mkdtempSync(join(tmpdir(), 'rfc159-deps-'))
     const cfgPath = join(dir, 'config.json')
 

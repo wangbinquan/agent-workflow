@@ -2,11 +2,11 @@
 // PostgreSQL projects the same task/status/workspace/review identities, while
 // daemon bootstrap explicitly injects the selected provider implementation.
 
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { describeEachProvider } from './helpers/eachProvider'
+import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   composePostgresqlTaskExecutionReadModels,
@@ -32,6 +32,8 @@ import {
   createTestRepositoryPublicationTransport,
 } from './helpers/taskExecutionTestTopology'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
+
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -80,7 +82,7 @@ afterEach(() => {
   selectDatabaseSchemaProvider('sqlite')
 })
 
-describeEachProvider('RFC-349 PostgreSQL task-execution read-model adapter', (harness) => {
+describe('RFC-349 PostgreSQL task-execution read-model adapter', () => {
   test('projects status, multi-repository workspace, review nodes, and gate subject', async () => {
     const fake = fixture([
       [['task-1', 'running', null]],
@@ -157,7 +159,7 @@ describeEachProvider('RFC-349 PostgreSQL task-execution read-model adapter', (ha
   })
 
   test('runtime preserves an injected provider-neutral read-model identity', () => {
-    const sqlite = harness.db
+    const sqlite = createInMemoryDb(MIGRATIONS)
     const readModels = fixture([]).readModels
     const runtime = composeTaskExecutionRuntime({
       readModels,

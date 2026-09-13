@@ -13,13 +13,13 @@ import {
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { beforeEach, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
+import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { stringify } from 'yaml'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
+import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
   mcps,
@@ -46,6 +46,8 @@ import {
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
 
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const EMPTY_AGENT: Omit<CreateAgent, 'name'> = {
   description: '',
   outputs: [],
@@ -66,7 +68,7 @@ function actor(id: string): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
+async function seedUser(db: DbClient, id: string): Promise<void> {
   await db.insert(users).values({
     id,
     username: id,
@@ -97,11 +99,7 @@ function workflowDefinition(agentId?: string): WorkflowDefinition {
   }
 }
 
-async function seedMcp(
-  db: ProviderNeutralDatabase,
-  id: string,
-  ownerUserId = 'target-owner',
-): Promise<void> {
+async function seedMcp(db: DbClient, id: string, ownerUserId = 'target-owner'): Promise<void> {
   await db.insert(mcps).values({
     id,
     name: `mcp-${id}`,
@@ -114,7 +112,7 @@ async function seedMcp(
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: DbClient,
   type: 'agent' | 'mcp',
   resourceId: string,
   userId: string,
@@ -128,12 +126,12 @@ async function grant(
   })
 }
 
-describeEachProvider('RFC-223 ordinary reference final-transaction fences', (harness) => {
-  let db: ProviderNeutralDatabase
+describe('RFC-223 ordinary reference final-transaction fences', () => {
+  let db: DbClient
   let editor: Actor
 
   beforeEach(async () => {
-    db = harness.db
+    db = createInMemoryDb(MIGRATIONS)
     await seedUser(db, 'editor')
     await seedUser(db, 'target-owner')
     await seedUser(db, 'new-owner')

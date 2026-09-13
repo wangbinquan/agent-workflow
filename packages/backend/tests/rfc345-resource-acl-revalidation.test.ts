@@ -10,18 +10,16 @@
 //
 // 判据：通知归 composition 所有（谁调用都发），且调用方自己的 `afterCommit` 不被吞掉。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents } from '../src/db/schema'
 import { updateResourceAcl } from '../src/modules/resource-catalog/composition/resourceAcl'
 import { createAgent } from '../src/services/agent'
 import { createUser } from '../src/services/users'
 import { registerRevalidationTrigger, type RevocationReason } from '../src/ws/revalidationHook'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const AGENT_FIELDS = {
   description: '',
@@ -36,14 +34,14 @@ const AGENT_FIELDS = {
   bodyMd: 'do the thing',
 }
 
-describe('RFC-345 resource ACL revalidation', () => {
-  let db: DbClient
+describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
+  let db: ProviderNeutralDatabase
   let admin: Actor
   let bobId: string
   let reasons: RevocationReason[]
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     reasons = []
     registerRevalidationTrigger(async (reason) => {
       reasons.push(reason)
@@ -88,7 +86,7 @@ describe('RFC-345 resource ACL revalidation', () => {
         ownerUserId: admin.user.id,
       },
     )
-    const row = db.select().from(agents).where(eq(agents.id, agent.id)).get()!
+    const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
     await updateResourceAcl(db, admin, 'agent', row, {
       visibility: 'private',
       grants: [{ userId: bobId, level: 'read' }],
@@ -108,7 +106,7 @@ describe('RFC-345 resource ACL revalidation', () => {
         ownerUserId: admin.user.id,
       },
     )
-    const row = db.select().from(agents).where(eq(agents.id, agent.id)).get()!
+    const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
     let ownEffect = 0
     await updateResourceAcl(
       db,

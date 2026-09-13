@@ -21,17 +21,16 @@
 // `-i`；它证明不了真正 clone 的时候这份 env 有没有被用上。所以这里断言的是桩 ssh
 // **确实收到了** `-i <key>`——那是「部署密钥能不能用」的唯一机器判据。
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { removeTempDirSync } from './fixtures/tempDir'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // 真 git clone + 真进程，和 git-repo-cache.test.ts 同一档预算。
 setDefaultTimeout(60_000)
@@ -78,8 +77,8 @@ exec /bin/sh -c "$*"
   return { path, log }
 }
 
-describe('RFC-319 REPO-42 —— ssh 传输的仓库接入', () => {
-  let db: DbClient
+describeEachProvider('RFC-319 REPO-42 —— ssh 传输的仓库接入', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fixture: string
   let bare: string
@@ -87,7 +86,7 @@ describe('RFC-319 REPO-42 —— ssh 传输的仓库接入', () => {
   let prevSshCommand: string | undefined
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     appHome = mkdtempSync(join(tmpdir(), 'aw-ssh-home-'))
     fixture = mkdtempSync(join(tmpdir(), 'aw-ssh-fixture-'))
     const working = join(fixture, 'src')
@@ -125,7 +124,7 @@ describe('RFC-319 REPO-42 —— ssh 传输的仓库接入', () => {
     expect(r.cached.defaultBranch).toBe('main')
     // 内容真的取回来了，不只是建了个空目录。
     expect(existsSync(join(r.cached.localPath, 'README.md'))).toBe(true)
-    expect(db.select().from(cachedRepos).all().length).toBe(1)
+    expect((await db.select().from(cachedRepos)).length).toBe(1)
 
     // 传输确实是 ssh：桩被调用过，而且 git 交给它的是发往**那个主机**的
     // `git-upload-pack`。少了这条，一个把 ssh:// 悄悄改写成本地路径的实现
@@ -181,6 +180,6 @@ describe('RFC-319 REPO-42 —— ssh 传输的仓库接入', () => {
     expect(a.cold).toBe(true)
     expect(b.cold, 'scp 式写法又冷克隆了一次 ⇒ 两种写法没有归一到同一个 cache key').toBe(false)
     expect(b.cached.id).toBe(a.cached.id)
-    expect(db.select().from(cachedRepos).all().length).toBe(1)
+    expect((await db.select().from(cachedRepos)).length).toBe(1)
   })
 })

@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import { beforeEach, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { stringify } from 'yaml'
@@ -7,8 +7,7 @@ import type { ImportRefSelection, WorkflowDefinition } from '@agent-workflow/sha
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
+import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, skills, users, workflows } from '../src/db/schema'
 import {
   resolveAgentImportRefs,
@@ -129,6 +128,8 @@ function assertImportRefTransactionAwaiting(source: string): void {
   ])
 }
 
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
     user: { id, username: id, displayName: id, role, status: 'active' },
@@ -136,7 +137,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
+async function seedUser(db: DbClient, id: string, role: 'admin' | 'user' = 'user') {
   await db.insert(users).values({
     id,
     username: id,
@@ -149,7 +150,7 @@ async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' |
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: DbClient,
   id: string,
   ownerUserId: string,
   name = 'shared',
@@ -178,12 +179,12 @@ function portableWorkflowYaml(input?: { id?: string; name?: string; agentName?: 
   })
 }
 
-describeEachProvider('RFC-223 AC10 portable import reference resolution', (harness) => {
-  let db: ProviderNeutralDatabase
+describe('RFC-223 AC10 portable import reference resolution', () => {
+  let db: DbClient
   let viewer: Actor
 
   beforeEach(async () => {
-    db = harness.db
+    db = createInMemoryDb(MIGRATIONS)
     await seedUser(db, 'owner-a')
     await seedUser(db, 'owner-b')
     await seedUser(db, 'viewer')

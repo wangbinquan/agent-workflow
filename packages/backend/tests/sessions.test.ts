@@ -1,9 +1,9 @@
 // RFC-036 — sessionStore CRUD + lookup invariants.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   createLoginSession,
   createSession,
@@ -16,9 +16,7 @@ import {
 } from './helpers/auth/sessionStore'
 import { users, userSessions } from '../src/db/schema'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedActiveUser(db: DbClient, id = '01HQUSER'): Promise<string> {
+async function seedActiveUser(db: ProviderNeutralDatabase, id = '01HQUSER'): Promise<string> {
   await db.insert(users).values({
     id,
     username: id.toLowerCase(),
@@ -37,11 +35,11 @@ async function seedActiveUser(db: DbClient, id = '01HQUSER'): Promise<string> {
   return id
 }
 
-describe('sessionStore', () => {
-  let db: DbClient
+describeEachProvider('sessionStore', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('createSession returns aws_s_ token and stores its hash', async () => {
@@ -54,7 +52,7 @@ describe('sessionStore', () => {
     // confirm only the hash is in the row, not the raw token
     const stored = await lookupRawHash(db, token)
     expect(stored).toBe(true)
-    expect(db.select().from(users).where(idEq(userId)).get()?.lastLoginAt).toBeNull()
+    expect((await db.select().from(users).where(idEq(userId)).limit(1))[0]?.lastLoginAt).toBeNull()
   })
 
   test('createLoginSession atomically stamps the authenticated user', async () => {
@@ -73,7 +71,9 @@ describe('sessionStore', () => {
       createdAt: 12_345,
       lastUsedAt: 12_345,
     })
-    expect(db.select().from(users).where(idEq(userId)).get()?.lastLoginAt).toBe(12_345)
+    expect((await db.select().from(users).where(idEq(userId)).limit(1))[0]?.lastLoginAt).toBe(
+      12_345,
+    )
   })
 
   test('lookupActiveSession returns null for unknown token', async () => {
@@ -135,7 +135,7 @@ describe('sessionStore', () => {
   })
 })
 
-async function lookupRawHash(db: DbClient, raw: string): Promise<boolean> {
+async function lookupRawHash(db: ProviderNeutralDatabase, raw: string): Promise<boolean> {
   // Look directly at user_sessions to confirm only the hash was persisted.
   const { userSessions } = await import('../src/db/schema')
   const rows = (await db.select().from(userSessions)) as { tokenHash: string }[]

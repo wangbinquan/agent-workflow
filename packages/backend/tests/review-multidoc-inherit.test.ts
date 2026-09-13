@@ -11,14 +11,14 @@
 // Codex design-gate P1 lock: the prior round lives on the SAME reused review
 // node_run (iterate/reject) — inheritance must still find it (not exclude it).
 
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
+import type { DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
 import {
   agents as agentsTable,
   docVersions,
@@ -35,10 +35,11 @@ import {
 import { transitionTaskStatusByEvent } from '../src/services/lifecycle'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']
 
-describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) => {
-  let db: ProviderNeutralDatabase
+describe('RFC-129 — cross-round selection inheritance', () => {
+  let db: DbClient
   let appHome: string
   let worktree: string
 
@@ -48,7 +49,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     worktree = join(tmp, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    db = harness.db
+    db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })

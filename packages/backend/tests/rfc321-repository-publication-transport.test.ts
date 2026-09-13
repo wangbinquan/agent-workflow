@@ -2,7 +2,7 @@
 // personal > global selection, deterministic SSH -> HTTP(S), one fixed
 // exact-target lease per publication attempt, and no fallback after selection.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
 import {
   existsSync,
@@ -14,10 +14,11 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { userRepositoryTransportCredentials } from '../src/db/schema'
 import { missionPublicationSubject } from '../src/modules/development-automation/application/missionDeliveryChain'
 import type { RepositoryGit } from '../src/modules/source-control/application/repositoryCommit'
@@ -39,7 +40,6 @@ import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease
 import { runGit as executeGit } from '../src/util/git'
 import { createUser } from '../src/services/users'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DIGEST = 'a'.repeat(64)
 const PERSONAL_TOKEN = 'aw-rfc321-personal-push-token-9876' // gitleaks:allow
 const GLOBAL_TOKEN = 'aw-rfc321-global-push-token-1234' // gitleaks:allow
@@ -60,7 +60,7 @@ function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
 }
 
-function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
+function repositoryOf(db: ProviderNeutralDatabase) {
   return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 
@@ -123,7 +123,7 @@ async function captureLease(
   }
 }
 
-describe('RFC-321 repository publication transport', () => {
+describeEachProvider('RFC-321 repository publication transport', (harness) => {
   test('managed publication failures use stable authentication and authorization codes', () => {
     expect(classifyRepositoryPushFailure('fatal: Authentication failed for repository')).toBe(
       'repository-push-authentication-failed',
@@ -150,7 +150,7 @@ describe('RFC-321 repository publication transport', () => {
   })
 
   test('personal wins, SSH is mapped to HTTP(S), and one exact lease is reused then removed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 31))
     const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
@@ -266,7 +266,7 @@ describe('RFC-321 repository publication transport', () => {
   })
 
   test('provider metadata wins for self-hosted SSH, while an HTTP input performs no metadata fetch', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 32))
     const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     await credentials.adminConnections.synchronize({
@@ -333,7 +333,7 @@ describe('RFC-321 repository publication transport', () => {
   })
 
   test('provider metadata identifies the managed connection when SSH and web authorities differ', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 35))
     const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
@@ -435,7 +435,7 @@ describe('RFC-321 repository publication transport', () => {
   })
 
   test('cross-authority metadata fails closed when more than one connection claims the project', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 36))
     const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     await credentials.adminConnections.synchronize({
@@ -508,7 +508,7 @@ describe('RFC-321 repository publication transport', () => {
   })
 
   test('known ambiguous SSH ownership never falls back when discovery is unavailable', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 37))
     const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     for (const [provider, token] of [
@@ -550,7 +550,7 @@ describe('RFC-321 repository publication transport', () => {
   })
 
   test('a stale personal credential fails closed before discovery and never falls back to global', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 33))
     const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
@@ -577,10 +577,10 @@ describe('RFC-321 repository publication transport', () => {
       connectionGeneration: 'github-generation',
       endpointBindingDigest: DIGEST,
     })
-    db.update(userRepositoryTransportCredentials)
+    await db
+      .update(userRepositoryTransportCredentials)
       .set({ endpointBindingDigest: 'b'.repeat(64) })
       .where(eq(userRepositoryTransportCredentials.userId, alice.id))
-      .run()
     let fetches = 0
     const root = appHome()
     const transport = createRepositoryPublicationTransport({

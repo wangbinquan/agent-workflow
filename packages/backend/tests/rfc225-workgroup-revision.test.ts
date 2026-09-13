@@ -10,10 +10,8 @@ import {
 } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { workgroups } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
@@ -27,7 +25,6 @@ import {
 } from '../src/services/workgroups'
 import { DomainError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM: WorkgroupWritePrincipal = { kind: 'system', reason: 'rfc225-test' }
 
 function actorPrincipal(id: string): WorkgroupWritePrincipal {
@@ -83,7 +80,7 @@ async function createFixture(
 }
 
 async function createEmptyFixture(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   ownerUserId: string,
 ): Promise<WorkgroupDetail> {
@@ -122,8 +119,8 @@ function codeOf(reason: unknown): string | undefined {
   return reason instanceof DomainError ? reason.code : undefined
 }
 
-describe('RFC-225 workgroup revision fencing', () => {
-  describeEachProvider('workgroup revision persistence', (harness) => {
+describeEachProvider('RFC-225 workgroup revision fencing', (harness) => {
+  describe('workgroup revision persistence', () => {
     test('create returns v1 detail with a canonical hash', async () => {
       const db = harness.db
       const group = await createFixture(db)
@@ -202,7 +199,7 @@ describe('RFC-225 workgroup revision fencing', () => {
   })
 
   test('RFC-223 scopes create and rename conflicts to the owner bucket', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const source = await createEmptyFixture(db, 'source', 'owner-a')
     await createEmptyFixture(db, 'shared', 'owner-b')
 
@@ -257,7 +254,7 @@ describe('RFC-225 workgroup revision fencing', () => {
   })
 
   test('RFC-223 maps a same-owner create race to one stable 409 conflict', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const results = await Promise.allSettled([
       createEmptyFixture(db, 'raced', 'owner-a'),
       createEmptyFixture(db, 'raced', 'owner-a'),
@@ -271,7 +268,7 @@ describe('RFC-225 workgroup revision fencing', () => {
   })
 
   test('RFC-223 revalidates the current owner before an ordinary save', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const group = await createEmptyFixture(db, 'owner-fence', 'owner-a')
     await db
       .update(workgroups)

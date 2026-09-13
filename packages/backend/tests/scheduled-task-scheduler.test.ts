@@ -7,15 +7,14 @@
 //   - each failure path (owner inactive / workflow gone) records failed + cf++
 //   - consecutive failures cross the threshold → auto-disable EXACTLY once
 //   - corrupt spec disables instead of hot-looping
-import { beforeEach, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { StartTask } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
+import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks, users, workflows } from '../src/db/schema'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { runDueSchedulesOnce } from './helpers/scheduledTaskScheduler'
@@ -24,6 +23,7 @@ import { createWorkflow } from '../src/services/workflow'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { withIntegrationTriggerResources } from './helpers/integrationTriggerResourceBinding'
 
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAILY = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const BODY = {
   workflowId: '',
@@ -53,14 +53,14 @@ function fakeLaunch(
   }
 }
 
-describeEachProvider('RFC-159 scheduled-task scheduler', (harness) => {
-  let db: ProviderNeutralDatabase
+describe('RFC-159 scheduled-task scheduler', () => {
+  let db: DbClient
   let wfId = ''
   let ownerId = ''
   let identityAccess: ReturnType<typeof withIntegrationTriggerResources>
 
   beforeEach(async () => {
-    db = harness.db
+    db = createInMemoryDb(MIGRATIONS)
     identityAccess = withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db }))
     const owner = await createUser(db, {
       username: 'owner',

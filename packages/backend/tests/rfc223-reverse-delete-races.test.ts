@@ -4,14 +4,15 @@
 // blocks deletion. Managed-skill deletion additionally proves the fs-staged
 // root/trash/op/lock rollback is complete before the ACL-safe error escapes.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, mcps, plugins, skillOperationLocks, skills } from '../src/db/schema'
 import {
   composeMcpServiceBindingForTest,
@@ -32,7 +33,6 @@ import {
 import { getActiveOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { ConflictError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ACTOR = buildActor({
   user: {
     id: 'u-owner',
@@ -44,23 +44,21 @@ const ACTOR = buildActor({
   source: 'session',
 })
 
-function insertReferencingAgent(
-  db: DbClient,
+async function insertReferencingAgent(
+  db: ProviderNeutralDatabase,
   input: { name: string; mcp?: string[]; plugins?: string[]; skillId?: string },
-): void {
-  db.insert(agents)
-    .values({
-      id: ulid(),
-      name: input.name,
-      mcp: JSON.stringify(input.mcp ?? []),
-      plugins: JSON.stringify(input.plugins ?? []),
-      skills: JSON.stringify(
-        input.skillId === undefined ? [] : [{ kind: 'managed', skillId: input.skillId }],
-      ),
-      ownerUserId: 'u-other',
-      visibility: 'private',
-    })
-    .run()
+): Promise<void> {
+  await db.insert(agents).values({
+    id: ulid(),
+    name: input.name,
+    mcp: JSON.stringify(input.mcp ?? []),
+    plugins: JSON.stringify(input.plugins ?? []),
+    skills: JSON.stringify(
+      input.skillId === undefined ? [] : [{ kind: 'managed', skillId: input.skillId }],
+    ),
+    ownerUserId: 'u-other',
+    visibility: 'private',
+  })
 }
 
 function assertHiddenReference(error: unknown, code: string, privateName: string): void {
@@ -75,12 +73,12 @@ function assertHiddenReference(error: unknown, code: string, privateName: string
   expect(JSON.stringify(details)).not.toContain(privateName)
 }
 
-describe('RFC-223 reverse-reference delete transaction races', () => {
-  let db: DbClient
+describeEachProvider('RFC-223 reverse-reference delete transaction races', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc223-delete-race-'))
   })
 
@@ -93,7 +91,7 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
     const mcpBinding = composeMcpServiceBindingForTest(db, {
       actor: ACTOR,
       beforeDelete: async () => {
-        insertReferencingAgent(db, { name: 'private-mcp-user', mcp: [mcpId] })
+        await insertReferencingAgent(db, { name: 'private-mcp-user', mcp: [mcpId] })
       },
     })
     const mcp = await createMcp(mcpBinding, {
@@ -139,7 +137,7 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
     await expect(deleteMcp(mcpBinding, mcp.id)).rejects.toMatchObject({
       code: 'resource-operation-stale',
     })
-    expect(db.select().from(mcps).where(eq(mcps.id, mcp.id)).get()).toMatchObject({
+    expect((await db.select().from(mcps).where(eq(mcps.id, mcp.id)).limit(1))[0]).toMatchObject({
       id: mcp.id,
       ownerUserId: 'u-other',
       visibility: 'private',
@@ -166,7 +164,7 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
     const pluginBinding = composePluginServiceBindingForTest(db, {
       actor: ACTOR,
       beforeDelete: async () => {
-        insertReferencingAgent(db, {
+        await insertReferencingAgent(db, {
           name: 'private-plugin-user',
           plugins: [pluginId],
         })
@@ -199,10 +197,10 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
     let caught: unknown
     try {
       await deleteSkill(db, { appHome }, skill.id, ACTOR, undefined, {
-        afterPhase: (phase) => {
+        afterPhase: async (phase) => {
           if (phase === 'fs-staged') {
             expect(existsSync(root)).toBe(false)
-            insertReferencingAgent(db, {
+            await insertReferencingAgent(db, {
               name: 'private-skill-user',
               skillId: skill.id,
             })
