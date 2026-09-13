@@ -5,12 +5,11 @@
  * "Upgrade to current version" button, so these tests intentionally start from
  * a real v1 tool -> job -> employee closure and then restart on v2.
  */
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -38,8 +37,6 @@ import type { ExecutionContractParticipant } from '@/modules/execution-contract/
 import { composeEventCenter } from '@/modules/event-center/composition'
 import { and, eq } from 'drizzle-orm'
 import { designEmployeeTypePackage } from './fixtures/digitalEmployeeTypePackages'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const executionContracts: ExecutionContractParticipant = {
   list: () => [],
@@ -154,24 +151,26 @@ const adapterCatalog: ToolConnectionCatalogPort = {
   },
 }
 
-function writeLegacyToolConnection(
-  db: ReturnType<typeof createInMemoryDb>,
+async function writeLegacyToolConnection(
+  db: ProviderNeutralDatabase,
   ref: { id: string; revision: number },
   connectionRef: { id: string; revision: number },
-): void {
-  const row = db
-    .select()
-    .from(employeeToolRegistrationRevisions)
-    .where(
-      and(
-        eq(employeeToolRegistrationRevisions.toolId, ref.id),
-        eq(employeeToolRegistrationRevisions.revision, ref.revision),
-      ),
-    )
-    .get()
+): Promise<void> {
+  const row = (
+    await db
+      .select()
+      .from(employeeToolRegistrationRevisions)
+      .where(
+        and(
+          eq(employeeToolRegistrationRevisions.toolId, ref.id),
+          eq(employeeToolRegistrationRevisions.revision, ref.revision),
+        ),
+      )
+  )[0]
   if (row === undefined) throw new Error(`missing tool revision ${ref.id}@${ref.revision}`)
   const content = { ...(JSON.parse(row.contentJson) as Record<string, unknown>), connectionRef }
-  db.update(employeeToolRegistrationRevisions)
+  await db
+    .update(employeeToolRegistrationRevisions)
     .set({ contentJson: JSON.stringify(content), contentDigest: contentDigest(content) })
     .where(
       and(
@@ -179,7 +178,6 @@ function writeLegacyToolConnection(
         eq(employeeToolRegistrationRevisions.revision, ref.revision),
       ),
     )
-    .run()
 }
 
 function versionedCollaboratingDesignPackage(revision: number): EmployeeTypePackageRegistration {
@@ -562,163 +560,177 @@ async function seedPublishedEmployee(input: { db: ProviderNeutralDatabase; appHo
   })
 }
 
-describe('RFC-310 Type Package automatic compatible upgrades', () => {
-  test('work-contract-required legacy lane connections auto-select a stable Adapter and keep immutable source rows', async () => {
-    const runScenario = async (
-      connections: readonly { id: string; revision: number }[],
-      connectionCatalog: ToolConnectionCatalogPort = adapterCatalog,
-    ): Promise<{
-      issues: Array<{ reasonCode: string; resourceId: string }>
-      employeeTypeRevision: number
-      exactAdapterBindings: unknown[]
-      sourceConnections: unknown[]
-      targetToolConnections: unknown[]
-    }> => {
-      const appHome = mkdtempSync(join(tmpdir(), 'rfc323-legacy-adapter-projection-'))
-      try {
-        const db = createInMemoryDb(MIGRATIONS)
-        const secondWorkItem = connections.length > 1
-        const v1 = createFixtureModule({
-          db,
-          appHome,
-          typePackage: versionedAdapterDesignPackage({
-            revision: 1,
-            adapterSlot: false,
-            secondWorkItem,
-          }),
-          connectionCatalog,
-          idPrefix: 'legacy-adapter-v1',
+// RFC-359：四个场景原本在**同一个 test 里**各开一个内存库跑一遍。双引擎 harness 每个用例
+// 给一个干净的库，所以拆成四条 test——各自拿自己的库，互不干扰（同名岗位模版、同前缀资源 id
+// 在一个库里会撞唯一键）。四组断言本来就互相独立。
+describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harness) => {
+  const runScenario = async (
+    connections: readonly { id: string; revision: number }[],
+    connectionCatalog: ToolConnectionCatalogPort = adapterCatalog,
+  ): Promise<{
+    issues: Array<{ reasonCode: string; resourceId: string }>
+    employeeTypeRevision: number
+    exactAdapterBindings: unknown[]
+    sourceConnections: unknown[]
+    targetToolConnections: unknown[]
+  }> => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc323-legacy-adapter-projection-'))
+    try {
+      const db = harness.db
+      const secondWorkItem = connections.length > 1
+      const v1 = createFixtureModule({
+        db,
+        appHome,
+        typePackage: versionedAdapterDesignPackage({
+          revision: 1,
+          adapterSlot: false,
+          secondWorkItem,
+        }),
+        connectionCatalog,
+        idPrefix: 'legacy-adapter-v1',
+      })
+      const typeRef = { typeId: 'design', revision: 1 }
+      const workItemRefs = secondWorkItem
+        ? (['design-work', 'design-review'] as const)
+        : (['design-work'] as const)
+      const toolRefs: Array<{ id: string; revision: number }> = []
+      for (const workItemRef of workItemRefs) {
+        const tool = await v1.commands.createTool({
+          typeRef,
+          workItemRef,
+          actorUserId: 'legacy-owner',
+          body: {
+            displayName: `${workItemRef} legacy tool`,
+            description: 'Published before lane Adapter bindings existed.',
+            roleRef: 'primary',
+            implementation: {
+              kind: 'agent',
+              agentRef: { id: `${workItemRef}-agent`, revision: 1 },
+            },
+          },
         })
-        const typeRef = { typeId: 'design', revision: 1 }
-        const workItemRefs = secondWorkItem
-          ? (['design-work', 'design-review'] as const)
-          : (['design-work'] as const)
-        const toolRefs: Array<{ id: string; revision: number }> = []
-        for (const workItemRef of workItemRefs) {
-          const tool = await v1.commands.createTool({
+        toolRefs.push(
+          await v1.commands.publishTool({
             typeRef,
             workItemRef,
+            toolId: tool.id,
             actorUserId: 'legacy-owner',
-            body: {
-              displayName: `${workItemRef} legacy tool`,
-              description: 'Published before lane Adapter bindings existed.',
-              roleRef: 'primary',
-              implementation: {
-                kind: 'agent',
-                agentRef: { id: `${workItemRef}-agent`, revision: 1 },
-              },
-            },
-          })
-          toolRefs.push(
-            await v1.commands.publishTool({
-              typeRef,
-              workItemRef,
-              toolId: tool.id,
-              actorUserId: 'legacy-owner',
-            }),
-          )
-        }
-        const job = await v1.commands.createJobTemplate({
-          typeRef,
-          actorUserId: 'legacy-owner',
-          body: {
-            name: 'Legacy Adapter role',
-            description: 'Legacy exact tool connections are projected on upgrade.',
-            defaultToolBindings: workItemRefs.map((workItemRef, index) => ({
-              workItemRef,
-              slotRef: 'primary',
-              registrationRef: toolRefs[index]!,
-            })),
-          },
-        })
-        const jobRef = await v1.commands.publishJobTemplate({
-          id: job.id,
-          actorUserId: 'legacy-owner',
-        })
-        const employee = await v1.commands.createEmployee({
-          typeRef,
-          actorUserId: 'legacy-owner',
-          body: {
-            name: 'Legacy Adapter employee',
-            jobTemplateRef: jobRef,
-            workScope: { kind: 'global' },
-          },
-        })
-        connections.forEach((connectionRef, index) =>
-          writeLegacyToolConnection(db, toolRefs[index]!, connectionRef),
+          }),
         )
-        const sourceRows = toolRefs.map(
-          (ref) =>
-            db
+      }
+      const job = await v1.commands.createJobTemplate({
+        typeRef,
+        actorUserId: 'legacy-owner',
+        body: {
+          name: 'Legacy Adapter role',
+          description: 'Legacy exact tool connections are projected on upgrade.',
+          defaultToolBindings: workItemRefs.map((workItemRef, index) => ({
+            workItemRef,
+            slotRef: 'primary',
+            registrationRef: toolRefs[index]!,
+          })),
+        },
+      })
+      const jobRef = await v1.commands.publishJobTemplate({
+        id: job.id,
+        actorUserId: 'legacy-owner',
+      })
+      const employee = await v1.commands.createEmployee({
+        typeRef,
+        actorUserId: 'legacy-owner',
+        body: {
+          name: 'Legacy Adapter employee',
+          jobTemplateRef: jobRef,
+          workScope: { kind: 'global' },
+        },
+      })
+      for (const [index, connectionRef] of connections.entries()) {
+        await writeLegacyToolConnection(db, toolRefs[index]!, connectionRef)
+      }
+      const sourceRows = await Promise.all(
+        toolRefs.map(
+          async (ref) =>
+            (
+              await db
+                .select()
+                .from(employeeToolRegistrationRevisions)
+                .where(
+                  and(
+                    eq(employeeToolRegistrationRevisions.toolId, ref.id),
+                    eq(employeeToolRegistrationRevisions.revision, ref.revision),
+                  ),
+                )
+            )[0]!,
+        ),
+      )
+
+      const issues: Array<{ reasonCode: string; resourceId: string }> = []
+      const v2 = createFixtureModule({
+        db,
+        appHome,
+        typePackage: versionedAdapterDesignPackage({
+          revision: 2,
+          adapterSlot: true,
+          secondWorkItem,
+        }),
+        connectionCatalog,
+        issues,
+        idPrefix: 'legacy-adapter-v2',
+      })
+      const current = await v2.queries.getEmployee(employee.id)
+      // RFC-359：读改成 await，于是这两个 map 回调变成 async——用 `Promise.all` 收回数组，
+      // 顺序与原来逐字相同（`Promise.all` 保序），断言仍逐行落在各自那一行上。
+      const sourceConnections = await Promise.all(
+        sourceRows.map(async (source) => {
+          const after = (
+            await db
               .select()
               .from(employeeToolRegistrationRevisions)
               .where(
                 and(
-                  eq(employeeToolRegistrationRevisions.toolId, ref.id),
-                  eq(employeeToolRegistrationRevisions.revision, ref.revision),
+                  eq(employeeToolRegistrationRevisions.toolId, source.toolId),
+                  eq(employeeToolRegistrationRevisions.revision, source.revision),
                 ),
               )
-              .get()!,
-        )
-
-        const issues: Array<{ reasonCode: string; resourceId: string }> = []
-        const v2 = createFixtureModule({
-          db,
-          appHome,
-          typePackage: versionedAdapterDesignPackage({
-            revision: 2,
-            adapterSlot: true,
-            secondWorkItem,
-          }),
-          connectionCatalog,
-          issues,
-          idPrefix: 'legacy-adapter-v2',
-        })
-        const current = await v2.queries.getEmployee(employee.id)
-        const sourceConnections = sourceRows.map((source) => {
-          const after = db
-            .select()
-            .from(employeeToolRegistrationRevisions)
-            .where(
-              and(
-                eq(employeeToolRegistrationRevisions.toolId, source.toolId),
-                eq(employeeToolRegistrationRevisions.revision, source.revision),
-              ),
-            )
-            .get()!
+          )[0]!
           expect(after.contentJson).toBe(source.contentJson)
           expect(after.contentDigest).toBe(source.contentDigest)
           return (
             (JSON.parse(after.contentJson) as { connectionRef?: unknown }).connectionRef ?? null
           )
-        })
-        const targetToolConnections = current.definition.exactToolBindings.map((binding) => {
-          const row = db
-            .select()
-            .from(employeeToolRegistrationRevisions)
-            .where(
-              and(
-                eq(employeeToolRegistrationRevisions.toolId, binding.registrationRef.id),
-                eq(employeeToolRegistrationRevisions.revision, binding.registrationRef.revision),
-              ),
-            )
-            .get()
+        }),
+      )
+      const targetToolConnections = await Promise.all(
+        current.definition.exactToolBindings.map(async (binding) => {
+          const row = (
+            await db
+              .select()
+              .from(employeeToolRegistrationRevisions)
+              .where(
+                and(
+                  eq(employeeToolRegistrationRevisions.toolId, binding.registrationRef.id),
+                  eq(employeeToolRegistrationRevisions.revision, binding.registrationRef.revision),
+                ),
+              )
+          )[0]
           return row === undefined
             ? 'missing'
             : ((JSON.parse(row.contentJson) as { connectionRef?: unknown }).connectionRef ?? null)
-        })
-        return {
-          issues,
-          employeeTypeRevision: current.typeRef.revision,
-          exactAdapterBindings: current.definition.exactAdapterBindings,
-          sourceConnections,
-          targetToolConnections,
-        }
-      } finally {
-        rmSync(appHome, { recursive: true, force: true })
+        }),
+      )
+      return {
+        issues,
+        employeeTypeRevision: current.typeRef.revision,
+        exactAdapterBindings: current.definition.exactAdapterBindings,
+        sourceConnections,
+        targetToolConnections,
       }
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
     }
+  }
 
+  test('legacy lane without a recorded connection falls back to the catalog default Adapter', async () => {
     const missing = await runScenario([])
     expect(missing.issues).toEqual([])
     expect(missing.employeeTypeRevision).toBe(2)
@@ -729,7 +741,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         adapterRef: catalogDefaultAdapterRef,
       },
     ])
+  })
 
+  test('a single recorded connection is projected onto the lane Adapter and the source row stays immutable', async () => {
     const exact = await runScenario([{ id: 'jenkins', revision: 3 }])
     expect(exact.issues).toEqual([])
     expect(exact.employeeTypeRevision).toBe(2)
@@ -742,7 +756,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
     ])
     expect(exact.sourceConnections).toEqual([{ id: 'jenkins', revision: 3 }])
     expect(exact.targetToolConnections).toEqual([null])
+  })
 
+  test('two recorded connections resolve to the first one, not to an issue', async () => {
     const ambiguous = await runScenario([
       { id: 'jenkins-a', revision: 1 },
       { id: 'jenkins-b', revision: 2 },
@@ -756,7 +772,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         adapterRef: { id: 'jenkins-a', revision: 1 },
       },
     ])
+  })
 
+  test('an unavailable catalog leaves the type revision behind and reports adapter-binding-missing', async () => {
     const unavailable = await runScenario([], { resolve: async () => null })
     expect(unavailable.employeeTypeRevision).toBe(1)
     expect(unavailable.issues).toContainEqual(
@@ -1111,7 +1129,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           ],
         },
       })
-      const parentRevisions = (await db.select().from(employeeDefinitionRevisions).all())
+      const parentRevisions = (await db.select().from(employeeDefinitionRevisions))
         .filter((revision) => revision.employeeId === parent.id)
         .map((revision) => ({
           revision: revision.revision,
@@ -1128,7 +1146,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           targetEmployeeRef: { id: target.id, revision: 2 },
         },
       ])
-      const rootRevisions = (await db.select().from(employeeDefinitionRevisions).all())
+      const rootRevisions = (await db.select().from(employeeDefinitionRevisions))
         .filter((revision) => revision.employeeId === root.id)
         .map((revision) => ({
           revision: revision.revision,
@@ -1146,30 +1164,28 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         },
       ])
 
-      const targetV2Revision = (await db
-        .select()
-        .from(employeeDefinitionRevisions)
-        .where(
-          and(
-            eq(employeeDefinitionRevisions.employeeId, target.id),
-            eq(employeeDefinitionRevisions.revision, 2),
-          ),
-        )
-        .get())!
-      await db
-        .insert(employeeDefinitionRevisions)
-        .values({
-          ...targetV2Revision,
-          revision: 3,
-          createdAt: targetV2Revision.createdAt + 1,
-          createdBy: null,
-        })
-        .run()
+      const targetV2Revision = (
+        await db
+          .select()
+          .from(employeeDefinitionRevisions)
+          .where(
+            and(
+              eq(employeeDefinitionRevisions.employeeId, target.id),
+              eq(employeeDefinitionRevisions.revision, 2),
+            ),
+          )
+      )[0]!
+      await db.insert(employeeDefinitionRevisions).values({
+        ...targetV2Revision,
+        revision: 3,
+        createdAt: targetV2Revision.createdAt + 1,
+        createdBy: null,
+      })
+
       await db
         .update(employeeDefinitions)
         .set({ currentRevision: 3, updatedAt: targetV2Revision.createdAt + 1 })
         .where(eq(employeeDefinitions.id, target.id))
-        .run()
 
       const sameTypeReconciled = createFixtureModule({
         db,
@@ -1195,7 +1211,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         },
       })
 
-      const revisionCount = (await db.select().from(employeeDefinitionRevisions).all()).length
+      const revisionCount = (await db.select().from(employeeDefinitionRevisions)).length
       const replayed = createFixtureModule({
         db,
         appHome,
@@ -1205,18 +1221,18 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
       })
       expect((await replayed.queries.getEmployee(parent.id)).revision).toBe(4)
       expect((await replayed.queries.getEmployee(root.id)).revision).toBe(4)
-      expect(await db.select().from(employeeDefinitionRevisions).all()).toHaveLength(revisionCount)
+      expect(await db.select().from(employeeDefinitionRevisions)).toHaveLength(revisionCount)
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }
   })
 })
 
-describe('RFC-310 Type Package automatic compatible upgrades', () => {
+describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harness) => {
   test('automatically re-plans a legacy invocation when only its target can upgrade', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-invocation-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       let now = 30_000
       let ordinal = 0
       const id = () => `invocation-upgrade-${++ordinal}`
@@ -1478,12 +1494,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         artifactRefs: [],
         workSubject: { typeId: 'work-request', subjectRef: 'UPGRADE-RECOVERY-1' },
       })
-      const launchedRow = db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, launched.caseRef.id))
-        .get()!
-      db.update(employeeCases)
+      const launchedRow = (
+        await db.select().from(employeeCases).where(eq(employeeCases.id, launched.caseRef.id))
+      )[0]!
+      await db
+        .update(employeeCases)
         .set({
           state: 'active',
           currentWorkItemRef: 'delegate',
@@ -1491,45 +1506,45 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           updatedAt: ++now,
         })
         .where(eq(employeeCases.id, launched.caseRef.id))
-        .run()
 
       const failedRoundId = (await v1.runtime!.worker.planOneReaction())!
-      const failedRound = db
-        .select()
-        .from(employeeReactionRounds)
-        .where(eq(employeeReactionRounds.id, failedRoundId))
-        .get()!
+      const failedRound = (
+        await db
+          .select()
+          .from(employeeReactionRounds)
+          .where(eq(employeeReactionRounds.id, failedRoundId))
+      )[0]!
       const failedPlan = JSON.parse(failedRound.planJson) as { implementationJson: string }
       const [frozenBinding] = JSON.parse(failedPlan.implementationJson) as Array<{
         memberRef: string
         targetEmployeeRef: { id: string; revision: number }
       }>
       const legacyInvocationId = `invocation:${failedRoundId}:${frozenBinding!.memberRef}`
-      db.insert(employeeInvocations)
-        .values({
-          id: legacyInvocationId,
-          idempotencyKey: `employee-invocation:${failedRoundId}:${frozenBinding!.memberRef}`,
-          parentCaseId: launched.caseRef.id,
-          parentRoundId: failedRoundId,
-          targetEmployeeId: frozenBinding!.targetEmployeeRef.id,
-          targetEmployeeRevision: frozenBinding!.targetEmployeeRef.revision,
-          targetWorkScopeRefJson: JSON.stringify({ id: 'legacy-scope', revision: 1 }),
-          inputEnvelopeRef: `reaction-round:${failedRoundId}`,
-          inputDigest: '0'.repeat(64),
-          completionContractRefJson: JSON.stringify({
-            contractId: 'design.cross-work',
-            resultSchemaId: 'design.delegated-result.v1',
-            eventTypeRef: { id: 'design.employee-result', revision: 1 },
-            sourceRef: { id: 'employee.channel', revision: 1 },
-          }),
-          deadlineAt: now + 60_000,
-          childCaseId: null,
-          state: 'requested',
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
-      db.update(employeeReactionRounds)
+      await db.insert(employeeInvocations).values({
+        id: legacyInvocationId,
+        idempotencyKey: `employee-invocation:${failedRoundId}:${frozenBinding!.memberRef}`,
+        parentCaseId: launched.caseRef.id,
+        parentRoundId: failedRoundId,
+        targetEmployeeId: frozenBinding!.targetEmployeeRef.id,
+        targetEmployeeRevision: frozenBinding!.targetEmployeeRef.revision,
+        targetWorkScopeRefJson: JSON.stringify({ id: 'legacy-scope', revision: 1 }),
+        inputEnvelopeRef: `reaction-round:${failedRoundId}`,
+        inputDigest: '0'.repeat(64),
+        completionContractRefJson: JSON.stringify({
+          contractId: 'design.cross-work',
+          resultSchemaId: 'design.delegated-result.v1',
+          eventTypeRef: { id: 'design.employee-result', revision: 1 },
+          sourceRef: { id: 'employee.channel', revision: 1 },
+        }),
+        deadlineAt: now + 60_000,
+        childCaseId: null,
+        state: 'requested',
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      await db
+        .update(employeeReactionRounds)
         .set({
           state: 'failed',
           outputJson: JSON.stringify({
@@ -1541,22 +1556,20 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           settledAt: now,
         })
         .where(eq(employeeReactionRounds.id, failedRoundId))
-        .run()
-      const invocationOutbox = db
-        .select()
-        .from(employeeOsOutbox)
-        .all()
-        .find((row) => row.caseId === launched.caseRef.id && row.kind === 'invocation-create')!
-      db.update(employeeOsOutbox)
+
+      const invocationOutbox = (await db.select().from(employeeOsOutbox)).find(
+        (row) => row.caseId === launched.caseRef.id && row.kind === 'invocation-create',
+      )!
+      await db
+        .update(employeeOsOutbox)
         .set({ state: 'failed', attemptCount: 1, updatedAt: now })
         .where(eq(employeeOsOutbox.id, invocationOutbox.id))
-        .run()
-      const plannedCase = db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, launched.caseRef.id))
-        .get()!
-      db.update(employeeCases)
+
+      const plannedCase = (
+        await db.select().from(employeeCases).where(eq(employeeCases.id, launched.caseRef.id))
+      )[0]!
+      await db
+        .update(employeeCases)
         .set({
           state: 'blocked',
           blockReason: 'legacy employee upgrade failure',
@@ -1565,14 +1578,12 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           updatedAt: ++now,
         })
         .where(eq(employeeCases.id, launched.caseRef.id))
-        .run()
 
-      const parentDefinition = db
-        .select()
-        .from(employeeDefinitions)
-        .where(eq(employeeDefinitions.id, parent.id))
-        .get()!
-      db.update(employeeDefinitions)
+      const parentDefinition = (
+        await db.select().from(employeeDefinitions).where(eq(employeeDefinitions.id, parent.id))
+      )[0]!
+      await db
+        .update(employeeDefinitions)
         .set({
           configurationJson: JSON.stringify({
             ...JSON.parse(parentDefinition.configurationJson),
@@ -1581,7 +1592,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           updatedAt: ++now,
         })
         .where(eq(employeeDefinitions.id, parent.id))
-        .run()
+
       const v2Base = versionedCollaboratingDesignPackage(2)
       const v2Package: EmployeeTypePackageRegistration = {
         ...v2Base,
@@ -1607,18 +1618,20 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       const recoveredRoundId = (await v2.runtime!.worker.planOneReaction())!
       expect(recoveredRoundId).not.toBe(failedRoundId)
 
-      let recoveredInvocation = db
-        .select()
-        .from(employeeInvocations)
-        .where(eq(employeeInvocations.parentRoundId, recoveredRoundId))
-        .get()
-      for (let attempt = 0; attempt < 20 && recoveredInvocation === undefined; attempt += 1) {
-        await v2.runtime!.worker.runOneOutbox()
-        recoveredInvocation = db
+      let recoveredInvocation = (
+        await db
           .select()
           .from(employeeInvocations)
           .where(eq(employeeInvocations.parentRoundId, recoveredRoundId))
-          .get()
+      )[0]
+      for (let attempt = 0; attempt < 20 && recoveredInvocation === undefined; attempt += 1) {
+        await v2.runtime!.worker.runOneOutbox()
+        recoveredInvocation = (
+          await db
+            .select()
+            .from(employeeInvocations)
+            .where(eq(employeeInvocations.parentRoundId, recoveredRoundId))
+        )[0]
       }
       expect(recoveredInvocation).toMatchObject({
         targetEmployeeId: target.id,
@@ -1627,11 +1640,12 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         childCaseId: expect.any(String),
       })
       expect(
-        db
-          .select()
-          .from(employeeInvocations)
-          .where(eq(employeeInvocations.id, legacyInvocationId))
-          .get(),
+        (
+          await db
+            .select()
+            .from(employeeInvocations)
+            .where(eq(employeeInvocations.id, legacyInvocationId))
+        )[0],
       ).toMatchObject({
         targetEmployeeId: target.id,
         targetEmployeeRevision: 1,
@@ -1680,7 +1694,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         workScope: { kind: 'global' },
       })
       expect(
-        (await db.select().from(employeeDefinitions).all()).find((row) => row.id === original.id),
+        (await db.select().from(employeeDefinitions)).find((row) => row.id === original.id),
       ).toMatchObject({
         ownerUserId: 'owner-1',
         visibility: 'private',
@@ -1694,10 +1708,10 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
       ).toHaveLength(1)
 
       const countsAfterUpgrade = {
-        tools: (await db.select().from(employeeToolRegistrations).all()).length,
-        jobs: (await db.select().from(employeeJobTemplates).all()).length,
-        employees: (await db.select().from(employeeDefinitions).all()).length,
-        revisions: (await db.select().from(employeeDefinitionRevisions).all()).length,
+        tools: (await db.select().from(employeeToolRegistrations)).length,
+        jobs: (await db.select().from(employeeJobTemplates)).length,
+        employees: (await db.select().from(employeeDefinitions)).length,
+        revisions: (await db.select().from(employeeDefinitionRevisions)).length,
       }
       const replayedModule = createFixtureModule({
         db,
@@ -1707,13 +1721,13 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
       })
       expect((await replayedModule.queries.listLaunchableEmployees())[0]?.revision).toBe(2)
       expect({
-        tools: (await db.select().from(employeeToolRegistrations).all()).length,
-        jobs: (await db.select().from(employeeJobTemplates).all()).length,
-        employees: (await db.select().from(employeeDefinitions).all()).length,
-        revisions: (await db.select().from(employeeDefinitionRevisions).all()).length,
+        tools: (await db.select().from(employeeToolRegistrations)).length,
+        jobs: (await db.select().from(employeeJobTemplates)).length,
+        employees: (await db.select().from(employeeDefinitions)).length,
+        revisions: (await db.select().from(employeeDefinitionRevisions)).length,
       }).toEqual(countsAfterUpgrade)
 
-      const frozenRevisions = (await db.select().from(employeeDefinitionRevisions).all())
+      const frozenRevisions = (await db.select().from(employeeDefinitionRevisions))
         .filter((row) => row.employeeId === original.id)
         .map((row) => ({
           revision: row.revision,
@@ -1729,7 +1743,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
   })
 })
 
-describe('RFC-310 Type Package automatic compatible upgrades', () => {
+describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harness) => {
   for (const source of [
     { ownerUserId: 'owner-1', visibility: 'private' as const },
     { ownerUserId: 'owner-1', visibility: 'public' as const },
@@ -1738,56 +1752,56 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
     test(`RFC-330 D18': successors inherit owner=${source.ownerUserId ?? 'null'} visibility=${source.visibility} and start with zero grants`, async () => {
       const appHome = mkdtempSync(join(tmpdir(), 'rfc330-auto-upgrade-acl-'))
       try {
-        const db = createInMemoryDb(MIGRATIONS)
+        const db = harness.db
         await seedPublishedEmployee({ db, appHome })
         // 把 source 行（工具 + 模版 + 员工定义）改成本用例的归属 / 可见性，并各挂一条 grant——
         // successor 必须复制 owner + visibility（D18'），**不**复制 grants（用户裁定 D22）。
-        const sourceTool = db.select().from(employeeToolRegistrations).all()[0]!
-        const sourceJob = db.select().from(employeeJobTemplates).all()[0]!
-        const sourceEmployee = db.select().from(employeeDefinitions).all()[0]!
-        db.update(employeeToolRegistrations)
+        const sourceTool = (await db.select().from(employeeToolRegistrations))[0]!
+        const sourceJob = (await db.select().from(employeeJobTemplates))[0]!
+        const sourceEmployee = (await db.select().from(employeeDefinitions))[0]!
+        await db
+          .update(employeeToolRegistrations)
           .set({ ownerUserId: source.ownerUserId, visibility: source.visibility })
           .where(eq(employeeToolRegistrations.id, sourceTool.id))
-          .run()
-        db.update(employeeJobTemplates)
+
+        await db
+          .update(employeeJobTemplates)
           .set({ ownerUserId: source.ownerUserId, visibility: source.visibility })
           .where(eq(employeeJobTemplates.id, sourceJob.id))
-          .run()
-        db.update(employeeDefinitions)
+
+        await db
+          .update(employeeDefinitions)
           .set({ ownerUserId: source.ownerUserId })
           .where(eq(employeeDefinitions.id, sourceEmployee.id))
-          .run()
-        db.insert(users)
-          .values({
-            id: 'grantee-1',
-            username: 'grantee-1',
-            displayName: 'grantee-1',
-            role: 'user',
-            status: 'active',
-            createdAt: 1,
-            updatedAt: 1,
-          })
-          .run()
-        db.insert(resourceGrants)
-          .values([
-            {
-              resourceType: 'employee_tool',
-              resourceId: sourceTool.id,
-              userId: 'grantee-1',
-              level: 'read',
-              addedBy: 'seed',
-              addedAt: 1,
-            },
-            {
-              resourceType: 'employee_job_template',
-              resourceId: sourceJob.id,
-              userId: 'grantee-1',
-              level: 'write',
-              addedBy: 'seed',
-              addedAt: 1,
-            },
-          ])
-          .run()
+
+        await db.insert(users).values({
+          id: 'grantee-1',
+          username: 'grantee-1',
+          displayName: 'grantee-1',
+          role: 'user',
+          status: 'active',
+          createdAt: 1,
+          updatedAt: 1,
+        })
+
+        await db.insert(resourceGrants).values([
+          {
+            resourceType: 'employee_tool',
+            resourceId: sourceTool.id,
+            userId: 'grantee-1',
+            level: 'read',
+            addedBy: 'seed',
+            addedAt: 1,
+          },
+          {
+            resourceType: 'employee_job_template',
+            resourceId: sourceJob.id,
+            userId: 'grantee-1',
+            level: 'write',
+            addedBy: 'seed',
+            addedAt: 1,
+          },
+        ])
 
         const issues: Array<{ reasonCode: string; resourceId: string }> = []
         const successorModule = createFixtureModule({
@@ -1799,16 +1813,12 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         await successorModule.maintenance.settleAutomaticUpgrades()
         expect(issues).toEqual([])
 
-        const successorTool = db
-          .select()
-          .from(employeeToolRegistrations)
-          .all()
-          .find((row) => row.typeRevision === 2)
-        const successorJob = db
-          .select()
-          .from(employeeJobTemplates)
-          .all()
-          .find((row) => row.typeRevision === 2)
+        const successorTool = (await db.select().from(employeeToolRegistrations)).find(
+          (row) => row.typeRevision === 2,
+        )
+        const successorJob = (await db.select().from(employeeJobTemplates)).find(
+          (row) => row.typeRevision === 2,
+        )
         expect(successorTool).toMatchObject({
           ownerUserId: source.ownerUserId,
           visibility: source.visibility,
@@ -1822,13 +1832,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           name: '产品设计岗位',
         })
         expect(
-          db
-            .select()
-            .from(resourceGrants)
-            .all()
-            .filter(
-              (row) => row.resourceId === successorTool!.id || row.resourceId === successorJob!.id,
-            ),
+          (await db.select().from(resourceGrants)).filter(
+            (row) => row.resourceId === successorTool!.id || row.resourceId === successorJob!.id,
+          ),
         ).toEqual([])
       } finally {
         rmSync(appHome, { recursive: true, force: true })
@@ -1839,7 +1845,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
   test("RFC-330 D17': another owner's same-name template does not rename the successor", async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc330-auto-upgrade-other-owner-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const futureTypeRef = { typeId: 'design', revision: 2 }
       const future = createFixtureModule({
         db,
@@ -1956,14 +1962,14 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           }),
         ]),
       )
-      expect(await db.select().from(employeeDefinitions).all()).toEqual([
+      expect(await db.select().from(employeeDefinitions)).toEqual([
         expect.objectContaining({
           id: original.id,
           typeRevision: 1,
           currentRevision: 1,
         }),
       ])
-      expect(await db.select().from(employeeDefinitionRevisions).all()).toHaveLength(1)
+      expect(await db.select().from(employeeDefinitionRevisions)).toHaveLength(1)
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }
@@ -2007,11 +2013,12 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           ],
         },
       })
-      const migratedTool = await db
-        .select()
-        .from(employeeToolRegistrations)
-        .where(eq(employeeToolRegistrations.typeRevision, 2))
-        .get()
+      const migratedTool = (
+        await db
+          .select()
+          .from(employeeToolRegistrations)
+          .where(eq(employeeToolRegistrations.typeRevision, 2))
+      )[0]
       expect(migratedTool).toBeDefined()
       expect(
         (
@@ -2026,11 +2033,11 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
   })
 })
 
-describe('RFC-310 Type Package automatic compatible upgrades', () => {
+describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harness) => {
   test('a target scope codec rejection is diagnostic-only and never asks the user to upgrade', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-scope-blocked-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const original = await seedPublishedEmployee({ db, appHome })
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const targetPackage = versionedDesignPackage(2)
@@ -2057,9 +2064,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       ])
       // The independently valid published job closure still migrates; only the
       // employee definition is pinned by its incompatible scope.
-      expect(db.select().from(employeeJobTemplates).all()).toHaveLength(2)
-      expect(db.select().from(employeeToolRegistrations).all()).toHaveLength(2)
-      expect(db.select().from(employeeDefinitionRevisions).all()).toHaveLength(1)
+      expect(await db.select().from(employeeJobTemplates)).toHaveLength(2)
+      expect(await db.select().from(employeeToolRegistrations)).toHaveLength(2)
+      expect(await db.select().from(employeeDefinitionRevisions)).toHaveLength(1)
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }
@@ -2068,7 +2075,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
   test('platform tools migrate only through a provider-validated target successor', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-platform-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const platformTools = platformToolCatalog()
       const v1 = createFixtureModule({
         db,
@@ -2123,7 +2130,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           typeRef: { typeId: 'design', revision: 2 },
         }),
       ])
-      expect(db.select().from(employeeToolRegistrations).all()).toEqual([])
+      expect(await db.select().from(employeeToolRegistrations)).toEqual([])
       expect(
         (await v2.queries.listJobTemplates({ typeId: 'design', revision: 2 }))[0]?.draft
           .defaultToolBindings[0]?.registrationRef,

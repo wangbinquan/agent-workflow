@@ -6800,3 +6800,12 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
 - **判「某一侧 composition 少实现了一个方法」要靠装配锁**：写一条把两侧都构造出来、断言
   `typeof participant.method === 'function'` 的用例（其余依赖全给 `null as never`，反正不碰）。
   行为用例覆盖不到这种缺席——缺席的那一侧根本走不到行为断言。
+
+- **「一个 test 里跑 N 个各自建库的场景」一律拆成 N 条 test**。双引擎 harness 每个用例给一个干净的
+  库；硬要几个场景共用一个库，先撞主键（同前缀自增 id 重插），给 id 加场景号之后再撞**名字**的
+  唯一键，越补越脏。拆开是一次性的、也更好读。
+
+- **终结符批量转换器故意不碰数组回调**（`.map` / `.forEach` 里的 `.get()` / `.all()` / `.run()`）：
+  把回调变 async 会静默改变契约。人来定：无写序依赖的 `.map` 改
+  `await Promise.all(xs.map(async …))`（`Promise.all` 保序，断言不用动）；
+  有写序依赖的 `forEach` 改 `for (const x of xs) { await … }`。

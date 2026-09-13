@@ -16,6 +16,8 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   developmentApprovalSagas,
   developmentMissionLinks,
@@ -33,6 +35,12 @@ import { createUser } from '@/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
+// RFC-359：这一块**有意留在单引擎**。`readAuthorityFence` 是 WS 发帧热路径上的**同步**读
+// ——帧要在当前 tick 内定夺，改 async 会让判定落到下一个微任务、而帧那时已经发出去了。
+// 能力矩阵的 `readRowSync` 只有 bun:sqlite 给得出；PostgreSQL 上围栏读的是进程内的
+// `AuthorityFenceCache`（授权读预热 + 写事务提交后刷新，RFC-349 的单 daemon 世代前提下
+// 它**就是**围栏本身）。本块断言的正是「直接改库之后同步读立刻看得见」，那条语义按定义
+// 只在 SQLite 上成立——拿双引擎 harness 跑它等于断言 PG 必须有一个它按设计就没有的能力。
 describe('RFC-317 T41 · TP-03 —— identity-access 的同步授权围栏读', () => {
   test('返回账号状态与授权版本；查无此人返回 null', async () => {
     const db = createInMemoryDb(MIGRATIONS)
@@ -71,29 +79,27 @@ describe('RFC-317 T41 · TP-03 —— identity-access 的同步授权围栏读',
   })
 })
 
-describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
-  const seedMission = (db: ReturnType<typeof createInMemoryDb>, id: string, terminal: boolean) => {
-    db.insert(developmentMissions)
-      .values({
-        id,
-        status: terminal ? 'completed' : 'running',
-        repositoryId: 'repo-1',
-        sourceKind: 'direct',
-        deliveryKind: 'merge-request',
-        createdAt: 1,
-        updatedAt: 1,
-        ...(terminal ? { terminalAt: 2 } : {}),
-      })
-      .run()
+describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (harness) => {
+  const seedMission = async (db: ProviderNeutralDatabase, id: string, terminal: boolean) => {
+    await db.insert(developmentMissions).values({
+      id,
+      status: terminal ? 'completed' : 'running',
+      repositoryId: 'repo-1',
+      sourceKind: 'direct',
+      deliveryKind: 'merge-request',
+      createdAt: 1,
+      updatedAt: 1,
+      ...(terminal ? { terminalAt: 2 } : {}),
+    })
   }
 
   test('只数未终结的 Mission（terminalAt 为 NULL）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const drain = createLegacyMissionDrainPort(db)
     expect(await drain.openMissionCount()).toBe(0)
 
-    seedMission(db, 'open-1', false)
-    seedMission(db, 'closed-1', true)
+    await seedMission(db, 'open-1', false)
+    await seedMission(db, 'closed-1', true)
     expect(await drain.openMissionCount()).toBe(1)
   })
 
@@ -101,81 +107,76 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
    * 审批 saga 行挂在 step run 上，step run 又挂在 mission 上。这里把这条外键链一次性
    * 补齐——本组断言只关心「未决审批计数」，链上的业务语义不参与。
    */
-  const seedStepRun = (db: ReturnType<typeof createInMemoryDb>, id: string, missionId: string) => {
-    db.insert(developmentStepRuns)
-      .values({
-        id,
-        missionId,
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        stepId: 'approval',
-        // 唯一键是 (mission, employee, revision, step, attempt, inputDigest)——
-        // 同一个 mission 上播多条时必须让 digest 各不相同。
-        inputDigest: `digest-${id}`,
-        producerKind: 'platform',
-        createdAt: 2,
-        updatedAt: 2,
-      })
-      .run()
+  const seedStepRun = async (db: ProviderNeutralDatabase, id: string, missionId: string) => {
+    await db.insert(developmentStepRuns).values({
+      id,
+      missionId,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      stepId: 'approval',
+      // 唯一键是 (mission, employee, revision, step, attempt, inputDigest)——
+      // 同一个 mission 上播多条时必须让 digest 各不相同。
+      inputDigest: `digest-${id}`,
+      producerKind: 'platform',
+      createdAt: 2,
+      updatedAt: 2,
+    })
+
     return id
   }
 
-  const seedApproval = (
-    db: ReturnType<typeof createInMemoryDb>,
+  const seedApproval = async (
+    db: ProviderNeutralDatabase,
     input: { id: string; missionId: string; latestStatus: string },
   ) => {
-    const stepRunId = seedStepRun(db, `step-${input.id}`, input.missionId)
-    db.insert(developmentApprovalSagas)
-      .values({
-        id: input.id,
-        missionId: input.missionId,
-        stepRunId,
-        adapterId: 'adapter-1',
-        adapterRevision: 1,
-        draftRef: 'draft-1',
-        submitIntentDigest: 'intent-digest',
-        idempotencyKey: `key-${input.id}`,
-        latestStatus: input.latestStatus,
-        deadlineAt: 10_000,
-        createdAt: 2,
-        updatedAt: 2,
-      })
-      .run()
+    const stepRunId = await seedStepRun(db, `step-${input.id}`, input.missionId)
+    await db.insert(developmentApprovalSagas).values({
+      id: input.id,
+      missionId: input.missionId,
+      stepRunId,
+      adapterId: 'adapter-1',
+      adapterRevision: 1,
+      draftRef: 'draft-1',
+      submitIntentDigest: 'intent-digest',
+      idempotencyKey: `key-${input.id}`,
+      latestStatus: input.latestStatus,
+      deadlineAt: 10_000,
+      createdAt: 2,
+      updatedAt: 2,
+    })
   }
 
   test('排空报告带上活跃 MR 认领 / 子链接 / 未决审批三项计数', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedMission(db, 'parent-1', false)
-    seedMission(db, 'child-1', false)
-    db.insert(developmentMrClaims)
-      .values({
-        id: 'claim-1',
-        codeHostEndpointRef: 'endpoint-1',
-        stableProjectRef: 'project-1',
-        mrIid: '7',
-        missionId: 'parent-1',
-        epoch: 1,
-        state: 'active',
-        createdAt: 2,
-      })
-      .run()
-    db.insert(developmentMissionLinks)
-      .values({
-        id: 'link-1',
-        parentMissionId: 'parent-1',
-        parentStepRunId: seedStepRun(db, 'step-link-1', 'parent-1'),
-        targetRepositoryId: 'repo-1',
-        targetEmployeeId: 'employee-1',
-        targetEmployeeRevision: 1,
-        inputDigest: 'link-digest',
-        idempotencyKey: 'link-key',
-        childMissionId: 'child-1',
-        completion: 'await-terminal',
-        createdAt: 2,
-        updatedAt: 2,
-      })
-      .run()
-    seedApproval(db, { id: 'saga-1', missionId: 'parent-1', latestStatus: 'pending' })
+    const db = harness.db
+    await seedMission(db, 'parent-1', false)
+    await seedMission(db, 'child-1', false)
+    await db.insert(developmentMrClaims).values({
+      id: 'claim-1',
+      codeHostEndpointRef: 'endpoint-1',
+      stableProjectRef: 'project-1',
+      mrIid: '7',
+      missionId: 'parent-1',
+      epoch: 1,
+      state: 'active',
+      createdAt: 2,
+    })
+
+    await db.insert(developmentMissionLinks).values({
+      id: 'link-1',
+      parentMissionId: 'parent-1',
+      parentStepRunId: await seedStepRun(db, 'step-link-1', 'parent-1'),
+      targetRepositoryId: 'repo-1',
+      targetEmployeeId: 'employee-1',
+      targetEmployeeRevision: 1,
+      inputDigest: 'link-digest',
+      idempotencyKey: 'link-key',
+      childMissionId: 'child-1',
+      completion: 'await-terminal',
+      createdAt: 2,
+      updatedAt: 2,
+    })
+
+    await seedApproval(db, { id: 'saga-1', missionId: 'parent-1', latestStatus: 'pending' })
 
     const report = await createLegacyMissionDrainPort(db).drainReport(10)
     expect(report.truncated).toBe(false)
@@ -201,10 +202,10 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
   })
 
   test('**已了结**的审批不计入未决数（这份终态词表归 development-automation）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedMission(db, 'settled-1', false)
+    const db = harness.db
+    await seedMission(db, 'settled-1', false)
     for (const [index, status] of ['approved', 'rejected', 'expired', 'unavailable'].entries()) {
-      seedApproval(db, {
+      await seedApproval(db, {
         id: `saga-settled-${index}`,
         missionId: 'settled-1',
         latestStatus: status,
@@ -216,18 +217,19 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
   })
 
   test('超过 limit 时如实标 truncated（报告不能假装自己是全部）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    for (let index = 0; index < 4; index += 1) seedMission(db, `bulk-${index}`, false)
+    const db = harness.db
+    for (let index = 0; index < 4; index += 1) await seedMission(db, `bulk-${index}`, false)
     const report = await createLegacyMissionDrainPort(db).drainReport(2)
     expect(report.truncated).toBe(true)
     expect(report.entries).toHaveLength(2)
   })
 })
 
-describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
+describeEachProvider('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', (harness) => {
   /** case 行是轮次行的外键前提；这里只填必填列，业务语义不参与本组断言。 */
-  const seedCase = (db: ReturnType<typeof createInMemoryDb>, caseId: string) => {
-    db.insert(employeeCases)
+  const seedCase = async (db: ProviderNeutralDatabase, caseId: string) => {
+    await db
+      .insert(employeeCases)
       .values({
         id: caseId,
         employeeId: 'employee-1',
@@ -241,11 +243,10 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
         updatedAt: 1,
       })
       .onConflictDoNothing()
-      .run()
   }
 
-  const seedRound = (
-    db: ReturnType<typeof createInMemoryDb>,
+  const seedRound = async (
+    db: ProviderNeutralDatabase,
     round: {
       id: string
       caseId: string
@@ -255,33 +256,31 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
       settledAt: number | null
     },
   ) => {
-    seedCase(db, round.caseId)
-    db.insert(employeeReactionRounds)
-      .values({
-        id: round.id,
-        caseId: round.caseId,
-        caseRevision: 1,
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        ruleId: 'rule-1',
-        workItemRef: round.workItemRef,
-        workContractId: 'contract-1',
-        workContractVersion: 1,
-        executionPolicyRevision: 1,
-        inputContextRefsJson: '[]',
-        state: round.state,
-        attemptOrdinal: 0,
-        planJson: JSON.stringify({ roundRef: round.id }),
-        createdAt: 1,
-        updatedAt: 1,
-        ...(round.settledAt === null ? {} : { settledAt: round.settledAt }),
-      })
-      .run()
+    await seedCase(db, round.caseId)
+    await db.insert(employeeReactionRounds).values({
+      id: round.id,
+      caseId: round.caseId,
+      caseRevision: 1,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      ruleId: 'rule-1',
+      workItemRef: round.workItemRef,
+      workContractId: 'contract-1',
+      workContractVersion: 1,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      state: round.state,
+      attemptOrdinal: 0,
+      planJson: JSON.stringify({ roundRef: round.id }),
+      createdAt: 1,
+      updatedAt: 1,
+      ...(round.settledAt === null ? {} : { settledAt: round.settledAt }),
+    })
   }
 
   test('frozenPlan 按 roundRef 取回 caseId 与冻结计划；查无返回 null', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedRound(db, {
+    const db = harness.db
+    await seedRound(db, {
       id: 'round-1',
       caseId: 'case-1',
       workItemRef: 'observe-mr',
@@ -297,15 +296,15 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
   })
 
   test('lastSettledRound 只认已结算的轮次，并取 settledAt 最晚的那条', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedRound(db, {
+    const db = harness.db
+    await seedRound(db, {
       id: 'repair-early',
       caseId: 'case-1',
       workItemRef: 'repair-conflict',
       state: 'completed',
       settledAt: 100,
     })
-    seedRound(db, {
+    await seedRound(db, {
       id: 'repair-late',
       caseId: 'case-1',
       workItemRef: 'repair-conflict',
@@ -313,7 +312,7 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
       settledAt: 200,
     })
     // 未结算的那条不能被选中——这正是原来散在别人 where 子句里的 `state === 'completed'`。
-    seedRound(db, {
+    await seedRound(db, {
       id: 'repair-running',
       caseId: 'case-1',
       workItemRef: 'repair-conflict',
@@ -329,15 +328,15 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
   })
 
   test('caseId / workItemRef 都参与过滤（串台会把别的 case 的修复结果当成自己的）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedRound(db, {
+    const db = harness.db
+    await seedRound(db, {
       id: 'other-case',
       caseId: 'case-2',
       workItemRef: 'repair-conflict',
       state: 'completed',
       settledAt: 100,
     })
-    seedRound(db, {
+    await seedRound(db, {
       id: 'other-item',
       caseId: 'case-1',
       workItemRef: 'observe-mr',

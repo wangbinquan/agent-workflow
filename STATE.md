@@ -2,6 +2,22 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 6，账本 **404** / open **99**——open 首次进到两位数）
+>
+> 落档 plan §5dn。`rfc317-cross-context-ports` 10 → 3、`rfc310-type-package-auto-upgrade` 6 → 0。
+>
+> **账本加了第五条免责判据 `sync-engine-capability`**：`readAuthorityFence` 是 WS 发帧热路径上的
+> **同步**读（帧要在当前 tick 内定夺），建在 `EngineCapabilities.readRowSync` 上——而那一格
+> **只有 bun:sqlite 给得出**。断言「直接改库之后同步读立刻看得见」按定义只在 SQLite 上成立，
+> 拿双引擎 harness 跑它等于要求 PG 具备一个它按设计就没有的能力。于是 open 再降 1 到 99，
+> 这个数字重新恢复「只数真债」的含义。
+>
+> **一条新定式**：「一个 test 里跑 N 个各自建库的场景」一律**拆成 N 条 test**——双引擎 harness
+> 本来就每个用例给一个干净的库。继续共用一个库的话，先撞主键、再撞名字唯一键，越补越脏。
+>
+> 另：数组回调里的终结符转换器**故意**不碰（把回调变 async 会静默改变契约）——
+> `.map` 改 `Promise.all(map(async …))`（保序），有写序依赖的 `forEach` 改 `for…of`。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 5，**逮到一条用户可见的引擎分叉**；账本 **405** / open **101**）
 >
 > 落档 plan §5dm。**`b41a8cab2` 的 CI 全绿**。

@@ -351,7 +351,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc310-pr6-pipeline-adapter.test.ts: 1',
   'rfc310-pr7b-handover.test.ts: 1',
   'rfc310-pr9-cutover.test.ts: 3',
-  'rfc310-type-package-auto-upgrade.test.ts: 6',
   'rfc311-backup-concurrency.test.ts: 1',
   'rfc311-backup-worker-fallback.test.ts: 5',
   'rfc311-branch-started-at-maintenance.test.ts: 2',
@@ -366,7 +365,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc313-session-escalation.test.ts: 1',
   'rfc314-autokill-stall-window.test.ts: 1',
   'rfc314-session-view-window.test.ts: 1',
-  'rfc317-cross-context-ports.test.ts: 10',
+  'rfc317-cross-context-ports.test.ts: 3',
   'rfc319-fusion-manifest-merge-back.test.ts: 1',
   'rfc321-repository-publication-system-mock-e2e.test.ts: 1',
   'rfc321-repository-transport-http.test.ts: 1',
@@ -611,6 +610,16 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
     holds: (_rel, code) => /(?<![A-Za-z0-9_.])new\s+Database\s*\(/.test(code),
   },
   {
+    // 能力矩阵里**同步**的那一格。`readAuthorityFence` 是 WS 发帧热路径上的同步读——帧要在
+    // 当前 tick 内定夺，改 async 会让判定落到下一个微任务、而帧那时已经发出去了。它建在
+    // `EngineCapabilities.readRowSync` 上，而那一格**只有 bun:sqlite 给得出**（PostgreSQL 的
+    // 实现返回 undefined，围栏退回进程内的 `AuthorityFenceCache`——RFC-349 的单 daemon 世代
+    // 前提下那份缓存**就是**围栏本身）。断言「直接改库之后同步读立刻看得见」按定义只在 SQLite
+    // 上成立，拿双引擎 harness 跑它等于要求 PG 具备一个它按设计就没有的能力。
+    id: 'sync-engine-capability',
+    holds: (_rel, code) => /(?<![A-Za-z0-9_.])readAuthorityFence\s*\(/.test(code),
+  },
+  {
     id: 'sqlite-only-primitive',
     holds: (_rel, code) =>
       // `.$client` 取的是裸 bun:sqlite 句柄。**只关它不算**（§5cm：`$client.close()` 只是收尾，
@@ -759,10 +768,8 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc310-pr6-pipeline-adapter.test.ts',
   'rfc310-pr7b-handover.test.ts',
   'rfc310-pr9-cutover.test.ts',
-  'rfc310-type-package-auto-upgrade.test.ts',
   'rfc311-repos-page.test.ts',
   'rfc311-task-page-fastpath.test.ts',
-  'rfc317-cross-context-ports.test.ts',
   'rfc321-repository-publication-system-mock-e2e.test.ts',
   'rfc323-platform-pipeline-collection.test.ts',
   'rfc326-review-decision-batch.test.ts',

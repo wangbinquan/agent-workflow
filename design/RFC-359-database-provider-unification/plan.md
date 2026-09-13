@@ -9084,3 +9084,38 @@ TRUNCATE 归零——保持原生 `describe`，两种块并存（§5dh 的定式
 `inspectDigitalEmployeeHumanReviewState`（把中立实现装进 PG 泳道，正是装配根该做的事）；
 ②该 composition 文件多一条 `@/db/query` 的**类型**边（中立签名的必要条件）。
 两条都随 W4-E1 的 public 用例切换一并退役。
+
+## 5dn. 两块各 6–10 条（404 / open **99**），外加账本的第五条免责判据
+
+### `rfc317-cross-context-ports`：10 → 3，剩下那 3 条**登记为按裁决单引擎**
+
+DE-01（旧 Mission 排空视图）与 DE-02（反应轮次只读查询面）两块的端口本来就收
+`ProviderNeutralDatabase`，迁移只卡在 seed 助手是同步的（`.run()` 不 await ⇒ PG 上外键链断）。
+`termfix2` 一遍过：7 个终结符退役、5 个助手变 async、17 个调用点补 await。
+
+TP-03（`readAuthorityFence`）**有意留在单引擎**，并为此给账本加了第五条免责判据
+`sync-engine-capability`：那条读是 WS 发帧热路径上的**同步**读——帧要在当前 tick 内定夺，
+改 async 会让判定落到下一个微任务、而帧那时已经发出去了。它建在
+`EngineCapabilities.readRowSync` 上，而那一格**只有 bun:sqlite 给得出**（PG 侧返回 undefined，
+围栏退回进程内的 `AuthorityFenceCache`——RFC-349 的单 daemon 世代前提下那份缓存**就是**围栏本身）。
+本块断言的正是「直接改库之后同步读立刻看得见」，那条语义按定义只在 SQLite 上成立；
+拿双引擎 harness 跑它等于要求 PG 具备一个它按设计就没有的能力。
+于是 open 从 100 再降 1 到 **99**——这个数字重新恢复「只数真债」的含义。
+
+### `rfc310-type-package-auto-upgrade`：6 → 0（2164 行，三跳）
+
+1. **数组回调里的终结符**：两处 `.map(cb => { … .get() … })` 与一处
+   `connections.forEach(… writeLegacyToolConnection …)`。前者改
+   `await Promise.all(xs.map(async …))`（`Promise.all` 保序，断言逐行不动），
+   后者改 `for…of xs.entries()` 顺序写（写有先后依赖，不能并发）。转换器**故意**不碰数组回调
+   ——把回调变 async 会静默改变契约，必须人来定。
+2. 剩下 54 个终结符 `termfix2` 一遍过。
+3. **一个 test 里跑四个场景、每个场景自建一个库**：改共用 harness 的库之后先撞主键
+   （`legacy-adapter-v1-1` 重插），给 id 前缀加场景号又撞**岗位模版名**的唯一键。
+   正解不是继续给名字加后缀，而是**拆成四条 test**——双引擎 harness 本来就每个用例给一个干净的库，
+   四组断言本来就互相独立。**定式**：「一个 test 里跑 N 个各自建库的场景」一律拆成 N 条 test。
+
+### 本批删掉 §5dm 的一次性 `allowGrowth`
+
+`rfc294-cross-context-observed-imports` / `rfc294-architecture-exceptions` 本批不涨，
+守卫会把留着的 `allowGrowth` 判为过期，按规矩删掉。
