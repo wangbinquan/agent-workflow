@@ -467,7 +467,12 @@ interface DigitalEmployeePersistenceBundle {
  * context 的私有实现层，装配面才是对外的那一层。development-automation 与 bootstrap
  * 只认这个工厂与 `public/queries.ts` 里的接口。
  */
-export function createEmployeeReactionRoundQueries(db: DbClient): EmployeeReactionRoundQueryPort {
+// RFC-359 AC-6：形参放宽到中立客户端。它与下面那个 PG 孪生的函数体**逐字相同**（都只是把 db
+// 转交给中立的 `createReactionRoundQueries`），所以放宽是纯向后兼容；两个名字暂时都留着，
+// 合并与否是 RFC-349「provider-selected composition」那条线自己的决定，不该作为一次测试迁移的副作用。
+export function createEmployeeReactionRoundQueries(
+  db: ProviderNeutralDatabase,
+): EmployeeReactionRoundQueryPort {
   return createReactionRoundQueries(db)
 }
 

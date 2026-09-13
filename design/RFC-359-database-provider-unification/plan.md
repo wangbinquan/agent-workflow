@@ -8050,3 +8050,30 @@ W8 把那条 `.get()` 预读改掉时就是为此（文件里 134 行那条注�
   卡 `execution-contract-platform`，同属 digital-employee 那一簇，留给下一波。
 
 账本 465 → 464。
+
+## 5cj. 一条**公共端口本身是同步的**——`inspectHumanReview`，PostgreSQL 上按签名就实现不了
+
+迁 `execution-contract-platform` 时卡在 `inspectDigitalEmployeeHumanReviewState(db, ref)`。
+它不是「形参写窄了」，是**返回类型就是同步的**：
+
+```ts
+// modules/task-execution/public/participants.ts:373
+inspectHumanReview?(executionRef: string): DigitalEmployeeHumanReviewState | null
+```
+
+实现里靠 bun:sqlite 的同步游标（`db.select(...).where(...).get()`）当场取回行；消费方
+`modules/digital-employee/application/runtimeService.ts:1289` 也按同步用
+（`this.#execution.inspectHumanReview?.(round.executionRef) ?? null`）。
+
+**这是一条真的架构缺口，不是测试问题**：PostgreSQL 上没有同步读，所以这个公共参与者端口
+**按签名就无法在 PG 侧实现**。它今天没炸，只因为 PG 的执行参与者装配没提供 `inspectHumanReview`
+（端口是可选的 `?`），于是 PG 部署上这条人审状态投影**直接缺失**——不是「两边行为不同」，
+是「一边有、一边没有」，正是本 RFC 要消灭的形态。
+
+处置（留作独立一步，本波只记录 + 把能放宽的放宽）：把端口改成
+`Promise<DigitalEmployeeHumanReviewState | null>`，实现改 await，`runtimeService` 那一处跟着 await。
+改动面小但穿过公共合同，要和 digital-employee 那条线一起定。
+
+同簇里**能放宽的已经放宽**：`createEmployeeReactionRoundQueries` 的形参换成
+`ProviderNeutralDatabase`（它与 PG 孪生的函数体逐字相同，都只是把 db 转交给中立的
+`createReactionRoundQueries`），typecheck 零外溢，5 个消费文件 16 pass / 0 fail。

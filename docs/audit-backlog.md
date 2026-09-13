@@ -51,6 +51,23 @@ users:                created_by               -> users(id)
 还要想清楚存量库上加外键遇到既有悬空行怎么办（先清洗，还是 `NOT VALID` 分两步）。
 清点做法：`PRAGMA foreign_key_list(<table>)` 对 `getTableConfig(t).foreignKeys` + 列级 `.references()`。
 
+## RFC-359：`inspectHumanReview` 是**同步**公共端口，PostgreSQL 上按签名实现不了
+
+`modules/task-execution/public/participants.ts:373`
+```ts
+inspectHumanReview?(executionRef: string): DigitalEmployeeHumanReviewState | null
+```
+实现（`modules/task-execution/composition/digitalEmployeeExecution.ts:235`）靠 bun:sqlite 的同步游标
+`.get()` 当场取行；消费方 `modules/digital-employee/application/runtimeService.ts:1289` 也按同步用。
+
+PostgreSQL 上没有同步读 ⇒ 这个端口在 PG 侧**无法实现**。今天不炸只因为端口是可选的（`?`）、
+PG 的执行参与者装配没提供它——于是 PG 部署上数字员工的**人审状态投影直接缺失**。
+这不是「两边行为不同」，是「一边有、一边没有」。
+
+**未决**：把端口改成 `Promise<… | null>`，实现改 await，`runtimeService` 那一处跟着 await。
+改动面小但穿过公共参与者合同，要和 digital-employee 那条线一起定。
+详见 `design/RFC-359-database-provider-unification/plan.md §5cj`。
+
 ## 审计报告索引（`design/`）
 
 | 报告                                                                                   | 主题                                | 状态 / 未决                                                                                                                                                                                                                                                                                                                           |
