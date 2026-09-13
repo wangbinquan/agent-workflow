@@ -115,7 +115,7 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
       // drizzle emits EVERY HEAD column, so `workflows.example` (0103) made the
       // ORM form fail with "table workflows has no column named example" on this
       // 0094-frozen DB. Spell the 0094-era columns out.
-      db.run(sql`
+      await db.run(sql`
         INSERT INTO workflows (id, name, description, definition)
         VALUES (${wfId}, ${`wf-${taskId}`}, '', '{}')
       `)
@@ -126,7 +126,7 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
       // keeps the fixture pinned to the 0094-era shape the test actually needs,
       // so future additive migrations don't re-red it (same intent as the
       // tag-based journal truncation above).
-      db.run(sql`
+      await db.run(sql`
         INSERT INTO tasks (
           id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
           base_branch, branch, status, inputs, started_at,

@@ -41,7 +41,7 @@ async function seedTask(db: ProviderNeutralDatabase) {
     })),
   )
 
-  db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('workflow-1', 'wf', '{}')`)
+  await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('workflow-1', 'wf', '{}')`)
   await db.insert(tasks).values({
     id: TASK_ID,
     name: 'task auth',

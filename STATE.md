@@ -2,6 +2,38 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-13 深夜，AC-6 账本 **430 → 423**；静默 PG 竞态审计清到 **0 真命中**）
+>
+> 落档在 `design/RFC-359-database-provider-unification/plan.md` §5cv。`f09a05bbd` 的 CI 已全绿。
+>
+> ### 1. `db.run(sql`…`)` 是同一类竞态的另一种写法
+>
+> `rfc248-repo-group-service` 用裸 SQL 循环插两行再读条数：SQLite 2、PostgreSQL **0**。
+> 终结子退役器此前只认 drizzle 构建器链，裸 SQL 从眼皮底下走过去了。两者在 bun:sqlite 上都同步、
+> 在 PG 上都是 promise，**不 await 就是发射后不管**。
+>
+> ### 2. 审计与退役器都必须**按 provider 块划范围**——而且不能划反
+>
+> 一个文件常同时装着 provider 块与**故意保留的单引擎 describe**。后者依赖 bun:sqlite 的同步语义
+> （`rfc359-w16` 的判据名就叫「legacy companion **is synchronous**」，退役器把它改 async 推红两次）。
+> 但范围不能反过来划成「provider 块之内才算」：**模块级 seed helper 不在任何块里、却会被 provider
+> 用例调用**。正确口径是**只排除「没有被任何 provider 块重叠的顶层 plain describe」**。
+> 按此重算，全树 fire-and-forget 终结子 **39 → 0 真命中**（剩 4 条误报是用例自建本地 SQLite 句柄）。
+>
+> ### 3. 变换器另收两条前置条件
+>
+> - **构造点在循环体里 = 每轮一个新库**，不能合（`skill-identity-migration` 的 `for (const defect …)`；
+>   这次 SQLite 侧当场就红，错误没等到 PG）。旧的「同一函数作用域建两次」判据看不见循环。
+> - **`describe` 工厂可以整体包**：`function describeNativeXxxCases(cases) { describe(name, () => …) }`
+>   是本仓的局部惯用法，这种 describe 不在顶层；认掉之后 rfc234 / rfc248 / rfc291 一次性迁完。
+>
+> ### 4. 本批的拒绝项都是「本来就该单引擎」
+>
+> `rfc317-cross-context-ports`（`readAuthorityFence` 是**同步** public 端口，PG 上落 `fenceCache`，
+> 与 `inspectHumanReview` 同类）、`rfc333-task-participants`（三处 `RAISE(ABORT)` 故障注入**加**循环，
+> 要按 rfc120 那套配方单独重做）、`rfc304` / `rfc309` / `rfc311-repos-page` / `rfc189-wg-round`
+> （`$client` 仪器面或 `DbClient` 形参 callee）。
+>
 > ## 📌 RFC-359 最新一段（2026-09-13 夜续，AC-6 账本 **439 → 430**；外加一条**全树静默 PG 竞态**审计 + 一次推红复盘）
 >
 > 落档在 `design/RFC-359-database-provider-unification/plan.md` §5cu。

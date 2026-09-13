@@ -6635,3 +6635,19 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   2026-09-13 实撞：`rfc349-task-transaction-participants` 的夹具 `db.insert(users)…run()` /
   `db.insert(tasks)…run()` 一串没 await，PG 上 `task_collaborators` 先于 `tasks` 落库、外键冲突。
   **迁移一个文件时必须把它的同步终结子一并退役**，不能只换 `describe`。
+
+- **`db.run(sql`…`)`（裸 SQL）与 `db.insert(…).values(…).run()`（构建器链）是同一类同步终结子**，
+  退役时两种形状都要认。2026-09-13 实撞：`rfc248-repo-group-service` 用裸 SQL 循环插两行 `memories`
+  再读条数——SQLite 上 2，PostgreSQL 上 **0**，因为裸 SQL 那条没被 await。
+
+- **给双引擎测试做批量改写时，范围要按 provider 块划，而且别划反**。一个文件常同时装着
+  `describeEachProvider` 块与**故意保留的单引擎 `describe`**；后者依赖 bun:sqlite 的同步语义
+  （`rfc359-w16-task-lifecycle-write-sequence` 的判据名就叫「legacy companion **is synchronous**」），
+  把里面的 hook 改成 `async` 会直接把它推红。但**不能**反过来只处理「provider 块之内」的代码：
+  **模块级的 seed helper 不在任何块里，却会被 provider 用例调用**，那才是真正的漏网之鱼。
+  正确口径：**只排除「没有被任何 provider 块重叠的顶层 plain `describe`」**，其余一律处理。
+
+- **构造点写在循环体里意味着「每轮一个新库」，迁到 harness 时不能合**。
+  `for (const defect of [...]) { const db = createInMemoryDb(...) }` 每轮都要干净库；
+  collapse 到一个 `harness.db` 之后第二轮会看见第一轮的行。注意「同一函数作用域只建一次」这条
+  常见判据**看不见循环**——循环体不是函数作用域。

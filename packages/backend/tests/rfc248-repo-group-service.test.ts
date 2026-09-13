@@ -4,11 +4,10 @@
 // 这里锁的是**服务层**该负责的事：规范化落库、保存期就拒环、祖先复查、
 // 两个删除守卫、以及设计门 G5 的「删组同事务归档组记忆」。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
+
 import { and, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { cachedRepos, memories, repoGroupNodes, repoGroups } from '../src/db/schema'
@@ -32,8 +31,6 @@ import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '../src/modules/source-control/composition'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface TestGroupWrite {
   name: string
@@ -101,16 +98,16 @@ async function codeOfAsync(fn: () => Promise<unknown>): Promise<string> {
   return 'no-throw'
 }
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let store: RepositoryWorkspaceStore
 let appRepo: string
 let sdkRepo: string
 const deps = () => ({ store })
 
 function describeNativeRepoGroupCases(cases: () => void) {
-  describe('RFC-248 repo group service', () => {
+  describeEachProvider('RFC-248 repo group service', (harness) => {
     beforeEach(async () => {
-      db = createInMemoryDb(MIGRATIONS)
+      db = harness.db
       store = composeSqliteRepositoryWorkspaceStore(db)
       appRepo = await makeRepo(db, 'app')
       sdkRepo = await makeRepo(db, 'sdk')
@@ -569,7 +566,7 @@ describeNativeRepoGroupCases(() => {
       null,
     )
     for (const title of ['m1', 'm2']) {
-      db.run(sql`
+      await db.run(sql`
         INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
         VALUES (${ulid()}, 'repo_group', ${g.id}, ${title}, 'b', '[]', 'approved', 'manual', ${Date.now()}, 1)
       `)
@@ -610,7 +607,7 @@ describeNativeRepoGroupCases(() => {
       },
       null,
     )
-    db.run(sql`
+    await db.run(sql`
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
       VALUES (${ulid()}, 'repo_group', ${g.id}, 'old', 'b', '[]', 'archived', 'manual', ${Date.now()}, 1)
     `)
@@ -925,11 +922,11 @@ describeNativeRepoGroupCases(() => {
     )
     // 一条 approved（可归档）+ 一条 fused（不可改——CHECK 要求 fused ⟺ 两个
     // fused_into_skill* 非空，把它改成 archived 会违反约束、整个删除事务 500）。
-    db.run(sql`
+    await db.run(sql`
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
       VALUES (${ulid()}, 'repo_group', ${g.id}, 'ok', 'b', '[]', 'approved', 'manual', ${Date.now()}, 1)
     `)
-    db.run(sql`
+    await db.run(sql`
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version,
                             fused_into_skill, fused_into_skill_id)
       VALUES (${ulid()}, 'repo_group', ${g.id}, 'fused-one', 'b', '[]', 'fused', 'manual', ${Date.now()}, 1,

@@ -86,7 +86,7 @@ async function seedTask(
 }
 
 async function taskRow(db: ProviderNeutralDatabase, id: string) {
-  const row = await db.select().from(tasks).where(eq(tasks.id, id)).get()
+  const row = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
   if (row === undefined) throw new Error(`missing fixture task ${id}`)
   return row
 }

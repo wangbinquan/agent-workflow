@@ -15,7 +15,7 @@
 //   - source locks: runTask branches on workgroup_id before runScope;
 //     renderUserPrompt REPLACES (not extends) the protocol block.
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -246,7 +246,6 @@ const doneBatchMember = (...summaries: string[]): WorkgroupHostRunResult => ({
 })
 
 // 上面那块 stuck-detector 用例仍是单引擎（夹具是 bun:sqlite 专有的），自带迁移常量。
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // ---------------------------------------------------------------------------
 // host snapshot
 // ---------------------------------------------------------------------------
@@ -884,9 +883,9 @@ describeEachProviderHttpApplication(
 
 // 这一块吃 `helpers/taskRecoveryOperations`——夹具用 `dbTxSync` + 同步终结符，是 bun:sqlite
 // 专有的，中立句柄传不进去。等那层夹具中立化之后再接双引擎（RFC-359 plan §5ak）。
-describe('RFC-164 engine — stuck detector S1/S2 workgroup exemption', () => {
+describeEachProvider('RFC-164 engine — stuck detector S1/S2 workgroup exemption', (harness) => {
   test('workgroup awaiting_review task: no S1 alert; plain task still alerts', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const old = Date.now() - 2 * 60 * 60 * 1000
     async function seedTask(workgroup: boolean): Promise<string> {
       const id = ulid()

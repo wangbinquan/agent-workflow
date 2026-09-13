@@ -3,10 +3,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
-import { resolve } from 'node:path'
+
 import { eq } from 'drizzle-orm'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   repositoryTransportConnections,
   userRepositoryTransportCredentials,
@@ -16,7 +17,6 @@ import { selectRepositoryTransportCredential } from '../src/modules/source-contr
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createUser } from '../src/services/users'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DIGEST = 'a'.repeat(64)
 const PERSONAL_TOKEN = 'aw-personal-fixture-token-9999'
 const GLOBAL_TOKEN = 'aw-global-fixture-token-1111'
@@ -25,7 +25,7 @@ function subject(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
 }
 
-function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
+function repositoryOf(db: ProviderNeutralDatabase) {
   return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 
@@ -90,9 +90,9 @@ describe('RFC-321 credential selector truth table', () => {
   })
 })
 
-describe('RFC-321 personal credential repository', () => {
+describeEachProvider('RFC-321 personal credential repository', (harness) => {
   test('one runtime supply owns personal-first Git selection without selected-personal fallback', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 20))
     const module = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
@@ -148,18 +148,20 @@ describe('RFC-321 personal credential repository', () => {
       credential: { credentialSource: 'personal', token: PERSONAL_TOKEN },
     })
 
-    db.update(userRepositoryTransportCredentials)
+    await db
+      .update(userRepositoryTransportCredentials)
       .set({ endpointBindingDigest: 'b'.repeat(64) })
       .where(eq(userRepositoryTransportCredentials.userId, alice.id))
-      .run()
+
     expect(
       await module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
     ).toEqual({ ok: false, code: 'code-host-push-credential-stale' })
 
-    db.update(userRepositoryTransportCredentials)
+    await db
+      .update(userRepositoryTransportCredentials)
       .set({ endpointBindingDigest: DIGEST, tokenEnc: 'corrupt-ciphertext' })
       .where(eq(userRepositoryTransportCredentials.userId, alice.id))
-      .run()
+
     expect(
       await module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
     ).toEqual({ ok: false, code: 'code-host-push-credential-unavailable' })
@@ -172,7 +174,7 @@ describe('RFC-321 personal credential repository', () => {
   })
 
   test('seals, replaces, isolates, and deletes each user credential', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
     const module = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
@@ -217,11 +219,12 @@ describe('RFC-321 personal credential repository', () => {
       configured: false,
     })
 
-    const row = db
-      .select()
-      .from(userRepositoryTransportCredentials)
-      .where(eq(userRepositoryTransportCredentials.userId, alice.id))
-      .get()!
+    const row = (
+      await db
+        .select()
+        .from(userRepositoryTransportCredentials)
+        .where(eq(userRepositoryTransportCredentials.userId, alice.id))
+    )[0]!
     expect(row.tokenEnc).not.toContain(PERSONAL_TOKEN)
     expect(box.unseal(row.tokenEnc)).toBe(PERSONAL_TOKEN)
     expect(row.credentialRevision).toBe(1)
@@ -232,18 +235,19 @@ describe('RFC-321 personal credential repository', () => {
       endpointBindingDigest: DIGEST,
     })
     expect(
-      db
-        .select({ revision: userRepositoryTransportCredentials.credentialRevision })
-        .from(userRepositoryTransportCredentials)
-        .where(eq(userRepositoryTransportCredentials.userId, alice.id))
-        .get(),
+      (
+        await db
+          .select({ revision: userRepositoryTransportCredentials.credentialRevision })
+          .from(userRepositoryTransportCredentials)
+          .where(eq(userRepositoryTransportCredentials.userId, alice.id))
+      )[0],
     ).toEqual({ revision: 2 })
     expect(await module.ownCredentials.remove(subject(alice), 'gitlab')).toEqual({ removed: true })
     expect(await module.ownCredentials.remove(subject(alice), 'gitlab')).toEqual({ removed: false })
   })
 
   test('generation/digest mismatch is a conflict and projection rebind revokes personal rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const box = createSecretBoxFromKey(Buffer.alloc(32, 22))
     const module = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
@@ -284,12 +288,13 @@ describe('RFC-321 personal credential repository', () => {
       endpointBindingDigest: 'c'.repeat(64),
       updatedAt: 2,
     })
-    expect(db.select().from(userRepositoryTransportCredentials).all()).toEqual([])
+    expect(await db.select().from(userRepositoryTransportCredentials)).toEqual([])
     expect(
-      db
-        .select({ revision: repositoryTransportConnections.credentialRevision })
-        .from(repositoryTransportConnections)
-        .get(),
+      (
+        await db
+          .select({ revision: repositoryTransportConnections.credentialRevision })
+          .from(repositoryTransportConnections)
+      )[0],
     ).toEqual({ revision: 1 })
   })
 })

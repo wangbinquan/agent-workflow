@@ -95,9 +95,9 @@ describe('RFC-074 PR-C — isFresherNodeRun pure-id ordering (C1-C4)', () => {
 // `tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts` 独立负责。
 // C10 判的是**行为**（插入 / 取回不带那一列），与引擎无关，按 RFC-359 AC-6 迁进双引擎块。
 describe('RFC-074 PR-C — migration 0041 drops node_runs.clarify_iteration (C9)', () => {
-  test('C9: the dropped column is absent from the live schema', () => {
+  test('C9: the dropped column is absent from the live schema', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = db.all(sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
+    const cols = (await db.all(sql`PRAGMA table_info(node_runs)`)) as Array<{ name: string }>
     const names = cols.map((c) => c.name)
     expect(names).not.toContain('clarify_iteration')
     // Provenance + other columns survive the rebuild.

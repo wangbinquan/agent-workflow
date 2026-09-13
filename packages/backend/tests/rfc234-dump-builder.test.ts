@@ -8,12 +8,11 @@
 //     agentId → agentRef handle; manifest detail entries carry per-type
 //     fences; inventory truncation is explicit, never silent.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -31,10 +30,9 @@ import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResou
 import { manifestEntryFor } from '@/modules/intent/application/manifest'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const SECRET = 'ghp_AAAABBBBCCCCDDDDEEEEFFFF111122223333' // gitleaks:allow — deliberate fake credential fixture
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 
 const OWNER = 'user_owner_000000000000000000'
@@ -114,9 +112,9 @@ function createProviderDumpSeeds(db: ProviderNeutralDatabase) {
 }
 
 function describeNativeDumpCases(name: string, cases: () => void) {
-  describe(name, () => {
+  describeEachProvider(name, (harness) => {
     beforeEach(() => {
-      db = createInMemoryDb(MIGRATIONS)
+      db = harness.db
       appHome = mkdtempSync(join(tmpdir(), 'aw-intent-dump-'))
     })
     afterEach(() => {

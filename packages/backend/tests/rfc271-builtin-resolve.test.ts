@@ -22,7 +22,8 @@ import {
   encodeBundleIdentityRef,
   resourceRefKey,
 } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, workflows } from '../src/db/schema'
 import {
   resolveAgentSkillRef,
@@ -38,10 +39,8 @@ const codeOf = async (p: Promise<unknown>): Promise<string | undefined> =>
     (e: unknown) => (e as { code?: string }).code,
   )
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 /** 与 `commit.ts` 的 provider 实现同构：按名字 + `builtin = true` 查。 */
-function ctxOver(db: ReturnType<typeof createInMemoryDb>): RefResolveCtx {
+function ctxOver(db: ProviderNeutralDatabase): RefResolveCtx {
   return {
     idOfSlug: new Map(),
     resolveExternal: async () => {
@@ -50,67 +49,67 @@ function ctxOver(db: ReturnType<typeof createInMemoryDb>): RefResolveCtx {
     // 与 `commit.ts` 的 provider 等价：`(name, builtin = true)` 双条件。
     // ⚠️ 少了 `builtin === true` 这半就是劫持面 —— 下面的反例正是锁它。
     resolveBuiltin: async (_type, name) => {
-      const match = db
-        .select()
-        .from(agents)
-        .all()
-        .find((r) => r.name === name && r.builtin === true)
+      const match = (await db.select().from(agents)).find(
+        (r) => r.name === name && r.builtin === true,
+      )
       return match?.id ?? null
     },
   }
 }
 
-const seed = (
-  db: ReturnType<typeof createInMemoryDb>,
+const seed = async (
+  db: ProviderNeutralDatabase,
   rows: Array<{ id: string; name: string; builtin: boolean; owner: string }>,
-): void => {
+): Promise<void> => {
   for (const r of rows) {
-    db.insert(agents)
-      .values({
-        id: r.id,
-        name: r.name,
-        description: '',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: r.owner,
-        visibility: 'public',
-        builtin: r.builtin,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      .run()
+    await db.insert(agents).values({
+      id: r.id,
+      name: r.name,
+      description: '',
+      outputs: '[]',
+      permission: '{}',
+      skills: '[]',
+      dependsOn: '[]',
+      mcp: '[]',
+      plugins: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+      ownerUserId: r.owner,
+      visibility: 'public',
+      builtin: r.builtin,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
   }
 }
 
-describe('builtin: 语义层 —— 正例', () => {
+describeEachProvider('builtin: 语义层 —— 正例', (harness) => {
   test('绑到本实例自己 seed 的那一个（源库 id 完全不参与）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, [{ id: 'DST_BUILTIN', name: '__skill_merger__', builtin: true, owner: '__system__' }])
+    const db = harness.db
+    await seed(db, [
+      { id: 'DST_BUILTIN', name: '__skill_merger__', builtin: true, owner: '__system__' },
+    ])
     const id = await resolveIdentityRef('builtin:agent/__skill_merger__', 'agent', ctxOver(db))
     expect(id).toBe('DST_BUILTIN')
   })
 })
 
-describe('builtin: 语义层 —— 劫持面（最要紧的一条）', () => {
+describeEachProvider('builtin: 语义层 —— 劫持面（最要紧的一条）', (harness) => {
   test('同名的**普通**资源不得被当成 built-in 绑定', async () => {
     // 攻击场景：对端没有这个 built-in，攻击者建一个同名的普通 agent。
     // 只按名字查就会把别人导入的工作流指向攻击者的 agent。
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, [{ id: 'ATTACKER', name: '__skill_merger__', builtin: false, owner: 'u-attacker' }])
+    const db = harness.db
+    await seed(db, [
+      { id: 'ATTACKER', name: '__skill_merger__', builtin: false, owner: 'u-attacker' },
+    ])
     expect(
       await codeOf(resolveIdentityRef('builtin:agent/__skill_merger__', 'agent', ctxOver(db))),
     ).toBe('bundle-builtin-missing')
   })
 
   test('同名普通资源与真 built-in 并存时，绑的是 built-in 那一个', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, [
+    const db = harness.db
+    await seed(db, [
       { id: 'ATTACKER', name: '__skill_merger__', builtin: false, owner: 'u-attacker' },
       { id: 'REAL', name: '__skill_merger__', builtin: true, owner: '__system__' },
     ])
@@ -120,9 +119,9 @@ describe('builtin: 语义层 —— 劫持面（最要紧的一条）', () => {
   })
 })
 
-describe('builtin: 语义层 —— fail closed', () => {
+describeEachProvider('builtin: 语义层 —— fail closed', (harness) => {
   test('本实例没有同名 built-in ⇒ 抛错，**不留悬空引用**', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     expect(await codeOf(resolveIdentityRef('builtin:agent/__nope__', 'agent', ctxOver(db)))).toBe(
       'bundle-builtin-missing',
     )
@@ -131,8 +130,8 @@ describe('builtin: 语义层 —— fail closed', () => {
   test('词法层放行的怪名字，在这里被「查不到」挡住（不是路径穿越）', async () => {
     // 与 wire 层那条「刻意宽松」配对：`a/b` / `../../etc/passwd` 过得了正则，
     // 但它们不可能是合法资源名 ⇒ 必然查不到 ⇒ fail closed。
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, [{ id: 'REAL', name: '__skill_merger__', builtin: true, owner: '__system__' }])
+    const db = harness.db
+    await seed(db, [{ id: 'REAL', name: '__skill_merger__', builtin: true, owner: '__system__' }])
     for (const ref of ['builtin:agent/a/b', 'builtin:agent/../../etc/passwd']) {
       expect({ ref, code: await codeOf(resolveIdentityRef(ref, 'agent', ctxOver(db))) }).toEqual({
         ref,
@@ -178,24 +177,22 @@ describe('local: 语义层二道 fail-closed', () => {
   })
 })
 
-describe('builtin call lowering —— 真实 builtin id + wire 权威名字', () => {
+describeEachProvider('builtin call lowering —— 真实 builtin id + wire 权威名字', (harness) => {
   test('同名普通 workflow 不得劫持，错误 name cache 也不得改写权威名', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     for (const row of [
       { id: 'ATTACKER', ownerUserId: 'u-attacker', builtin: false },
       { id: 'REAL_BUILTIN', ownerUserId: '__system__', builtin: true },
     ]) {
-      db.insert(workflows)
-        .values({
-          ...row,
-          name: '__agent_host__',
-          description: '',
-          definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
-          visibility: 'public',
-          createdAt: 1,
-          updatedAt: 1,
-        } as never)
-        .run()
+      await db.insert(workflows).values({
+        ...row,
+        name: '__agent_host__',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        visibility: 'public',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
     }
     const ctx: RefResolveCtx = {
       idOfSlug: new Map(),
@@ -205,11 +202,9 @@ describe('builtin call lowering —— 真实 builtin id + wire 权威名字', (
       resolveBuiltin: async (type, name) => {
         if (type !== 'workflow') return null
         return (
-          db
-            .select()
-            .from(workflows)
-            .all()
-            .find((row) => row.name === name && row.builtin === true)?.id ?? null
+          (await db.select().from(workflows)).find(
+            (row) => row.name === name && row.builtin === true,
+          )?.id ?? null
         )
       },
     }

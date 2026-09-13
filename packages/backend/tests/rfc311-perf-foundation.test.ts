@@ -189,10 +189,12 @@ describe('migration 0180 — RFC-311 index batch', () => {
     }
   })
 
-  test('maintenance_state exists as a bare KV table', () => {
+  test('maintenance_state exists as a bare KV table', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    db.run(sql`INSERT INTO maintenance_state (key, value, updated_at) VALUES ('probe', 'v1', 1)`)
-    const rows = db.all<{ value: string }>(
+    await db.run(
+      sql`INSERT INTO maintenance_state (key, value, updated_at) VALUES ('probe', 'v1', 1)`,
+    )
+    const rows = await db.all<{ value: string }>(
       sql`SELECT value FROM maintenance_state WHERE key = 'probe'`,
     )
     expect(rows[0]?.value).toBe('v1')

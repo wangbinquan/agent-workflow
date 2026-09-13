@@ -91,38 +91,38 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     expect(render(cap.claimLockClause())).toBe('')
   })
 
-  test('NULL 排序：ASC 默认 NULL 最前、DESC 默认 NULL 最后（矩阵不加修饰即正确）', () => {
+  test('NULL 排序：ASC 默认 NULL 最前、DESC 默认 NULL 最后（矩阵不加修饰即正确）', async () => {
     const db = scratch()
-    for (const v of [2, null, 1]) db.run(sql`insert into cap_scratch(v) values (${v})`)
+    for (const v of [2, null, 1]) await db.run(sql`insert into cap_scratch(v) values (${v})`)
     const col = sql.raw('v')
-    const asc = db.all<{ v: number | null }>(
+    const asc = await db.all<{ v: number | null }>(
       sql`select v from cap_scratch order by ${cap.ascNullsFirst(col)}`,
     )
-    const desc = db.all<{ v: number | null }>(
+    const desc = await db.all<{ v: number | null }>(
       sql`select v from cap_scratch order by ${cap.descNullsLast(col)}`,
     )
     expect(asc.map((r) => r.v)).toEqual([null, 1, 2])
     expect(desc.map((r) => r.v)).toEqual([2, 1, null])
   })
 
-  test('likeCaseInsensitive：ASCII 不敏感，且显式 ESCAPE 让 % _ \\ 按字面匹配', () => {
+  test('likeCaseInsensitive：ASCII 不敏感，且显式 ESCAPE 让 % _ \\ 按字面匹配', async () => {
     const db = scratch()
     for (const n of ['Hello World', 'C:\\build\\out', 'C:build', '100%']) {
-      db.run(sql`insert into cap_scratch(name) values (${n})`)
+      await db.run(sql`insert into cap_scratch(name) values (${n})`)
     }
-    const find = (term: string): string[] => {
+    const find = async (term: string): Promise<string[]> => {
       const { pattern, escape } = cap.likeEscape(term)
-      return db
-        .all<{
+      return (
+        await db.all<{
           name: string
         }>(
           sql`select name from cap_scratch where ${cap.likeCaseInsensitive(sql.raw('name'), pattern, escape)}`,
         )
-        .map((r) => r.name)
+      ).map((r) => r.name)
     }
-    expect(find('hello')).toEqual(['Hello World'])
-    expect(find('C:\\build')).toEqual(['C:\\build\\out'])
-    expect(find('100%')).toEqual(['100%'])
+    expect(await find('hello')).toEqual(['Hello World'])
+    expect(await find('C:\\build')).toEqual(['C:\\build\\out'])
+    expect(await find('100%')).toEqual(['100%'])
   })
 
   test('indexHint 渲染 INDEXED BY；reclaimScrubbedStorage 真跑 secure_delete + checkpoint + VACUUM', async () => {
@@ -130,12 +130,14 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     expect(render(cap.indexHint('idx_cap_scratch'))).toBe('INDEXED BY "idx_cap_scratch"')
     db.run(sql.raw('create index idx_cap_scratch on cap_scratch(v)'))
     expect(
-      db.all<{ v: number | null }>(
+      await db.all<{ v: number | null }>(
         sql`select v from cap_scratch ${cap.indexHint('idx_cap_scratch')} where v is null`,
       ),
     ).toEqual([])
     await cap.reclaimScrubbedStorage(db)
-    expect(db.all<{ secure_delete: number }>(sql`PRAGMA secure_delete`)[0]?.secure_delete).toBe(1)
+    expect(
+      (await db.all<{ secure_delete: number }>(sql`PRAGMA secure_delete`))[0]?.secure_delete,
+    ).toBe(1)
   })
 
   test('classifyError：结构化 code 单独就能判——不靠 message 正则兜底', () => {
@@ -151,12 +153,12 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     expect(cap.classifyError(busy)).toBe('busy')
   })
 
-  test('classifyError：真实 UNIQUE 冲突被分类为 unique-violation', () => {
+  test('classifyError：真实 UNIQUE 冲突被分类为 unique-violation', async () => {
     const db = scratch()
-    db.run(sql`insert into cap_scratch(name) values ('dup')`)
+    await db.run(sql`insert into cap_scratch(name) values ('dup')`)
     let caught: unknown
     try {
-      db.run(sql`insert into cap_scratch(name) values ('dup')`)
+      await db.run(sql`insert into cap_scratch(name) values ('dup')`)
     } catch (error) {
       caught = error
     }
@@ -164,16 +166,16 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     expect(cap.classifyError(new Error('anything else'))).toBe('other')
   })
 
-  test('readRowSync：驱动本身同步，直接给行 / 无行给 null；uniqueViolationTarget 给撞上的列', () => {
+  test('readRowSync：驱动本身同步，直接给行 / 无行给 null；uniqueViolationTarget 给撞上的列', async () => {
     const db = scratch()
-    db.run(sql`insert into cap_scratch(name, v) values ('row', 7)`)
+    await db.run(sql`insert into cap_scratch(name, v) values ('row', 7)`)
     expect(cap.readRowSync(db, sql`select name, v from cap_scratch where name = ${'row'}`)).toEqual(
       { name: 'row', v: 7 },
     )
     expect(cap.readRowSync(db, sql`select name from cap_scratch where name = ${'none'}`)).toBeNull()
     let caught: unknown
     try {
-      db.run(sql`insert into cap_scratch(name) values ('row')`)
+      await db.run(sql`insert into cap_scratch(name) values ('row')`)
     } catch (error) {
       caught = error
     }

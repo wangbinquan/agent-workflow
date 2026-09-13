@@ -14,13 +14,12 @@
 // 建边仍然合法且 dangle-tolerant——把它做成必填会静默废掉 intentDoc 一直教给
 // 模型的那条路径（本 RFC 实现时真踩过，19 条既有用例因此转红）。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { parseIntentChangeset } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { users, workflows, workgroups } from '../src/db/schema'
@@ -29,10 +28,9 @@ import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResou
 import { resolveIntentBundle } from '@/modules/intent/application/resolveChangeset'
 import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291e_000000'
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 
 const actor: Actor = {
@@ -135,10 +133,10 @@ function createProviderCallEdgeFixture(db: ProviderNeutralDatabase, appHome: str
 }
 
 function describeNativeCallEdgeCases(name: string, cases: () => void) {
-  describe(name, () => {
+  describeEachProvider(name, (harness) => {
     beforeEach(async () => {
       appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
-      db = createInMemoryDb(MIGRATIONS)
+      db = harness.db
       await db.insert(users).values({
         id: OWNER,
         username: 'owner',

@@ -462,9 +462,9 @@ describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () =
     // RFC-217 T8：clarify_rounds 对 asking_node_run_id 有 FK（遗留表没有），
     // 夹具会自动补 run 桩——要驱动「源 run 行缺失」的防御分支，插完 round 后
     // 关 FK 删掉桩，构造出 FK 之外才可能出现的孤儿 round。
-    db.run(sql`PRAGMA foreign_keys = OFF`)
+    await db.run(sql`PRAGMA foreign_keys = OFF`)
     await db.delete(nodeRuns).where(eq(nodeRuns.id, orphanRunId))
-    db.run(sql`PRAGMA foreign_keys = ON`)
+    await db.run(sql`PRAGMA foreign_keys = ON`)
     const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
       mkClarifyJob(taskId, clarifyId),
     ])
