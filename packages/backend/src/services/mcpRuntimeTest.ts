@@ -1714,14 +1714,30 @@ export class McpRuntimeTestService {
     if (this.idleTimer !== null) clearTimeout(this.idleTimer)
     this.idleTimer = null
     if (this.shuttingDown || this.paused) return
-    void this.deps.persistence.nextDeadline().then((earliest) => {
-      if (earliest === null || this.shuttingDown || this.paused) return
-      const delay = Math.max(0, Math.min(earliest - this.now(), 2_147_483_647))
-      this.idleTimer = setTimeout(() => {
-        this.idleTimer = null
-        void this.reconcile()
-      }, delay)
-      this.idleTimer.unref?.()
-    })
+    // RFC-359：`nextDeadline()` 在 PostgreSQL 上是**真异步**的一次查询，SQLite 上是同步读。
+    // 这条 fire-and-forget 此前既不 catch 也无人接住：PG 上库在服务停掉 / 测试拆台之后关闭，
+    // 这个还在飞的 promise 就以 `Connection closed` 变成一条**无人处理的 rejection**
+    // （CI 上表现为「Unhandled error between tests」，全部用例 0 fail 但进程退 1）。
+    // 排期失败不是致命的——下一次事件会重新排期——但必须落一条日志，不能静默也不能裸飞。
+    void this.deps.persistence
+      .nextDeadline()
+      .then((earliest) => {
+        if (earliest === null || this.shuttingDown || this.paused) return
+        const delay = Math.max(0, Math.min(earliest - this.now(), 2_147_483_647))
+        this.idleTimer = setTimeout(() => {
+          this.idleTimer = null
+          void this.reconcile().catch((error: unknown) => {
+            this.log.warn('mcp-test-idle-reconcile-failed', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }, delay)
+        this.idleTimer.unref?.()
+      })
+      .catch((error: unknown) => {
+        this.log.warn('mcp-test-idle-timer-schedule-failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
   }
 }

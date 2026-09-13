@@ -2,11 +2,9 @@
 // Execution infrastructure; provider-neutral callers consume composed
 // TaskExecutionPersistence participants instead of importing database types.
 export {
-  ConcurrentMergeStateTransition,
   ConcurrentNodeRunTransition,
   ConcurrentTaskTransition,
   TERMINAL_TASK_STATUSES,
-  abandonSupersededMergeStates,
   assertNodeRunSourceTerminationAdmission,
   cancelOpenNodeRuns,
   isTerminalTaskStatus,
@@ -15,14 +13,11 @@ export {
   setNodeRunStatus,
   setNodeRunStatusTx,
   setTaskStatus,
-  transitionMergeState,
   transitionNodeRunStatus,
   transitionNodeRunStatusTx,
   transitionTaskStatusByEvent,
   trySetTaskStatus,
-  tryTransitionMergeState,
   type HumanGateTaskTransition,
-  type MergeStateUpdateExtra,
   type NodeRunStatusUpdateExtra,
   type TaskStatusUpdateExtra,
   type TerminalWorkspacePruneDecision,

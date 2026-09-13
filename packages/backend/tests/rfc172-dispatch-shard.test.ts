@@ -11,7 +11,8 @@ import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { readFileSync } from 'node:fs'
 import type { WorkflowDefinition, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import {
   buildFrontierMintPlan,
@@ -21,14 +22,14 @@ import {
 import { buildWorkgroupHostSnapshot, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { hasOpenDispatchedEntryOnHome } from '../src/services/clarifyRerunLedger'
-import { abandonSupersededMergeStates } from '../src/services/lifecycle'
+import { createNodeRunMintParticipantInTx } from '../src/modules/task-execution/infrastructure/nodeRunMintParticipant'
+import { withTaskExecutionWrite } from '../src/modules/task-execution/infrastructure/ownedTaskExecution'
 import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 
 // Monotonic so seed ORDER == id ORDER — several shard tests depend on "the run seeded last is the
 // freshest" (the shard-blind lineage window picks by ULID id; a same-ms random ULID would break it).
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_DEF = {
   $schema_version: 1,
   inputs: [],
@@ -36,7 +37,7 @@ const MIN_DEF = {
   edges: [],
 } as unknown as WorkflowDefinition
 
-async function seedTask(db: DbClient, taskId: string): Promise<void> {
+async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
   await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
   await db.insert(tasks).values({
     id: taskId,
@@ -54,7 +55,7 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
 }
 
 async function seedNodeRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   over: { retryIndex?: number; shardKey?: string; status?: string; mergeState?: string } = {},
@@ -75,7 +76,7 @@ async function seedNodeRun(
 
 /** Insert a clarify round (+ its FK-referenced node_runs) keyed by intermediaryNodeRunId. */
 async function seedRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   intermediaryNodeRunId: string,
   askingShardKey: string | null,
@@ -101,7 +102,7 @@ async function seedRound(
 
 /** Insert a task_question and return the full row (what dispatchTaskQuestions passes around). */
 async function seedEntry(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   e: {
     originNodeRunId: string
@@ -170,7 +171,7 @@ const WG_CONFIG: WorkgroupRuntimeConfig = {
  *  (clarify-channel-only → upstream-free) frontier node dispatchTaskQuestions can mint against.
  *  workgroupId + config are set so `isTurnEngineWorkgroupTask` is true — the R2-T5 ban is gated on
  *  it (an ordinary workflow with a coincidentally-named node must NOT trip the ban). */
-async function seedWorkgroupTask(db: DbClient, taskId: string): Promise<void> {
+async function seedWorkgroupTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
   await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
   await db.insert(tasks).values({
     id: taskId,
@@ -191,7 +192,10 @@ async function seedWorkgroupTask(db: DbClient, taskId: string): Promise<void> {
 
 /** Seed an ORDINARY (non-workgroup) task whose snapshot has an agent node literally named
  *  '__wg_member__' — the P2 case: the R2-T5 ban must NOT fire here (no shard ambiguity). */
-async function seedOrdinaryTaskWithMemberNamedNode(db: DbClient, taskId: string): Promise<void> {
+async function seedOrdinaryTaskWithMemberNamedNode(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<void> {
   const def = {
     $schema_version: 1,
     inputs: [],
@@ -215,9 +219,9 @@ async function seedOrdinaryTaskWithMemberNamedNode(db: DbClient, taskId: string)
   })
 }
 
-describe('RFC-172 S0 — resolveEntryShardKeys', () => {
+describeEachProvider('RFC-172 S0 — resolveEntryShardKeys', (harness) => {
   test('clarify entries resolve to their round asking_shard_key; manual → null', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const originA = await seedNodeRun(db, taskId, '__wg_clarify__')
@@ -240,7 +244,7 @@ describe('RFC-172 S0 — resolveEntryShardKeys', () => {
   })
 
   test('golden-lock: a self entry whose round has NULL asking_shard_key resolves to null', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedNodeRun(db, taskId, '__wg_clarify__')
@@ -251,14 +255,14 @@ describe('RFC-172 S0 — resolveEntryShardKeys', () => {
   })
 
   test('empty input → empty map (no query)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     expect((await resolveEntryShardKeys(db, [])).size).toBe(0)
   })
 })
 
-describe('RFC-172 S3 — buildFrontierMintPlan shard scoping', () => {
+describeEachProvider('RFC-172 S3 — buildFrontierMintPlan shard scoping', (harness) => {
   test('shardKey scopes the inheritance source + retry lineage AND overwrites the rerun shard_key', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     // Member A ran once (retry 0); member B ran 6 times (retry 5) and is the GLOBAL freshest run.
@@ -337,54 +341,57 @@ describe('RFC-172 S2a — dispatch mint-loop shard wiring (source lock)', () => 
 // exists to kill (member B's answer must NOT ride member A's rerun). The null-shard golden lock (a
 // non-workgroup self dispatch still mints exactly one rerun) is covered by the entire rfc128-p5-bc
 // suite — every one of its self dispatches carries shardOf → null and still expects one rerun.
-describe('RFC-172 S5 — two member shards dispatch to two shard-correct reruns (end-to-end)', () => {
-  const actor = { userId: 'u1', role: 'owner' as const }
+describeEachProvider(
+  'RFC-172 S5 — two member shards dispatch to two shard-correct reruns (end-to-end)',
+  (harness) => {
+    const actor = { userId: 'u1', role: 'owner' as const }
 
-  test('each member self-answer mints a rerun on ITS OWN shard; entryIds never cross members', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // Two assignments share __wg_member__, separated only by shard_key. Each has a PRIOR run
-    // (assertSafeFrontierTarget's runnable proof + the scoped inheritance source) …
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
-    // … and a sealed, answered self clarify round whose intermediary clarify run is the entry origin
-    // resolveEntryShardKeys joins back to (→ asking_shard_key).
-    const originA = await seedNodeRun(db, taskId, '__wg_clarify__')
-    const originB = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, originA, 'assign-A')
-    await seedRound(db, taskId, originB, 'assign-B')
-    const entryA = await seedEntry(db, taskId, {
-      originNodeRunId: originA,
-      sourceKind: 'self',
-      sealed: true,
+    test('each member self-answer mints a rerun on ITS OWN shard; entryIds never cross members', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // Two assignments share __wg_member__, separated only by shard_key. Each has a PRIOR run
+      // (assertSafeFrontierTarget's runnable proof + the scoped inheritance source) …
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+      // … and a sealed, answered self clarify round whose intermediary clarify run is the entry origin
+      // resolveEntryShardKeys joins back to (→ asking_shard_key).
+      const originA = await seedNodeRun(db, taskId, '__wg_clarify__')
+      const originB = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, originA, 'assign-A')
+      await seedRound(db, taskId, originB, 'assign-B')
+      const entryA = await seedEntry(db, taskId, {
+        originNodeRunId: originA,
+        sourceKind: 'self',
+        sealed: true,
+      })
+      const entryB = await seedEntry(db, taskId, {
+        originNodeRunId: originB,
+        sourceKind: 'self',
+        sealed: true,
+      })
+
+      const res = await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
+
+      // TWO reruns minted — one per shard, NOT one collapsed rerun for the shared node.
+      expect(res.reruns.length).toBe(2)
+      const byShard = new Map<string | null, { entryIds: string[]; nodeId: string }>()
+      for (const r of res.reruns) {
+        const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, r.nodeRunId)))[0]
+        byShard.set(run?.shardKey ?? null, { entryIds: r.entryIds, nodeId: r.targetNodeId })
+      }
+      // Each assignment got its OWN rerun on __wg_member__ …
+      expect(byShard.get('assign-A')?.nodeId).toBe(WG_MEMBER_NODE_ID)
+      expect(byShard.get('assign-B')?.nodeId).toBe(WG_MEMBER_NODE_ID)
+      // … carrying ONLY its own member's entry (the core anti-crosstalk invariant).
+      expect(byShard.get('assign-A')?.entryIds).toEqual([entryA.id])
+      expect(byShard.get('assign-B')?.entryIds).toEqual([entryB.id])
+      // Both entries stamped dispatched, neither deferred.
+      expect([...res.dispatchedEntryIds].sort()).toEqual([entryA.id, entryB.id].sort())
+      expect(res.deferred).toEqual([])
     })
-    const entryB = await seedEntry(db, taskId, {
-      originNodeRunId: originB,
-      sourceKind: 'self',
-      sealed: true,
-    })
-
-    const res = await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
-
-    // TWO reruns minted — one per shard, NOT one collapsed rerun for the shared node.
-    expect(res.reruns.length).toBe(2)
-    const byShard = new Map<string | null, { entryIds: string[]; nodeId: string }>()
-    for (const r of res.reruns) {
-      const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, r.nodeRunId)))[0]
-      byShard.set(run?.shardKey ?? null, { entryIds: r.entryIds, nodeId: r.targetNodeId })
-    }
-    // Each assignment got its OWN rerun on __wg_member__ …
-    expect(byShard.get('assign-A')?.nodeId).toBe(WG_MEMBER_NODE_ID)
-    expect(byShard.get('assign-B')?.nodeId).toBe(WG_MEMBER_NODE_ID)
-    // … carrying ONLY its own member's entry (the core anti-crosstalk invariant).
-    expect(byShard.get('assign-A')?.entryIds).toEqual([entryA.id])
-    expect(byShard.get('assign-B')?.entryIds).toEqual([entryB.id])
-    // Both entries stamped dispatched, neither deferred.
-    expect([...res.dispatchedEntryIds].sort()).toEqual([entryA.id, entryB.id].sort())
-    expect(res.deferred).toEqual([])
-  })
-})
+  },
+)
 
 // R2-T5 — a manual question (§15) has no clarify round, so resolveEntryShardKeys maps it to null;
 // dispatched at __wg_member__ it would inherit the global-freshest member's shard and hijack that
@@ -392,208 +399,218 @@ describe('RFC-172 S5 — two member shards dispatch to two shard-correct reruns 
 // reassign (taskQuestions.ts) + dispatch backstop (taskQuestionDispatch.ts, for pre-upgrade rows).
 // It is GATED on the task actually being a turn-engine workgroup — an ordinary workflow with a node
 // coincidentally named __wg_member__ has no shard ambiguity and stays allowed (Codex impl-gate P2).
-describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member__ host node', () => {
-  const actor = { userId: 'u1', role: 'owner' as const }
+describeEachProvider(
+  'RFC-172 R2-T5 — manual question cannot target the shared __wg_member__ host node',
+  (harness) => {
+    const actor = { userId: 'u1', role: 'owner' as const }
 
-  test('create(target=__wg_member__) on a workgroup task → rejected, nothing inserted', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // __wg_member__ HAS a prior run, so this is NOT the never-run rejection — it is the R2-T5 guard.
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
-    let threw: unknown = null
-    try {
-      await createManualTaskQuestion(
+    test('create(target=__wg_member__) on a workgroup task → rejected, nothing inserted', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // __wg_member__ HAS a prior run, so this is NOT the never-run rejection — it is the R2-T5 guard.
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+      let threw: unknown = null
+      try {
+        await createManualTaskQuestion(
+          db,
+          taskId,
+          { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
+          actor,
+        )
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
+      const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+      expect(rows.length).toBe(0)
+    })
+
+    test('P2: create(target=__wg_member__) on an ORDINARY workflow → ALLOWED (no shard ambiguity)', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedOrdinaryTaskWithMemberNamedNode(db, taskId)
+      // The node has a prior run (manual reruns its handler); NOT a workgroup task → ban skipped.
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+      const { id } = await createManualTaskQuestion(
         db,
         taskId,
         { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
         actor,
       )
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
-    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
-    expect(rows.length).toBe(0)
-  })
-
-  test('P2: create(target=__wg_member__) on an ORDINARY workflow → ALLOWED (no shard ambiguity)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedOrdinaryTaskWithMemberNamedNode(db, taskId)
-    // The node has a prior run (manual reruns its handler); NOT a workgroup task → ban skipped.
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
-      actor,
-    )
-    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
-    expect(row?.overrideTargetNodeId).toBe(WG_MEMBER_NODE_ID) // created, not rejected
-  })
-
-  test('P1: reassign a leader-targeted manual onto __wg_member__ → rejected (bypass closed)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // Both host nodes have prior runs so neither hits the never-run gate.
-    await seedNodeRun(db, taskId, '__wg_leader__')
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
-    // Manual created for the leader (singleton, shard null) — allowed.
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: '__wg_leader__' },
-      actor,
-    )
-    // …then MOVED onto the shared member node → the R2-T5 reassign guard rejects.
-    let threw: unknown = null
-    try {
-      await reassignTaskQuestion(db, id, WG_MEMBER_NODE_ID, actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
-    // target unchanged (reassign failed before the update tx).
-    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
-    expect(row?.overrideTargetNodeId).toBe('__wg_leader__')
-  })
-
-  test('P1: dispatch backstop — a pre-upgrade manual@__wg_member__ row is refused, not hijacked', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // Two member runs (a global-freshest exists to be hijacked); a manual row already targeting the
-    // shared node — hand-seeded to simulate a row created BEFORE the create/reassign guards existed.
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', retryIndex: 3 })
-    const origin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const manual = await seedEntry(db, taskId, {
-      originNodeRunId: origin,
-      sourceKind: 'manual',
-      sealed: true,
+      const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+      expect(row?.overrideTargetNodeId).toBe(WG_MEMBER_NODE_ID) // created, not rejected
     })
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [manual.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    // the backstop rejects ANY shard-less entry at __wg_member__ (manual is always null-shard).
-    expect((threw as { code?: string }).code).toBe('workgroup-member-shardless-dispatch')
-    // NOT dispatched — no rerun minted (would-be hijack prevented).
-    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, manual.id)))[0]
-    expect(row?.dispatchedAt).toBeNull()
-  })
 
-  test('source lock: guards gate on isTurnEngineWorkgroupTask + literal matches WG_MEMBER_NODE_ID', () => {
-    // WG_MEMBER_NODE_ID is the source of truth; the guards hard-code its value to dodge the import
-    // cycle (workgroupLaunch pulls in heavy services). If the constant is renamed, this catches it.
-    expect(WG_MEMBER_NODE_ID).toBe('__wg_member__')
-    const SVC = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'collaboration',
-        'infrastructure',
-        'taskQuestions.ts',
-      ),
-      'utf8',
-    )
-    expect(SVC).toContain("if (target !== '__wg_member__') return")
-    expect(SVC).toContain('isTurnEngineWorkgroupTask(t)') // P2 gating
-    expect(SVC).toContain('manual-question-workgroup-member-target')
-    const DISP = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'collaboration',
-        'infrastructure',
-        'taskQuestionDispatch.ts',
-      ),
-      'utf8',
-    )
-    // dispatch backstop: any shard-less entry at __wg_member__ on a turn-engine workgroup → reject.
-    expect(DISP).toContain("effectiveTarget(e) === '__wg_member__'")
-    expect(DISP).toContain('workgroup-member-shardless-dispatch')
-    expect(DISP).toContain('isTurnEngineWorkgroupTask(taskRow)')
-  })
-})
+    test('P1: reassign a leader-targeted manual onto __wg_member__ → rejected (bypass closed)', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // Both host nodes have prior runs so neither hits the never-run gate.
+      await seedNodeRun(db, taskId, '__wg_leader__')
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+      // Manual created for the leader (singleton, shard null) — allowed.
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: '__wg_leader__' },
+        actor,
+      )
+      // …then MOVED onto the shared member node → the R2-T5 reassign guard rejects.
+      let threw: unknown = null
+      try {
+        await reassignTaskQuestion(db, id, WG_MEMBER_NODE_ID, actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
+      // target unchanged (reassign failed before the update tx).
+      const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+      expect(row?.overrideTargetNodeId).toBe('__wg_leader__')
+    })
+
+    test('P1: dispatch backstop — a pre-upgrade manual@__wg_member__ row is refused, not hijacked', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // Two member runs (a global-freshest exists to be hijacked); a manual row already targeting the
+      // shared node — hand-seeded to simulate a row created BEFORE the create/reassign guards existed.
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', retryIndex: 3 })
+      const origin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+      const manual = await seedEntry(db, taskId, {
+        originNodeRunId: origin,
+        sourceKind: 'manual',
+        sealed: true,
+      })
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [manual.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      // the backstop rejects ANY shard-less entry at __wg_member__ (manual is always null-shard).
+      expect((threw as { code?: string }).code).toBe('workgroup-member-shardless-dispatch')
+      // NOT dispatched — no rerun minted (would-be hijack prevented).
+      const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, manual.id)))[0]
+      expect(row?.dispatchedAt).toBeNull()
+    })
+
+    test('source lock: guards gate on isTurnEngineWorkgroupTask + literal matches WG_MEMBER_NODE_ID', () => {
+      // WG_MEMBER_NODE_ID is the source of truth; the guards hard-code its value to dodge the import
+      // cycle (workgroupLaunch pulls in heavy services). If the constant is renamed, this catches it.
+      expect(WG_MEMBER_NODE_ID).toBe('__wg_member__')
+      const SVC = readFileSync(
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'collaboration',
+          'infrastructure',
+          'taskQuestions.ts',
+        ),
+        'utf8',
+      )
+      expect(SVC).toContain("if (target !== '__wg_member__') return")
+      expect(SVC).toContain('isTurnEngineWorkgroupTask(t)') // P2 gating
+      expect(SVC).toContain('manual-question-workgroup-member-target')
+      const DISP = readFileSync(
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'collaboration',
+          'infrastructure',
+          'taskQuestionDispatch.ts',
+        ),
+        'utf8',
+      )
+      // dispatch backstop: any shard-less entry at __wg_member__ on a turn-engine workgroup → reject.
+      expect(DISP).toContain("effectiveTarget(e) === '__wg_member__'")
+      expect(DISP).toContain('workgroup-member-shardless-dispatch')
+      expect(DISP).toContain('isTurnEngineWorkgroupTask(taskRow)')
+    })
+  },
+)
 
 // T5 — the in-flight dispatch gate (assertNoInFlightDispatch / findOpenDispatchTarget) keys on the
 // (target, SHARD) a batch mints, not the target node alone. Two workgroup members share the ONE
 // __wg_member__ host node; member A's in-flight clarify rerun (shard A) must NOT block member B's
 // clarify-answer dispatch (shard B). Same shard still serializes. Golden-lock: non-workgroup batches
 // resolve every shard to null → {target → {null}} → the gate is byte-identical to today.
-describe('RFC-172b T5 — in-flight gate is per-(target, shard); sibling members do not block', () => {
-  const actor = { userId: 'u1', role: 'owner' as const }
+describeEachProvider(
+  'RFC-172b T5 — in-flight gate is per-(target, shard); sibling members do not block',
+  (harness) => {
+    const actor = { userId: 'u1', role: 'owner' as const }
 
-  /** member `shard` DISPATCHED with an in-flight (pending) rerun — the obligation the gate reads. */
-  async function seedInFlight(db: DbClient, taskId: string, shard: string): Promise<void> {
-    const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, clarify, shard)
-    const rerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
-      shardKey: shard,
-      status: 'pending',
-    })
-    await seedEntry(db, taskId, {
-      originNodeRunId: clarify,
-      sourceKind: 'self',
-      sealed: true,
-      dispatchedAt: Date.now(),
-      triggerRunId: rerun,
-    })
-  }
-
-  /** a fresh, sealed, UNDISPATCHED member answer on `shard`. */
-  async function seedFresh(db: DbClient, taskId: string, shard: string) {
-    const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, clarify, shard)
-    return seedEntry(db, taskId, { originNodeRunId: clarify, sourceKind: 'self', sealed: true })
-  }
-
-  test('member A in-flight (shard A) does NOT block member B dispatch (shard B) → mints B rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // member B's prior run first (lower id → clean shard-B inheritance), then member A in-flight.
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
-    await seedInFlight(db, taskId, 'assign-A')
-    const entryB = await seedFresh(db, taskId, 'assign-B')
-
-    // the (target, shard) SKIP excludes member A (shard A ∉ mint {B}) — deterministic, independent
-    // of run topology — so B dispatches through the sibling's in-flight rerun.
-    const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
-    expect(res.reruns.length).toBe(1)
-    const run = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
-    )[0]
-    expect(run?.shardKey).toBe('assign-B')
-  })
-
-  test('SAME shard still serializes — member A in-flight (shard A) blocks another shard-A dispatch', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // in-flight rerun (shard A) is ALSO the frontier-safe prior run; NO extra shard-A done run
-    // (a higher-id shard-A done would mask the anchor and wrongly release the block).
-    await seedInFlight(db, taskId, 'assign-A')
-    const entryA2 = await seedFresh(db, taskId, 'assign-A')
-
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entryA2.id], actor)
-    } catch (e) {
-      threw = e
+    /** member `shard` DISPATCHED with an in-flight (pending) rerun — the obligation the gate reads. */
+    async function seedInFlight(
+      db: ProviderNeutralDatabase,
+      taskId: string,
+      shard: string,
+    ): Promise<void> {
+      const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, clarify, shard)
+      const rerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
+        shardKey: shard,
+        status: 'pending',
+      })
+      await seedEntry(db, taskId, {
+        originNodeRunId: clarify,
+        sourceKind: 'self',
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: rerun,
+      })
     }
-    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
-  })
-})
+
+    /** a fresh, sealed, UNDISPATCHED member answer on `shard`. */
+    async function seedFresh(db: ProviderNeutralDatabase, taskId: string, shard: string) {
+      const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, clarify, shard)
+      return seedEntry(db, taskId, { originNodeRunId: clarify, sourceKind: 'self', sealed: true })
+    }
+
+    test('member A in-flight (shard A) does NOT block member B dispatch (shard B) → mints B rerun', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // member B's prior run first (lower id → clean shard-B inheritance), then member A in-flight.
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+      await seedInFlight(db, taskId, 'assign-A')
+      const entryB = await seedFresh(db, taskId, 'assign-B')
+
+      // the (target, shard) SKIP excludes member A (shard A ∉ mint {B}) — deterministic, independent
+      // of run topology — so B dispatches through the sibling's in-flight rerun.
+      const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+      expect(res.reruns.length).toBe(1)
+      const run = (
+        await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
+      )[0]
+      expect(run?.shardKey).toBe('assign-B')
+    })
+
+    test('SAME shard still serializes — member A in-flight (shard A) blocks another shard-A dispatch', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // in-flight rerun (shard A) is ALSO the frontier-safe prior run; NO extra shard-A done run
+      // (a higher-id shard-A done would mask the anchor and wrongly release the block).
+      await seedInFlight(db, taskId, 'assign-A')
+      const entryA2 = await seedFresh(db, taskId, 'assign-A')
+
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [entryA2.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
+    })
+  },
+)
 
 // T6 (S4) — the self-rollback open-ledger preflight (selfHomeHasOpenLedger → hasOpenDispatchedEntryOnHome)
 // keys on the rolling-back member's shard: a SIBLING member's open ledger on the shared __wg_member__
@@ -669,62 +686,60 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
 })
 
 // Codex impl-gate P1 — the (target,shard) dispatch SKIP lets member B mint while member A runs, but
-// the same-tx supersede retirement (abandonSupersededMergeStates) is node-wide → it would abandon
-// member A's still-running merge_state. The fix shard-scopes the abandon so a sibling member's run
-// survives. Golden-lock: undefined = node-wide (today).
-describe('RFC-172b Codex P1 — abandonSupersededMergeStates is shard-scoped', () => {
-  async function seedRun(
-    db: DbClient,
-    taskId: string,
-    shard: string,
-    id?: string,
-  ): Promise<string> {
+// the same-tx supersede retirement is node-wide → it would abandon member A's still-running
+// merge_state. The fix shard-scopes the abandon so a sibling member's run survives. Golden-lock:
+// a null shard = node-wide (today).
+//
+// RFC-359：判据原本打在 `abandonSupersededMergeStates` 上——那个 SQLite 孪生已随
+// merge_state 孪生一并删除（零生产调用方）。生产的 supersede 闭包是铸行程序
+// `nodeRunMintProgram` 的一步，provider 中立的一份，所以判据改打在铸行入口上，两个引擎各跑一遍。
+describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 shard 收口', (harness) => {
+  async function seedRun(db: ProviderNeutralDatabase, taskId: string, shard: string) {
     return seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
       shardKey: shard,
       status: 'running',
       mergeState: 'isolating',
-      ...(id ? {} : {}),
     })
   }
 
-  test('shardKey=B retires only shard-B priors; a running sibling (shard A) survives', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+  /** 铸一行新的 __wg_member__ run —— supersede 闭包是它同事务内的一步。 */
+  async function mintMemberRun(
+    db: ProviderNeutralDatabase,
+    taskId: string,
+    shardKey: string | null,
+  ): Promise<string> {
+    return await withTaskExecutionWrite(db, async (tx) =>
+      createNodeRunMintParticipantInTx(tx).mint({
+        taskId,
+        nodeId: WG_MEMBER_NODE_ID,
+        iteration: 0,
+        status: 'pending',
+        cause: 'wg-assignment',
+        overrides: { shardKey },
+      }),
+    )
+  }
+
+  test('shard=B 只废 shard-B 的前代；还在跑的兄弟成员（shard A）不受波及', async () => {
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedWorkgroupTask(db, taskId)
     const runA = await seedRun(db, taskId, 'assign-A') // member A: running + isolating
     const runB = await seedRun(db, taskId, 'assign-B') // member B: prior generation
-    const superseding = ulid() // a higher-id new member-B run supersedes
-
-    const n = abandonSupersededMergeStates({
-      db,
-      taskId,
-      nodeId: WG_MEMBER_NODE_ID,
-      iteration: 0,
-      supersededByRunId: superseding,
-      shardKey: 'assign-B',
-    })
-    expect(n).toBe(1) // only runB (shard B) retired
+    await mintMemberRun(db, taskId, 'assign-B')
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
     expect(byId.get(runA)).toBe('isolating') // sibling member A UNTOUCHED (the fix)
     expect(byId.get(runB)).toBe('abandoned')
   })
 
-  test('golden-lock: undefined shardKey retires ALL priors node-wide (今日行为)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+  test('golden-lock：null shard 的铸行仍然节点级全废前代（今日行为）', async () => {
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedWorkgroupTask(db, taskId)
     const runA = await seedRun(db, taskId, 'assign-A')
     const runB = await seedRun(db, taskId, 'assign-B')
-    const n = abandonSupersededMergeStates({
-      db,
-      taskId,
-      nodeId: WG_MEMBER_NODE_ID,
-      iteration: 0,
-      supersededByRunId: ulid(),
-      // no shardKey → node-wide
-    })
-    expect(n).toBe(2)
+    await mintMemberRun(db, taskId, null)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
     expect(byId.get(runA)).toBe('abandoned')
@@ -736,201 +751,204 @@ describe('RFC-172b Codex P1 — abandonSupersededMergeStates is shard-scoped', (
 // shard; the (target,shard) SKIP must NOT skip it for a legitimate member batch (its trigger might
 // be THIS member's), else same-shard serialization breaks. A null-shard in-flight ledger is a
 // conservative node-wide blocker.
-describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a member dispatch', () => {
-  const actor = { userId: 'u1', role: 'owner' as const }
+describeEachProvider(
+  'RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a member dispatch',
+  (harness) => {
+    const actor = { userId: 'u1', role: 'owner' as const }
 
-  test('a dispatched manual (null shard) in-flight on __wg_member__ blocks member B dispatch', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // member B's fresh answer (shard B) + a prior shard-B run — seeded FIRST so its runs have lower
-    // ids than the legacy rerun below (a real legacy in-flight ledger is the LATEST run on the node;
-    // a higher-id sibling done run would otherwise mask it in the shard-blind lineage window).
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
-    const clarifyB = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, clarifyB, 'assign-B')
-    const entryB = await seedEntry(db, taskId, {
-      originNodeRunId: clarifyB,
-      sourceKind: 'self',
-      sealed: true,
-    })
-    // Legacy manual, dispatched, with an in-flight (pending) rerun → null shard (no clarify round).
-    // Seeded LAST → highest id → the freshest run in its own lineage window → genuinely unconsumed.
-    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'pending' })
-    await seedEntry(db, taskId, {
-      originNodeRunId: legacyOrigin,
-      sourceKind: 'manual', // → resolveEntryShardKeys returns null
-      sealed: true,
-      dispatchedAt: Date.now(),
-      triggerRunId: legacyRerun,
-    })
+    test('a dispatched manual (null shard) in-flight on __wg_member__ blocks member B dispatch', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // member B's fresh answer (shard B) + a prior shard-B run — seeded FIRST so its runs have lower
+      // ids than the legacy rerun below (a real legacy in-flight ledger is the LATEST run on the node;
+      // a higher-id sibling done run would otherwise mask it in the shard-blind lineage window).
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+      const clarifyB = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, clarifyB, 'assign-B')
+      const entryB = await seedEntry(db, taskId, {
+        originNodeRunId: clarifyB,
+        sourceKind: 'self',
+        sealed: true,
+      })
+      // Legacy manual, dispatched, with an in-flight (pending) rerun → null shard (no clarify round).
+      // Seeded LAST → highest id → the freshest run in its own lineage window → genuinely unconsumed.
+      const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+      const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'pending' })
+      await seedEntry(db, taskId, {
+        originNodeRunId: legacyOrigin,
+        sourceKind: 'manual', // → resolveEntryShardKeys returns null
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: legacyRerun,
+      })
 
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    // the null-shard legacy ledger is NOT skipped → it blocks (conservative, no double-mint).
-    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
-  })
-
-  test('a legacy broadcast ledger is NOT released by a newer sibling done run (conservative)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // A legacy manual whose round-derived shard is null; its trigger run lives on shard B (pending).
-    // A shard-blind consumption check would let the newer sibling done run below mask it → falsely
-    // consumed. The conservative block (a null-shard ledger on a multi-shard host is unconsumed across
-    // ALL shards) prevents that WITHOUT narrowing to the trigger's shard (which is unstable — manual
-    // rows are shard-exempt and their trigger_run_id is rebound per render, Codex round-3).
-    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
-      shardKey: 'assign-B',
-      status: 'pending',
-    })
-    await seedEntry(db, taskId, {
-      originNodeRunId: legacyOrigin,
-      sourceKind: 'manual', // resolveEntryShardKeys → null (round-derived shard is null)
-      sealed: true,
-      dispatchedAt: Date.now(),
-      triggerRunId: legacyRerun,
-    })
-    // A NEWER sibling run on a DIFFERENT shard (A) reaches done — higher id, so shard-blind lineage
-    // would pick IT as the freshest handler and falsely mark the pending shard-B ledger consumed.
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A', status: 'done' })
-    // member A dispatches a fresh answer (shard A).
-    const clarifyA = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, clarifyA, 'assign-A')
-    const entryA = await seedEntry(db, taskId, {
-      originNodeRunId: clarifyA,
-      sourceKind: 'self',
-      sealed: true,
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      // the null-shard legacy ledger is NOT skipped → it blocks (conservative, no double-mint).
+      expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
     })
 
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    // the legacy rerun is PENDING (a run obligation remains) → the conservative block holds and the
-    // sibling A done run does NOT release it → no duplicate same-shard rerun.
-    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
-  })
+    test('a legacy broadcast ledger is NOT released by a newer sibling done run (conservative)', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // A legacy manual whose round-derived shard is null; its trigger run lives on shard B (pending).
+      // A shard-blind consumption check would let the newer sibling done run below mask it → falsely
+      // consumed. The conservative block (a null-shard ledger on a multi-shard host is unconsumed across
+      // ALL shards) prevents that WITHOUT narrowing to the trigger's shard (which is unstable — manual
+      // rows are shard-exempt and their trigger_run_id is rebound per render, Codex round-3).
+      const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+      const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
+        shardKey: 'assign-B',
+        status: 'pending',
+      })
+      await seedEntry(db, taskId, {
+        originNodeRunId: legacyOrigin,
+        sourceKind: 'manual', // resolveEntryShardKeys → null (round-derived shard is null)
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: legacyRerun,
+      })
+      // A NEWER sibling run on a DIFFERENT shard (A) reaches done — higher id, so shard-blind lineage
+      // would pick IT as the freshest handler and falsely mark the pending shard-B ledger consumed.
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A', status: 'done' })
+      // member A dispatches a fresh answer (shard A).
+      const clarifyA = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, clarifyA, 'assign-A')
+      const entryA = await seedEntry(db, taskId, {
+        originNodeRunId: clarifyA,
+        sourceKind: 'self',
+        sealed: true,
+      })
 
-  test('round-4: a legacy ledger whose runs are ALL done RELEASES (no permanent deadlock)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // A legacy manual dispatched to __wg_member__, but its handler run is DONE — the host is idle
-    // (no non-done run). The conservative block must NOT fire (else every later member answer on an
-    // upgraded task deadlocks forever, Codex round-4).
-    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
-    await seedEntry(db, taskId, {
-      originNodeRunId: legacyOrigin,
-      sourceKind: 'manual',
-      sealed: true,
-      dispatchedAt: Date.now(),
-      triggerRunId: legacyDone,
-    })
-    // member B's fresh answer (shard B) + a prior (done) shard-B run.
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
-    const clarifyB = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, clarifyB, 'assign-B')
-    const entryB = await seedEntry(db, taskId, {
-      originNodeRunId: clarifyB,
-      sourceKind: 'self',
-      sealed: true,
-    })
-
-    // no run obligation on the host → the done legacy ledger is consumed → B dispatches (releases).
-    const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
-    expect(res.reruns.length).toBe(1)
-    const run = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
-    )[0]
-    expect(run?.shardKey).toBe('assign-B')
-  })
-
-  test('round-5: a superseded failed attempt (done retry exists) does not keep the ledger blocked', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // Legacy manual dispatched to __wg_member__, its handler DONE.
-    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
-    await seedEntry(db, taskId, {
-      originNodeRunId: legacyOrigin,
-      sourceKind: 'manual',
-      sealed: true,
-      dispatchedAt: Date.now(),
-      triggerRunId: legacyDone,
-    })
-    // member B had a process retry: a FAILED attempt superseded by a newer DONE run (same shard).
-    // The stale `failed` row must NOT count as a live obligation (Codex round-5).
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'failed' })
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'done' })
-    // member C's fresh answer (shard C) + a prior done shard-C run.
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-C' })
-    const clarifyC = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, clarifyC, 'assign-C')
-    const entryC = await seedEntry(db, taskId, {
-      originNodeRunId: clarifyC,
-      sourceKind: 'self',
-      sealed: true,
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      // the legacy rerun is PENDING (a run obligation remains) → the conservative block holds and the
+      // sibling A done run does NOT release it → no duplicate same-shard rerun.
+      expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
     })
 
-    // every shard's FRESHEST generation is done → no live obligation → the done legacy ledger is
-    // consumed → member C dispatches (a superseded failed row cannot deadlock the upgraded task).
-    const res = await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
-    expect(res.reruns.length).toBe(1)
-    const run = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
-    )[0]
-    expect(run?.shardKey).toBe('assign-C')
-  })
+    test('round-4: a legacy ledger whose runs are ALL done RELEASES (no permanent deadlock)', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // A legacy manual dispatched to __wg_member__, but its handler run is DONE — the host is idle
+      // (no non-done run). The conservative block must NOT fire (else every later member answer on an
+      // upgraded task deadlocks forever, Codex round-4).
+      const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+      const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
+      await seedEntry(db, taskId, {
+        originNodeRunId: legacyOrigin,
+        sourceKind: 'manual',
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: legacyDone,
+      })
+      // member B's fresh answer (shard B) + a prior (done) shard-B run.
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+      const clarifyB = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, clarifyB, 'assign-B')
+      const entryB = await seedEntry(db, taskId, {
+        originNodeRunId: clarifyB,
+        sourceKind: 'self',
+        sealed: true,
+      })
 
-  test('round-6: an older ACTIVE (pending) run is still an obligation despite a newer done row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedWorkgroupTask(db, taskId)
-    // Legacy null-shard ledger dispatched to __wg_member__ — its trigger run is DONE (consumed), so
-    // the ONLY possible blocker is the assign-B pending row below. (Codex round-6 test-quality fix: a
-    // pending null-shard legacy run would independently satisfy openRun and mask whether the intended
-    // assign-B pending row is preserved; a null-shard member run is also unroutable by driveAdoptedRun.)
-    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
-    await seedEntry(db, taskId, {
-      originNodeRunId: legacyOrigin,
-      sourceKind: 'manual',
-      sealed: true,
-      dispatchedAt: Date.now(),
-      triggerRunId: legacyDone,
-    })
-    // A recovery/legacy state on shard B: an OLDER pending run + a NEWER done row (same shard). The
-    // pending row is still executable (scheduler reuses pendingExisting / the engine adopts it), so a
-    // max-id reducer that kept only the newer done would wrongly release the gate (Codex round-6).
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'pending' })
-    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'done' })
-    // member C dispatch.
-    const clarifyC = await seedNodeRun(db, taskId, '__wg_clarify__')
-    await seedRound(db, taskId, clarifyC, 'assign-C')
-    const entryC = await seedEntry(db, taskId, {
-      originNodeRunId: clarifyC,
-      sourceKind: 'self',
-      sealed: true,
+      // no run obligation on the host → the done legacy ledger is consumed → B dispatches (releases).
+      const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+      expect(res.reruns.length).toBe(1)
+      const run = (
+        await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
+      )[0]
+      expect(run?.shardKey).toBe('assign-B')
     })
 
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    // the older pending run is a live obligation → the conservative block holds (no duplicate mint).
-    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
-  })
-})
+    test('round-5: a superseded failed attempt (done retry exists) does not keep the ledger blocked', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // Legacy manual dispatched to __wg_member__, its handler DONE.
+      const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+      const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
+      await seedEntry(db, taskId, {
+        originNodeRunId: legacyOrigin,
+        sourceKind: 'manual',
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: legacyDone,
+      })
+      // member B had a process retry: a FAILED attempt superseded by a newer DONE run (same shard).
+      // The stale `failed` row must NOT count as a live obligation (Codex round-5).
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'failed' })
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'done' })
+      // member C's fresh answer (shard C) + a prior done shard-C run.
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-C' })
+      const clarifyC = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, clarifyC, 'assign-C')
+      const entryC = await seedEntry(db, taskId, {
+        originNodeRunId: clarifyC,
+        sourceKind: 'self',
+        sealed: true,
+      })
+
+      // every shard's FRESHEST generation is done → no live obligation → the done legacy ledger is
+      // consumed → member C dispatches (a superseded failed row cannot deadlock the upgraded task).
+      const res = await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
+      expect(res.reruns.length).toBe(1)
+      const run = (
+        await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
+      )[0]
+      expect(run?.shardKey).toBe('assign-C')
+    })
+
+    test('round-6: an older ACTIVE (pending) run is still an obligation despite a newer done row', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedWorkgroupTask(db, taskId)
+      // Legacy null-shard ledger dispatched to __wg_member__ — its trigger run is DONE (consumed), so
+      // the ONLY possible blocker is the assign-B pending row below. (Codex round-6 test-quality fix: a
+      // pending null-shard legacy run would independently satisfy openRun and mask whether the intended
+      // assign-B pending row is preserved; a null-shard member run is also unroutable by driveAdoptedRun.)
+      const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+      const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
+      await seedEntry(db, taskId, {
+        originNodeRunId: legacyOrigin,
+        sourceKind: 'manual',
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: legacyDone,
+      })
+      // A recovery/legacy state on shard B: an OLDER pending run + a NEWER done row (same shard). The
+      // pending row is still executable (scheduler reuses pendingExisting / the engine adopts it), so a
+      // max-id reducer that kept only the newer done would wrongly release the gate (Codex round-6).
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'pending' })
+      await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'done' })
+      // member C dispatch.
+      const clarifyC = await seedNodeRun(db, taskId, '__wg_clarify__')
+      await seedRound(db, taskId, clarifyC, 'assign-C')
+      const entryC = await seedEntry(db, taskId, {
+        originNodeRunId: clarifyC,
+        sourceKind: 'self',
+        sealed: true,
+      })
+
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
+      } catch (e) {
+        threw = e
+      }
+      // the older pending run is a live obligation → the conservative block holds (no duplicate mint).
+      expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
+    })
+  },
+)

@@ -2301,9 +2301,10 @@ export const nodeRuns = sqliteTable(
      *   agent (D15). Distinct pin ref from base (D26).
      * - merge_state: the RFC-130 iso lifecycle, state-machined by RFC-144
      *   (value universe = shared/lifecycle.ts MERGE_STATES; the ONLY sanctioned
-     *   writers are transitionMergeState / abandonSupersededMergeStates in
-     *   services/lifecycle.ts — the rfc144 blind-write inventory guard enforces
-     *   this). NULL (never isolated: passthrough/legacy; every mint is born
+     *   writers are the event CAS in task-execution's
+     *   mergeStateLifecyclePersistence.ts and the supersede closure inside
+     *   nodeRunMintParticipant.ts — both provider-neutral, and the rfc144
+     *   blind-write inventory guard enforces this). NULL (never isolated: passthrough/legacy; every mint is born
      *   NULL) | 'isolating' (iso created, agent not finished) | 'pending-merge'
      *   (agent ok, outputs+node_tree pinned, NOT yet merged, D15) | 'merged'
      *   (delta reached canonical) | 'conflict-human' (merge agent could not

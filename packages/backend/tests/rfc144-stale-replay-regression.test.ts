@@ -40,7 +40,6 @@ import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import { transitionMergeState } from '../src/services/lifecycle'
 import { retryNode } from '../src/services/task'
 import { createLogger } from '../src/util/log'
 import { runGit } from '../src/util/git'
@@ -405,12 +404,9 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const gen1 = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     expect(gen1.mergeState).toBe('isolating')
     const gen1Base = gen1.isoBaseSnapshot!
-    await transitionMergeState({
-      db: h.db,
-      nodeRunId: runId,
-      event: { kind: 'mark-pending-merge' },
-    })
-    await transitionMergeState({ db: h.db, nodeRunId: runId, event: { kind: 'mark-merged' } })
+    const mergeStates = createTaskExecutionPersistence(h.db).mergeStates
+    await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-pending-merge' } })
+    await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-merged' } })
     // 旧代 git progress（PR-5 复核：必须随 reenter 原子清空，防崩溃窗口漏检）。
     await h.db
       .update(nodeRuns)
@@ -494,16 +490,9 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     await createOrRebuildWrapperIso(state, runId, null)
     const gen1 = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     const gen1Base = gen1.isoBaseSnapshot!
-    await transitionMergeState({
-      db: h.db,
-      nodeRunId: runId,
-      event: { kind: 'mark-pending-merge' },
-    })
-    await transitionMergeState({
-      db: h.db,
-      nodeRunId: runId,
-      event: { kind: 'park-conflict-human' },
-    })
+    const mergeStates = createTaskExecutionPersistence(h.db).mergeStates
+    await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-pending-merge' } })
+    await mergeStates.transition({ nodeRunId: runId, event: { kind: 'park-conflict-human' } })
     const handle = await createOrRebuildWrapperIso(state, runId, {
       isoBaseSnapshot: gen1Base,
       isoBaseSnapshotReposJson: null,

@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 2，**merge_state 孪生退役** + 修主干红；账本 **409** / open **105**）
+>
+> 落档 plan §5dj / §5dk。**`810f71c52` 把主干推红了**，已在同一批里修掉。
+>
+> **红的真因（值得记住的形态）**：ubuntu 分片 2/12 日志里 **`0 fail`、1960 个用例全过**，进程却退 1——
+> `# Unhandled error between tests`：`services/mcpRuntimeTest.ts` 的
+> `void persistence.nextDeadline().then(…)` 没接 `.catch`。**SQLite 上没有窗口**（同步读，`void`
+> 交出去时已 settle），**PG 上是真异步**：库关掉后它以 `Connection closed` 拒绝，成了无人处理的
+> rejection。已补 `.catch` + 用 `process.on('unhandledRejection')` 当探针的回归用例（先验红再验绿）。
+> 全树同形的 `void <promise>` 还有 **47 处**未逐条核实，记进 `docs/audit-backlog.md`。
+>
+> **AC-1 的一刀**：从「`rfc172-dispatch-shard` 为什么迁不动」倒推，发现
+> `abandonSupersededMergeStates` / `transitionMergeState` / `tryTransitionMergeState` 等一整族
+> **零生产调用方**——生产早已跑在 provider 中立的 `nodeRunMintParticipant` 与
+> `mergeStateLifecyclePersistence` 上。删掉孪生 213 行，四个测试文件的判据改打在生产实现上，
+> `rfc144-merge-state-cas`（1）与 `rfc172-dispatch-shard`（18）顺势变双引擎。
+>
+> **一处判据被迁移改写（须知悉）**：CAS 竞态原本断言「竞争者赢」——那是孪生把 SELECT 放在事务外的
+> 副产物。中立实现读—改—写同事务，CAS miss 整笔回滚、注入的竞争写也一起回滚，判据改成锁
+> 「**我方的写没落库**」。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续，`rfc311-task-archive` 一次干掉 5 条；总账 **412 → 411**，open **107 → 106**）
 >
 > 落档 plan §5di。**`63030aaea` 的 CI 已全绿**——十二片分片 + 两个分片数守卫 + 审计最终一致性判据全过。

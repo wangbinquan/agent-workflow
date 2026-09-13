@@ -112,6 +112,7 @@ export function* nodeRunMintProgram(
     yield* transactionStep(() =>
       tx
         .update(nodeRuns)
+        // rfc144-allow-direct-merge-state-write -- supersede 闭包：WHERE 的 IN(from 集) 即转移守卫
         .set({ mergeState: 'abandoned' })
         .where(
           and(

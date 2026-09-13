@@ -153,7 +153,6 @@ const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
   [
     'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
     new Set([
-      'abandonSupersededMergeStates',
       'setNodeRunStatus',
       'setNodeRunStatusTx',
       'setTaskStatus',

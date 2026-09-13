@@ -6748,3 +6748,32 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   （两个 PostgreSQL 库），内层用例会以 `… [postgresql] > application lifetime > … [postgresql]`
   这种双重身份全挂。提出来之后还要检查**它引用的助手是不是定义在外层 describe 体里**，
   是的话一并上提到模块级。
+
+- **`void <promise>` 不接 `.catch` 在 SQLite 上看不出问题，在 PostgreSQL 上是进程级窗口**。
+  bun:sqlite 的读写是同步的，`void somePersistence.foo()` 交出去时 promise 往往已经 settle；
+  PostgreSQL 上同一条是真异步查询，库一关（服务停掉 / 测试拆台）它就以 `Connection closed` 拒绝，
+  而没人接 → **无人处理的 rejection**。bun test 把它记成 `# Unhandled error between tests`：
+  **全部用例 `0 fail`、进程照样退 1**，日志里翻不到任何 `(fail)` 行，很容易误判成「CI 抽风」。
+  凡是 fire-and-forget 的 promise 一律显式 `.catch` 落一条 warn。
+  （实例：`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer()`，CI run 34768029441 ubuntu 分片 2/12。）
+
+- **CI 红了先看它到底是不是 `(fail)`**：`0 fail` 却退 1 的形态目前已知两类——上面那条无人处理的
+  rejection，以及测试进程里抛在 `beforeAll` / 模块顶层的错误。直接 `grep " fail$"` 看到 0 就以为
+  「重跑就好」是错的，要连 `##[error]` 与 `Unhandled` 一起搜。
+
+- **要在两个引擎上构造「读到写之间被人插队」的 CAS 竞态**，两条都得做到：①竞争写走**同一笔事务的
+  句柄**（另开连接在 PG 上会撞行锁把自己锁死）；②代理同时挂 `update` 与 `transaction`——SQLite 的
+  `DatabaseSession` 把**客户端句柄**本身当事务用（显式 BEGIN IMMEDIATE），PostgreSQL 走驱动的
+  `db.transaction(cb)`，只挂一个会在另一个引擎上静默不触发（PG 全过、其实没插进去）。
+  插入点用被代理 builder 的 `then`（drizzle builder 是 PromiseLike，`await` 那一刻才发语句）。
+  还有：**别把事务句柄传给 `databaseSessionFor`**——重入按**客户端**识别帧，传事务句柄会在开着的
+  事务里再发一次 BEGIN。
+
+- **一条测试「迁不动」，先怀疑它测的东西生产早就不用了**。RFC-359 里 `rfc172-dispatch-shard` 迁
+  不动，是因为 `abandonSupersededMergeStates` 只收 SQLite 句柄；一 grep 才发现它**零生产调用方**，
+  同语义的实现早已在 provider 中立的铸行程序里。`grep -rn <symbol> packages | grep -v node_modules`
+  再剔掉注释与自身再导出，是个几秒钟就能做的判断，省下一整轮无谓的适配。
+
+- **allowlist 里的条目会悄悄失效**：`rfc144-merge-state-blind-write-inventory` 曾钉着一个早已删除的
+  文件，守卫照绿——因为它只在「有写点的文件」上比对计数，没写点的条目谁也不查。给这类棘轮加一条
+  **逐条对齐整张表**的断言（每个 allowlist key 都必须被占用且计数吻合），退役文件留在表里当场红。

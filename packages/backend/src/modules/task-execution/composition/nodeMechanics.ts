@@ -1217,8 +1217,9 @@ export async function resolveMergeConflicts(
 // GC all reuse the RFC-130 machinery. Recovery (daemon restart, reap) re-enters
 // through the SAME function: the frontier redispatches the interrupted row and
 // the adoption block decides attach / resume-child / finalize instead of
-// re-launching (design §4.2 — minting here would abandonSupersededMergeStates
-// the child's canonical iso generation, so adoption NEVER mints).
+// re-launching (design §4.2 — minting here would run the mint program's
+// supersede closure over the child's canonical iso generation, so adoption
+// NEVER mints).
 // =============================================================================
 
 const CALL_CHILD_OBSERVE_MS = 5_000
@@ -1340,7 +1341,8 @@ export async function runCallWorkflowNode(
     broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
     preResolve: async (latestExisting) => {
       // RFC-243-LOCK:adoption-no-mint-begin — this block re-attaches; minting
-      // here would abandonSupersededMergeStates the child's canonical iso.
+      // here would let the mint program's supersede closure retire the child's
+      // canonical iso.
       // 实现门 P1-5：领养判据按「这一代是否已收尾」而不是单看 running/interrupted。
       // daemon shutdown 的收尾会把调用行落成 canceled（RFC-095 revival 语义下它
       // 仍是可复活行），只认 running/interrupted 会漏掉领养 → 重新 mint → 同一
@@ -4693,9 +4695,9 @@ export async function runAgentSingleNode(
         },
         // RFC-208: persisting the iso base must happen INSIDE the region whose
         // finally releases the permit. It used to sit between the acquire and the
-        // window, and `transitionMergeState` throwing there (a documented,
-        // test-locked behavior — NotFoundError / IllegalMergeStateTransition /
-        // ConcurrentMergeStateTransition, plus any SQLite error) leaked one
+        // window, and the merge_state CAS throwing there (a documented,
+        // test-locked behavior — node-run-not-found / IllegalMergeStateTransition /
+        // concurrent-merge-state-transition, plus any database error) leaked one
         // daemon-wide permit per occurrence with no way back short of a restart.
         persistBase: 'in-window',
         persist: async () => {

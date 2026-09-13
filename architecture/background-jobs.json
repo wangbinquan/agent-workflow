@@ -531,9 +531,9 @@
     {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
-      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1504",
+      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1506",
       "kind": "register-call",
-      "line": 1504,
+      "line": 1506,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode",
       "removeAfterWave": "W6/W9",
       "symbol": "runCallWorkflowNode",
@@ -8173,7 +8173,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1576",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1578",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8187,7 +8187,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1576",
+      "symbol": "$setInterval:1578",
       "targetContext": "task-execution"
     },
     {
@@ -8196,7 +8196,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1960",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1962",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8210,7 +8210,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:1960",
+      "symbol": "$setTimeout:1962",
       "targetContext": "task-execution"
     },
     {
@@ -11674,7 +11674,7 @@
       ],
       "file": "packages/backend/src/services/mcpRuntimeTest.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/mcpRuntimeTest.ts#$setTimeout:1720",
+      "id": "background:packages/backend/src/services/mcpRuntimeTest.ts#$setTimeout:1727",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -11688,7 +11688,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:1720",
+      "symbol": "$setTimeout:1727",
       "targetContext": "runtime-management"
     },
     {
@@ -12847,5 +12847,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:77556e71ee51387a7fdcce596b93a93a997c45d3318d69ccdc7b73772c75e73a"
+  "sourceDigest": "sha256:bff00ab14790e319ae720e2c6a7798e9c21dee1cbcb2769deeae381fd46e169c"
 }

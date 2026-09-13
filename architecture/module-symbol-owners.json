@@ -6,7 +6,7 @@
     "moduleFiles": 1188,
     "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24942
+    "symbolsIncludingFileRoots": 24936
   },
   "entries": [
     {
@@ -151672,48 +151672,12 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#ABANDONABLE_MERGE_STATES",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "ABANDONABLE_MERGE_STATES",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#abandonSupersededMergeStates",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "abandonSupersededMergeStates",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#cancelOpenNodeRuns",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "cancelOpenNodeRuns",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#ConcurrentMergeStateTransition",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "ConcurrentMergeStateTransition",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -151750,18 +151714,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "lifecycleLog",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#MergeStateUpdateExtra",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "MergeStateUpdateExtra",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -151878,18 +151830,6 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "transitionMergeState",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionNodeRunStatus",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -151930,18 +151870,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "trySetTaskStatus",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#tryTransitionMergeState",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "tryTransitionMergeState",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -300005,5 +299933,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:77556e71ee51387a7fdcce596b93a93a997c45d3318d69ccdc7b73772c75e73a"
+  "sourceDigest": "sha256:bff00ab14790e319ae720e2c6a7798e9c21dee1cbcb2769deeae381fd46e169c"
 }

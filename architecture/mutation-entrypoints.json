@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1729,
+    "entries": 1728,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -32351,28 +32351,6 @@
       },
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
-      "symbol": "transitionMergeState",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionNodeRunStatus",
       "missingControls": [
         "audit",
@@ -41298,8 +41276,8 @@
     {
       "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
       "guard": "rfc098-node-run-mint-grep-guard",
-      "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#126",
-      "line": 126,
+      "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#127",
+      "line": 127,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
       "removeAfterWave": null,
       "status": "canonical-writer",
@@ -41307,7 +41285,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:77556e71ee51387a7fdcce596b93a93a997c45d3318d69ccdc7b73772c75e73a",
+  "sourceDigest": "sha256:bff00ab14790e319ae720e2c6a7798e9c21dee1cbcb2769deeae381fd46e169c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41419,7 +41397,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 162,
+      "durableWriterSites": 160,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -42217,8 +42195,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#126:nodeRuns",
-        "line": 126,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#127:nodeRuns",
+        "line": 127,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -43765,22 +43743,6 @@
           "nodeRuns"
         ],
         "authorityKind": "control-revision",
-        "consumer": "abandonSupersededMergeStates",
-        "controlSubtype": "terminal-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1072:nodeRuns",
-        "line": 1072,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#abandonSupersededMergeStates",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-or-node-lifecycle-status-cas",
-        "symbol": "abandonSupersededMergeStates"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
         "consumer": "transitionNodeRunStatusTx",
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
@@ -43839,22 +43801,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
         "symbol": "setTaskStatus"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "transitionMergeState",
-        "controlSubtype": "terminal-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#959:nodeRuns",
-        "line": 959,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-or-node-lifecycle-status-cas",
-        "symbol": "transitionMergeState"
       },
       {
         "allowedTables": [

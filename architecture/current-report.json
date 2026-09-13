@@ -7,8 +7,8 @@
     "crossContextImports": 5264,
     "facades": 322,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24942,
-    "mutationEntrypoints": 1729,
+    "moduleSymbolOwners": 24936,
+    "mutationEntrypoints": 1728,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 983,
     "transactionExternalEffects": 270
@@ -127,8 +127,8 @@
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#126",
-        "line": 126,
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#127",
+        "line": 127,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
         "removeAfterWave": null,
         "status": "canonical-writer",
@@ -158,5 +158,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:77556e71ee51387a7fdcce596b93a93a997c45d3318d69ccdc7b73772c75e73a"
+  "sourceDigest": "sha256:bff00ab14790e319ae720e2c6a7798e9c21dee1cbcb2769deeae381fd46e169c"
 }

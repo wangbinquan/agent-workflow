@@ -1783,4 +1783,35 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     expect(existsSync(scratchRoot)).toBe(false)
     expect(await db.select().from(mcpRuntimeTestCreateReceipts)).toHaveLength(0)
   })
+  // RFC-359 回归：`scheduleIdleTimer()` 里的 `persistence.nextDeadline()` 是一条 fire-and-forget。
+  // 它在 SQLite 上是同步读（promise 早已 settle，没有窗口），在 PostgreSQL 上是**真异步**查询——
+  // 库在服务停掉 / 测试拆台之后关闭时，这个还在飞的 promise 以 `Connection closed` 拒绝，
+  // 而当时既没有 `.catch` 也没有别的接住者，于是变成一条**无人处理的 rejection**：
+  // CI 上所有用例 0 fail、进程仍然退 1，报「Unhandled error between tests」
+  // （run 34768029441，ubuntu 分片 2/12）。这条用例把那个窗口固定下来。
+  test('nextDeadline 读失败只落日志，不留下无人处理的 rejection', async () => {
+    const { db, root } = await seed(harness.db)
+    const base = runtimeTestDependencies(db, root)
+    const service = new McpRuntimeTestService({
+      ...base,
+      persistence: {
+        ...base.persistence,
+        nextDeadline: () => Promise.reject(new Error('Connection closed')),
+      },
+    })
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      // reconcile() 走到 reconcileCore() 末尾就会排空闲定时器——那正是失败的那一跳。
+      await service.reconcile()
+      await new Promise((settle) => setTimeout(settle, 50))
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+      await service.shutdown(0)
+    }
+    expect(unhandled).toEqual([])
+  })
 })

@@ -2,12 +2,12 @@
 //
 // 退役前 `withTaskExecutionMutation` / `withTaskExecutionTransaction`（`sqliteOwnedTaskMutation.ts`）
 // 建在 `dbTxSync` + `withOwnedTaskTx` 上——那是 bun:sqlite 独有的**同步**事务面，PostgreSQL 上根本
-// 不存在。于是 `transitionMergeState` 这类写手只有 SQLite 一个引擎跑得动，正是 RFC-359 要消灭的
+// 不存在。于是 merge_state CAS 这类写手只有 SQLite 一个引擎跑得动，正是 RFC-359 要消灭的
 // 「一个好一个不好」。D28b 把这条网关整体退役，5 处调用点迁到两引擎共用的
 // `withTaskExecutionWrite` + `fenceTaskWrite`（`infrastructure/ownedTaskExecution.ts`）。
 //
 // 这条用例锁两件事，**两个引擎各跑一遍**：
-//   1. 同一个 `transitionMergeState` 在 SQLite 与 PostgreSQL 上都完成 merge_state CAS。迁移前
+//   1. 同一个 merge_state CAS 写手在 SQLite 与 PostgreSQL 上都跑通。迁移前
 //      它在 PG 上不可能跑通（`dbTxSync` 要的是 bun:sqlite 的同步 `db.transaction`）。
 //   2. 无执行上下文的控制面写入按**统一规则**走无主围栏：任务仍挂着活着的（`claimed`）owner 时
 //      当场拒绝，且拒绝之后那一行原样不动。这是迁移**带来的**行为变化——旧的同步网关在无上下文
@@ -19,7 +19,7 @@ import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, taskExecutionOwners, tasks, workflows } from '@/db/schema'
-import { transitionMergeState } from '@/platform/persistence/sqlite/taskLifecycle'
+import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -92,12 +92,11 @@ async function mergeStateOf(db: ProviderNeutralDatabase, runId: string): Promise
 }
 
 describeEachProvider('RFC-359 W4-D28b —— 同步 owned-mutation 网关退役', (harness) => {
-  test('无 owner 的控制面写入：同一个 transitionMergeState 在两个引擎上都完成 CAS', async () => {
+  test('无 owner 的控制面写入：同一个 merge_state 迁移在两个引擎上都完成 CAS', async () => {
     const { runId } = await seedTaskWithNodeRun(harness.db)
     expect(await mergeStateOf(harness.db, runId)).toBeNull()
 
-    const moved = await transitionMergeState({
-      db: harness.db,
+    const moved = await new DrizzleMergeStateLifecyclePersistence(harness.db).transition({
       nodeRunId: runId,
       event: { kind: 'begin-isolation' },
     })
@@ -111,8 +110,7 @@ describeEachProvider('RFC-359 W4-D28b —— 同步 owned-mutation 网关退役'
     await seedLiveOwner(harness.db, taskId)
 
     await expect(
-      transitionMergeState({
-        db: harness.db,
+      new DrizzleMergeStateLifecyclePersistence(harness.db).transition({
         nodeRunId: runId,
         event: { kind: 'begin-isolation' },
       }),

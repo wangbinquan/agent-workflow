@@ -39,6 +39,7 @@ export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecycl
       const to = nextMergeState(from, input.event)
       const updated = await tx
         .update(nodeRuns)
+        // rfc144-allow-direct-merge-state-write -- 事件 CAS：唯一的 merge_state 迁移写手
         .set({ mergeState: to, ...(input.extra ?? {}) })
         .where(
           and(

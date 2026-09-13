@@ -5077,3 +5077,30 @@ void deps.core.tokenCallAudit.record({ actor, channel: 'rest', method, path, sta
 **处置**：用例改成按「最终一致」语义**有界等待**（5s 内轮询），并在注释里写明这是生产侧差异、
 不是用例写错。**生产代码没动**——要不要在 PG 上 await（给每个 token 请求加一次写往返）、
 或者改成带确认的后台队列，是**产品决策**：它在延迟、可靠性与「审计永不拖垮业务调用」之间取舍。
+
+## RFC-359 —— `void <promise>` 未接 rejection 的 47 处（2026-09-13 开）
+
+**形态**：`void somePromise()` 且链上既无 `.catch(...)` 也无双参 `.then(ok, err)`。
+bun:sqlite 的读写是同步的，这类 fire-and-forget 在 SQLite 上往往交出去时就已 settle，看不出问题；
+PostgreSQL 上同一条是真异步查询，库一关（服务停掉 / 测试拆台 / daemon 收尾）它就以
+`Connection closed` 拒绝，成为**无人处理的 rejection**——bun test 记成
+`# Unhandled error between tests`，**全部用例 0 fail 而进程退 1**（实撞：CI run 34768029441，
+ubuntu 分片 2/12，`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer`，已在同批修复并带回归用例）。
+
+**已核安全的**：`auth/application/tokenCallAudit.ts` 的 `record`（`insertAudit` 在 try 里；
+`writeDeleteSnapshot` 自身整体 try/catch，连兜底的 `markSnapshotFailed` 也包了）。
+
+**未核的 45 处**分布（`packages/backend/src`，AST 扫描：`void` 语句 + 链上无 rejection handler）：
+`platform/background/maintenanceWorker.ts`(3)、`platform/background/maintenanceService.ts`(1)、
+`platform/events/committed/workerDefinitions.ts`(1)、`mcp/server.ts`(1)、`cli/start.ts`(6)、
+`cli/postgresqlDaemonApplication.ts`(3)、`modules/digital-employee/application/osWorker.ts`(1)、
+`modules/intent/inbound/intentSessionRoutes.ts`(10)、`modules/intent/application/dispatcher.ts`(3)、
+`modules/event-center/application/eventCenterWorker.ts`(1)、`server.ts`(4)、`routes/webhooks.ts`(1)、
+`services/scheduledTaskScheduler.ts`(1)、`services/controlListener.ts`(1)、
+`services/pluginGenerationGc.ts`(1)、`services/repoBatchImport.ts`(2)、
+`services/execution/managedProcess.ts`(4)、`services/reviewMutationCoordinator.ts`(1)、
+`services/structuralDiff/service.ts`(2)。
+
+**正解**：立一条与 AC-6 同形的账本——机械判据「**被调函数体整体 try/catch**，或链上有 `.catch` /
+双参 `.then` ⇒ 已接住」把 47 条切成「已接住（免责）」与「未接住（债）」两栏，后者逐条收到零。
+扫描脚本见 plan §5dk 描述的 AST 判据（`ts.isVoidExpression` + 链尾 handler 检出）。

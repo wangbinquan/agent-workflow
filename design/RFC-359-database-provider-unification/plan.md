@@ -8871,3 +8871,112 @@ await（给每个 token 请求加一次写往返）还是改成带确认的后�
 迁到作用域后改走 `open({ config: { taskArchive: { enabled: false, retentionDays: 90 } } })`
 ——应用读的是作用域现建的 configPath。而归档产物（`archive/tasks/<id>/manifest.json`）
 仍要按作用域交出的 `opened.appHome` 去断言。
+
+## 5dj. 从「这条测试迁不动」倒推出「它测的东西生产早就不用了」——merge_state 孪生退役（AC-1 / AC-6，410 → **409** / open **105**）
+
+### 起点：一条迁不动的测试
+
+`rfc172-dispatch-shard.test.ts`（18 个调用点，账本上最肥的几条之一）机械迁完之后 typecheck 只剩
+两处红：`abandonSupersededMergeStates({ db, … })` 收的是 `DbClient | DbTxSync`，中立句柄塞不进去。
+顺着它往回读 `platform/persistence/sqlite/taskLifecycle.ts`，才发现真正的问题不在测试：
+
+```
+$ grep -rn "abandonSupersededMergeStates" packages | grep -v node_modules
+… 只有：定义本身、`services/lifecycle.ts` 的再导出、三个测试文件、以及若干注释
+```
+
+**零生产调用方**。同一段 supersede 闭包（前代 top-level + 其子行、`lt(id, 新行)`、按 shard 收口）
+生产早已跑在 `modules/task-execution/infrastructure/nodeRunMintParticipant.ts` 的铸行程序里，
+provider 中立的一份。同一次盘点里 `transitionMergeState` / `tryTransitionMergeState` /
+`ConcurrentMergeStateTransition` / `MergeStateUpdateExtra` 同样零生产调用方——它们的现役对应物是
+`infrastructure/mergeStateLifecyclePersistence.ts`（W4-B1 已合一，读 + CAS 写同一事务，
+比孪生那份**更严**：孪生的 SELECT 在事务外）。
+
+**这正是 AC-1 说的那种重复实现**：两份代码、同一语义、其中一份只有测试还在喂它活着。
+按 `CLAUDE.md`「删除优于 deprecate」，整块（213 行）删除。
+
+### 判据不能跟着一起删
+
+三个文件的判据改打在**生产实现**上，顺带各自变成双引擎：
+
+| 文件                                        | 原来打在                                | 现在打在                                                       |
+| ------------------------------------------- | --------------------------------------- | -------------------------------------------------------------- |
+| `rfc144-merge-state-cas.test.ts`            | 三个孪生函数                            | `DrizzleMergeStateLifecyclePersistence` + `nodeRunMintParticipant` |
+| `rfc172-dispatch-shard.test.ts`（2 条）     | `abandonSupersededMergeStates(shardKey)` | 铸一行真的 `__wg_member__` run，断言 supersede 闭包的可观察结果 |
+| `rfc359-w4-d28b-owned-mutation-gateway.test.ts` | `transitionMergeState`              | 同一个中立 persistence                                          |
+| `rfc144-stale-replay-regression.test.ts`（4 处） | `transitionMergeState`             | `createTaskExecutionPersistence(db).mergeStates`                |
+
+**一处判据被迁移改写（须知悉）**：原 CAS 竞态用例断言「竞争者赢」——旧孪生的 SELECT 在事务外、
+竞争写也在事务外，所以竞争者那一笔留得住。中立实现把读—改—写收进**同一笔事务**，CAS miss 让整笔
+回滚，注入的竞争写**随之一起回滚**。所以判据改成锁真正的不变量：**我方那条写没落库**
+（`mergeState` 停在竞态前的值、`isoWorktreePath` 停在 null）。NULL-from 那格另加一句说明：
+它与 happy path 的 `begin-isolation` **必须同时绿**才证明谓词走的是 `IS NULL`——
+写成 `eq(col, null)` 时本例照样抛冲突，但正向迁移也永远做不成。
+
+### 竞态怎么在两个引擎上都构造得出来
+
+旧写法是「代理 `db.update`，在 UPDATE 前同步插一条竞争写」——那依赖 bun:sqlite 的同步单连接。
+PostgreSQL 上第二条连接会撞行锁把自己锁死。新写法两点：
+
+1. 竞争写走**同一笔事务的句柄**（不是第二个连接）；
+2. 代理同时挂在 `update` 与 `transaction` 上——两个引擎的事务句柄来路不同：SQLite 的
+   `DatabaseSession` 直接把**客户端句柄**当事务用（显式 `BEGIN IMMEDIATE`），PostgreSQL 走驱动的
+   `db.transaction(cb)`。只挂一个就会在另一个引擎上静默不触发（实测：只挂 `update` 时 PG 全过、
+   实际没插进去）。插入点用被代理 builder 的 `then`：drizzle 的 builder 是 PromiseLike，
+   `await` 的那一刻才发语句，`then` 里先跑竞争写再放行，就是「读到写之间」。
+
+**别把事务句柄交给 `databaseSessionFor`**（它自己的头注释就写着）：重入靠 AsyncLocalStorage 帧按
+**客户端**识别，拿事务句柄开会话会在开着的事务里再发一次 BEGIN。第一版就是这么写的，八个用例全红。
+
+### 守卫随之改口径
+
+`rfc144-merge-state-blind-write-inventory` 的 allowlist 原本钉着
+`platform/persistence/sqlite/taskLifecycle.ts: 2` 和一个**早已退役**的
+`sqliteNodeRunMintParticipant.ts: 1`——后者是「allowlist 条目可以悄悄失效」的活样本：文件没了，
+守卫照绿。现在两条：`nodeRunMintParticipant.ts: 1` + `mergeStateLifecyclePersistence.ts: 1`，
+并且把「占用性」断言从「钉住某一个文件的计数」改成**逐条对齐整张表**——
+退役文件留在表里会当场红。两个中立内核各补一条 `rfc144-allow-direct-merge-state-write` 标记注释。
+
+`rfc328-architecture-guards` 的 `CANONICAL_MUTATION_SYMBOLS` 去掉同名的死条目。
+`db/schema.ts` 与 `nodeMechanics.ts` 里指名道姓引用这三个函数的注释一并改写——
+注释里点名一个不存在的函数，比没有注释更误导。
+
+## 5dk. `810f71c52` 把主干推红了：一条 **0 fail 却退 1** 的红，根因是 `void <promise>` 没人接
+
+`810f71c52` 的 CI（run `34768029441`）ubuntu 分片 2/12 红，但日志里 **`0 fail`、`Ran 1960 tests`**。
+真正的失败长这样：
+
+```
+# Unhandled error between tests
+error: Failed query: select "in_flight_turn_id" from "…"."mcp_runtime_test_sessions" …
+PostgresError: Connection closed  code: "ERR_POSTGRES_CONNECTION_CLOSED"
+  at async nextDeadline (…/mcpRuntimeTestPersistence.ts:2048:10)
+```
+
+`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer()`：
+
+```ts
+void this.deps.persistence.nextDeadline().then((earliest) => { … })   // 没有 .catch
+```
+
+**SQLite 上这条没有窗口**——`nextDeadline()` 里全是同步读，`void` 交出去时 promise 已经 settle。
+**PostgreSQL 上它是一次真异步查询**：服务停掉 / 测试拆台把库关了，这个还在飞的 promise 以
+`Connection closed` 拒绝，而当时既没有 `.catch` 也没有别的接住者 → 一条**无人处理的 rejection**，
+bun 记成「Unhandled error between tests」，**全部用例通过、进程照样退 1**。
+
+分片 8 → 12 只是改变了文件分组、把这个一直存在的窗口挪到了会撞上的位置；不是它引入的。
+
+处置：`.catch` 落一条 warn（排期失败不致命，下一次事件会重新排期），内层
+`void this.reconcile()` 同样补上。回归用例注入一个必然拒绝的 `nextDeadline`，
+用 `process.on('unhandledRejection')` 当探针——**修复前红、修复后绿**（实测：先把生产改回原样跑一遍，
+确认这条用例红，再改回来）。
+
+### 这是一类，不是一处
+
+全树扫「`void <promise>` 且链上没有 `.catch` / 双参 `.then`」得 **47 处**。它们的共同风险形状是
+同一条：**SQLite 上同步、PG 上真异步**，于是「在 SQLite 上永远来不及出事」的写法在 PG 上是一个
+真实的进程级窗口。已核过的几处里，`tokenCallAudit.record` 是安全的（`insertAudit` 在 try 里，
+`writeDeleteSnapshot` 自己整体 try/catch 且连兜底的 `markSnapshotFailed` 也包了）。
+其余尚未逐条核实——**这是本 RFC 的一条开放缺口**，记在 `docs/audit-backlog.md`，
+正解是给它立一条与 AC-6 同形的账本：**被调函数体整体 try/catch 或链上有 `.catch` = 已接住**，
+其余进「未接住」那一栏，逐条收。

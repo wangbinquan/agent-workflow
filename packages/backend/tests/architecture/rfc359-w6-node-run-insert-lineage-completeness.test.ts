@@ -44,7 +44,7 @@ const REQUIRED_COLUMNS = ['continuationSlotKey', 'lineageSlotPathJson'] as const
  * 键是 `file:line`，与 W7 的账本同形（那条账本里也记着「行号会因上方编辑而漂」的摩擦）。
  */
 const NODE_RUN_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:126 continuationSlotKey+ lineageSlotPathJson+',
+  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:127 continuationSlotKey+ lineageSlotPathJson+',
 ]
 
 function sourceFiles(dir: string): string[] {
