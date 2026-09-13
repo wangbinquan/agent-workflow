@@ -27,7 +27,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
@@ -44,11 +43,10 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 // 同毫秒多行排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）。
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('test-s05-fanout-chain')
 
-const nodePersistence = (db: DbClient) => new DrizzleNodeExecutionPersistence(db)
+const nodePersistence = (db: ProviderNeutralDatabase) => new DrizzleNodeExecutionPersistence(db)
 
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
@@ -60,7 +58,7 @@ afterAll(() => resetBroadcastersForTests())
 //  "上游产出【只】存在于 child 行 → 端口整体缺失"场景。）
 // ---------------------------------------------------------------------------
 
-async function seedBareTask(db: DbClient): Promise<string> {
+async function seedBareTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_s05_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
   await db.insert(workflows).values({
@@ -89,7 +87,7 @@ async function seedBareTask(db: DbClient): Promise<string> {
 
 // id 用显式字典序字符串（'01...'），与 baseline 测试同法，排序确定。
 async function seedRunWithOutput(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   fields: {
@@ -126,78 +124,81 @@ function chainEdge(): WorkflowEdge {
   }
 }
 
-describe('S-5 layer 1 — resolveUpstreamInputs excludes shard child rows wholesale', () => {
-  test('upstream output existing ONLY on shard child rows → target port key entirely absent, consumed empty', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedBareTask(db)
-    // fanout wrapper 行（child 行的 parent）。
-    await db.insert(nodeRuns).values({
-      id: '01WRAP',
-      taskId,
-      nodeId: 'fan',
-      status: 'running',
-      retryIndex: 0,
-      iteration: 0,
-      parentNodeRunId: null,
+describeEachProvider(
+  'S-5 layer 1 — resolveUpstreamInputs excludes shard child rows wholesale',
+  (harness) => {
+    test('upstream output existing ONLY on shard child rows → target port key entirely absent, consumed empty', async () => {
+      const db = harness.db
+      const taskId = await seedBareTask(db)
+      // fanout wrapper 行（child 行的 parent）。
+      await db.insert(nodeRuns).values({
+        id: '01WRAP',
+        taskId,
+        nodeId: 'fan',
+        status: 'running',
+        retryIndex: 0,
+        iteration: 0,
+        parentNodeRunId: null,
+      })
+      // A（audit）的产出只存在于 shard child 行上 —— fanout 内 per-shard 节点的
+      // 真实落库形态（见 wrapperMechanics.ts dispatchFanoutShard 的 insert：
+      // parentNodeRunId = wrapperRunId）。
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'audit',
+        { id: '01SHARD_A', status: 'done', parentNodeRunId: '01WRAP', shardKey: 'a.md' },
+        { result: 'FINDING-FOR-a.md' },
+      )
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'audit',
+        { id: '01SHARD_B', status: 'done', parentNodeRunId: '01WRAP', shardKey: 'b.md' },
+        { result: 'FINDING-FOR-b.md' },
+      )
+
+      const { inputs, consumed } = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        [chainEdge()],
+        'fix',
+        { containerRunId: null, iteration: 0 },
+        log,
+      )
+      // [FLIP] 修复（长期方案：按 shardKey 解析 child 行）后：inputs.findings
+      // 应携带对应 shard 的 'FINDING-FOR-*' 内容，consumed 应记录 child 行 id。
+      // 当前缺陷行为：done 的 child 行被 parentNodeRunId===null 过滤整体排除，
+      // 端口键缺失（注意：连空字符串都不是 —— key 不存在），provenance 为空。
+      expect(inputs).toEqual({})
+      expect(consumed).toEqual({})
     })
-    // A（audit）的产出只存在于 shard child 行上 —— fanout 内 per-shard 节点的
-    // 真实落库形态（见 wrapperMechanics.ts dispatchFanoutShard 的 insert：
-    // parentNodeRunId = wrapperRunId）。
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'audit',
-      { id: '01SHARD_A', status: 'done', parentNodeRunId: '01WRAP', shardKey: 'a.md' },
-      { result: 'FINDING-FOR-a.md' },
-    )
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'audit',
-      { id: '01SHARD_B', status: 'done', parentNodeRunId: '01WRAP', shardKey: 'b.md' },
-      { result: 'FINDING-FOR-b.md' },
-    )
 
-    const { inputs, consumed } = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      [chainEdge()],
-      'fix',
-      { containerRunId: null, iteration: 0 },
-      log,
-    )
-    // [FLIP] 修复（长期方案：按 shardKey 解析 child 行）后：inputs.findings
-    // 应携带对应 shard 的 'FINDING-FOR-*' 内容，consumed 应记录 child 行 id。
-    // 当前缺陷行为：done 的 child 行被 parentNodeRunId===null 过滤整体排除，
-    // 端口键缺失（注意：连空字符串都不是 —— key 不存在），provenance 为空。
-    expect(inputs).toEqual({})
-    expect(consumed).toEqual({})
-  })
-
-  test('control: same shape with a top-level done row resolves normally (proves the filter is the discriminator)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedBareTask(db)
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'audit',
-      { id: '01TOP', status: 'done', parentNodeRunId: null },
-      { result: 'TOP-LEVEL-FINDING' },
-    )
-    const { inputs, consumed } = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      [chainEdge()],
-      'fix',
-      { containerRunId: null, iteration: 0 },
-      log,
-    )
-    // 唯一差别是 parentNodeRunId=null —— 内容立即可见。证明层 1 的空结果
-    // 完全由 child-row 过滤造成，而非端口名/状态等其他因素。
-    expect(inputs.findings).toBe('TOP-LEVEL-FINDING')
-    expect(consumed.audit).toBe('01TOP')
-  })
-})
+    test('control: same shape with a top-level done row resolves normally (proves the filter is the discriminator)', async () => {
+      const db = harness.db
+      const taskId = await seedBareTask(db)
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'audit',
+        { id: '01TOP', status: 'done', parentNodeRunId: null },
+        { result: 'TOP-LEVEL-FINDING' },
+      )
+      const { inputs, consumed } = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        [chainEdge()],
+        'fix',
+        { containerRunId: null, iteration: 0 },
+        log,
+      )
+      // 唯一差别是 parentNodeRunId=null —— 内容立即可见。证明层 1 的空结果
+      // 完全由 child-row 过滤造成，而非端口名/状态等其他因素。
+      expect(inputs.findings).toBe('TOP-LEVEL-FINDING')
+      expect(consumed.audit).toBe('01TOP')
+    })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // 层 2 — validator 面：inner-to-inner 链路边零规则

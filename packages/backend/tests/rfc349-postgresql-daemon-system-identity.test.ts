@@ -23,17 +23,17 @@
 // 注：注册表本身与 provider 无关（两个 provider 共用 `buildIdentityAccessRuntime`，只有仓库
 // 实现不同），所以 ①② 用内存 SQLite 起同一套运行时即可；缺陷落在**接线**上，由 ③ 锁住。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '../src/auth/actor'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '../src/auth/session'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_SOURCE = resolve(import.meta.dir, '..', 'src', 'cli', 'postgresqlDaemonApplication.ts')
 
 /** daemon 组合根当年手捏的那个投影，逐字段照抄。 */
@@ -50,15 +50,15 @@ function handBuiltSystemActor(): Actor {
   })
 }
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let identityAccess: ReturnType<typeof createIdentityAccessRuntime>
 
-beforeEach(() => {
-  db = createInMemoryDb(MIGRATIONS)
-  identityAccess = createIdentityAccessRuntime({ db })
-})
+describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) => {
+  beforeEach(() => {
+    db = harness.db
+    identityAccess = createIdentityAccessRuntime({ db })
+  })
 
-describe('RFC-349 — PostgreSQL daemon 的系统身份', () => {
   test('正式 admit 出来的身份能穿过两种生产接线，账号事实与手捏常量一致', async () => {
     const identity = await admitDaemonIdentity(identityAccess)
     expect(

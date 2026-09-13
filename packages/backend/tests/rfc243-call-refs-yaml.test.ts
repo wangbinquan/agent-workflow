@@ -24,7 +24,6 @@ import { workflowDefinitionToNameSelectors } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { agents, resourceGrants, users, workflows } from '../src/db/schema'
@@ -32,8 +31,6 @@ import { resolveImportRefs } from '../src/modules/resource-catalog/infrastructur
 import { extractWorkflowWorkflowRefs } from '../src/services/resourceRefs'
 import { copyWorkflow, createWorkflow, getWorkflow, updateWorkflow } from '../src/services/workflow'
 import { importWorkflowYaml, workflowDefinitionToSelectors } from '../src/services/workflow.yaml'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -72,7 +69,7 @@ function callDef(
 }
 
 async function seedWorkflowRow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: {
     id?: string
     name: string
@@ -98,7 +95,10 @@ async function seedWorkflowRow(
   return id
 }
 
-async function storedDefinition(db: DbClient, workflowId: string): Promise<WorkflowDefinition> {
+async function storedDefinition(
+  db: ProviderNeutralDatabase,
+  workflowId: string,
+): Promise<WorkflowDefinition> {
   const row = (await db.select().from(workflows).where(eq(workflows.id, workflowId)))[0]
   if (row === undefined) throw new Error(`missing workflow ${workflowId}`)
   return JSON.parse(row.definition) as WorkflowDefinition
@@ -125,12 +125,12 @@ describe('RFC-243 — extractWorkflowWorkflowRefs', () => {
 })
 
 // ---------------------------------------------------------------------------
-describe('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15)', () => {
-  let db: DbClient
+describeEachProvider('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15)', (harness) => {
+  let db: ProviderNeutralDatabase
   const editor = actor('editor')
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedUser(db, 'owner-a')
     await seedUser(db, 'editor')
     await seedWorkflowRow(db, {
@@ -288,7 +288,7 @@ describe('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15)', () => {
 })
 
 // ---------------------------------------------------------------------------
-describe('RFC-243 §5.5 — YAML export strips the workflowId cache', () => {
+describeEachProvider('RFC-243 §5.5 — YAML export strips the workflowId cache', (harness) => {
   test('shared workflowDefinitionToNameSelectors drops workflowId, keeps workflowName', () => {
     const portable = workflowDefinitionToNameSelectors({
       $schema_version: 4,
@@ -308,7 +308,7 @@ describe('RFC-243 §5.5 — YAML export strips the workflowId cache', () => {
   })
 
   test('backend workflowDefinitionToSelectors drops workflowId on BOTH the agent-free fast path and the agent path', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedUser(db, 'owner-a')
     const viewer = actor('viewer')
 
@@ -349,150 +349,153 @@ describe('RFC-243 §5.5 — YAML export strips the workflowId cache', () => {
 })
 
 // ---------------------------------------------------------------------------
-describe('RFC-243 §5.5 — YAML import resolves / dangles call-workflow names', () => {
-  let db: DbClient
-  const viewer = actor('viewer')
+describeEachProvider(
+  'RFC-243 §5.5 — YAML import resolves / dangles call-workflow names',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    const viewer = actor('viewer')
 
-  beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    await seedUser(db, 'owner-a')
-    await seedUser(db, 'owner-b')
-    await seedUser(db, 'viewer')
-  })
-
-  function callYaml(input: { name?: string; workflowName: string; workflowId?: string }): string {
-    return stringify({
-      name: input.name ?? 'imported-caller',
-      description: '',
-      definition: {
-        $schema_version: 4,
-        inputs: [],
-        nodes: [
-          {
-            id: 'c1',
-            kind: 'call-workflow',
-            workflowName: input.workflowName,
-            ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId }),
-          },
-        ],
-        edges: [],
-      },
+    beforeEach(async () => {
+      db = harness.db
+      await seedUser(db, 'owner-a')
+      await seedUser(db, 'owner-b')
+      await seedUser(db, 'viewer')
     })
-  }
 
-  test('round-trip: a resolved name backfills THIS install id and never keeps the foreign one', async () => {
-    const childId = await seedWorkflowRow(db, {
-      name: 'child-wf',
-      ownerUserId: 'owner-a',
-      visibility: 'public',
-    })
-    const result = await importWorkflowYaml(
-      db,
-      { yamlText: callYaml({ workflowName: 'child-wf', workflowId: 'FOREIGN_ID' }), mode: 'new' },
-      { kind: 'actor', actor: viewer },
-    )
-    expect(result.outcome).toBe('created')
-    if (result.outcome !== 'created') throw new Error('unreachable')
-    const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
-      string,
-      unknown
-    >
-    expect(node.workflowName).toBe('child-wf')
-    expect(node.workflowId).toBe(childId)
-  })
+    function callYaml(input: { name?: string; workflowName: string; workflowId?: string }): string {
+      return stringify({
+        name: input.name ?? 'imported-caller',
+        description: '',
+        definition: {
+          $schema_version: 4,
+          inputs: [],
+          nodes: [
+            {
+              id: 'c1',
+              kind: 'call-workflow',
+              workflowName: input.workflowName,
+              ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId }),
+            },
+          ],
+          edges: [],
+        },
+      })
+    }
 
-  test('zero candidates: the dangling name imports successfully with no id cache', async () => {
-    const result = await importWorkflowYaml(
-      db,
-      { yamlText: callYaml({ workflowName: 'ghost-wf', workflowId: 'FOREIGN_ID' }), mode: 'new' },
-      { kind: 'actor', actor: viewer },
-    )
-    expect(result.outcome).toBe('created')
-    if (result.outcome !== 'created') throw new Error('unreachable')
-    const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
-      string,
-      unknown
-    >
-    expect(node.workflowName).toBe('ghost-wf')
-    expect(node.workflowId).toBeUndefined()
-  })
-
-  test('a name whose only rows are invisible is NOT importable (save fence, anti-exfiltration)', async () => {
-    // The import resolver treats invisible as missing (skip → dangling), but
-    // the save-time name-domain ACL still rejects: without it, launch's
-    // ACL-free closure freeze would happily execute the private definition.
-    await seedWorkflowRow(db, {
-      name: 'secret-wf',
-      ownerUserId: 'owner-a',
-      visibility: 'private',
-    })
-    await expect(
-      importWorkflowYaml(
+    test('round-trip: a resolved name backfills THIS install id and never keeps the foreign one', async () => {
+      const childId = await seedWorkflowRow(db, {
+        name: 'child-wf',
+        ownerUserId: 'owner-a',
+        visibility: 'public',
+      })
+      const result = await importWorkflowYaml(
         db,
-        { yamlText: callYaml({ workflowName: 'secret-wf' }), mode: 'new' },
+        { yamlText: callYaml({ workflowName: 'child-wf', workflowId: 'FOREIGN_ID' }), mode: 'new' },
         { kind: 'actor', actor: viewer },
-      ),
-    ).rejects.toMatchObject({
-      code: 'acl-missing-refs',
-      details: { missing: [{ type: 'workflow', name: 'secret-wf' }] },
+      )
+      expect(result.outcome).toBe('created')
+      if (result.outcome !== 'created') throw new Error('unreachable')
+      const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
+        string,
+        unknown
+      >
+      expect(node.workflowName).toBe('child-wf')
+      expect(node.workflowId).toBe(childId)
     })
-  })
 
-  test('ambiguous visible candidates keep the RFC-223 mapping flow; a selection binds and backfills', async () => {
-    const idA = await seedWorkflowRow(db, {
-      name: 'dup-wf',
-      ownerUserId: 'owner-a',
-      visibility: 'public',
-    })
-    const idB = await seedWorkflowRow(db, {
-      name: 'dup-wf',
-      ownerUserId: 'owner-b',
-      visibility: 'public',
-    })
-    const ordered = [idA, idB].sort((a, b) => a.localeCompare(b))
-    await expect(
-      importWorkflowYaml(
+    test('zero candidates: the dangling name imports successfully with no id cache', async () => {
+      const result = await importWorkflowYaml(
         db,
-        { yamlText: callYaml({ workflowName: 'dup-wf' }), mode: 'new' },
+        { yamlText: callYaml({ workflowName: 'ghost-wf', workflowId: 'FOREIGN_ID' }), mode: 'new' },
         { kind: 'actor', actor: viewer },
-      ),
-    ).rejects.toMatchObject({
-      code: 'import-ref-ambiguous',
-      status: 409,
-      details: {
-        ambiguities: [
-          {
-            selector: { type: 'workflow', name: 'dup-wf' },
-            candidates: [{ id: ordered[0] }, { id: ordered[1] }],
-          },
-        ],
-      },
+      )
+      expect(result.outcome).toBe('created')
+      if (result.outcome !== 'created') throw new Error('unreachable')
+      const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
+        string,
+        unknown
+      >
+      expect(node.workflowName).toBe('ghost-wf')
+      expect(node.workflowId).toBeUndefined()
     })
 
-    const result = await importWorkflowYaml(
-      db,
-      {
-        yamlText: callYaml({ workflowName: 'dup-wf' }),
-        mode: 'new',
-        selections: [
-          {
-            selector: { type: 'workflow', name: 'dup-wf' },
-            resourceId: idB,
-            expectedAclRevision: 0,
-          },
-        ],
-      },
-      { kind: 'actor', actor: viewer },
-    )
-    expect(result.outcome).toBe('created')
-    if (result.outcome !== 'created') throw new Error('unreachable')
-    const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
-      string,
-      unknown
-    >
-    expect(node.workflowId).toBe(idB)
-  })
-})
+    test('a name whose only rows are invisible is NOT importable (save fence, anti-exfiltration)', async () => {
+      // The import resolver treats invisible as missing (skip → dangling), but
+      // the save-time name-domain ACL still rejects: without it, launch's
+      // ACL-free closure freeze would happily execute the private definition.
+      await seedWorkflowRow(db, {
+        name: 'secret-wf',
+        ownerUserId: 'owner-a',
+        visibility: 'private',
+      })
+      await expect(
+        importWorkflowYaml(
+          db,
+          { yamlText: callYaml({ workflowName: 'secret-wf' }), mode: 'new' },
+          { kind: 'actor', actor: viewer },
+        ),
+      ).rejects.toMatchObject({
+        code: 'acl-missing-refs',
+        details: { missing: [{ type: 'workflow', name: 'secret-wf' }] },
+      })
+    })
+
+    test('ambiguous visible candidates keep the RFC-223 mapping flow; a selection binds and backfills', async () => {
+      const idA = await seedWorkflowRow(db, {
+        name: 'dup-wf',
+        ownerUserId: 'owner-a',
+        visibility: 'public',
+      })
+      const idB = await seedWorkflowRow(db, {
+        name: 'dup-wf',
+        ownerUserId: 'owner-b',
+        visibility: 'public',
+      })
+      const ordered = [idA, idB].sort((a, b) => a.localeCompare(b))
+      await expect(
+        importWorkflowYaml(
+          db,
+          { yamlText: callYaml({ workflowName: 'dup-wf' }), mode: 'new' },
+          { kind: 'actor', actor: viewer },
+        ),
+      ).rejects.toMatchObject({
+        code: 'import-ref-ambiguous',
+        status: 409,
+        details: {
+          ambiguities: [
+            {
+              selector: { type: 'workflow', name: 'dup-wf' },
+              candidates: [{ id: ordered[0] }, { id: ordered[1] }],
+            },
+          ],
+        },
+      })
+
+      const result = await importWorkflowYaml(
+        db,
+        {
+          yamlText: callYaml({ workflowName: 'dup-wf' }),
+          mode: 'new',
+          selections: [
+            {
+              selector: { type: 'workflow', name: 'dup-wf' },
+              resourceId: idB,
+              expectedAclRevision: 0,
+            },
+          ],
+        },
+        { kind: 'actor', actor: viewer },
+      )
+      expect(result.outcome).toBe('created')
+      if (result.outcome !== 'created') throw new Error('unreachable')
+      const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
+        string,
+        unknown
+      >
+      expect(node.workflowId).toBe(idB)
+    })
+  },
+)
 
 describeEachProvider('RFC-359 W53 import reference resolution', (harness) => {
   let db: ProviderNeutralDatabase

@@ -7918,3 +7918,27 @@ PostgresqlMigrationSequenceError: index-only upgrade changed a row, codec, key o
   journal 形状与 `PostgresqlIndexUpgrade` 并列而不是改它（既有 3 步的 digest 不能动）；
 - T-FK2：8 条外键补进 `db/schema.ts`，按 T-FK1 append 一步；
 - T-FK3：把**外键**并入 `rfc359-w5-t19g` 的对账口径，让这一类从此可清点、只降不升。
+
+## 5cd. 又两个小桶：「模块级 beforeEach」与「文件里已有 provider 块、还剩单引擎 describe」
+
+- **模块级 `beforeEach` 桶**（8 个候选）：形状是 `let db; beforeEach(() => { db = createInMemoryDb(…) })`
+  写在**任何 describe 之外**，所以 `harness` 不在作用域里。变换把那个 hook 原样搬进 describe 体内
+  （文本先做替换再重排缩进，避免搬完还留一个 `createInMemoryDb`）。实际只有 1 个跑绿
+  （`rfc349-postgresql-daemon-system-identity`），其余卡 callee 形参或真红，收益递减，不再追。
+- **「已有 provider 块 + 残留单引擎 describe」桶**（12 个候选）：只转那些**真的建库**的顶层
+  `describe`，落地 4 个（`rfc243-call-refs-yaml`、`rfc271-export-package`、
+  `scheduler-audit-s05-fanout-inner-chain`，加上面那个）。
+
+### 变换器补的第三条前置条件：不要包住已经含 provider 块的 describe
+
+`task-file-content` / `rfc271-import-preview` 上撞到：一个顶层 `describe` 里面**已经**有
+`describeEachProvider`，把外层也转掉就成了嵌套两套 harness，PG 上直接
+`cannot drop the currently open database`。变换器现在扫子树，遇到 `describeEachProvider`
+就跳过这个顶层块。
+
+**顺带修掉我自己一个正则坑**（值得记）：「把嵌套块降级成普通 describe」那条正则写的是
+`^(\s+)describeEachProvider\(`，而 `\s` **匹配换行**——于是它会从上一行的空行处起头，
+把**顶层**（零缩进）那个也一起降级掉。表现是测试名里 `[sqlite]` / `[postgresql]` 后缀整个消失、
+用例数对不上。判缩进要用 `^[ \t]+`，别用 `\s`。
+
+账本 472 → 468。

@@ -14,7 +14,7 @@
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { parse as parseYaml } from 'yaml'
 import {
@@ -23,7 +23,6 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
 import { eq } from 'drizzle-orm'
 import { agents, mcps, workflows } from '../src/db/schema'
 import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
@@ -32,7 +31,6 @@ import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 技能内容在文件系统里（`${appHome}/skills/{id}/files/`），所以导出要 appHome。
 // 本文件的 seed 不建 managed 技能，目录不存在 ⇒ 读到空树，不影响这里的断言。
 const APP_HOME = mkdtempSync(join(tmpdir(), 'rfc271-export-'))
@@ -151,9 +149,9 @@ describe('包的目录结构（AC-1：内部结构清晰明确）', () => {
   })
 })
 
-describe('① 包**不带任何权属信息**（决策 4/12）', () => {
+describeEachProvider('① 包**不带任何权属信息**（决策 4/12）', (harness) => {
   test('manifest 里不出现 owner / visibility / grant', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { wf } = await seed(db)
     const pkg = await exportResourcePackage(
       db,
@@ -170,7 +168,7 @@ describe('① 包**不带任何权属信息**（决策 4/12）', () => {
   })
 
   test('bundle.json 里同样没有权属字段', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { wf } = await seed(db)
     const pkg = await exportResourcePackage(
       db,
@@ -184,9 +182,9 @@ describe('① 包**不带任何权属信息**（决策 4/12）', () => {
   })
 })
 
-describe('② 凭据：位置在包里、值不在包里', () => {
+describeEachProvider('② 凭据：位置在包里、值不在包里', (harness) => {
   test('manifest.secrets 点名字段，原 token 在**整个包**里找不到', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { wf } = await seed(db)
     const pkg = await exportResourcePackage(
       db,
@@ -205,7 +203,7 @@ describe('② 凭据：位置在包里、值不在包里', () => {
   })
 
   test('README 说明了要重新填写，并给出数量', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { wf } = await seed(db)
     const pkg = await exportResourcePackage(
       db,
@@ -217,7 +215,7 @@ describe('② 凭据：位置在包里、值不在包里', () => {
   })
 
   test('分离式 --token/--password 的 value 槽脱敏，整个 zip 字节不含原值', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { wf } = await seed(db)
     const [agent] = await db.select().from(agents)
     const localMcpId = ulid()
@@ -321,7 +319,7 @@ describe('② 凭据：位置在包里、值不在包里', () => {
   })
 
   test('自由 JSON 的 dot/bracket/numeric key 经 export→apply 精确往返', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { wf } = await seed(db)
     const [agent] = await db.select().from(agents)
     const original = {
