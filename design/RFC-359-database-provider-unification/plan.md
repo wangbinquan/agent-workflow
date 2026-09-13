@@ -8184,3 +8184,34 @@ body 却仍在 `createInMemoryDb(MIGRATIONS)`——它们名义上双引擎，�
 
 `composeSqliteResourceCatalog`（6）最便宜：中立的 `composeResourceCatalogFor` 早就在，
 调用方改个名字就行（§5bz 已在两个夹具上这么做过）。
+
+## 5co. `services/task.ts` 这一刀有多大——实测，不是估的
+
+§5cn 指出它是剩余 AC-6 最大的单点（`resumeTask` 19 + `retryNode` 14 + `cancelTask` 9 = 42 个账本文件）。
+实测把 `resumeTask` / `retryNode` 两个形参放宽到中立客户端：
+
+- **`resumeTask` / `retryNode` 自己的函数体零同步终结符**——放宽它们本身不需要改一行实现；
+- 外溢只有 **9 个错，全在同文件内**，是一层浅的转交：
+  `resumeKick` / `assertChildTaskDrivable` / `retryRepoPreparation` /
+  `reapHeldRuntimeSessionOwnersForTask` / `cancelTask` / `reapRunBeforeWorktreeReset` /
+  `rollbackNodeRunForResume`，外加 `deps: { ...opts.deps, db }`（即 `StartTaskDeps.db`）。
+
+**真正的硬骨头是 `cancelTask` 里那条同步预检**（`services/task.ts:4136-4141`），它的注释写得很清楚：
+
+> Bun SQLite can do this preflight **synchronously**, preserving the legacy rejected-Promise API
+> while allowing the no-controller path to register its FIFO mutation slot **before this function
+> first yields**.
+
+也就是说这条同步读**是有意的**：它保住了「函数首次 yield 之前先把 FIFO 写槽注册上」这个顺序契约。
+改成 await 会让函数提前让出，观察到的行为随之变化——这不是机械替换能了的，要先决定
+「注册写槽」与「预检」谁先谁后，或者接受让出并把注册挪到前面。`cancelTask` 的另一处
+（`:4223` 的 `await tx.select(...).get()`）本来就在 await 里，删掉 `.get()` 即可。
+
+`services/task.ts` 全文共 34 处 `.get()` / `.all()` / `.run()`、22 处 `LegacySqliteTaskDatabase` 形参。
+文件里已有两处注释（`:3317`、`:5877`）记着前几波是**分片**把事务边界从 `dbTxSync` 换到中立原语的，
+这一刀按同样的方式分片做。
+
+**下一波的任务形状（已定形）**：
+- T-TASK1：`cancelTask` 的同步预检定去留（顺序契约怎么保），这是唯一需要决策的一格；
+- T-TASK2：那 9 个转交点连同 `StartTaskDeps.db` 一起放宽；
+- T-TASK3：42 个账本文件按既有变换器批量迁入。
