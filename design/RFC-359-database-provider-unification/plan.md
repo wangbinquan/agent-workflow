@@ -8299,3 +8299,22 @@ deadlock, constraint and storage faults roll back row plus receipt before exact 
   `createWorkflowValidationPort` / 资源目录 / intent 装配，而那些形参本来就是中立的。
   放宽后只剩一处真同步读（`db.select().from(workflows).all()`）要改 await；14 个消费文件
   218 pass / 0 fail。随之 `rfc349-intent-boot-resume-authority` 迁入（模块级 hook 那一类）。
+
+## 5cs. webhook 仓库解析器那一对合一（AC-1），以及「合一时不要起第三个名字」
+
+`createSqliteWebhookRepositoryResolver` 与 `createPostgresqlWebhookRepositoryResolver` 的函数体
+**逐字相同，只差一个 `await`**：SQLite 的 `.get()` 是同步游标、PostgreSQL 的是 Promise，
+而 `.get()` 两个客户端都有。按 PG 那份的异步形状收成一份即可——SQLite 上 `await` 一个非 Promise
+是 no-op，行为一格不动。随之 `composeSqliteWebhookDispatchCore` 的形参也放宽（它转交的四件
+——dispatch/delivery 持久化、仓库解析、启动准入——形参都已中立）。
+
+**没有起第三个名字**（第一版起了 `createWebhookRepositoryResolver` 当正典、两个旧名做别名，
+立刻被 `rfc317-ledger-highwater` 拦下）：**新增一个导出符号会让
+`rfc294-module-symbol-owners` 24942 → 24943、`rfc294-mutation-entrypoints` 1729 → 1730
+同时涨一格**，而这次合一本身并没有引入任何新东西——涨账本是纯记账噪声。
+改成「正典沿用原来的 sqlite 名（形参已放宽）、PG 名变成指向它的别名」后，导出符号数不增不减。
+
+**定式**：合并一对孪生体时，**把其中一个原名提升为正典、另一个做别名**；只有确实需要一个中性
+新名字（例如两个旧名都要退役）时才新增符号，且要预期两本 census 账各涨一格。
+
+12 个 webhook 相关套件 133 pass / 0 fail（双引擎）。

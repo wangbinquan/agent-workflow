@@ -1,9 +1,8 @@
 import { eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { WebhookEndpointRow } from '@/services/webhook/dispatcherTypes'
 import type { RepoResolution } from '@/services/webhook/webhookDispatch'
@@ -67,28 +66,21 @@ async function resolveWithLookup(
   return { kind: 'url', repoUrl: autoUrl }
 }
 
-export function createSqliteWebhookRepositoryResolver(db: DbClient, secretBox: SecretBox) {
-  return async (
-    event: CodeHostEvent,
-    endpoint: Pick<WebhookEndpointRow, 'preferredCloneProtocol'>,
-    autoRegister: boolean,
-  ): Promise<RepoResolution> =>
-    await resolveWithLookup(
-      async (urlHash) =>
-        db
-          .select({ id: cachedRepos.id, urlEnc: cachedRepos.urlEnc })
-          .from(cachedRepos)
-          .where(eq(cachedRepos.urlHash, urlHash))
-          .get() ?? null,
-      secretBox,
-      event,
-      endpoint,
-      autoRegister,
-    )
-}
-
-export function createPostgresqlWebhookRepositoryResolver(
-  db: PostgresqlDatabaseClient,
+/**
+ * RFC-359 AC-1 —— 两个 provider 共用这一份。
+ *
+ * 合一前是一对孪生体，函数体**逐字相同，只差一个 `await`**：SQLite 的 `.get()` 是同步游标、
+ * PostgreSQL 的是 Promise，而 `.get()` 两个客户端都有。所以按 PG 那份的异步形状收成一份即可——
+ * 在 SQLite 上 `await` 一个非 Promise 是 no-op，行为一格不动。
+ *
+ * **没有起第三个名字**：正典就用原来的 `createSqliteWebhookRepositoryResolver`（形参已放宽），
+ * PG 那个名字变成指向它的别名。这样导出符号数不增不减——新增一个导出符号会让
+ * `rfc294-module-symbol-owners` / `rfc294-mutation-entrypoints` 两本账同时涨一格（实测），
+ * 而这次合一本身并没有引入任何新东西。名字里的 Sqlite 是历史残留，两个 bootstrap 的装配入口与
+ * `rfc349-provider-cutover` 那几条守卫都按它认，改名要连账本一起动。
+ */
+export function createSqliteWebhookRepositoryResolver(
+  db: ProviderNeutralDatabase,
   secretBox: SecretBox,
 ) {
   return async (
@@ -109,3 +101,5 @@ export function createPostgresqlWebhookRepositoryResolver(
       autoRegister,
     )
 }
+
+export const createPostgresqlWebhookRepositoryResolver = createSqliteWebhookRepositoryResolver

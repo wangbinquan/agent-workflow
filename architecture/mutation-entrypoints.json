@@ -11930,7 +11930,7 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": true,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -11941,6 +11941,7 @@
         "audit",
         "authority",
         "authorization",
+        "event",
         "fenceOrOcc",
         "transaction"
       ],
@@ -41306,7 +41307,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2e03f9c6e52c54909c4e774c3b1c048b974f434b5feadff2d21554a3dbb5298b",
+  "sourceDigest": "sha256:ec5f3ddfd506945db071c21d1d3d1fc7878bb921630ea26b2caa43ac6824db42",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

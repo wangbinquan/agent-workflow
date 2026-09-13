@@ -1,5 +1,6 @@
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { WebhookDispatchDeps } from '@/services/webhook/webhookDispatch'
 import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
@@ -64,8 +65,10 @@ export function composePostgresqlWebhookTriggerServiceDependencies(
   })
 }
 
+// RFC-359 AC-6：形参放宽到中立客户端——它转交的四件（dispatch/delivery 持久化、仓库解析、
+// 启动准入）形参都已中立，其中仓库解析这一对本轮刚合一（见 `webhookRepositoryResolver.ts`）。
 export function composeSqliteWebhookDispatchCore(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   secretBox: SecretBox,
   scheduledTasks: ScheduledTaskOperations,
 ): Pick<
