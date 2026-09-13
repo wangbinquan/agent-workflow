@@ -445,6 +445,24 @@ push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推
 （`bun test tests/foo-*.test.ts`、`git add path/a path/b`）。要用变量就写数组
 （`files=(...)` + `"${files[@]}"`）或显式 `${=FILES}`。
 
+### 按 exact SHA 查 CI 时**必须同时过滤 workflow**，否则会把计划任务的红当成推送门的红
+
+**2026-09-13 实撞（RFC-359）**：`gh run list --branch main --json headSha,... | select(.headSha==$SHA)`
+取第一条，报回 `completed/failure`——查下去那条是 **`postgresql-evidence` 的 `schedule` 运行**
+（`on: schedule: cron '30 3 * * 0'`，周日跑；它 checkout 的就是默认分支 HEAD，所以 headSha 与刚推的
+提交一模一样）。而同一个 SHA 上的**推送门**（`name: CI`、`event: push`）是另一条记录。
+
+同一个 SHA 上可以有多条 run，来自不同 workflow、不同 event。判据要写全：
+
+```
+gh run list --branch main --json headSha,event,name,status,conclusion \
+  --jq ".[] | select(.headSha==\"$SHA\" and .event==\"push\" and .name==\"CI\")"
+```
+
+**两个后果**：①把别人（或计划任务）的红算到自己头上，白排查；②反过来，如果计划任务恰好绿，
+可能把它当成推送门绿而漏看真红。顺带：计划任务的红仍然是**真信号**，只是 owner 不是刚推的那个人——
+按它自己的失败用例归属，别静默忽略。
+
 ### 第二种形态：`set -- $VAR` 拆不出位置参数，后台轮询会**静默空转到超时**（2026-09-07 实撞，一次挂 4 个）
 
 同一个坑换个身位，危害更隐蔽——不报错，只是判据恒假。写 CI 轮询器时用了这个惯用法：

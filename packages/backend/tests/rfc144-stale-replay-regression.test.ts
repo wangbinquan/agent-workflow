@@ -39,7 +39,7 @@ import {
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
-import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { transitionMergeState } from '../src/services/lifecycle'
 import { retryNode } from '../src/services/task'
 import { createLogger } from '../src/util/log'
@@ -358,7 +358,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       ],
       opts: {
         appHome: h.appHome,
-        persistence: createSqliteTaskExecutionPersistence(h.db),
+        persistence: createTaskExecutionPersistence(h.db),
       },
       log: createLogger('rfc144-test'),
       writeSem: new Semaphore(1),

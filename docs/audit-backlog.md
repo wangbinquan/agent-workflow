@@ -51,6 +51,25 @@ users:                created_by               -> users(id)
 还要想清楚存量库上加外键遇到既有悬空行怎么办（先清洗，还是 `NOT VALID` 分两步）。
 清点做法：`PRAGMA foreign_key_list(<table>)` 对 `getTableConfig(t).foreignKeys` + 列级 `.references()`。
 
+## RFC-349/359：周度 `postgresql-evidence` 的真 PG 故障/恢复矩阵在 2026-09-13 的计划运行里红了一条
+
+`postgresql-evidence` workflow（`on: schedule: cron '30 3 * * 0'`，不进推送门）2026-09-13 的运行里
+`PostgreSQL crash matrix + 100-client full seed` 这一格失败，失败用例是：
+
+> `RFC-349 real PostgreSQL target fault/resume matrix > disconnect, timeout, deadlock, constraint
+> and storage faults roll back row plus receipt before exact resume`（6229.81ms）
+
+同 run 里 `RFC-349 hosted external PostgreSQL evidence contract` 与 `RFC-349 database migration runner`
+的各条都是 pass，所以红的是**真 PG 目标上的故障注入/恢复那条**，不是判据契约本身。
+产物也没生成：`No files were found with the provided path: test-results/rfc349-postgresql-evidence-linux.json`。
+
+**归属**：这条 run 的 headSha 恰好是当天最后一个提交（`434060937`，**纯文档**），但那只是因为计划任务
+checkout 默认分支 HEAD——不是那个提交引入的。要按失败用例自己的 owner 追。
+
+**未决**：①这条是 flake 还是真回归要先定（同一 workflow 可 `workflow_dispatch` 手动重跑，
+带 `target_sha` 钉到具体提交做二分）；②它是 RFC-359 AC-7/AC-9 依赖的真 PG 证据面，
+红着不该长期挂。
+
 ## RFC-359：`inspectHumanReview` 是**同步**公共端口，PostgreSQL 上按签名实现不了
 
 `modules/task-execution/public/participants.ts:373`

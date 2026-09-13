@@ -26,7 +26,7 @@ import { createUploadSessionPersistence } from '@/modules/development-automation
 import { createActionTemplatePersistence } from '@/modules/development-automation/infrastructure/configResourceStore'
 import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
-import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { createTokenCallAudit } from '@/auth/composition'
 import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
@@ -71,7 +71,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
     executionFence: async () => 'clear' as const,
   },
   integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
-  taskRecovery: createSqliteTaskExecutionPersistence(db).recoveryAdministration,
+  taskRecovery: createTaskExecutionPersistence(db).recoveryAdministration,
   taskArchive: createDrizzleTaskArchiveMaintenanceCommand(db),
   tokenAudit: createTokenCallAudit(db),
   system: {

@@ -48,7 +48,7 @@ import {
   type SkillFsOptions,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
-import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
@@ -218,10 +218,7 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
     ).toContain(PLATFORM_FUSION_MANIFEST)
 
     expect(
-      await forcedPortPathsForTask(
-        createSqliteTaskExecutionPersistence(h.db).artifactPaths,
-        taskId!,
-      ),
+      await forcedPortPathsForTask(createTaskExecutionPersistence(h.db).artifactPaths, taskId!),
       '名册的消费端（createNodeIso / snapshotNodeIsoFinal 的 force-include 清单）' +
         '必须真的看到这条路径——只写进任务行而消费端读不到，等于没登记',
     ).toContain(PLATFORM_FUSION_MANIFEST)

@@ -4,10 +4,9 @@
 
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
-import { createInMemoryDb } from '@/db/client'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   taskExecutionEffectAttempts,
@@ -19,7 +18,7 @@ import {
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/application/codeHostEffectObserver'
-import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
 import { canonicalJson, type LineageSlot } from '@/modules/task-execution/domain/executionIntent'
 import { executeCodeHostCall } from '@/services/codeHost/call'
@@ -41,39 +40,35 @@ import { submitTaskContinuationInTransaction } from '@/modules/task-execution/pu
 // 这里改指两个引擎共用的那一份。
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 async function fixture(
+  db: ProviderNeutralDatabase,
   taskId: string,
   action: CodeHostAction = 'custom',
   provider: CodeHostProvider = 'gitlab',
 ) {
-  const db = createInMemoryDb(MIGRATIONS)
   const nodeRunId = `${taskId}-code-host-node`
   const slotPath: readonly LineageSlot[] = [
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ]
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: taskId,
-      workflowId: 'workflow-rfc328-codehost',
-      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      workflowVersion: 1,
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/worktree',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: 1,
-      executionLineageId: taskId,
-      lineageSlotPathJson: canonicalJson(slotPath),
-    })
-    .run()
-  db.insert(nodeRuns)
+  await db.insert(tasks).values({
+    id: taskId,
+    name: taskId,
+    workflowId: 'workflow-rfc328-codehost',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    workflowVersion: 1,
+    repoPath: '/tmp/repo',
+    worktreePath: '/tmp/worktree',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+    executionLineageId: taskId,
+    lineageSlotPathJson: canonicalJson(slotPath),
+  })
+  await db
+    .insert(nodeRuns)
     .values({ id: nodeRunId, taskId, nodeId: 'code-host', status: 'running' })
-    .run()
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
   const intent = await submitIntent(db, {
     intentId: `intent-${taskId}`,
@@ -116,7 +111,7 @@ async function fixture(
     resourceKeys: [`code-host:${provider}:${taskId}`],
   } as const
   const observer = createCodeHostEffectAttemptObserver({
-    persistence: createSqliteTaskExecutionPersistence(db).effects,
+    persistence: createTaskExecutionPersistence(db).effects,
     context,
     action,
     nodeRunId,
@@ -193,11 +188,12 @@ interface ApproveRemoteState {
 }
 
 async function approveResponseLossDriftFixture(input: {
+  db: ProviderNeutralDatabase
   taskId: string
   provider: CodeHostProvider
   drift: (state: ApproveRemoteState) => void
 }): Promise<{ state: ApproveRemoteState; sends: number }> {
-  const h = await fixture(input.taskId, 'mr.approve', input.provider)
+  const h = await fixture(input.db, input.taskId, 'mr.approve', input.provider)
   const state: ApproveRemoteState = {
     head: 'head-before-approve',
     approved: false,
@@ -242,7 +238,9 @@ async function approveResponseLossDriftFixture(input: {
   expect(h.observer.outcomeUnknown()).toBe(true)
   expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
-  const unresolved = h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).get()!
+  const unresolved = (
+    await h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).limit(1)
+  )[0]!
   const owner = (await h.module.ownershipFor(h.db).read(h.taskId))!
   await closeOutcomeUnknownAndRelease(h.db, {
     token: h.context.token,
@@ -258,11 +256,13 @@ async function approveResponseLossDriftFixture(input: {
     now: 20,
   })
   expect(
-    h.db
-      .select({ state: taskExecutionLineageOperationRecords.decisionState })
-      .from(taskExecutionLineageOperationRecords)
-      .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
-      .get()?.state,
+    (
+      await h.db
+        .select({ state: taskExecutionLineageOperationRecords.decisionState })
+        .from(taskExecutionLineageOperationRecords)
+        .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
+        .limit(1)
+    )[0]?.state,
   ).toBe('requires-actor')
   expect(sends).toBe(1) // actorless closure/recovery performs no second approval send.
   return { state, sends }
@@ -285,7 +285,7 @@ function submitIntent(
   return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
 }
 
-describe('RFC-328 code-host per-send attempt ledger', () => {
+describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
   test('all registry actions/providers/candidates have an exact recovery and transport profile', () => {
     const manifest = buildCodeHostRecoveryBindingManifest()
     expect(validateCodeHostRecoveryBindingManifest(manifest)).toEqual([])
@@ -418,7 +418,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('ambiguous mr.approve pauses actorless replay but the existing manual command runs generation N+1', async () => {
-    const h = await fixture('task-approve-manual', 'mr.approve', 'gitlab')
+    const h = await fixture(harness.db, 'task-approve-manual', 'mr.approve', 'gitlab')
     let ambiguousSends = 0
     const ambiguous = await executeCodeHostCall(
       {
@@ -440,10 +440,9 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(h.observer.outcomeUnknown()).toBe(true)
     expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
-    const unresolved = h.db
-      .select({ id: taskExecutionEffects.id })
-      .from(taskExecutionEffects)
-      .get()!
+    const unresolved = (
+      await h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).limit(1)
+    )[0]!
     const owner = (await h.module.ownershipFor(h.db).read(h.taskId))!
     await closeOutcomeUnknownAndRelease(h.db, {
       token: h.context.token,
@@ -459,11 +458,13 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       now: 20,
     })
     expect(
-      h.db
-        .select({ state: taskExecutionLineageOperationRecords.decisionState })
-        .from(taskExecutionLineageOperationRecords)
-        .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
-        .get()?.state,
+      (
+        await h.db
+          .select({ state: taskExecutionLineageOperationRecords.decisionState })
+          .from(taskExecutionLineageOperationRecords)
+          .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
+          .limit(1)
+      )[0]?.state,
     ).toBe('requires-actor')
 
     const manualIntentId = 'intent-approve-manual-generation-1'
@@ -486,12 +487,11 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     const claim = await h.module.claim({ db: h.db, intentId: manualIntentId })
     h.module.claimGate.leave(claim.permit)
     const nextNodeRunId = `${h.taskId}-code-host-node-generation-1`
-    h.db
+    await h.db
       .insert(nodeRuns)
       .values({ id: nextNodeRunId, taskId: h.taskId, nodeId: 'code-host', status: 'running' })
-      .run()
     const nextObserver = createCodeHostEffectAttemptObserver({
-      persistence: createSqliteTaskExecutionPersistence(h.db).effects,
+      persistence: createTaskExecutionPersistence(h.db).effects,
       context: createTaskExecutionContext({
         db: h.db,
         intentId: manualIntentId,
@@ -521,17 +521,20 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(manualSends).toBe(1)
     expect(await settleTerminal(nextObserver, nextNodeRunId)).toBe(true)
     expect(
-      h.db
-        .select({ state: taskExecutionLineageOperationRecords.decisionState })
-        .from(taskExecutionLineageOperationRecords)
-        .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
-        .get()?.state,
+      (
+        await h.db
+          .select({ state: taskExecutionLineageOperationRecords.decisionState })
+          .from(taskExecutionLineageOperationRecords)
+          .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
+          .limit(1)
+      )[0]?.state,
     ).toBe('consumed')
     expect(
-      h.db
-        .select({ generation: taskExecutionEffects.operationGeneration })
-        .from(taskExecutionEffects)
-        .all()
+      (
+        await h.db
+          .select({ generation: taskExecutionEffects.operationGeneration })
+          .from(taskExecutionEffects)
+      )
         .map((row) => row.generation)
         .sort(),
     ).toEqual([0, 1])
@@ -539,6 +542,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
 
   test('mr.approve response loss followed by HEAD advance stays actor-replay', async () => {
     const result = await approveResponseLossDriftFixture({
+      db: harness.db,
       taskId: 'task-approve-head-advance',
       provider: 'gitlab',
       drift: (state) => {
@@ -555,6 +559,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
 
   test('GitLab approval reset after response loss cannot disprove the old approval', async () => {
     const result = await approveResponseLossDriftFixture({
+      db: harness.db,
       taskId: 'task-approve-gitlab-reset',
       provider: 'gitlab',
       drift: (state) => {
@@ -567,6 +572,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
 
   test('GitHub review dismissal after response loss cannot disprove the old approval', async () => {
     const result = await approveResponseLossDriftFixture({
+      db: harness.db,
       taskId: 'task-approve-github-dismissal',
       provider: 'github',
       drift: (state) => {
@@ -578,7 +584,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('mr.approve keeps the existing 429 retry and normal success path', async () => {
-    const h = await fixture('task-approve-429', 'mr.approve', 'github')
+    const h = await fixture(harness.db, 'task-approve-429', 'mr.approve', 'github')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -601,7 +607,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('a response-lost pipeline cancel is adopted after one read-only state probe', async () => {
-    const h = await fixture('task-pipeline-cancel-probe', 'pipeline.cancel', 'gitlab')
+    const h = await fixture(harness.db, 'task-pipeline-cancel-probe', 'pipeline.cancel', 'gitlab')
     let mutationSends = 0
     let pipelineStatus = 'running'
     const callDeps = deps(
@@ -649,17 +655,18 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       }),
     ).toBe(true)
     expect(probeReads).toBe(1)
-    expect(h.db.select().from(taskExecutionEffects).get()?.state).toBe('succeeded')
+    expect((await h.db.select().from(taskExecutionEffects).limit(1))[0]?.state).toBe('succeeded')
     expect(
-      h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).get()?.errorMessage,
+      (await h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).limit(1))[0]
+        ?.errorMessage,
     ).toBe('pipeline-cancel-projected')
-    expect(h.db.select().from(taskExecutionEffectAttempts).all()).toMatchObject([
+    expect(await h.db.select().from(taskExecutionEffectAttempts)).toMatchObject([
       { state: 'succeeded', applicationEvidence: 'applied' },
     ])
   })
 
   test('a still-existing draft authorizes one same-generation delete retry', async () => {
-    const h = await fixture('task-draft-delete-probe', 'review.draft-discard', 'gitlab')
+    const h = await fixture(harness.db, 'task-draft-delete-probe', 'review.draft-discard', 'gitlab')
     let draftExists = true
     let mutationSends = 0
     const firstDeps = deps(
@@ -723,14 +730,13 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(mutationSends).toBe(4)
     expect(draftExists).toBe(false)
     expect(
-      h.db
+      await h.db
         .select({
           state: taskExecutionEffectAttempts.state,
           evidence: taskExecutionEffectAttempts.applicationEvidence,
         })
         .from(taskExecutionEffectAttempts)
-        .orderBy(taskExecutionEffectAttempts.attemptNo)
-        .all(),
+        .orderBy(taskExecutionEffectAttempts.attemptNo),
     ).toEqual([
       { state: 'retry-authorized', evidence: 'ambiguous' },
       { state: 'retry-authorized', evidence: 'ambiguous' },
@@ -738,17 +744,16 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       { state: 'succeeded', evidence: 'applied' },
     ])
     expect(
-      h.db
+      await h.db
         .select({ generation: taskExecutionEffects.operationGeneration })
-        .from(taskExecutionEffects)
-        .all(),
+        .from(taskExecutionEffects),
     ).toEqual([{ generation: 0 }])
   })
 
   test('custom GET/PUT/PATCH/DELETE network, 5xx and every-method 429 retry stay unchanged', async () => {
     const methods = ['GET', 'PUT', 'PATCH', 'DELETE'] as const
     for (const method of methods) {
-      const h = await fixture(`task-custom-transport-${method.toLowerCase()}`)
+      const h = await fixture(harness.db, `task-custom-transport-${method.toLowerCase()}`)
       let sends = 0
       const outcome = await executeCodeHostCall(
         {
@@ -770,7 +775,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     }
 
     for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const) {
-      const h = await fixture(`task-custom-429-${method.toLowerCase()}`)
+      const h = await fixture(harness.db, `task-custom-429-${method.toLowerCase()}`)
       let sends = 0
       const outcome = await executeCodeHostCall(
         {
@@ -792,7 +797,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('custom PUT keeps the network retry and later applied result with prior ambiguity audit', async () => {
-    const h = await fixture('task-codehost-success')
+    const h = await fixture(harness.db, 'task-codehost-success')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -812,28 +817,30 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(h.observer.outcomeUnknown()).toBe(false)
     expect(await settleTerminal(h.observer, h.nodeRunId, { errorMessage: 'projected' })).toBe(true)
     expect(
-      h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).get()?.errorMessage,
+      (await h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).limit(1))[0]
+        ?.errorMessage,
     ).toBe('projected')
 
-    const attempts = h.db
+    const attempts = await h.db
       .select({ state: taskExecutionEffectAttempts.state })
       .from(taskExecutionEffectAttempts)
       .orderBy(taskExecutionEffectAttempts.attemptNo)
-      .all()
     expect(attempts).toEqual([{ state: 'retry-authorized' }, { state: 'succeeded' }])
-    const effect = h.db.select().from(taskExecutionEffects).get()!
+    const effect = (await h.db.select().from(taskExecutionEffects).limit(1))[0]!
     expect(effect.state).toBe('succeeded')
     expect(JSON.parse(effect.receiptJson ?? '{}')).toMatchObject({ priorAmbiguityCount: 1 })
     expect(
-      h.db
-        .select({ generation: taskExecutionLineageOperationRecords.highestSettledGeneration })
-        .from(taskExecutionLineageOperationRecords)
-        .get()?.generation,
+      (
+        await h.db
+          .select({ generation: taskExecutionLineageOperationRecords.highestSettledGeneration })
+          .from(taskExecutionLineageOperationRecords)
+          .limit(1)
+      )[0]?.generation,
     ).toBe(0)
   })
 
   test('later definite failure cannot erase the first ambiguous send', async () => {
-    const h = await fixture('task-codehost-unknown')
+    const h = await fixture(harness.db, 'task-codehost-unknown')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -853,19 +860,20 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(h.observer.outcomeUnknown()).toBe(true)
     expect(await settleTerminal(h.observer, h.nodeRunId, { status: 'failed' })).toBe(true)
     expect(
-      h.db
+      await h.db
         .select({ state: taskExecutionEffectAttempts.state })
         .from(taskExecutionEffectAttempts)
-        .orderBy(taskExecutionEffectAttempts.attemptNo)
-        .all(),
+        .orderBy(taskExecutionEffectAttempts.attemptNo),
     ).toEqual([{ state: 'retry-authorized' }, { state: 'recovery-required' }])
     expect(
-      h.db.select({ state: taskExecutionEffects.state }).from(taskExecutionEffects).get()?.state,
+      (
+        await h.db.select({ state: taskExecutionEffects.state }).from(taskExecutionEffects).limit(1)
+      )[0]?.state,
     ).toBe('open')
   })
 
   test('POST still retries 429, records both sends, and performs no new 5xx/network retry', async () => {
-    const h = await fixture('task-codehost-post')
+    const h = await fixture(harness.db, 'task-codehost-post')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -882,9 +890,9 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(outcome.ok).toBe(true)
     expect(sends).toBe(2)
     expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
-    expect(h.db.select().from(taskExecutionEffectAttempts).all()).toHaveLength(2)
+    expect(await h.db.select().from(taskExecutionEffectAttempts)).toHaveLength(2)
 
-    const network = await fixture('task-codehost-post-network')
+    const network = await fixture(harness.db, 'task-codehost-post-network')
     let networkSends = 0
     const failed = await executeCodeHostCall(
       {

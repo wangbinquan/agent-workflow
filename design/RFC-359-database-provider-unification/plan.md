@@ -8250,3 +8250,39 @@ T-TASK1/2/3 作废。`cancelTask` 那条同步预检的取证仍然有效、也�
 加上 41 个 `new Database(` 开**真实文件**（备份 / 还原 / VACUUM INTO / 外部 store）同样按定义单引擎，
 **AC-6 真正的剩余工作量是那 278 个**，不是 460。这条分层此前没有写出来，导致 §5cn 把一个
 已被裁决的结构性阻塞当成了「最大的单点」去排序。
+
+## 5cp. 两个「中立版本早就在，只是没人用」的工厂
+
+§5cn 那张表里排中游的两个，查下来都属于**中立实现已存在、调用方还指着 provider 别名**这一类，
+换个名字就好，不需要动任何实现：
+
+- **`createSqliteTaskExecutionPersistence` → `createTaskExecutionPersistence`**：后者是
+  `taskExecutionPersistence.ts` 里按 `databaseSessionFor(db).engine.provider` 分派的中立工厂
+  （RFC-359 T7b 建的，「task-execution 里看 provider 的唯一入口之一」）。7 个账本文件直接换名。
+  ⚠️ 两份 provider 对拍（`rfc349-task-execution-provider-adapters` /
+  `…-read-models-postgresql-adapter`）**保留显式的 sqlite 工厂**——它们判的就是「按品牌选出来的那一份」。
+- **`createTaskExecutionContext`（`composition/sqliteTaskExecutionContext.ts`）形参放宽**：
+  它只是把 db 原样别在 `legacyConnection` / `compatibility` 上给旧调用方取用，持久化那一格改用上面
+  那个中立工厂后，**函数体零方言**。放宽后 typecheck 只剩 1 个错（同文件的接口声明），
+  一并放宽即清零；14 个消费文件 244 pass / 0 fail。名字里的 Sqlite 暂留——它是
+  `rfc349-provider-cutover` 账本里那条边的键，改名要连账本一起动。
+
+这两步解锁了 `rfc328-codehost-attempt-ledger`（26 pass / 0 fail）：它的夹具原来自己建库，
+改成收 `db` 形参后整条链走通。账本 460 → 459。
+
+**顺带修正 §5co 的分层数字**：`createSqliteTaskExecutionPersistence` 不该算进「SQLite 执行引擎」
+那一类——它有中立分派器，属于**已合一**的持久化层。去掉它之后那一类是 **80 个**（不是 85），
+真正的迁移面是 **283 个**。
+
+## 5cq. 周度 `postgresql-evidence` 红了一条，以及我的 CI 观察脚本有个缺陷
+
+盯 `434060937`（**纯文档**提交）的 CI 时读到 `completed/failure`，查下去那条不是推送门，而是
+**`postgresql-evidence` 的 `schedule` 运行**（`cron '30 3 * * 0'`，它 checkout 默认分支 HEAD，
+所以 headSha 与刚推的提交一模一样）。同一个 SHA 上可以有多条 run，来自不同 workflow / 不同 event；
+我的脚本只按 headSha 取第一条，于是把计划任务的红算到了推送门头上。判据要写全
+（`.event=="push" and .name=="CI"`），已记进 `docs/dev-gotchas.md`。
+
+**但那条红是真信号**：`RFC-349 real PostgreSQL target fault/resume matrix > disconnect, timeout,
+deadlock, constraint and storage faults roll back row plus receipt before exact resume` 失败，
+同 run 里的判据契约与 migration runner 各条都 pass，产物也没生成。它是 AC-7/AC-9 依赖的真 PG 证据面，
+已连同「怎么二分」记进 `docs/audit-backlog.md`。

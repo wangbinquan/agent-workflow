@@ -32,7 +32,7 @@ import {
 } from '../src/services/isolatedAgentRun'
 import { discardNodeIso, type CanonRepo, type IsoHandle } from '../src/services/nodeIsolation'
 import { runGit, snapshotFullState } from '../src/util/git'
-import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { IsolatedAgentRunBinding } from '../src/services/isolatedAgentRun'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -103,7 +103,7 @@ function canonRepos(worktreePath: string): CanonRepo[] {
 }
 
 function isolatedRunBinding(db: DbClient): IsolatedAgentRunBinding {
-  return Object.freeze({ persistence: createSqliteTaskExecutionPersistence(db) })
+  return Object.freeze({ persistence: createTaskExecutionPersistence(db) })
 }
 
 async function mintedRow(db: DbClient, taskId: string): Promise<string> {
