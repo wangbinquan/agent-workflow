@@ -10,7 +10,6 @@ import { maintenanceState, nodeRunEvents, nodeRuns, tasks, workflows } from '@/d
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
-import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_001_734_000
@@ -26,7 +25,7 @@ function assertSqlite(db: ProviderNeutralDatabase): asserts db is DbClient {
 function originalConstructor(db: ProviderNeutralDatabase) {
   if (isPostgresql(db)) return createPostgresqlEventsArchiveStore(db)
   assertSqlite(db)
-  return createSqliteEventsArchiveStore(db)
+  return createEventsArchiveStore(db)
 }
 
 async function seed(db: ProviderNeutralDatabase): Promise<void> {

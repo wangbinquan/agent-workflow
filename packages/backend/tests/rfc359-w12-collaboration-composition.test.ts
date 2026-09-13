@@ -20,10 +20,7 @@ import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastr
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, docVersions, nodeRuns, tasks, taskQuestions, workflows } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import {
-  composeSqliteCollaborationRouteOperations,
-  composePostgresqlCollaborationRouteOperations,
-} from '@/modules/collaboration/composition/collaborationRouteOperations'
+import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import type {
   CollaborationRouteActor,
@@ -78,8 +75,8 @@ function operations(harness: ProviderHarness): CollaborationRouteOperations {
     clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
   })
   return harness.capabilities.isolation === 'exclusive'
-    ? composeSqliteCollaborationRouteOperations({ db, context })
-    : composePostgresqlCollaborationRouteOperations({ db, context })
+    ? composeCollaborationRouteOperations({ db, context })
+    : composeCollaborationRouteOperations({ db, context })
 }
 
 function reviewDefinition(): WorkflowDefinition {

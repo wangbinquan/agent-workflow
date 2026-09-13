@@ -29,7 +29,6 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Config } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
@@ -42,11 +41,6 @@ import { createLogger } from '@/util/log'
 const log = createLogger('events-archive')
 
 const HOUR_MS = 60 * 60 * 1000
-
-/** Compatibility constructor; both owners use the same database queries. */
-export function createSqliteEventsArchiveStore(db: DbClient): EventsArchiveStore {
-  return createEventsArchiveStore(db)
-}
 
 export interface ArchiveRunResult {
   perGroupArchived: number

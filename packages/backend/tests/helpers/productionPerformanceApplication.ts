@@ -6,10 +6,7 @@ import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersiste
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  composePostgresqlCollaborationRouteOperations,
-  composeSqliteCollaborationRouteOperations,
-} from '@/modules/collaboration/composition/collaborationRouteOperations'
+import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import {
   createClarifyDecisionCommand,
@@ -153,8 +150,8 @@ export async function createProductionPerformanceApplication(
   })
   const collaboration =
     session.engine.isolation === 'exclusive'
-      ? composeSqliteCollaborationRouteOperations({ db, context: collaborationContext })
-      : composePostgresqlCollaborationRouteOperations({ db, context: collaborationContext })
+      ? composeCollaborationRouteOperations({ db, context: collaborationContext })
+      : composeCollaborationRouteOperations({ db, context: collaborationContext })
   const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({

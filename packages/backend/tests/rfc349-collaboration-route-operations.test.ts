@@ -79,8 +79,8 @@ describe('RFC-349 collaboration route operations', () => {
     const publisher = source(
       'src/modules/collaboration/infrastructure/collaborationClarifyDraftEventPublisher.ts',
     )
-    expect(composition).toContain('composePostgresqlCollaborationRouteOperations')
-    expect(composition).toContain('composeSqliteCollaborationRouteOperations')
+    expect(composition).toContain('composeCollaborationRouteOperations')
+    expect(composition).toContain('composeCollaborationRouteOperations')
     expect(composition).toContain('context: CollaborationRouteContext')
     expect(composition).toContain('bindCollaborationRouteContext')
     expect(composition).toContain('createCollaborationClarifyDraftEventPublisher()')

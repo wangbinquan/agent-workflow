@@ -8,10 +8,8 @@ import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../packages/backend/src/db/client'
 import type { PostgresqlDatabaseClient } from '../packages/backend/src/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlEventsArchiveStore } from '../packages/backend/src/platform/persistence/postgresqlEventsArchive'
-import {
-  archiveEventsWithStore,
-  createSqliteEventsArchiveStore,
-} from '../packages/backend/src/services/eventsArchive'
+import { createEventsArchiveStore } from '../packages/backend/src/platform/persistence/eventsArchiveStore'
+import { archiveEventsWithStore } from '../packages/backend/src/services/eventsArchive'
 import { createProductionPerformanceApplication } from '../packages/backend/tests/helpers/productionPerformanceApplication'
 import { PERF_CORPUS_ENTRY } from './perf-corpus'
 import { PERF_HTTP_SCENARIOS, performanceStats, type PerfHttpScenarioResult } from './perf-compare'
@@ -93,7 +91,7 @@ export async function measurePerformanceArchive(
 ) {
   const started = performance.now()
   const store =
-    '$provider' in db ? createPostgresqlEventsArchiveStore(db) : createSqliteEventsArchiveStore(db)
+    '$provider' in db ? createPostgresqlEventsArchiveStore(db) : createEventsArchiveStore(db)
   const result = await archiveEventsWithStore(
     store,
     {

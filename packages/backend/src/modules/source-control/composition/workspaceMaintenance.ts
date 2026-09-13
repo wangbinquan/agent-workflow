@@ -33,16 +33,3 @@ export function composeWorkspaceMaintenanceCommand(
     filesystem: filesystem(input),
   })
 }
-
-/** 两个 bootstrap 的具名绑定（RFC-349 起的装配入口名保持稳定）。 */
-export function composeSqliteWorkspaceMaintenanceCommand(
-  input: WorkspaceMaintenanceCompositionInput & { readonly db: ProviderNeutralDatabase },
-): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
-  return composeWorkspaceMaintenanceCommand(input)
-}
-
-export function composePostgresqlWorkspaceMaintenanceCommand(
-  input: WorkspaceMaintenanceCompositionInput & { readonly db: ProviderNeutralDatabase },
-): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
-  return composeWorkspaceMaintenanceCommand(input)
-}

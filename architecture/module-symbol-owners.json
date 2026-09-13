@@ -6,7 +6,7 @@
     "moduleFiles": 1188,
     "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24927
+    "symbolsIncludingFileRoots": 24920
   },
   "entries": [
     {
@@ -16412,36 +16412,12 @@
     {
       "currentContext": "collaboration",
       "currentLayer": "composition",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts#composeCollaborationRouteOperations",
       "removeAfterWave": "W4",
       "status": "current-module",
       "symbol": "composeCollaborationRouteOperations",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts#composePostgresqlCollaborationRouteOperations",
-      "removeAfterWave": "W4",
-      "status": "current-module",
-      "symbol": "composePostgresqlCollaborationRouteOperations",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts#composeSqliteCollaborationRouteOperations",
-      "removeAfterWave": "W4",
-      "status": "current-module",
-      "symbol": "composeSqliteCollaborationRouteOperations",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -83584,18 +83560,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts#composePostgresqlResourceCatalog",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "composePostgresqlResourceCatalog",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts#composeProviderResourceCatalog",
       "removeAfterWave": "W4-C",
       "status": "current-module",
@@ -83612,18 +83576,6 @@
       "removeAfterWave": "W4-C",
       "status": "current-module",
       "symbol": "composeResourceCatalogFor",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts#composeSqliteResourceCatalog",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "composeSqliteResourceCatalog",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -106308,30 +106260,6 @@
       "removeAfterWave": "W5",
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "source-control",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "source-control",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts#composePostgresqlWorkspaceMaintenanceCommand",
-      "removeAfterWave": "W5",
-      "status": "current-module",
-      "symbol": "composePostgresqlWorkspaceMaintenanceCommand",
-      "targetContext": "source-control",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "source-control",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts#composeSqliteWorkspaceMaintenanceCommand",
-      "removeAfterWave": "W5",
-      "status": "current-module",
-      "symbol": "composeSqliteWorkspaceMaintenanceCommand",
       "targetContext": "source-control",
       "targetLayer": "application"
     },
@@ -150046,18 +149974,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "chunked",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts#createSqliteEventsArchiveStore",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "createSqliteEventsArchiveStore",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -299825,5 +299741,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b7e679cf96fa6805b9ddcabab3ab2e4ebd0a64b1c7fac4da4774ae0e609232f"
+  "sourceDigest": "sha256:e8fc9a5d481e4e829823e6be9e5504a9a78adc4e7c69492bcfe482f0b3f9f556"
 }

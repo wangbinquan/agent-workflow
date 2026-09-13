@@ -16,7 +16,7 @@ import { monotonicFactory } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { taskExecutionMaintenanceClaims, tasks, workflows } from '@/db/schema'
-import { composeSqliteWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
+import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -54,8 +54,8 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       resolve(sourceRoot, 'composition/workspaceMaintenance.ts'),
       'utf8',
     )
-    expect(composition).toContain('composeSqliteWorkspaceMaintenanceCommand')
-    expect(composition).toContain('composePostgresqlWorkspaceMaintenanceCommand')
+    expect(composition).toContain('composeWorkspaceMaintenanceCommand')
+    expect(composition).toContain('composeWorkspaceMaintenanceCommand')
     // RFC-359 W4-B6：只有一份中立 store，两个 provider 共用；它不得把中立句柄断言成 SQLite 客户端。
     const neutral = readFileSync(
       resolve(sourceRoot, 'infrastructure/workspaceMaintenanceStore.ts'),
@@ -174,7 +174,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       finishedAt: 2,
     })
     const invalidated: string[] = []
-    const command = composeSqliteWorkspaceMaintenanceCommand({
+    const command = composeWorkspaceMaintenanceCommand({
       db,
       appHome,
       terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
@@ -228,7 +228,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     mkdirSync(collision, { recursive: true })
     utimesSync(partial, old, old)
     utimesSync(collision, old, old)
-    const command = composeSqliteWorkspaceMaintenanceCommand({
+    const command = composeWorkspaceMaintenanceCommand({
       db,
       appHome,
       terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
@@ -299,7 +299,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       cleanupPlanJson: JSON.stringify({ v: 1, kind: 'workspace-prune', taskId }),
       now: 100,
     })
-    const command = composeSqliteWorkspaceMaintenanceCommand({
+    const command = composeWorkspaceMaintenanceCommand({
       db,
       appHome,
       terminalMaintenance,
@@ -348,7 +348,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       startedAt: 1,
       finishedAt: 2,
     })
-    const command = composeSqliteWorkspaceMaintenanceCommand({
+    const command = composeWorkspaceMaintenanceCommand({
       db,
       appHome,
       terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),

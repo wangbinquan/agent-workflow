@@ -23,10 +23,7 @@ import {
   type CollaborationCommandDependencies,
   type PostgresqlCollaborationCommandContextInput,
 } from '@/modules/collaboration/composition/commandContext'
-import type {
-  composePostgresqlCollaborationRouteOperations,
-  composeSqliteCollaborationRouteOperations,
-} from '@/modules/collaboration/composition/collaborationRouteOperations'
+import type { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
@@ -82,10 +79,8 @@ type ReviewContext = Parameters<typeof submitReviewDecision>[0]
 type QuestionContext = Parameters<typeof dispatchTaskQuestions>[0]
 type ClarifyContext = Parameters<typeof submitClarifyDecision>[0]
 type ReadModelsContext = Parameters<typeof getReviewNodeReviewerConfig>[0]
-type SqliteRouteContext = Parameters<typeof composeSqliteCollaborationRouteOperations>[0]['context']
-type PostgresqlRouteContext = Parameters<
-  typeof composePostgresqlCollaborationRouteOperations
->[0]['context']
+type SqliteRouteContext = Parameters<typeof composeCollaborationRouteOperations>[0]['context']
+type PostgresqlRouteContext = Parameters<typeof composeCollaborationRouteOperations>[0]['context']
 type AppRouteContext = AppDeps['collaborationContext']
 type ProviderRouteContext = ReturnType<
   SqliteTaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>['routes']

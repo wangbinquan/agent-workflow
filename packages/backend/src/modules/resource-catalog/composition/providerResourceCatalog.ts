@@ -1,7 +1,5 @@
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createResourceAclApplication,
   type ResourceAclApplication,
@@ -80,19 +78,4 @@ export function composeResourceCatalogFor(input: {
     }),
     createResourceCatalogSummaryReadPort(input.db),
   )
-}
-
-/** 旧名保留为装配别名，bootstrap 收敛后删除。 */
-export function composeSqliteResourceCatalog(input: {
-  readonly db: DbClient
-  readonly lifecycle?: ResourceAclMutationLifecycle
-}): ProviderResourceCatalogComposition {
-  return composeResourceCatalogFor(input)
-}
-
-export function composePostgresqlResourceCatalog(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly lifecycle?: ResourceAclMutationLifecycle
-}): ProviderResourceCatalogComposition {
-  return composeResourceCatalogFor(input)
 }

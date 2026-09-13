@@ -44,8 +44,8 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
     )
 
     expect(composition).toContain('composeProviderResourceCatalog(')
-    expect(composition).toContain('composeSqliteResourceCatalog(')
-    expect(composition).toContain('composePostgresqlResourceCatalog(')
+    expect(composition).toContain('composeResourceCatalogFor(')
+    expect(composition).toContain('composeResourceCatalogFor(')
     expect(composition).toContain('createQuery(input:')
     expect(composition).toContain('createResourceCatalogQueryApplication({')
     expect(composition).not.toMatch(/as\s+(?:unknown|DbClient|PostgresqlDatabaseClient)/)

@@ -65,7 +65,7 @@ import {
   composeSkillMemoryFusionParticipantFactory,
 } from '@/modules/memory/composition'
 import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
-import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
@@ -122,13 +122,13 @@ import {
   createCollaborationRuntimeMechanics,
   createPostgresqlCollaborationCommandContext,
 } from '@/modules/collaboration/composition'
-import { composePostgresqlCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
+import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import {
   readCommittedReviewArtifactBody,
   resolveCollaborationTaskAccess,
 } from '@/modules/collaboration/public/queries'
 import { createPostgresqlCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
-import { composePostgresqlWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
+import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import {
   composeExecutionContract,
@@ -473,7 +473,7 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
   readonly mcpRuntimeTests: ReturnType<typeof getMcpRuntimeTestService>
   readonly webhookTerminalControl: ReturnType<typeof composePostgresqlMrTerminalControl>
-  readonly workspaceMaintenance: ReturnType<typeof composePostgresqlWorkspaceMaintenanceCommand>
+  readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
   readonly intentMaintenance: ReturnType<typeof composePostgresqlIntentMaintenanceSnapshotQueries>
   readonly resourcePackageActivity: Pick<
     ReturnType<typeof createPostgresqlResourcePackageAtomicApplyOperations>,
@@ -592,7 +592,7 @@ export async function composePostgresqlApplication(
   const systemIdentity = await admitDaemonIdentity(identityAccess)
   if (systemIdentity === null) throw new Error('postgresql-daemon-system-identity-not-admitted')
   const systemActor = actorOfDirectAuthority(systemIdentity)
-  const resourceCatalog = composePostgresqlResourceCatalog({
+  const resourceCatalog = composeResourceCatalogFor({
     db: input.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
@@ -885,7 +885,7 @@ export async function composePostgresqlApplication(
   // RFC-359 W1-T1（P0-7）：派发管线跑在 DatabaseSession 上，两个 provider 共用同一份投影；
   // 此前这里是一个从未被 bind 的 holder，每个 tick 抛 deferred-question-dispatcher-not-bound。
   const taskDagCollaboration = createTaskDagCollaborationOperations(input.db)
-  const workspaceMaintenance = composePostgresqlWorkspaceMaintenanceCommand({
+  const workspaceMaintenance = composeWorkspaceMaintenanceCommand({
     db: input.db,
     appHome: input.appHome,
     terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
@@ -1161,7 +1161,7 @@ export async function composePostgresqlApplication(
     canViewTask: async (actor: Actor, task: { readonly id: string }) =>
       (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
   })
-  const collaborationRouteOperations = composePostgresqlCollaborationRouteOperations({
+  const collaborationRouteOperations = composeCollaborationRouteOperations({
     db: input.db,
     context: boundCollaborationContext,
   })

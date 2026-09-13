@@ -790,7 +790,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1728,
+      "baseline": 1727,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -825,7 +825,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5259,
+      "baseline": 5256,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -846,7 +846,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4725,
+      "baseline": 4722,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -881,12 +881,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24927,
+      "baseline": 24920,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9b7e679cf96fa6805b9ddcabab3ab2e4ebd0a64b1c7fac4da4774ae0e609232f",
+    "sourceDigest": "sha256:e8fc9a5d481e4e829823e6be9e5504a9a78adc4e7c69492bcfe482f0b3f9f556",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e27d7f0350eb503f6ff41290e3de17df6192cda4",
-    "contentDigest": "sha256:2256dc3f9920d0eacb31ea4d79ddde483346b06d892f50b5fb055c22dedabf87",
+    "currentSnapshotSha": "f70210f8216d4dc35b6761580e5f03d8a6f6739f",
+    "contentDigest": "sha256:ba43fcfec28545bbb4806173c1b9aac30583b2988b25e2d33373dae0d71f3755",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

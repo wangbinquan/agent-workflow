@@ -101,7 +101,7 @@ describe('RFC-338 maintenance architecture', () => {
     expect(worker).toContain("if ('database' in parsed)")
     expect(worker).toContain('poolMax: Math.min(2, parsed.database.poolMax)')
     expect(worker).toContain('createMaintenanceRunStore(')
-    expect(worker).toContain('composePostgresqlWorkspaceMaintenanceCommand({')
+    expect(worker).toContain('composeWorkspaceMaintenanceCommand({')
     expect(worker).toContain('composePostgresqlIntentMaintenanceCommandsForAppHome({')
     expect(worker).toContain('composePostgresqlResourcePackageApplyMaintenance({')
     expect(worker).not.toContain('postgresql-maintenance-owner-command-unavailable')

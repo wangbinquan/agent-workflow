@@ -3,7 +3,7 @@ import type { DbClient } from '../../src/db/client'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import { composeSqliteAgentLaunchResourceOperations } from '../../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import type { WebhookTaskExecutionParticipant } from '../../src/modules/integration/composition/webhookDispatch'
 import type { TaskExecutionResourceAuthority } from '../../src/services/execution/taskExecutionResources'
 import type { ExecutionInvoker } from '../../src/services/execution/types'
@@ -19,7 +19,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
   readonly schedulerDriver: SchedulerDriverPort
   readonly identityAccess: NonNullable<StartTaskDeps['identityAccess']>
 }): WebhookTaskExecutionParticipant<TaskExecutionResourceAuthority, ExecutionInvoker> {
-  const resourceCatalog = composeSqliteResourceCatalog({ db: input.db })
+  const resourceCatalog = composeResourceCatalogFor({ db: input.db })
   const agentLaunchResources = Object.freeze({
     resources: composeSqliteAgentLaunchResourceOperations(input.db),
     integrity: composeDatabaseAgentResourceIntegrity({

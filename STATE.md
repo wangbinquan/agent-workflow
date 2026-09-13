@@ -9,10 +9,15 @@
 > ——它们全都只是转交给一个已经存在的中立实现，多数文件里还留着
 > 「旧名保留为装配别名，bootstrap 收敛后删除」那行注释。
 >
-> 本批还掉四对（`WebhookDeliveryRuntime` / `WebhookIngressPersistence` /
-> `WebhookDeliveryPersistence` / `ScheduledTaskRuntime`，都在 `modules/integration/composition/`），
-> 八个别名连同那行注释一起删；`rfc359-w5-provider-runtime-exercised` 的组合根下限 80 → 76
-> （**降是对的方向**，每次退役在那里留一次有署名的记录）。**剩 10 对**，下一批继续。
+> 本批还掉**八对**：第一档四对在 `modules/integration/composition/`（`WebhookDeliveryRuntime` /
+> `WebhookIngressPersistence` / `WebhookDeliveryPersistence` / `ScheduledTaskRuntime`），第二档四对
+> （`CollaborationRouteOperations` —— 中立那份原本是**私有函数**、别名才是公开面 /
+> `WorkspaceMaintenanceCommand` / `ResourceCatalog` / `EventsArchiveStore`）。十六个别名连同那行
+> 「bootstrap 收敛后删除」的注释一起删。
+>
+> 语料下限跟着降两处（只降不升、各留署名记录）：组合根 80 → 76 → **70**；适配器声明分母
+> 150 → **145**。**剩 6 对**——它们**没有**现成的中立函数，相同的函数体是**内联**的，
+> 下一批要先把那段体提成一份中立实现再收。
 >
 > ## 📌 RFC-359 最新一段（2026-09-15 续 9，收掉一对**函数体逐字相同**的孪生；账本 **400** / open **94**）
 >

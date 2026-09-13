@@ -53,7 +53,7 @@ function bindCollaborationRouteContext(
 
 // RFC-359 W7：路由持久化面已合一（`infrastructure/collaborationRouteOperations.ts`），两个
 // 装配入口只是名字不同的同一条线；名字暂留，等 bootstrap 侧的 provider 命名一并收敛。
-function composeCollaborationRouteOperations(input: {
+export function composeCollaborationRouteOperations(input: {
   readonly db: ProviderNeutralDatabase
   readonly context: CollaborationRouteContext
 }): CollaborationRouteOperations {
@@ -64,18 +64,4 @@ function composeCollaborationRouteOperations(input: {
       clarifyDraftEvents: createCollaborationClarifyDraftEventPublisher(),
     }),
   )
-}
-
-export function composeSqliteCollaborationRouteOperations(input: {
-  readonly db: ProviderNeutralDatabase
-  readonly context: CollaborationRouteContext
-}): CollaborationRouteOperations {
-  return composeCollaborationRouteOperations(input)
-}
-
-export function composePostgresqlCollaborationRouteOperations(input: {
-  readonly db: ProviderNeutralDatabase
-  readonly context: CollaborationRouteContext
-}): CollaborationRouteOperations {
-  return composeCollaborationRouteOperations(input)
 }

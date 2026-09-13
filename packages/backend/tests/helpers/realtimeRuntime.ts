@@ -15,10 +15,7 @@ import type {
   RealtimeCredentialAccess,
   RealtimeRuntime,
 } from '../../src/modules/runtime-management/public/participants'
-import {
-  composeResourceCatalogFor,
-  composeSqliteResourceCatalog,
-} from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { batchOwnerUserId } from '../../src/services/repoBatchImport'
 import { redactEventPayload } from '../../src/services/tokenRedaction'
 import { memoryCatalogOf } from './memoryCatalog'
@@ -55,7 +52,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
   readonly repoImportOwnerUserId?: (batchId: string) => string | null
   readonly redactTaskEventPayload?: (payload: unknown, source: ActorSource) => unknown
 }): RealtimeRuntime {
-  const resourceCatalog = composeSqliteResourceCatalog({ db: input.db })
+  const resourceCatalog = composeResourceCatalogFor({ db: input.db })
   return composeSqliteRealtimeRuntime({
     db: input.db,
     auth: createAuthRuntimeFor({ db: input.db, onCredentialRevoked: () => {} }),

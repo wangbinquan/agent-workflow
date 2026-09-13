@@ -31,7 +31,7 @@ import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execu
 import { createTokenCallAudit } from '@/auth/composition'
 import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
-import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
+import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import { runRetentionSweepSlice } from '@/services/maintenanceRetention'
 import { pruneTokenAuditSlice } from '@/services/tokenAudit'
 import { gcDeliveriesSlice } from '@/services/webhook/deliveryStore'
@@ -76,7 +76,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
   tokenAudit: createTokenCallAudit(db),
   system: {
     eventsArchive: createEventsArchiveMaintenanceCommand({
-      store: createSqliteEventsArchiveStore(db),
+      store: createEventsArchiveStore(db),
       logsDir: join(appHome, 'logs'),
     }),
     retention: {

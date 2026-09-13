@@ -9299,10 +9299,20 @@ CI 那次的 0.38 也照样过；真出回归（CPU-bound 语句记到 cpuMs≈0
 `rfc359-w5-provider-runtime-exercised` 的组合根下限 80 → 76 —— **降是对的方向**，
 这个数随合一持续下降；那条断言照旧贴着当前值钉，每次退役都要在那里留一次有署名的记录。
 
-**剩下 10 对**（下一批继续）：`CapabilityTemplateOperations` / `CodeCapabilityDemoSeedParticipant` /
-`CollaborationRouteOperations` / `DemoResourceCatalogSeedParticipant` / `LegacyCodeReadProviders` /
-`RealtimeRuntime` / `ResourceCatalog` / `WebhookEndpointServiceDependencies` /
-`WorkspaceMaintenanceCommand` / `EventsArchiveStore`。
+**同批第二档**又还掉四对：`CollaborationRouteOperations`（中立那份原本是**私有函数**，别名才是公开面
+——把它导出即可）/ `WorkspaceMaintenanceCommand` / `ResourceCatalog` /
+`EventsArchiveStore`（后者的「中立实现」本就住在 `platform/persistence/eventsArchiveStore.ts`，
+`sqlite/systemEventsArchive.ts` 里那个只是再导出一次；调用方改成从owner 模块 import）。
+
+**剩下 6 对**（下一批继续）：`CapabilityTemplateOperations` / `CodeCapabilityDemoSeedParticipant` /
+`DemoResourceCatalogSeedParticipant` / `LegacyCodeReadProviders` / `RealtimeRuntime` /
+`WebhookEndpointServiceDependencies`。这 6 对与前 8 对形状不同：它们**没有**现成的中立函数，
+两侧的相同函数体是**内联**的，所以下一批要先把那段体提成一份中立实现再收。
+
+**语料下限跟着降的两处**（都按各自的规矩留了署名记录，只降不升）：
+`rfc359-w5-provider-runtime-exercised` 的组合根 80 → 76 → **70**；
+`rfc359-w5-adapter-production-consumer` 的适配器声明分母 150 → **145**
+（该文件注释里本来就记着 242 → 203 → 188 这条收敛轨迹，这次续上一档）。
 
 **扫描脚本的判据**（可复跑）：`compose|create|make|build` + `Sqlite|LegacySqlite|Postgresql` + 同一个
 base；两侧函数体 `replace(/\s+/g, ' ').trim()` 后全等。这条判据挑不出「体不同但语义相同」的那些

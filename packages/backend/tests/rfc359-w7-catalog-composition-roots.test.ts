@@ -30,7 +30,7 @@ import {
   composePostgresqlSkillArtifactCompensation,
   composeSqliteSkillArtifactCompensation,
 } from '@/modules/resource-catalog/composition/intentApply'
-import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
@@ -136,7 +136,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
   test('目录 ACL 装配：授权 / ACL / 概览查询三个面都在真库上给出判定', async () => {
     const owner = await seedActor(harness.db)
     const stranger = await seedActor(harness.db)
-    const catalog = composePostgresqlResourceCatalog({ db: asPostgresql(harness.db) })
+    const catalog = composeResourceCatalogFor({ db: asPostgresql(harness.db) })
 
     const agentId = `a_${ulid()}`
     await harness.db.insert(agents).values({

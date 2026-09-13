@@ -36,7 +36,7 @@ import { DrizzleReviewerResolutionRead } from '@/modules/code-capability/infrast
 import { composePostgresqlDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composePostgresqlWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
+import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { createNodeRunLifecycleParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -369,7 +369,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
         workspacePruningAt: T0,
         workspacePruneCause: 'webhook-terminal',
       })
-      const command = composePostgresqlWorkspaceMaintenanceCommand({
+      const command = composeWorkspaceMaintenanceCommand({
         db: harness.db,
         appHome,
         terminalMaintenance: createSqliteTaskExecutionPersistence(asSqlite(harness.db))

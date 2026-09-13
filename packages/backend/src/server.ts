@@ -95,7 +95,7 @@ import {
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
-  composeSqliteResourceCatalog,
+  composeResourceCatalogFor,
   type ProviderResourceCatalogComposition,
 } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import {
@@ -337,7 +337,7 @@ import {
   createQuestionDispatchCommand,
   createReviewDecisionCommand,
 } from '@/modules/collaboration/composition/decisionCommands'
-import { composeSqliteCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
+import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/taskCatalogSources'
@@ -1960,7 +1960,7 @@ export function composeSqliteApplicationDeps(
   const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperationsFor({
     db: runtimeDeps.db,
     access: composeSqliteDevelopmentConfigResourceAccess(runtimeDeps.db),
-    grants: composeSqliteResourceCatalog({ db: runtimeDeps.db }).persistence.grants,
+    grants: composeResourceCatalogFor({ db: runtimeDeps.db }).persistence.grants,
   })
   const developmentConfigOperations = composeDevelopmentConfigOperations(
     runtimeDeps.db,
@@ -2022,7 +2022,7 @@ export function composeSqliteApplicationDeps(
         ? {}
         : { capacity: effectiveDeps.mcpRuntimeTestDependencies.capacity }),
     })
-  const providerResourceCatalog = composeSqliteResourceCatalog({
+  const providerResourceCatalog = composeResourceCatalogFor({
     db: effectiveDeps.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
@@ -2335,7 +2335,7 @@ function composeSqliteApiRouteMounts(
   workflowCatalog: WorkflowCatalogModule,
   workgroupCatalog: WorkgroupCatalogModule,
   resourcePackageCatalog: ComposedResourcePackageCatalog | null,
-  providerResourceCatalog: ReturnType<typeof composeSqliteResourceCatalog>,
+  providerResourceCatalog: ReturnType<typeof composeResourceCatalogFor>,
   composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
   agentResourceIntegrity: AgentResourceIntegrityComposition,
   intentApply: IntentApplyOperations,
@@ -2797,7 +2797,7 @@ function composeSqliteApiRouteMounts(
     }),
   })
   const missionInputUploads = composeMissionInputUploadOperations({ db: deps.db, appHome })
-  const collaborationRouteOperations = composeSqliteCollaborationRouteOperations({
+  const collaborationRouteOperations = composeCollaborationRouteOperations({
     db: deps.db,
     context: deps.collaborationContext,
   })

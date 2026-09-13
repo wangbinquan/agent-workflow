@@ -39,10 +39,7 @@ import type {
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import type { IntegrationMaintenanceCommands } from '@/modules/integration/public/commands'
-import {
-  composePostgresqlWorkspaceMaintenanceCommand,
-  composeSqliteWorkspaceMaintenanceCommand,
-} from '@/modules/source-control/composition/workspaceMaintenance'
+import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/public/commands'
 import type { ClaimedMaintenanceRun, MaintenanceRunStore } from './maintenanceRunStorePort'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
@@ -51,7 +48,7 @@ import {
   type MaintenanceExecutionFence,
 } from '@/platform/persistence/maintenanceExecutionFence'
 import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
-import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
+import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persistence/databaseOperationalAdapter'
@@ -559,7 +556,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       taskRecoveryOperations = taskExecution.recoveryAdministration
       taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(client)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
-        composePostgresqlWorkspaceMaintenanceCommand({
+        composeWorkspaceMaintenanceCommand({
           db: client,
           appHome,
           terminalMaintenance: taskExecution.terminalMaintenance,
@@ -668,7 +665,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       taskRecoveryOperations = taskExecution.recoveryAdministration
       taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(sqliteDb)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
-        composeSqliteWorkspaceMaintenanceCommand({
+        composeWorkspaceMaintenanceCommand({
           db: sqliteDb,
           appHome,
           terminalMaintenance: taskExecution.terminalMaintenance,
@@ -678,7 +675,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       )
       systemOperations = Object.freeze({
         eventsArchive: createEventsArchiveMaintenanceCommand({
-          store: createSqliteEventsArchiveStore(sqliteDb),
+          store: createEventsArchiveStore(sqliteDb),
           logsDir: join(appHome, 'logs'),
         }),
         retention: Object.freeze({

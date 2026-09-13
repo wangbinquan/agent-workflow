@@ -105,7 +105,7 @@ import {
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
-import { composeSqliteWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
+import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
@@ -244,7 +244,7 @@ import {
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
-import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import type { SkillCatalogBootParticipant } from '@/modules/resource-catalog/public/participants'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
@@ -1716,7 +1716,7 @@ async function composeSqliteProviderSession(
     endpointDiscovery: repositoryEndpointDiscovery,
   })
   const identityAccess = providerCore.identityAccess
-  const resourceCatalog = composeSqliteResourceCatalog({
+  const resourceCatalog = composeResourceCatalogFor({
     db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
@@ -2041,7 +2041,7 @@ async function composeSqliteProviderSession(
 
   // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal
   // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。
-  const bootWorkspaceMaintenance = composeSqliteWorkspaceMaintenanceCommand({
+  const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({
     db,
     appHome: Paths.root,
     terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
