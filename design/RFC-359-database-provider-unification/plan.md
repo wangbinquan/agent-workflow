@@ -7851,3 +7851,27 @@ bigint 列取回成**字符串**，`toBe(number)` 当场失败——改成 drizz
   - `rfc232-owner-list`「null 与悬空 owner id 保持稳定、身份降级成 null」在 PG 上判据不成立。
 
   后两条要单独查，本波先原样退回、留在账本上，不靠改判据抹掉。
+
+## 5cb. §5ca 那 3 条红逐条查完：两条是夹具写在 SQLite 专属面上，一条按定义就该单引擎
+
+- **`rfc232-owner-list`** —— 「悬空 owner id」这条夹具用 `PRAGMA foreign_keys = OFF` 绕外键。
+  查下来**两个引擎的外键不是一回事**：SQLite 的迁移链给 `tasks.owner_user_id` 加了
+  `REFERENCES users(id) ON DELETE SET NULL`（`db/migrations/0020_rfc036_task_collab.sql:1`），
+  而 drizzle 的表声明里**没有**这条（`ownerUserId: text('owner_user_id')`，不带 `.references()`）。
+  PostgreSQL 的 schema 由 drizzle 声明生成 ⇒ 那边压根不存在这个约束，不用关也不能关。
+  处置：provider 判别只落在**夹具**里，被测判据两个引擎逐字相同。
+  **顺带照出一个守卫缺口**：`rfc359-w5-t19g-schema-contract-reconciliation` 对账的是
+  CHECK / 索引 / UNIQUE / 触发器，**不含外键**——这条「SQLite 有、PG 没有」的外键因此从未被清点过。
+  它正是那条守卫头注释说要消灭的形态（一个引擎有保护、另一个没有），且有用户可见后果：
+  SQLite 上删用户会把任务的 owner 置空，PG 上不会。已记进 `docs/audit-backlog.md`。
+- **`rfc223-pr6-injection-identity`** —— 三条都是夹具打在业务客户端上的 DDL / SQLite 专属语句：
+  `DROP INDEX IF EXISTS …` 被 `postgresql-ddl-through-business-client` 拒（**守卫是对的**，
+  DDL 就该走 migrator / 夹具面），`PRAGMA foreign_keys = OFF` 被 `sqlite-operation-on-postgresql` 拒。
+  处置：DDL 改走 `harness.executeFixtureDdl`，改名从 `db.run(sql\`UPDATE …\`)` 改成 drizzle 类型化
+  update，`PRAGMA` 那条按引擎判别。
+- **`rfc074-prc-cci-retirement`** —— C9 判的是 `PRAGMA table_info(node_runs)`，即
+  **SQLite 迁移链跑完后的实时 schema**，按定义只对 SQLite 成立（PG 的 schema 来自 drizzle 声明，
+  两侧对账由 W5-T19g 独立负责）。C10 判的是**行为**（插入 / 取回不带那一列），与引擎无关。
+  处置：把这个 describe 拆成两个——C9 留单引擎，C10 进双引擎块。
+
+三个文件合计 24 pass / 0 fail（双引擎），账本 474 → 472。

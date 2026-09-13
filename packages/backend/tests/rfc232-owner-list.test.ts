@@ -1,11 +1,9 @@
 // RFC-232 — owner projection batching + scheduled-list mapper parity.
 
-import { describe, expect, test } from 'bun:test'
-import { sql } from 'drizzle-orm'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { scheduledTasks, tasks, users, workflows } from '../src/db/schema'
 import {
   listScheduledTaskItems,
@@ -14,7 +12,6 @@ import {
 import { OWNER_IDENTITY_SQL_BATCH_SIZE } from '../src/services/ownerIdentity'
 import { listTaskItems } from '../src/services/task'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCHEDULE_SPEC = JSON.stringify({ kind: 'daily', at: '09:00', timezone: 'UTC' })
 
 const adminActor = buildActor({
@@ -38,9 +35,9 @@ function launchPayload(repoUrl = 'https://example.com/repo.git'): string {
   })
 }
 
-describe('RFC-232 — scheduled-task owner list projection', () => {
+describeEachProvider('RFC-232 — scheduled-task owner list projection', (harness) => {
   test('combines every owner across more than one bounded SQL batch', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const total = OWNER_IDENTITY_SQL_BATCH_SIZE + 1
     const now = Date.now()
     const userRows = Array.from({ length: total }, (_, index) => {
@@ -75,7 +72,7 @@ describe('RFC-232 — scheduled-task owner list projection', () => {
   })
 
   test('keeps canonical tolerant/redacting mapping and degrades missing owners', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const now = Date.now()
     await db.insert(users).values({
       id: 'owner-alice',
@@ -139,9 +136,9 @@ describe('RFC-232 — scheduled-task owner list projection', () => {
   })
 })
 
-describe('RFC-232 — task owner list projection', () => {
+describeEachProvider('RFC-232 — task owner list projection', (harness) => {
   test('keeps null and dangling owner ids stable while degrading identity to null', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const now = Date.now()
     await db.insert(workflows).values({
       id: 'workflow-task-owner-fallbacks',
@@ -171,7 +168,14 @@ describe('RFC-232 — task owner list projection', () => {
       deletedAt: null,
       schemaVersion: 1,
     }
-    await db.run(sql`PRAGMA foreign_keys = OFF`)
+    // RFC-359 AC-6：悬空 owner 这条夹具要绕开外键，而**两个引擎的外键不是一回事**。
+    // SQLite 的迁移链给 `tasks.owner_user_id` 加了 `REFERENCES users(id)`
+    // （`db/migrations/0020_rfc036_task_collab.sql:1`），drizzle 的表声明里没有这条——
+    // PostgreSQL 的 schema 由 drizzle 声明生成，所以那边压根不存在这个约束，不用关也不能关
+    // （`PRAGMA` 是 SQLite 专属语句，走到 PG 上会被 SQL 编译器直接拒掉）。
+    // provider 判别只出现在**夹具**里，被测判据本身两个引擎逐字相同。
+    const enforcesOwnerForeignKey = harness.capabilities.provider === 'sqlite'
+    if (enforcesOwnerForeignKey) await harness.executeFixtureDdl('PRAGMA foreign_keys = OFF')
     await db.insert(tasks).values([
       {
         ...baseTask,
@@ -186,7 +190,7 @@ describe('RFC-232 — task owner list projection', () => {
         ownerUserId: 'deleted-owner',
       },
     ])
-    await db.run(sql`PRAGMA foreign_keys = ON`)
+    if (enforcesOwnerForeignKey) await harness.executeFixtureDdl('PRAGMA foreign_keys = ON')
 
     const rows = await listTaskItems(db)
     expect(rows.find((row) => row.id === 'task-owner-null')).toMatchObject({

@@ -23,7 +23,9 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { isFresherNodeRun } from '../src/services/scheduler'
 
@@ -88,31 +90,11 @@ describe('RFC-074 PR-C — isFresherNodeRun pure-id ordering (C1-C4)', () => {
   })
 })
 
-describe('RFC-074 PR-C — migration 0041 drops node_runs.clarify_iteration (C9-C10)', () => {
-  async function seedWorkflowTask(db: DbClient): Promise<string> {
-    await db.insert(workflows).values({
-      id: 'wf1',
-      name: 'w',
-      description: '',
-      definition: '{}',
-      version: 1,
-    })
-    await db.insert(tasks).values({
-      id: 'task1',
-      name: 't',
-      workflowId: 'wf1',
-      workflowSnapshot: '{}',
-      repoPath: '/tmp',
-      worktreePath: '',
-      baseBranch: 'main',
-      branch: 'agent-workflow/t',
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    return 'task1'
-  }
-
+// C9 判的是 **SQLite 迁移链跑完后的实时 schema**（`PRAGMA table_info`），按定义只对 SQLite 成立：
+// PostgreSQL 的 schema 来自 drizzle 声明，两侧的对账由
+// `tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts` 独立负责。
+// C10 判的是**行为**（插入 / 取回不带那一列），与引擎无关，按 RFC-359 AC-6 迁进双引擎块。
+describe('RFC-074 PR-C — migration 0041 drops node_runs.clarify_iteration (C9)', () => {
   test('C9: the dropped column is absent from the live schema', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const cols = db.all(sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
@@ -123,26 +105,55 @@ describe('RFC-074 PR-C — migration 0041 drops node_runs.clarify_iteration (C9-
     expect(names).toContain('commit_push_json')
     expect(names).toContain('review_iteration')
   })
-
-  test('C10: a node_run round-trips insert/select without the cci column', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedWorkflowTask(db)
-    await db.insert(nodeRuns).values({
-      id: '01ROW',
-      taskId,
-      nodeId: 'n',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      reviewIteration: 0,
-      consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }),
-    })
-    const got = (await db.select().from(nodeRuns).limit(1))[0]
-    expect(got?.id).toBe('01ROW')
-    expect(got?.consumedUpstreamRunsJson).toBe(JSON.stringify({ up: '01UP' }))
-    expect('clarifyIteration' in (got as object)).toBe(false)
-  })
 })
+
+describeEachProvider(
+  'RFC-074 PR-C — node_run round-trips without the cci column (C10)',
+  (harness) => {
+    async function seedWorkflowTask(db: ProviderNeutralDatabase): Promise<string> {
+      await db.insert(workflows).values({
+        id: 'wf1',
+        name: 'w',
+        description: '',
+        definition: '{}',
+        version: 1,
+      })
+      await db.insert(tasks).values({
+        id: 'task1',
+        name: 't',
+        workflowId: 'wf1',
+        workflowSnapshot: '{}',
+        repoPath: '/tmp',
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: 'agent-workflow/t',
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      return 'task1'
+    }
+
+    test('C10: a node_run round-trips insert/select without the cci column', async () => {
+      const db = harness.db
+      const taskId = await seedWorkflowTask(db)
+      await db.insert(nodeRuns).values({
+        id: '01ROW',
+        taskId,
+        nodeId: 'n',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        reviewIteration: 0,
+        consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }),
+      })
+      const got = (await db.select().from(nodeRuns).limit(1))[0]
+      expect(got?.id).toBe('01ROW')
+      expect(got?.consumedUpstreamRunsJson).toBe(JSON.stringify({ up: '01UP' }))
+      expect('clarifyIteration' in (got as object)).toBe(false)
+    })
+  },
+)
 
 describe('RFC-074 PR-C — grep guards (C11-C12)', () => {
   const allSrc = SRC_ROOTS.flatMap(walkSourceFiles)

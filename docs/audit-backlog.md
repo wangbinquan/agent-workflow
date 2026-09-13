@@ -7,6 +7,40 @@
 1. **登记前先按「症状关键词」搜本文件，不是只搜 `flaky` / `间歇` 这类分类词。** 实撞：一条 `intent-builder` e2e 红被当成新发现登记，而 08-14 的 webkit nightly 条目里**早已一字不差记着同一形态**（「按钮从未出现，不是 detach」）——登记者 grep 的是 `flaky|间歇`,没 grep `intent-builder`。**判据**:用**失败用例的文件名 / 症状原文**搜一遍再动笔;命中既有条目就**补进那条**,不另起——同一件事散成两条，下一个人只会读到其中一条，而那条可能恰好是写错的那条。
 2. **「说明还有 X 未解」「疑似还有 Y」「未追」这类措辞是待办，不是免责声明。** 要么**当场追一步给出结论**,要么显式写成一条带 owner 的待办;不允许只留一句观察就翻篇。实撞：08-14 写下「说明该 spec 至少还有第二个竞态未解」后没往下追——而当时查明它**只需要看一眼那个按钮的渲染条件**;代价是 08-15 撞上时从零重建全部上下文（拉 trace、逐条比对 actionability 日志、翻前端条件渲染),外加一条写错方向的 backlog 又返工。**悬案的成本从来不是「留着不管」，是下次撞上时重建上下文，而重建的人未必是当初写下线索的人。**
 
+## RFC-359：schema 对账守卫不含**外键**，已实测到一条只在 SQLite 上存在的外键
+
+`tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts` 逐项对账的是
+CHECK / 索引 / UNIQUE / 触发器，**不含 FOREIGN KEY**。2026-09-13 在迁 `rfc232-owner-list` 时实测到
+至少一条漏网的：
+
+- `tasks.owner_user_id REFERENCES users(id) ON UPDATE no action ON DELETE set null`
+  —— 写在 `db/migrations/0020_rfc036_task_collab.sql:1`，drizzle 的表声明里没有
+  （`src/db/schema.ts` 的 `ownerUserId: text('owner_user_id')` 不带 `.references()`）。
+  PostgreSQL 的 schema 由 drizzle 声明生成，所以**那边没有这条外键**。
+
+用户可见后果：SQLite 上删掉一个用户，他名下任务的 `owner_user_id` 会被置空；PostgreSQL 上不会，
+留下悬空 id。这正是 W5-T19g 头注释说要消灭的形态（一个引擎有保护、另一个没有），只是外键这一类
+从未进入它的清点口径。
+
+**规模已清点（2026-09-13，实跑迁移链 + drizzle 声明逐表比对）**：184 张表，SQLite 实时 142 条外键、
+drizzle 声明 134 条，差异**全部单向**——8 条 SQLite 有而 PostgreSQL 没有，0 条反向：
+
+```
+development_missions: reopened_from_mission_id -> development_missions(id)
+memories:             superseded_by_id         -> memories(id)
+memories:             supersedes_id            -> memories(id)
+node_runs:            container_run_id         -> node_runs(id)
+repo_group_nodes:     child_group_id           -> repo_groups(id)
+task_collaborators:   added_by                 -> users(id)
+tasks:                owner_user_id            -> users(id)
+users:                created_by               -> users(id)
+```
+
+**未决**：①把这 8 条按迁移 DDL 的 ON UPDATE / ON DELETE 动作补进 `db/schema.ts` 的列声明
+（只影响 PostgreSQL 侧生成的 DDL——SQLite 侧本来就有）；②把外键并入 W5-T19g 的对账口径，
+让这一类从此可清点、只降不升。清点脚本见本条上面的做法：`PRAGMA foreign_key_list(<table>)`
+对 `getTableConfig(t).foreignKeys` + 列级 `.references()`。
+
 ## 审计报告索引（`design/`）
 
 | 报告                                                                                   | 主题                                | 状态 / 未决                                                                                                                                                                                                                                                                                                                           |

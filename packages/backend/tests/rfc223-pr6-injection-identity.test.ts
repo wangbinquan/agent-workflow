@@ -9,11 +9,11 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Agent, AgentSkillRef } from '@agent-workflow/shared'
-import { sql } from 'drizzle-orm'
-import { resolve } from 'node:path'
+import { eq } from 'drizzle-orm'
 import type { Logger } from '@/util/log'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { mcps, skills } from '../src/db/schema'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import { agents, mcps, skills } from '../src/db/schema'
 import { createAgent, getAgentById } from '../src/services/agent'
 import {
   findManagedInjectionNameConflict,
@@ -25,8 +25,6 @@ import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { skillFilesRel } from '../src/services/skillIdentityPaths'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 const NOOP_LOG: Logger = {
   debug: () => {},
   info: () => {},
@@ -36,7 +34,7 @@ const NOOP_LOG: Logger = {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   opts: {
     dependsOn?: string[]
@@ -67,7 +65,7 @@ async function seedAgent(
 }
 
 async function seedManagedSkill(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   name: string,
   ownerUserId: string,
@@ -82,7 +80,7 @@ async function seedManagedSkill(
 }
 
 async function seedMcp(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   name: string,
   enabled: boolean,
@@ -99,7 +97,7 @@ async function seedMcp(
   })
 }
 
-async function prepareRoot(db: DbClient, rootId: string) {
+async function prepareRoot(db: ProviderNeutralDatabase, rootId: string) {
   const root = await getAgentById(db, rootId)
   if (root === null) throw new Error(`missing root id ${rootId}`)
   return resolveInjection(db, root, {
@@ -195,11 +193,11 @@ describe('RFC-223 PR-6 managed injection identity guard', () => {
   })
 })
 
-describe('RFC-223 PR-6 scheduler wiring is shared by both runtimes', () => {
-  let db: DbClient
+describeEachProvider('RFC-223 PR-6 scheduler wiring is shared by both runtimes', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   })
 
@@ -220,8 +218,10 @@ describe('RFC-223 PR-6 scheduler wiring is shared by both runtimes', () => {
     // Simulate the post-PR-8 schema while PR-6 still lands safely beforehand:
     // relax the current global index, then create two different ids named
     // `dep-one`. The roots already persist their closure refs by id.
-    await db.run(sql`DROP INDEX IF EXISTS agents_name_unique`)
-    await db.run(sql`UPDATE agents SET name = 'dep-one' WHERE id = ${depTwo.id}`)
+    // RFC-359 AC-6：DDL 走夹具面（PostgreSQL 的业务客户端明确拒绝 DDL——
+    // `postgresql-ddl-through-business-client`），改名走 drizzle 类型化 update。
+    await harness.executeFixtureDdl('DROP INDEX IF EXISTS agents_name_unique')
+    await db.update(agents).set({ name: 'dep-one' }).where(eq(agents.id, depTwo.id))
 
     for (const root of roots) {
       expectDuplicateFailure(await prepareRoot(db, root.id), 'agent', 'dep-one')
@@ -249,9 +249,13 @@ describe('RFC-223 PR-6 scheduler wiring is shared by both runtimes', () => {
     // The pre-PR-8 schema still has legacy name-keyed skill_versions FKs.
     // Disable their enforcement in this synthetic post-PR-8 fixture before
     // removing the global name index; PR-8 migrates those FKs to ids first.
-    await db.run(sql`PRAGMA foreign_keys = OFF`)
-    await db.run(sql`DROP INDEX IF EXISTS skills_name_unique`)
-    await db.run(sql`UPDATE skills SET name = 'skill-one' WHERE id = 'skill-two-id'`)
+    // `PRAGMA` 是 SQLite 专属语句；PostgreSQL 的 schema 来自 drizzle 声明，那些按名字建的
+    // legacy skill_versions 外键在那边并不存在，所以只有 SQLite 需要先关外键。
+    if (harness.capabilities.provider === 'sqlite') {
+      await harness.executeFixtureDdl('PRAGMA foreign_keys = OFF')
+    }
+    await harness.executeFixtureDdl('DROP INDEX IF EXISTS skills_name_unique')
+    await db.update(skills).set({ name: 'skill-one' }).where(eq(skills.id, 'skill-two-id'))
 
     for (const root of roots) {
       expectDuplicateFailure(await prepareRoot(db, root.id), 'managed-skill', 'skill-one')
@@ -297,9 +301,9 @@ describe('RFC-223 PR-6 scheduler wiring is shared by both runtimes', () => {
       bucket.push(await seedAgent(db, rootName, { runtime, mcp: refs }))
     }
 
-    await db.run(sql`DROP INDEX IF EXISTS mcps_name_unique`)
-    await db.run(sql`UPDATE mcps SET name = 'mcp-one' WHERE id = 'mcp-two-id'`)
-    await db.run(sql`UPDATE mcps SET name = 'mcp-one' WHERE id = 'mcp-disabled-id'`)
+    await harness.executeFixtureDdl('DROP INDEX IF EXISTS mcps_name_unique')
+    await db.update(mcps).set({ name: 'mcp-one' }).where(eq(mcps.id, 'mcp-two-id'))
+    await db.update(mcps).set({ name: 'mcp-one' }).where(eq(mcps.id, 'mcp-disabled-id'))
 
     for (const root of enabledRoots) {
       expectDuplicateFailure(await prepareRoot(db, root.id), 'mcp', 'mcp-one')
