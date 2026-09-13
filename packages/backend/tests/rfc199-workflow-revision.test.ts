@@ -14,10 +14,8 @@ import {
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { getTask } from '../src/services/task'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, tasks, users, workflows } from '../src/db/schema'
 import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
@@ -33,6 +31,8 @@ import {
   type WorkflowWritePrincipal,
 } from '../src/services/workflow'
 import { DomainError } from '../src/util/errors'
+import { createInMemoryDb } from '../src/db/client'
+import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   ensureWorkgroupHostWorkflow,
@@ -43,8 +43,6 @@ import {
   WORKFLOWS_CHANNEL,
   workflowsBroadcaster,
 } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 4,
@@ -104,8 +102,8 @@ function codeOf(reason: unknown): string | undefined {
   return reason instanceof DomainError ? reason.code : undefined
 }
 
-describe('RFC-199 workflow revision fencing', () => {
-  describeEachProvider('canonical storage', (harness) => {
+describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
+  describe('canonical storage', () => {
     test('create stores canonical latest definition and returns a derived detail hash', async () => {
       const db = harness.db
       const legacy: WorkflowDefinition = {
@@ -134,21 +132,7 @@ describe('RFC-199 workflow revision fencing', () => {
     })
   })
 
-  test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
-    await ensureWorkgroupHostWorkflow(db)
-
-    const rows = await db
-      .select({ id: workflows.id, definition: workflows.definition })
-      .from(workflows)
-    const byId = new Map(rows.map((row) => [row.id, row.definition]))
-    const expected = serializeWorkflowDefinitionStorageV1(EMPTY_DEFINITION)
-    expect(byId.get(AGENT_HOST_WORKFLOW_ID)).toBe(expected)
-    expect(byId.get(WORKGROUP_HOST_WORKFLOW_ID)).toBe(expected)
-  })
-
-  describeEachProvider('revision writes', (harness) => {
+  describe('revision writes', () => {
     test('two writers from the same base produce one owned receipt and one conflict', async () => {
       const db = harness.db
       const workflow = await createWorkflow(db, {
@@ -292,7 +276,7 @@ describe('RFC-199 workflow revision fencing', () => {
   })
 
   test('current visibility precedes builtin/owner and current owner is rechecked', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const alice = actorPrincipal('alice')
     const bob = actorPrincipal('bob')
     const workflow = await createWorkflow(
@@ -328,7 +312,7 @@ describe('RFC-199 workflow revision fencing', () => {
   })
 
   test('changed legacy name is gated while an unchanged legacy name may heal/save', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await createWorkflow(db, {
       name: 'Legacy Name With Spaces',
       description: '',
@@ -350,7 +334,7 @@ describe('RFC-199 workflow revision fencing', () => {
   })
 
   test('new-reference preflight failure leaves editable bytes and version untouched', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const alice = actorPrincipal('alice')
     const workflow = await createWorkflow(
       db,
@@ -391,7 +375,7 @@ describe('RFC-199 workflow revision fencing', () => {
   })
 
   test('delete repeats current visibility, owner-transfer, and builtin gates in its transaction', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const alice = actorPrincipal('alice')
     const bob = actorPrincipal('bob')
     const workflow = await createWorkflow(
@@ -432,7 +416,7 @@ describe('RFC-199 workflow revision fencing', () => {
 
   test('delete is version-fenced, reference-checked, and broadcasts the winning fence', async () => {
     resetBroadcastersForTests()
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const alice = actorPrincipal('alice')
     await db.insert(users).values({
       id: 'carol',
@@ -533,5 +517,24 @@ describe('RFC-199 workflow revision fencing', () => {
       },
     ])
     unsubscribe()
+  })
+})
+
+// RFC-359 AC-6 例外：单引擎。`composeSqliteAgentLaunchResourceOperations(db)` 与它的 PG 孪生
+// **入参形状不同**——PG 那份还要 `agents` / `workflowValidation` 两个端口（SQLite 那份在内部自建），
+// 所以这条不是「换个 harness」能迁的，得先把那两个组合根的装配签名对齐。留在账本上。
+describe('RFC-199 —— 固定的 agent / workgroup 宿主种子走同一条 canonical latest 存储', () => {
+  test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
+    await ensureWorkgroupHostWorkflow(db)
+
+    const rows = await db
+      .select({ id: workflows.id, definition: workflows.definition })
+      .from(workflows)
+    const byId = new Map(rows.map((row) => [row.id, row.definition]))
+    const expected = serializeWorkflowDefinitionStorageV1(EMPTY_DEFINITION)
+    expect(byId.get(AGENT_HOST_WORKFLOW_ID)).toBe(expected)
+    expect(byId.get(WORKGROUP_HOST_WORKFLOW_ID)).toBe(expected)
   })
 })

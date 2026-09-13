@@ -7999,3 +7999,32 @@ PostgresqlMigrationSequenceError: index-only upgrade changed a row, codec, key o
 `rfc359-w29-unstarted-application-composition` 的结构摘要——那条守卫在 98545e3f8 上推红过一次。
 
 账本 468 → 466。
+
+## 5cg. 把 `dbTxSync` 从测试夹具里拆掉——解锁 `sqlite-concurrency-fuzz`
+
+`tests/helpers/taskRecoveryOperations.ts` 的 `repairRuntimeSessionLeaseAfterOrphanReap` 还在用
+SQLite 专属的同步事务 `dbTxSync`，整个事务体是同步终结符（`.get()` / `.all()` / `.run()`）。
+搬到中立事务口 `databaseSessionFor(db).transaction(async (tx) => …)`，体内逐条改成 await
+（`.get()` → `(await …limit(1))[0]`，`.all()` / `.run()` → 直接 await；`.returning()` 本来就带回行）。
+形参同批放宽到 `ProviderNeutralDatabase`。
+
+**35 个消费文件 493 pass / 0 fail** —— 这个夹具是 recovery 那一簇的公共入口，改它必须把下游全跑一遍。
+
+随之 `sqlite-concurrency-fuzz` 解锁（它的两个错就是 `taskRecoveryOperations(db)`）。
+文件名带 sqlite 但它的头注释本来就写明 fuzz 锁的是**操作组合的不变量**、不是 SQLite 引擎并发，
+所以双引擎跑是严格更强；名字暂不改（别的守卫按名引用）。
+
+## 5ch. `rfc199-workflow-revision`：一条真的**装配签名不对称**，拆出去单跑
+
+这个文件的 6 个调用点里，5 个随嵌套块降级 + 外层转换一起迁完，**只剩 1 条迁不了**：
+
+```ts
+await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
+```
+
+它的 PG 孪生 `composePostgresqlAgentLaunchResourceOperations` **入参形状不同**——还要
+`agents` / `workflowValidation` 两个端口（SQLite 那份在内部自建）。这不是「形参写窄了」，
+是两个组合根的装配签名真的不对称，和 §5cf 里 `rfc221` 的 `secretBox` 同类。
+处置：把这一条 test 拆成文件末尾一个单引擎 `describe`、留在账本上，其余 21 条双引擎跑绿。
+
+账本 466 → 465。

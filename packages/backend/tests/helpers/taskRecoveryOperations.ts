@@ -1,9 +1,8 @@
 import { TERMINAL_NODE_RUN_STATUSES } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { nodeRuns, runtimeSessionLeases, tasks } from '../../src/db/schema'
-import { dbTxSync } from '../../src/db/txSync'
 import type { TaskRecoveryOperations } from '../../src/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createTaskRecoveryOperations } from '../../src/modules/task-execution/infrastructure/taskRecoveryOperations'
 import { terminalizeTaskExecutionIntentsUncheckedInTx } from '../../src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
@@ -12,8 +11,8 @@ import { databaseSessionFor } from '../../src/platform/persistence/databaseTrans
 const TERMINAL_RUN_STATUSES = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 
 /** Test composition mirrors daemon provider selection explicitly; recovery
- * services never accept a DbClient compatibility shape. */
-export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
+ * services never accept a provider-branded compatibility shape. */
+export function taskRecoveryOperations(db: ProviderNeutralDatabase): TaskRecoveryOperations {
   return createTaskRecoveryOperations(db, {
     async interruptBootOrphanTask(input) {
       // RFC-359：同步孪生 `terminalizeTaskExecutionIntentsTx` 退役，这条夹具跟着搬到中立事务口。
@@ -28,7 +27,6 @@ export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
           })
           .where(and(eq(tasks.id, input.taskId), eq(tasks.status, input.from)))
           .returning({ id: tasks.id })
-          .all()
         if (interrupted.length !== 1) return false
         await terminalizeTaskExecutionIntentsUncheckedInTx(tx, {
           taskId: input.taskId,
@@ -56,12 +54,16 @@ export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
     },
 
     async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
-      return dbTxSync(db, (tx) => {
-        const lease = tx
-          .select()
-          .from(runtimeSessionLeases)
-          .where(eq(runtimeSessionLeases.leaseNodeRunId, nodeRunId))
-          .get()
+      // RFC-359 AC-6：从 SQLite 专属的同步事务 `dbTxSync` 搬到中立事务口。
+      // 事务体逐条改成 await：`.get()` → `(await …limit(1))[0]`，`.all()` / `.run()` → 直接 await。
+      return await databaseSessionFor(db).transaction(async (tx) => {
+        const lease = (
+          await tx
+            .select()
+            .from(runtimeSessionLeases)
+            .where(eq(runtimeSessionLeases.leaseNodeRunId, nodeRunId))
+            .limit(1)
+        )[0]
         if (
           lease === undefined ||
           lease.leaseNodeRunId === null ||
@@ -69,22 +71,24 @@ export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
         ) {
           return 0
         }
-        const run = tx
-          .select({
-            status: nodeRuns.status,
-            sessionId: nodeRuns.opencodeSessionId,
-            failureCode: nodeRuns.failureCode,
-          })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, nodeRunId))
-          .get()
+        const run = (
+          await tx
+            .select({
+              status: nodeRuns.status,
+              sessionId: nodeRuns.opencodeSessionId,
+              failureCode: nodeRuns.failureCode,
+            })
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, nodeRunId))
+            .limit(1)
+        )[0]
         if (run === undefined || !TERMINAL_RUN_STATUSES.has(run.status)) return 0
         if (
           run.failureCode !== 'runtime-session-identity-invalid' &&
           !lease.resetPending &&
           run.sessionId === lease.sessionId
         ) {
-          const released = tx
+          const released = await tx
             .update(runtimeSessionLeases)
             .set({ leaseNodeRunId: null, leaseNonceDigest: null, leasedAt: null })
             .where(
@@ -95,14 +99,13 @@ export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
               ),
             )
             .returning({ sessionId: runtimeSessionLeases.sessionId })
-            .all()
           return released.length === 1 ? 1 : 0
         }
-        tx.update(nodeRuns)
+        await tx
+          .update(nodeRuns)
           .set({ opencodeSessionId: null })
           .where(and(eq(nodeRuns.id, nodeRunId), eq(nodeRuns.opencodeSessionId, lease.sessionId)))
-          .run()
-        const discarded = tx
+        const discarded = await tx
           .delete(runtimeSessionLeases)
           .where(
             and(
@@ -112,7 +115,6 @@ export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
             ),
           )
           .returning({ sessionId: runtimeSessionLeases.sessionId })
-          .all()
         return discarded.length === 1 ? 1 : 0
       })
     },
