@@ -2,6 +2,20 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 4，三个大文件一批收掉 **49 个调用点**；账本 **406** / open **102**）
+>
+> 落档 plan §5dl。`rfc128-p5-d-autodispatch`(28) + `rfc333-task-participants`(14) +
+> `rfc230-run-liveness`(6)。三个各卡在一条不同的**机械**障碍上（分两行的 import / 模块级建库助手 /
+> 循环里每轮建库），都不是「这段逻辑没法双引擎」。
+>
+> **`47e14256a` 的 CI 红了一格**（macOS 分片 4/6），已在本批修：§5dj 把 `rfc172-dispatch-shard` 的
+> supersede 判据改打到铸行程序上之后，铸行默认取 `ulid` 包的**随机** ulid，而 seed 行用的是本文件的
+> **monotonic** 工厂——同毫秒内随机 id 可能排在 seed 行**之下**，`lt(id, 新行 id)` 一条前代也不废。
+> 本地五连跑全绿、CI 才红。处置：铸行时显式 `id: ulid()`（同一个 monotonic 工厂）。
+>
+> **故障注入触发器收成一份**：`tests/helpers/faultTrigger.ts` 的 `installAbortTrigger` /
+> `dropAbortTrigger`（两引擎 DDL 差异 + `BEFORE UPDATE OF <cols>` + 必须配 try/finally 的理由）。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 3，给那条红立守卫：`rfc359-w5-unattended-void-promise`）
 >
 > 落档 plan §5dk-b。修掉一处不够——**没人接的 `void <promise>`** 是一类形态，新守卫按 TypeChecker

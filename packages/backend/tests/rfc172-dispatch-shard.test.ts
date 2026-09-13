@@ -702,7 +702,14 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
     })
   }
 
-  /** 铸一行新的 __wg_member__ run —— supersede 闭包是它同事务内的一步。 */
+  /**
+   * 铸一行新的 __wg_member__ run —— supersede 闭包是它同事务内的一步。
+   *
+   * **id 必须显式给本文件的 monotonic `ulid()`**：supersede 的谓词是 `lt(id, 新行 id)`，
+   * 而铸行程序默认用 `ulid` 包的**随机** ulid——同毫秒内它可能排在前面几行**之下**，
+   * 于是一条前代也不废、判据在快机器上随机变红（macOS 分片 4/6 实撞）。
+   * 前面的 seed 行同样出自这个 monotonic 工厂，所以这里再取一个必然严格更大。
+   */
   async function mintMemberRun(
     db: ProviderNeutralDatabase,
     taskId: string,
@@ -710,6 +717,7 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
   ): Promise<string> {
     return await withTaskExecutionWrite(db, async (tx) =>
       createNodeRunMintParticipantInTx(tx).mint({
+        id: ulid(),
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
         iteration: 0,

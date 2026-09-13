@@ -517,14 +517,14 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 409,
+      "baseline": 406,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
       "id": "rfc359-w5-test-engine-open-migration-debt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "OPEN_MIGRATION_DEBT",
-      "baseline": 105,
+      "baseline": 102,
       "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。"
     },
     {
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "47e14256a705f4116e50744b405ca2cf19fa1eaf",
-    "contentDigest": "sha256:75c7fda67cf9f79b6f0f6b78d8edf897cbea5037c49509ec8b889c39c432fbbb",
+    "currentSnapshotSha": "35b67a83c74884975cf9dc5889a1729ddce8d72a",
+    "contentDigest": "sha256:86860c230629a74b7fe0088be2b5e5a7f533b6064348091c0120816ac461f9ba",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

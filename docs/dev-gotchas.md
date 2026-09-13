@@ -6777,3 +6777,15 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
 - **allowlist 里的条目会悄悄失效**：`rfc144-merge-state-blind-write-inventory` 曾钉着一个早已删除的
   文件，守卫照绿——因为它只在「有写点的文件」上比对计数，没写点的条目谁也不查。给这类棘轮加一条
   **逐条对齐整张表**的断言（每个 allowlist key 都必须被占用且计数吻合），退役文件留在表里当场红。
+
+- **判据依赖「新行 id 比旧行大」时，两边的 id 必须出自同一个 monotonic 工厂**。本仓测试常用
+  `monotonicFactory()` 保证 seed 顺序 = id 顺序，但生产代码（例如铸行程序 `buildNodeRunMintRecord`）
+  用的是 `ulid` 包的**随机** ulid——同毫秒内它可能排在先前那些 monotonic id **之下**。于是
+  `lt(id, 新行 id)` 这类谓词在快机器上随机失效：本地五连跑全绿，CI macOS 分片才红一次。
+  处置是在调用生产铸行入口时**显式传 id**，取本文件的 monotonic 工厂。
+
+- **故障注入触发器走 `tests/helpers/faultTrigger.ts`**（`installAbortTrigger` /
+  `dropAbortTrigger`），别再手写 `db.run(sql\`CREATE TRIGGER …\`)`：①业务客户端在 PostgreSQL 上
+  **拒绝 DDL**（`postgresql-ddl-through-business-client`），要走 `harness.executeFixtureDdl`；
+  ②两个引擎的 DDL 与 DROP 语法都不同；③**必须配 try/finally 删掉**——PG 的库是整份测试共用的真库，
+  用例之间只清表不回滚 DDL。

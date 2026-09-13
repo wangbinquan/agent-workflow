@@ -9000,3 +9000,34 @@ bun 记成「Unhandled error between tests」，**全部用例通过、进程照
 存量里已逐条核实为安全的三族写进了守卫头注释：`modules/intent/**` 的 13 条（都落到已兜住的
 `dispatchIntentTurn`）、`maintenanceWorker.processQueue`、`tokenCallAudit.record`。其余未核。
 退役一条的判据只有一个：在调用点补拒绝处理器，让扫描器不再数到它。
+
+## 5dl. 三个大文件一批收掉（409 → **406** / open 105 → **102**；49 个调用点）
+
+`rfc128-p5-d-autodispatch`（28）、`rfc333-task-participants`（14）、`rfc230-run-liveness`（6）。
+三个各卡在一条不同的机械障碍上，都不是「这段逻辑没法双引擎」：
+
+| 文件            | 障碍                                    | 处置                                                                                     |
+| --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `rfc230`        | 同一模块被 `import type` 与 `import` 分两行引入，转换器只认一条 `db/client` import | 合成一行 `import { createInMemoryDb, type DbClient }`                                      |
+| `rfc128`        | 一个模块级助手 `createProjectionDb()` 自己建库；另有一条用例在同一作用域建两个库 | 助手改成 `withProjection(db)`（库由外面给）；那条用例两半共用一个库——**隔离靠不同的 taskId，不是不同的库** |
+| `rfc333`        | 一条用例 `for (const fault of …)` 三轮、每轮自建一个库 | 拆成 `test.each` 三条——双引擎 harness 本来就每个用例给一个干净的库                          |
+
+### 故障注入触发器收成一份：`tests/helpers/faultTrigger.ts`
+
+「某张表的写入必失败，验证整笔回滚」这类判据本仓有十来处，而两个引擎的 DDL 不同：SQLite 的触发器体
+直接 `RAISE(ABORT, …)`，PostgreSQL 必须先建 plpgsql 触发器函数再挂触发器；`DROP` 也不同
+（SQLite 触发器名是库级的，PG 的挂在表上、必须带 `ON <table>`）。抄第四遍时收成
+`installAbortTrigger` / `dropAbortTrigger`，支持 `BEFORE INSERT` 与 `BEFORE UPDATE OF <cols>`。
+头注释里钉着那条**必须配 try/finally** 的理由：PG 的库是整份测试共用的真库，用例之间只清表
+**不回滚 DDL**，留下的触发器会让之后每个写那张表的用例全红（rfc120 上实撞，CI shard 5/8 才暴露）。
+
+### 一条随机红：**铸行的 id 必须显式给 monotonic ulid**
+
+§5dj 把 `rfc172-dispatch-shard` 的 supersede 判据改打在铸行程序上之后，macOS 分片 4/6 随机红一次
+（本地五连跑全绿）。原因是 supersede 的谓词是 `lt(id, 新行 id)`，而 `buildNodeRunMintRecord` 默认取
+**`ulid` 包的随机 ulid**；测试里前面的 seed 行用的是本文件的 **monotonic** 工厂。同毫秒内随机 ulid
+可能排在那些 seed 行**之下** → 一条前代也不废。处置：铸行时显式 `id: ulid()`（本文件的 monotonic
+工厂），与 seed 行同源、必然严格更大，判据从此与时序无关。
+
+**定式**：凡是判据依赖「新行 id 比旧行大」的用例，id 必须来自同一个 monotonic 工厂——
+不要让一半 id 出自 `monotonicFactory()`、另一半出自生产代码里的随机 `ulid()`。

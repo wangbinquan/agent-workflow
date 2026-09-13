@@ -15,14 +15,13 @@
 // 任何 refactor 一旦让下面任一条变红，说明「没有进程 ⇒ 已经死了」这个只对
 // agent 成立的前提又被悄悄推广到了容器行上。
 
-import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { NODE_KIND, type NodeKind, type WorkflowDefinition } from '@agent-workflow/shared'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { probeRunProcessAlive, reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { listRecoveryEventsForTask } from '../src/services/recovery'
@@ -34,7 +33,6 @@ import {
 } from '../src/services/runLiveness'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_000_000
 
 // --- fixtures ---------------------------------------------------------------
@@ -343,7 +341,10 @@ describe('RFC-230 — resolveRunLiveness', () => {
 
 // --- ④ 回收器端到端 ---------------------------------------------------------
 
-async function seedTask(db: DbClient, definition: WorkflowDefinition): Promise<string> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  definition: WorkflowDefinition,
+): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(definition) })
@@ -364,7 +365,7 @@ async function seedTask(db: DbClient, definition: WorkflowDefinition): Promise<s
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   over: { nodeId: string; status: string; pid?: number | null; containerRunId?: string | null },
 ): Promise<string> {
@@ -382,9 +383,9 @@ async function seedRun(
   return id
 }
 
-describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => {
+describeEachProvider('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', (harness) => {
   test('内层 agent 还在跑的 wrapper 不被回收（事故直接回归）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     await seedRun(db, taskId, {
@@ -408,7 +409,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
   })
 
   test('失去驱动的 wrapper（内层全终态）被正确回收，理由 inner-all-terminal', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     await seedRun(db, taskId, { nodeId: 'a', containerRunId: wrapperId, status: 'done', pid: 777 })
@@ -426,7 +427,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
   })
 
   test('driver 门：任务仍被调度器驱动时，行与任务行都不被改写', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     await seedRun(db, taskId, { nodeId: 'a', containerRunId: wrapperId, status: 'done', pid: 777 })
@@ -448,7 +449,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
   test('pre-spawn 行：走生产 activeTasks 注册表，有驱动不收 / 无驱动收', async () => {
     // RFC-349：driver ownership 是 required composition seam；这里用同一
     // required participant锁住「有驱动不收 / 无驱动收」。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, gitWrapperDef())
     const runId = await seedRun(db, taskId, { nodeId: 'solo', status: 'running' }) // 尚未写 pid
     let activeTaskId: string | undefined = taskId
@@ -478,7 +479,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
   })
 
   test('回收 run 但任务仍有活时，run 级审计事件仍然存在（AC2）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     await seedRun(db, taskId, { nodeId: 'a', containerRunId: wrapperId, status: 'done', pid: 777 })
@@ -499,7 +500,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
   })
 
   test('快照不可解析的任务被跳过（保守），不因残缺定义误杀', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, gitWrapperDef())
     await db.update(tasks).set({ workflowSnapshot: '{ not json' }).where(eq(tasks.id, taskId))
     await seedRun(db, taskId, { nodeId: 'w', status: 'running' })

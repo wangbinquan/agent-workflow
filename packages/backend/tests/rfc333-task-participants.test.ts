@@ -4,10 +4,12 @@
 
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq, inArray, sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
+import { expectDatabaseFailure } from './helpers/databaseFailure'
+import { dropAbortTrigger, installAbortTrigger } from './helpers/faultTrigger'
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -51,7 +53,6 @@ import {
   encodeLineageSlotPath,
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
-import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_788_969_900_000
 
@@ -59,63 +60,60 @@ function slotPath(taskId: string): readonly LineageSlot[] {
   return [{ stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 }]
 }
 
-function seedTask(
-  db: ReturnType<typeof createInMemoryDb>,
+async function seedTask(
+  db: ProviderNeutralDatabase,
   taskId: string,
   status: 'pending' | 'running' | 'awaiting_review' | 'awaiting_human' | 'failed' | 'interrupted',
-): void {
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: taskId,
-      workflowId: 'workflow-rfc333',
-      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      workflowVersion: 1,
-      repoPath: '/tmp/rfc333',
-      worktreePath: '/tmp/rfc333',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status,
-      inputs: '{}',
-      startedAt: NOW - 1_000,
-      executionLineageId: taskId,
-      lineageSlotPathJson: encodeLineageSlotPath(slotPath(taskId)),
-    })
-    .run()
+): Promise<void> {
+  await db.insert(tasks).values({
+    id: taskId,
+    name: taskId,
+    workflowId: 'workflow-rfc333',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    workflowVersion: 1,
+    repoPath: '/tmp/rfc333',
+    worktreePath: '/tmp/rfc333',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status,
+    inputs: '{}',
+    startedAt: NOW - 1_000,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath(slotPath(taskId)),
+  })
 }
 
-function seedDecisionNodes(db: ReturnType<typeof createInMemoryDb>, taskId: string) {
+async function seedDecisionNodes(db: ProviderNeutralDatabase, taskId: string) {
   const sourceNodeRunId = `${taskId}-source`
   const rerunNodeRunId = `${taskId}-rerun`
-  db.insert(nodeRuns)
-    .values([
-      {
-        id: sourceNodeRunId,
-        taskId,
-        nodeId: 'writer',
-        status: 'canceled',
-        retryIndex: 0,
-        iteration: 0,
-        reviewIteration: 0,
-        preSnapshot: 'a'.repeat(40),
-        rerunCause: null,
-        supersededByReview: 'rejected',
-        rolledBack: false,
-        operationGeneration: 0,
-      },
-      {
-        id: rerunNodeRunId,
-        taskId,
-        nodeId: 'writer',
-        status: 'pending',
-        retryIndex: 1,
-        iteration: 0,
-        reviewIteration: 0,
-        rerunCause: 'review-reject',
-        operationGeneration: 0,
-      },
-    ])
-    .run()
+  await db.insert(nodeRuns).values([
+    {
+      id: sourceNodeRunId,
+      taskId,
+      nodeId: 'writer',
+      status: 'canceled',
+      retryIndex: 0,
+      iteration: 0,
+      reviewIteration: 0,
+      preSnapshot: 'a'.repeat(40),
+      rerunCause: null,
+      supersededByReview: 'rejected',
+      rolledBack: false,
+      operationGeneration: 0,
+    },
+    {
+      id: rerunNodeRunId,
+      taskId,
+      nodeId: 'writer',
+      status: 'pending',
+      retryIndex: 1,
+      iteration: 0,
+      reviewIteration: 0,
+      rerunCause: 'review-reject',
+      operationGeneration: 0,
+    },
+  ])
+
   return { sourceNodeRunId, rerunNodeRunId }
 }
 
@@ -200,22 +198,17 @@ function settleShape(settled: {
   return { consumed: settled.operationIds.length, parked: settled.parked }
 }
 
-async function prepareOpenOperation(input: {
-  db: ReturnType<typeof createInMemoryDb>
-  taskId: string
-}) {
+async function prepareOpenOperation(input: { db: ProviderNeutralDatabase; taskId: string }) {
   const askingNodeRunId = `${input.taskId}-asking`
-  input.db
-    .insert(nodeRuns)
-    .values({
-      id: askingNodeRunId,
-      taskId: input.taskId,
-      nodeId: 'writer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    .run()
+  await input.db.insert(nodeRuns).values({
+    id: askingNodeRunId,
+    taskId: input.taskId,
+    nodeId: 'writer',
+    status: 'done',
+    retryIndex: 0,
+    iteration: 0,
+  })
+
   const result = await new ClarifyGateOpenPreparation(
     new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
     new DatabaseClarifyQuestionSnapshotReader(input.db),
@@ -259,11 +252,11 @@ function submitIntent(
   return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
 }
 
-describe('RFC-333 T5 TaskParkTx', () => {
+describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
   test('consumes the prepared gate and parks task + lifecycle event in one owned transaction', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-park'
-    seedTask(db, taskId, 'running')
+    await seedTask(db, taskId, 'running')
     const module = createTaskExecutionTestModule('daemon-rfc333-park')
     const intent = await submitIntent(db, {
       intentId: 'intent-rfc333-park',
@@ -301,29 +294,31 @@ describe('RFC-333 T5 TaskParkTx', () => {
     })
     // 停靠一次要发两条已提交事件：任务生命周期一条 + collaboration 开门一条。
     expect(parked.eventRefs).toHaveLength(2)
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 2,
     })
     expect(
-      db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.id, prepared.operationId))
-        .get(),
+      (
+        await db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.id, prepared.operationId))
+      )[0],
     ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
     expect(
-      db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)),
     ).toHaveLength(1)
     expect(
-      db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
+      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
     ).toHaveLength(1)
     expect(
-      db
-        .select()
-        .from(committedEvents)
-        .where(eq(committedEvents.id, `task-lifecycle:${taskId}:2`))
-        .get(),
+      (
+        await db
+          .select()
+          .from(committedEvents)
+          .where(eq(committedEvents.id, `task-lifecycle:${taskId}:2`))
+      )[0],
     ).toMatchObject({
       producer: 'task-execution',
       family: 'task-lifecycle',
@@ -333,9 +328,9 @@ describe('RFC-333 T5 TaskParkTx', () => {
   })
 
   test('task park failure rolls collaboration consumption back to prepared', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-park-fault'
-    seedTask(db, taskId, 'running')
+    await seedTask(db, taskId, 'running')
     const module = createTaskExecutionTestModule('daemon-rfc333-park-fault')
     const intent = await submitIntent(db, {
       request: {
@@ -358,32 +353,40 @@ describe('RFC-333 T5 TaskParkTx', () => {
     module.claimGate.leave(claimed.permit)
     const opening = await prepareOpenOperation({ db, taskId })
     const prepared = opening.prepared
-    db.run(sql`
-      CREATE TRIGGER rfc333_fail_task_park
-      BEFORE UPDATE OF status ON tasks
-      BEGIN SELECT RAISE(ABORT, 'rfc333-task-park-fault'); END
-    `)
+    const trigger = {
+      name: 'rfc333_fail_task_park',
+      table: 'tasks',
+      error: 'rfc333-task-park-fault',
+      event: 'update' as const,
+      columns: ['status'],
+    }
+    await installAbortTrigger(harness, trigger)
 
-    await expect(
-      new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
-        prepared,
-        token: claimed.token,
-        now: NOW + 2,
-      }),
-    ).rejects.toThrow()
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
-    expect(
-      db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.id, prepared.operationId))
-        .get()?.state,
-    ).toBe('prepared')
+    try {
+      await expect(
+        new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
+          prepared,
+          token: claimed.token,
+          now: NOW + 2,
+        }),
+      ).rejects.toThrow()
+      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
+      expect(
+        (
+          await db
+            .select()
+            .from(collaborationGateOperations)
+            .where(eq(collaborationGateOperations.id, prepared.operationId))
+        )[0]?.state,
+      ).toBe('prepared')
+    } finally {
+      await dropAbortTrigger(harness, trigger)
+    }
   })
 })
 
-describe('RFC-333 T7 manual-question durable park obligation', () => {
-  const createManual = (db: ReturnType<typeof createInMemoryDb>, taskId: string) =>
+describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harness) => {
+  const createManual = (db: ProviderNeutralDatabase, taskId: string) =>
     createManualQuestionOpen(createCollaborationCommandContext({ db }), {
       taskId,
       title: 'Investigate this edge case',
@@ -402,14 +405,14 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     'interrupted',
   ] as const) {
     test(`create on ${status} preserves task state and records the exact obligation`, async () => {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const taskId = `task-333-manual-${status}`
-      seedTask(db, taskId, status)
+      await seedTask(db, taskId, status)
       const created = await createManual(db, taskId)
 
-      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe(status)
+      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(status)
       expect(
-        db.select().from(taskQuestions).where(eq(taskQuestions.id, created.questionId)).get(),
+        (await db.select().from(taskQuestions).where(eq(taskQuestions.id, created.questionId)))[0],
       ).toMatchObject({
         sourceKind: 'manual',
         roleKind: 'designer',
@@ -417,11 +420,12 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
         overrideTargetNodeId: 'fixer',
       })
       expect(
-        db
-          .select()
-          .from(collaborationGateOperations)
-          .where(eq(collaborationGateOperations.id, created.operationId))
-          .get(),
+        (
+          await db
+            .select()
+            .from(collaborationGateOperations)
+            .where(eq(collaborationGateOperations.id, created.operationId))
+        )[0],
       ).toMatchObject({
         state: 'prepared',
         operationKind: 'manual-question-open',
@@ -431,31 +435,35 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
   }
 
   test('question-row failure rolls the operation insert back in the same transaction', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-manual-create-fault'
-    seedTask(db, taskId, 'running')
-    db.run(sql`
-      CREATE TRIGGER rfc333_fail_manual_question
-      BEFORE INSERT ON task_questions
-      BEGIN SELECT RAISE(ABORT, 'rfc333-manual-question-fault'); END
-    `)
-    await expect(createManual(db, taskId)).rejects.toThrow('rfc333-manual-question-fault')
-    expect(db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all()).toEqual(
-      [],
-    )
-    expect(
-      db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.taskId, taskId))
-        .all(),
-    ).toEqual([])
+    await seedTask(db, taskId, 'running')
+    const trigger = {
+      name: 'rfc333_fail_manual_question',
+      table: 'task_questions',
+      error: 'rfc333-manual-question-fault',
+    }
+    await installAbortTrigger(harness, trigger)
+    try {
+      await expectDatabaseFailure(() => createManual(db, taskId), 'rfc333-manual-question-fault')
+      expect(await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))).toEqual(
+        [],
+      )
+      expect(
+        await db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.taskId, taskId)),
+      ).toEqual([])
+    } finally {
+      await dropAbortTrigger(harness, trigger)
+    }
   })
 
   test('HTTP-side create does not steal the active owner; that owner parks at settle', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-manual-owner-settle'
-    seedTask(db, taskId, 'running')
+    await seedTask(db, taskId, 'running')
     const module = createTaskExecutionTestModule('daemon-rfc333-manual')
     const intent = await submitIntent(db, {
       request: {
@@ -476,124 +484,127 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     })
     const claimed = await module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
-    const ownerBefore = db
-      .select()
-      .from(taskExecutionOwners)
-      .where(eq(taskExecutionOwners.taskId, taskId))
-      .get()!
+    const ownerBefore = (
+      await db.select().from(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
+    )[0]!
 
     const created = await createManual(db, taskId)
-    const ownerAfterCreate = db
-      .select()
-      .from(taskExecutionOwners)
-      .where(eq(taskExecutionOwners.taskId, taskId))
-      .get()!
+    const ownerAfterCreate = (
+      await db.select().from(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
+    )[0]!
     expect(ownerAfterCreate).toMatchObject({
       ownerId: ownerBefore.ownerId,
       epoch: ownerBefore.epoch,
       revision: ownerBefore.revision,
       state: 'claimed',
     })
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
       .settleManualQuestionParks({ taskId, token: claimed.token, now: NOW + 20 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 2,
     })
     expect(
-      db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.id, created.operationId))
-        .get(),
+      (
+        await db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.id, created.operationId))
+      )[0],
     ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
   })
 
   test('a dispatched question completes its stale obligation without parking', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-manual-dispatched-before-settle'
-    seedTask(db, taskId, 'running')
+    await seedTask(db, taskId, 'running')
     const created = await createManual(db, taskId)
-    db.update(taskQuestions)
+    await db
+      .update(taskQuestions)
       .set({ dispatchedAt: NOW + 11, dispatchedBy: 'user-rfc333' })
       .where(eq(taskQuestions.id, created.questionId))
-      .run()
+
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: false })
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
     expect(
-      db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.id, created.operationId))
-        .get()?.state,
+      (
+        await db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.id, created.operationId))
+      )[0]?.state,
     ).toBe('completed')
   })
 
   test('an auto-dispatch-deferred question yields its park obligation to the runnable predecessor', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-manual-auto-dispatch-deferred'
-    seedTask(db, taskId, 'running')
+    await seedTask(db, taskId, 'running')
     const created = await createManual(db, taskId)
     // Regression: a mixed-cause "dispatch all" atomically mints the first
     // handler rerun and marks the lower-priority manual question for automatic
     // dispatch. Parking here, before the DAG can run that predecessor, leaves
     // both obligations waiting on each other forever.
-    db.update(taskQuestions)
+    await db
+      .update(taskQuestions)
       .set({ autoDispatchDeferredAt: NOW + 11 })
       .where(eq(taskQuestions.id, created.questionId))
-      .run()
+
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
 
     expect(settled).toEqual({ consumed: 1, parked: false })
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
     expect(
-      db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.id, created.operationId))
-        .get()?.state,
+      (
+        await db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.id, created.operationId))
+      )[0]?.state,
     ).toBe('completed')
   })
 
   test('awaiting-human obligation survives release until a later owner settle', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-manual-revision-rebase'
-    seedTask(db, taskId, 'awaiting_human')
+    await seedTask(db, taskId, 'awaiting_human')
     const created = await createManual(db, taskId)
-    db.update(tasks)
+    await db
+      .update(tasks)
       .set({ status: 'running', lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 3` })
       .where(eq(tasks.id, taskId))
-      .run()
+
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
       .settleManualQuestionParks({ taskId, now: NOW + 30 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 5,
     })
     expect(
-      db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.id, created.operationId))
-        .get()?.state,
+      (
+        await db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.id, created.operationId))
+      )[0]?.state,
     ).toBe('completed')
   })
 
   test('final done CAS rolls back when a question lands before its in-tx settle check', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-manual-done-fence'
-    seedTask(db, taskId, 'running')
+    await seedTask(db, taskId, 'running')
     await createManual(db, taskId)
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
@@ -605,31 +616,31 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       now: NOW + 40,
     })
     expect(outcome).toEqual({ kind: 'manual-question-pending' })
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
   })
 })
 
-describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
+describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
   test('commits task event + exactly one intent + linked rollback effect', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-decision'
-    seedTask(db, taskId, 'awaiting_review')
-    const ids = seedDecisionNodes(db, taskId)
+    await seedTask(db, taskId, 'awaiting_review')
+    const ids = await seedDecisionNodes(db, taskId)
     const module = createTaskExecutionTestModule('daemon-rfc333-decision')
     const receipt = await databaseSessionFor(db).transaction(
       async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
     )
 
     expect(receipt.taskRevision).toBe(2)
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
       status: 'pending',
       lifecycleEventRevision: 2,
     })
-    const intents = db
+    const intents = await db
       .select()
       .from(taskExecutionIntents)
       .where(eq(taskExecutionIntents.taskId, taskId))
-      .all()
+
     expect(intents).toHaveLength(1)
     expect(intents[0]).toMatchObject({
       id: receipt.continuationRef,
@@ -642,7 +653,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       operationId: `operation:${taskId}`,
       workspaceRollbackPlan: { planDigest: 'b'.repeat(64) },
     })
-    expect(db.select().from(taskExecutionEffects).all()).toEqual([
+    expect(await db.select().from(taskExecutionEffects)).toEqual([
       expect.objectContaining({
         taskId,
         currentIntentId: receipt.continuationRef,
@@ -653,11 +664,12 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       }),
     ])
     expect(
-      db
-        .select()
-        .from(committedEvents)
-        .where(eq(committedEvents.id, `task-lifecycle:${taskId}:2`))
-        .get(),
+      (
+        await db
+          .select()
+          .from(committedEvents)
+          .where(eq(committedEvents.id, `task-lifecycle:${taskId}:2`))
+      )[0],
     ).toMatchObject({ aggregateId: taskId, eventType: 'task.lifecycle-transitioned.v1' })
 
     await expect(
@@ -665,14 +677,14 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
       ),
     ).rejects.toThrow()
-    expect(db.select().from(taskExecutionIntents).all()).toHaveLength(1)
+    expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
   })
 
   test('admits one gate successor behind a claimed owner while every other admission stays exclusive', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-decision-handoff'
-    seedTask(db, taskId, 'awaiting_review')
-    const ids = seedDecisionNodes(db, taskId)
+    await seedTask(db, taskId, 'awaiting_review')
+    const ids = await seedDecisionNodes(db, taskId)
     const module = createTaskExecutionTestModule('daemon-rfc333-decision-handoff')
     const launch = await submitIntent(db, {
       intentId: 'intent-rfc333-handoff-owner',
@@ -719,11 +731,11 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     const decision = await databaseSessionFor(db).transaction(
       async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
     )
-    const active = db
+    const active = await db
       .select({ id: taskExecutionIntents.id, state: taskExecutionIntents.state })
       .from(taskExecutionIntents)
       .where(inArray(taskExecutionIntents.state, ['pending', 'claimed']))
-      .all()
+
     expect(active).toHaveLength(2)
     expect(active).toEqual(
       expect.arrayContaining([
@@ -755,67 +767,77 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     ).rejects.toEqual(expect.objectContaining({ code: 'task-continuation-conflict' }))
   })
 
-  test('projection, lifecycle-event, and intent faults each roll prior domain writes back', async () => {
-    for (const fault of ['projection', 'event', 'intent'] as const) {
-      const db = createInMemoryDb(MIGRATIONS)
+  // RFC-359：原本是一个 test 里 `for (const fault of …)` 三轮、每轮自建一个库。拆成
+  // `test.each` 三条——双引擎 harness 每个用例给一个干净的库，循环内自建库就没有位置了。
+  // 故障注入的触发器两个引擎写法不同（SQLite 直接 RAISE(ABORT)，PostgreSQL 要 plpgsql 函数），
+  // 且**必须在 finally 里删掉**：PG 的库是本文件共用的真库，用例之间只清表不回滚 DDL。
+  test.each(['projection', 'event', 'intent'] as const)(
+    '%s fault rolls prior domain writes back',
+    async (fault) => {
+      const db = harness.db
       const taskId = `task-333-${fault}-fault`
-      seedTask(db, taskId, 'awaiting_review')
-      const ids = seedDecisionNodes(db, taskId)
+      await seedTask(db, taskId, 'awaiting_review')
+      const ids = await seedDecisionNodes(db, taskId)
       const module = createTaskExecutionTestModule(`daemon-rfc333-${fault}`)
       const oldFence = await projectionFence(db, [ids.sourceNodeRunId, ids.rerunNodeRunId])
-      if (fault === 'event') {
-        db.run(sql`
-          CREATE TRIGGER rfc333_fail_lifecycle_event
-          BEFORE INSERT ON committed_events
-          BEGIN SELECT RAISE(ABORT, 'rfc333-event-fault'); END
-        `)
-      }
-      if (fault === 'intent') {
-        db.run(sql`
-          CREATE TRIGGER rfc333_fail_continuation_intent
-          BEFORE INSERT ON task_execution_intents
-          BEGIN SELECT RAISE(ABORT, 'rfc333-intent-fault'); END
-        `)
-      }
+      const trigger =
+        fault === 'event'
+          ? {
+              name: 'rfc333_fail_lifecycle_event',
+              table: 'committed_events',
+              error: 'rfc333-event-fault',
+            }
+          : fault === 'intent'
+            ? {
+                name: 'rfc333_fail_continuation_intent',
+                table: 'task_execution_intents',
+                error: 'rfc333-intent-fault',
+              }
+            : null
+      if (trigger !== null) await installAbortTrigger(harness, trigger)
 
-      await expect(
-        databaseSessionFor(db).transaction(async (tx) => {
-          await tx
-            .update(nodeRuns)
-            .set({ reviewIteration: 1 })
-            .where(eq(nodeRuns.id, ids.sourceNodeRunId))
-          const fence =
-            fault === 'projection'
-              ? oldFence
-              : await projectionFence(tx, [ids.sourceNodeRunId, ids.rerunNodeRunId])
-          return await submitDecision(tx, {
-            taskId,
-            ...ids,
-            module,
-            expectedFence: fence,
-            rollback: false,
-          })
-        }),
-      ).rejects.toThrow()
+      try {
+        await expect(
+          databaseSessionFor(db).transaction(async (tx) => {
+            await tx
+              .update(nodeRuns)
+              .set({ reviewIteration: 1 })
+              .where(eq(nodeRuns.id, ids.sourceNodeRunId))
+            const fence =
+              fault === 'projection'
+                ? oldFence
+                : await projectionFence(tx, [ids.sourceNodeRunId, ids.rerunNodeRunId])
+            return await submitDecision(tx, {
+              taskId,
+              ...ids,
+              module,
+              expectedFence: fence,
+              rollback: false,
+            })
+          }),
+        ).rejects.toThrow()
 
-      expect(
-        db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)).get()
-          ?.reviewIteration,
-      ).toBe(0)
-      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
-        status: 'awaiting_review',
-        lifecycleEventRevision: 1,
-      })
-      expect(db.select().from(taskExecutionIntents).all()).toHaveLength(0)
-      expect(db.select().from(committedEvents).all()).toHaveLength(0)
-    }
-  })
+        expect(
+          (await db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)))[0]
+            ?.reviewIteration,
+        ).toBe(0)
+        expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+          status: 'awaiting_review',
+          lifecycleEventRevision: 1,
+        })
+        expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
+        expect(await db.select().from(committedEvents)).toHaveLength(0)
+      } finally {
+        if (trigger !== null) await dropAbortTrigger(harness, trigger)
+      }
+    },
+  )
 
   test('pre-drive settles the linked effect and projection exactly once before rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-pre-drive'
-    seedTask(db, taskId, 'awaiting_review')
-    const ids = seedDecisionNodes(db, taskId)
+    await seedTask(db, taskId, 'awaiting_review')
+    const ids = await seedDecisionNodes(db, taskId)
     const module = createTaskExecutionTestModule('daemon-rfc333-pre-drive')
     const decision = await databaseSessionFor(db).transaction(
       async (tx) => await submitDecision(tx, { taskId, ...ids, module }),
@@ -871,23 +893,23 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
     expect(events).toEqual([`load:operation:${taskId}`, `act:operation:${taskId}`])
-    expect(db.select().from(taskExecutionEffects).get()).toMatchObject({
+    expect((await db.select().from(taskExecutionEffects))[0]).toMatchObject({
       state: 'succeeded',
       lastAttemptNo: 1,
     })
-    expect(db.select().from(taskExecutionEffectAttempts).get()).toMatchObject({
+    expect((await db.select().from(taskExecutionEffectAttempts))[0]).toMatchObject({
       state: 'succeeded',
       applicationEvidence: 'applied',
     })
     expect(
-      db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)).get()?.rolledBack,
+      (await db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)))[0]?.rolledBack,
     ).toBe(true)
   })
 
   test('pre-drive preserves the exact legacy task-gate resume variant without weakening RFC-333 payloads', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = 'task-333-legacy-task-gate'
-    seedTask(db, taskId, 'pending')
+    await seedTask(db, taskId, 'pending')
     const module = createTaskExecutionTestModule('daemon-rfc333-legacy-task-gate')
     const submitted = await submitIntent(db, {
       intentId: 'intent-rfc333-legacy-task-gate',
@@ -937,10 +959,11 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
 
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
 
-    db.update(taskExecutionIntents)
+    await db
+      .update(taskExecutionIntents)
       .set({ payloadJson: '{"event":"resume","extra":true,"v":1}' })
       .where(eq(taskExecutionIntents.id, submitted.intentId))
-      .run()
+
     await expect(step.run(context)).rejects.toThrow('invalid-human-gate-continuation-payload')
   })
 })
