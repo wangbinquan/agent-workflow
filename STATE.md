@@ -2,6 +2,22 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续，`rfc311-task-archive` 一次干掉 5 条；总账 **412 → 411**，open **107 → 106**）
+>
+> 落档 plan §5di。**`63030aaea` 的 CI 已全绿**——十二片分片 + 两个分片数守卫 + 审计最终一致性判据全过。
+>
+> 这一刀踩的新坑与 §5dh 是同族、方向相反：上次是「别把**故意保留的原生块**包进来」，
+> 这次是「别把**已经双引擎的块**包进来」——`describe('手动批量归档入口与审计行')` 体内**嵌着**
+> 一个 `describeEachProvider('ordinary sweep audit persistence')`。整块一包就成了
+> **provider 套 provider**，两套 harness / 两个 PG 库，内层用例以
+> `… [postgresql] > application lifetime > … [postgresql]` 的双重身份全挂。
+>
+> 处置：内层块**提到顶层**当兄弟；随之暴露第二跳——它引用的 `auditRows` 助手定义在外层 describe 体里，
+> 提出来就没作用域了，得**上提到模块级**。
+>
+> **定式（已进 gotchas）**：包一个 describe 之前先扫**整个子树**有没有 `describeEachProvider`；
+> 有就先提内层 + 提它用到的助手，再包外层。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15，HTTP 桶第四、五迁；总账 **413 → 412**，open **108 → 107**）
 >
 > 落档 plan §5dh。

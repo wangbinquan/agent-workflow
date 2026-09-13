@@ -6742,3 +6742,9 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   「**故意保留的原生 SQLite 对照块**」与「已迁的 `describeEachProvider` 块」并存
   （`workflows.test.ts` 的 `SQLite list compatibility` + `CRUD` 就是），**一半原生一半双引擎是设计**。
   盲目把整个文件包进作用域会把那个有意的对照删掉——那不是收敛，是丢覆盖。
+
+- **把一个 `describe` 包进 provider 作用域之前，先扫它的整个子树里有没有 `describeEachProvider`**。
+  有的话必须先把内层块**提到顶层**当兄弟——provider 块套 provider 块会开两套 harness
+  （两个 PostgreSQL 库），内层用例会以 `… [postgresql] > application lifetime > … [postgresql]`
+  这种双重身份全挂。提出来之后还要检查**它引用的助手是不是定义在外层 describe 体里**，
+  是的话一并上提到模块级。

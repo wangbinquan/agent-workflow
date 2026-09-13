@@ -8848,3 +8848,26 @@ await（给每个 token 请求加一次写往返）还是改成带确认的后�
 只迁后者。**规律**：一个文件的账本条目数 > 1 时，先看它们是不是**归属不同的块**——
 盲目把整文件包进作用域会把「故意保留的原生对照」也一起吃掉，那是把有意的单引擎对照删掉，
 不是收敛。
+
+## 5di. `rfc311-task-archive`：**别把嵌在里面的 provider 块一起包了**（411 / open 106）
+
+这个文件一次干掉 5 个账本条目（手动归档入口那 5 条用例各建一次库），但踩了一个新坑，
+与 §5dh「一个文件里多种块并存」是同一族、方向相反：
+
+上一次是**别把故意保留的原生块包进来**；这一次是**别把已经双引擎的块包进来**——
+`describe('RFC-311 T19 — 手动批量归档入口与审计行')` 体内**嵌着**一个
+`describeEachProvider('ordinary sweep audit persistence')`。把外层整块包成
+`describeEachProviderHttpApplication` 之后，那个内层块就成了 **provider 块套 provider 块**，
+两套 harness / 两个 PG 库，直接炸（实测：内层用例在 `[postgresql] > application lifetime >
+… [postgresql]` 这种双重身份下全挂）。
+
+处置是把内层块**提到顶层**当兄弟。这又暴露出第二跳问题：它引用了定义在外层 describe 体里的
+`auditRows` 助手——提出来之后作用域没了。把该助手**上提到模块级**即可（它本来就是一行中立查询）。
+
+**定式**：包一个 describe 之前，先扫它的**整个子树**里有没有 `describeEachProvider`。
+有就先把内层提到顶层、并把它用到的助手一并上提，再包外层。
+
+配置覆盖同 §5de：那条「显式关掉自动归档、只留保留期」的用例原本往自建 home 写 `config.json`，
+迁到作用域后改走 `open({ config: { taskArchive: { enabled: false, retentionDays: 90 } } })`
+——应用读的是作用域现建的 configPath。而归档产物（`archive/tasks/<id>/manifest.json`）
+仍要按作用域交出的 `opened.appHome` 去断言。

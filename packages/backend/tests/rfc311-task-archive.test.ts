@@ -1,5 +1,6 @@
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 // RFC-311 T19 — 终态任务树归档出库(proposal §5 C1,用户拍板「归档到归档目录、
 // 从表里删除、界面不可见」)。
 //
@@ -22,7 +23,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { count, eq } from 'drizzle-orm'
 
 import type { Hono } from 'hono'
@@ -30,7 +31,6 @@ import type { Hono } from 'hono'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import * as schema from '../src/db/schema'
 import { cascadeClosure, cascadeEdges, closureOverEdges } from './architecture/cascadeClosure'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   nodeRunEvents,
   nodeRuns,
@@ -48,7 +48,6 @@ import {
   ARCHIVE_EXEMPT_TABLES,
   createDrizzleTaskArchiveMaintenanceCommand,
 } from '../src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand'
-import { createApp } from '../src/server'
 import {
   archiveTaskTree,
   findArchivableTrees,
@@ -57,7 +56,6 @@ import {
 
 const TOKEN = 'a'.repeat(64)
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 
@@ -299,11 +297,12 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     ])
     expect(manifest.digest).toMatch(/^[a-f0-9]{64}$/)
 
-    const durableClaim = await db
-      .select()
-      .from(schema.taskExecutionMaintenanceClaims)
-      .where(eq(schema.taskExecutionMaintenanceClaims.id, manifest.terminalMaintenance.claim.id))
-      .get()
+    const durableClaim = (
+      await db
+        .select()
+        .from(schema.taskExecutionMaintenanceClaims)
+        .where(eq(schema.taskExecutionMaintenanceClaims.id, manifest.terminalMaintenance.claim.id))
+    )[0]
     expect(durableClaim?.state).toBe('completed')
 
     const taskLines = readFileSync(join(dir, 'db', 'tasks.jsonl'), 'utf-8')
@@ -396,174 +395,173 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
 // design §7.1 的第二半:「另有 admin API + 设置页维护区『按条件批量归档』手动入口
 // (审计行记录操作者与数量)」。审计行是这条路径唯一的事后证据——归档把任务行删了,
 // 之后除了 task_archive_audit,库里再没有任何地方能回答「谁在什么时候删了什么」。
-describe('RFC-311 T19 — 手动批量归档入口与审计行', () => {
-  async function auditRows(db: ProviderNeutralDatabase) {
-    return db.select().from(taskArchiveAudit)
-  }
+async function auditRows(db: ProviderNeutralDatabase) {
+  return db.select().from(taskArchiveAudit)
+}
 
-  function appWith(db: DbClient, home: string): Hono {
-    mkdirSync(home, { recursive: true })
-    process.env.AGENT_WORKFLOW_HOME = home
-    return createApp({
-      token: TOKEN,
-      configPath: join(home, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 17,
-      db,
-    })
-  }
-
-  async function post(app: Hono, body: unknown): Promise<Response> {
-    return app.request('/api/tasks/archive', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  }
-
-  test('dry-run 是默认:给出预览,但一行不删、一条审计都不写', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-manual-'))
-    const app = appWith(db, home)
-    await seedBase(db)
-    await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-    await addTask(db, {
-      id: 'kid',
-      status: 'done',
-      finishedAt: NOW - 299 * DAY,
-      parentTaskId: 'old',
-    })
-
-    const res = await post(app, { retentionDays: 90 })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { dryRun: boolean; treeCount: number; taskCount: number }
-    expect(body.dryRun).toBe(true)
-    expect(body.treeCount).toBe(1)
-    // 单位是整棵树:root + 后代都算进去。
-    expect(body.taskCount).toBe(2)
-    expect(await taskCount(db)).toBe(2)
-    expect(await auditRows(db)).toHaveLength(0)
-  })
-
-  test('dryRun:false 才真删,并留下带操作者与数量的审计行', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-manual-'))
-    const app = appWith(db, home)
-    await seedBase(db)
-    await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-    await addTask(db, {
-      id: 'kid',
-      status: 'done',
-      finishedAt: NOW - 299 * DAY,
-      parentTaskId: 'old',
-    })
-
-    const res = await post(app, { retentionDays: 90, dryRun: false })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { dryRun: boolean; treeCount: number; taskCount: number }
-    expect(body.dryRun).toBe(false)
-    expect(body.treeCount).toBe(1)
-    expect(body.taskCount).toBe(2)
-    expect(await taskCount(db)).toBe(0)
-    expect(existsSync(join(home, 'archive', 'tasks', 'old', 'manifest.json'))).toBe(true)
-
-    const audit = await auditRows(db)
-    expect(audit).toHaveLength(1)
-    expect(audit[0]!.source).toBe('manual')
-    expect(audit[0]!.actorUserId).toBe(SYSTEM_USER_ID)
-    expect(audit[0]!.treeCount).toBe(1)
-    expect(audit[0]!.taskCount).toBe(2)
-    expect(audit[0]!.retentionDays).toBe(90)
-    expect(JSON.parse(audit[0]!.rootTaskIdsJson)).toEqual(['old'])
-  })
-
-  test('手动入口在自动开关关着时照样可用(它本来就是给关着的部署用的)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-manual-'))
-    const app = appWith(db, home)
-    // 配置里显式关掉自动归档,只留保留期。
-    writeFileSync(
-      join(home, 'config.json'),
-      JSON.stringify({ taskArchive: { enabled: false, retentionDays: 90 } }),
-    )
-    await seedBase(db)
-    await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-
-    // 不传 retentionDays 时回落到配置值。
-    const res = await post(app, { dryRun: false })
-    expect(res.status).toBe(200)
-    expect(await taskCount(db)).toBe(0)
-    expect((await auditRows(db))[0]!.retentionDays).toBe(90)
-  })
-
-  test('载荷不合法时 422 task-archive-invalid,而不是拿默认值蒙混执行', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-manual-'))
-    const app = appWith(db, home)
-    await seedBase(db)
-    await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-
-    // 天数不是整数 / 棵数越界 / dryRun 不是布尔——三种都必须拒绝:这条路径的
-    // 「宽容解析」等于拿一个没人要求过的参数去做不可逆删除。
-    for (const bad of [
-      { retentionDays: 1.5, dryRun: false },
-      { retentionDays: 90, maxTrees: 0, dryRun: false },
-      { retentionDays: 90, dryRun: 'yes' },
-    ]) {
-      const res = await post(app, bad)
-      expect(res.status).toBe(422)
-      expect(((await res.json()) as { code: string }).code).toBe('task-archive-invalid')
+describeEachProviderHttpApplication(
+  'RFC-311 T19 — 手动批量归档入口与审计行',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 17,
+    tempPrefix: 'aw-rfc311-manual-',
+  },
+  (scope) => {
+    /**
+     * RFC-359 AC-6：app home 与 `AGENT_WORKFLOW_HOME` 归作用域（`open()` 现建、afterEach 删）。
+     * 用例仍然要拿到那个 home——归档产物（`archive/tasks/<id>/manifest.json`）就落在它下面。
+     * 要改配置的用例走 `open({ config })`：应用读的是作用域现建的 configPath，
+     * 自己往别处写 config.json 会被整份绕开。
+     */
+    async function appWith(
+      config?: Readonly<Record<string, unknown>>,
+    ): Promise<{ db: ProviderNeutralDatabase; app: Hono; home: string }> {
+      const opened = await scope.open(config === undefined ? undefined : { config })
+      return { db: scope.harness.db, app: opened.app, home: opened.appHome }
     }
-    expect(await taskCount(db)).toBe(1)
-    expect(await auditRows(db)).toHaveLength(0)
-  })
 
-  test('配置成 0(=不归档)时手动入口拒绝执行,而不是把 0 天当成「全归档」', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-manual-'))
-    const app = appWith(db, home)
-    // retentionDays=0 在配置语义里是「关」。若手动入口把它当 cutoff=now 用,
-    // 这台机器上**每一棵终态树**都会被立刻不可逆地删掉。
-    writeFileSync(
-      join(home, 'config.json'),
-      JSON.stringify({ taskArchive: { enabled: false, retentionDays: 0 } }),
-    )
-    await seedBase(db)
-    await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1_000 })
+    async function post(app: Hono, body: unknown): Promise<Response> {
+      return app.request('/api/tasks/archive', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    }
 
-    const res = await post(app, { dryRun: false })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('task-archive-retention-unset')
-    expect(await taskCount(db)).toBe(1)
-    expect(await auditRows(db)).toHaveLength(0)
-  })
-  describeEachProvider('ordinary sweep audit persistence', (harness) => {
-    test('sweeper 的审计行归给系统(无操作者),且空转不写行', async () => {
-      const db = harness.db
-      const addTask = createProviderTaskSeed()
-      const dirs = tmpDirs()
+    test('dry-run 是默认:给出预览,但一行不删、一条审计都不写', async () => {
+      const { db, app } = await appWith()
       await seedBase(db)
-      // 还在保留期内 ⇒ 这一拍什么都没归档 ⇒ 不该留下噪音审计行。
-      await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1 * DAY })
-      await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
-      expect(await auditRows(db)).toHaveLength(0)
-
       await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-      await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+      await addTask(db, {
+        id: 'kid',
+        status: 'done',
+        finishedAt: NOW - 299 * DAY,
+        parentTaskId: 'old',
+      })
+
+      const res = await post(app, { retentionDays: 90 })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { dryRun: boolean; treeCount: number; taskCount: number }
+      expect(body.dryRun).toBe(true)
+      expect(body.treeCount).toBe(1)
+      // 单位是整棵树:root + 后代都算进去。
+      expect(body.taskCount).toBe(2)
+      expect(await taskCount(db)).toBe(2)
+      expect(await auditRows(db)).toHaveLength(0)
+    })
+
+    test('dryRun:false 才真删,并留下带操作者与数量的审计行', async () => {
+      const { db, app, home } = await appWith()
+      await seedBase(db)
+      await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
+      await addTask(db, {
+        id: 'kid',
+        status: 'done',
+        finishedAt: NOW - 299 * DAY,
+        parentTaskId: 'old',
+      })
+
+      const res = await post(app, { retentionDays: 90, dryRun: false })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { dryRun: boolean; treeCount: number; taskCount: number }
+      expect(body.dryRun).toBe(false)
+      expect(body.treeCount).toBe(1)
+      expect(body.taskCount).toBe(2)
+      expect(await taskCount(db)).toBe(0)
+      expect(existsSync(join(home, 'archive', 'tasks', 'old', 'manifest.json'))).toBe(true)
+
       const audit = await auditRows(db)
       expect(audit).toHaveLength(1)
-      expect(audit[0]!.source).toBe('sweep')
-      expect(audit[0]!.actorUserId).toBeNull()
+      expect(audit[0]!.source).toBe('manual')
+      expect(audit[0]!.actorUserId).toBe(SYSTEM_USER_ID)
+      expect(audit[0]!.treeCount).toBe(1)
+      expect(audit[0]!.taskCount).toBe(2)
+      expect(audit[0]!.retentionDays).toBe(90)
       expect(JSON.parse(audit[0]!.rootTaskIdsJson)).toEqual(['old'])
-      expect(
-        await db
-          .select({
-            operation: taskExecutionMaintenanceClaims.operation,
-            state: taskExecutionMaintenanceClaims.state,
-          })
-          .from(taskExecutionMaintenanceClaims),
-      ).toContainEqual({ operation: 'retention', state: 'completed' })
     })
+
+    test('手动入口在自动开关关着时照样可用(它本来就是给关着的部署用的)', async () => {
+      // 配置里显式关掉自动归档,只留保留期。
+      const { db, app } = await appWith({ taskArchive: { enabled: false, retentionDays: 90 } })
+      await seedBase(db)
+      await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
+
+      // 不传 retentionDays 时回落到配置值。
+      const res = await post(app, { dryRun: false })
+      expect(res.status).toBe(200)
+      expect(await taskCount(db)).toBe(0)
+      expect((await auditRows(db))[0]!.retentionDays).toBe(90)
+    })
+
+    test('载荷不合法时 422 task-archive-invalid,而不是拿默认值蒙混执行', async () => {
+      const { db, app } = await appWith()
+      await seedBase(db)
+      await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
+
+      // 天数不是整数 / 棵数越界 / dryRun 不是布尔——三种都必须拒绝:这条路径的
+      // 「宽容解析」等于拿一个没人要求过的参数去做不可逆删除。
+      for (const bad of [
+        { retentionDays: 1.5, dryRun: false },
+        { retentionDays: 90, maxTrees: 0, dryRun: false },
+        { retentionDays: 90, dryRun: 'yes' },
+      ]) {
+        const res = await post(app, bad)
+        expect(res.status).toBe(422)
+        expect(((await res.json()) as { code: string }).code).toBe('task-archive-invalid')
+      }
+      expect(await taskCount(db)).toBe(1)
+      expect(await auditRows(db)).toHaveLength(0)
+    })
+
+    test('配置成 0(=不归档)时手动入口拒绝执行,而不是把 0 天当成「全归档」', async () => {
+      const { db, app, home } = await appWith()
+      // retentionDays=0 在配置语义里是「关」。若手动入口把它当 cutoff=now 用,
+      // 这台机器上**每一棵终态树**都会被立刻不可逆地删掉。
+      writeFileSync(
+        join(home, 'config.json'),
+        JSON.stringify({ taskArchive: { enabled: false, retentionDays: 0 } }),
+      )
+      await seedBase(db)
+      await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1_000 })
+
+      const res = await post(app, { dryRun: false })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('task-archive-retention-unset')
+      expect(await taskCount(db)).toBe(1)
+      expect(await auditRows(db)).toHaveLength(0)
+    })
+  },
+)
+
+// RFC-359 AC-6：这一块本来嵌在上面那个 describe 里；上面整块迁进 HTTP 作用域之后，
+// 它必须**提到顶层**——provider 块套 provider 块会开两套 harness（两个 PG 库），直接炸。
+describeEachProvider('ordinary sweep audit persistence', (harness) => {
+  test('sweeper 的审计行归给系统(无操作者),且空转不写行', async () => {
+    const db = harness.db
+    const addTask = createProviderTaskSeed()
+    const dirs = tmpDirs()
+    await seedBase(db)
+    // 还在保留期内 ⇒ 这一拍什么都没归档 ⇒ 不该留下噪音审计行。
+    await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1 * DAY })
+    await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+    expect(await auditRows(db)).toHaveLength(0)
+
+    await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
+    await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+    const audit = await auditRows(db)
+    expect(audit).toHaveLength(1)
+    expect(audit[0]!.source).toBe('sweep')
+    expect(audit[0]!.actorUserId).toBeNull()
+    expect(JSON.parse(audit[0]!.rootTaskIdsJson)).toEqual(['old'])
+    expect(
+      await db
+        .select({
+          operation: taskExecutionMaintenanceClaims.operation,
+          state: taskExecutionMaintenanceClaims.state,
+        })
+        .from(taskExecutionMaintenanceClaims),
+    ).toContainEqual({ operation: 'retention', state: 'completed' })
   })
 })
 
