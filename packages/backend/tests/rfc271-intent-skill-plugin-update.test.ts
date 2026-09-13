@@ -19,12 +19,12 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { plugins, skills } from '../src/db/schema'
 import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight'
 import { createResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/aclReadRepository'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // RFC-355 T7：锚点跟着实现走。这条断言当年打在 `services/intent/applyChangeset.ts` 上，
 // RFC-349 把 apply 引擎搬进 infrastructure 后那里只剩装配门面，断言等于空跑；现在直接
 // 钉住引擎本体。
@@ -77,7 +77,7 @@ const entry = (handle: string, resourceType: string, resourceId: string) =>
   ({ handle, resourceType, resourceId }) as never
 
 async function copyOnlyTargetsFor(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   manifest: Parameters<typeof resolveIntentApplyResourcePreflight>[2],
   changeset: Parameters<typeof resolveIntentApplyResourcePreflight>[3],
@@ -92,7 +92,7 @@ async function copyOnlyTargetsFor(
   ).copyOnlyTargets
 }
 
-async function seedSkill(db: DbClient, ownerUserId: string): Promise<string> {
+async function seedSkill(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
   const id = ulid()
   await db
     .insert(skills)
@@ -110,7 +110,7 @@ async function seedSkill(db: DbClient, ownerUserId: string): Promise<string> {
   return id
 }
 
-async function seedPlugin(db: DbClient, ownerUserId: string): Promise<string> {
+async function seedPlugin(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
   const id = ulid()
   await db
     .insert(plugins)
@@ -134,9 +134,9 @@ async function seedPlugin(db: DbClient, ownerUserId: string): Promise<string> {
   return id
 }
 
-describe('T14 · 自己拥有的 skill / plugin 不再被 copy-only 挡住', () => {
+describeEachProvider('T14 · 自己拥有的 skill / plugin 不再被 copy-only 挡住', (harness) => {
   test('skill：自己的 ⇒ copy-only 里没有它', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const actor = actorOf('u1')
     const id = await seedSkill(db, 'u1')
     const out = await copyOnlyTargetsFor(db, actor, [entry('res#skill#1', 'skill', id)], {
@@ -146,7 +146,7 @@ describe('T14 · 自己拥有的 skill / plugin 不再被 copy-only 挡住', () 
   })
 
   test('plugin：自己的 ⇒ copy-only 里没有它', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const actor = actorOf('u1')
     const id = await seedPlugin(db, 'u1')
     const out = await copyOnlyTargetsFor(db, actor, [entry('res#plugin#1', 'plugin', id)], {
@@ -156,9 +156,9 @@ describe('T14 · 自己拥有的 skill / plugin 不再被 copy-only 挡住', () 
   })
 })
 
-describe('T15 · **他人拥有的仍然强制 copy** —— ownerUserId 判据一字未动', () => {
+describeEachProvider('T15 · **他人拥有的仍然强制 copy** —— ownerUserId 判据一字未动', (harness) => {
   test('skill：别人的 ⇒ copy-only，理由是 owner 而不是「尚不支持」', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const id = await seedSkill(db, 'u-someone-else')
     const out = await copyOnlyTargetsFor(db, actorOf('u1'), [entry('res#skill#1', 'skill', id)], {
       ops: [{ action: 'update', resourceType: 'skill', target: 'res#skill#1' }],
@@ -167,7 +167,7 @@ describe('T15 · **他人拥有的仍然强制 copy** —— ownerUserId 判据�
   })
 
   test('plugin：别人的 ⇒ 同上', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const id = await seedPlugin(db, 'u-someone-else')
     const out = await copyOnlyTargetsFor(db, actorOf('u1'), [entry('res#plugin#1', 'plugin', id)], {
       ops: [{ action: 'update', resourceType: 'plugin', target: 'res#plugin#1' }],
@@ -176,7 +176,7 @@ describe('T15 · **他人拥有的仍然强制 copy** —— ownerUserId 判据�
   })
 
   test('六类走的是**同一条**判据（agent 的行为逐字不变，作为对照）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const skillMine = await seedSkill(db, 'u1')
     const skillTheirs = await seedSkill(db, 'u2')
     const out = await copyOnlyTargetsFor(

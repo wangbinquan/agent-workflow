@@ -17,15 +17,13 @@
 // 为此本轮补齐了三块此前没覆盖的格子：workflow scope、RFC-324 D9 的 `write` 授权档、
 // 以及 `annotateMemoryManageRights` 与 `canManageMemory` 之间既存的判据差。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, resourceGrants, users, workflows } from '../src/db/schema'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function actorOfRole(role: 'admin' | 'manager' | 'user', id = `u_${role}`): Actor {
   return buildActor({
@@ -34,7 +32,7 @@ function actorOfRole(role: 'admin' | 'manager' | 'user', id = `u_${role}`): Acto
   })
 }
 
-async function seedAgent(db: DbClient, ownerUserId: string): Promise<string> {
+async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
   const id = 'agt_matrix'
   await db.insert(agents).values({
     id,
@@ -45,7 +43,7 @@ async function seedAgent(db: DbClient, ownerUserId: string): Promise<string> {
   return id
 }
 
-async function seedWorkflow(db: DbClient, ownerUserId: string): Promise<string> {
+async function seedWorkflow(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
   const id = 'wf_matrix'
   await db.insert(workflows).values({
     id,
@@ -59,7 +57,7 @@ async function seedWorkflow(db: DbClient, ownerUserId: string): Promise<string> 
 
 /** RFC-324 D9 的 `write` 授权档：被授权人不是 owner，但可以改内容。 */
 async function seedWriteGrant(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   resourceType: 'agent' | 'workflow',
   resourceId: string,
   userId: string,
@@ -85,9 +83,9 @@ async function seedWriteGrant(
   })
 }
 
-describe('RFC-285 B7 — 现状矩阵（读面）', () => {
+describeEachProvider('RFC-285 B7 — 现状矩阵（读面）', (harness) => {
   test('repo / repo_group / global：全员可读（含普通 user；Q3 锁 RFC-248 AC-29）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     for (const scopeType of ['repo', 'repo_group', 'global'] as const) {
       for (const role of ['admin', 'manager', 'user'] as const) {
         const actor = actorOfRole(role)
@@ -102,7 +100,7 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
   })
 
   test('资源 scope（agent）：随资源可见性——owner 可读、外人不可读、资源管理员全读', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
     const stranger = actorOfRole('user', 'u_stranger')
     const agentId = await seedAgent(db, owner.user.id)
@@ -124,7 +122,7 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
   })
 
   test('资源 scope 资源行消失：非管理员 fail-closed、管理员保留（清理面）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const scope = { scopeType: 'agent' as const, scopeId: 'agt_vanished' }
     const user = actorOfRole('user')
     const admin = actorOfRole('admin')
@@ -137,9 +135,9 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
   })
 })
 
-describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
+describeEachProvider('RFC-285 B7 — 现状矩阵（管理面）', (harness) => {
   test('repo / repo_group / global：admin+manager 可管（hasResourceAclBypass 兜底）、普通 user 不可', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     for (const scopeType of ['repo', 'repo_group', 'global'] as const) {
       const scope = { scopeType, scopeId: 's1' }
       const admin = actorOfRole('admin')
@@ -158,7 +156,7 @@ describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
   })
 
   test('资源 scope：资源 owner 可管、可见非 owner 不可管、admin+manager 兜底', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
     const stranger = actorOfRole('user', 'u_stranger')
     const agentId = await seedAgent(db, owner.user.id)
@@ -180,9 +178,9 @@ describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
 // RFC-352 补格：迁移前必须先把 oracle 补全，否则搬完了也不知道哪一格漂了。
 // ---------------------------------------------------------------------------
 
-describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
+describeEachProvider('RFC-352 W4-E2 迁移 oracle — 补齐的格子', (harness) => {
   test('workflow scope 与 agent scope 同档：owner 可读可管、外人都不行、资源管理员兜底', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
     const stranger = actorOfRole('user', 'u_stranger')
     const workflowId = await seedWorkflow(db, owner.user.id)
@@ -211,7 +209,7 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
   })
 
   test('RFC-324 D9：`write` 授权档能管资源 scope 的记忆（不只是 owner）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
     const writer = actorOfRole('user', 'u_writer')
     const agentId = await seedAgent(db, owner.user.id)
@@ -236,7 +234,7 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
   // 这条测试锁的就是「列表标记 == API 门」。它变红只有两种可能：判据又分叉了，
   // 或者有人在没立项的情况下改了权限档位。
   test('列表逐行 canManage 与 API 门一致：write 授权者两边都是 true', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
     const writer = actorOfRole('user', 'u_writer')
     const agentId = await seedAgent(db, owner.user.id)
@@ -249,7 +247,7 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
   })
 
   test('平台 scope 的列表标记仍是「仅 ACL bypass」——对齐没有放宽这一档', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const user = actorOfRole('user')
     const admin = actorOfRole('admin')
     const rows = (['repo', 'repo_group', 'global'] as const).map((scopeType) => ({
@@ -269,7 +267,7 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
   })
 
   test('非 owner、无授权的人：读不到也管不到，列表标记同样是 false', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
     const stranger = actorOfRole('user', 'u_stranger')
     const agentId = await seedAgent(db, owner.user.id)

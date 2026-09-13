@@ -6,10 +6,10 @@
 // review/clarify attribution snapshots depend on it.
 
 import { describe, expect, test, beforeEach } from 'bun:test'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, resourceGrants, workflows } from '../src/db/schema'
 import {
   canGovernResource,
@@ -26,8 +26,6 @@ import {
 } from '../src/services/resourceAcl'
 import { ForbiddenError, NotFoundError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 function actorOfUser(id: string, role: 'admin' | 'user' | 'guest', patScopes?: string[]): Actor {
   return buildActor({
     user: { id, username: `u-${id.slice(-4)}`, displayName: 'U', role, status: 'active' },
@@ -36,7 +34,11 @@ function actorOfUser(id: string, role: 'admin' | 'user' | 'guest', patScopes?: s
   })
 }
 
-async function seedUser(db: DbClient, id: string, role: 'admin' | 'user' | 'guest'): Promise<void> {
+async function seedUser(
+  db: ProviderNeutralDatabase,
+  id: string,
+  role: 'admin' | 'user' | 'guest',
+): Promise<void> {
   const { users } = await import('../src/db/schema')
   await db.insert(users).values({
     id,
@@ -49,8 +51,8 @@ async function seedUser(db: DbClient, id: string, role: 'admin' | 'user' | 'gues
   })
 }
 
-describe('resourceAcl — visibility matrix', () => {
-  let db: DbClient
+describeEachProvider('resourceAcl — visibility matrix', (harness) => {
+  let db: ProviderNeutralDatabase
   const ownerId = ulid()
   const grantedId = ulid()
   const strangerId = ulid()
@@ -60,7 +62,7 @@ describe('resourceAcl — visibility matrix', () => {
   let publicAgent: AclRow
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     for (const [id, role] of [
       [ownerId, 'user'],
       [grantedId, 'user'],

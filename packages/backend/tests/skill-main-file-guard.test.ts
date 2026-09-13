@@ -11,9 +11,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   createManagedSkill,
   deleteSkillFile,
@@ -23,8 +24,6 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import { ConflictError } from '../src/util/errors'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('isProtectedSkillMainFile (lexical, shared)', () => {
   test('rejects the root main file and its pure aliases', () => {
@@ -57,15 +56,15 @@ describe('isProtectedSkillMainFile (lexical, shared)', () => {
   })
 })
 
-describe('writeSkillFile / deleteSkillFile SKILL.md guard', () => {
-  let db: DbClient
+describeEachProvider('writeSkillFile / deleteSkillFile SKILL.md guard', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: SkillFsOptions
   let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-skill-guard-'))
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     fsOpts = { appHome }
     const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',

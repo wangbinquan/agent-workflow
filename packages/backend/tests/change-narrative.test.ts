@@ -13,11 +13,12 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { computeSummary, type StructuralDiff, type Task } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { runtimes, taskCollaborators, tasks, workflows } from '../src/db/schema'
 import { createUser } from '../src/services/users'
 import { getTask } from '../src/services/task'
@@ -41,9 +42,7 @@ import {
 } from '../src/services/systemAgentRun'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-const buildNarrativeInput = (db: DbClient, task: Task) =>
+const buildNarrativeInput = (db: ProviderNeutralDatabase, task: Task) =>
   buildNarrativeInputWithPort(createCodeWorkspaceRead(db), task)
 
 let home: string
@@ -87,7 +86,7 @@ function actorFor(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 
-async function seedWorld(db: DbClient): Promise<{
+async function seedWorld(db: ProviderNeutralDatabase): Promise<{
   task: Task
   owner: Actor
   collaborator: Actor
@@ -260,8 +259,11 @@ describe('computeContentDigest', () => {
   })
 })
 
-describe('triggerChangeNarrative', () => {
-  function deps(db: DbClient, runFn: ChangeNarrativeDeps['runFn']): ChangeNarrativeDeps {
+describeEachProvider('triggerChangeNarrative', (harness) => {
+  function deps(
+    db: ProviderNeutralDatabase,
+    runFn: ChangeNarrativeDeps['runFn'],
+  ): ChangeNarrativeDeps {
     const runtimes = runtimeRegistryPersistence(db)
     const base: ChangeNarrativeDeps = {
       workspace: createCodeWorkspaceRead(db),
@@ -281,7 +283,7 @@ describe('triggerChangeNarrative', () => {
   }
 
   test('member gate: owner/collaborator/non-member admin pass, outsider 403', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     const calls: unknown[] = []
     const runFn: ChangeNarrativeDeps['runFn'] = async (opts) => {
@@ -303,7 +305,7 @@ describe('triggerChangeNarrative', () => {
   })
 
   test('single-flight: concurrent triggers share one generation', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     let runs = 0
     const runFn: ChangeNarrativeDeps['runFn'] = async () => {
@@ -322,7 +324,7 @@ describe('triggerChangeNarrative', () => {
   })
 
   test('success persists; ready carries the diff contentDigest; ghost group keys pruned; prompt carries intents not user ids', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     let seenPrompt = ''
     const runFn: ChangeNarrativeDeps['runFn'] = async (opts) => {
@@ -347,7 +349,7 @@ describe('triggerChangeNarrative', () => {
   })
 
   test('failure → failed state, nothing persisted', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     const runFn: ChangeNarrativeDeps['runFn'] = async () => {
       throw new Error('boom')
@@ -360,7 +362,7 @@ describe('triggerChangeNarrative', () => {
   })
 
   test('deletion race: task deleted mid-run leaves no husk directory', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     const runFn: ChangeNarrativeDeps['runFn'] = async () => {
       await db.delete(taskCollaborators).where(eq(taskCollaborators.taskId, w.task.id))
@@ -373,7 +375,7 @@ describe('triggerChangeNarrative', () => {
   })
 
   test('RFC-239 config: deps.runtimeName selects the per-feature runtime row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     await db.insert(runtimes).values({
       id: 'rt-narr',
@@ -399,7 +401,7 @@ describe('triggerChangeNarrative', () => {
   })
 
   test('nothing to narrate → 409', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     // reset the worktree to clean (no changes)
     await runGit(w.task.worktreePath, ['checkout', '--', '.'])
@@ -414,9 +416,9 @@ describe('triggerChangeNarrative', () => {
   })
 })
 
-describe('buildNarrativePrompt', () => {
+describeEachProvider('buildNarrativePrompt', (harness) => {
   test('stays under the cap and lists group stats', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const w = await seedWorld(db)
     const input = await buildNarrativeInput(db, w.task)
     const prompt = buildNarrativePrompt(w.task, input)

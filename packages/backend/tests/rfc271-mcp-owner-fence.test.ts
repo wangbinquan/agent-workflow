@@ -18,7 +18,8 @@ import { buildActor } from '../src/auth/actor'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { mcps } from '../src/db/schema'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
@@ -30,8 +31,6 @@ import {
   createMcpForTest as createMcp,
   type McpCatalogTestBinding as McpServiceBinding,
 } from './helpers/mcpServiceBinding'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const VICTIM = 'u-victim'
 const ATTACKER = 'u-attacker'
@@ -47,7 +46,7 @@ function authorityFor(userId: string): McpOperationContext {
   ).actor
 }
 
-function composeTestMcpCatalog(db: DbClient): McpCatalogModule {
+function composeTestMcpCatalog(db: ProviderNeutralDatabase): McpCatalogModule {
   return composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -68,7 +67,10 @@ function bindingFor(catalog: McpCatalogModule, userId: string): McpServiceBindin
   return Object.freeze({ catalog, authority: authorityFor(userId) })
 }
 
-async function seedVictimPublicMcp(db: DbClient, victim: McpServiceBinding): Promise<string> {
+async function seedVictimPublicMcp(
+  db: ProviderNeutralDatabase,
+  victim: McpServiceBinding,
+): Promise<string> {
   const created = await createMcp(victim, {
     name: 'shared-tools',
     description: 'victim owns this',
@@ -81,9 +83,9 @@ async function seedVictimPublicMcp(db: DbClient, victim: McpServiceBinding): Pro
   return created.id
 }
 
-describe('伪造 overwrite：他人 public 资源 id + 正确 hash', () => {
+describeEachProvider('伪造 overwrite：他人 public 资源 id + 正确 hash', (harness) => {
   test('exact application reload + owner 围栏 ⇒ 拒绝，受害者那一行不变', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = composeTestMcpCatalog(db)
     const victim = bindingFor(catalog, VICTIM)
     const attacker = bindingFor(catalog, ATTACKER)
@@ -109,7 +111,7 @@ describe('伪造 overwrite：他人 public 资源 id + 正确 hash', () => {
   })
 
   test('**对照组**：owner 的同一 exact command 正常成功', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = composeTestMcpCatalog(db)
     const victim = bindingFor(catalog, VICTIM)
     const id = await seedVictimPublicMcp(db, victim)
@@ -127,9 +129,9 @@ describe('伪造 overwrite：他人 public 资源 id + 正确 hash', () => {
   })
 })
 
-describe('围栏的另一面：读取之后、提交之前的 owner 转移', () => {
+describeEachProvider('围栏的另一面：读取之后、提交之前的 owner 转移', (harness) => {
   test('读取时看到 VICTIM，提交前行被转给别人 ⇒ fresh reload 后拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = composeTestMcpCatalog(db)
     const victim = bindingFor(catalog, VICTIM)
     const id = await seedVictimPublicMcp(db, victim)
@@ -153,7 +155,7 @@ describe('围栏的另一面：读取之后、提交之前的 owner 转移', () 
   })
 
   test('owner 没变 ⇒ 正常放行（围栏不误伤）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = composeTestMcpCatalog(db)
     const victim = bindingFor(catalog, VICTIM)
     const id = await seedVictimPublicMcp(db, victim)

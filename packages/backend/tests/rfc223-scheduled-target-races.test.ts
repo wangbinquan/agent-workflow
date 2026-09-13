@@ -8,12 +8,12 @@
 // leaves the scheduled row absent/unchanged, so neither serial order can
 // create an orphan.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, scheduledTasks, workflows, workgroups } from '../src/db/schema'
 import { createAgent, deleteAgent } from '../src/services/agent'
@@ -24,7 +24,6 @@ import {
 import { createWorkflow, deleteWorkflow } from '../src/services/workflow'
 import { deleteWorkgroup } from '../src/services/workgroups'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 
 const AGENT_FIELDS = {
@@ -53,7 +52,7 @@ function actorFor(id = 'u-owner'): Actor {
   })
 }
 
-async function seedWorkflow(db: DbClient, ownerId: string) {
+async function seedWorkflow(db: ProviderNeutralDatabase, ownerId: string) {
   return createWorkflow(
     db,
     {
@@ -65,7 +64,7 @@ async function seedWorkflow(db: DbClient, ownerId: string) {
   )
 }
 
-async function seedAgent(db: DbClient, actor: Actor) {
+async function seedAgent(db: ProviderNeutralDatabase, actor: Actor) {
   await seedTestDefaultOpencodeRuntime(db)
   return createAgent(
     db,
@@ -74,7 +73,7 @@ async function seedAgent(db: DbClient, actor: Actor) {
   )
 }
 
-async function seedWorkgroup(db: DbClient, ownerId: string) {
+async function seedWorkgroup(db: ProviderNeutralDatabase, ownerId: string) {
   const id = ulid()
   await db.insert(workgroups).values({
     id,
@@ -113,12 +112,12 @@ function workgroupPayload(workgroupId: string) {
   }
 }
 
-describe('RFC-223 scheduled create target/delete transaction order', () => {
-  let db: DbClient
+describeEachProvider('RFC-223 scheduled create target/delete transaction order', (harness) => {
+  let db: ProviderNeutralDatabase
   let actor: Actor
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     actor = actorFor()
   })
 
@@ -205,12 +204,12 @@ describe('RFC-223 scheduled create target/delete transaction order', () => {
   })
 })
 
-describe('RFC-223 scheduled update final target identity/ACL fence', () => {
-  let db: DbClient
+describeEachProvider('RFC-223 scheduled update final target identity/ACL fence', (harness) => {
+  let db: ProviderNeutralDatabase
   let actor: Actor
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     actor = actorFor()
   })
 

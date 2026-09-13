@@ -13,12 +13,12 @@
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, mcps, workflows } from '../src/db/schema'
 import {
   assertNoDuplicateNames,
@@ -26,8 +26,6 @@ import {
   directRefsOf,
 } from '../src/services/resourcePackage/closure'
 import { walkExportClosure } from './helpers/resourcePackageProvider'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ⚠️ **直接构造** Actor 而不是走 `buildActor`：后者按**角色**算权限、忽略调用方
 // 传的集合，于是「一个权限点都没有」这种形态根本构造不出来——而 AC-7d 的反向锁
@@ -43,7 +41,7 @@ const defn = (nodes: unknown[]): WorkflowDefinition =>
   ({ $schema_version: 4, inputs: [], nodes, edges: [] }) as unknown as WorkflowDefinition
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   owner: string,
   name: string,
   extra: Record<string, unknown> = {},
@@ -73,7 +71,7 @@ async function seedAgent(
   return id
 }
 
-async function seedMcp(db: DbClient, owner: string, name: string): Promise<string> {
+async function seedMcp(db: ProviderNeutralDatabase, owner: string, name: string): Promise<string> {
   const id = ulid()
   await db
     .insert(mcps)
@@ -94,7 +92,7 @@ async function seedMcp(db: DbClient, owner: string, name: string): Promise<strin
 }
 
 async function seedWorkflow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   owner: string,
   name: string,
   definition: WorkflowDefinition,
@@ -151,9 +149,9 @@ describe('directRefsOf —— 每类的引用出边', () => {
   })
 })
 
-describe('① 行级可见性（含传递）', () => {
+describeEachProvider('① 行级可见性（含传递）', (harness) => {
   test('自己的工作流 → 自己的 agent → 自己的 MCP：整棵树导出成功', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const mcp = await seedMcp(db, 'u1', 'tools')
     const agent = await seedAgent(db, 'u1', 'auditor', { mcp: JSON.stringify([mcp]) })
     const wf = await seedWorkflow(
@@ -168,7 +166,7 @@ describe('① 行级可见性（含传递）', () => {
   })
 
   test('**传递**依赖不可见 ⇒ 整体拒绝，并点名是谁引用了它', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const foreignMcp = await seedMcp(db, 'u-other', 'secret-tools')
     const agent = await seedAgent(db, 'u1', 'auditor', { mcp: JSON.stringify([foreignMcp]) })
     const wf = await seedWorkflow(
@@ -186,7 +184,7 @@ describe('① 行级可见性（含传递）', () => {
   })
 
   test('「不存在」与「存在但不可见」**同形** —— 不给存在性预言机', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const hidden = await seedMcp(db, 'u-other', 'hidden')
     const ghost = ulid()
     const messages: string[] = []
@@ -205,7 +203,7 @@ describe('① 行级可见性（含传递）', () => {
   })
 
   test('别人的 public 资源可见 ⇒ 可以导出（可见即有读权限）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const mcp = await seedMcp(db, 'u-other', 'shared')
     await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp)).run()
     const agent = await seedAgent(db, 'u1', 'auditor', { mcp: JSON.stringify([mcp]) })
@@ -214,9 +212,9 @@ describe('① 行级可见性（含传递）', () => {
   })
 })
 
-describe('AC-7d 反向锁 · **不得**有类型级 *:read 门', () => {
+describeEachProvider('AC-7d 反向锁 · **不得**有类型级 *:read 门', (harness) => {
   test('actor 只有 private range、没有类型 read，但资源行级可见 ⇒ 导出成功', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const mcp = await seedMcp(db, 'u1', 'tools')
     const agent = await seedAgent(db, 'u1', 'auditor', { mcp: JSON.stringify([mcp]) })
     // 没有 mcps:read、没有 agents:read；private range 只允许进入行级 ACL。

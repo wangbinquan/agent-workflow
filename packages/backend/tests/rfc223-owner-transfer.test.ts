@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { AclResourceType } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   agents,
   capabilityTemplates,
@@ -25,7 +25,6 @@ import {
 import type { AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
 import { ConflictError, ForbiddenError, NotFoundError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // RFC-304 — the two capability template layers carry owner+name unique indexes
 // exactly like the five above, so a transfer into an occupied name bucket must
 // produce the same typed 409. They were absent from `OWNER_NAME_UNIQUE_TYPES`
@@ -47,7 +46,11 @@ function actor(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 
-async function seedUser(db: DbClient, id: string, role: 'admin' | 'user'): Promise<void> {
+async function seedUser(
+  db: ProviderNeutralDatabase,
+  id: string,
+  role: 'admin' | 'user',
+): Promise<void> {
   await db.insert(users).values({
     id,
     username: id,
@@ -60,7 +63,7 @@ async function seedUser(db: DbClient, id: string, role: 'admin' | 'user'): Promi
 }
 
 async function seedResource(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   type: AclResourceType,
   id: string,
   name: string,
@@ -108,13 +111,13 @@ async function seedResource(
   return { id, ownerUserId, visibility: 'public' }
 }
 
-describe('RFC-223 owner transfer and fresh-ACL fences', () => {
-  let db: DbClient
+describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) => {
+  let db: ProviderNeutralDatabase
   let admin: Actor
   let ownerA: Actor
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedUser(db, 'owner-a', 'user')
     await seedUser(db, 'owner-b', 'user')
     await seedUser(db, 'admin', 'admin')
@@ -256,13 +259,13 @@ describe('RFC-223 owner transfer and fresh-ACL fences', () => {
 //     话前者会被误拒——这正是 v1 设计里 (owner, name) 的问题）；
 //   - `employee_definitions_owner_name_unique` 自 RFC-310 就在，但类型此前没登记进
 //     唯一表：撞名转移是一次 raw UNIQUE 失败（500）而非 409。
-describe('RFC-330 —— 分区化的 owner-name 唯一转移预检', () => {
+describeEachProvider('RFC-330 —— 分区化的 owner-name 唯一转移预检', (harness) => {
   const NOW = 1_700_000_000_000
-  let db: DbClient
+  let db: ProviderNeutralDatabase
   let admin: Actor
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedUser(db, 'owner-a', 'user')
     await seedUser(db, 'owner-b', 'user')
     await seedUser(db, 'admin', 'admin')

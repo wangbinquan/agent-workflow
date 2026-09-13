@@ -7825,3 +7825,29 @@ bigint 列取回成**字符串**，`toBe(number)` 当场失败——改成 drizz
 以及那张表里未动的 `LegacySqliteTaskDatabase` 一刀放宽：`legacySqliteTransportMechanisms.ts` 那条
 独立再导出一旦也统一，`services/task.ts` 会炸 34 个——它的函数体真在用 SQLite 同步面，
 得先把那一片搬到中立事务口。
+
+## 5ca. 多个顶层 `describe` 的那一批：只包**真的建库**的那几个
+
+94 个文件有多个顶层 `describe`，此前被检测器整片拒掉。这一波把变换扩成「逐个顶层 `describe` 判定」：
+
+- 一个顶层 `describe` 的子树里**出现 `createInMemoryDb(` 才**换成 `describeEachProvider`；
+  不建库的（纯源码文本断言、纯函数判据）保持普通 `describe`。
+- 这样一个文件只开它**真正需要**的那几套 PostgreSQL 库，而不是按顶层块数无脑翻倍。
+  这条不是省时间，是避免 §5by 记过的那类 harness 打架。
+
+42 个通过 AST 前置条件，跑完 typecheck + 双引擎后落地 **21 个**（账本 495 → 474，共 -21 文件 / -77 调用点）。
+
+被挡下的两类，各自的原因都写在这里：
+
+- **17 个仍卡在 callee 形参**（`commitResourcePackage`、`taskRecoveryOperations`、
+  `installTaskLifecycleAfterCommitTestPump`、`createEmployeeReactionRoundQueries`、`cancelTask`、
+  `dbTxSync`、`createSqliteTaskExecutionPersistence`，以及大量 `.all()` / `.get()` 同步读）——
+  与 §5bz 是同一张待办表，按同样的办法逐个放宽。
+- **3 个跑红，都是真发现，不是迁移手误**：
+  - `rfc074-prc-cci-retirement` C9「被删掉的列不在实时 schema 里」——判据是 SQLite 迁移链的
+    `PRAGMA table_info`，PG 侧的 schema 来自 drizzle 声明，这条按定义就只对 SQLite 成立；
+  - `rfc223-pr6-injection-identity` 三条在 PG 上撞 SQL 编译器
+    （`SQLITE_ONLY_STATEMENT` / `assertPostgresqlBusinessStatement`）；
+  - `rfc232-owner-list`「null 与悬空 owner id 保持稳定、身份降级成 null」在 PG 上判据不成立。
+
+  后两条要单独查，本波先原样退回、留在账本上，不靠改判据抹掉。

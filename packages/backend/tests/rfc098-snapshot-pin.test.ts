@@ -27,9 +27,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { runWorktreeGc } from '../src/services/gc'
 import { rollbackNodeRunWorktrees } from '../src/services/nodeRollback'
@@ -44,7 +45,6 @@ import {
 import { createLogger } from '../src/util/log'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test.rfc098-snapshot-pin')
 
 /** `git cat-file -e <sha>` — exitCode 0 iff the object exists in the odb. */
@@ -81,74 +81,77 @@ async function taskSnapshotRefs(repoPath: string, taskId: string): Promise<strin
     .filter((l) => l.length > 0)
 }
 
-describe('RFC-098 WP-9 — pinned snapshot survives source-repo gc; worktree GC deletes the task refs', () => {
-  let appHome: string
-  let repoPath: string
-  let db: DbClient
-  beforeEach(async () => {
-    appHome = mkdtempSync(join(tmpdir(), 'aw-rfc098-pin-'))
-    repoPath = join(appHome, 'repo')
-    await runGit(appHome, ['init', '-q', '-b', 'main', 'repo'])
-    await runGit(repoPath, ['config', 'user.email', 'test@example.com'])
-    await runGit(repoPath, ['config', 'user.name', 'Test'])
-    writeFileSync(join(repoPath, 'data.txt'), 'HEAD\n')
-    await runGit(repoPath, ['add', '.'])
-    await runGit(repoPath, ['commit', '-q', '-m', 'init'])
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => rmSync(appHome, { recursive: true, force: true }))
-
-  test('worktree-pinned snapshot lives in the shared odb past gc; runWorktreeGc removes worktree + refs, re-exposing the object', async () => {
-    const workflowId = ulid()
-    const taskId = ulid()
-    const nodeRunId = ulid()
-    const wt = await createWorktree({ repoPath, taskId, appHome })
-
-    // Snapshot taken FROM the worktree (the scheduler's write-point shape):
-    // the ref lands in the SHARED source-repo odb because snapshot refs are
-    // common refs, not per-worktree refs.
-    writeFileSync(join(wt.worktreePath, 'data.txt'), 'SNAPSHOT-STATE\n')
-    const sha = await gitStashSnapshot(wt.worktreePath, {
-      pinRef: snapshotRefName(taskId, nodeRunId),
-      log,
+describeEachProvider(
+  'RFC-098 WP-9 — pinned snapshot survives source-repo gc; worktree GC deletes the task refs',
+  (harness) => {
+    let appHome: string
+    let repoPath: string
+    let db: ProviderNeutralDatabase
+    beforeEach(async () => {
+      appHome = mkdtempSync(join(tmpdir(), 'aw-rfc098-pin-'))
+      repoPath = join(appHome, 'repo')
+      await runGit(appHome, ['init', '-q', '-b', 'main', 'repo'])
+      await runGit(repoPath, ['config', 'user.email', 'test@example.com'])
+      await runGit(repoPath, ['config', 'user.name', 'Test'])
+      writeFileSync(join(repoPath, 'data.txt'), 'HEAD\n')
+      await runGit(repoPath, ['add', '.'])
+      await runGit(repoPath, ['commit', '-q', '-m', 'init'])
+      db = harness.db
     })
-    expect(sha).toMatch(/^[a-f0-9]{40}$/)
-    expect(await taskSnapshotRefs(repoPath, taskId)).toEqual([snapshotRefName(taskId, nodeRunId)])
+    afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
-    // A user-side gc in the SOURCE repo (the S-11 attack) keeps the object —
-    // the ref makes it reachable.
-    await gcPruneNow(repoPath)
-    expect(await objectExists(repoPath, sha)).toBe(true)
+    test('worktree-pinned snapshot lives in the shared odb past gc; runWorktreeGc removes worktree + refs, re-exposing the object', async () => {
+      const workflowId = ulid()
+      const taskId = ulid()
+      const nodeRunId = ulid()
+      const wt = await createWorktree({ repoPath, taskId, appHome })
 
-    // Terminal task, old enough for the GC threshold.
-    await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
-    await db.insert(tasks).values({
-      name: 'fixture-task',
-      id: taskId,
-      workflowId,
-      workflowSnapshot: '{}',
-      repoPath,
-      worktreePath: wt.worktreePath,
-      baseBranch: 'main',
-      branch: wt.branch,
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
-      finishedAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
+      // Snapshot taken FROM the worktree (the scheduler's write-point shape):
+      // the ref lands in the SHARED source-repo odb because snapshot refs are
+      // common refs, not per-worktree refs.
+      writeFileSync(join(wt.worktreePath, 'data.txt'), 'SNAPSHOT-STATE\n')
+      const sha = await gitStashSnapshot(wt.worktreePath, {
+        pinRef: snapshotRefName(taskId, nodeRunId),
+        log,
+      })
+      expect(sha).toMatch(/^[a-f0-9]{40}$/)
+      expect(await taskSnapshotRefs(repoPath, taskId)).toEqual([snapshotRefName(taskId, nodeRunId)])
+
+      // A user-side gc in the SOURCE repo (the S-11 attack) keeps the object —
+      // the ref makes it reachable.
+      await gcPruneNow(repoPath)
+      expect(await objectExists(repoPath, sha)).toBe(true)
+
+      // Terminal task, old enough for the GC threshold.
+      await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
+      await db.insert(tasks).values({
+        name: 'fixture-task',
+        id: taskId,
+        workflowId,
+        workflowSnapshot: '{}',
+        repoPath,
+        worktreePath: wt.worktreePath,
+        baseBranch: 'main',
+        branch: wt.branch,
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
+        finishedAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
+      })
+
+      const r = await runWorktreeGc(db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
+      expect(r.removed).toEqual([taskId])
+      expect(existsSync(wt.worktreePath)).toBe(false)
+      // gc.ts batch-deleted the task's snapshot refs from the source repo.
+      expect(await taskSnapshotRefs(repoPath, taskId)).toEqual([])
+
+      // Ref lifecycle == worktree lifecycle: with the pin gone, the next gc
+      // finally collects the snapshot object (no permanent odb growth).
+      await gcPruneNow(repoPath)
+      expect(await objectExists(repoPath, sha)).toBe(false)
     })
-
-    const r = await runWorktreeGc(db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
-    expect(r.removed).toEqual([taskId])
-    expect(existsSync(wt.worktreePath)).toBe(false)
-    // gc.ts batch-deleted the task's snapshot refs from the source repo.
-    expect(await taskSnapshotRefs(repoPath, taskId)).toEqual([])
-
-    // Ref lifecycle == worktree lifecycle: with the pin gone, the next gc
-    // finally collects the snapshot object (no permanent odb growth).
-    await gcPruneNow(repoPath)
-    expect(await objectExists(repoPath, sha)).toBe(false)
-  })
-})
+  },
+)
 
 describe('RFC-098 WP-9 修订#3 — multi-repo rollback is two-phase all-or-nothing', () => {
   let root: string

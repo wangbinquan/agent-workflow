@@ -37,7 +37,8 @@ import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, taskRepos, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -45,7 +46,6 @@ import { gcTaskWriteSem, getTaskWriteSem, taskWriteLockCount } from '../src/serv
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (f: string) => resolve(import.meta.dir, '..', 'src', 'services', f)
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -222,7 +222,7 @@ interface SeededClarify {
 }
 
 async function seedClarifyTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: {
     worktreePath: string
     repoPath: string
@@ -302,170 +302,176 @@ async function seedClarifyTask(
 // 2. S-9 mutual exclusion (semi-integration)
 // ---------------------------------------------------------------------------
 
-describe('RFC-098 B1 — S-9: clarify rollback serializes behind the task write lock', () => {
-  test('answering the round stays pending while the write lock is held (worktree untouched); rollback applies only after release', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc098-s9-'))
-    try {
-      const repo = join(tmp, 'wt')
-      await initRepo(repo)
+describeEachProvider(
+  'RFC-098 B1 — S-9: clarify rollback serializes behind the task write lock',
+  (harness) => {
+    test('answering the round stays pending while the write lock is held (worktree untouched); rollback applies only after release', async () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc098-s9-'))
+      try {
+        const repo = join(tmp, 'wt')
+        await initRepo(repo)
 
-      // Pre-snapshot the state the source agent started from (tracked
-      // modification so `git stash create` yields a non-empty sha — the same
-      // capture the scheduler does for writer nodes).
-      writeFileSync(join(repo, 'src.txt'), 'pre-state\n')
-      const sha = await gitStashSnapshot(repo)
-      expect(sha).not.toBe('')
+        // Pre-snapshot the state the source agent started from (tracked
+        // modification so `git stash create` yields a non-empty sha — the same
+        // capture the scheduler does for writer nodes).
+        writeFileSync(join(repo, 'src.txt'), 'pre-state\n')
+        const sha = await gitStashSnapshot(repo)
+        expect(sha).not.toBe('')
 
-      // Simulate the in-flight WRITER's half-done work: a tracked overwrite +
-      // an untracked stray. This is exactly what the S-9 backdoor used to
-      // reset/clean from under the writer.
-      writeFileSync(join(repo, 'src.txt'), 'writer-dirty\n')
-      writeFileSync(join(repo, 'writer-inflight.txt'), 'half-done\n')
+        // Simulate the in-flight WRITER's half-done work: a tracked overwrite +
+        // an untracked stray. This is exactly what the S-9 backdoor used to
+        // reset/clean from under the writer.
+        writeFileSync(join(repo, 'src.txt'), 'writer-dirty\n')
+        writeFileSync(join(repo, 'writer-inflight.txt'), 'half-done\n')
 
-      const db = createInMemoryDb(MIGRATIONS)
-      const seeded = await seedClarifyTask(db, {
-        worktreePath: repo,
-        repoPath: repo,
-        preSnapshot: sha,
-      })
+        const db = harness.db
+        const seeded = await seedClarifyTask(db, {
+          worktreePath: repo,
+          repoPath: repo,
+          preSnapshot: sha,
+        })
 
-      // Hold the task write lock — the registry hands the SAME instance the
-      // clarify service will queue on (the whole point of B1).
-      const release = await getTaskWriteSem(seeded.taskId).acquire()
+        // Hold the task write lock — the registry hands the SAME instance the
+        // clarify service will queue on (the whole point of B1).
+        const release = await getTaskWriteSem(seeded.taskId).acquire()
 
-      // Probe object (property reads survive TS closure-mutation narrowing;
-      // the rejected branch is folded in so a pre-lock throw cannot become an
-      // unhandled rejection during the sleep below).
-      const probe: { outcome: { ok: true } | { err: unknown } | null } = { outcome: null }
-      const submitP = autoDispatchClarifyRound({
-        db,
-        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-        originNodeRunId: seeded.clarifyNodeRunId,
-        answers: [makeAns('q1')],
-        directive: 'continue',
-        actor,
-      }).then(
-        () => {
-          probe.outcome = { ok: true }
-        },
-        (err: unknown) => {
-          probe.outcome = { err }
-        },
-      )
+        // Probe object (property reads survive TS closure-mutation narrowing;
+        // the rejected branch is folded in so a pre-lock throw cannot become an
+        // unhandled rejection during the sleep below).
+        const probe: { outcome: { ok: true } | { err: unknown } | null } = { outcome: null }
+        const submitP = autoDispatchClarifyRound({
+          db,
+          memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+          originNodeRunId: seeded.clarifyNodeRunId,
+          answers: [makeAns('q1')],
+          directive: 'continue',
+          actor,
+        }).then(
+          () => {
+            probe.outcome = { ok: true }
+          },
+          (err: unknown) => {
+            probe.outcome = { err }
+          },
+        )
 
-      // Probe: with the lock held the submit cannot complete…
-      await Bun.sleep(150)
-      expect(probe.outcome).toBeNull()
-      // …and — the load-bearing S-9 invariant — the worktree is UNTOUCHED:
-      // no reset/clean ran under the in-flight writer.
-      expect(readFileSync(join(repo, 'src.txt'), 'utf-8')).toBe('writer-dirty\n')
-      expect(existsSync(join(repo, 'writer-inflight.txt'))).toBe(true)
+        // Probe: with the lock held the submit cannot complete…
+        await Bun.sleep(150)
+        expect(probe.outcome).toBeNull()
+        // …and — the load-bearing S-9 invariant — the worktree is UNTOUCHED:
+        // no reset/clean ran under the in-flight writer.
+        expect(readFileSync(join(repo, 'src.txt'), 'utf-8')).toBe('writer-dirty\n')
+        expect(existsSync(join(repo, 'writer-inflight.txt'))).toBe(true)
 
-      // Writer finishes → releases the lock → the queued rollback runs and
-      // the submit completes.
-      release()
-      await submitP
-      expect(probe.outcome).toEqual({ ok: true })
+        // Writer finishes → releases the lock → the queued rollback runs and
+        // the submit completes.
+        release()
+        await submitP
+        expect(probe.outcome).toEqual({ ok: true })
 
-      // File-trace order: the rollback happened AFTER the release — reset
-      // (base) + clean (stray gone) + stash apply (pre-state restored).
-      expect(readFileSync(join(repo, 'src.txt'), 'utf-8')).toBe('pre-state\n')
-      expect(existsSync(join(repo, 'writer-inflight.txt'))).toBe(false)
+        // File-trace order: the rollback happened AFTER the release — reset
+        // (base) + clean (stray gone) + stash apply (pre-state restored).
+        expect(readFileSync(join(repo, 'src.txt'), 'utf-8')).toBe('pre-state\n')
+        expect(existsSync(join(repo, 'writer-inflight.txt'))).toBe(false)
 
-      // And the answer still minted exactly one pending rerun (happy path
-      // unbroken by the lock detour).
-      const agentRows = await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, seeded.taskId), eq(nodeRuns.nodeId, 'agent_x')))
-      expect(agentRows.filter((r) => r.status === 'pending').length).toBe(1)
+        // And the answer still minted exactly one pending rerun (happy path
+        // unbroken by the lock detour).
+        const agentRows = await db
+          .select()
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, seeded.taskId), eq(nodeRuns.nodeId, 'agent_x')))
+        expect(agentRows.filter((r) => r.status === 'pending').length).toBe(1)
 
-      gcTaskWriteSem(seeded.taskId) // idle now — keep the registry clean
-    } finally {
-      rmSync(tmp, { recursive: true, force: true })
-    }
-  }, 20_000)
-})
+        gcTaskWriteSem(seeded.taskId) // idle now — keep the registry clean
+      } finally {
+        rmSync(tmp, { recursive: true, force: true })
+      }
+    }, 20_000)
+  },
+)
 
 // ---------------------------------------------------------------------------
 // 3. ⑥-10 multi-repo rollback wiring
 // ---------------------------------------------------------------------------
 
-describe('RFC-098 B1 — ⑥-10: clarify answer rolls back EVERY sub-repo of a multi-repo task', () => {
-  test('dual-repo task: both sub-repos are reset/cleaned/stash-applied from preSnapshotReposJson (pre-fix: silent single-track no-op)', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc098-610-'))
-    try {
-      // Production multi-repo layout: tasks.worktreePath is a PLAIN mkdir
-      // container; each repo is its own git tree in a sub-directory.
-      const containerDir = join(tmp, 'container')
-      mkdirSync(containerDir, { recursive: true })
-      const repoA = join(containerDir, 'repo-a')
-      const repoB = join(containerDir, 'repo-b')
-      await initRepo(repoA)
-      await initRepo(repoB)
+describeEachProvider(
+  'RFC-098 B1 — ⑥-10: clarify answer rolls back EVERY sub-repo of a multi-repo task',
+  (harness) => {
+    test('dual-repo task: both sub-repos are reset/cleaned/stash-applied from preSnapshotReposJson (pre-fix: silent single-track no-op)', async () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc098-610-'))
+      try {
+        // Production multi-repo layout: tasks.worktreePath is a PLAIN mkdir
+        // container; each repo is its own git tree in a sub-directory.
+        const containerDir = join(tmp, 'container')
+        mkdirSync(containerDir, { recursive: true })
+        const repoA = join(containerDir, 'repo-a')
+        const repoB = join(containerDir, 'repo-b')
+        await initRepo(repoA)
+        await initRepo(repoB)
 
-      // Per-repo pre-snapshots (distinct contents so we can prove EACH repo
-      // got ITS OWN sha applied, not just any reset).
-      writeFileSync(join(repoA, 'src.txt'), 'pre-a\n')
-      const shaA = await gitStashSnapshot(repoA)
-      writeFileSync(join(repoB, 'src.txt'), 'pre-b\n')
-      const shaB = await gitStashSnapshot(repoB)
-      expect(shaA).not.toBe('')
-      expect(shaB).not.toBe('')
+        // Per-repo pre-snapshots (distinct contents so we can prove EACH repo
+        // got ITS OWN sha applied, not just any reset).
+        writeFileSync(join(repoA, 'src.txt'), 'pre-a\n')
+        const shaA = await gitStashSnapshot(repoA)
+        writeFileSync(join(repoB, 'src.txt'), 'pre-b\n')
+        const shaB = await gitStashSnapshot(repoB)
+        expect(shaA).not.toBe('')
+        expect(shaB).not.toBe('')
 
-      // The source agent's half-done work in BOTH repos.
-      writeFileSync(join(repoA, 'src.txt'), 'dirty-a\n')
-      writeFileSync(join(repoA, 'stray-a.txt'), 'x\n')
-      writeFileSync(join(repoB, 'src.txt'), 'dirty-b\n')
-      writeFileSync(join(repoB, 'stray-b.txt'), 'x\n')
+        // The source agent's half-done work in BOTH repos.
+        writeFileSync(join(repoA, 'src.txt'), 'dirty-a\n')
+        writeFileSync(join(repoA, 'stray-a.txt'), 'x\n')
+        writeFileSync(join(repoB, 'src.txt'), 'dirty-b\n')
+        writeFileSync(join(repoB, 'stray-b.txt'), 'x\n')
 
-      const db = createInMemoryDb(MIGRATIONS)
-      const seeded = await seedClarifyTask(db, {
-        worktreePath: containerDir,
-        repoPath: repoA,
-        repoCount: 2,
-        // Multi-repo rows leave `preSnapshot` NULL by design (RFC-066 dual
-        // write) — exactly the shape the pre-B1 single-track gate skipped.
-        preSnapshot: null,
-        preSnapshotReposJson: JSON.stringify({ 'repo-a': shaA, 'repo-b': shaB }),
-        repos: [
-          { worktreePath: repoA, worktreeDirName: 'repo-a' },
-          { worktreePath: repoB, worktreeDirName: 'repo-b' },
-        ],
-      })
+        const db = harness.db
+        const seeded = await seedClarifyTask(db, {
+          worktreePath: containerDir,
+          repoPath: repoA,
+          repoCount: 2,
+          // Multi-repo rows leave `preSnapshot` NULL by design (RFC-066 dual
+          // write) — exactly the shape the pre-B1 single-track gate skipped.
+          preSnapshot: null,
+          preSnapshotReposJson: JSON.stringify({ 'repo-a': shaA, 'repo-b': shaB }),
+          repos: [
+            { worktreePath: repoA, worktreeDirName: 'repo-a' },
+            { worktreePath: repoB, worktreeDirName: 'repo-b' },
+          ],
+        })
 
-      await autoDispatchClarifyRound({
-        db,
-        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-        originNodeRunId: seeded.clarifyNodeRunId,
-        answers: [makeAns('q1')],
-        directive: 'continue',
-        actor,
-      })
+        await autoDispatchClarifyRound({
+          db,
+          memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+          originNodeRunId: seeded.clarifyNodeRunId,
+          answers: [makeAns('q1')],
+          directive: 'continue',
+          actor,
+        })
 
-      // HEADLINE (red→green on ⑥-10): BOTH sub-repos rolled back to their own
-      // pre-snapshot. Pre-fix nothing was touched (preSnapshot NULL → the old
-      // single-track gate skipped the rollback entirely for multi-repo rows).
-      expect(readFileSync(join(repoA, 'src.txt'), 'utf-8')).toBe('pre-a\n')
-      expect(readFileSync(join(repoB, 'src.txt'), 'utf-8')).toBe('pre-b\n')
-      expect(existsSync(join(repoA, 'stray-a.txt'))).toBe(false)
-      expect(existsSync(join(repoB, 'stray-b.txt'))).toBe(false)
+        // HEADLINE (red→green on ⑥-10): BOTH sub-repos rolled back to their own
+        // pre-snapshot. Pre-fix nothing was touched (preSnapshot NULL → the old
+        // single-track gate skipped the rollback entirely for multi-repo rows).
+        expect(readFileSync(join(repoA, 'src.txt'), 'utf-8')).toBe('pre-a\n')
+        expect(readFileSync(join(repoB, 'src.txt'), 'utf-8')).toBe('pre-b\n')
+        expect(existsSync(join(repoA, 'stray-a.txt'))).toBe(false)
+        expect(existsSync(join(repoB, 'stray-b.txt'))).toBe(false)
 
-      // The container dir is NOT a git repo — the shared rollback's multi-repo
-      // hard gate must never aim git at it (it would throw, and the worktree
-      // states above would not hold).
-      expect(existsSync(join(containerDir, '.git'))).toBe(false)
+        // The container dir is NOT a git repo — the shared rollback's multi-repo
+        // hard gate must never aim git at it (it would throw, and the worktree
+        // states above would not hold).
+        expect(existsSync(join(containerDir, '.git'))).toBe(false)
 
-      // Rerun minted — the multi-repo detour didn't break the answer flow.
-      const agentRows = await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, seeded.taskId), eq(nodeRuns.nodeId, 'agent_x')))
-      expect(agentRows.filter((r) => r.status === 'pending').length).toBe(1)
+        // Rerun minted — the multi-repo detour didn't break the answer flow.
+        const agentRows = await db
+          .select()
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, seeded.taskId), eq(nodeRuns.nodeId, 'agent_x')))
+        expect(agentRows.filter((r) => r.status === 'pending').length).toBe(1)
 
-      gcTaskWriteSem(seeded.taskId)
-    } finally {
-      rmSync(tmp, { recursive: true, force: true })
-    }
-  }, 20_000)
-})
+        gcTaskWriteSem(seeded.taskId)
+      } finally {
+        rmSync(tmp, { recursive: true, force: true })
+      }
+    }, 20_000)
+  },
+)

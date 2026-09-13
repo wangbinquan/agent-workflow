@@ -15,7 +15,8 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowDetail, WorkflowNode } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { createInMemoryDb, type DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   createWorkflow,
   getWorkflow,
@@ -26,7 +27,6 @@ import {
 import { REDACTED, serializeWorkflowFor, workflowReadLensFor } from '@/services/tokenRedaction'
 import { DomainError } from '@/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'u-owner'
 const SCRIPT_BODY = 'import os\nprint(os.environ["AW_PORT_DIFF"])\n'
 
@@ -69,7 +69,7 @@ function seedDefinition(): WorkflowDefinition {
   }
 }
 
-async function seed(db: DbClient): Promise<WorkflowDetail> {
+async function seed(db: ProviderNeutralDatabase): Promise<WorkflowDetail> {
   // 建的时候走 system principal（不传 actor）：现实里这份工作流是管理员 / manager
   // 做好后归属给普通用户的，这里只要复现「库里已经有特权节点」这个前提。
   return createWorkflow(
@@ -96,7 +96,7 @@ function withNodes(
 }
 
 function save(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   workflow: WorkflowDetail,
   definition: WorkflowDefinition,
   principal: WorkflowWritePrincipal,
@@ -113,7 +113,10 @@ function save(
   )
 }
 
-async function storedDefinition(db: DbClient, id: string): Promise<WorkflowDefinition> {
+async function storedDefinition(
+  db: ProviderNeutralDatabase,
+  id: string,
+): Promise<WorkflowDefinition> {
   const detail = await getWorkflow(db, id)
   if (detail === null) throw new Error('workflow vanished')
   return detail.definition
@@ -134,50 +137,53 @@ async function codeOfRejection(promise: Promise<unknown>): Promise<string | unde
   }
 }
 
-describe('RFC-270 AC-6 · 无权限用户把脱敏定义原样交回来 → 保存成功且库里一字未改', () => {
-  test('改了别的节点的标题 + 挪了脚本节点的位置，都不撞门', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflow = await seed(db)
-    const masked = asSeenByUser(workflow)
-    // 前提自检：客户端手上确实是 `***`，否则下面全是空断言。
-    expect(nodeOf(masked, 's1').script).toBe(REDACTED)
-    expect(nodeOf(masked, 'c1').params).toEqual({ project: REDACTED })
+describeEachProvider(
+  'RFC-270 AC-6 · 无权限用户把脱敏定义原样交回来 → 保存成功且库里一字未改',
+  (harness) => {
+    test('改了别的节点的标题 + 挪了脚本节点的位置，都不撞门', async () => {
+      const db = harness.db
+      const workflow = await seed(db)
+      const masked = asSeenByUser(workflow)
+      // 前提自检：客户端手上确实是 `***`，否则下面全是空断言。
+      expect(nodeOf(masked, 's1').script).toBe(REDACTED)
+      expect(nodeOf(masked, 'c1').params).toEqual({ project: REDACTED })
 
-    const edited = withNodes(masked, (nodes) =>
-      nodes.map((node) => {
-        if (node.id === 'in1') return { ...node, title: '改过的标题' }
-        if (node.id === 's1') return { ...node, position: { x: 240, y: 80 } }
-        return node
-      }),
-    )
-    await save(db, workflow, edited, principalOfRole('user'))
+      const edited = withNodes(masked, (nodes) =>
+        nodes.map((node) => {
+          if (node.id === 'in1') return { ...node, title: '改过的标题' }
+          if (node.id === 's1') return { ...node, position: { x: 240, y: 80 } }
+          return node
+        }),
+      )
+      await save(db, workflow, edited, principalOfRole('user'))
 
-    const stored = await storedDefinition(db, workflow.id)
-    expect(nodeOf(stored, 's1').script).toBe(SCRIPT_BODY)
-    expect(nodeOf(stored, 's1').env).toEqual({ API_TOKEN: 'sk-live-scriptenv' })
-    expect(nodeOf(stored, 's1').dependencies).toEqual(['requests==2.31.0'])
-    expect(nodeOf(stored, 'c1').params).toEqual({ project: 'grp/app' })
-    expect(nodeOf(stored, 'c1').request).toEqual({
-      method: 'POST',
-      path: '/api/v4/projects/1/notes',
-      body: '{"body":"ok"}',
+      const stored = await storedDefinition(db, workflow.id)
+      expect(nodeOf(stored, 's1').script).toBe(SCRIPT_BODY)
+      expect(nodeOf(stored, 's1').env).toEqual({ API_TOKEN: 'sk-live-scriptenv' })
+      expect(nodeOf(stored, 's1').dependencies).toEqual(['requests==2.31.0'])
+      expect(nodeOf(stored, 'c1').params).toEqual({ project: 'grp/app' })
+      expect(nodeOf(stored, 'c1').request).toEqual({
+        method: 'POST',
+        path: '/api/v4/projects/1/notes',
+        body: '{"body":"ok"}',
+      })
+      // 用户真正想改的那两处生效了
+      expect(nodeOf(stored, 'in1').title).toBe('改过的标题')
+      expect(nodeOf(stored, 's1').position).toEqual({ x: 240, y: 80 })
     })
-    // 用户真正想改的那两处生效了
-    expect(nodeOf(stored, 'in1').title).toBe('改过的标题')
-    expect(nodeOf(stored, 's1').position).toEqual({ x: 240, y: 80 })
-  })
 
-  test('原样交回、什么都没改也不撞门（编辑器 heal-on-open 会打出这一发）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflow = await seed(db)
-    await save(db, workflow, asSeenByUser(workflow), principalOfRole('user'))
-    expect(nodeOf(await storedDefinition(db, workflow.id), 's1').script).toBe(SCRIPT_BODY)
-  })
-})
+    test('原样交回、什么都没改也不撞门（编辑器 heal-on-open 会打出这一发）', async () => {
+      const db = harness.db
+      const workflow = await seed(db)
+      await save(db, workflow, asSeenByUser(workflow), principalOfRole('user'))
+      expect(nodeOf(await storedDefinition(db, workflow.id), 's1').script).toBe(SCRIPT_BODY)
+    })
+  },
+)
 
-describe('RFC-270 AC-7 · 结构性改动仍然撞门', () => {
+describeEachProvider('RFC-270 AC-7 · 结构性改动仍然撞门', (harness) => {
   test('新增脚本节点 → script-author-forbidden', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const added = withNodes(asSeenByUser(workflow), (nodes) => [
       ...nodes,
@@ -189,7 +195,7 @@ describe('RFC-270 AC-7 · 结构性改动仍然撞门', () => {
   })
 
   test('删除脚本节点 → script-author-forbidden', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const removed = withNodes(asSeenByUser(workflow), (nodes) =>
       nodes.filter((node) => node.id !== 's1'),
@@ -200,7 +206,7 @@ describe('RFC-270 AC-7 · 结构性改动仍然撞门', () => {
   })
 
   test('改脚本节点的入边 → script-author-forbidden（入边决定 AW_PORT_* 取到什么）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const masked = asSeenByUser(workflow)
     const rewired: WorkflowDefinition = {
@@ -219,7 +225,7 @@ describe('RFC-270 AC-7 · 结构性改动仍然撞门', () => {
   })
 
   test('把脚本节点塞进 loop → script-author-forbidden（归属决定跑几次）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const wrapped = withNodes(asSeenByUser(workflow), (nodes) => [
       ...nodes,
@@ -231,7 +237,7 @@ describe('RFC-270 AC-7 · 结构性改动仍然撞门', () => {
   })
 
   test('改代码平台节点的 provider → code-host-author-forbidden（枚举字段不遮，但也不许改）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const flipped = withNodes(asSeenByUser(workflow), (nodes) =>
       nodes.map((node) => (node.id === 'c1' ? { ...node, provider: 'github' } : node)),
@@ -242,7 +248,7 @@ describe('RFC-270 AC-7 · 结构性改动仍然撞门', () => {
   })
 
   test('新增代码平台调用节点 → code-host-author-forbidden', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const added = withNodes(asSeenByUser(workflow), (nodes) => [
       ...nodes,
@@ -254,9 +260,9 @@ describe('RFC-270 AC-7 · 结构性改动仍然撞门', () => {
   })
 })
 
-describe('RFC-270 AC-8 · 回填由镜头决定，不由值决定', () => {
+describeEachProvider('RFC-270 AC-8 · 回填由镜头决定，不由值决定', (harness) => {
   test('admin 把脚本正文真的写成 `***` 就存成 `***`（不被静默还原）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const literal = withNodes(workflow.definition, (nodes) =>
       nodes.map((node) => (node.id === 's1' ? { ...node, script: REDACTED } : node)),
@@ -266,7 +272,7 @@ describe('RFC-270 AC-8 · 回填由镜头决定，不由值决定', () => {
   })
 
   test('admin 的正常编辑照常落库（镜头透明 ⇒ 完全不回填）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const edited = withNodes(workflow.definition, (nodes) =>
       nodes.map((node) => (node.id === 's1' ? { ...node, script: 'print("v2")' } : node)),
@@ -276,7 +282,7 @@ describe('RFC-270 AC-8 · 回填由镜头决定，不由值决定', () => {
   })
 
   test('system principal 走透明镜头（平台搬运已经过门的字节）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db)
     const edited = withNodes(workflow.definition, (nodes) =>
       nodes.map((node) => (node.id === 's1' ? { ...node, script: 'print("sys")' } : node)),

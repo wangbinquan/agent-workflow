@@ -9,12 +9,12 @@
 // replaced: for every actor, count === filtered-list length. If either side
 // drifts, the badge starts lying about the inbox.
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   clarifyRounds,
   docVersions,
@@ -31,9 +31,7 @@ import {
 import { countPendingReviews, listReviewSummaries } from '../src/services/review'
 import { visibleTaskIdsOf } from '../src/services/taskAuthorization'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -146,9 +144,9 @@ async function legacyClarifyBadge(db: Db, who: Actor): Promise<number> {
   return pending.filter((s) => visible.has(s.taskId)).length
 }
 
-describe('RFC-311 — countPendingReviews oracle', () => {
+describeEachProvider('RFC-311 — countPendingReviews oracle', (harness) => {
   test('count(*) equals the legacy list+visibility pipeline for every actor', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
 
     // alice's live task: v1+v2 pending on the same (run, port) — only the
@@ -196,7 +194,7 @@ describe('RFC-311 — countPendingReviews oracle', () => {
   })
 })
 
-describe('RFC-311 — countAwaitingClarifyRounds oracle', () => {
+describeEachProvider('RFC-311 — countAwaitingClarifyRounds oracle', (harness) => {
   async function addRound(
     db: Db,
     taskId: string,
@@ -226,7 +224,7 @@ describe('RFC-311 — countAwaitingClarifyRounds oracle', () => {
   }
 
   test('count(*) equals the legacy list+visibility pipeline for every actor', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
 
     await addTask(db, 'c-live', 'alice', 'awaiting_human')
@@ -252,9 +250,9 @@ describe('RFC-311 — countAwaitingClarifyRounds oracle', () => {
 // 实现门 P2-6:`visibleTaskIdsOf` 的 tasks:read:all 分支曾直接回传入参 id(含
 // 不存在的行),与非 admin 分支语义不同、也与自己的文档相反。两个分支现在都做
 // 存在性过滤,admin 只是少一个授权谓词。
-describe('RFC-311 — visibleTaskIdsOf drops unknown ids for every actor', () => {
+describeEachProvider('RFC-311 — visibleTaskIdsOf drops unknown ids for every actor', (harness) => {
   test('admin and restricted actors agree on which ids exist', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
     await addTask(db, 'real', 'alice', 'awaiting_review')
     const ids = ['real', 'ghost-1', 'ghost-2']

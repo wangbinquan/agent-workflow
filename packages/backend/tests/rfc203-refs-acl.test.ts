@@ -14,7 +14,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
@@ -35,8 +36,6 @@ import {
   type McpCatalogTestBinding as McpServiceBinding,
 } from './helpers/mcpServiceBinding'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   return buildActor({
     user: { id, username: `u-${id}`, displayName: id, role, status: 'active' },
@@ -44,7 +43,11 @@ function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 
-async function seedUser(db: DbClient, id: string, role: 'admin' | 'user'): Promise<void> {
+async function seedUser(
+  db: ProviderNeutralDatabase,
+  id: string,
+  role: 'admin' | 'user',
+): Promise<void> {
   await db.insert(users).values({
     id,
     username: `u-${id}`,
@@ -56,7 +59,7 @@ async function seedUser(db: DbClient, id: string, role: 'admin' | 'user'): Promi
   })
 }
 
-function mcpBinding(db: DbClient, actor: Actor): McpServiceBinding {
+function mcpBinding(db: ProviderNeutralDatabase, actor: Actor): McpServiceBinding {
   const catalog = composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -118,13 +121,13 @@ describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => 
   })
 })
 
-describe('RFC-203 T6 引用披露 ACL', () => {
-  let db: DbClient
+describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
+  let db: ProviderNeutralDatabase
   const owner = actorOfUser('u-owner', 'user')
   const admin = actorOfUser('u-admin', 'admin')
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedUser(db, 'u-owner', 'user')
     await seedUser(db, 'u-other', 'user')
     await seedUser(db, 'u-admin', 'admin')

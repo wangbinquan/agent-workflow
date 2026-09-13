@@ -30,7 +30,8 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { DEFAULT_CONFIG_DIR_PROFILE, RESERVED_SPAWN_ENV } from '@agent-workflow/shared'
 import type { Agent } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { frozenRuntimeOfSession, resolveFrozenRuntime } from '../src/services/nodeRunMint'
 import {
@@ -49,7 +50,6 @@ import { createLogger } from '../src/util/log'
 import { assembleOpencodeBusinessSpawn } from '../src/services/runtime/opencode/driver'
 import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc154-test')
 
 // --- (1) validators ----------------------------------------------------------
@@ -104,7 +104,7 @@ describe('RFC-154 validateConfigDirEnv', () => {
 
 // --- (2) resolve + CRUD round-trip (exercises migration 0079 columns) --------
 
-describe('RFC-154 resolve — NULL → protocol default, overrides win', () => {
+describeEachProvider('RFC-154 resolve — NULL → protocol default, overrides win', (harness) => {
   test('defaultConfigDirProfile matches the shared single source per kind', () => {
     expect(defaultConfigDirProfile('opencode')).toEqual(DEFAULT_CONFIG_DIR_PROFILE.opencode)
     expect(defaultConfigDirProfile('claude-code')).toEqual(
@@ -113,14 +113,14 @@ describe('RFC-154 resolve — NULL → protocol default, overrides win', () => {
   })
 
   test('seeded built-ins resolve to the protocol default', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     const oc = await resolveRuntimeByName(runtimeRegistryPersistence(db), 'opencode')
     expect(oc.configDir).toEqual({ env: 'OPENCODE_CONFIG_DIR', name: '.opencode' })
     const cc = await resolveRuntimeByName(runtimeRegistryPersistence(db), 'claude-code')
     expect(cc.configDir).toEqual({ env: 'CLAUDE_CONFIG_DIR', name: '.claude' })
     // Unseeded-name + unknown-name fallbacks carry the default too.
-    const db2 = createInMemoryDb(MIGRATIONS)
+    const db2 = harness.db
     expect(
       (await resolveRuntimeByName(runtimeRegistryPersistence(db2), 'claude-code')).configDir.env,
     ).toBe('CLAUDE_CONFIG_DIR')
@@ -130,7 +130,7 @@ describe('RFC-154 resolve — NULL → protocol default, overrides win', () => {
   })
 
   test('custom row: create → resolve overrides; update → clears back to default', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     await createRuntime(runtimeRegistryPersistence(db), {
       name: 'myfork',
@@ -157,7 +157,7 @@ describe('RFC-154 resolve — NULL → protocol default, overrides win', () => {
   })
 
   test('create/update reject invalid values (service-level, not just the route)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     expect(
       createRuntime(runtimeRegistryPersistence(db), {
@@ -184,7 +184,7 @@ describe('RFC-154 resolve — NULL → protocol default, overrides win', () => {
 
 // --- (3) freeze survival (Codex P1) -------------------------------------------
 
-async function seedRun(db: DbClient): Promise<string> {
+async function seedRun(db: ProviderNeutralDatabase): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -212,9 +212,9 @@ async function seedRun(db: DbClient): Promise<string> {
   return id
 }
 
-describe('RFC-154 freeze — configDir rides the runtime snapshot', () => {
+describeEachProvider('RFC-154 freeze — configDir rides the runtime snapshot', (harness) => {
   test('frozen at first dispatch; a later row edit does NOT re-route resume', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     await createRuntime(runtimeRegistryPersistence(db), {
       name: 'myfork',
@@ -235,7 +235,7 @@ describe('RFC-154 freeze — configDir rides the runtime snapshot', () => {
   })
 
   test('frozenRuntimeOfSession returns the frozen configDir', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     await createRuntime(runtimeRegistryPersistence(db), {
       name: 'myfork',
@@ -251,7 +251,7 @@ describe('RFC-154 freeze — configDir rides the runtime snapshot', () => {
   })
 
   test('legacy runtime_params_json (no __configDir) reads back as protocol default', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const id = await seedRun(db)
     // Hand-freeze a pre-RFC-154 shape: params only, no __configDir key.
     await db
@@ -267,7 +267,7 @@ describe('RFC-154 freeze — configDir rides the runtime snapshot', () => {
   })
 
   test('params whitelist keeps __configDir out of RuntimeProfile', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     const id = await seedRun(db)
     const frozen = await resolveFrozenRuntime(db, id, 'opencode', null)

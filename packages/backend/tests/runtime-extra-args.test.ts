@@ -28,7 +28,8 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createRuntime,
@@ -48,9 +49,7 @@ import {
   CLAUDE_PLATFORM_OWNED_FLAGS,
 } from '../src/services/runtime/claudeCode/spawn'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedRun(db: DbClient): Promise<string> {
+async function seedRun(db: ProviderNeutralDatabase): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -150,9 +149,9 @@ describe('validateExtraArgs — fail-closed write gate', () => {
   })
 })
 
-describe('registry persistence + frozen snapshot', () => {
+describeEachProvider('registry persistence + frozen snapshot', (harness) => {
   test('create persists extraArgs; view + resolve expose it; opencode create rejects it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     await createRuntime(runtimeRegistryPersistence(db), {
       name: 'codeagent',
@@ -178,7 +177,7 @@ describe('registry persistence + frozen snapshot', () => {
   })
 
   test('update validates against the ROW protocol and flips the execution profile', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     await createRuntime(runtimeRegistryPersistence(db), {
       name: 'codeagent',
@@ -206,7 +205,7 @@ describe('registry persistence + frozen snapshot', () => {
   })
 
   test('frozen runtime snapshot carries extraArgs and isSandbox; later row edits do not re-route', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     await createRuntime(runtimeRegistryPersistence(db), {
       name: 'codeagent',

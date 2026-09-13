@@ -9,11 +9,11 @@
 //     (R3-3 cross-tenant isolation — the failure PR-8 name-uniqueness would open).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
@@ -27,8 +27,6 @@ import {
 import { extractAgentIdsFromSnapshot } from '../src/modules/memory/application/distill/schedule'
 import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
 import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/constants'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const ACTOR = buildActor({
   user: { id: 'u-admin', username: 'admin', displayName: 'admin', role: 'admin', status: 'active' },
@@ -171,10 +169,10 @@ describe('buildMintNodeRunValues — agentOverrideId', () => {
 // ---------------------------------------------------------------------------
 // launch freeze (A2) + task guard (R3-3) — DB-backed.
 // ---------------------------------------------------------------------------
-describe('RFC-223 PR-3a — DB locks', () => {
-  let db: DbClient
+describeEachProvider('RFC-223 PR-3a — DB locks', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('buildWorkgroupRuntimeConfig freezes each member agentId', async () => {

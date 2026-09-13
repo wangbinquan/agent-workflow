@@ -19,7 +19,8 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { skills } from '../src/db/schema'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
@@ -34,7 +35,6 @@ import { skillFilesRel } from '../src/services/skillIdentityPaths'
 import { createLogger } from '../src/util/log'
 import type { Agent } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src')
 const log = createLogger('rfc282-b2')
 
@@ -59,107 +59,113 @@ function mkAgent(overrides: Partial<Agent> = {}): Agent {
   } as Agent
 }
 
-describe('RFC-282 B2 — §7-7 skill gates are typed failures (node-level attribution)', () => {
-  let db: DbClient
+describeEachProvider(
+  'RFC-282 B2 — §7-7 skill gates are typed failures (node-level attribution)',
+  (harness) => {
+    let db: ProviderNeutralDatabase
 
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    resetSkillBootVerifyForTest()
-  })
+    beforeEach(() => {
+      db = harness.db
+      resetSkillBootVerifyForTest()
+    })
 
-  test('quarantined managed skill → {kind:failed, skill-quarantined} (was a THROW → task-level)', async () => {
-    const skillId = ulid()
-    await db.insert(skills).values({
-      id: skillId,
-      name: 'quarantined-skill',
-      description: '',
-      managedPath: skillFilesRel(skillId),
-      contentVersion: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    // Boot-reverify active with an EMPTY verified set ⇒ this skill is
-    // quarantined for the boot epoch (RFC-170 T9).
-    activateBootReverifyForTest()
-    const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
-    const result = await resolveInjection(db, agent, {
-      appHome: '/tmp/aw',
-      log,
-      agentDependencies: legacyInjectionAgentLookup(db),
-    })
-    expect(result.kind).toBe('failed')
-    if (result.kind !== 'failed') throw new Error('unreachable')
-    expect(result.message).toBe('skill-quarantined')
-    expect(result.summary).toContain('quarantined-skill')
-  })
-
-  test('non-canonical managed path → {kind:failed, skill-path-not-canonical} (was a THROW)', async () => {
-    const skillId = ulid()
-    await db.insert(skills).values({
-      id: skillId,
-      name: 'legacy-path-skill',
-      description: '',
-      managedPath: `skills/legacy-name/files`, // pre-identity-migration shape
-      contentVersion: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    activateBootReverifyForTest()
-    markSkillBootVerified(skillId)
-    const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
-    const result = await resolveInjection(db, agent, {
-      appHome: '/tmp/aw',
-      log,
-      agentDependencies: legacyInjectionAgentLookup(db),
-    })
-    expect(result.kind).toBe('failed')
-    if (result.kind !== 'failed') throw new Error('unreachable')
-    expect(result.message).toBe('skill-path-not-canonical')
-  })
-
-  test('the resolver no longer throws domain errors for these gates (typed-only surface)', async () => {
-    const skillId = ulid()
-    await db.insert(skills).values({
-      id: skillId,
-      name: 'q2',
-      description: '',
-      managedPath: skillFilesRel(skillId),
-      contentVersion: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    activateBootReverifyForTest()
-    const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
-    // A throw here would reject; typed failure resolves.
-    await expect(
-      resolveInjection(db, agent, {
-        appHome: '/tmp/aw',
-        log,
-        agentDependencies: legacyInjectionAgentLookup(db),
-      }),
-    ).resolves.toMatchObject({ kind: 'failed' })
-  })
-})
-
-describe('RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 lock)', () => {
-  test('commit-push and merge synthetic agents → ok with empty faces', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    for (const agent of [buildCommitAgent(), buildMergeAgent()]) {
+    test('quarantined managed skill → {kind:failed, skill-quarantined} (was a THROW → task-level)', async () => {
+      const skillId = ulid()
+      await db.insert(skills).values({
+        id: skillId,
+        name: 'quarantined-skill',
+        description: '',
+        managedPath: skillFilesRel(skillId),
+        contentVersion: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      // Boot-reverify active with an EMPTY verified set ⇒ this skill is
+      // quarantined for the boot epoch (RFC-170 T9).
+      activateBootReverifyForTest()
+      const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
       const result = await resolveInjection(db, agent, {
         appHome: '/tmp/aw',
         log,
         agentDependencies: legacyInjectionAgentLookup(db),
       })
-      expect(result.kind).toBe('ok')
-      if (result.kind !== 'ok') throw new Error('unreachable')
-      expect(result.spec.dependents).toEqual([])
-      expect(result.spec.skills).toEqual([])
-      expect(result.spec.mcps).toEqual([])
-      expect(result.spec.plugins).toEqual([])
-      expect(result.spec.agent).toBe(agent)
-    }
-  })
-})
+      expect(result.kind).toBe('failed')
+      if (result.kind !== 'failed') throw new Error('unreachable')
+      expect(result.message).toBe('skill-quarantined')
+      expect(result.summary).toContain('quarantined-skill')
+    })
+
+    test('non-canonical managed path → {kind:failed, skill-path-not-canonical} (was a THROW)', async () => {
+      const skillId = ulid()
+      await db.insert(skills).values({
+        id: skillId,
+        name: 'legacy-path-skill',
+        description: '',
+        managedPath: `skills/legacy-name/files`, // pre-identity-migration shape
+        contentVersion: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      activateBootReverifyForTest()
+      markSkillBootVerified(skillId)
+      const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
+      const result = await resolveInjection(db, agent, {
+        appHome: '/tmp/aw',
+        log,
+        agentDependencies: legacyInjectionAgentLookup(db),
+      })
+      expect(result.kind).toBe('failed')
+      if (result.kind !== 'failed') throw new Error('unreachable')
+      expect(result.message).toBe('skill-path-not-canonical')
+    })
+
+    test('the resolver no longer throws domain errors for these gates (typed-only surface)', async () => {
+      const skillId = ulid()
+      await db.insert(skills).values({
+        id: skillId,
+        name: 'q2',
+        description: '',
+        managedPath: skillFilesRel(skillId),
+        contentVersion: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      activateBootReverifyForTest()
+      const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
+      // A throw here would reject; typed failure resolves.
+      await expect(
+        resolveInjection(db, agent, {
+          appHome: '/tmp/aw',
+          log,
+          agentDependencies: legacyInjectionAgentLookup(db),
+        }),
+      ).resolves.toMatchObject({ kind: 'failed' })
+    })
+  },
+)
+
+describeEachProvider(
+  'RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 lock)',
+  (harness) => {
+    test('commit-push and merge synthetic agents → ok with empty faces', async () => {
+      const db = harness.db
+      for (const agent of [buildCommitAgent(), buildMergeAgent()]) {
+        const result = await resolveInjection(db, agent, {
+          appHome: '/tmp/aw',
+          log,
+          agentDependencies: legacyInjectionAgentLookup(db),
+        })
+        expect(result.kind).toBe('ok')
+        if (result.kind !== 'ok') throw new Error('unreachable')
+        expect(result.spec.dependents).toEqual([])
+        expect(result.spec.skills).toEqual([])
+        expect(result.spec.mcps).toEqual([])
+        expect(result.spec.plugins).toEqual([])
+        expect(result.spec.agent).toBe(agent)
+      }
+    })
+  },
+)
 
 describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one resource session', () => {
   test('TaskExecution has six managed session reads plus three explicit synthetic resolutions', () => {
