@@ -2,6 +2,25 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 午，总账 **416 → 415**，open **111 → 110**）
+>
+> 落档 plan §5db。`rfc104-builtin-readonly` 迁完（37 条判据双引擎全绿）：模块级 `buildApp()`
+> 建库+建应用、17 个用例各调一次、散在两个顶层 describe（另两个不碰库，不包）。
+> 顺带退役 28 个同步终结子。
+>
+> 一个顺手的确认：**`composeSqliteFusionPersistence` 只是 `composeFusionPersistenceFor` 的别名**，
+> 形参早就中立——名字里的 `Sqlite` 是纯命名债、不是能力债。这类转发壳在 AC-12 的 provider-命名
+> 账本里还有，迁移时**不必绕开**。
+>
+> ### 两个查明「不该迁」的（不是漏做）
+>
+> - `rfc310-pr3-journey`：整份夹具在 `beforeAll`（真 git 仓 + requirement provider mock + 策略种子），
+>   5 个 describe 共用；作用域是**每用例**一个应用，迁过去等于把昂贵夹具按用例重建——改的是用例的
+>   **代价结构**，不只是库来源。要迁得先拆「贵的一次性部分」与「按用例部分」。
+> - `rfc326-review-decision-batch`：两个 builder 各自在自己 tmp 下建 `appHome/doc_versions`，
+>   而作用域 app home 是 `open()` 现建的；得像 `rfc294-route-gate-compat` 那样改成 `open()` 之后
+>   往**作用域的** appHome 建目录。形状可迁，但两 builder × 四 describe，单独一刀更稳。
+>
 > ## 📌 RFC-359 最新一段（2026-09-14 上午，总账 **418 → 416**，open **113 → 111**；HTTP/WS 那一桶开工）
 >
 > 落档 plan §5da。

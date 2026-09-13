@@ -22,7 +22,9 @@ import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 import { agents, skills, tasks, workflows } from '../src/db/schema'
 import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
 import {
@@ -41,29 +43,21 @@ import { WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/constants'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { listWorkflows } from '../src/services/workflow'
-import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { ForbiddenError } from '../src/util/errors'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const TOKEN = 'a'.repeat(64) // 64-char hex → the __system__ ADMIN daemon actor
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src')
 
-function buildApp(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-rfc104-config-never-used.json',
-    opencodeVersion: '1.15.0',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
+async function buildApp(
+  scope: ProviderHttpApplicationScope,
+): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+  return { db: scope.harness.db, app: (await scope.open()).app }
 }
 
-function seedFusionResourcesForDb(db: DbClient): Promise<void> {
+function seedFusionResourcesForDb(db: ProviderNeutralDatabase): Promise<void> {
   return seedFusionResources(
     composeSqliteFusionPersistence({
       ...TEST_SQLITE_FUSION_PARTICIPANTS,
@@ -95,7 +89,7 @@ function agentPayload(name: string): Record<string, unknown> {
   }
 }
 
-async function builtinWorkflowId(db: DbClient): Promise<string> {
+async function builtinWorkflowId(db: ProviderNeutralDatabase): Promise<string> {
   const wf = (await listWorkflows(db)).find(
     (w) => w.name === SKILL_FUSION_WORKFLOW_NAME && w.builtin,
   )
@@ -103,13 +97,10 @@ async function builtinWorkflowId(db: DbClient): Promise<string> {
   return wf.id
 }
 
-function builtinAgentId(db: DbClient): string {
-  const agent = db
-    .select()
-    .from(agents)
-    .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
-    .all()
-    .find((row) => row.builtin)
+async function builtinAgentId(db: ProviderNeutralDatabase): Promise<string> {
+  const agent = (
+    await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+  ).find((row) => row.builtin)
   if (!agent) throw new Error('built-in agent not seeded')
   return agent.id
 }
@@ -139,267 +130,282 @@ async function agentRevision(
 }
 
 /** Insert a task row whose workflow is the built-in (mirrors task-collab-launch). */
-function seedTaskOnWorkflow(db: DbClient, wfId: string): string {
+async function seedTaskOnWorkflow(db: ProviderNeutralDatabase, wfId: string): Promise<string> {
   const id = ulid()
-  db.insert(tasks)
-    .values({
-      id,
-      name: 'fixture',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/repo',
-      repoUrl: null,
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      baseCommit: null,
-      status: 'interrupted',
-      inputs: '{}',
-      maxDurationMs: null,
-      maxTotalTokens: null,
-      startedAt: 0,
-      finishedAt: 0,
-      errorSummary: null,
-      errorMessage: null,
-      failedNodeId: null,
-      expiresAt: null,
-      deletedAt: null,
-      schemaVersion: 1,
-      ownerUserId: SYSTEM_USER_ID,
-    })
-    .run()
+  await db.insert(tasks).values({
+    id,
+    name: 'fixture',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/repo',
+    repoUrl: null,
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${id}`,
+    baseCommit: null,
+    status: 'interrupted',
+    inputs: '{}',
+    maxDurationMs: null,
+    maxTotalTokens: null,
+    startedAt: 0,
+    finishedAt: 0,
+    errorSummary: null,
+    errorMessage: null,
+    failedNodeId: null,
+    expiresAt: null,
+    deletedAt: null,
+    schemaVersion: 1,
+    ownerUserId: SYSTEM_USER_ID,
+  })
+
   return id
 }
 
-describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', () => {
-  beforeEach(() => resetBroadcastersForTests())
-  afterEach(() => resetBroadcastersForTests())
+describeEachProviderHttpApplication(
+  'RFC-104 — route guards refuse mutating a built-in (even as admin)',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc104-',
+  },
+  (scope) => {
+    beforeEach(() => resetBroadcastersForTests())
+    afterEach(() => resetBroadcastersForTests())
 
-  test('Settings resolves the merger through its stable semantic route', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
+    test('Settings resolves the merger through its stable semantic route', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
 
-    const response = await api(app, '/api/agents/builtins/skill-merger')
-    expect(response.status).toBe(200)
-    expect((await response.json()) as { id: string; builtin: boolean }).toMatchObject({
-      id: SKILL_MERGER_AGENT_ID,
-      builtin: true,
+      const response = await api(app, '/api/agents/builtins/skill-merger')
+      expect(response.status).toBe(200)
+      expect((await response.json()) as { id: string; builtin: boolean }).toMatchObject({
+        id: SKILL_MERGER_AGENT_ID,
+        builtin: true,
+      })
+      expect((await api(app, `/api/agents/${SKILL_MERGER_AGENT_NAME}`)).status).toBe(404)
     })
-    expect((await api(app, `/api/agents/${SKILL_MERGER_AGENT_NAME}`)).status).toBe(404)
-  })
 
-  test('agent PUT / DELETE / rename on the built-in → 403 builtin-readonly', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const base = `/api/agents/${builtinAgentId(db)}`
-    const revision = await agentRevision(app, builtinAgentId(db))
+    test('agent PUT / DELETE / rename on the built-in → 403 builtin-readonly', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const base = `/api/agents/${await builtinAgentId(db)}`
+      const revision = await agentRevision(app, await builtinAgentId(db))
 
-    await expect403Builtin(
-      await api(app, base, {
-        method: 'PUT',
-        body: JSON.stringify({ description: 'hijack', ...revision }),
-      }),
-    )
-    await expect403Builtin(await api(app, base, { method: 'DELETE' }))
-    await expect403Builtin(
-      await api(app, `${base}/rename`, {
-        method: 'POST',
-        body: JSON.stringify({ newName: 'x', ...revision }),
-      }),
-    )
-
-    // The row survived all three attempts, unmodified.
-    const row = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]
-    expect(row?.description).toContain('skill-fusion worker')
-    expect(row?.builtin).toBe(true)
-  })
-
-  // RFC-117: the built-in commit/merger agent (aw-skill-merger) gets a NARROW
-  // exemption — a runtime-ONLY patch is allowed (admin) so fusion can be pointed
-  // at a runtime profile (the "select a runtime" parity user agents have); any
-  // other field, or a mixed patch, is still 403 (RFC-104).
-  test('RFC-117: built-in agent accepts a runtime-ONLY patch; mixed/other fields still 403', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    await createRuntime(runtimeRegistryPersistence(db), {
-      name: 'oc-haiku',
-      protocol: 'opencode',
-      model: 'haiku',
-    })
-    const base = `/api/agents/${builtinAgentId(db)}`
-    const revision = await agentRevision(app, builtinAgentId(db))
-
-    // runtime-only patch lands.
-    const ok = await api(app, base, {
-      method: 'PUT',
-      body: JSON.stringify({ runtime: 'oc-haiku', ...revision }),
-    })
-    expect(ok.status).toBe(200)
-    const updated = (await ok.clone().json()) as { updatedAt: number; aclRevision?: number }
-    expect(
-      db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]?.runtime,
-    ).toBe('oc-haiku')
-
-    // a mixed patch (runtime + another field) is still rejected — no smuggling.
-    await expect403Builtin(
-      await api(app, base, {
-        method: 'PUT',
-        body: JSON.stringify({
-          runtime: 'oc-haiku',
-          description: 'hijack',
-          expectedUpdatedAt: updated.updatedAt,
-          expectedAclRevision: updated.aclRevision ?? 0,
+      await expect403Builtin(
+        await api(app, base, {
+          method: 'PUT',
+          body: JSON.stringify({ description: 'hijack', ...revision }),
         }),
-      }),
-    )
-    // built-in description untouched (the mixed patch didn't land).
-    expect(
-      db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]
-        ?.description,
-    ).toContain('skill-fusion worker')
-  })
+      )
+      await expect403Builtin(await api(app, base, { method: 'DELETE' }))
+      await expect403Builtin(
+        await api(app, `${base}/rename`, {
+          method: 'POST',
+          body: JSON.stringify({ newName: 'x', ...revision }),
+        }),
+      )
 
-  test('workflow PUT / DELETE on the built-in → 403 builtin-readonly', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const id = await builtinWorkflowId(db)
-    const workflow = await workflowDetail(app, id)
+      // The row survived all three attempts, unmodified.
+      const row = (
+        await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+      )[0]
+      expect(row?.description).toContain('skill-fusion worker')
+      expect(row?.builtin).toBe(true)
+    })
 
-    await expect403Builtin(
-      await api(app, `/api/workflows/${id}`, {
+    // RFC-117: the built-in commit/merger agent (aw-skill-merger) gets a NARROW
+    // exemption — a runtime-ONLY patch is allowed (admin) so fusion can be pointed
+    // at a runtime profile (the "select a runtime" parity user agents have); any
+    // other field, or a mixed patch, is still 403 (RFC-104).
+    test('RFC-117: built-in agent accepts a runtime-ONLY patch; mixed/other fields still 403', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      await createRuntime(runtimeRegistryPersistence(db), {
+        name: 'oc-haiku',
+        protocol: 'opencode',
+        model: 'haiku',
+      })
+      const base = `/api/agents/${await builtinAgentId(db)}`
+      const revision = await agentRevision(app, await builtinAgentId(db))
+
+      // runtime-only patch lands.
+      const ok = await api(app, base, {
         method: 'PUT',
-        body: JSON.stringify({
-          expectedVersion: workflow.version,
-          clientMutationId: ulid(),
-          snapshot: {
-            name: workflow.name,
+        body: JSON.stringify({ runtime: 'oc-haiku', ...revision }),
+      })
+      expect(ok.status).toBe(200)
+      const updated = (await ok.clone().json()) as { updatedAt: number; aclRevision?: number }
+      expect(
+        (await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)))[0]
+          ?.runtime,
+      ).toBe('oc-haiku')
+
+      // a mixed patch (runtime + another field) is still rejected — no smuggling.
+      await expect403Builtin(
+        await api(app, base, {
+          method: 'PUT',
+          body: JSON.stringify({
+            runtime: 'oc-haiku',
             description: 'hijack',
-            definition: workflow.definition,
-          },
+            expectedUpdatedAt: updated.updatedAt,
+            expectedAclRevision: updated.aclRevision ?? 0,
+          }),
         }),
-      }),
-    )
-    await expect403Builtin(
-      await api(app, `/api/workflows/${id}`, {
-        method: 'DELETE',
-        body: JSON.stringify({ expectedVersion: workflow.version, clientMutationId: ulid() }),
-      }),
-    )
-    expect(db.select().from(workflows).where(eq(workflows.id, id)).all()[0]?.builtin).toBe(true)
-  })
+      )
+      // built-in description untouched (the mixed patch didn't land).
+      expect(
+        (await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)))[0]
+          ?.description,
+      ).toContain('skill-fusion worker')
+    })
 
-  test('ACL PUT (owner/visibility/grants) on built-in agent + workflow → 403 (the footgun)', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const id = await builtinWorkflowId(db)
+    test('workflow PUT / DELETE on the built-in → 403 builtin-readonly', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const id = await builtinWorkflowId(db)
+      const workflow = await workflowDetail(app, id)
 
-    const agentId = builtinAgentId(db)
-    await expect403Builtin(
-      await api(app, `/api/agents/${agentId}/acl`, {
+      await expect403Builtin(
+        await api(app, `/api/workflows/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: workflow.version,
+            clientMutationId: ulid(),
+            snapshot: {
+              name: workflow.name,
+              description: 'hijack',
+              definition: workflow.definition,
+            },
+          }),
+        }),
+      )
+      await expect403Builtin(
+        await api(app, `/api/workflows/${id}`, {
+          method: 'DELETE',
+          body: JSON.stringify({ expectedVersion: workflow.version, clientMutationId: ulid() }),
+        }),
+      )
+      expect((await db.select().from(workflows).where(eq(workflows.id, id)))[0]?.builtin).toBe(true)
+    })
+
+    test('ACL PUT (owner/visibility/grants) on built-in agent + workflow → 403 (the footgun)', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const id = await builtinWorkflowId(db)
+
+      const agentId = await builtinAgentId(db)
+      await expect403Builtin(
+        await api(app, `/api/agents/${agentId}/acl`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            visibility: 'private',
+            expectedResourceId: agentId,
+            expectedAclRevision: 0,
+          }),
+        }),
+      )
+      await expect403Builtin(
+        await api(app, `/api/workflows/${id}/acl`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            ownerUserId: 'someone',
+            visibility: 'private',
+            expectedResourceId: id,
+            expectedAclRevision: 0,
+          }),
+        }),
+      )
+      // Owner + visibility unchanged → still hidden + still resolvable as built-in.
+      const wf = (await db.select().from(workflows).where(eq(workflows.id, id)))[0]
+      expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
+      expect(wf?.visibility).toBe('public')
+    })
+
+    test('POST /api/tasks launching the built-in workflow → 403 builtin-readonly', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const id = await builtinWorkflowId(db)
+      const res = await api(app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'manual-launch-attempt',
+          workflowId: id,
+          repoUrl: 'https://git.invalid/placeholder.git',
+          ref: 'main',
+          inputs: {},
+        }),
+      })
+      await expect403Builtin(res)
+    })
+
+    // RFC-271 C2 显式改判：裸 YAML 导入端点已下线，这条针对它的内置只读守卫随之
+    // 退场。**守卫本身仍在**——`insertWorkflowInTx` / `commitWorkflowSaveInTx` 这两个
+    // 持久化原语上的 builtin 判据一字未动，同文件其余用例就在锁它们；配置包导入走的
+    // 也正是那两个原语。
+
+    test('the guard does NOT over-block normal (non-built-in) resources', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      await createRuntime(runtimeRegistryPersistence(db), {
+        name: 'opencode',
+        protocol: 'opencode',
+        model: 'openai/gpt-5.6',
+      })
+      const created = await api(app, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify(agentPayload('my-coder')),
+      })
+      expect(created.status).toBe(201)
+      const agent = (await created.json()) as {
+        id: string
+        updatedAt: number
+        aclRevision?: number
+      }
+      // A normal agent (builtin=false) edits fine — the lock is built-in-only.
+      const put = await api(app, `/api/agents/${agent.id}`, {
         method: 'PUT',
         body: JSON.stringify({
-          visibility: 'private',
-          expectedResourceId: agentId,
-          expectedAclRevision: 0,
+          description: 'edited',
+          expectedUpdatedAt: agent.updatedAt,
+          expectedAclRevision: agent.aclRevision ?? 0,
         }),
-      }),
-    )
-    await expect403Builtin(
-      await api(app, `/api/workflows/${id}/acl`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          ownerUserId: 'someone',
-          visibility: 'private',
-          expectedResourceId: id,
-          expectedAclRevision: 0,
+      })
+      expect(put.status).toBe(200)
+    })
+
+    test('POST /api/tasks (multipart) launching the built-in workflow → 403 builtin-readonly', async () => {
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const id = await builtinWorkflowId(db)
+      const form = new FormData()
+      form.append(
+        'payload',
+        JSON.stringify({
+          name: 'mp',
+          workflowId: id,
+          repoUrl: 'https://git.invalid/placeholder.git',
+          ref: 'main',
+          inputs: {},
         }),
-      }),
-    )
-    // Owner + visibility unchanged → still hidden + still resolvable as built-in.
-    const wf = db.select().from(workflows).where(eq(workflows.id, id)).all()[0]
-    expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
-    expect(wf?.visibility).toBe('public')
-  })
-
-  test('POST /api/tasks launching the built-in workflow → 403 builtin-readonly', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const id = await builtinWorkflowId(db)
-    const res = await api(app, '/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'manual-launch-attempt',
-        workflowId: id,
-        repoUrl: 'https://git.invalid/placeholder.git',
-        ref: 'main',
-        inputs: {},
-      }),
+      )
+      await expect403Builtin(await api(app, '/api/tasks', { method: 'POST', body: form }))
     })
-    await expect403Builtin(res)
-  })
 
-  // RFC-271 C2 显式改判：裸 YAML 导入端点已下线，这条针对它的内置只读守卫随之
-  // 退场。**守卫本身仍在**——`insertWorkflowInTx` / `commitWorkflowSaveInTx` 这两个
-  // 持久化原语上的 builtin 判据一字未动，同文件其余用例就在锁它们；配置包导入走的
-  // 也正是那两个原语。
-
-  test('the guard does NOT over-block normal (non-built-in) resources', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    await createRuntime(runtimeRegistryPersistence(db), {
-      name: 'opencode',
-      protocol: 'opencode',
-      model: 'openai/gpt-5.6',
+    test('resume / retry of a built-in-workflow task → 403 (no manual exec via resume/retry)', async () => {
+      // The only built-in-workflow tasks are fusion engine tasks; the engine drives
+      // them via the SERVICE (clarify/review → resumeTask, daemon recovery), never
+      // these user-facing routes — so blocking the routes is safe.
+      const { db, app } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const taskId = await seedTaskOnWorkflow(db, await builtinWorkflowId(db))
+      await expect403Builtin(await api(app, `/api/tasks/${taskId}/resume`, { method: 'POST' }))
+      await expect403Builtin(
+        await api(app, `/api/tasks/${taskId}/nodes/some-node/retry`, { method: 'POST' }),
+      )
     })
-    const created = await api(app, '/api/agents', {
-      method: 'POST',
-      body: JSON.stringify(agentPayload('my-coder')),
-    })
-    expect(created.status).toBe(201)
-    const agent = (await created.json()) as { id: string; updatedAt: number; aclRevision?: number }
-    // A normal agent (builtin=false) edits fine — the lock is built-in-only.
-    const put = await api(app, `/api/agents/${agent.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'edited',
-        expectedUpdatedAt: agent.updatedAt,
-        expectedAclRevision: agent.aclRevision ?? 0,
-      }),
-    })
-    expect(put.status).toBe(200)
-  })
-
-  test('POST /api/tasks (multipart) launching the built-in workflow → 403 builtin-readonly', async () => {
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const id = await builtinWorkflowId(db)
-    const form = new FormData()
-    form.append(
-      'payload',
-      JSON.stringify({
-        name: 'mp',
-        workflowId: id,
-        repoUrl: 'https://git.invalid/placeholder.git',
-        ref: 'main',
-        inputs: {},
-      }),
-    )
-    await expect403Builtin(await api(app, '/api/tasks', { method: 'POST', body: form }))
-  })
-
-  test('resume / retry of a built-in-workflow task → 403 (no manual exec via resume/retry)', async () => {
-    // The only built-in-workflow tasks are fusion engine tasks; the engine drives
-    // them via the SERVICE (clarify/review → resumeTask, daemon recovery), never
-    // these user-facing routes — so blocking the routes is safe.
-    const { db, app } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const taskId = seedTaskOnWorkflow(db, await builtinWorkflowId(db))
-    await expect403Builtin(await api(app, `/api/tasks/${taskId}/resume`, { method: 'POST' }))
-    await expect403Builtin(
-      await api(app, `/api/tasks/${taskId}/nodes/some-node/retry`, { method: 'POST' }),
-    )
-  })
-})
+  },
+)
 
 describe('RFC-104 — assertNotBuiltin / isBuiltinRow are the actor-blind single source', () => {
   test('framework identity registry has no collisions and skills stay outside builtin semantics', () => {
@@ -433,172 +439,178 @@ describe('RFC-104 — assertNotBuiltin / isBuiltinRow are the actor-blind single
   })
 })
 
-describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', () => {
-  beforeEach(() => resetBroadcastersForTests())
+describeEachProviderHttpApplication(
+  'RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc104-',
+  },
+  (scope) => {
+    beforeEach(() => resetBroadcastersForTests())
 
-  test('owner/visibility drift on the built-in workflow is repaired on re-seed', async () => {
-    const { db } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const id = await builtinWorkflowId(db)
-    // Simulate someone having moved owner + flipped visibility (builtin kept).
-    db.update(workflows)
-      .set({ ownerUserId: ulid(), visibility: 'private' })
-      .where(eq(workflows.id, id))
-      .run()
+    test('owner/visibility drift on the built-in workflow is repaired on re-seed', async () => {
+      const { db } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const id = await builtinWorkflowId(db)
+      // Simulate someone having moved owner + flipped visibility (builtin kept).
+      await db
+        .update(workflows)
+        .set({ ownerUserId: ulid(), visibility: 'private' })
+        .where(eq(workflows.id, id))
 
-    await seedFusionResourcesForDb(db)
-    const wf = db.select().from(workflows).where(eq(workflows.id, id)).all()[0]
-    expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
-    expect(wf?.visibility).toBe('public')
-    expect(wf?.builtin).toBe(true)
-  })
-
-  test('built-in flag lost (owner still __system__) is re-adopted on re-seed', async () => {
-    const { db } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const id = await builtinWorkflowId(db)
-    // Migration backfill could miss a row; simulate builtin=0 with owner intact.
-    db.update(workflows).set({ builtin: false }).where(eq(workflows.id, id)).run()
-
-    await seedFusionResourcesForDb(db)
-    expect(db.select().from(workflows).where(eq(workflows.id, id)).all()[0]?.builtin).toBe(true)
-  })
-
-  test('agent drift with __system__ owner intact (builtin/visibility) is repaired on re-seed', async () => {
-    const { db } = buildApp()
-    await seedFusionResourcesForDb(db)
-    // The fixed ID is the authority, so identity-field drift is repaired.
-    // A random-ID same-name squatter is still never adopted (covered below).
-    db.update(agents)
-      .set({ visibility: 'private', builtin: false })
-      .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
-      .run()
-
-    await seedFusionResourcesForDb(db)
-    const row = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]
-    expect(row?.builtin).toBe(true)
-    expect(row?.ownerUserId).toBe(SYSTEM_USER_ID)
-    expect(row?.visibility).toBe('public')
-  })
-
-  test('re-seed preserves merger customization and repairs only workflow agentId once', async () => {
-    const { db } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const workflow = db
-      .select()
-      .from(workflows)
-      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      .get()!
-    const definition = JSON.parse(workflow.definition) as {
-      nodes: Array<Record<string, unknown>>
-      custom?: string
-    }
-    const mergerNode = definition.nodes.find((node) => node['id'] === 'merger')!
-    mergerNode['agentId'] = 'drifted-agent-id'
-    definition.custom = 'preserve-me'
-
-    db.update(agents)
-      .set({
-        runtime: 'custom-runtime',
-        bodyMd: 'custom merger instructions',
-        dependsOn: JSON.stringify(['custom-dependency']),
-        plugins: JSON.stringify(['custom-plugin']),
-      })
-      .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
-      .run()
-    db.update(workflows)
-      .set({ definition: JSON.stringify(definition) })
-      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      .run()
-
-    await seedFusionResourcesForDb(db)
-    const agent = db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).get()!
-    expect(agent.runtime).toBe('custom-runtime')
-    expect(agent.bodyMd).toBe('custom merger instructions')
-    expect(JSON.parse(agent.dependsOn)).toEqual(['custom-dependency'])
-    expect(JSON.parse(agent.plugins)).toEqual(['custom-plugin'])
-
-    const repaired = db
-      .select()
-      .from(workflows)
-      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      .get()!
-    const repairedDefinition = JSON.parse(repaired.definition) as {
-      nodes: Array<Record<string, unknown>>
-      custom?: string
-    }
-    expect(repairedDefinition.custom).toBe('preserve-me')
-    expect(repairedDefinition.nodes.find((node) => node['id'] === 'merger')?.['agentId']).toBe(
-      SKILL_MERGER_AGENT_ID,
-    )
-    expect(repaired.version).toBe(workflow.version + 1)
-
-    await seedFusionResourcesForDb(db)
-    expect(
-      db
-        .select({ version: workflows.version })
-        .from(workflows)
-        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-        .get()?.version,
-    ).toBe(repaired.version)
-  })
-
-  test('workflow repair never adopts another node by the merger display name', async () => {
-    const { db } = buildApp()
-    await seedFusionResourcesForDb(db)
-    const workflow = db
-      .select()
-      .from(workflows)
-      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      .get()!
-    const definition = JSON.parse(workflow.definition) as {
-      nodes: Array<Record<string, unknown>>
-    }
-    definition.nodes.push({
-      id: 'display-name-impostor',
-      kind: 'agent-single',
-      agentId: 'user-agent-id',
-      agentName: SKILL_MERGER_AGENT_NAME,
+      await seedFusionResourcesForDb(db)
+      const wf = (await db.select().from(workflows).where(eq(workflows.id, id)))[0]
+      expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
+      expect(wf?.visibility).toBe('public')
+      expect(wf?.builtin).toBe(true)
     })
-    db.update(workflows)
-      .set({ definition: JSON.stringify(definition) })
-      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      .run()
 
-    await seedFusionResourcesForDb(db)
-    const repaired = JSON.parse(
-      db
-        .select({ definition: workflows.definition })
-        .from(workflows)
+    test('built-in flag lost (owner still __system__) is re-adopted on re-seed', async () => {
+      const { db } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const id = await builtinWorkflowId(db)
+      // Migration backfill could miss a row; simulate builtin=0 with owner intact.
+      await db.update(workflows).set({ builtin: false }).where(eq(workflows.id, id))
+
+      await seedFusionResourcesForDb(db)
+      expect((await db.select().from(workflows).where(eq(workflows.id, id)))[0]?.builtin).toBe(true)
+    })
+
+    test('agent drift with __system__ owner intact (builtin/visibility) is repaired on re-seed', async () => {
+      const { db } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      // The fixed ID is the authority, so identity-field drift is repaired.
+      // A random-ID same-name squatter is still never adopted (covered below).
+      await db
+        .update(agents)
+        .set({ visibility: 'private', builtin: false })
+        .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+
+      await seedFusionResourcesForDb(db)
+      const row = (
+        await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+      )[0]
+      expect(row?.builtin).toBe(true)
+      expect(row?.ownerUserId).toBe(SYSTEM_USER_ID)
+      expect(row?.visibility).toBe('public')
+    })
+
+    test('re-seed preserves merger customization and repairs only workflow agentId once', async () => {
+      const { db } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const workflow = (
+        await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      )[0]!
+      const definition = JSON.parse(workflow.definition) as {
+        nodes: Array<Record<string, unknown>>
+        custom?: string
+      }
+      const mergerNode = definition.nodes.find((node) => node['id'] === 'merger')!
+      mergerNode['agentId'] = 'drifted-agent-id'
+      definition.custom = 'preserve-me'
+
+      await db
+        .update(agents)
+        .set({
+          runtime: 'custom-runtime',
+          bodyMd: 'custom merger instructions',
+          dependsOn: JSON.stringify(['custom-dependency']),
+          plugins: JSON.stringify(['custom-plugin']),
+        })
+        .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
+
+      await db
+        .update(workflows)
+        .set({ definition: JSON.stringify(definition) })
         .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-        .get()!.definition,
-    ) as { nodes: Array<Record<string, unknown>> }
-    expect(repaired.nodes.find((node) => node['id'] === 'merger')?.['agentId']).toBe(
-      SKILL_MERGER_AGENT_ID,
-    )
-    expect(repaired.nodes.find((node) => node['id'] === 'display-name-impostor')?.['agentId']).toBe(
-      'user-agent-id',
-    )
-  })
 
-  test('a wrong-name fixed-id occupant fails closed and remains untouched', async () => {
-    const { db } = buildApp()
-    db.insert(agents)
-      .values({ id: SKILL_MERGER_AGENT_ID, name: 'ordinary-agent', builtin: false })
-      .run()
+      await seedFusionResourcesForDb(db)
+      const agent = (await db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)))[0]!
+      expect(agent.runtime).toBe('custom-runtime')
+      expect(agent.bodyMd).toBe('custom merger instructions')
+      expect(JSON.parse(agent.dependsOn)).toEqual(['custom-dependency'])
+      expect(JSON.parse(agent.plugins)).toEqual(['custom-plugin'])
 
-    await expect(seedFusionResourcesForDb(db)).rejects.toThrow(/stable built-in agent id/)
-    expect(
-      db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).get(),
-    ).toMatchObject({ name: 'ordinary-agent', builtin: false })
-  })
+      const repaired = (
+        await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      )[0]!
+      const repairedDefinition = JSON.parse(repaired.definition) as {
+        nodes: Array<Record<string, unknown>>
+        custom?: string
+      }
+      expect(repairedDefinition.custom).toBe('preserve-me')
+      expect(repairedDefinition.nodes.find((node) => node['id'] === 'merger')?.['agentId']).toBe(
+        SKILL_MERGER_AGENT_ID,
+      )
+      expect(repaired.version).toBe(workflow.version + 1)
 
-  test('a user same-named workflow (builtin=false) coexists; exactly one built-in remains', async () => {
-    const { db } = buildApp()
-    await seedFusionResourcesForDb(db)
-    // A user creates/imports their own workflow reusing the reserved name.
-    db.insert(workflows)
-      .values({
+      await seedFusionResourcesForDb(db)
+      expect(
+        (
+          await db
+            .select({ version: workflows.version })
+            .from(workflows)
+            .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+        )[0]?.version,
+      ).toBe(repaired.version)
+    })
+
+    test('workflow repair never adopts another node by the merger display name', async () => {
+      const { db } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      const workflow = (
+        await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      )[0]!
+      const definition = JSON.parse(workflow.definition) as {
+        nodes: Array<Record<string, unknown>>
+      }
+      definition.nodes.push({
+        id: 'display-name-impostor',
+        kind: 'agent-single',
+        agentId: 'user-agent-id',
+        agentName: SKILL_MERGER_AGENT_NAME,
+      })
+      await db
+        .update(workflows)
+        .set({ definition: JSON.stringify(definition) })
+        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+
+      await seedFusionResourcesForDb(db)
+      const repaired = JSON.parse(
+        (
+          await db
+            .select({ definition: workflows.definition })
+            .from(workflows)
+            .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+        )[0]!.definition,
+      ) as { nodes: Array<Record<string, unknown>> }
+      expect(repaired.nodes.find((node) => node['id'] === 'merger')?.['agentId']).toBe(
+        SKILL_MERGER_AGENT_ID,
+      )
+      expect(
+        repaired.nodes.find((node) => node['id'] === 'display-name-impostor')?.['agentId'],
+      ).toBe('user-agent-id')
+    })
+
+    test('a wrong-name fixed-id occupant fails closed and remains untouched', async () => {
+      const { db } = await buildApp(scope)
+      await db
+        .insert(agents)
+        .values({ id: SKILL_MERGER_AGENT_ID, name: 'ordinary-agent', builtin: false })
+
+      await expect(seedFusionResourcesForDb(db)).rejects.toThrow(/stable built-in agent id/)
+      expect(
+        (await db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)))[0],
+      ).toMatchObject({ name: 'ordinary-agent', builtin: false })
+    })
+
+    test('a user same-named workflow (builtin=false) coexists; exactly one built-in remains', async () => {
+      const { db } = await buildApp(scope)
+      await seedFusionResourcesForDb(db)
+      // A user creates/imports their own workflow reusing the reserved name.
+      await db.insert(workflows).values({
         id: ulid(),
         name: SKILL_FUSION_WORKFLOW_NAME,
         description: 'mine',
@@ -612,59 +624,60 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
         ownerUserId: ulid(),
         builtin: false,
       })
-      .run()
 
-    const all = (await listWorkflows(db)).filter((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)
-    expect(all.length).toBe(2)
-    // fusionWorkflowId selects by builtin=true → exactly one match, unambiguous.
-    expect(all.filter((w) => w.builtin).length).toBe(1)
+      const all = (await listWorkflows(db)).filter((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)
+      expect(all.length).toBe(2)
+      // fusionWorkflowId selects by builtin=true → exactly one match, unambiguous.
+      expect(all.filter((w) => w.builtin).length).toBe(1)
 
-    // The partial unique index forbids a SECOND built-in with the same name.
-    expect(() =>
-      db
-        .insert(workflows)
-        .values({
-          id: ulid(),
-          name: SKILL_FUSION_WORKFLOW_NAME,
-          description: 'rogue',
-          definition: JSON.stringify({
-            $schema_version: 4,
-            inputs: [],
-            nodes: [],
-            edges: [],
-            outputs: [],
+      // The partial unique index forbids a SECOND built-in with the same name.
+      expect(
+        async () =>
+          await db.insert(workflows).values({
+            id: ulid(),
+            name: SKILL_FUSION_WORKFLOW_NAME,
+            description: 'rogue',
+            definition: JSON.stringify({
+              $schema_version: 4,
+              inputs: [],
+              nodes: [],
+              edges: [],
+              outputs: [],
+            }),
+            ownerUserId: SYSTEM_USER_ID,
+            builtin: true,
           }),
-          ownerUserId: SYSTEM_USER_ID,
-          builtin: true,
-        })
-        .run(),
-    ).toThrow()
-  })
-
-  test('reserved-name user row coexists with the system-owned built-in bucket', async () => {
-    const { db } = buildApp()
-    // A user grabbed `aw-skill-merger` (builtin=false, user-owned) before the
-    // framework's first seed. RFC-223 scopes names by owner, so the user row
-    // remains untouched while the framework publishes its own system row.
-    const uid = ulid()
-    const userAgentId = ulid()
-    db.insert(agents)
-      .values({ id: userAgentId, name: SKILL_MERGER_AGENT_NAME, ownerUserId: uid, builtin: false })
-      .run()
-
-    await expect(seedFusionResourcesForDb(db)).resolves.toBeUndefined()
-    const rows = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()
-    expect(rows).toHaveLength(2)
-    expect(rows.find((row) => row.id === userAgentId)).toMatchObject({
-      builtin: false,
-      ownerUserId: uid,
+      ).toThrow()
     })
-    expect(rows.find((row) => row.id === SKILL_MERGER_AGENT_ID)).toMatchObject({
-      builtin: true,
-      ownerUserId: SYSTEM_USER_ID,
+
+    test('reserved-name user row coexists with the system-owned built-in bucket', async () => {
+      const { db } = await buildApp(scope)
+      // A user grabbed `aw-skill-merger` (builtin=false, user-owned) before the
+      // framework's first seed. RFC-223 scopes names by owner, so the user row
+      // remains untouched while the framework publishes its own system row.
+      const uid = ulid()
+      const userAgentId = ulid()
+      await db.insert(agents).values({
+        id: userAgentId,
+        name: SKILL_MERGER_AGENT_NAME,
+        ownerUserId: uid,
+        builtin: false,
+      })
+
+      await expect(seedFusionResourcesForDb(db)).resolves.toBeUndefined()
+      const rows = await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+      expect(rows).toHaveLength(2)
+      expect(rows.find((row) => row.id === userAgentId)).toMatchObject({
+        builtin: false,
+        ownerUserId: uid,
+      })
+      expect(rows.find((row) => row.id === SKILL_MERGER_AGENT_ID)).toMatchObject({
+        builtin: true,
+        ownerUserId: SYSTEM_USER_ID,
+      })
     })
-  })
-})
+  },
+)
 
 describe('RFC-104 — source-level guard anchors (regression: do not delete the guards)', () => {
   test('launch + resume/retry + YAML import + ACL guards are present in source', () => {

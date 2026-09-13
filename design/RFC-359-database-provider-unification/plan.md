@@ -8661,3 +8661,26 @@ helper 不在任何块里，却会被 provider 用例调用**，那才是真正�
   （§5bg 的装配签名不对称）。全树只有这 2 个文件有这种「写在散文里的裁决」，**不值得为它们
   新增一类 marker 判据**——marker 判据的风险是「谁都能给自己编个理由」，而收益只有 2 条。
   它们留在 open 名单里，等 §5bg 那一刀连根消掉。
+
+## 5db. HTTP 那一桶第二迁：`rfc104-builtin-readonly`（415 / open 110），以及两个**不该迁**的形状
+
+`rfc104-builtin-readonly` 是这一桶里最典型的形状：一个模块级 `buildApp()` 建库 + 建应用，
+**17 个用例各自调一次**，散在两个顶层 describe 里（另两个 describe 不碰库，不用包）。
+迁法与 §5da 的先导一致：`buildApp(scope)` 里 `db` 取 `scope.harness.db`、`app` 取
+`(await scope.open()).app`，两个用到它的 describe 各自包成 `describeEachProviderHttpApplication`。
+顺带退役 28 个同步终结子（3 个函数转 async、6 个调用点补 `await`）。37 条判据两引擎全绿。
+
+一个顺手的确认：`composeSqliteFusionPersistence` 其实**只是 `composeFusionPersistenceFor` 的别名**
+（`modules/knowledge-evolution/composition/fusion.ts`），形参早就中立——名字里的 `Sqlite` 是纯
+命名债，不是能力债。这类「名字吓人、签名已中立」的转发壳在 AC-12 的 provider-命名账本里还有，
+迁移时不必绕开它们。
+
+### 两个查明**不该迁**的（不是漏做）
+
+- **`rfc310-pr3-journey`**：整份夹具建在 `beforeAll` 里（真 git 仓 + requirement provider mock +
+  策略种子），5 个 describe 共用。作用域是**每用例**一个应用，迁过去等于把这套昂贵夹具按用例重建，
+  改的是用例的代价结构而不只是库来源。要迁得先把夹具拆成「贵的一次性部分」与「按用例的部分」。
+- **`rfc326-review-decision-batch`**：两个 builder 各自在自己的 tmp 下建 `appHome/doc_versions`，
+  而作用域的 app home 是 `open()` 现建的——得像 `rfc294-route-gate-compat` 那样改成在
+  `open()` 之后往**作用域的** appHome 里建目录。形状可迁，但两个 builder × 四个 describe，
+  单独一刀更稳。
