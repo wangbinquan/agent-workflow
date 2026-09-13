@@ -2,6 +2,56 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-13 下半场，AC-6 账本 **530 → 460**；判据换 AST + 批量迁移 + 三条架构缺口）
+>
+> 主干从 `405e43bf7` 推到 `d8f41b642`，本段 18 个提交（末尾这条 STATE 更新在外）；中途推红三次，都当场修了，见下「三次推红」。
+>
+> ### 1. 账本判据从**文本扫**换成**按 AST 数真调用点**（plan §5bw）
+>
+> 注释、`expect(src).not.toContain('new Database(')` 这类断言不再被记成欠债——误计不只是数字不准，
+> 它让「把账本改到 0」**做不到**。模板字面量仍然数（worker 源码常以模板串写在用例里再落盘执行）。
+> 守卫的自我豁免随之退役（`EXEMPT` 2 → 1）。
+>
+> ### 2. 迁移工具化：三版才落到全 AST（§5bx / §5cd / §5cl）
+>
+> 前两版栽在「文本里出现某个名字 ≠ 代码里用了某个符号」上：`\bDbClient\b` 的全文替换把**源码断言里的
+> 字符串**也改了，判据当场反转。第三版只改 `TypeReferenceNode`，编辑收成 `{start,end,text}` 倒序施加。
+> 检测器前置条件积到四条：构造点必须在 lazy hook 里 / 不要包住已含 provider 块的 describe /
+> 判缩进用 `^[ \t]+` 不能用 `\s`（`\s` 匹配换行，会把顶层块也降级）/ 被跳过的块里的构造点不能替换。
+>
+> ### 3. 三次推红，三个不同的漏检（都已折进 `docs/dev-gotchas.md`）
+>
+> ① 迁完只对 diff 跑 eslint（漏 4 个未用 import）；② **`bun test` 不做类型检查**——27 个迁移双引擎
+> 全绿而 tsc 红了 11 个；③ 放宽形参留下一个死 import，tsc 不管、eslint 当场红。
+> **结论：typecheck 和 eslint 是两件事，提交前对着完整 `git status` 列表各跑一遍。**
+>
+> ### 4. 照出三条**真架构缺口**（不是测试问题），都已取证定形、未擅自动手
+>
+> - **8 条外键只在 SQLite 上有**（`tasks.owner_user_id`、`users.created_by` …）。删用户时 SQLite
+>   会把 owner 置空，PG 留悬空 id。补声明后清点归零（142 = 142）、全绿，但**上不了车**：PG 的不可变
+>   schema 历史只有「索引新增」一种 append 步骤，硬性要求 rowContract 逐字不变、且必须配一条新增的
+>   SQLite 迁移。已回退，定形成 **T-FK1/2/3**（plan §5cc）。
+> - **`inspectHumanReview` 是同步公共端口**（`task-execution/public/participants.ts:373`），PG 上按签名
+>   实现不了；端口可选，于是 **PG 部署上数字员工的人审状态投影直接缺失**（plan §5cj + audit-backlog）。
+> - **`createTaskExecutionTestTopology` 那 73 个**：203 个调用点里 202 个只取 `schedulerDriver`、
+>   201 个要 `'real'`；两个引擎的执行模型不同（PG 的 drive 必须在已认领的 ownership 里跑）。
+>   要么改写成提交 `runTask`，要么给 provider 拓扑补一个自带认领的外观（plan §5ce）。
+>
+> ### 5. 剩下 460 条的构成与**下一刀**（plan §5ce / §5cn / §5co）
+>
+> `migration-*` 80（**按定义不该双引擎**）、task-topology 73（要设计）、裸 `$client` 78、
+> HTTP 形状 37、残留约 190（绝大多数卡 callee 形参）。另有 41 个 `new Database(` 开**真实文件**
+> （备份 / 还原 / VACUUM INTO / 外部 store），判的就是 SQLite 文件自身行为，不该也不能双引擎。
+>
+> **下一刀是 `services/task.ts`**：`resumeTask` 19 + `retryNode` 14 + `cancelTask` 9 = **42 个账本文件**
+> 卡在它上面，是最大的单点。实测：那两个函数**自己的体零同步终结符**，外溢只有 9 个错、全在同文件内的
+> 一层浅转交；**唯一需要决策的一格是 `cancelTask:4136-4141` 那条有意的同步预检**——它保住「首次 yield
+> 之前先注册 FIFO 写槽」的顺序契约，改 await 会让函数提前让出。定形成 **T-TASK1/2/3**（plan §5co）。
+>
+> 本段顺带修掉的 PG-only / 覆盖类问题：raw SQL 在 PG 上把 bigint 取回成字符串、嵌套 harness
+> （`cannot drop the currently open database`）、**一处存量假覆盖**（`describeEachProvider` 体内还在
+> `createInMemoryDb`，名义双引擎实际两轮都跑 SQLite，现已全树清零）。
+
 > ## 📌 RFC-359 最新一段（2026-09-13，AC-6 账本 **550 → 535**；反睡眠清零 + 两个组合根签名对齐）
 >
 > 接着下面那段做。主线是**把两个组合根的装配签名对齐**（补了五个覆盖口）与**把负向断言从
