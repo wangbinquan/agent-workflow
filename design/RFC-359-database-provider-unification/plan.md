@@ -9350,3 +9350,24 @@ base；两侧函数体 `replace(/\s+/g, ' ').trim()` 后全等。这条判据挑
 
 定式已进 `docs/dev-gotchas.md`：**测试被 CI 掐红时，先问「这条断言真的需要那段慢准备吗」，
 再考虑加时间。**
+
+## 5du. AC-12：退役唯一一条**零 src importer** 的 provider 门面
+
+孪生清零之后顺手把 T17 那 49 个 provider 命名文件逐个查了一遍「src 里还有没有人 import 它」。
+只有一条是真死的：
+
+```ts
+// services/bundle/postgresqlApply.ts —— 全文四行
+// RFC-349 — compatibility export for callers that have not yet switched to
+// the provider-owned PostgreSQL persistence entrypoint.
+export * from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+```
+
+「还没切过来的调用方」一个都不剩了——全 src 零 importer，只有三处架构账本还按路径记着它。
+删掉文件与那三条账本条目；两个高水位基线跟着降一格
+（`rfc349-provider-specific-business-dependencies` 28 → 27、
+`rfc359-w5-provider-named-file-location` 49 → 48），各自在 `why` 里留了署名记录。
+
+**其余 48 个都还有生产消费者**，不是「忘了删」，而是真的在装配链上——它们的退役条件是各自那一对
+合一（见 §5dp 的成对账本），不是靠删门面能收掉的。这条盘点本身就是结论：
+**AC-12 的剩余面与 AC-1 的剩余面是同一件事。**

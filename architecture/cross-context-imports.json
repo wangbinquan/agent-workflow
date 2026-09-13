@@ -164689,7 +164689,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ede83b879c708924ae3571baf0aaf41b4cd84f65ef7978d701dc7923ab38fc3d",
+  "sourceDigest": "sha256:3b5e42d8baa454472d249bb092fea0e3c571ef0224e9490fd2ba217ea5b715a0",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

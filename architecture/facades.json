@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 322,
-    "thinFacades": 71
+    "serviceFiles": 321,
+    "thinFacades": 70
   },
   "entries": [
     {
@@ -323,17 +323,6 @@
       "file": "packages/backend/src/services/bundle/lower.ts",
       "id": "facade:packages/backend/src/services/bundle/lower.ts",
       "ownerEntryId": "owner:packages/backend/src/services/bundle/lower.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/bundle/postgresqlApply.ts",
-      "id": "facade:packages/backend/src/services/bundle/postgresqlApply.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/bundle/postgresqlApply.ts#$file",
       "removeAfterWave": "W4-E1",
       "status": "thin-facade",
       "targetContext": "task-execution",
@@ -6748,5 +6737,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ede83b879c708924ae3571baf0aaf41b4cd84f65ef7978d701dc7923ab38fc3d"
+  "sourceDigest": "sha256:3b5e42d8baa454472d249bb092fea0e3c571ef0224e9490fd2ba217ea5b715a0"
 }

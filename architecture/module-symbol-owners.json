@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1790,
+    "backendFiles": 1789,
     "frontendFiles": 622,
-    "legacyFiles": 602,
+    "legacyFiles": 601,
     "moduleFiles": 1188,
-    "productionFiles": 2567,
+    "productionFiles": 2566,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24914
+    "symbolsIncludingFileRoots": 24913
   },
   "entries": [
     {
@@ -159953,18 +159953,6 @@
       "currentContext": "legacy",
       "currentLayer": "services",
       "exported": false,
-      "file": "packages/backend/src/services/bundle/postgresqlApply.ts",
-      "id": "owner:packages/backend/src/services/bundle/postgresqlApply.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
       "file": "packages/backend/src/services/bundle/provider.ts",
       "id": "owner:packages/backend/src/services/bundle/provider.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -299669,5 +299657,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ede83b879c708924ae3571baf0aaf41b4cd84f65ef7978d701dc7923ab38fc3d"
+  "sourceDigest": "sha256:3b5e42d8baa454472d249bb092fea0e3c571ef0224e9490fd2ba217ea5b715a0"
 }

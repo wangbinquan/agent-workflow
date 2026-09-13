@@ -32,7 +32,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/backupVacuumWorker.ts -> @/platform/persistence/sqlite/systemBackupVacuum :: quickCheckSqlite,vacuumSqliteInto',
   'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/code-capability/infrastructure/capabilityTemplatePackageCommit :: createSqliteCapabilityTemplatePackageCommitSync',
   'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: getAclResourceOwnerInTx',
-  'packages/backend/src/services/bundle/postgresqlApply.ts -> @/platform/persistence/postgresqlResourcePackageAtomicApply :: export:*',
   'packages/backend/src/services/limits.ts -> @/modules/system-operations/composition/resourceLimits :: composeLegacySqliteResourceLimitOperations',
   'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,createLegacySqliteNodeRunOperations',
   'packages/backend/src/services/pendingRestore.ts -> @/platform/persistence/sqlite/systemProviderRestore :: SqlitePostRestoreRecovery',
