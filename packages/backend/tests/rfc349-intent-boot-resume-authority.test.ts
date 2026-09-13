@@ -13,7 +13,7 @@
 // 启动恢复递给它的 actor，排队那条变更真的推进到 applied；②当年那种手捏投影**确实**
 // 会被同一个目录拒掉——这条把「为什么不能手捏」钉在测试里，而不是靠注释。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -21,7 +21,8 @@ import { ulid } from 'ulid'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { admitDurableWorkOwner } from '../src/auth/session'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { intentSessions, intentWorkingSetChanges } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
@@ -36,7 +37,7 @@ import type {
   IntentContextResourceAuthorization,
   IntentPersistence,
 } from '../src/modules/intent/application/ports/intentPersistence'
-import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'
 import { resumeQueuedIntentWorkingSets } from '@/modules/intent/application/dispatcher'
@@ -58,9 +59,7 @@ import {
 } from './helpers/intentResourceCatalogBinding'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-let db: DbClient
+let db: ProviderNeutralDatabase
 let actor: Actor
 let persistence: IntentPersistence
 let visibility: IntentContextResourceAuthorization
@@ -73,7 +72,7 @@ let mountedAgentId: string
  * `catalogs` 只喂给逐资源的 detail 查询，本条路径不会碰——碰了就说明判据跑偏了。
  */
 function productionShapedResourceCatalogFor(): IntentResourceCatalogFor {
-  const catalog = composeSqliteResourceCatalog({ db })
+  const catalog = composeResourceCatalogFor({ db })
   // 注册表在**构造时**定住，和上面的 catalog 一样绑在同一个 db 上。
   // 生产上每个 daemon 进程只有一个 identity-access 注册表；这里的 `let` 是夹具产物：
   // 恢复完的那一轮会按设计 fire-and-forget 再派发一轮后继（dispatcher 的 finally），
@@ -138,52 +137,6 @@ const runFn = async (opts: SystemAgentRunOptions): Promise<SystemAgentRunResult>
   }
 }
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
-  identityAccess = createIdentityAccessRuntime({ db })
-  persistence = composeIntentPersistence({
-    db,
-    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
-  })
-  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
-  const { createUser } = await import('../src/services/users')
-  const owner = await createUser(db, {
-    username: `owner-${ulid().toLowerCase()}`,
-    displayName: 'Owner',
-    role: 'user',
-    password: 'longEnoughPassword',
-  })
-  actor = buildActor({
-    user: {
-      id: owner.id,
-      username: owner.username,
-      displayName: owner.displayName,
-      role: 'user',
-      status: 'active',
-    },
-    source: 'session',
-  })
-  visibility = intentResourceVisibility(intentResourceCatalogBinding(db, actor))
-  const agent = await createAgent(
-    db,
-    {
-      name: `mounted-${ulid().toLowerCase()}`,
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: 'mounted fixture',
-    },
-    { ownerUserId: owner.id },
-  )
-  mountedAgentId = agent.id
-})
-
 /**
  * 生成中被 kill：一行 queued 变更 + 一个已经没人驱动的会话。
  *
@@ -211,7 +164,9 @@ async function seedQueuedSuccessor(): Promise<{ sessionId: string; changeId: str
     .where(eq(intentSessions.id, session.id))
     .run()
   await insertUserTurnAndReserve(persistence, actor, session.id, 'message', { message: 'run' }, 50)
-  const running = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
+  const running = (
+    await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).limit(1)
+  )[0]!
   const queued = await submitIntentWorkingSetChange(
     persistence,
     visibility,
@@ -235,7 +190,53 @@ async function seedQueuedSuccessor(): Promise<{ sessionId: string; changeId: str
   return { sessionId: session.id, changeId: queued.change.id }
 }
 
-describe('RFC-349 intent boot resume authority', () => {
+describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
+  beforeEach(async () => {
+    db = harness.db
+    identityAccess = createIdentityAccessRuntime({ db })
+    persistence = composeIntentPersistence({
+      db,
+      contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
+    })
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    const { createUser } = await import('../src/services/users')
+    const owner = await createUser(db, {
+      username: `owner-${ulid().toLowerCase()}`,
+      displayName: 'Owner',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    actor = buildActor({
+      user: {
+        id: owner.id,
+        username: owner.username,
+        displayName: owner.displayName,
+        role: 'user',
+        status: 'active',
+      },
+      source: 'session',
+    })
+    visibility = intentResourceVisibility(intentResourceCatalogBinding(db, actor))
+    const agent = await createAgent(
+      db,
+      {
+        name: `mounted-${ulid().toLowerCase()}`,
+        description: '',
+        outputs: [],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: 'mounted fixture',
+      },
+      { ownerUserId: owner.id },
+    )
+    mountedAgentId = agent.id
+  })
+
   test('boot recovery finishes the queued successor through the production catalog seam', async () => {
     const { sessionId, changeId } = await seedQueuedSuccessor()
     // RFC-355 T4b（实现门 r2）：恢复路径上的广播此前零覆盖——把 dispatcher 的
@@ -267,11 +268,13 @@ describe('RFC-349 intent boot resume authority', () => {
       '启动恢复一条都没领走 ⇒ 排队的变更永远停在 queued，会话永远停在「生成中」',
     ).toBe(1)
     expect(
-      db
-        .select()
-        .from(intentWorkingSetChanges)
-        .where(eq(intentWorkingSetChanges.id, changeId))
-        .get()?.state,
+      (
+        await db
+          .select()
+          .from(intentWorkingSetChanges)
+          .where(eq(intentWorkingSetChanges.id, changeId))
+          .limit(1)
+      )[0]?.state,
     ).toBe('applied')
     expect(sessionId).not.toBe('')
     expect(
@@ -306,11 +309,13 @@ describe('RFC-349 intent boot resume authority', () => {
       resourceCatalogFor: productionShapedResourceCatalogFor(),
       runFn,
     })
-    const row = db
-      .select()
-      .from(intentWorkingSetChanges)
-      .where(eq(intentWorkingSetChanges.id, changeId))
-      .get()
+    const row = (
+      await db
+        .select()
+        .from(intentWorkingSetChanges)
+        .where(eq(intentWorkingSetChanges.id, changeId))
+        .limit(1)
+    )[0]
     expect(row?.state).toBe('failed')
     expect(row?.error ?? '').toContain('intent-context-authorization-not-composed')
   })

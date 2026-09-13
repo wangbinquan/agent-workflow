@@ -25,7 +25,7 @@ import { startWorkgroupTask, WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/
 import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeDatabaseAgentResourceInventorySource } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { createUser } from '../src/services/users'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
@@ -112,7 +112,7 @@ describe('RFC-228 Agent resource integrity', () => {
   test('status shows names, masks hidden rows, and marks deleted rows without using the id as a name', async () => {
     const resourceInventory = composeDatabaseAgentResourceInventorySource({
       db,
-      authorization: composeSqliteResourceCatalog({ db }).authorization,
+      authorization: composeResourceCatalogFor({ db }).authorization,
     })
     const viewer = await createUser(db, {
       username: 'viewer',

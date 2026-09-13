@@ -2,7 +2,8 @@ import { workflows as workflowsTable } from '../../src/db/schema'
 import { createWorkflowValidationPort } from '@/modules/resource-catalog/infrastructure/workflowValidation'
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { Actor } from '../../src/auth/actor'
-import type { DbClient } from '../../src/db/client'
+// RFC-359 AC-6：整份夹具的 `db` 放宽到中立客户端——它转手给的那些工厂
+// （`createWorkflowValidationPort` / 资源目录 / intent 装配）形参本来就是中立的。
 import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import type { DirectAuthenticatedAuthority } from '../../src/modules/identity-access/public/participants'
@@ -69,7 +70,7 @@ export function intentPersistenceForTest(db: ProviderNeutralDatabase): IntentPer
 }
 
 export function createIntentSessionForTest(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   input: Parameters<typeof createIntentSession>[3],
   appHome: string = Paths.root,
@@ -84,7 +85,7 @@ export function createIntentSessionForTest(
 }
 
 export function createIntentSessionAndReserveTurnForTest(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   input: Parameters<typeof createIntentSessionAndReserveTurn>[3],
   appHome: string = Paths.root,
@@ -205,7 +206,7 @@ export function runIntentTurnForTest(
   deps: Pick<RunIntentTurnDeps, 'appHome' | 'config'> &
     Partial<Omit<RunIntentTurnDeps, 'appHome' | 'config' | 'resourceCatalog'>> &
     Readonly<{
-      db: DbClient
+      db: ProviderNeutralDatabase
       platformInventory?: IntentPlatformInventoryParticipant
     }>,
   input: Parameters<typeof runIntentTurn>[1],
@@ -238,7 +239,9 @@ export function runIntentTurnForTest(
  * 刻意不 stub：意图测试的 fixture 定义会真的过一遍工作流校验器，既覆盖了新链路，
  * 也让「某个 fixture 其实是张坏图」这种事在它被当作正例用之前就暴露出来。
  */
-export function intentGraphValidationForTest(db: DbClient): IntentWorkflowGraphValidationPort {
+export function intentGraphValidationForTest(
+  db: ProviderNeutralDatabase,
+): IntentWorkflowGraphValidationPort {
   // 测试里没有启动期复核，skill 只按 reservation ready 算可用（与旧 SQLite 校验器在测试里的行为一致）。
   const port = createWorkflowValidationPort({ db, skillContent: { isAvailable: async () => true } })
   const graph: IntentWorkflowGraphValidationPort = {
@@ -254,7 +257,7 @@ export function intentGraphValidationForTest(db: DbClient): IntentWorkflowGraphV
       const wanted = new Set(input.agentIds)
       const byAgent = new Map<string, { readonly id: string; readonly name: string }[]>()
       if (wanted.size === 0) return byAgent
-      for (const row of db.select().from(workflowsTable).all()) {
+      for (const row of await db.select().from(workflowsTable)) {
         let nodes: Array<{ agentId?: unknown }> = []
         try {
           nodes =
@@ -275,14 +278,14 @@ export function intentGraphValidationForTest(db: DbClient): IntentWorkflowGraphV
   return Object.freeze(graph)
 }
 
-// RFC-359 AC-6：这个形参的 `DbClient` 纯属未收敛——它只把库转手给
+// RFC-359 AC-6：这个形参的 `ProviderNeutralDatabase` 纯属未收敛——它只把库转手给
 // `intentPersistenceForTest`，而那个早就是中立面了。收成中立面，调用方即可用 harness.db。
 export function intentTurnRuntimeResolverForTest(db: ProviderNeutralDatabase) {
   return composeIntentTurnRuntimeResolver(intentPersistenceForTest(db))
 }
 
 export function dispatchIntentTurnForTest(
-  deps: Omit<IntentDispatchDeps, 'resourceCatalogFor'> & Readonly<{ db: DbClient }>,
+  deps: Omit<IntentDispatchDeps, 'resourceCatalogFor'> & Readonly<{ db: ProviderNeutralDatabase }>,
   ...args: Parameters<typeof dispatchIntentTurn> extends [IntentDispatchDeps, ...infer Rest]
     ? Rest
     : never

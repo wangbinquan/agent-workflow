@@ -46,7 +46,7 @@ import {
 } from '../src/services/agentLaunch'
 import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
@@ -96,7 +96,7 @@ function daemonActor(): Actor {
 function agentResourceIntegrity(db: DbClient) {
   return composeDatabaseAgentResourceIntegrity({
     db,
-    authorization: composeSqliteResourceCatalog({ db }).authorization,
+    authorization: composeResourceCatalogFor({ db }).authorization,
   }).launch
 }
 

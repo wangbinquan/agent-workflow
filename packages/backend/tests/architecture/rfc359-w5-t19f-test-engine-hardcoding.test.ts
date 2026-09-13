@@ -435,7 +435,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-execution-peripheral-provider.test.ts: 1',
   'rfc349-frozen-source-request-writes.test.ts: 1',
   'rfc349-identity-access-promise-contract.test.ts: 2',
-  'rfc349-intent-boot-resume-authority.test.ts: 1',
   'rfc349-maintenance-disk-provider.test.ts: 1',
   'rfc349-maintenance-execution-fence.test.ts: 1',
   'rfc349-null-ordering-parity.test.ts: 1',

@@ -65,7 +65,7 @@ import {
 } from '../src/services/agentLaunch'
 import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { createUser } from '../src/services/users'
 import {
@@ -109,7 +109,7 @@ function daemonActor() {
 function agentResourceIntegrity(db: DbClient) {
   return composeDatabaseAgentResourceIntegrity({
     db,
-    authorization: composeSqliteResourceCatalog({ db }).authorization,
+    authorization: composeResourceCatalogFor({ db }).authorization,
   }).launch
 }
 

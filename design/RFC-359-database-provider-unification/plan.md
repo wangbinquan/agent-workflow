@@ -8286,3 +8286,16 @@ T-TASK1/2/3 作废。`cancelTask` 那条同步预检的取证仍然有效、也�
 deadlock, constraint and storage faults roll back row plus receipt before exact resume` 失败，
 同 run 里的判据契约与 migration runner 各条都 pass，产物也没生成。它是 AC-7/AC-9 依赖的真 PG 证据面，
 已连同「怎么二分」记进 `docs/audit-backlog.md`。
+
+## 5cr. 资源目录换中立工厂 + intent 夹具整份放宽（459 → 458）
+
+- **`composeSqliteResourceCatalog` → `composeResourceCatalogFor`**（7 个账本文件）：后者早就在，
+  形参是 `ProviderNeutralDatabase`。换名不动实现，126 pass / 0 fail。
+  **但账本一格没动**——那 7 个里有 6 个另外卡在 `createTaskExecutionTestTopology`（= §5co 那类
+  「按裁决就该单引擎」）或 HTTP 应用上。收益是少一个 provider 命名依赖（AC-12 方向），不是 AC-6 数字。
+  `composeSqliteResourceCatalog` 仍有 `helpers/realtimeRuntime` / `helpers/webhookTaskExecution`
+  两个真消费者，不会变成「只装配不构造」的零引用根。
+- **`tests/helpers/intentResourceCatalogBinding.ts` 整份放宽**：它的 5 个导出全把 db 转手给
+  `createWorkflowValidationPort` / 资源目录 / intent 装配，而那些形参本来就是中立的。
+  放宽后只剩一处真同步读（`db.select().from(workflows).all()`）要改 await；14 个消费文件
+  218 pass / 0 fail。随之 `rfc349-intent-boot-resume-authority` 迁入（模块级 hook 那一类）。
