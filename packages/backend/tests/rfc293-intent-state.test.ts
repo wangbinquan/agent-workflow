@@ -113,8 +113,8 @@ async function createBareSession(message = 'build it') {
   return (await createIntentSession(persistence, visibility, actor, { message })).session
 }
 
-function seedFakeRoot(sessionId: string) {
-  return db
+async function seedFakeRoot(sessionId: string) {
+  return await db
     .update(intentSessions)
     .set({
       contextManifestJson: JSON.stringify([
@@ -129,30 +129,27 @@ function seedFakeRoot(sessionId: string) {
       handleWatermarkJson: JSON.stringify({ agent: 1 }),
     })
     .where(eq(intentSessions.id, sessionId))
-    .run()
 }
 
 async function insertDraft(sessionId: string) {
   const id = ulid()
   const hash = `sha256:${'a'.repeat(64)}`
-  await db
-    .insert(intentDrafts)
-    .values({
-      id,
-      sessionId,
-      revision: 1,
-      changesetJson: JSON.stringify({ $schema_version: 1, ops: [] }),
-      validationJson: JSON.stringify({ errors: [], credentialFindings: [] }),
-      draftHash: hash,
-      contextRevision: 0,
-      createdAt: Date.now(),
-    })
-    .run()
+  await db.insert(intentDrafts).values({
+    id,
+    sessionId,
+    revision: 1,
+    changesetJson: JSON.stringify({ $schema_version: 1, ops: [] }),
+    validationJson: JSON.stringify({ errors: [], credentialFindings: [] }),
+    draftHash: hash,
+    contextRevision: 0,
+    createdAt: Date.now(),
+  })
+
   await db
     .update(intentSessions)
     .set({ currentDraftId: id })
     .where(eq(intentSessions.id, sessionId))
-    .run()
+
   return { id, hash }
 }
 
@@ -182,11 +179,9 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
     )
     expect(submitted.change.state).toBe('applied')
     if (submitted.reservation === null) throw new Error('automatic successor was not reserved')
-    const fresh = (await db
-      .select()
-      .from(intentSessions)
-      .where(eq(intentSessions.id, session.id))
-      .get())!
+    const fresh = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]!
     expect(fresh.contextRevision).toBe(1)
     expect([submitted.change.resultingTurnId, fresh.inFlightTurnId]).toEqual([
       submitted.reservation.turnId,
@@ -194,7 +189,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
     ])
     expect(sessionManifest(fresh)[0]?.root).toBe(false)
     expect(
-      (await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id)).all()).map(
+      (await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))).map(
         (t) => t.kind,
       ),
     ).toEqual(['message', 'message', 'running'])
@@ -222,11 +217,9 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       { message: 'running' },
       50,
     )
-    const running = (await db
-      .select()
-      .from(intentSessions)
-      .where(eq(intentSessions.id, session.id))
-      .get())!
+    const running = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]!
     const queued = await submitIntentWorkingSetChange(
       persistence,
       visibility,
@@ -308,8 +301,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
           .select()
           .from(intentWorkingSetChanges)
           .where(eq(intentWorkingSetChanges.id, failed.change.id))
-          .get()
-      )?.state,
+      )[0]?.state,
     ).toBe('canceled')
   })
 
@@ -333,16 +325,14 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
     )
     expect(refined.reservation).not.toBeNull()
     expect(
-      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get())
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
         ?.currentDraftId,
     ).toBe(draft.id)
     expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
 
-    const afterRefine = (await db
-      .select()
-      .from(intentSessions)
-      .where(eq(intentSessions.id, session.id))
-      .get())!
+    const afterRefine = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]!
     const regenerated = await reserveIntentIteration(
       persistence,
       actor,
@@ -359,7 +349,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
     )
     expect(regenerated.reservation).not.toBeNull()
     expect(
-      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get())
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
         ?.currentDraftId,
     ).toBeNull()
     expect(
@@ -368,15 +358,12 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
           .select()
           .from(intentDraftResolutions)
           .where(eq(intentDraftResolutions.draftId, draft.id))
-          .get()
-      )?.reason,
+      )[0]?.reason,
     ).toBe('discarded')
     expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
-    const failedTurn = (await db
-      .select()
-      .from(intentTurns)
-      .where(eq(intentTurns.id, regenerated.receipt.agentTurnId))
-      .get())!
+    const failedTurn = (
+      await db.select().from(intentTurns).where(eq(intentTurns.id, regenerated.receipt.agentTurnId))
+    )[0]!
     const retried = await reserveExactIntentRetry(
       persistence,
       actor,
@@ -391,7 +378,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
     )
     expect(retried.reservation).not.toBeNull()
     expect(
-      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get())
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
         ?.currentDraftId,
     ).toBeNull()
     expect(
@@ -400,18 +387,14 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
           .select()
           .from(intentDraftResolutions)
           .where(eq(intentDraftResolutions.draftId, draft.id))
-          .get()
-      )?.reason,
+      )[0]?.reason,
     ).toBe('discarded')
   })
 
   test('continues from a committed checkpoint with no current candidate', async () => {
     const session = await createBareSession()
-    await db
-      .update(intentSessions)
-      .set({ commitSeq: 3 })
-      .where(eq(intentSessions.id, session.id))
-      .run()
+    await db.update(intentSessions).set({ commitSeq: 3 }).where(eq(intentSessions.id, session.id))
+
     const continued = await reserveIntentIteration(
       persistence,
       actor,
@@ -438,29 +421,24 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       { ownerUserId: actor.user.id, actor },
     )
     const sourceTurnId = ulid()
-    await db
-      .insert(intentTurns)
-      .values({
-        id: sourceTurnId,
-        sessionId: session.id,
-        seq: 2,
-        role: 'agent',
-        kind: 'questions',
-        contentJson: JSON.stringify({
-          questions: [
-            { id: 'q1', question: 'Scope?', options: ['small', 'large'], multiSelect: false },
-          ],
-          mountRequests: [{ resourceType: 'agent', name: 'auditor', reason: 'reuse the reviewer' }],
-        }),
-        contextRevision: 0,
-        createdAt: Date.now(),
-      })
-      .run()
-    await db
-      .update(intentSessions)
-      .set({ turnSeq: 2 })
-      .where(eq(intentSessions.id, session.id))
-      .run()
+    await db.insert(intentTurns).values({
+      id: sourceTurnId,
+      sessionId: session.id,
+      seq: 2,
+      role: 'agent',
+      kind: 'questions',
+      contentJson: JSON.stringify({
+        questions: [
+          { id: 'q1', question: 'Scope?', options: ['small', 'large'], multiSelect: false },
+        ],
+        mountRequests: [{ resourceType: 'agent', name: 'auditor', reason: 'reuse the reviewer' }],
+      }),
+      contextRevision: 0,
+      createdAt: Date.now(),
+    })
+
+    await db.update(intentSessions).set({ turnSeq: 2 }).where(eq(intentSessions.id, session.id))
+
     const input = {
       clientMutationId: ulid(),
       sourceTurnId,
@@ -485,11 +463,9 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       50,
     )
     expect(action.reservation).not.toBeNull()
-    const fresh = (await db
-      .select()
-      .from(intentSessions)
-      .where(eq(intentSessions.id, session.id))
-      .get())!
+    const fresh = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]!
     expect(fresh.turnSeq).toBe(4)
     expect(fresh.contextRevision).toBe(1)
     expect(
@@ -498,7 +474,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
         .map((entry) => entry.resourceId),
     ).toEqual([agent.id])
     expect(
-      (await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id)).all()).map(
+      (await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))).map(
         (turn) => turn.kind,
       ),
     ).toEqual(['message', 'questions', 'answers', 'running'])
@@ -524,7 +500,7 @@ describe('RFC-293 Intent working state', () => {
 
   test('boot recovery resumes an idle queued working-context successor without a browser', async () => {
     const session = await createBareSession('resume after restart')
-    seedFakeRoot(session.id)
+    await seedFakeRoot(session.id)
     await insertUserTurnAndReserve(
       persistence,
       actor,
@@ -533,7 +509,9 @@ describe('RFC-293 Intent working state', () => {
       { message: 'running' },
       50,
     )
-    const running = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
+    const running = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]!
     const queued = await submitIntentWorkingSetChange(
       persistence,
       visibility,
@@ -607,19 +585,24 @@ describe('RFC-293 Intent working state', () => {
       }),
     ).toBe(1)
     for (let i = 0; i < 100; i++) {
-      const fresh = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()
+      const fresh = (
+        await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+      )[0]
       if (fresh?.inFlightTurnId === null) break
       await new Promise((resolveWait) => setTimeout(resolveWait, 5))
     }
-    const fresh = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
+    const fresh = (
+      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+    )[0]!
     expect(fresh.inFlightTurnId).toBeNull()
     expect(fresh.currentDraftId).not.toBeNull()
     expect(
-      db
-        .select()
-        .from(intentWorkingSetChanges)
-        .where(eq(intentWorkingSetChanges.id, queued.change.id))
-        .get()?.state,
+      (
+        await db
+          .select()
+          .from(intentWorkingSetChanges)
+          .where(eq(intentWorkingSetChanges.id, queued.change.id))
+      )[0]?.state,
     ).toBe('applied')
   })
 })

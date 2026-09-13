@@ -8,9 +8,10 @@ import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   captureClaudeSessions,
@@ -21,12 +22,12 @@ import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { createLogger, type Logger } from '../src/util/log'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const capturePersistence = (db: ProviderNeutralDatabase) =>
+  createRuntimeSessionCapturePersistence(db)
 
-const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)
-
-async function seed(): Promise<{ db: DbClient; nodeRunId: string }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function seed(
+  db: ProviderNeutralDatabase,
+): Promise<{ db: ProviderNeutralDatabase; nodeRunId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
   await db
@@ -50,7 +51,7 @@ async function seed(): Promise<{ db: DbClient; nodeRunId: string }> {
   return { db, nodeRunId }
 }
 
-describe('captureClaudeSessions (RFC-111 PR-D)', () => {
+describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
   test("cwdSlug replaces / with - (fast-path guess only, NOT claude's rule)", () => {
     expect(cwdSlug('/Users/x/proj')).toBe('-Users-x-proj')
     // Evidence that this guess is not claude's actual rule: a real
@@ -73,7 +74,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
     // production mismatch was invisible. Here the directory is named the way
     // real claude names it (every non-alphanumeric run collapsed to `-`), which
     // `cwdSlug` provably does NOT produce for this path.
-    const { db, nodeRunId } = await seed()
+    const { db, nodeRunId } = await seed(harness.db)
     const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-slug-'))
     const worktree = join(root, '.agent-workflow', 'worktrees', 'repo x', 'task-1')
     mkdirSync(worktree, { recursive: true })
@@ -112,7 +113,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
   })
 
   test('captures subagent JSONL turns into node_run_events under the parent session', async () => {
-    const { db, nodeRunId } = await seed()
+    const { db, nodeRunId } = await seed(harness.db)
     const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-'))
     const worktree = join(root, 'wt')
     mkdirSync(worktree, { recursive: true })
@@ -166,7 +167,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
   })
 
   test('recurses modern workflow directories and restores depth-1/2/3 parent links', async () => {
-    const { db, nodeRunId } = await seed()
+    const { db, nodeRunId } = await seed(harness.db)
     const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-nested-'))
     const worktree = join(root, 'wt')
     mkdirSync(worktree, { recursive: true })
@@ -280,7 +281,13 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
   })
 
   test('batches transcript events and retries one transient SQLITE_BUSY insert', async () => {
-    const { db, nodeRunId } = await seed()
+    // 这条判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语在 SQLite 上把事务句柄
+    // **就是 db 对象本身**，于是持久化里 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx`
+    // 是另一个对象，注入点一次都不触发（`eventInsertAttempts` 恒为 0），判据零预言力。
+    // 正解是把注入点做进持久化本身（`cancelTask` 的 `beforeStatusCas` 即先例），那要动生产代码，
+    // 已登记在 `docs/audit-backlog.md`；在此之前这条判据留在 SQLite 上，本文件其余判据两引擎都跑。
+    if (harness.capabilities.provider !== 'sqlite') return
+    const { db, nodeRunId } = await seed(harness.db)
     const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-batch-'))
     const worktree = join(root, 'wt')
     mkdirSync(worktree, { recursive: true })
@@ -307,7 +314,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
     const transientDb = new Proxy(db, {
       get(target, property) {
         if (property === 'run') {
-          return (...args: Parameters<DbClient['run']>) => {
+          return (...args: Parameters<ProviderNeutralDatabase['run']>) => {
             if (JSON.stringify(args[0]).includes('BEGIN IMMEDIATE')) {
               beginAttempts++
               if (failFirstBegin) {
@@ -324,7 +331,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
         const value = Reflect.get(target, property, target) as unknown
         return typeof value === 'function' ? value.bind(target) : value
       },
-    }) as DbClient
+    }) as ProviderNeutralDatabase
     const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
     const log: Logger = {
       debug: () => undefined,
@@ -344,7 +351,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       worktreePath: worktree,
     })
 
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     expect(rows).toHaveLength(205)
     // One failed attempt + two batches (200 and 5), not 205 autocommit writes.
     expect(beginAttempts).toBe(3)
@@ -353,7 +360,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
   })
 
   test('missing transcript dir → no rows, no throw (graceful)', async () => {
-    const { db, nodeRunId } = await seed()
+    const { db, nodeRunId } = await seed(harness.db)
     await captureClaudeSessions({
       rootSessionId: 'nope',
       nodeRunId,
@@ -368,7 +375,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
   })
 
   test('scans every candidate root, not just the first (transcript in a later root)', async () => {
-    const { db, nodeRunId } = await seed()
+    const { db, nodeRunId } = await seed(harness.db)
     const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-multi-'))
     const worktree = join(root, 'wt')
     mkdirSync(worktree, { recursive: true })
@@ -477,68 +484,77 @@ function writeTranscript(configRoot: string, worktree: string, session: string, 
   )
 }
 
-describe('claudeCodeDriver.captureSessions (RFC-154 profile → operator root)', () => {
-  test('finds transcripts under an exported CLAUDE_CONFIG_DIR (pre-fix: dropped)', async () => {
-    const { db, nodeRunId } = await seed()
-    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-env-'))
-    const worktree = join(root, 'wt')
-    mkdirSync(worktree, { recursive: true })
-    writeTranscript(join(root, 'operator-config'), worktree, 'sess-env', 'agent-env')
+describeEachProvider(
+  'claudeCodeDriver.captureSessions (RFC-154 profile → operator root)',
+  (harness) => {
+    test('finds transcripts under an exported CLAUDE_CONFIG_DIR (pre-fix: dropped)', async () => {
+      const { db, nodeRunId } = await seed(harness.db)
+      const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-env-'))
+      const worktree = join(root, 'wt')
+      mkdirSync(worktree, { recursive: true })
+      writeTranscript(join(root, 'operator-config'), worktree, 'sess-env', 'agent-env')
 
-    const prevEnv = process.env.CLAUDE_CONFIG_DIR
-    process.env.CLAUDE_CONFIG_DIR = join(root, 'operator-config')
-    try {
-      await claudeCodeDriver.captureSessions({
-        rootSessionId: 'sess-env',
-        nodeRunId,
-        taskId: 'ignored',
-        persistence: capturePersistence(db),
-        log: createLogger('test'),
-        worktreePath: worktree,
-      })
-    } finally {
-      if (prevEnv === undefined) delete process.env.CLAUDE_CONFIG_DIR
-      else process.env.CLAUDE_CONFIG_DIR = prevEnv
-    }
+      const prevEnv = process.env.CLAUDE_CONFIG_DIR
+      process.env.CLAUDE_CONFIG_DIR = join(root, 'operator-config')
+      try {
+        await claudeCodeDriver.captureSessions({
+          rootSessionId: 'sess-env',
+          nodeRunId,
+          taskId: 'ignored',
+          persistence: capturePersistence(db),
+          log: createLogger('test'),
+          worktreePath: worktree,
+        })
+      } finally {
+        if (prevEnv === undefined) delete process.env.CLAUDE_CONFIG_DIR
+        else process.env.CLAUDE_CONFIG_DIR = prevEnv
+      }
 
-    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    expect(rows.length).toBe(1)
-    expect(rows[0]?.sessionId).toBe('agent-env')
-    rmSync(root, { recursive: true, force: true })
-  })
+      const rows = await db
+        .select()
+        .from(nodeRunEvents)
+        .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      expect(rows.length).toBe(1)
+      expect(rows[0]?.sessionId).toBe('agent-env')
+      rmSync(root, { recursive: true, force: true })
+    })
 
-  test('fork row with a renamed leaf → `<home>/<leaf>`, not the protocol default', async () => {
-    const { db, nodeRunId } = await seed()
-    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-fork-'))
-    const worktree = join(root, 'wt')
-    mkdirSync(worktree, { recursive: true })
-    const home = join(root, 'home')
-    writeTranscript(join(home, '.awfork'), worktree, 'sess-fork', 'agent-fork')
+    test('fork row with a renamed leaf → `<home>/<leaf>`, not the protocol default', async () => {
+      const { db, nodeRunId } = await seed(harness.db)
+      const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-fork-'))
+      const worktree = join(root, 'wt')
+      mkdirSync(worktree, { recursive: true })
+      const home = join(root, 'home')
+      writeTranscript(join(home, '.awfork'), worktree, 'sess-fork', 'agent-fork')
 
-    const prevHome = process.env.HOME
-    const prevEnv = process.env.CLAUDE_CONFIG_DIR
-    process.env.HOME = home
-    delete process.env.CLAUDE_CONFIG_DIR
-    try {
-      await claudeCodeDriver.captureSessions({
-        rootSessionId: 'sess-fork',
-        nodeRunId,
-        taskId: 'ignored',
-        persistence: capturePersistence(db),
-        log: createLogger('test'),
-        worktreePath: worktree,
-        configDirEnv: 'AW_TEST_FORK_CONFIG_DIR',
-        configDirName: '.awfork',
-      })
-    } finally {
-      if (prevHome === undefined) delete process.env.HOME
-      else process.env.HOME = prevHome
-      if (prevEnv !== undefined) process.env.CLAUDE_CONFIG_DIR = prevEnv
-    }
+      const prevHome = process.env.HOME
+      const prevEnv = process.env.CLAUDE_CONFIG_DIR
+      process.env.HOME = home
+      delete process.env.CLAUDE_CONFIG_DIR
+      try {
+        await claudeCodeDriver.captureSessions({
+          rootSessionId: 'sess-fork',
+          nodeRunId,
+          taskId: 'ignored',
+          persistence: capturePersistence(db),
+          log: createLogger('test'),
+          worktreePath: worktree,
+          configDirEnv: 'AW_TEST_FORK_CONFIG_DIR',
+          configDirName: '.awfork',
+        })
+      } finally {
+        if (prevHome === undefined) delete process.env.HOME
+        else process.env.HOME = prevHome
+        if (prevEnv !== undefined) process.env.CLAUDE_CONFIG_DIR = prevEnv
+      }
 
-    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    expect(rows.length).toBe(1)
-    expect(rows[0]?.sessionId).toBe('agent-fork')
-    rmSync(root, { recursive: true, force: true })
-  })
-})
+      const rows = await db
+        .select()
+        .from(nodeRunEvents)
+        .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      expect(rows.length).toBe(1)
+      expect(rows[0]?.sessionId).toBe('agent-fork')
+      rmSync(root, { recursive: true, force: true })
+    })
+  },
+)

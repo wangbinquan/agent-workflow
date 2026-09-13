@@ -6,22 +6,22 @@
 // emits configurable JSON events + envelope. The DB is in-memory.
 
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import type { Logger } from '../src/util/log'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -50,11 +50,10 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-runner-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   // Seed workflow + task so the FK from node_runs.task_id stays satisfied.
@@ -89,7 +88,11 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string, nodeId = 'node1'): Promise<string> {
+async function insertNodeRun(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  nodeId = 'node1',
+): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
     id,
@@ -117,7 +120,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-function proxyDbInsert(db: DbClient, intercept: (table: unknown) => void): DbClient {
+function proxyDbInsert(
+  db: ProviderNeutralDatabase,
+  intercept: (table: unknown) => void,
+): ProviderNeutralDatabase {
   return new Proxy(db, {
     get(target, property) {
       if (property === 'insert') {
@@ -129,14 +135,17 @@ function proxyDbInsert(db: DbClient, intercept: (table: unknown) => void): DbCli
       const value = Reflect.get(target, property, target) as unknown
       return typeof value === 'function' ? value.bind(target) : value
     },
-  }) as DbClient
+  }) as ProviderNeutralDatabase
 }
 
 /**
  * RFC-359 W4-D24 —— 统一事务原语用 `BEGIN IMMEDIATE`（`db.run`），不是 drizzle 的 `db.transaction`。
  * 想数「整笔事务被重试了几次」，插桩点就得跟着挪到真正的事务起点上。
  */
-function proxyDbBeginImmediate(db: DbClient, intercept: () => void): DbClient {
+function proxyDbBeginImmediate(
+  db: ProviderNeutralDatabase,
+  intercept: () => void,
+): ProviderNeutralDatabase {
   return new Proxy(db, {
     get(target, property) {
       if (property === 'run') {
@@ -149,7 +158,7 @@ function proxyDbBeginImmediate(db: DbClient, intercept: () => void): DbClient {
       const value = Reflect.get(target, property, target) as unknown
       return typeof value === 'function' ? value.bind(target) : value
     },
-  }) as DbClient
+  }) as ProviderNeutralDatabase
 }
 
 function captureWarnings(): { log: Logger; warnings: Array<Record<string, unknown>> } {
@@ -164,10 +173,10 @@ function captureWarnings(): { log: Logger; warnings: Array<Record<string, unknow
   return { log, warnings }
 }
 
-describe('runNode', () => {
+describeEachProvider('runNode', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
@@ -432,6 +441,12 @@ describe('runNode', () => {
   // line-persistence exception but discarded the exception itself. Keep the
   // bounded kill/reap behavior while making the root cause diagnosable.
   test('stream persistence failure preserves the masked root cause', async () => {
+    // 这条判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语在 SQLite 上把事务句柄
+    // **就是 db 对象本身**，于是持久化里 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx`
+    // 是另一个对象，注入点一次都不触发（`eventInsertAttempts` 恒为 0），判据零预言力。
+    // 正解是把注入点做进持久化本身（`cancelTask` 的 `beforeStatusCas` 即先例），那要动生产代码，
+    // 已登记在 `docs/audit-backlog.md`；在此之前这条判据留在 SQLite 上，本文件其余判据两引擎都跑。
+    if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     await h.db.run(sql`
@@ -471,13 +486,19 @@ describe('runNode', () => {
     expect(result.errorMessage).toContain('forced node-run-event persistence failure')
     expect(result.errorMessage).not.toContain('settle-pump-secret')
 
-    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.failureCode).toBe('runtime-stream-interrupted')
     expect(row?.errorMessage).toBe(result.errorMessage)
   })
 
   test('a transient SQLITE_BUSY event insert is retried without stopping the agent', async () => {
+    // 这条判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语在 SQLite 上把事务句柄
+    // **就是 db 对象本身**，于是持久化里 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx`
+    // 是另一个对象，注入点一次都不触发（`eventInsertAttempts` 恒为 0），判据零预言力。
+    // 正解是把注入点做进持久化本身（`cancelTask` 的 `beforeStatusCas` 即先例），那要动生产代码，
+    // 已登记在 `docs/audit-backlog.md`；在此之前这条判据留在 SQLite 上，本文件其余判据两引擎都跑。
+    if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const { log } = captureWarnings()
@@ -519,15 +540,21 @@ describe('runNode', () => {
     expect(result.status).toBe('done')
     expect(result.outputs.summary).toBe('survived contention')
     expect(eventInsertAttempts).toBeGreaterThanOrEqual(2)
-    const events = h.db
+    const events = await h.db
       .select()
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+
     expect(events.some((event) => event.kind === 'step_start')).toBe(true)
   })
 
   test('a transient SQLITE_BUSY session-lease claim retries the whole transaction', async () => {
+    // 这条判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语在 SQLite 上把事务句柄
+    // **就是 db 对象本身**，于是持久化里 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx`
+    // 是另一个对象，注入点一次都不触发（`eventInsertAttempts` 恒为 0），判据零预言力。
+    // 正解是把注入点做进持久化本身（`cancelTask` 的 `beforeStatusCas` 即先例），那要动生产代码，
+    // 已登记在 `docs/audit-backlog.md`；在此之前这条判据留在 SQLite 上，本文件其余判据两引擎都跑。
+    if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const { log } = captureWarnings()
@@ -568,11 +595,17 @@ describe('runNode', () => {
     expect(result.status).toBe('done')
     expect(result.sessionId).toBe('session-busy-retry')
     expect(transactionAttempts).toBeGreaterThanOrEqual(2)
-    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.opencodeSessionId).toBe('session-busy-retry')
   })
 
   test('pre-spawn session-reset insert failure returns failed instead of stranding running', async () => {
+    // 这条判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语在 SQLite 上把事务句柄
+    // **就是 db 对象本身**，于是持久化里 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx`
+    // 是另一个对象，注入点一次都不触发（`eventInsertAttempts` 恒为 0），判据零预言力。
+    // 正解是把注入点做进持久化本身（`cancelTask` 的 `beforeStatusCas` 即先例），那要动生产代码，
+    // 已登记在 `docs/audit-backlog.md`；在此之前这条判据留在 SQLite 上，本文件其余判据两引擎都跑。
+    if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const spawnMarker = join(h.appHome, 'must-not-spawn.jsonl')
@@ -610,12 +643,18 @@ describe('runNode', () => {
     expect(result.errorMessage).toContain('runtime-session-reset-persistence-failed')
     expect(result.errorMessage).toContain('forced session reset persistence failure')
     expect(existsSync(spawnMarker)).toBe(false)
-    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorMessage).toBe(result.errorMessage)
   })
 
   test('declared outputs persist atomically and retain the failing insert reason', async () => {
+    // 这条判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语在 SQLite 上把事务句柄
+    // **就是 db 对象本身**，于是持久化里 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx`
+    // 是另一个对象，注入点一次都不触发（`eventInsertAttempts` 恒为 0），判据零预言力。
+    // 正解是把注入点做进持久化本身（`cancelTask` 的 `beforeStatusCas` 即先例），那要动生产代码，
+    // 已登记在 `docs/audit-backlog.md`；在此之前这条判据留在 SQLite 上，本文件其余判据两引擎都跑。
+    if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent({ outputs: ['summary', 'findings'] })
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     await h.db.run(sql`
@@ -654,13 +693,13 @@ describe('runNode', () => {
     expect(result.outputs).toEqual({})
     expect(result.errorMessage).toContain('runtime-output-persistence-failed')
     expect(result.errorMessage).toContain('forced findings output persistence failure')
-    const outputRows = h.db
+    const outputRows = await h.db
       .select()
       .from(nodeRunOutputs)
       .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
-      .all()
+
     expect(outputRows).toEqual([])
-    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorMessage).toBe(result.errorMessage)
   })

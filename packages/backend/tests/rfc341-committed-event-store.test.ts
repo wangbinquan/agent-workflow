@@ -29,9 +29,10 @@ import { MIGRATIONS } from './migration-freeze'
 const NOW = 1_789_488_100_000
 const CONSUMER = { id: 'event-center.fixture', deliveryClass: 'critical' as const }
 
-function createLegacyStoreDb(): ReturnType<typeof createInMemoryDb> {
+async function createLegacyStoreDb(): Promise<ReturnType<typeof createInMemoryDb>> {
   const db = createInMemoryDb(MIGRATIONS)
-  db.update(committedEventFamilyCutovers)
+  await db
+    .update(committedEventFamilyCutovers)
     .set({ mode: 'legacy', epoch: 1, changedAt: NOW, changeRef: 'test:legacy-baseline' })
     .where(
       and(
@@ -39,7 +40,7 @@ function createLegacyStoreDb(): ReturnType<typeof createInMemoryDb> {
         eq(committedEventFamilyCutovers.family, 'review'),
       ),
     )
-    .run()
+
   return db
 }
 
@@ -98,7 +99,7 @@ async function createProviderLegacyStoreDb(
         eq(committedEventFamilyCutovers.family, 'review'),
       ),
     )
-    .run()
+
   return db
 }
 
@@ -130,7 +131,7 @@ describe('RFC-341 committed-event store', () => {
   })
 
   test('preflights an idle queue without reserving the writer and rechecks due work in the claim transaction', async () => {
-    const db = createLegacyStoreDb()
+    const db = await createLegacyStoreDb()
     const session = databaseSessionFor(db)
     await sqliteCutover(session, 'legacy', 1, 'shadow')
     await sqliteCutover(session, 'shadow', 2, 'dispatchable')
@@ -180,7 +181,7 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
       async (tx) => await appendCommittedEvent(tx, eventInput({ operation: 'legacy' })),
     )
     expect(legacy.eventRef).toBeNull()
-    expect(await db.select().from(committedEvents).all()).toEqual([])
+    expect(await db.select().from(committedEvents)).toEqual([])
 
     await cutoverForProvider(harness, 'legacy', 1, 'shadow')
     const input = eventInput({ operation: 'shadow' })
@@ -197,7 +198,7 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
       async (tx) => await appendCommittedEvent(tx, input),
     )
     expect(replay.eventRef).toEqual(first.eventRef)
-    expect(await db.select().from(committedEvents).all()).toHaveLength(1)
+    expect(await db.select().from(committedEvents)).toHaveLength(1)
     expect(
       await createCommittedEventDeliveryPersistence(db).claimNext({
         workerId: 'worker',
@@ -279,16 +280,17 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
       now: () => NOW + 100,
     })
     expect(await dispatcher.runOne()).toBe('dead-letter')
-    const dead = (await db
-      .select()
-      .from(committedEventDeliveries)
-      .where(
-        and(
-          eq(committedEventDeliveries.eventId, appended.eventRef!.eventId),
-          eq(committedEventDeliveries.consumerId, CONSUMER.id),
-        ),
-      )
-      .get())!
+    const dead = (await (
+      await db
+        .select()
+        .from(committedEventDeliveries)
+        .where(
+          and(
+            eq(committedEventDeliveries.eventId, appended.eventRef!.eventId),
+            eq(committedEventDeliveries.consumerId, CONSUMER.id),
+          ),
+        )
+    )[0])!
     expect(dead).toMatchObject({
       state: 'dead-letter',
       attemptCount: 1,

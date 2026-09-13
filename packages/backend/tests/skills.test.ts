@@ -515,11 +515,10 @@ describeProviderSkills('skill HTTP routes (formerly native fixture)', (buildHarn
     const content = (await (await req(h.app, `/api/skills/${skill.id}/content`)).json()) as {
       token: string
     }
-    h.db
+    await h.db
       .update(skills)
       .set({ ownerUserId: 'other-owner', aclRevision: 1 })
       .where(eq(skills.id, skill.id))
-      .run()
 
     const stale = await req(h.app, `/api/skills/${skill.id}`, {
       method: 'DELETE',

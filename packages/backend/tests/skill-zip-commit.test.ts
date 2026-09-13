@@ -388,7 +388,7 @@ describe('RFC-102 overwrite permission', () => {
 
   test('visible non-owner overwrite is rejected with skill-overwrite-forbidden', async () => {
     const target = await seedAliceSkill('owned')
-    h.db.update(skills).set({ visibility: 'public' }).where(eq(skills.id, target.id)).run()
+    await h.db.update(skills).set({ visibility: 'public' }).where(eq(skills.id, target.id))
     const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
     // Replaying another actor's preview cannot turn it into write authority.
     const stolenPreview = await previewOverwrite(h, ALICE, buf, 'owned')
@@ -410,11 +410,11 @@ describe('RFC-102 overwrite permission', () => {
     const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
     const stolenPreview = await previewOverwrite(h, ALICE, buf, 'owned')
 
-    h.db
+    await h.db
       .update(skills)
       .set({ visibility: 'private', aclRevision: 1 })
       .where(eq(skills.id, target.id))
-      .run()
+
     const hidden = await commitSkillZipBuffer(
       h.db,
       h.fsOpts,
@@ -422,7 +422,7 @@ describe('RFC-102 overwrite permission', () => {
       { owned: stolenPreview },
       { actor: BOB },
     )
-    h.db.delete(skills).where(eq(skills.id, target.id)).run()
+    await h.db.delete(skills).where(eq(skills.id, target.id))
     const missing = await commitSkillZipBuffer(
       h.db,
       h.fsOpts,
@@ -641,11 +641,10 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       {
         actor: ADMIN,
         __beforeOverwriteVersionForTest: async ({ skillId }) => {
-          h.db
+          await h.db
             .update(skills)
             .set({ ownerUserId: BOB.user.id, aclRevision: decision.expectedAclRevision + 1 })
             .where(eq(skills.id, skillId))
-            .run()
         },
       },
     )
@@ -672,11 +671,10 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       {
         actor: ADMIN,
         __beforeOverwriteVersionForTest: async ({ skillId }) => {
-          h.db
+          await h.db
             .update(skills)
             .set({ visibility: 'private', aclRevision: decision.expectedAclRevision + 1 })
             .where(eq(skills.id, skillId))
-            .run()
         },
       },
     )

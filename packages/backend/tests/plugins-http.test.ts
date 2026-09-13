@@ -111,9 +111,9 @@ let db: DbClient
 let app: Hono
 let seededId: string
 function registerNativePluginCrudFixture(): void {
-  beforeEach(() => {
+  beforeEach(async () => {
     ;({ db, app } = buildHarness())
-    seededId = seedPluginRow(db, 'seeded', 'pkg@1')
+    seededId = await seedPluginRow(db, 'seeded', 'pkg@1')
   })
 }
 
@@ -132,31 +132,29 @@ async function pluginRevision(app: Hono, path: string): Promise<string> {
   return ((await response.json()) as { operationConfigHash: string }).operationConfigHash
 }
 
-function startPluginSeed(db: ProviderNeutralDatabase, name: string, spec: string) {
+async function startPluginSeed(db: ProviderNeutralDatabase, name: string, spec: string) {
   const id = ulid()
   const now = Date.now()
-  const write = db
-    .insert(plugins)
-    .values({
-      id,
-      name,
-      spec,
-      optionsJson: '{}',
-      description: '',
-      enabled: true,
-      sourceKind: 'npm',
-      cachedPath: join(pluginsDir, id, 'node_modules', name),
-      resolvedVersion: '1.0.0',
-      installedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const write = await db.insert(plugins).values({
+    id,
+    name,
+    spec,
+    optionsJson: '{}',
+    description: '',
+    enabled: true,
+    sourceKind: 'npm',
+    cachedPath: join(pluginsDir, id, 'node_modules', name),
+    resolvedVersion: '1.0.0',
+    installedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  })
+
   return { id, write }
 }
 
-function seedPluginRow(db: DbClient, name: string, spec: string): string {
-  return startPluginSeed(db, name, spec).id
+async function seedPluginRow(db: DbClient, name: string, spec: string): Promise<string> {
+  return (await startPluginSeed(db, name, spec)).id
 }
 
 async function seedProviderPluginRow(
@@ -164,7 +162,7 @@ async function seedProviderPluginRow(
   name: string,
   spec: string,
 ): Promise<string> {
-  const { id, write } = startPluginSeed(db, name, spec)
+  const { id, write } = await startPluginSeed(db, name, spec)
   await write
   return id
 }
@@ -351,10 +349,10 @@ describe('/api/plugins CRUD (DB-seeded) (continued 4) native fixture', () => {
 
   test('ACL owner transfer invalidates a captured config-hash fence', async () => {
     const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
-    db.update(plugins)
+    await db
+      .update(plugins)
       .set({ ownerUserId: 'other-owner', aclRevision: 1 })
       .where(eq(plugins.id, seededId))
-      .run()
 
     const stale = await req(app, `/api/plugins/${seededId}`, {
       method: 'PUT',

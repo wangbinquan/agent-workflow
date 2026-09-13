@@ -106,16 +106,18 @@ async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promi
   return id
 }
 
-function seedReleasedSession(db: ProviderNeutralDatabase, taskId: string, sessionId: string): void {
-  db.insert(runtimeSessionLeases)
-    .values({
-      protocol: 'opencode',
-      sessionId,
-      taskId,
-      nodeId: 'n1',
-      createdNodeRunId: `prior-${sessionId}`,
-    })
-    .run()
+async function seedReleasedSession(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  sessionId: string,
+): Promise<void> {
+  await db.insert(runtimeSessionLeases).values({
+    protocol: 'opencode',
+    sessionId,
+    taskId,
+    nodeId: 'n1',
+    createdNodeRunId: `prior-${sessionId}`,
+  })
 }
 
 function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {
@@ -143,7 +145,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
   test('threads --session <id> through when promptMode is the followup arm', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    seedReleasedSession(h.db, h.taskId, 'opc_followup_test_01')
+    await seedReleasedSession(h.db, h.taskId, 'opc_followup_test_01')
     await withEnv(
       {
         MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV: h.argvLog,
@@ -181,7 +183,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
   test('followup promptText is the short follow-up — no inputs / template body / protocol block', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    seedReleasedSession(h.db, h.taskId, 'opc_followup_test_02')
+    await seedReleasedSession(h.db, h.taskId, 'opc_followup_test_02')
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'OK' }) }, () =>
       runNode({
         taskId: h.taskId,
@@ -218,7 +220,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
   test('followup promptMode skips inventory-plugin materialization', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    seedReleasedSession(h.db, h.taskId, 'opc_followup_test_03')
+    await seedReleasedSession(h.db, h.taskId, 'opc_followup_test_03')
     // The runner caches the materialized plugin under runs/<task>/<run>/aw-inventory-dump.mjs.
     // When followup is on, that file must NOT be created.
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'OK' }) }, () =>
@@ -260,7 +262,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
     // 专用字段）同时在场，臂内值仍是权威来源。
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    seedReleasedSession(h.db, h.taskId, 'opc_followup_arm_session')
+    await seedReleasedSession(h.db, h.taskId, 'opc_followup_arm_session')
     await withEnv(
       {
         MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV: h.argvLog,

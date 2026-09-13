@@ -6,21 +6,21 @@
 // view.
 
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -47,11 +47,10 @@ function makeAgent(): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc027-runner-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -84,7 +83,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
   return id
@@ -105,10 +104,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('runner stdout → node_run_events session tagging', () => {
+describeEachProvider('runner stdout → node_run_events session tagging', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
@@ -143,11 +142,11 @@ describe('runner stdout → node_run_events session tagging', () => {
         }),
     )
 
-    const rows = h.db
+    const rows = await h.db
       .select()
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+
     const stdoutRows = rows.filter((r) => r.kind !== 'subagent_capture_failed')
     expect(stdoutRows.length).toBeGreaterThan(0)
     for (const r of stdoutRows) {
@@ -180,11 +179,11 @@ describe('runner stdout → node_run_events session tagging', () => {
           db: h.db,
         }),
     )
-    const rows = h.db
+    const rows = await h.db
       .select()
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+
     const marker = rows.find((r) => r.kind === 'subagent_capture_failed')
     expect(marker).toBeDefined()
     expect(marker!.sessionId).toBe('sess_root_marker')

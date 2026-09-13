@@ -50,20 +50,22 @@ const operations: OperationRow[] = (
 }))
 
 // These are the three published read expressions, including their distinct tails.
-function originalGet(db: ProviderNeutralDatabase, opId: string) {
-  return db
-    .select({ active: skillOperations.active, phase: skillOperations.phase })
-    .from(skillOperations)
-    .where(eq(skillOperations.opId, opId))
-    .get()
+async function originalGet(db: ProviderNeutralDatabase, opId: string) {
+  return (
+    await db
+      .select({ active: skillOperations.active, phase: skillOperations.phase })
+      .from(skillOperations)
+      .where(eq(skillOperations.opId, opId))
+  )[0]
 }
 
 async function originalAwaitedGet(db: ProviderNeutralDatabase, opId: string) {
-  return await db
-    .select({ active: skillOperations.active, phase: skillOperations.phase })
-    .from(skillOperations)
-    .where(eq(skillOperations.opId, opId))
-    .get()
+  return await (
+    await db
+      .select({ active: skillOperations.active, phase: skillOperations.phase })
+      .from(skillOperations)
+      .where(eq(skillOperations.opId, opId))
+  )[0]
 }
 
 async function originalLimited(db: ProviderNeutralDatabase, opId: string) {
@@ -85,12 +87,12 @@ async function candidateTails(db: ProviderNeutralDatabase, opId: string) {
 }
 
 async function readPhysicalRows(db: ProviderNeutralDatabase) {
-  return await db.select().from(skillOperations).orderBy(skillOperations.opId).all()
+  return await db.select().from(skillOperations).orderBy(skillOperations.opId)
 }
 
 describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
   beforeEach(async () => {
-    await harness.db.insert(skillOperations).values(operations).run()
+    await harness.db.insert(skillOperations).values(operations)
   })
 
   test('preserves all three tails, ordered bindings, two-field rows and missing results', async () => {
@@ -151,7 +153,7 @@ describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
           .update(skillOperations)
           .set({ active: 0, phase: 'done' })
           .where(eq(skillOperations.opId, 'operation-active'))
-          .run()
+
         expect(await candidateTails(tx, 'operation-active')).toEqual([
           { active: 0, phase: 'done' },
           { active: 0, phase: 'done' },
@@ -166,10 +168,10 @@ describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
 })
 
 if (resolveTestProviders(process.env).includes('sqlite')) {
-  test('native compatibility loader returns the actual row or undefined immediately', () => {
+  test('native compatibility loader returns the actual row or undefined immediately', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     try {
-      db.insert(skillOperations).values(operations).run()
+      await db.insert(skillOperations).values(operations)
       const recording = recordStatements(db.$client)
       try {
         const builder = skillOperationStateQuery(db, 'operation-done')

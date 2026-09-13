@@ -6627,3 +6627,11 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   推论：**不要用「本地这个文件全绿」证明没有夹具污染**，凡是注入了 DDL 的用例一律 try/finally。
   另外 `DROP TRIGGER` 的语法两边不同——SQLite 触发器名是库级的（`DROP TRIGGER IF EXISTS <name>`），
   PostgreSQL 的挂在表上（`DROP TRIGGER IF EXISTS <name> ON <table>`），还要额外删掉触发器函数。
+
+- **迁到双引擎之后，文件里残留的 bun:sqlite 同步终结子是一条静默的 PostgreSQL 竞态**，
+  而且 **typecheck 与 SQLite 侧测试都抓不到**。`.run()` / `.all()` / `.get()` 在中立类型
+  （`ProviderNeutralDatabase`）上都合法；SQLite 同步执行、语句顺序天然正确；PostgreSQL 上它们
+  返回 promise，**没 await 就是发射后不管**，连接池里并发发出去、顺序不保证。
+  2026-09-13 实撞：`rfc349-task-transaction-participants` 的夹具 `db.insert(users)…run()` /
+  `db.insert(tasks)…run()` 一串没 await，PG 上 `task_collaborators` 先于 `tasks` 落库、外键冲突。
+  **迁移一个文件时必须把它的同步终结子一并退役**，不能只换 `describe`。

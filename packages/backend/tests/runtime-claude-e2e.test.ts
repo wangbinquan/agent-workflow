@@ -8,7 +8,7 @@
 // process; the next root frame's native id becomes the resumable identity.
 
 import type { Agent, RuntimeInventoryObservation } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { and, eq, sql } from 'drizzle-orm'
 import type { Logger } from '../src/util/log'
 import type { RuntimeProfile } from '../src/services/runtimeRegistry'
@@ -16,15 +16,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -52,11 +52,10 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-claude-runner-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -88,7 +87,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'node1', status: 'pending' })
   return id
@@ -137,7 +136,7 @@ function runClaude(o: RunOpts) {
 }
 
 async function waitForFirstRuntimeEvent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   timeoutMs = 3_000,
 ): Promise<void> {
@@ -170,10 +169,10 @@ function captureWarnings(): {
   return { log, warnings }
 }
 
-describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
+describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
@@ -285,23 +284,25 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
       hasParentToolUseId: false,
     })
     expect(
-      h.db
-        .select({ sessionId: nodeRuns.opencodeSessionId })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, nodeRunId))
-        .get(),
+      (
+        await h.db
+          .select({ sessionId: nodeRuns.opencodeSessionId })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, nodeRunId))
+      )[0],
     ).toEqual({ sessionId: null })
     expect(
-      h.db
-        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(
-          and(
-            eq(runtimeSessionLeases.protocol, 'claude-code'),
-            eq(runtimeSessionLeases.sessionId, 'claude-root-session'),
-          ),
-        )
-        .get(),
+      (
+        await h.db
+          .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(
+            and(
+              eq(runtimeSessionLeases.protocol, 'claude-code'),
+              eq(runtimeSessionLeases.sessionId, 'claude-root-session'),
+            ),
+          )
+      )[0],
     ).toBeUndefined()
   })
 
@@ -321,11 +322,11 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(result.status).toBe('done')
     expect(result.sessionId).toBe('claude-parallel-root')
     expect(result.outputs.summary).toBe('root-complete')
-    const rows = h.db
+    const rows = await h.db
       .select()
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+
     for (const childId of childIds) {
       expect(rows.some((row) => row.payload.includes(childId))).toBe(true)
     }
@@ -367,11 +368,11 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(result.sessionId).toBe('claude-after-reset')
     expect(result.outputs.summary).toBe('kept')
 
-    const rows = h.db
+    const rows = await h.db
       .select()
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+
     const reset = rows.find((row) => row.payload.includes('"type":"conversation_reset"'))
     const assistant = rows.find((row) => row.payload.includes('"type":"assistant"'))
     const terminal = rows.find((row) => row.payload.includes('"type":"result"'))
@@ -386,35 +387,38 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(rows.every((row) => row.sessionId === 'claude-after-reset')).toBe(true)
 
     expect(
-      h.db
-        .select({ sessionId: nodeRuns.opencodeSessionId })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, nodeRunId))
-        .get(),
+      (
+        await h.db
+          .select({ sessionId: nodeRuns.opencodeSessionId })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, nodeRunId))
+      )[0],
     ).toEqual({ sessionId: 'claude-after-reset' })
     expect(
-      h.db
-        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(
-          and(
-            eq(runtimeSessionLeases.protocol, 'claude-code'),
-            eq(runtimeSessionLeases.sessionId, 'claude-before-reset'),
-          ),
-        )
-        .get(),
+      (
+        await h.db
+          .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(
+            and(
+              eq(runtimeSessionLeases.protocol, 'claude-code'),
+              eq(runtimeSessionLeases.sessionId, 'claude-before-reset'),
+            ),
+          )
+      )[0],
     ).toBeUndefined()
     expect(
-      h.db
-        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(
-          and(
-            eq(runtimeSessionLeases.protocol, 'claude-code'),
-            eq(runtimeSessionLeases.sessionId, 'claude-after-reset'),
-          ),
-        )
-        .get(),
+      (
+        await h.db
+          .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(
+            and(
+              eq(runtimeSessionLeases.protocol, 'claude-code'),
+              eq(runtimeSessionLeases.sessionId, 'claude-after-reset'),
+            ),
+          )
+      )[0],
     ).toEqual({ holder: null })
   })
 
@@ -437,23 +441,25 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     )
     expect(result.sessionId).toBeUndefined()
     expect(
-      h.db
-        .select({ sessionId: nodeRuns.opencodeSessionId })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, nodeRunId))
-        .get(),
+      (
+        await h.db
+          .select({ sessionId: nodeRuns.opencodeSessionId })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, nodeRunId))
+      )[0],
     ).toEqual({ sessionId: null })
     expect(
-      h.db
-        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(
-          and(
-            eq(runtimeSessionLeases.protocol, 'claude-code'),
-            eq(runtimeSessionLeases.sessionId, 'claude-invalidated-by-reset'),
-          ),
-        )
-        .get(),
+      (
+        await h.db
+          .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(
+            and(
+              eq(runtimeSessionLeases.protocol, 'claude-code'),
+              eq(runtimeSessionLeases.sessionId, 'claude-invalidated-by-reset'),
+            ),
+          )
+      )[0],
     ).toBeUndefined()
   })
 
@@ -528,6 +534,12 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
   })
 
   test('stderr persistence exception is retained in Claude node diagnostics and logs', async () => {
+    // 这条判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语在 SQLite 上把事务句柄
+    // **就是 db 对象本身**，于是持久化里 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx`
+    // 是另一个对象，注入点一次都不触发（`eventInsertAttempts` 恒为 0），判据零预言力。
+    // 正解是把注入点做进持久化本身（`cancelTask` 的 `beforeStatusCas` 即先例），那要动生产代码，
+    // 已登记在 `docs/audit-backlog.md`；在此之前这条判据留在 SQLite 上，本文件其余判据两引擎都跑。
+    if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const { log, warnings } = captureWarnings()
@@ -563,16 +575,16 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(warning?.fields?.err).toContain('forced Claude stderr persistence failure')
     expect(warning?.fields?.err).not.toContain('claude-pump-secret')
 
-    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorMessage).toBe(result.errorMessage)
   })
 })
 
-describe('runNode — claude injection parity (RFC-111 PR-C)', () => {
+describeEachProvider('runNode — claude injection parity (RFC-111 PR-C)', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
@@ -637,10 +649,10 @@ describe('runNode — claude injection parity (RFC-111 PR-C)', () => {
   })
 })
 
-describe('runNode — runtime spawn failure (RFC-111 Codex P1-2)', () => {
+describeEachProvider('runNode — runtime spawn failure (RFC-111 Codex P1-2)', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

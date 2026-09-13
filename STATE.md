@@ -2,6 +2,44 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-13 夜续，AC-6 账本 **439 → 430**；外加一条**全树静默 PG 竞态**审计 + 一次推红复盘）
+>
+> 落档在 `design/RFC-359-database-provider-unification/plan.md` §5cu。
+>
+> ### 1. 比账本更要紧的那条发现：已双引擎的文件里还留着 bun:sqlite 同步终结子
+>
+> `rfc349-task-transaction-participants` 迁完 typecheck 全绿、SQLite 全绿，PostgreSQL 上以**外键冲突**
+> 红了——夹具里 `db.insert(users)…run()` / `db.insert(tasks)…run()` 一串**都没 await**。
+> SQLite 同步执行、顺序天然对；PostgreSQL 上它们是 promise，池里并发发出去，
+> `task_collaborators` 先于 `tasks` 落库。**`.run()` 在中立类型上合法，typecheck 不报，
+> SQLite 侧也全绿——只有真跑 PG 才看得见。**
+>
+> 写了全树审计 `termaudit2`（在**已走 `describeEachProvider`** 的文件里找**既没 await 也没 return**
+> 的 drizzle 同步终结子）：初查 **39 处 / 15 个文件**，本批修掉 36 处。剩 3 处：harness 自己、
+> 一个走 `dbTxSync`（SQLite 专属原语）、一个在数组回调里。
+>
+> ### 2. 变换器又添两条前置条件
+>
+> - 终结子在 `.map` / `.forEach` / `.filter` 这类**数组回调**里时，把回调改 `async` 会静默改契约
+>   （`.map` 产出 promise 数组、`.forEach` 直接丢），整文件拒绝、交人工。
+> - 判「文件里是不是已经有 `harness`」要看 **AST 绑定**（变量/形参/函数/import），不能看文本——
+>   变换器自己刚插进去的 `harness.db` 引用会把整批都拒掉。
+>
+> ### 3. 推红一次（`62c95e336` → `2161d4789` 已修）：PostgreSQL 上 fixture DDL 会跨用例污染
+>
+> 上一段给 `rfc120-deferred-dispatch` 加的 RFC-333 故障触发器没删，把同文件的
+> 「decision atomically stamps…」判据推红在 CI shard 5/8。SQLite 每个用例一个全新内存库、
+> DDL 随库消失；**PostgreSQL 的库是整个文件共用的真库，用例之间只清表数据、不回滚 DDL**。
+> **本地整文件跑是绿的**——两个引擎的用例执行顺序不一样（SQLite 按文件顺序，PG 实测 fault 先跑），
+> 只有 PG 侧撞得上。**不要用「本地这个文件全绿」证明没有夹具污染。**
+>
+> ### 4. 7 条判据登记为「靠 SQLite 专属注入面」
+>
+> `runner` / `runtime-claude-*` 里 7 条「写失败会怎样」的判据用包住 `db.insert` 的 Proxy 注入故障。
+> 统一事务原语在 SQLite 上把事务句柄做成 db 对象本身，PG 上 `tx` 是另一个对象，注入点一次都不触发。
+> 生产代码两边都有错误分类器，缺的是**测试驱动得到这些分支**的手段；正解（把注入点做进持久化，
+> 同 `cancelTask` 的 `beforeStatusCas`）已登记在 `docs/audit-backlog.md`，单独一刀。
+>
 > ## 📌 RFC-359 最新一段（2026-09-13 夜，AC-6 账本 **458 → 439**；「构造点已在 describe 体内」那一桶 + 两条真 PG 落差）
 >
 > 落档在 `design/RFC-359-database-provider-unification/plan.md` §5ct。

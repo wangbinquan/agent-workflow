@@ -18,15 +18,15 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous seeding under pure-id freshness
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -53,11 +53,10 @@ function makeAgent(): Agent {
   } as Agent
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc046-runner-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -90,7 +89,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function insertNodeRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   overrides: Partial<typeof nodeRuns.$inferInsert> = {},
 ): Promise<string> {
@@ -123,39 +122,38 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-function readJson(db: DbClient, nodeRunId: string): string | null {
-  const row = db
-    .select({ json: nodeRuns.injectedMemoriesJson })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .get()
+async function readJson(db: ProviderNeutralDatabase, nodeRunId: string): Promise<string | null> {
+  const row = (
+    await db
+      .select({ json: nodeRuns.injectedMemoriesJson })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+  )[0]
   return row?.json ?? null
 }
 
-describe('RFC-046 — runner persists injected_memories_json', () => {
+describeEachProvider('RFC-046 — runner persists injected_memories_json', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
   test('R1: approved global memory present → JSON snapshot written to column', async () => {
-    h.db
-      .insert(memories)
-      .values({
-        id: 'mem_g1',
-        scopeType: 'global',
-        scopeId: null,
-        title: 'G',
-        bodyMd: 'global body',
-        tags: '["g"]',
-        status: 'approved',
-        sourceKind: 'review',
-        version: 1,
-        approvedAt: 1_700_000_000_000,
-        createdAt: Date.now(),
-      })
-      .run()
+    await h.db.insert(memories).values({
+      id: 'mem_g1',
+      scopeType: 'global',
+      scopeId: null,
+      title: 'G',
+      bodyMd: 'global body',
+      tags: '["g"]',
+      status: 'approved',
+      sourceKind: 'review',
+      version: 1,
+      approvedAt: 1_700_000_000_000,
+      createdAt: Date.now(),
+    })
+
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     await withEnv(
       {
@@ -178,7 +176,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           db: h.db,
         }),
     )
-    const raw = readJson(h.db, nodeRunId)
+    const raw = await readJson(h.db, nodeRunId)
     expect(raw).not.toBeNull()
     const parsed = JSON.parse(raw!)
     expect(Array.isArray(parsed)).toBe(true)
@@ -213,7 +211,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           db: h.db,
         }),
     )
-    expect(readJson(h.db, nodeRunId)).toBeNull()
+    expect(await readJson(h.db, nodeRunId)).toBeNull()
   })
 
   test('R3: envelope-followup retry copies attempt-0 sibling JSON verbatim', async () => {
@@ -279,7 +277,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           },
         }),
     )
-    const raw = readJson(h.db, followupId)
+    const raw = await readJson(h.db, followupId)
     expect(raw).not.toBeNull()
     const parsed = JSON.parse(raw!)
     expect(parsed.length).toBe(1)
@@ -338,7 +336,7 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
           },
         }),
     )
-    expect(readJson(h.db, followupId)).toBeNull()
+    expect(await readJson(h.db, followupId)).toBeNull()
   })
 })
 

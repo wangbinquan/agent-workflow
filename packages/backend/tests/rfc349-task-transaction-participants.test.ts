@@ -4,11 +4,12 @@
 // task but may never act on it, and minting retires superseded merge attempts
 // in the same transaction that creates the replacement run.
 
-import { afterEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, expect, test } from 'bun:test'
+
 import { eq, sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { nodeRuns, taskCollaborators, tasks, users } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -22,63 +23,58 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TASK_ID = 'rfc349-task-auth'
 
 afterEach(() => {
   selectDatabaseSchemaProvider('sqlite')
 })
 
-function seedTask() {
-  const db = createInMemoryDb(MIGRATIONS)
+async function seedTask(db: ProviderNeutralDatabase) {
   const now = 1_000
-  db.insert(users)
-    .values(
-      ['owner', 'member', 'observer', 'outsider'].map((id) => ({
-        id,
-        username: id,
-        displayName: id,
-        createdAt: now,
-        updatedAt: now,
-      })),
-    )
-    .run()
+  await db.insert(users).values(
+    ['owner', 'member', 'observer', 'outsider'].map((id) => ({
+      id,
+      username: id,
+      displayName: id,
+      createdAt: now,
+      updatedAt: now,
+    })),
+  )
+
   db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('workflow-1', 'wf', '{}')`)
-  db.insert(tasks)
-    .values({
-      id: TASK_ID,
-      name: 'task auth',
-      workflowId: 'workflow-1',
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/worktree',
-      baseBranch: 'main',
-      branch: 'agent-workflow/rfc349-task-auth',
-      status: 'running',
-      inputs: '{}',
-      startedAt: now,
-      ownerUserId: 'owner',
-    })
-    .run()
-  db.insert(taskCollaborators)
-    .values([
-      { taskId: TASK_ID, userId: 'owner', role: 'owner', addedBy: 'owner', addedAt: now },
-      {
-        taskId: TASK_ID,
-        userId: 'member',
-        role: 'collaborator',
-        addedBy: 'owner',
-        addedAt: now,
-      },
-      {
-        taskId: TASK_ID,
-        userId: 'observer',
-        role: 'observer',
-        addedBy: 'owner',
-        addedAt: now,
-      },
-    ])
-    .run()
+  await db.insert(tasks).values({
+    id: TASK_ID,
+    name: 'task auth',
+    workflowId: 'workflow-1',
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/repo',
+    worktreePath: '/tmp/worktree',
+    baseBranch: 'main',
+    branch: 'agent-workflow/rfc349-task-auth',
+    status: 'running',
+    inputs: '{}',
+    startedAt: now,
+    ownerUserId: 'owner',
+  })
+
+  await db.insert(taskCollaborators).values([
+    { taskId: TASK_ID, userId: 'owner', role: 'owner', addedBy: 'owner', addedAt: now },
+    {
+      taskId: TASK_ID,
+      userId: 'member',
+      role: 'collaborator',
+      addedBy: 'owner',
+      addedAt: now,
+    },
+    {
+      taskId: TASK_ID,
+      userId: 'observer',
+      role: 'observer',
+      addedBy: 'owner',
+      addedAt: now,
+    },
+  ])
+
   return db
 }
 
@@ -149,7 +145,7 @@ function postgresqlFixture() {
   return { db: createPostgresqlDatabaseClient(runtime), statements }
 }
 
-describe('RFC-349 task transaction participants', () => {
+describeEachProvider('RFC-349 task transaction participants', (harness) => {
   // RFC-359 W10：这条用例此前驱动的是 `infrastructure/sqliteTaskAuthorization.ts`——一份自
   // W1-T2c 起零生产调用方的同步孪生，本批随文件一并退役。同一判据（可见性含 viewer、
   // 动手权只认 owner/collaborator）已搬到真在跑的中立实现上，并且两个引擎各跑一遍：
@@ -160,7 +156,7 @@ describe('RFC-349 task transaction participants', () => {
   // **铸行与退役同笔提交**，与解释无关；改走中立参与者之后，本用例的两半（SQLite / PostgreSQL）
   // 现在是同一个形状、同一个 `nodeRunMintProgram`。
   test('replacement mint and superseded-merge retirement commit atomically', async () => {
-    const db = seedTask()
+    const db = await seedTask(harness.db)
     await databaseSessionFor(db).transaction(async (tx) => {
       const mint = createNodeRunMintParticipantInTx(tx)
       await mint.mint({
@@ -174,7 +170,7 @@ describe('RFC-349 task transaction participants', () => {
         .update(nodeRuns)
         .set({ mergeState: 'pending-merge' })
         .where(eq(nodeRuns.id, '01RFC349000000000000000001'))
-        .run()
+
       await mint.mint({
         id: '01RFC349000000000000000002',
         taskId: TASK_ID,
@@ -185,11 +181,10 @@ describe('RFC-349 task transaction participants', () => {
     })
 
     expect(
-      db
+      await db
         .select({ id: nodeRuns.id, mergeState: nodeRuns.mergeState })
         .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, TASK_ID))
-        .all(),
+        .where(eq(nodeRuns.taskId, TASK_ID)),
     ).toEqual([
       { id: '01RFC349000000000000000001', mergeState: 'abandoned' },
       { id: '01RFC349000000000000000002', mergeState: null },

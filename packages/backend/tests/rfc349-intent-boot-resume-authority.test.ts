@@ -148,7 +148,8 @@ async function seedQueuedSuccessor(): Promise<{ sessionId: string; changeId: str
   const session = (
     await createIntentSession(persistence, visibility, actor, { message: 'build it' })
   ).session
-  db.update(intentSessions)
+  await db
+    .update(intentSessions)
     .set({
       contextManifestJson: JSON.stringify([
         {
@@ -162,7 +163,7 @@ async function seedQueuedSuccessor(): Promise<{ sessionId: string; changeId: str
       handleWatermarkJson: JSON.stringify({ agent: 1 }),
     })
     .where(eq(intentSessions.id, session.id))
-    .run()
+
   await insertUserTurnAndReserve(persistence, actor, session.id, 'message', { message: 'run' }, 50)
   const running = (
     await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).limit(1)

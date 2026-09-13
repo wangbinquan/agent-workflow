@@ -73,19 +73,18 @@ function authorization(): IntentContextResourceAuthorization {
   })
 }
 
-function seedOwner(__db: ProviderNeutralDatabase) {
+async function seedOwner(__db: ProviderNeutralDatabase) {
   const db = __db
-  db.insert(users)
-    .values({
-      id: SESSION.ownerUserId,
-      username: SESSION.ownerUserId,
-      displayName: 'Intent Context Owner',
-      role: 'user',
-      status: 'active',
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
+  await db.insert(users).values({
+    id: SESSION.ownerUserId,
+    username: SESSION.ownerUserId,
+    displayName: 'Intent Context Owner',
+    role: 'user',
+    status: 'active',
+    createdAt: 1,
+    updatedAt: 1,
+  })
+
   return db
 }
 
@@ -103,7 +102,7 @@ describeEachProvider('RFC-349 Intent transaction-bound context authorization', (
   // RFC-359 W7：SQLite 侧的 `dbTxSync` 已换成中立事务原语，断言的东西没变——
   // 授权仍必须发生在**驱动本程序的那一笔事务**里，失败要把 Intent 的插入一起回滚。
   test('the runner validates the resource inside the same transaction before inserting', async () => {
-    const db = seedOwner(harness.db)
+    const db = await seedOwner(harness.db)
     const current = authorization()
     let factoryCalls = 0
     let authorizationCalls = 0
@@ -139,7 +138,7 @@ describeEachProvider('RFC-349 Intent transaction-bound context authorization', (
   })
 
   test('an invisible resource is rejected and the Intent insert rolls back', async () => {
-    const db = seedOwner(harness.db)
+    const db = await seedOwner(harness.db)
     const current = authorization()
     const persistence = composeIntentPersistence({
       db,

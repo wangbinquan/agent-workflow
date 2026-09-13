@@ -1,11 +1,12 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
@@ -42,7 +43,6 @@ import {
   type McpCatalogTestBinding as McpServiceBinding,
 } from './helpers/mcpServiceBinding'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
 
 const actor = buildActor({
@@ -56,7 +56,7 @@ const actor = buildActor({
   source: 'daemon',
 })
 
-function mcpBinding(db: DbClient): McpServiceBinding {
+function mcpBinding(db: ProviderNeutralDatabase): McpServiceBinding {
   const catalog = composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -78,7 +78,10 @@ function mcpBinding(db: DbClient): McpServiceBinding {
   return Object.freeze({ catalog, authority })
 }
 
-function runtimeTestDependencies(db: DbClient, root: string): McpRuntimeTestDependencies {
+function runtimeTestDependencies(
+  db: ProviderNeutralDatabase,
+  root: string,
+): McpRuntimeTestDependencies {
   const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
   const mcp = mcpBinding(db)
   return {
@@ -108,36 +111,36 @@ function successResult(
   }
 }
 
-async function seed(protocol: 'opencode' | 'claude-code' = 'opencode'): Promise<{
-  db: DbClient
+async function seed(
+  db: ProviderNeutralDatabase,
+  protocol: 'opencode' | 'claude-code' = 'opencode',
+): Promise<{
+  db: ProviderNeutralDatabase
   mcp: NonNullable<Awaited<ReturnType<typeof getMcpById>>>
   root: string
   runtimeName: string
 }> {
-  const db = createInMemoryDb(MIGRATIONS)
   const runtimeName = protocol === 'claude-code' ? 'test-claude' : 'test-opencode'
-  db.insert(runtimes)
-    .values({
-      id: 'runtime-1',
-      name: runtimeName,
-      protocol,
-      binaryPath: canonicalBinaryPath(protocol === 'claude-code' ? 'claude' : 'opencode'),
-      model: 'openai/test-model',
-      enabled: true,
-    })
-    .run()
-  db.insert(mcps)
-    .values({
-      id: 'mcp-1',
-      name: 'fixture',
-      description: '',
-      type: 'local',
-      config: JSON.stringify({ command: ['fixture-mcp'] }),
-      enabled: true,
-      ownerUserId: SYSTEM_USER_ID,
-      visibility: 'private',
-    })
-    .run()
+  await db.insert(runtimes).values({
+    id: 'runtime-1',
+    name: runtimeName,
+    protocol,
+    binaryPath: canonicalBinaryPath(protocol === 'claude-code' ? 'claude' : 'opencode'),
+    model: 'openai/test-model',
+    enabled: true,
+  })
+
+  await db.insert(mcps).values({
+    id: 'mcp-1',
+    name: 'fixture',
+    description: '',
+    type: 'local',
+    config: JSON.stringify({ command: ['fixture-mcp'] }),
+    enabled: true,
+    ownerUserId: SYSTEM_USER_ID,
+    visibility: 'private',
+  })
+
   const mcp = await getMcpById(mcpBinding(db), 'mcp-1')
   if (mcp === null) throw new Error('fixture MCP missing')
   const root = mkdtempSync(join(tmpdir(), 'rfc238-service-'))
@@ -157,9 +160,9 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-describe('RFC-238 MCP runtime test service', () => {
+describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('rejects empty and over-64-KiB UTF-8 messages before scheduling a runtime', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let runs = 0
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -187,7 +190,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('resumes multiple turns and expires only after 10 minutes of terminal idle', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let now = 1_000
     let runs = 0
     const service = new McpRuntimeTestService({
@@ -264,7 +267,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('explicit conversation reset rotates the playground native lease and next-turn resume id', async () => {
-    const { db, mcp, root, runtimeName } = await seed('claude-code')
+    const { db, mcp, root, runtimeName } = await seed(harness.db, 'claude-code')
     const observedBeforeRuns: Array<string | null> = []
     let initialNativeId: string | null = null
     let runs = 0
@@ -274,10 +277,11 @@ describe('RFC-238 MCP runtime test service', () => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
         const persistedNativeId =
-          db
-            .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-            .from(mcpRuntimeTestSessions)
-            .get()?.id ?? null
+          (
+            await db
+              .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+              .from(mcpRuntimeTestSessions)
+          )[0]?.id ?? null
         observedBeforeRuns.push(persistedNativeId)
         await opts.onSpawned?.({
           pid: 100 + runs,
@@ -338,11 +342,12 @@ describe('RFC-238 MCP runtime test service', () => {
     let session = await service.get(actor, mcp.id, created.sessionId)
     expect(session.nativeSessionReady).toBe(true)
     expect(
-      db
-        .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-        .get(),
+      (
+        await db
+          .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+          .from(mcpRuntimeTestSessions)
+          .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
+      )[0],
     ).toEqual({ id: 'native-reset-new' })
 
     await service.message(actor, mcp, created.sessionId, {
@@ -359,26 +364,26 @@ describe('RFC-238 MCP runtime test service', () => {
     expect(initialNativeId).not.toBeNull()
     expect(observedBeforeRuns).toEqual([initialNativeId, 'native-reset-new'])
     expect(
-      db
+      await db
         .select({ id: mcpRuntimeTestEvents.sessionId })
         .from(mcpRuntimeTestEvents)
-        .where(eq(mcpRuntimeTestEvents.testSessionId, created.sessionId))
-        .all(),
+        .where(eq(mcpRuntimeTestEvents.testSessionId, created.sessionId)),
     ).toEqual([{ id: 'native-reset-new' }, { id: 'native-reset-new' }])
   })
 
   test('reset without replacement makes an established playground session unusable', async () => {
-    const { db, mcp, root, runtimeName } = await seed('claude-code')
+    const { db, mcp, root, runtimeName } = await seed(harness.db, 'claude-code')
     let runs = 0
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
-        const persistedNativeId = db
-          .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-          .from(mcpRuntimeTestSessions)
-          .get()?.id
+        const persistedNativeId = (
+          await db
+            .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+            .from(mcpRuntimeTestSessions)
+        )[0]?.id
         expect(persistedNativeId).toBeString()
         await opts.onSpawned?.({
           pid: 200 + runs,
@@ -440,27 +445,29 @@ describe('RFC-238 MCP runtime test service', () => {
       failureCode: 'mcp-test-session-conflict',
     })
     expect(
-      db
-        .select({ reason: mcpRuntimeTestTurns.captureIncompleteReason })
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, ended.turns.at(-1)!.id))
-        .get(),
+      (
+        await db
+          .select({ reason: mcpRuntimeTestTurns.captureIncompleteReason })
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.id, ended.turns.at(-1)!.id))
+      )[0],
     ).toEqual({ reason: 'stream-persist-failed' })
     expect(runs).toBe(2)
   })
 
   test('native identity integrity failure cannot restore a prior ready resume id', async () => {
-    const { db, mcp, root, runtimeName } = await seed('claude-code')
+    const { db, mcp, root, runtimeName } = await seed(harness.db, 'claude-code')
     let runs = 0
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
-        const persistedNativeId = db
-          .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-          .from(mcpRuntimeTestSessions)
-          .get()?.id
+        const persistedNativeId = (
+          await db
+            .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+            .from(mcpRuntimeTestSessions)
+        )[0]?.id
         expect(persistedNativeId).toBeString()
         await opts.onSpawned?.({
           pid: 300 + runs,
@@ -514,7 +521,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('cancel current turn preserves the session; end now terminates the next turn', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let now = 5_000
     let runIndex = 0
     let nativeSessionObserved = false
@@ -583,7 +590,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('canceling the first turn before a native session is ready ends the logical session', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
@@ -636,7 +643,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('create idempotency and canonical event dedupe prevent repeated side effects', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let runs = 0
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -680,10 +687,11 @@ describe('RFC-238 MCP runtime test service', () => {
       turnId,
     })
     // Re-open capture only for this isolated sink/dedupe assertion.
-    db.update(mcpRuntimeTestTurns)
+    await db
+      .update(mcpRuntimeTestTurns)
       .set({ captureState: 'live' })
       .where(eq(mcpRuntimeTestTurns.id, turnId))
-      .run()
+
     await sink.append({
       ts: 2,
       kind: 'text',
@@ -703,16 +711,15 @@ describe('RFC-238 MCP runtime test service', () => {
       externalEventId: 'same-part',
     })
     expect(
-      db
+      await db
         .select()
         .from(mcpRuntimeTestEvents)
-        .where(eq(mcpRuntimeTestEvents.testSessionId, first.sessionId))
-        .all(),
+        .where(eq(mcpRuntimeTestEvents.testSessionId, first.sessionId)),
     ).toHaveLength(1)
   })
 
   test('message response-loss replay is exact and does not schedule a duplicate turn', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let runs = 0
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -759,20 +766,18 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('transcripts are owner-only while mcp-runtime-tests:audit grants exact-id read only', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     for (const id of ['owner-user', 'stranger-user']) {
-      db.insert(users)
-        .values({
-          id,
-          username: id,
-          displayName: id,
-          role: 'user',
-          status: 'active',
-          forcePasswordChange: false,
-          createdAt: 1,
-          updatedAt: 1,
-        })
-        .run()
+      await db.insert(users).values({
+        id,
+        username: id,
+        displayName: id,
+        role: 'user',
+        status: 'active',
+        forcePasswordChange: false,
+        createdAt: 1,
+        updatedAt: 1,
+      })
     }
     const ownerActor = buildActor({
       user: {
@@ -840,7 +845,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('end intent wins the final pre-spawn fence and prevents a late process start', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let planReady = false
     let releasePlan = (): void => {}
     let spawnAttempts = 0
@@ -890,7 +895,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('the spawned receipt is durable and a crossed hard deadline still blocks prompt delivery', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let now = 1_000
     let promptDelivered = false
     const service = new McpRuntimeTestService({
@@ -930,11 +935,12 @@ describe('RFC-238 MCP runtime test service', () => {
       async () => (await service.get(actor, mcp.id, created.sessionId)).status === 'ended',
     )
 
-    const turn = db
-      .select()
-      .from(mcpRuntimeTestTurns)
-      .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
-      .get()
+    const turn = (
+      await db
+        .select()
+        .from(mcpRuntimeTestTurns)
+        .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
+    )[0]
     expect(promptDelivered).toBe(false)
     expect(turn).toMatchObject({
       status: 'timed_out',
@@ -945,7 +951,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('an unreaped child quarantines the session and blocks replacement', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let runs = 0
     let reapOutcome: 'kill-failed' | 'not-alive' = 'kill-failed'
     const service = new McpRuntimeTestService({
@@ -985,18 +991,20 @@ describe('RFC-238 MCP runtime test service', () => {
     expect(ended.cleanupState).toBe('quarantined')
     expect(ended.endReason).toBe('capture-incomplete')
     expect(
-      db
-        .select({ pid: mcpRuntimeTestTurns.pid })
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
-        .get()?.pid,
+      (
+        await db
+          .select({ pid: mcpRuntimeTestTurns.pid })
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
+      )[0]?.pid,
     ).toBe(4242)
     expect(
-      db
-        .select({ cleanupErrorCode: mcpRuntimeTestSessions.cleanupErrorCode })
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-        .get()?.cleanupErrorCode,
+      (
+        await db
+          .select({ cleanupErrorCode: mcpRuntimeTestSessions.cleanupErrorCode })
+          .from(mcpRuntimeTestSessions)
+          .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
+      )[0]?.cleanupErrorCode,
     ).toBe('mcp-test-child-unreaped')
 
     await expect(
@@ -1014,11 +1022,12 @@ describe('RFC-238 MCP runtime test service', () => {
     const recovered = await service.get(actor, mcp.id, created.sessionId)
     expect(recovered.cleanupState).toBe('complete')
     expect(
-      db
-        .select({ pid: mcpRuntimeTestTurns.pid })
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
-        .get()?.pid,
+      (
+        await db
+          .select({ pid: mcpRuntimeTestTurns.pid })
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
+      )[0]?.pid,
     ).toBeNull()
 
     const replacement = await service.create(actor, mcp, {
@@ -1036,53 +1045,51 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('boot recovery retains identity and scratch when the old child cannot be reaped', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'orphan-session')
     mkdirSync(scratchRoot, { recursive: true })
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    db.insert(mcpRuntimeTestSessions)
-      .values({
-        id: 'orphan-session',
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'orphan-create',
-        clientCreateDigest: 'a'.repeat(64),
-        status: 'active',
-        mcpConfigHash: hash,
-        runtimeRowId: 'runtime-1',
-        runtimeName: 'test-opencode',
-        runtimeProtocol: 'opencode',
-        runtimeSnapshotJson: '{}',
-        runtimeBinaryPath: canonicalBinaryPath('opencode'),
-        nativeSessionState: 'pending',
-        inFlightTurnId: 'orphan-turn',
-        turnSeq: 1,
-        sessionVersion: 1,
-        scratchRoot,
-        cleanupState: 'not-started',
-        createdAt: 900,
-        updatedAt: 900,
-      })
-      .run()
-    db.insert(mcpRuntimeTestTurns)
-      .values({
-        id: 'orphan-turn',
-        sessionId: 'orphan-session',
-        seq: 1,
-        clientMessageId: 'orphan-message',
-        promptText: 'was running before restart',
-        status: 'running',
-        hardDeadlineAt: 10_000,
-        captureState: 'live',
-        pid: 5151,
-        spawnedAt: 910,
-        spawnBinaryPath: canonicalBinaryPath('opencode'),
-        startedAt: 905,
-        createdAt: 900,
-      })
-      .run()
+    await db.insert(mcpRuntimeTestSessions).values({
+      id: 'orphan-session',
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'orphan-create',
+      clientCreateDigest: 'a'.repeat(64),
+      status: 'active',
+      mcpConfigHash: hash,
+      runtimeRowId: 'runtime-1',
+      runtimeName: 'test-opencode',
+      runtimeProtocol: 'opencode',
+      runtimeSnapshotJson: '{}',
+      runtimeBinaryPath: canonicalBinaryPath('opencode'),
+      nativeSessionState: 'pending',
+      inFlightTurnId: 'orphan-turn',
+      turnSeq: 1,
+      sessionVersion: 1,
+      scratchRoot,
+      cleanupState: 'not-started',
+      createdAt: 900,
+      updatedAt: 900,
+    })
+
+    await db.insert(mcpRuntimeTestTurns).values({
+      id: 'orphan-turn',
+      sessionId: 'orphan-session',
+      seq: 1,
+      clientMessageId: 'orphan-message',
+      promptText: 'was running before restart',
+      status: 'running',
+      hardDeadlineAt: 10_000,
+      captureState: 'live',
+      pid: 5151,
+      spawnedAt: 910,
+      spawnBinaryPath: canonicalBinaryPath('opencode'),
+      startedAt: 905,
+      createdAt: 900,
+    })
+
     let reapedPid: number | null = null
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -1094,12 +1101,13 @@ describe('RFC-238 MCP runtime test service', () => {
     })
     await service.start()
     await waitFor(
-      () =>
-        db
-          .select({ status: mcpRuntimeTestSessions.status })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, 'orphan-session'))
-          .get()?.status === 'ended',
+      async () =>
+        (
+          await db
+            .select({ status: mcpRuntimeTestSessions.status })
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, 'orphan-session'))
+        )[0]?.status === 'ended',
     )
     const recovered = await service.get(actor, mcp.id, 'orphan-session')
     expect(String(reapedPid)).toBe('5151')
@@ -1107,16 +1115,17 @@ describe('RFC-238 MCP runtime test service', () => {
     expect(recovered.turns[0]?.status).toBe('interrupted')
     expect(existsSync(scratchRoot)).toBe(true)
     expect(
-      db
-        .select({ pid: mcpRuntimeTestTurns.pid })
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, 'orphan-turn'))
-        .get()?.pid,
+      (
+        await db
+          .select({ pid: mcpRuntimeTestTurns.pid })
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.id, 'orphan-turn'))
+      )[0]?.pid,
     ).toBe(5151)
   })
 
   test('boot preserves a completely captured native session after the old child is gone', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const sessionId = 'recovered-opencode-session'
     const turnId = 'recovered-opencode-turn'
     const runtimeSessionId = 'native-recovered-opencode'
@@ -1125,48 +1134,45 @@ describe('RFC-238 MCP runtime test service', () => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    db.insert(mcpRuntimeTestSessions)
-      .values({
-        id: sessionId,
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'recovered-opencode-create',
-        clientCreateDigest: 'a'.repeat(64),
-        status: 'active',
-        mcpConfigHash: hash,
-        runtimeRowId: 'runtime-1',
-        runtimeName: 'test-opencode',
-        runtimeProtocol: 'opencode',
-        runtimeSnapshotJson: '{}',
-        runtimeBinaryPath: canonicalBinaryPath('opencode'),
-        runtimeSessionId,
-        nativeSessionState: 'ready',
-        inFlightTurnId: turnId,
-        turnSeq: 1,
-        sessionVersion: 1,
-        scratchRoot,
-        cleanupState: 'not-started',
-        createdAt: 900,
-        updatedAt: 900,
-      })
-      .run()
-    db.insert(mcpRuntimeTestTurns)
-      .values({
-        id: turnId,
-        sessionId,
-        seq: 1,
-        clientMessageId: 'recovered-opencode-message',
-        promptText: 'captured before the daemon stopped',
-        status: 'running',
-        hardDeadlineAt: 10_000,
-        captureState: 'complete',
-        pid: 8181,
-        spawnedAt: 910,
-        spawnBinaryPath: canonicalBinaryPath('opencode'),
-        startedAt: 905,
-        createdAt: 900,
-      })
-      .run()
+    await db.insert(mcpRuntimeTestSessions).values({
+      id: sessionId,
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'recovered-opencode-create',
+      clientCreateDigest: 'a'.repeat(64),
+      status: 'active',
+      mcpConfigHash: hash,
+      runtimeRowId: 'runtime-1',
+      runtimeName: 'test-opencode',
+      runtimeProtocol: 'opencode',
+      runtimeSnapshotJson: '{}',
+      runtimeBinaryPath: canonicalBinaryPath('opencode'),
+      runtimeSessionId,
+      nativeSessionState: 'ready',
+      inFlightTurnId: turnId,
+      turnSeq: 1,
+      sessionVersion: 1,
+      scratchRoot,
+      cleanupState: 'not-started',
+      createdAt: 900,
+      updatedAt: 900,
+    })
+
+    await db.insert(mcpRuntimeTestTurns).values({
+      id: turnId,
+      sessionId,
+      seq: 1,
+      clientMessageId: 'recovered-opencode-message',
+      promptText: 'captured before the daemon stopped',
+      status: 'running',
+      hardDeadlineAt: 10_000,
+      captureState: 'complete',
+      pid: 8181,
+      spawnedAt: 910,
+      spawnBinaryPath: canonicalBinaryPath('opencode'),
+      startedAt: 905,
+      createdAt: 900,
+    })
 
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -1185,7 +1191,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('graceful shutdown reaps the turn, preserves a proven native session, and rejects new work', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let running = false
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -1242,7 +1248,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('provider-session pause closes admission and resume reopens the same service', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => successResult(opts, 'native-after-resume'),
@@ -1270,7 +1276,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('graceful shutdown also reaps a turn already marked ending by a durable mutation', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let running = false
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -1304,14 +1310,14 @@ describe('RFC-238 MCP runtime test service', () => {
       clientMessageId: 'message-ending-shutdown',
     })
     await waitFor(() => running)
-    db.update(mcpRuntimeTestSessions)
+    await db
+      .update(mcpRuntimeTestSessions)
       .set({
         status: 'ending',
         endReason: 'access-revoked',
         idleDeadlineAt: null,
       })
       .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-      .run()
 
     await service.shutdown(1_000)
     const ended = await service.get(actor, mcp.id, created.sessionId)
@@ -1324,7 +1330,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('an accepted running turn times out at its hard deadline without ending a proven session', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let now = 20_000
     let running = false
     const service = new McpRuntimeTestService({
@@ -1376,7 +1382,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('reconciliation times out an expired queued continuation before it can spawn', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     let now = 100
     let runs = 0
     const service = new McpRuntimeTestService({
@@ -1393,44 +1399,41 @@ describe('RFC-238 MCP runtime test service', () => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    db.insert(mcpRuntimeTestSessions)
-      .values({
-        id: 'expired-queued-session',
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'expired-queued-create',
-        clientCreateDigest: 'a'.repeat(64),
-        status: 'active',
-        mcpConfigHash: hash,
-        runtimeRowId: 'runtime-1',
-        runtimeName: 'claude-code',
-        runtimeProtocol: 'claude-code',
-        runtimeSnapshotJson: '{}',
-        runtimeBinaryPath: '/mock/claude',
-        runtimeSessionId: 'native-expired-queued',
-        nativeSessionState: 'ready',
-        inFlightTurnId: 'expired-queued-turn',
-        turnSeq: 2,
-        sessionVersion: 2,
-        scratchRoot,
-        cleanupState: 'not-started',
-        createdAt: 1,
-        updatedAt: 2,
-      })
-      .run()
-    db.insert(mcpRuntimeTestTurns)
-      .values({
-        id: 'expired-queued-turn',
-        sessionId: 'expired-queued-session',
-        seq: 2,
-        clientMessageId: 'expired-queued-message',
-        promptText: 'must expire in the queue',
-        status: 'queued',
-        hardDeadlineAt: 200,
-        captureState: 'live',
-        createdAt: 50,
-      })
-      .run()
+    await db.insert(mcpRuntimeTestSessions).values({
+      id: 'expired-queued-session',
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'expired-queued-create',
+      clientCreateDigest: 'a'.repeat(64),
+      status: 'active',
+      mcpConfigHash: hash,
+      runtimeRowId: 'runtime-1',
+      runtimeName: 'claude-code',
+      runtimeProtocol: 'claude-code',
+      runtimeSnapshotJson: '{}',
+      runtimeBinaryPath: '/mock/claude',
+      runtimeSessionId: 'native-expired-queued',
+      nativeSessionState: 'ready',
+      inFlightTurnId: 'expired-queued-turn',
+      turnSeq: 2,
+      sessionVersion: 2,
+      scratchRoot,
+      cleanupState: 'not-started',
+      createdAt: 1,
+      updatedAt: 2,
+    })
+
+    await db.insert(mcpRuntimeTestTurns).values({
+      id: 'expired-queued-turn',
+      sessionId: 'expired-queued-session',
+      seq: 2,
+      clientMessageId: 'expired-queued-message',
+      promptText: 'must expire in the queue',
+      status: 'queued',
+      hardDeadlineAt: 200,
+      captureState: 'live',
+      createdAt: 50,
+    })
 
     now = 200
     await service.reconcile()
@@ -1444,19 +1447,18 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('worker admission preserves a ready continuation that expires while queued', async () => {
-    const { db, mcp, root } = await seed()
-    db.insert(mcps)
-      .values({
-        id: 'mcp-2',
-        name: 'fixture_two',
-        description: '',
-        type: 'local',
-        config: JSON.stringify({ command: ['fixture-mcp-two'] }),
-        enabled: true,
-        ownerUserId: SYSTEM_USER_ID,
-        visibility: 'private',
-      })
-      .run()
+    const { db, mcp, root } = await seed(harness.db)
+    await db.insert(mcps).values({
+      id: 'mcp-2',
+      name: 'fixture_two',
+      description: '',
+      type: 'local',
+      config: JSON.stringify({ command: ['fixture-mcp-two'] }),
+      enabled: true,
+      ownerUserId: SYSTEM_USER_ID,
+      visibility: 'private',
+    })
+
     const secondMcp = await getMcpById(mcpBinding(db), 'mcp-2')
     if (secondMcp === null) throw new Error('second fixture MCP missing')
 
@@ -1519,12 +1521,13 @@ describe('RFC-238 MCP runtime test service', () => {
     releaseBlockingRun()
 
     await waitFor(
-      () =>
-        db
-          .select({ status: mcpRuntimeTestTurns.status })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, queued.turns[1]!.id))
-          .get()?.status === 'timed_out',
+      async () =>
+        (
+          await db
+            .select({ status: mcpRuntimeTestTurns.status })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, queued.turns[1]!.id))
+        )[0]?.status === 'timed_out',
     )
     const recovered = await service.get(actor, secondMcp.id, primed.sessionId)
     expect(runs).toBe(2)
@@ -1536,7 +1539,7 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('canceling a queued continuation does not reopen a drift-blocked session', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const sessionId = 'blocked-queued-session'
     const turnId = 'blocked-queued-turn'
     const scratchRoot = join(root, 'mcp-runtime-tests', sessionId)
@@ -1552,45 +1555,42 @@ describe('RFC-238 MCP runtime test service', () => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    db.insert(mcpRuntimeTestSessions)
-      .values({
-        id: sessionId,
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'blocked-queued-create',
-        clientCreateDigest: 'a'.repeat(64),
-        status: 'active',
-        mcpConfigHash: hash,
-        runtimeRowId: 'runtime-1',
-        runtimeName: 'claude-code',
-        runtimeProtocol: 'claude-code',
-        runtimeSnapshotJson: '{}',
-        runtimeBinaryPath: '/mock/claude',
-        runtimeSessionId: 'native-blocked-queued',
-        nativeSessionState: 'ready',
-        inFlightTurnId: turnId,
-        turnSeq: 2,
-        sessionVersion: 2,
-        continuationBlockedReason: 'mcp-config-changed',
-        scratchRoot,
-        cleanupState: 'not-started',
-        createdAt: 1,
-        updatedAt: 2,
-      })
-      .run()
-    db.insert(mcpRuntimeTestTurns)
-      .values({
-        id: turnId,
-        sessionId,
-        seq: 2,
-        clientMessageId: 'blocked-queued-message',
-        promptText: 'must not reopen',
-        status: 'queued',
-        hardDeadlineAt: 600_002,
-        captureState: 'live',
-        createdAt: 2,
-      })
-      .run()
+    await db.insert(mcpRuntimeTestSessions).values({
+      id: sessionId,
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'blocked-queued-create',
+      clientCreateDigest: 'a'.repeat(64),
+      status: 'active',
+      mcpConfigHash: hash,
+      runtimeRowId: 'runtime-1',
+      runtimeName: 'claude-code',
+      runtimeProtocol: 'claude-code',
+      runtimeSnapshotJson: '{}',
+      runtimeBinaryPath: '/mock/claude',
+      runtimeSessionId: 'native-blocked-queued',
+      nativeSessionState: 'ready',
+      inFlightTurnId: turnId,
+      turnSeq: 2,
+      sessionVersion: 2,
+      continuationBlockedReason: 'mcp-config-changed',
+      scratchRoot,
+      cleanupState: 'not-started',
+      createdAt: 1,
+      updatedAt: 2,
+    })
+
+    await db.insert(mcpRuntimeTestTurns).values({
+      id: turnId,
+      sessionId,
+      seq: 2,
+      clientMessageId: 'blocked-queued-message',
+      promptText: 'must not reopen',
+      status: 'queued',
+      hardDeadlineAt: 600_002,
+      captureState: 'live',
+      createdAt: 2,
+    })
 
     const canceled = await service.cancel(actor, mcp.id, sessionId, { turnId })
     expect(canceled.session.status).toBe('ended')
@@ -1600,49 +1600,46 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('boot safely settles a never-spawned queued turn without quarantining it', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'queued-session')
     mkdirSync(scratchRoot, { recursive: true })
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    db.insert(mcpRuntimeTestSessions)
-      .values({
-        id: 'queued-session',
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'queued-create',
-        clientCreateDigest: 'a'.repeat(64),
-        status: 'active',
-        mcpConfigHash: hash,
-        runtimeRowId: 'runtime-1',
-        runtimeName: 'claude-code',
-        runtimeProtocol: 'claude-code',
-        runtimeSnapshotJson: '{}',
-        runtimeBinaryPath: '/mock/claude',
-        nativeSessionState: 'pending',
-        inFlightTurnId: 'queued-turn',
-        turnSeq: 1,
-        sessionVersion: 1,
-        scratchRoot,
-        cleanupState: 'not-started',
-        createdAt: 1,
-        updatedAt: 1,
-      })
-      .run()
-    db.insert(mcpRuntimeTestTurns)
-      .values({
-        id: 'queued-turn',
-        sessionId: 'queued-session',
-        seq: 1,
-        clientMessageId: 'queued-message',
-        promptText: 'never spawned',
-        status: 'queued',
-        hardDeadlineAt: 600_001,
-        captureState: 'live',
-        createdAt: 1,
-      })
-      .run()
+    await db.insert(mcpRuntimeTestSessions).values({
+      id: 'queued-session',
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'queued-create',
+      clientCreateDigest: 'a'.repeat(64),
+      status: 'active',
+      mcpConfigHash: hash,
+      runtimeRowId: 'runtime-1',
+      runtimeName: 'claude-code',
+      runtimeProtocol: 'claude-code',
+      runtimeSnapshotJson: '{}',
+      runtimeBinaryPath: '/mock/claude',
+      nativeSessionState: 'pending',
+      inFlightTurnId: 'queued-turn',
+      turnSeq: 1,
+      sessionVersion: 1,
+      scratchRoot,
+      cleanupState: 'not-started',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+
+    await db.insert(mcpRuntimeTestTurns).values({
+      id: 'queued-turn',
+      sessionId: 'queued-session',
+      seq: 1,
+      clientMessageId: 'queued-message',
+      promptText: 'never spawned',
+      status: 'queued',
+      hardDeadlineAt: 600_001,
+      captureState: 'live',
+      createdAt: 1,
+    })
 
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -1657,66 +1654,63 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('boot keeps a proven native session active when a later queued turn never spawned', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'queued-resume-session')
     mkdirSync(scratchRoot, { recursive: true })
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    db.insert(mcpRuntimeTestSessions)
-      .values({
-        id: 'queued-resume-session',
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'queued-resume-create',
-        clientCreateDigest: 'a'.repeat(64),
-        status: 'active',
-        mcpConfigHash: hash,
-        runtimeRowId: 'runtime-1',
-        runtimeName: 'claude-code',
-        runtimeProtocol: 'claude-code',
-        runtimeSnapshotJson: '{}',
-        runtimeBinaryPath: '/mock/claude',
-        runtimeSessionId: 'native-queued-resume',
-        nativeSessionState: 'ready',
-        inFlightTurnId: 'queued-resume-turn-2',
-        turnSeq: 2,
-        sessionVersion: 2,
-        scratchRoot,
-        cleanupState: 'not-started',
+    await db.insert(mcpRuntimeTestSessions).values({
+      id: 'queued-resume-session',
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'queued-resume-create',
+      clientCreateDigest: 'a'.repeat(64),
+      status: 'active',
+      mcpConfigHash: hash,
+      runtimeRowId: 'runtime-1',
+      runtimeName: 'claude-code',
+      runtimeProtocol: 'claude-code',
+      runtimeSnapshotJson: '{}',
+      runtimeBinaryPath: '/mock/claude',
+      runtimeSessionId: 'native-queued-resume',
+      nativeSessionState: 'ready',
+      inFlightTurnId: 'queued-resume-turn-2',
+      turnSeq: 2,
+      sessionVersion: 2,
+      scratchRoot,
+      cleanupState: 'not-started',
+      createdAt: 1,
+      updatedAt: 2,
+    })
+
+    await db.insert(mcpRuntimeTestTurns).values([
+      {
+        id: 'queued-resume-turn-1',
+        sessionId: 'queued-resume-session',
+        seq: 1,
+        clientMessageId: 'queued-resume-message-1',
+        promptText: 'completed before restart',
+        status: 'succeeded',
+        hardDeadlineAt: 600_001,
+        captureState: 'complete',
+        durationMs: 1,
+        startedAt: 1,
+        finishedAt: 2,
         createdAt: 1,
-        updatedAt: 2,
-      })
-      .run()
-    db.insert(mcpRuntimeTestTurns)
-      .values([
-        {
-          id: 'queued-resume-turn-1',
-          sessionId: 'queued-resume-session',
-          seq: 1,
-          clientMessageId: 'queued-resume-message-1',
-          promptText: 'completed before restart',
-          status: 'succeeded',
-          hardDeadlineAt: 600_001,
-          captureState: 'complete',
-          durationMs: 1,
-          startedAt: 1,
-          finishedAt: 2,
-          createdAt: 1,
-        },
-        {
-          id: 'queued-resume-turn-2',
-          sessionId: 'queued-resume-session',
-          seq: 2,
-          clientMessageId: 'queued-resume-message-2',
-          promptText: 'accepted but never spawned',
-          status: 'queued',
-          hardDeadlineAt: 600_003,
-          captureState: 'live',
-          createdAt: 3,
-        },
-      ])
-      .run()
+      },
+      {
+        id: 'queued-resume-turn-2',
+        sessionId: 'queued-resume-session',
+        seq: 2,
+        clientMessageId: 'queued-resume-message-2',
+        promptText: 'accepted but never spawned',
+        status: 'queued',
+        hardDeadlineAt: 600_003,
+        captureState: 'live',
+        createdAt: 3,
+      },
+    ])
 
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -1734,47 +1728,44 @@ describe('RFC-238 MCP runtime test service', () => {
   })
 
   test('periodic reconciliation retries pending cleanup and expires old create receipts', async () => {
-    const { db, mcp, root } = await seed()
+    const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'pending-session')
     mkdirSync(scratchRoot, { recursive: true })
-    db.insert(mcpRuntimeTestSessions)
-      .values({
-        id: 'pending-session',
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'pending-create',
-        clientCreateDigest: 'a'.repeat(64),
-        status: 'ended',
-        endReason: 'user',
-        mcpConfigHash: 'a'.repeat(64),
-        runtimeRowId: 'runtime-1',
-        runtimeName: 'claude-code',
-        runtimeProtocol: 'claude-code',
-        runtimeSnapshotJson: '{}',
-        runtimeBinaryPath: '/mock/claude',
-        nativeSessionState: 'ready',
-        turnSeq: 0,
-        sessionVersion: 1,
-        scratchRoot,
-        cleanupState: 'pending',
-        cleanupErrorCode: 'mcp-test-cleanup-failed',
-        createdAt: 1,
-        updatedAt: 2,
-        endedAt: 2,
-      })
-      .run()
-    db.insert(mcpRuntimeTestCreateReceipts)
-      .values({
-        mcpId: mcp.id,
-        ownerUserId: SYSTEM_USER_ID,
-        clientCreateId: 'expired-create',
-        requestDigest: 'c'.repeat(64),
-        sessionId: 'expired-session',
-        acceptedTurnId: 'expired-turn',
-        createdAt: 1,
-        expiresAt: 2,
-      })
-      .run()
+    await db.insert(mcpRuntimeTestSessions).values({
+      id: 'pending-session',
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'pending-create',
+      clientCreateDigest: 'a'.repeat(64),
+      status: 'ended',
+      endReason: 'user',
+      mcpConfigHash: 'a'.repeat(64),
+      runtimeRowId: 'runtime-1',
+      runtimeName: 'claude-code',
+      runtimeProtocol: 'claude-code',
+      runtimeSnapshotJson: '{}',
+      runtimeBinaryPath: '/mock/claude',
+      nativeSessionState: 'ready',
+      turnSeq: 0,
+      sessionVersion: 1,
+      scratchRoot,
+      cleanupState: 'pending',
+      cleanupErrorCode: 'mcp-test-cleanup-failed',
+      createdAt: 1,
+      updatedAt: 2,
+      endedAt: 2,
+    })
+
+    await db.insert(mcpRuntimeTestCreateReceipts).values({
+      mcpId: mcp.id,
+      ownerUserId: SYSTEM_USER_ID,
+      clientCreateId: 'expired-create',
+      requestDigest: 'c'.repeat(64),
+      sessionId: 'expired-session',
+      acceptedTurnId: 'expired-turn',
+      createdAt: 1,
+      expiresAt: 2,
+    })
 
     const service = new McpRuntimeTestService({
       ...runtimeTestDependencies(db, root),
@@ -1782,13 +1773,14 @@ describe('RFC-238 MCP runtime test service', () => {
     })
     await service.start()
     expect(
-      db
-        .select({ cleanupState: mcpRuntimeTestSessions.cleanupState })
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, 'pending-session'))
-        .get()?.cleanupState,
+      (
+        await db
+          .select({ cleanupState: mcpRuntimeTestSessions.cleanupState })
+          .from(mcpRuntimeTestSessions)
+          .where(eq(mcpRuntimeTestSessions.id, 'pending-session'))
+      )[0]?.cleanupState,
     ).toBe('complete')
     expect(existsSync(scratchRoot)).toBe(false)
-    expect(db.select().from(mcpRuntimeTestCreateReceipts).all()).toHaveLength(0)
+    expect(await db.select().from(mcpRuntimeTestCreateReceipts)).toHaveLength(0)
   })
 })

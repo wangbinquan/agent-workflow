@@ -78,18 +78,16 @@ function updateRepoGroup(
 async function makeRepo(db: ProviderNeutralDatabase, slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(cachedRepos)
-    .values({
-      id,
-      urlHash: `${slug}00000000`.slice(0, 8),
-      urlRedacted: `https://git.example/${slug}.git`,
-      localPath: `/tmp/repos/${slug}`,
-      defaultBranch: 'main',
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  await db.insert(cachedRepos).values({
+    id,
+    urlHash: `${slug}00000000`.slice(0, 8),
+    urlRedacted: `https://git.example/${slug}.git`,
+    localPath: `/tmp/repos/${slug}`,
+    defaultBranch: 'main',
+    lastFetchedAt: now,
+    createdAt: now,
+  })
+
   return id
 }
 
@@ -581,15 +579,15 @@ describeNativeRepoGroupCases(() => {
     const r = await deleteRepoGroup(store, g.id)
     expect(r.archivedMemories).toBe(2)
     // 不硬删——用户知识保住了。
-    const rows = db.select().from(memories).all()
+    const rows = await db.select().from(memories)
     expect(rows).toHaveLength(2)
     expect(rows.every((m) => m.status === 'archived')).toBe(true)
     // archived 被 memoryInject 的 status='approved' 过滤排除 ⇒ 注入立即停止。
-    const stillApproved = db
+    const stillApproved = await db
       .select()
       .from(memories)
       .where(and(eq(memories.scopeType, 'repo_group'), eq(memories.status, 'approved')))
-      .all()
+
     expect(stillApproved).toHaveLength(0)
   })
 
@@ -696,16 +694,14 @@ describeNativeRepoGroupCases(() => {
   test('外键挡住悬空的 child_group_id——坏数据进不了库', () => {
     // 服务层的 member-not-found 校验之外还有 DB 兜底：`child_group_id` 上的外键
     // 让「并发删组留下悬空引用」这件事在存储层就不可能发生。
-    expect(() =>
-      db
-        .insert(repoGroupNodes)
-        .values({
+    expect(
+      async () =>
+        await db.insert(repoGroupNodes).values({
           groupId: ulid(),
           path: 'x',
           attachmentKind: 'group',
           childGroupId: 'ghost',
-        })
-        .run(),
+        }),
     ).toThrow()
   })
 
@@ -741,14 +737,12 @@ describeNativeRepoGroupCases(() => {
       null,
     )
     // 绕过服务层的保存期环检测，直写一条把 g1 → g2 的边补上，成环。
-    db.insert(repoGroupNodes)
-      .values({
-        groupId: g1.id,
-        path: 'b',
-        attachmentKind: 'group',
-        childGroupId: g2.id,
-      })
-      .run()
+    await db.insert(repoGroupNodes).values({
+      groupId: g1.id,
+      path: 'b',
+      attachmentKind: 'group',
+      childGroupId: g2.id,
+    })
 
     const items = await listRepoGroups(store)
     expect(items).toHaveLength(2)
@@ -795,7 +789,7 @@ describeNativeRepoGroupCases(() => {
     )
     expect(code).toBe('mount-path-duplicate')
     expect(await listRepoGroups(store)).toHaveLength(0)
-    expect(db.select().from(repoGroupNodes).all()).toHaveLength(0)
+    expect(await db.select().from(repoGroupNodes)).toHaveLength(0)
   })
 
   test('H1: 改组校验失败 ⇒ 成员列表与 version 完全不变', async () => {
@@ -946,7 +940,7 @@ describeNativeRepoGroupCases(() => {
 
     const r = await deleteRepoGroup(store, g.id)
     expect(r.archivedMemories).toBe(1)
-    const rows = db.select().from(memories).all()
+    const rows = await db.select().from(memories)
     expect(rows).toHaveLength(2)
     // fused 那条原样保留——它本就是终态、也本就不会被注入。
     expect(rows.filter((m) => m.status === 'fused')).toHaveLength(1)
@@ -990,7 +984,7 @@ describeEachProvider('RFC-248 repo group service', (harness) => {
       null,
     )
     await deleteRepoGroup(store, g.id)
-    expect(await db.select().from(repoGroupNodes).all()).toHaveLength(0)
-    expect(await db.select().from(repoGroups).all()).toHaveLength(0)
+    expect(await db.select().from(repoGroupNodes)).toHaveLength(0)
+    expect(await db.select().from(repoGroups)).toHaveLength(0)
   })
 })

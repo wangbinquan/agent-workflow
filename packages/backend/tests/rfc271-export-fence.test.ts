@@ -11,19 +11,19 @@
 // 所以这里测的是**行为**，不是源码里有没有那几个字段名：源码断言挡不住「字段解析了
 // 但没参与比对」这类失败。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, mcps, plugins, skills, users, workflows, workgroups } from '../src/db/schema'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const actorOf = (id: string): Actor =>
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
@@ -37,8 +37,9 @@ const codeOf = async (p: Promise<unknown>): Promise<string | undefined> =>
     (e: unknown) => (e as { code?: string }).code,
   )
 
-async function seed(): Promise<{ db: DbClient; appHome: string; agentId: string; mcpId: string }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function seed(
+  db: ProviderNeutralDatabase,
+): Promise<{ db: ProviderNeutralDatabase; appHome: string; agentId: string; mcpId: string }> {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc271-fence-'))
   await db.insert(users).values({
     id: 'u1',
@@ -85,326 +86,342 @@ async function seed(): Promise<{ db: DbClient; appHome: string; agentId: string;
   return { db, appHome, agentId, mcpId }
 }
 
-describe('AC-12 · agent 用 updatedAt + aclRevision 两个（少一个就漏漂移）', () => {
-  test('两个都对上 ⇒ 导出成功', async () => {
-    const { db, appHome, agentId } = await seed()
-    const pkg = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'agent', id: agentId },
-      { appHome, expect: { expectedUpdatedAt: 1000, expectedAclRevision: 3 } },
-    )
-    expect(pkg.zip.byteLength).toBeGreaterThan(0)
-  })
+describeEachProvider(
+  'AC-12 · agent 用 updatedAt + aclRevision 两个（少一个就漏漂移）',
+  (harness) => {
+    test('两个都对上 ⇒ 导出成功', async () => {
+      const { db, appHome, agentId } = await seed(harness.db)
+      const pkg = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'agent', id: agentId },
+        { appHome, expect: { expectedUpdatedAt: 1000, expectedAclRevision: 3 } },
+      )
+      expect(pkg.zip.byteLength).toBeGreaterThan(0)
+    })
 
-  test('`updatedAt` 对不上 ⇒ 409 package-root-changed', async () => {
-    const { db, appHome, agentId } = await seed()
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'agent', id: agentId },
-          { appHome, expect: { expectedUpdatedAt: 999, expectedAclRevision: 3 } },
+    test('`updatedAt` 对不上 ⇒ 409 package-root-changed', async () => {
+      const { db, appHome, agentId } = await seed(harness.db)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'agent', id: agentId },
+            { appHome, expect: { expectedUpdatedAt: 999, expectedAclRevision: 3 } },
+          ),
         ),
-      ),
-    ).toBe('package-root-changed')
-  })
+      ).toBe('package-root-changed')
+    })
 
-  test('**只带 aclRevision 漂移**也要拦下 —— 这正是「完整形态」的意义', async () => {
-    // ACL 变了而内容没变：只比 updatedAt 的 fence 会放它过去。
-    const { db, appHome, agentId } = await seed()
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'agent', id: agentId },
-          { appHome, expect: { expectedUpdatedAt: 1000, expectedAclRevision: 2 } },
+    test('**只带 aclRevision 漂移**也要拦下 —— 这正是「完整形态」的意义', async () => {
+      // ACL 变了而内容没变：只比 updatedAt 的 fence 会放它过去。
+      const { db, appHome, agentId } = await seed(harness.db)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'agent', id: agentId },
+            { appHome, expect: { expectedUpdatedAt: 1000, expectedAclRevision: 2 } },
+          ),
         ),
-      ),
-    ).toBe('package-root-changed')
-  })
+      ).toBe('package-root-changed')
+    })
 
-  test('给了就必须**给全**：少一个字段 ⇒ 拒绝，而不是只比给了的那个', async () => {
-    // 少给一维等于放过那一维的漂移，而调用方会以为自己有保护。
-    const { db, appHome, agentId } = await seed()
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'agent', id: agentId },
-          { appHome, expect: { expectedUpdatedAt: 1000 } },
+    test('给了就必须**给全**：少一个字段 ⇒ 拒绝，而不是只比给了的那个', async () => {
+      // 少给一维等于放过那一维的漂移，而调用方会以为自己有保护。
+      const { db, appHome, agentId } = await seed(harness.db)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'agent', id: agentId },
+            { appHome, expect: { expectedUpdatedAt: 1000 } },
+          ),
         ),
-      ),
-    ).toBe('package-invalid')
-  })
+      ).toBe('package-invalid')
+    })
 
-  test('拿错类型的 fence 字段 ⇒ 拒绝，不静默忽略', async () => {
-    // 「我明明传了 expectedConfigHash」不该变成一次没有保护的导出。
-    const { db, appHome, agentId } = await seed()
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'agent', id: agentId },
-          {
-            appHome,
-            expect: { expectedUpdatedAt: 1000, expectedAclRevision: 3, expectedConfigHash: 'x' },
-          },
+    test('拿错类型的 fence 字段 ⇒ 拒绝，不静默忽略', async () => {
+      // 「我明明传了 expectedConfigHash」不该变成一次没有保护的导出。
+      const { db, appHome, agentId } = await seed(harness.db)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'agent', id: agentId },
+            {
+              appHome,
+              expect: { expectedUpdatedAt: 1000, expectedAclRevision: 3, expectedConfigHash: 'x' },
+            },
+          ),
         ),
-      ),
-    ).toBe('package-invalid')
-  })
-})
+      ).toBe('package-invalid')
+    })
+  },
+)
 
-describe('AC-12 · mcp 用 configHash（形态与 agent 不同，取自同一份 expectTokenOf）', () => {
-  test('错的 hash ⇒ 409；完全不给 fence ⇒ 正常导出', async () => {
-    const { db, appHome, mcpId } = await seed()
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'mcp', id: mcpId },
-          { appHome, expect: { expectedConfigHash: 'definitely-not-it' } },
+describeEachProvider(
+  'AC-12 · mcp 用 configHash（形态与 agent 不同，取自同一份 expectTokenOf）',
+  (harness) => {
+    test('错的 hash ⇒ 409；完全不给 fence ⇒ 正常导出', async () => {
+      const { db, appHome, mcpId } = await seed(harness.db)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'mcp', id: mcpId },
+            { appHome, expect: { expectedConfigHash: 'definitely-not-it' } },
+          ),
         ),
-      ),
-    ).toBe('package-root-changed')
+      ).toBe('package-root-changed')
 
-    // 不给 fence 是合法的（「所见非所得」防护是可选的）。
-    const pkg = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'mcp', id: mcpId },
-      { appHome },
-    )
-    expect(pkg.zip.byteLength).toBeGreaterThan(0)
-  })
+      // 不给 fence 是合法的（「所见非所得」防护是可选的）。
+      const pkg = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'mcp', id: mcpId },
+        { appHome },
+      )
+      expect(pkg.zip.byteLength).toBeGreaterThan(0)
+    })
 
-  test('给 mcp 传 expectedVersion（workflow 的形态）⇒ 拒绝', async () => {
-    const { db, appHome, mcpId } = await seed()
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'mcp', id: mcpId },
-          { appHome, expect: { expectedVersion: 1 } },
+    test('给 mcp 传 expectedVersion（workflow 的形态）⇒ 拒绝', async () => {
+      const { db, appHome, mcpId } = await seed(harness.db)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'mcp', id: mcpId },
+            { appHome, expect: { expectedVersion: 1 } },
+          ),
         ),
-      ),
-    ).toBe('package-invalid')
-  })
-})
+      ).toBe('package-invalid')
+    })
+  },
+)
 
-describe('AC-12 · workflow / workgroup 只用 expectedVersion（ACL 维**不该**加）', () => {
-  // 实现门第三轮报过「这两类漏了 ACL 漂移维度」（`version` 只被内容写路径推进，
-  // `updateResourceAcl` 只推 `aclRevision`）。我照做加了一维，然后**实测推翻了它**：
-  //
-  //   包**不携带任何权属信息**（决策 4/12），所以把工作流从 private 改成 public 之后
-  //   再导出，产物**逐字节相同**、manifest 也相同 —— fence 放行它是对的，「所见即所得」
-  //   的「所得」根本没变。
-  //
-  // 而那一维的代价是实打实的：六个前端导出入口全部 `package-invalid`（工作流/工作组
-  // 页面只拿得到 `version`，拿不到 `aclRevision`）。
-  //
-  // 这条测试就是为了钉住这个结论，省得下一个看到「agent 有 aclRevision 而 workflow
-  // 没有」的人再加一次。判据只有一句：**这一维会改变导出的字节吗？**
-  test('ACL 漂移产出逐字节相同的包 ⇒ 旧 fence 应当放行', async () => {
-    const { db, appHome } = await seed()
-    const wfId = ulid()
-    await db.insert(workflows).values({
-      id: wfId,
-      name: 'wf-acl',
-      description: '',
-      definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
-      ownerUserId: 'u1',
-      visibility: 'private',
-      version: 3,
-      aclRevision: 0,
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
+describeEachProvider(
+  'AC-12 · workflow / workgroup 只用 expectedVersion（ACL 维**不该**加）',
+  (harness) => {
+    // 实现门第三轮报过「这两类漏了 ACL 漂移维度」（`version` 只被内容写路径推进，
+    // `updateResourceAcl` 只推 `aclRevision`）。我照做加了一维，然后**实测推翻了它**：
+    //
+    //   包**不携带任何权属信息**（决策 4/12），所以把工作流从 private 改成 public 之后
+    //   再导出，产物**逐字节相同**、manifest 也相同 —— fence 放行它是对的，「所见即所得」
+    //   的「所得」根本没变。
+    //
+    // 而那一维的代价是实打实的：六个前端导出入口全部 `package-invalid`（工作流/工作组
+    // 页面只拿得到 `version`，拿不到 `aclRevision`）。
+    //
+    // 这条测试就是为了钉住这个结论，省得下一个看到「agent 有 aclRevision 而 workflow
+    // 没有」的人再加一次。判据只有一句：**这一维会改变导出的字节吗？**
+    test('ACL 漂移产出逐字节相同的包 ⇒ 旧 fence 应当放行', async () => {
+      const { db, appHome } = await seed(harness.db)
+      const wfId = ulid()
+      await db.insert(workflows).values({
+        id: wfId,
+        name: 'wf-acl',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        ownerUserId: 'u1',
+        visibility: 'private',
+        version: 3,
+        aclRevision: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
 
-    const before = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wfId },
-      { appHome, exportedAt: 0, expect: { expectedVersion: 3 } },
-    )
+      const before = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workflow', id: wfId },
+        { appHome, exportedAt: 0, expect: { expectedVersion: 3 } },
+      )
 
-    // ACL 写路径：推 aclRevision / visibility / updatedAt，**不动 version**。
-    await db
-      .update(workflows)
-      .set({ visibility: 'public', aclRevision: 1, updatedAt: 2 } as never)
-      .where(eq(workflows.id, wfId))
+      // ACL 写路径：推 aclRevision / visibility / updatedAt，**不动 version**。
+      await db
+        .update(workflows)
+        .set({ visibility: 'public', aclRevision: 1, updatedAt: 2 } as never)
+        .where(eq(workflows.id, wfId))
 
-    const after = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wfId },
-      { appHome, exportedAt: 0, expect: { expectedVersion: 3 } },
-    )
+      const after = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workflow', id: wfId },
+        { appHome, exportedAt: 0, expect: { expectedVersion: 3 } },
+      )
 
-    // ① 旧 fence 仍然放行（没有 409）；② 两次产物逐字节相同 —— ② 是 ① 正确的理由。
-    expect(Buffer.from(after.zip).equals(Buffer.from(before.zip))).toBe(true)
-    expect(JSON.stringify(after.manifest)).toBe(JSON.stringify(before.manifest))
-  })
+      // ① 旧 fence 仍然放行（没有 409）；② 两次产物逐字节相同 —— ② 是 ① 正确的理由。
+      expect(Buffer.from(after.zip).equals(Buffer.from(before.zip))).toBe(true)
+      expect(JSON.stringify(after.manifest)).toBe(JSON.stringify(before.manifest))
+    })
 
-  test('内容漂移（version）仍然 409', async () => {
-    const { db, appHome } = await seed()
-    const wfId = ulid()
-    await db.insert(workflows).values({
-      id: wfId,
-      name: 'wf',
-      description: '',
-      definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
-      ownerUserId: 'u1',
-      visibility: 'private',
-      version: 2,
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'workflow', id: wfId },
-          { appHome, expect: { expectedVersion: 1 } },
+    test('内容漂移（version）仍然 409', async () => {
+      const { db, appHome } = await seed(harness.db)
+      const wfId = ulid()
+      await db.insert(workflows).values({
+        id: wfId,
+        name: 'wf',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        ownerUserId: 'u1',
+        visibility: 'private',
+        version: 2,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'workflow', id: wfId },
+            { appHome, expect: { expectedVersion: 1 } },
+          ),
         ),
-      ),
-    ).toBe('package-root-changed')
-  })
+      ).toBe('package-root-changed')
+    })
 
-  test('workgroup 同形（只要 expectedVersion；多给 ACL 维 ⇒ 拒绝）', async () => {
-    const { db, appHome } = await seed()
-    const wgId = ulid()
-    await db.insert(workgroups).values({
-      id: wgId,
-      name: 'squad',
-      description: '',
-      instructions: '',
-      mode: 'free_collab',
-      leaderMemberId: null,
-      shareOutputs: true,
-      directMessages: false,
-      blackboard: false,
-      maxRounds: 20,
-      completionGate: false,
-      clarifyBudget: 3,
-      fanOut: false,
-      ownerUserId: 'u1',
-      visibility: 'private',
-      version: 5,
-      aclRevision: 2,
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
+    test('workgroup 同形（只要 expectedVersion；多给 ACL 维 ⇒ 拒绝）', async () => {
+      const { db, appHome } = await seed(harness.db)
+      const wgId = ulid()
+      await db.insert(workgroups).values({
+        id: wgId,
+        name: 'squad',
+        description: '',
+        instructions: '',
+        mode: 'free_collab',
+        leaderMemberId: null,
+        shareOutputs: true,
+        directMessages: false,
+        blackboard: false,
+        maxRounds: 20,
+        completionGate: false,
+        clarifyBudget: 3,
+        fanOut: false,
+        ownerUserId: 'u1',
+        visibility: 'private',
+        version: 5,
+        aclRevision: 2,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
 
-    const ok = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workgroup', id: wgId },
-      { appHome, expect: { expectedVersion: 5 } },
-    )
-    expect(ok.zip.byteLength).toBeGreaterThan(0)
+      const ok = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workgroup', id: wgId },
+        { appHome, expect: { expectedVersion: 5 } },
+      )
+      expect(ok.zip.byteLength).toBeGreaterThan(0)
 
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'workgroup', id: wgId },
-          { appHome, expect: { expectedVersion: 5, expectedAclRevision: 2 } },
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'workgroup', id: wgId },
+            { appHome, expect: { expectedVersion: 5, expectedAclRevision: 2 } },
+          ),
         ),
-      ),
-    ).toBe('package-invalid')
-  })
-})
+      ).toBe('package-invalid')
+    })
+  },
+)
 
-describe('AC-12 · skill 三维（contentVersion + metaRevision + aclRevision）', () => {
-  // 技能是唯一三维的：只改 description 会推 metaRevision 而 contentVersion 不变，
-  // 只带后者的 fence 完全看不见这次修改。
-  // RFC-359 W8：技能行之外还要铺出它在 appHome 下的目录——导出读的是真实文件树，
-  // 缺目录此后是 `resource-package-skill-tree-invalid`（合一前 SQLite 侧静默产出零文件条目，
-  // 见 `tests/rfc359-w8-package-skill-tree-conformance.test.ts` 差异②）。本组用例锁的是三维
-  // fence，不是空目录行为，所以按生产形态把目录补齐。
-  const seedSkill = async (db: DbClient, appHome: string): Promise<string> => {
-    const id = ulid()
-    const files = join(appHome, 'skills', id, 'files')
-    mkdirSync(files, { recursive: true })
-    writeFileSync(join(files, 'SKILL.md'), '---\nname: helper\n---\n\nhelper body\n')
-    await db.insert(skills).values({
-      id,
-      name: 'helper',
-      description: '',
-      sourceKind: 'managed',
-      managedPath: null,
-      ownerUserId: 'u1',
-      visibility: 'private',
-      contentVersion: 4,
-      metaRevision: 2,
-      aclRevision: 1,
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    return id
-  }
+describeEachProvider(
+  'AC-12 · skill 三维（contentVersion + metaRevision + aclRevision）',
+  (harness) => {
+    // 技能是唯一三维的：只改 description 会推 metaRevision 而 contentVersion 不变，
+    // 只带后者的 fence 完全看不见这次修改。
+    // RFC-359 W8：技能行之外还要铺出它在 appHome 下的目录——导出读的是真实文件树，
+    // 缺目录此后是 `resource-package-skill-tree-invalid`（合一前 SQLite 侧静默产出零文件条目，
+    // 见 `tests/rfc359-w8-package-skill-tree-conformance.test.ts` 差异②）。本组用例锁的是三维
+    // fence，不是空目录行为，所以按生产形态把目录补齐。
+    const seedSkill = async (db: ProviderNeutralDatabase, appHome: string): Promise<string> => {
+      const id = ulid()
+      const files = join(appHome, 'skills', id, 'files')
+      mkdirSync(files, { recursive: true })
+      writeFileSync(join(files, 'SKILL.md'), '---\nname: helper\n---\n\nhelper body\n')
+      await db.insert(skills).values({
+        id,
+        name: 'helper',
+        description: '',
+        sourceKind: 'managed',
+        managedPath: null,
+        ownerUserId: 'u1',
+        visibility: 'private',
+        contentVersion: 4,
+        metaRevision: 2,
+        aclRevision: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      return id
+    }
 
-  test('三维齐且都对 ⇒ 成功', async () => {
-    const { db, appHome } = await seed()
-    const id = await seedSkill(db, appHome)
-    const ok = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'skill', id },
-      {
-        appHome,
-        expect: { expectedContentVersion: 4, expectedMetaRevision: 2, expectedAclRevision: 1 },
-      },
-    )
-    expect(ok.zip.byteLength).toBeGreaterThan(0)
-  })
+    test('三维齐且都对 ⇒ 成功', async () => {
+      const { db, appHome } = await seed(harness.db)
+      const id = await seedSkill(db, appHome)
+      const ok = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'skill', id },
+        {
+          appHome,
+          expect: { expectedContentVersion: 4, expectedMetaRevision: 2, expectedAclRevision: 1 },
+        },
+      )
+      expect(ok.zip.byteLength).toBeGreaterThan(0)
+    })
 
-  test('**只有 metaRevision 漂移** ⇒ 409（内容没变不等于没改）', async () => {
-    const { db, appHome } = await seed()
-    const id = await seedSkill(db, appHome)
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'skill', id },
-          {
-            appHome,
-            expect: { expectedContentVersion: 4, expectedMetaRevision: 1, expectedAclRevision: 1 },
-          },
+    test('**只有 metaRevision 漂移** ⇒ 409（内容没变不等于没改）', async () => {
+      const { db, appHome } = await seed(harness.db)
+      const id = await seedSkill(db, appHome)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'skill', id },
+            {
+              appHome,
+              expect: {
+                expectedContentVersion: 4,
+                expectedMetaRevision: 1,
+                expectedAclRevision: 1,
+              },
+            },
+          ),
         ),
-      ),
-    ).toBe('package-root-changed')
-  })
+      ).toBe('package-root-changed')
+    })
 
-  test('少给一维 ⇒ package-invalid（不能只比给了的那两维）', async () => {
-    const { db, appHome } = await seed()
-    const id = await seedSkill(db, appHome)
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'skill', id },
-          { appHome, expect: { expectedContentVersion: 4, expectedMetaRevision: 2 } },
+    test('少给一维 ⇒ package-invalid（不能只比给了的那两维）', async () => {
+      const { db, appHome } = await seed(harness.db)
+      const id = await seedSkill(db, appHome)
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            db,
+            actorOf('u1'),
+            { type: 'skill', id },
+            { appHome, expect: { expectedContentVersion: 4, expectedMetaRevision: 2 } },
+          ),
         ),
-      ),
-    ).toBe('package-invalid')
-  })
-})
+      ).toBe('package-invalid')
+    })
+  },
+)
 
-describe('AC-12 · plugin 用 configHash（含安装态，不只是配置文本）', () => {
-  const seedPlugin = async (db: DbClient): Promise<string> => {
+describeEachProvider('AC-12 · plugin 用 configHash（含安装态，不只是配置文本）', (harness) => {
+  const seedPlugin = async (db: ProviderNeutralDatabase): Promise<string> => {
     const id = ulid()
     await db.insert(plugins).values({
       id,
@@ -426,7 +443,7 @@ describe('AC-12 · plugin 用 configHash（含安装态，不只是配置文本�
   }
 
   test('错的 hash ⇒ 409；不给 fence ⇒ 正常导出', async () => {
-    const { db, appHome } = await seed()
+    const { db, appHome } = await seed(harness.db)
     const id = await seedPlugin(db)
     expect(
       await codeOf(
@@ -444,15 +461,11 @@ describe('AC-12 · plugin 用 configHash（含安装态，不只是配置文本�
   })
 
   test('**只改 enabled** 也要让 hash 变 —— 安装/启用态属于导出语义的一部分', async () => {
-    const { db, appHome } = await seed()
+    const { db, appHome } = await seed(harness.db)
     const id = await seedPlugin(db)
     // 先拿到当前 hash（用一次成功导出证明它是对的）。
     const before = expectTokenOf('plugin', {
-      ...(db
-        .select()
-        .from(plugins)
-        .all()
-        .find((r) => r.id === id) as Record<string, unknown>),
+      ...((await db.select().from(plugins)).find((r) => r.id === id) as Record<string, unknown>),
     }) as { expectedConfigHash: string }
 
     await db

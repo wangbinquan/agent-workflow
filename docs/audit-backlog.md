@@ -4943,3 +4943,28 @@ PG 并发派单、ubuntu e2e 工作流矩阵、windows e2e 守护进程重启。
 
 **建议**（未做，需要用户定优先级）：把上面三条抖动各自开一刀查清（三条都已在本文件单独立条、
 各自写明「先让它可诊断」的第一步），而不是继续按「重跑一次看看」处理。
+
+## PostgreSQL 侧缺一个「持久化内部的故障注入点」（RFC-359 W5 迁移时照出，2026-09-13）
+
+**现象**：`runner.test.ts` / `runtime-claude-capture.test.ts` / `runtime-claude-e2e.test.ts` 里
+7 条「写失败会怎样」的判据靠一个包住 `db.insert` 的 Proxy 注入故障。统一事务原语
+（`databaseSessionFor(db).transaction`）在 SQLite 上把**事务句柄就是 db 对象本身**，于是持久化
+里的 `tx.insert(...)` 会穿过这个 Proxy；PostgreSQL 上 `tx` 是另一个对象，注入点**一次都不触发**
+（计数器恒为 0）。这 7 条已按 `harness.capabilities.provider !== 'sqlite'` 登记为单引擎判据，
+同文件其余判据两引擎都跑。
+
+**影响面**：PostgreSQL 上这几类行为目前零覆盖——写冲突重试（`nodeRunEvents` 批量插入、
+session-lease 认领整笔事务重试）、流式持久化失败时的根因保真、声明输出的原子落盘与失败原因保留。
+**生产代码本身不缺能力**：`platform/persistence/capabilities.ts` 两个引擎各有分类器
+（SQLite 认 `SQLITE_BUSY*`，PostgreSQL 认 40001 序列化失败与 55P03 `lock_not_available`），
+缺的是**测试驱动得到这些分支**的手段。
+
+**正解（已有先例，未动手）**：把注入点做进持久化实现本身，而不是从外面包 db 代理——
+`services/task.ts::cancelTask` 的 `beforeStatusCas` 就是这个形状（「生产从不传；只有锁某条回归
+判据传」），它的注释里已经写明「旧的代理注入器在新事务原语下一次都不触发，用例照样绿但一个并发
+场景都没验」。需要在 `modules/task-execution/infrastructure/nodeExecutionPersistence.ts` 与
+`runtimeSessionCapturePersistence.ts` 的写点上加同形注入点，再把这 7 条判据的注入改走它，
+两个引擎就能跑同一条判据。
+
+**为什么没在本批做**：这要动生产代码的接口（新增测试注入形参），属于设计面改动，
+不该夹在一次机械迁移里；先登记，等单独一刀。
