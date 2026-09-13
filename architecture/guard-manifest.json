@@ -1906,8 +1906,8 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 1500,
-      "assertsAbsence": false,
-      "negativeFixture": false,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
       "lines": 800
     },
@@ -2483,8 +2483,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "d852cbedfe04a87c8fa1de9738ea65d6874c291a",
-    "contentDigest": "sha256:f03d3b0f608801bab414ea73d20a777cb2434adacb28bd8ab25a8af99119500d",
+    "currentSnapshotSha": "a004ec434c0cb8eeb9aa8668eef40108669eb56c",
+    "contentDigest": "sha256:f421abfa0560b0dac796fbd447589ad855fd286549268a6af4359d202f6746fa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -8524,3 +8524,46 @@ helper 不在任何块里，却会被 provider 用例调用**，那才是真正�
   `gitlab project '…' is already seeded`。顺带还暴露了**模块级 `mkdtempSync` 根 + 固定子目录名**
   的老坑：第二遍的 `git add -A` 在已提交的树上找不到改动，`git commit` 失败，报出来的是一句与
   数据库毫无关系的 git 错误。要迁它得先让 mock 的 id 随用例唯一——单独一刀，不夹在这波里。
+
+## 5cx. 把 AC-6 的账本切成「已裁决的单引擎」与「真·待办」——421 里真正的债是 **126**
+
+### 为什么必须切
+
+上一版账本只回答「有多少行」，回答不了接手的人真正要问的那句：**这一行是债，还是本来就这样？**
+读到 421 的人只有两种反应，而且两种都错：要么以为还有 421 个待办（士气税，而且会把精力花在
+一批根本不打算迁的用例上，见 §5cw 那张被原始计数带偏的表），要么反过来把所有行都当成
+「反正都是历史包袱」——那时守卫就彻底失效了，因为新写的单引擎判据混进去也没人看得出来。
+
+### 分类**故意是机械的**，不是人工标注
+
+人工标注会立刻退化成「谁都能给自己新写的那条编一个理由」。所以判据全部落在**文件内容**上
+（`SANCTIONED_SINGLE_ENGINE`）：
+
+| 类别 | 数量 | 判据 | 为什么它就该单引擎 |
+| --- | --- | --- | --- |
+| `sqlite-execution-engine` | 124 | `runTask(` / 测试拓扑 / `import services/task` | `TaskRouteOperations` 这一对早已判为「不该合」，PG 生产走 `taskExecutionProvider.cancellation`，不经过这条路径 |
+| `migration-chain` | 86 | 路径形如 `migration-<n>` | 判的是 **SQLite 迁移链本身**；PG 有自己的序列与对账守卫（`rfc359-w5-t19g`），两条链不共用用例 |
+| `real-file-database` | 50 | `new Database(` | 被测物就是磁盘上的 SQLite 文件格式（备份 / 还原 / `VACUUM INTO` / 外部 store） |
+| `sqlite-only-primitive` | 35 | `$client.` / `PRAGMA` / `dbTxSync(` | bun:sqlite 独有的面：语句计数、`EXPLAIN QUERY PLAN`、同步事务原语 |
+| **`OPEN_MIGRATION_DEBT`** | **126** | 以上都不成立 | **这才是待办量，也是唯一需要往下压的数字** |
+
+`OPEN_MIGRATION_DEBT` 逐文件列名、按字典序、只降不升，并在
+`architecture/ledger-baselines.json` 里单独立了一条基线。总账 `TEST_ENGINE_HARDCODING_DEBT`
+保持不变，继续当**逐文件调用点数**的棘轮。
+
+### 两条新判据把「切开」本身钉死
+
+1. **两张名单不重不漏**：账本里每一行要么落进某一类 sanctioned，要么在 open 名单里；
+   既在两边、或两边都不在，都红。没有这条，分类判据松一松就能把债悄悄挪进 sanctioned。
+2. **open 量与实测逐字相等**：新写一条**没有正当理由**的单引擎判据会让它变长。
+
+### 还配了负 fixture（否则这套分类可以静默失效）
+
+分类判据一旦失效（比如正则被改坏），上面两条会**全绿通过**——所有文件要么都被归进 open、
+要么都被 sanction，「不重不漏」照样成立。所以另加一条把**伪造**文件内容喂给纯判据
+`sanctionFor(rel, text)` 的负 fixture，四类理由各验一次、再验一条「没有理由」返回 `null`。
+它一点真实语料都不碰——碰了就是在断言现状（那是规则），而不是在证明「决定过程还活着」。
+
+**记账口径**：`guard-manifest.json` 里除 `rfc294-canonical-manifests` 外的条目**不由 census
+重算**（census 只重算它自己那一条），所以这次把本守卫的 `assertsAbsence` / `negativeFixture`
+从 `false` 改成 `true` 是手改的——改完要再跑一次 census 让 N1a 的内容寻址 provenance 重新对上。

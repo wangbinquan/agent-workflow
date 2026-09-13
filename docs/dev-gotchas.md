@@ -6664,3 +6664,14 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   同类还有**模块级 `mkdtempSync` 根 + 固定子目录名**：第二遍的 `git add -A` 在已提交的树上
   找不到改动，`git commit` 失败——而报出来的是一句与数据库毫无关系的 git 错误，很容易查错方向。
   要迁这类用例，得先让外部 id 与临时根**随用例唯一**。
+
+- **`architecture/guard-manifest.json` 除 `rfc294-canonical-manifests` 那一条外，不由 census 重算**。
+  census 只重新计算它自己那一条；其余条目是**手维护**的。所以当一个守卫从「只断言存在」变成
+  「断言不存在」（或加/删了负 fixture），要**手改** manifest 里它的 `assertsAbsence` /
+  `negativeFixture`，否则 `rfc317-guard-negative-fixture` 会以「账本 false vs 磁盘 true」红。
+  改完**再跑一次 census**，让 `rfc294 N1a` 的内容寻址 provenance 重新对上。
+
+- **给「只降不升」的账本做分类时，分类判据本身必须配负 fixture**。把总账切成「已裁决」与
+  「真待办」两张名单之后，「两张不重不漏」这条判据在分类逻辑**被改坏时会全绿通过**——
+  所有文件要么都落进待办、要么都被裁决，互斥与完备照样成立。必须另加一条把**伪造输入**
+  喂给纯判据的 fixture（且一点真实语料都不碰），否则整套分类可以静默失效。

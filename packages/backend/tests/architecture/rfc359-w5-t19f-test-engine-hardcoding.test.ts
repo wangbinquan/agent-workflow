@@ -568,6 +568,209 @@ function callSiteRows(): readonly string[] {
   return cachedRows
 }
 
+/**
+ * **为什么光有一条「还剩多少」的总账不够。**
+ *
+ * 上面那本账把「还没迁」和「按裁决就该单引擎」混在同一个数字里，于是它只能回答「有多少行」，
+ * 回答不了接手的人真正要问的那句：**这一行是债，还是本来就这样？** 一个读到 400 多行的人，
+ * 要么以为还有 400 多个待办（士气税），要么反过来把所有行都当成「反正都是历史包袱」（守卫失效）。
+ *
+ * 所以下面按**机械可判**的理由把总账切开。分类**故意不做人工标注**——人工标注会退化成
+ * 「谁都能给自己新写的那条编一个理由」，守卫就白上了。判据全部落在文件内容上：
+ *
+ * · `migration-chain` —— 判的就是 **SQLite 迁移链本身**（`db/migrations/*.sql` 的逐条行为）。
+ *   PostgreSQL 侧有自己的迁移序列（`postgresqlMigrationSequence.ts`）与对账守卫
+ *   （`rfc359-w5-t19g`），两条链本来就不共用一份用例。
+ * · `sqlite-execution-engine` —— 驱动 **SQLite 那台执行引擎**（`runTask` / 测试拓扑 /
+ *   `services/task`）。`TaskRouteOperations` 这一对早已被本 RFC 判为「不该合」，PostgreSQL 生产
+ *   走的是 `taskExecutionProvider.cancellation`，根本不经过这条路径。
+ * · `real-file-database` —— `new Database(` 开的是**磁盘上的真库**（备份 / 还原 / `VACUUM INTO` /
+ *   外部 store）。这类判据的被测物就是 SQLite 文件格式本身。
+ * · `sqlite-only-primitive` —— 用了 bun:sqlite 独有的面：`$client` 仪器（语句计数、
+ *   `EXPLAIN QUERY PLAN`）、`PRAGMA`、同步事务原语 `dbTxSync`。
+ *
+ * 剩下的就是 `OPEN_MIGRATION_DEBT`：**没有任何机械理由**留在单引擎上的文件。这才是待办量，
+ * 也是唯一需要往下压的数字。它同样只降不升——新写一条没有正当理由的单引擎判据会让它变长。
+ */
+const SANCTIONED_SINGLE_ENGINE: readonly {
+  readonly id: string
+  readonly holds: (rel: string, text: string) => boolean
+}[] = [
+  {
+    id: 'migration-chain',
+    holds: (rel) => /(^|\/)migration-\d/.test(rel) || /rfc\d+-migration-\d/.test(rel),
+  },
+  {
+    id: 'sqlite-execution-engine',
+    holds: (_rel, text) =>
+      /(?<![A-Za-z0-9_.])runTask\s*\(/.test(text) ||
+      text.includes('createTaskExecutionTestTopology') ||
+      /from '(@\/|(\.\.\/)+src\/)services\/task'/.test(text),
+  },
+  {
+    id: 'real-file-database',
+    holds: (_rel, text) => /(?<![A-Za-z0-9_.])new Database\s*\(/.test(text),
+  },
+  {
+    id: 'sqlite-only-primitive',
+    holds: (_rel, text) =>
+      /\$client\s*\.\s*(?!close)/.test(text) ||
+      text.includes('PRAGMA') ||
+      /(?<![A-Za-z0-9_.])dbTxSync\s*\(/.test(text),
+  },
+]
+
+/** 纯判据：只看路径与内容，不碰磁盘——负 fixture 直接喂它伪造输入。 */
+function sanctionFor(rel: string, text: string): string | null {
+  return SANCTIONED_SINGLE_ENGINE.find((entry) => entry.holds(rel, text))?.id ?? null
+}
+
+function sanctionOf(rel: string): string | null {
+  let text: string
+  try {
+    text = readFileSync(join(TESTS, rel), 'utf8')
+  } catch {
+    return null
+  }
+  return sanctionFor(rel, text)
+}
+
+/**
+ * 账本里**没有任何机械正当理由**的文件——真正的「还没迁」。按路径字典序，只降不升。
+ *
+ * 想把某一行从这里拿掉，只有两条路：**真把它迁到 `describeEachProvider`**，
+ * 或者证明它落进上面某一类 sanctioned 理由（那要改的是判据，不是这张名单）。
+ * **不要**为了让数字好看而往 `SANCTIONED_SINGLE_ENGINE` 里加一条只为某个文件量身定做的判据。
+ */
+export const OPEN_MIGRATION_DEBT: readonly string[] = [
+  'architecture/rfc329-mcp-surface-guard.test.ts',
+  'clarify-baseline-rest-ws.test.ts',
+  'commit-push-runner.test.ts',
+  'contracts/harness.ts',
+  'execution-contract-platform.test.ts',
+  'fixtures/rfc349-postgresql-crash-worker.ts',
+  'helpers/rfc310Pr3Fixture.ts',
+  'intent-agent-branch-ports.test.ts',
+  'intent-mcp-oauth.test.ts',
+  'intent-privileged-node-capability.test.ts',
+  'lifecycle-wrapper-nested.test.ts',
+  'limits.test.ts',
+  'plugins-http.test.ts',
+  'reviews-comment-patch.test.ts',
+  'rfc097-task-status-cas.test.ts',
+  'rfc104-builtin-readonly.test.ts',
+  'rfc128-p5-d-autodispatch.test.ts',
+  'rfc135-runtimes-status.test.ts',
+  'rfc164-workgroups.test.ts',
+  'rfc165-workspace-gc.test.ts',
+  'rfc172-dispatch-shard.test.ts',
+  'rfc189-wg-round.test.ts',
+  'rfc201-plugin-exact-operation.test.ts',
+  'rfc207-runtime-accounting.test.ts',
+  'rfc210-commitpush-nested-precommitted.test.ts',
+  'rfc210-commitpush-subrepo.test.ts',
+  'rfc210-commitpush-untouched-subrepo.test.ts',
+  'rfc212-revalidation-infrastructure.test.ts',
+  'rfc221-login-policy-routes.test.ts',
+  'rfc230-run-liveness.test.ts',
+  'rfc234-apply-changeset.test.ts',
+  'rfc234-turn-engine.test.ts',
+  'rfc238-mcp-runtime-test-real-e2e.test.ts',
+  'rfc244-task-operations.test.ts',
+  'rfc247-api-docs.test.ts',
+  'rfc251-product-boundary.test.ts',
+  'rfc257-webhook-dispatch.test.ts',
+  'rfc257-webhook-e2e.test.ts',
+  'rfc257-webhook-error-codes.test.ts',
+  'rfc257-webhook-ingress.test.ts',
+  'rfc257-webhook-management.test.ts',
+  'rfc258-file-symbols.test.ts',
+  'rfc259-webhook-github-e2e.test.ts',
+  'rfc268-webhook-scratch-launch.test.ts',
+  'rfc269-code-host-wiring-2026-08-10.test.ts',
+  'rfc269-webhook-code-host-context-e2e.test.ts',
+  'rfc271-bundle-engine.test.ts',
+  'rfc271-bundle-recovery-hardening.test.ts',
+  'rfc271-export-closure-authz.test.ts',
+  'rfc271-export-fence-http.test.ts',
+  'rfc271-import-commit.test.ts',
+  'rfc271-import-http.test.ts',
+  'rfc271-overwrite-ownership.test.ts',
+  'rfc271-resource-package-hardening.test.ts',
+  'rfc271-roundtrip.test.ts',
+  'rfc274-workgroup-output-messages.test.ts',
+  'rfc285-b3-inherited-actor.test.ts',
+  'rfc291-closure-call-edges.test.ts',
+  'rfc291-commit-auto-mount.test.ts',
+  'rfc291-commit-then-update.test.ts',
+  'rfc291-unavailable-mount.test.ts',
+  'rfc293-intent-state.test.ts',
+  'rfc294-apply-replay-recovery-parity.test.ts',
+  'rfc294-background-worker-boundary.test.ts',
+  'rfc300-terminal-workspace-policy.test.ts',
+  'rfc304-template-upstream.test.ts',
+  'rfc305-architecture-lock.test.ts',
+  'rfc307-demo-seed.test.ts',
+  'rfc309-template-upstream-wiring.test.ts',
+  'rfc310-digital-employee-authoring.test.ts',
+  'rfc310-digital-employee-conflict-system-mock-e2e.test.ts',
+  'rfc310-digital-employee-system-mock-e2e.test.ts',
+  'rfc310-employee-workspace-delivery.test.ts',
+  'rfc310-pr3-journey.test.ts',
+  'rfc310-pr6-pipeline-adapter.test.ts',
+  'rfc310-pr7b-handover.test.ts',
+  'rfc310-pr9-cutover.test.ts',
+  'rfc310-type-package-auto-upgrade.test.ts',
+  'rfc311-maintenance-boot-tick.test.ts',
+  'rfc311-repos-page.test.ts',
+  'rfc311-task-archive.test.ts',
+  'rfc311-task-page-fastpath.test.ts',
+  'rfc314-autokill-stall-window.test.ts',
+  'rfc314-session-view-window.test.ts',
+  'rfc317-cross-context-ports.test.ts',
+  'rfc321-repository-publication-system-mock-e2e.test.ts',
+  'rfc323-platform-pipeline-collection.test.ts',
+  'rfc326-review-decision-batch.test.ts',
+  'rfc328-durable-ownership.test.ts',
+  'rfc330-case-members-ws-gate.test.ts',
+  'rfc333-task-participants.test.ts',
+  'rfc338-maintenance-status.test.ts',
+  'rfc341-committed-event-store.test.ts',
+  'rfc343-intent-apply-correctness.test.ts',
+  'rfc349-daemon-provider-core.test.ts',
+  'rfc349-database-migration-coordinator.integration.test.ts',
+  'rfc349-digital-employee-platform-tools-wiring.test.ts',
+  'rfc349-dual-provider-behavior-oracle.test.ts',
+  'rfc349-execution-contract-postgresql-adapter.test.ts',
+  'rfc349-execution-peripheral-provider.test.ts',
+  'rfc349-frozen-source-request-writes.test.ts',
+  'rfc349-maintenance-execution-fence.test.ts',
+  'rfc349-postgresql-logical-migration.integration.test.ts',
+  'rfc349-task-execution-provider-adapters.test.ts',
+  'rfc349-task-execution-read-models-postgresql-adapter.test.ts',
+  'rfc349-websocket-provider.test.ts',
+  'rfc357-task-list-authorization.test.ts',
+  'rfc358-intent-graph-validation.test.ts',
+  'rfc359-t19h-logical-backup-restore.test.ts',
+  'rfc359-t19h-postgresql-upgrade.integration.test.ts',
+  'rfc359-w25-task-page-bounded-prefix.test.ts',
+  'rfc359-w36-skill-operation-state-query.test.ts',
+  'rfc359-w7-catalog-composition-roots.test.ts',
+  'scheduled-tasks-ws.test.ts',
+  'skill-identity-migration.test.ts',
+  'skill-zip-commit.test.ts',
+  'skills-import-zip-http.test.ts',
+  'start-task-deps.test.ts',
+  'task-file-content.test.ts',
+  'tasks.test.ts',
+  'terminal-maintenance-watermark-coverage.test.ts',
+  'webhook-trigger-validation-acl-order.test.ts',
+  'wg-readonly-claim-and-pause-reason.test.ts',
+  'workflows.test.ts',
+  'worktree-files-proxy.test.ts',
+  'ws.test.ts',
+]
+
 describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降不升）', () => {
   test('语料非空：确实扫到了整棵 backend 测试树（扫成 0 说明扫描根失效，此刻零预言力）', () => {
     expect(CORPUS_FILES.length).toBeGreaterThanOrEqual(1_500)
@@ -584,6 +787,51 @@ describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降�
         '确有理由只跑单引擎，就把新增写进账本并在那一行旁写清为什么。' +
         '**减**了说明迁移发生了——把账本一起改小，让这次减少留下一次有署名的提交记录。',
     ).toEqual([...TEST_ENGINE_HARDCODING_DEBT])
+  }, 30_000)
+
+  test('分类把总账**完整切开**：每一行要么有机械理由，要么在 open 名单里（两者不重不漏）', () => {
+    const ledgerPaths = TEST_ENGINE_HARDCODING_DEBT.map((row) => row.slice(0, row.lastIndexOf(':')))
+    const openSet = new Set(OPEN_MIGRATION_DEBT)
+    const both = ledgerPaths.filter((rel) => openSet.has(rel) && sanctionOf(rel) !== null)
+    expect(
+      both,
+      '这些文件既被判成 sanctioned、又列在 open 名单里——两张名单必须互斥，否则「还剩多少要迁」没有唯一答案',
+    ).toEqual([])
+    const neither = ledgerPaths.filter((rel) => !openSet.has(rel) && sanctionOf(rel) === null)
+    expect(
+      neither,
+      '这些文件既不在 open 名单里、也没有任何机械理由——新写的单引擎判据要么迁掉，要么把它加进 ' +
+        '`OPEN_MIGRATION_DEBT`（然后在下一波迁掉）。不要为了让数字好看而给它量身定做一条 sanctioned 判据。',
+    ).toEqual([])
+  }, 30_000)
+
+  test('open 待办量与实测逐字相等（这才是「还剩多少要迁」，不是总账那个数）', () => {
+    const ledgerPaths = TEST_ENGINE_HARDCODING_DEBT.map((row) => row.slice(0, row.lastIndexOf(':')))
+    const measured = ledgerPaths.filter((rel) => sanctionOf(rel) === null).sort()
+    expect(
+      measured,
+      '没有正当理由的单引擎文件与 `OPEN_MIGRATION_DEBT` 不符。**增**了说明有人新写了一条只验证 ' +
+        'SQLite 的判据，而且它不属于任何一类已裁决的单引擎场景——改用 ' +
+        '`describeEachProvider(name, (harness) => ...)`。**减**了说明迁移发生了，把名单一起改小。',
+    ).toEqual([...OPEN_MIGRATION_DEBT])
+  }, 30_000)
+
+  // 负 fixture：把**伪造**的文件内容喂给分类判据本身，证明它还在工作。不碰真实语料——
+  // 碰了就是在断言现状（那是规则），而不是在证明「决定过程还活着」。判据静默失效时，
+  // 上面两条「切开总账」的判据会全绿通过（一切都被归进 open 或都被 sanction），
+  // 只有这一条会红。
+  test('分类判据的负 fixture：四类理由各自能被认出来，没有理由的返回 null', () => {
+    expect(sanctionFor('migration-0042-widget.test.ts', 'const noop = 1\n')).toBe('migration-chain')
+    expect(sanctionFor('plain.test.ts', 'await runTask({ taskId, db, appHome })\n')).toBe(
+      'sqlite-execution-engine',
+    )
+    expect(sanctionFor('plain.test.ts', "const raw = new Database(join(root, 'aw.db'))\n")).toBe(
+      'real-file-database',
+    )
+    expect(sanctionFor('plain.test.ts', 'const rows = db.$client.query(sql).all()\n')).toBe(
+      'sqlite-only-primitive',
+    )
+    expect(sanctionFor('plain.test.ts', "await db.insert(tasks).values({ id: 't1' })\n")).toBeNull()
   }, 30_000)
 
   test('账本按路径字典序、无重复（清点稳定的前提）', () => {

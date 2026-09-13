@@ -2,6 +2,39 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 凌晨续，AC-6 账本切成两半：**已裁决的单引擎 295 + 真·待办 126**）
+>
+> 落档 plan §5cx。**这一刀不迁文件，改的是账本的预言力。**
+>
+> ### 1. 为什么要切
+>
+> 421 这个数字回答不了接手的人真正要问的那句：**这一行是债，还是本来就这样？**
+> 读到 421 的人两种反应都错——要么以为还有 421 个待办（§5cw 那张被原始计数带偏的表就是这么来的），
+> 要么把所有行都当成历史包袱，那时守卫就彻底失效了。
+>
+> ### 2. 分类**故意是机械的**
+>
+> 人工标注会退化成「谁都能给自己新写的那条编个理由」。判据全落在文件内容上：
+> `sqlite-execution-engine` 124（`runTask` / 测试拓扑 / `services/task`）、
+> `migration-chain` 86（判的是 SQLite 迁移链本身）、`real-file-database` 50（`new Database(`）、
+> `sqlite-only-primitive` 35（`$client` / `PRAGMA` / `dbTxSync`）。
+> 剩下 **126** 就是 `OPEN_MIGRATION_DEBT`——**唯一需要往下压的数字**，逐文件列名、只降不升、
+> 在 `ledger-baselines.json` 里单独立了基线。
+>
+> ### 3. 三条判据把这件事钉死
+>
+> ①**两张名单不重不漏**（既在两边或两边都不在都红，防止把债悄悄挪进 sanctioned）；
+> ②**open 量与实测逐字相等**（新写没有正当理由的单引擎判据会让它变长）；
+> ③**负 fixture**——分类判据一旦被改坏，①②会**全绿通过**（所有文件要么都进 open、要么都被
+> sanction，「不重不漏」照样成立），所以另加一条把**伪造**文件内容喂给纯判据 `sanctionFor` 的
+> fixture，四类各验一次 + 一条返回 `null`，且一点真实语料都不碰。
+>
+> ### 4. 一条记账口径（踩过）
+>
+> `architecture/guard-manifest.json` 里除 `rfc294-canonical-manifests` 外的条目**不由 census 重算**
+> （census 只重算它自己那一条），所以本守卫的 `assertsAbsence` / `negativeFixture` 由 `false`
+> 改 `true` 是**手改**的；改完要再跑一次 census，让 N1a 的内容寻址 provenance 重新对上。
+>
 > ## 📌 RFC-359 最新一段（2026-09-14 凌晨，AC-6 账本 **423 → 421**；开始拿**窄形参 callee**开刀）
 >
 > 落档 plan §5cw。`d852cbedf` 的 CI 已全绿。
