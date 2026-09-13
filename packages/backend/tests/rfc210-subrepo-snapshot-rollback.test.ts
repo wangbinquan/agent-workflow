@@ -181,17 +181,20 @@ describe('RFC-210 submodule snapshot / rollback', () => {
 })
 
 describe('RFC-210 detectSubmodules performance gate', () => {
-  // 预算而非性能门：这条断的是「没有 .gitmodules 时它返回 false」，而「不多 spawn 一个
-  // git 进程」那条判据由下面的源码锁盯着（行为面观察不到「零进程」，注释已写明）。
-  // 它自己却要真的 `git init/add/commit` 造一个仓，在 CI 上四分片同跑时曾整整卡满
-  // bun 默认的 5s 上限而红（run 33587996629，macos shard 1/4）。同文件的嵌套回滚那条
-  // 早就写了显式 90s，这条只是漏了。
+  // 这条断的是「没有 .gitmodules 时它返回 false」，而「不多 spawn 一个 git 进程」那条判据由下面的
+  // 源码锁盯着（行为面观察不到「零进程」，注释已写明）。
+  //
+  // RFC-359（2026-09-13）：**把真 `git init/add/commit` 拿掉了**。它此前为了这条断言真造一个仓，
+  // 于是在共享 runner 上反复被时间掐红——先是卡满 bun 默认的 5s（run 33587996629，macos shard 1/4），
+  // 补到 30s 之后又在 30s 上超时一次（run 34782479990，macos shard 3/6）。**继续加时间是错的方向**：
+  // 被测的短路发生在 `existsSync('.gitmodules')` 上，**根本走不到 git**，所以一个空目录就够了，
+  // 而且这样断得更强——连一个仓都不存在时它照样返回 false，证明短路确实在任何 git 调用之前。
   test('hasDirtySubmoduleContent short-circuits when .gitmodules is absent', async () => {
-    const repo = join(root, 'nosub')
-    await initRepo(repo, 'a.txt', 'v1\n')
-    expect(existsSync(join(repo, '.gitmodules'))).toBe(false)
-    expect(await hasDirtySubmoduleContent(repo)).toBe(false)
-  }, 30_000)
+    const plain = join(root, 'nosub')
+    mkdirSync(plain, { recursive: true })
+    expect(existsSync(join(plain, '.gitmodules'))).toBe(false)
+    expect(await hasDirtySubmoduleContent(plain)).toBe(false)
+  })
 
   test('source-level lock: the existsSync gate precedes any runGit call', () => {
     // Behavioural assertions cannot observe "zero processes spawned" here, so the
