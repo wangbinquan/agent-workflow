@@ -2,6 +2,38 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14，总账 **421 → 418**，open 待办 **126 → 113**；分类判据补了两个洞）
+>
+> 落档 plan §5cy / §5cz。
+>
+> ### 1. 分类判据必须跑在**剥掉注释**的 token 流上
+>
+> §5cx 的第一版是裸文本扫描，两个洞**方向都是让数字变好看**——这正是分类判据最危险的失效模式：
+>
+> - **漏判**：`.$client` 判据只认「`$client` 后紧跟点号」，漏掉
+>   `const sqlite = (db as unknown as { $client: Database }).$client` 换行后再 `.serialize()`。
+>   `rfc349-database-migration-coordinator` 因此被当成待办去迁——它测的是 **SQLite → PostgreSQL
+>   迁移**，源库按定义就是 SQLite，迁完在 PG 上以 `sqlite.serialize` undefined 红。
+>   判据改成「**取用**裸句柄都算，**只关它不算**」（§5cm 既有裁决）。
+> - **误判**：放宽后 11 个文件被判 sanctioned，其中 `rfc305-architecture-lock` 的 `.$client`
+>   在**注释里**——那段注释恰好就是在解释「裸文本扫描会撞上自己」。
+>
+> 判据统一跑 `codeOnly(text)`（TS scanner，`skipTrivia`），负 fixture 加了一条
+> 「注释里提到不算用了」。
+>
+> ### 2. 数字下降要分开说
+>
+> 总账 421 → 418 是**真迁了 3 个**（`rfc212-revalidation-infrastructure` /
+> `rfc330-case-members-ws-gate` / `scheduled-tasks-ws`）；open 126 → 113 里只有 3 个是迁走的，
+> 另外 10 个是**判据补洞后归位**到 `sqlite-only-primitive`。不分开说，下一个人会读成迁移进度。
+>
+> ### 3. 下一刀该打哪（实测分布，plan §5cz）
+>
+> 机械那一桶边际产出已经很低（第 7 波 31 个候选只活 3 个）。剩下 113 条里
+> **`createApp` 那 18 个**才是下一刀——它们卡在**同一个可复用的装配**
+> （`describeEachProviderHttpApplication`）上，而不是各自的坑；只是各文件传的 deps 不同
+> （`maintenanceStatus` / `databaseTelemetry` …），要逐个看。
+>
 > ## 📌 RFC-359 最新一段（2026-09-14 凌晨续，AC-6 账本切成两半：**已裁决的单引擎 295 + 真·待办 126**）
 >
 > 落档 plan §5cx。**这一刀不迁文件，改的是账本的预言力。**

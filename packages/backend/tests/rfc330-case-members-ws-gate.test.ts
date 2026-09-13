@@ -4,13 +4,11 @@
 // （或 tasks:read:all）；没有受众快照、快照指向别的案例 ⇒ 丢帧。与 rfc152 的
 // task.members.changed 用例同形（proposal AC-10）。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
-import { WS_CHANNELS } from '../src/ws/registry'
+import { expect, test } from 'bun:test'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { buildActor, type Actor } from '../src/auth/actor'
+import { describeEachProvider } from './helpers/eachProvider'
+import { WS_CHANNELS } from '../src/ws/registry'
 
 function makeActor(role: 'admin' | 'user', id: string): Actor {
   return buildActor({
@@ -19,8 +17,8 @@ function makeActor(role: 'admin' | 'user', id: string): Actor {
   })
 }
 
-describe('RFC-330 —— employee-case.members.changed 帧门', () => {
-  const db = createInMemoryDb(MIGRATIONS)
+describeEachProvider('RFC-330 —— employee-case.members.changed 帧门', (harness) => {
+  const db = harness.db
   const gate = WS_CHANNELS['tasks-list'].frameGate!
   const caseId = 'case-audience'
   const visibleUserIds = new Set(['previous-owner', 'next-owner', 'removed-member', 'added-member'])

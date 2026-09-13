@@ -17,7 +17,8 @@ import { readFileSync } from 'node:fs'
 import { describeCredential } from '../src/auth/session'
 import { createSession, hashToken, lookupActiveSessionByHash } from './helpers/auth/sessionStore'
 import { createPat, lookupActivePatByHash } from './helpers/auth/patStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { userPats, users, userSessions } from '../src/db/schema'
 import { createUser } from '../src/services/users'
 import {
@@ -30,8 +31,6 @@ import {
 } from '../src/ws/connections'
 import { triggerRevalidation } from '../src/ws/revalidationHook'
 import { WS_CHANNELS, type WsChannelKind, type WsConnectionData } from '../src/ws/registry'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function fakeWs(): ServerWebSocket<WsConnectionData> {
   return { data: {} } as unknown as ServerWebSocket<WsConnectionData>
@@ -96,9 +95,9 @@ describe('RFC-212 T1 — live connection set', () => {
   })
 })
 
-describe('RFC-212 T2 — credential fingerprint, never the raw token', () => {
+describeEachProvider('RFC-212 T2 — credential fingerprint, never the raw token', (harness) => {
   test('classifies session / pat / daemon exactly like resolveActor does', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const user = await createUser(db, {
       username: 'alice',
       displayName: 'Alice',
@@ -123,7 +122,7 @@ describe('RFC-212 T2 — credential fingerprint, never the raw token', () => {
   })
 
   test('the fingerprint is a hash — the raw token is not recoverable from it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const user = await createUser(db, {
       username: 'bob',
       displayName: 'Bob',
@@ -151,14 +150,14 @@ describe('RFC-212 T2 — credential fingerprint, never the raw token', () => {
   })
 })
 
-describe('RFC-212 T3 — hash-keyed lookups are read-only when asked', () => {
+describeEachProvider('RFC-212 T3 — hash-keyed lookups are read-only when asked', (harness) => {
   async function seed(): Promise<{
-    db: DbClient
+    db: ProviderNeutralDatabase
     userId: string
     sessionToken: string
     patToken: string
   }> {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const user = await createUser(db, {
       username: 'carol',
       displayName: 'Carol',

@@ -2,20 +2,17 @@
 //
 // Every frame carries ownerUserId; the owner + tasks:read:all admins receive it,
 // everyone else drops (no DB lookup).
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import type { ScheduledTaskWsMessage } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   resetBroadcastersForTests,
   SCHEDULED_TASK_CHANNEL,
   scheduledTaskBroadcaster,
 } from '../src/ws/broadcaster'
 import { WS_CHANNELS } from '../src/ws/registry'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -24,13 +21,13 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-describe('RFC-159 — scheduled-tasks WS frame gate', () => {
+describeEachProvider('RFC-159 — scheduled-tasks WS frame gate', (harness) => {
   beforeEach(() => resetBroadcastersForTests())
   afterEach(() => resetBroadcastersForTests())
 
   const spec = WS_CHANNELS['scheduled-tasks']
   const gate = spec.frameGate!
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = harness.db
   const ctx = (a: Actor) => ({ db, actor: a, cache: new Map<string, boolean>() })
   const msg: ScheduledTaskWsMessage = { type: 'scheduled.fired', id: 's1', ownerUserId: 'bob' }
 

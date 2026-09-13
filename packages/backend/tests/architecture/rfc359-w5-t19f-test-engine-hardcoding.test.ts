@@ -262,7 +262,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc210-commitpush-subrepo.test.ts: 1',
   'rfc210-commitpush-untouched-subrepo.test.ts: 1',
   'rfc212-revalidation-behavior.test.ts: 13',
-  'rfc212-revalidation-infrastructure.test.ts: 3',
   'rfc213-pending-restore.test.ts: 1',
   'rfc213-restore.test.ts: 3',
   'rfc217-migration-0107.test.ts: 1',
@@ -386,7 +385,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc326-review-decision-transaction.test.ts: 1',
   'rfc326-tx-primitives-equivalence.test.ts: 2',
   'rfc328-durable-ownership.test.ts: 1',
-  'rfc330-case-members-ws-gate.test.ts: 1',
   'rfc330-migration-backfill.test.ts: 1',
   'rfc333-migration-human-gate-operations.test.ts: 4',
   'rfc333-task-participants.test.ts: 14',
@@ -444,7 +442,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w8-logical-source-conformance.test.ts: 1',
   'rfc359-w8-migrator-conformance.test.ts: 1',
   'runner-subagent-live-capture.test.ts: 6',
-  'scheduled-tasks-ws.test.ts: 1',
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1',
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1',
   'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts: 1',
@@ -592,9 +589,24 @@ function callSiteRows(): readonly string[] {
  * 剩下的就是 `OPEN_MIGRATION_DEBT`：**没有任何机械理由**留在单引擎上的文件。这才是待办量，
  * 也是唯一需要往下压的数字。它同样只降不升——新写一条没有正当理由的单引擎判据会让它变长。
  */
+/**
+ * 判据跑在**剥掉注释**的 token 流上，不是裸文本。`rfc305-architecture-lock` 的注释里就写着
+ * `db.$client`（那段注释正是在解释「裸文本扫描会撞上自己」），裸扫会把它误判成用了裸驱动、
+ * 于是把一条真待办悄悄挪进 sanctioned——**分类判据放松的方向恰好是让数字变好看的方向**，
+ * 所以这里宁可多花一次解析。token 之间用空格拼回，因此下面所有判据都写成容忍空白的形式。
+ */
+function codeOnly(text: string): string {
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, text)
+  const parts: string[] = []
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    parts.push(scanner.getTokenText())
+  }
+  return parts.join(' ')
+}
+
 const SANCTIONED_SINGLE_ENGINE: readonly {
   readonly id: string
-  readonly holds: (rel: string, text: string) => boolean
+  readonly holds: (rel: string, code: string) => boolean
 }[] = [
   {
     id: 'migration-chain',
@@ -602,27 +614,30 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
   },
   {
     id: 'sqlite-execution-engine',
-    holds: (_rel, text) =>
-      /(?<![A-Za-z0-9_.])runTask\s*\(/.test(text) ||
-      text.includes('createTaskExecutionTestTopology') ||
-      /from '(@\/|(\.\.\/)+src\/)services\/task'/.test(text),
+    holds: (_rel, code) =>
+      /(?<![A-Za-z0-9_.])runTask\s*\(/.test(code) ||
+      code.includes('createTaskExecutionTestTopology') ||
+      /from\s*'(@\/|(\.\.\/)+src\/)services\/task'/.test(code),
   },
   {
     id: 'real-file-database',
-    holds: (_rel, text) => /(?<![A-Za-z0-9_.])new Database\s*\(/.test(text),
+    holds: (_rel, code) => /(?<![A-Za-z0-9_.])new\s+Database\s*\(/.test(code),
   },
   {
     id: 'sqlite-only-primitive',
-    holds: (_rel, text) =>
-      /\$client\s*\.\s*(?!close)/.test(text) ||
-      text.includes('PRAGMA') ||
-      /(?<![A-Za-z0-9_.])dbTxSync\s*\(/.test(text),
+    holds: (_rel, code) =>
+      // `.$client` 取的是裸 bun:sqlite 句柄。**只关它不算**（§5cm：`$client.close()` 只是收尾，
+      // 不构成「用了裸驱动面」），其余取用——`serialize()`、语句录制、`EXPLAIN QUERY PLAN`——都算。
+      /\.\s*\$client\b(?!\s*\.\s*close\b)/.test(code) ||
+      code.includes('PRAGMA') ||
+      /(?<![A-Za-z0-9_.])dbTxSync\s*\(/.test(code),
   },
 ]
 
 /** 纯判据：只看路径与内容，不碰磁盘——负 fixture 直接喂它伪造输入。 */
 function sanctionFor(rel: string, text: string): string | null {
-  return SANCTIONED_SINGLE_ENGINE.find((entry) => entry.holds(rel, text))?.id ?? null
+  const code = codeOnly(text)
+  return SANCTIONED_SINGLE_ENGINE.find((entry) => entry.holds(rel, code))?.id ?? null
 }
 
 function sanctionOf(rel: string): string | null {
@@ -646,9 +661,7 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'architecture/rfc329-mcp-surface-guard.test.ts',
   'clarify-baseline-rest-ws.test.ts',
   'commit-push-runner.test.ts',
-  'contracts/harness.ts',
   'execution-contract-platform.test.ts',
-  'fixtures/rfc349-postgresql-crash-worker.ts',
   'helpers/rfc310Pr3Fixture.ts',
   'intent-agent-branch-ports.test.ts',
   'intent-mcp-oauth.test.ts',
@@ -670,7 +683,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc210-commitpush-nested-precommitted.test.ts',
   'rfc210-commitpush-subrepo.test.ts',
   'rfc210-commitpush-untouched-subrepo.test.ts',
-  'rfc212-revalidation-infrastructure.test.ts',
   'rfc221-login-policy-routes.test.ts',
   'rfc230-run-liveness.test.ts',
   'rfc234-apply-changeset.test.ts',
@@ -725,27 +737,20 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc311-repos-page.test.ts',
   'rfc311-task-archive.test.ts',
   'rfc311-task-page-fastpath.test.ts',
-  'rfc314-autokill-stall-window.test.ts',
-  'rfc314-session-view-window.test.ts',
   'rfc317-cross-context-ports.test.ts',
   'rfc321-repository-publication-system-mock-e2e.test.ts',
   'rfc323-platform-pipeline-collection.test.ts',
   'rfc326-review-decision-batch.test.ts',
   'rfc328-durable-ownership.test.ts',
-  'rfc330-case-members-ws-gate.test.ts',
   'rfc333-task-participants.test.ts',
   'rfc338-maintenance-status.test.ts',
-  'rfc341-committed-event-store.test.ts',
   'rfc343-intent-apply-correctness.test.ts',
   'rfc349-daemon-provider-core.test.ts',
-  'rfc349-database-migration-coordinator.integration.test.ts',
   'rfc349-digital-employee-platform-tools-wiring.test.ts',
   'rfc349-dual-provider-behavior-oracle.test.ts',
   'rfc349-execution-contract-postgresql-adapter.test.ts',
   'rfc349-execution-peripheral-provider.test.ts',
   'rfc349-frozen-source-request-writes.test.ts',
-  'rfc349-maintenance-execution-fence.test.ts',
-  'rfc349-postgresql-logical-migration.integration.test.ts',
   'rfc349-task-execution-provider-adapters.test.ts',
   'rfc349-task-execution-read-models-postgresql-adapter.test.ts',
   'rfc349-websocket-provider.test.ts',
@@ -753,10 +758,7 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc358-intent-graph-validation.test.ts',
   'rfc359-t19h-logical-backup-restore.test.ts',
   'rfc359-t19h-postgresql-upgrade.integration.test.ts',
-  'rfc359-w25-task-page-bounded-prefix.test.ts',
-  'rfc359-w36-skill-operation-state-query.test.ts',
   'rfc359-w7-catalog-composition-roots.test.ts',
-  'scheduled-tasks-ws.test.ts',
   'skill-identity-migration.test.ts',
   'skill-zip-commit.test.ts',
   'skills-import-zip-http.test.ts',
@@ -832,6 +834,8 @@ describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降�
       'sqlite-only-primitive',
     )
     expect(sanctionFor('plain.test.ts', "await db.insert(tasks).values({ id: 't1' })\n")).toBeNull()
+    // 注释里提到某个符号**不算**用了它——否则一句解释性注释就能把一条真待办挪进 sanctioned。
+    expect(sanctionFor('plain.test.ts', '// 这里解释 db.$client 与 PRAGMA 为什么危险\n')).toBeNull()
   }, 30_000)
 
   test('账本按路径字典序、无重复（清点稳定的前提）', () => {

@@ -8567,3 +8567,47 @@ helper 不在任何块里，却会被 provider 用例调用**，那才是真正�
 **记账口径**：`guard-manifest.json` 里除 `rfc294-canonical-manifests` 外的条目**不由 census
 重算**（census 只重算它自己那一条），所以这次把本守卫的 `assertsAbsence` / `negativeFixture`
 从 `false` 改成 `true` 是手改的——改完要再跑一次 census 让 N1a 的内容寻址 provenance 重新对上。
+
+## 5cy. 分类判据必须跑在**剥掉注释**的 token 流上（否则一句注释就能把债挪进 sanctioned）
+
+§5cx 的分类判据第一版是裸文本扫描，立刻撞上两个问题，方向**都是让数字变好看**——这正是分类判据
+最危险的失效模式：
+
+1. **漏判**：`.$client` 的判据写成 `\$client\s*\.\s*(?!close)`，只认「`$client` 后面紧跟点号」。
+   而 `rfc349-database-migration-coordinator` 是
+   `const sqlite = (drizzle as unknown as { $client: Database }).$client` 换行之后再
+   `sqlite.serialize()`——取的就是裸 bun:sqlite 句柄（把库序列化成文件，因为它测的是
+   **SQLite → PostgreSQL 迁移**，源库按定义就是 SQLite），却没被认出来，于是被当成待办去迁，
+   迁完在 PG 上以 `undefined is not an object (evaluating 'sqlite.serialize')` 红。
+   判据放宽成 `\.\s*\$client\b(?!\s*\.\s*close\b)`：**取用**裸句柄都算，**只关它不算**
+   （§5cm 的既有裁决：`$client.close()` 只是收尾）。
+2. **误判**：放宽之后立刻有 11 个文件被判成 sanctioned，其中 `rfc305-architecture-lock`
+   的 `.$client` 出现在**注释里**——那段注释恰好就是在解释「裸文本扫描会撞上自己」。
+   把一条真待办因为一句解释性注释挪进 sanctioned，是这套分类最不该犯的错。
+
+所以判据统一跑在 `codeOnly(text)`——用 TS scanner 以 `skipTrivia` 扫一遍、token 用空格拼回，
+注释整体消失（所有判据随之写成容忍空白的形式：`new\s+Database\s*\(`、`from\s*'…services/task'`）。
+负 fixture 同批加了一条：`sanctionFor('plain.test.ts', '// 这里解释 db.$client 与 PRAGMA …')`
+必须返回 `null`。
+
+**净效果**：总账 421 → **418**（迁了 3 个：`rfc212-revalidation-infrastructure` /
+`rfc330-case-members-ws-gate` / `scheduled-tasks-ws`），open 待办 126 → **113**
+（3 个真迁走 + 10 个是判据补洞后归位到 `sqlite-only-primitive`，其中不含 `rfc305`——它只是注释）。
+**判据补洞导致的数字下降要单独说清楚**，否则下一个人会把它误读成迁移进度。
+
+## 5cz. 剩下 113 条 open 的**下一个拦路石**分布（实测，不是估的）
+
+对每个 open 文件探测「下一步会卡在哪」：
+
+| 下一个拦路石 | 文件数 | 说明 |
+| --- | --- | --- |
+| 无（机械可迁） | 48 | 但**「探测不到」不等于可迁**——其中相当一部分是窄形参 callee 卡住的，文本探测看不见（`readAuthorityFence` 的同步端口、`DbClient` 形参的 deps） |
+| 同步终结子 | 40 | `termfix2` 可批量处理 |
+| `createApp` | 18 | 要换 `describeEachProviderHttpApplication`，而各文件传的 deps 不同（`maintenanceStatus` / `databaseTelemetry` …），逐个看 |
+| 裸 SQL 终结子 | 5 | 同 §5cu |
+| 共享 system-mock | 3 | 见 §5cw 的 `rfc310` 那条 |
+| 组合 | ~12 | |
+
+**排期口径**：机械那一桶已经被前几波刮到边际产出很低（第 7 波 31 个候选只survive 3 个），
+真正的下一刀应该是 `createApp` 那 18 个——它们卡在同一个可复用的装配上，
+而不是每个文件各自的坑。
