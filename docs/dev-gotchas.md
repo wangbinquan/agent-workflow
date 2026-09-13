@@ -6696,3 +6696,12 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   app home 是 `open()` 现建的、用例结束时删掉；应用读的是 `open()` 那个 `configPath`，
   自建 app home 写的 config 会被整份绕开。桩二进制放自己的 tmp 目录，路径经
   `open({ config })` 喂进去。
+
+- **`harness.db` / `harness.session` / `harness.capabilities` 都是惰性 getter：绝不能在 `describe`
+  体里直接读**。describe 的函数体在**注册期**执行，那时 `beforeEach` 还没建库，getter 会抛
+  `ProviderHarness 只能在 test 体内读取`。要么把读取挪进 `test` / `beforeEach`，要么写成
+  `const db = () => harness.db`（调用时才读）。
+  **最要命的是它本地可能是绿的**：抛不抛取决于同进程里前一个文件是否刚好把状态留成非空，
+  单跑一个文件和在 CI 分片里跟几十个文件一起跑结果不一样。2026-09-13 实撞：本地 25 pass 全绿、
+  CI 上 **4 个分片同时红**。已上守卫（`rfc359-w5-t19f` 里的「注册期读 harness」判据 + 负 fixture），
+  再犯会在 push 门禁直接红。

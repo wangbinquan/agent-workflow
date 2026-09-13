@@ -7,6 +7,7 @@
 import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '../src/auth/actor'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { WS_CHANNELS } from '../src/ws/registry'
 
@@ -18,7 +19,10 @@ function makeActor(role: 'admin' | 'user', id: string): Actor {
 }
 
 describeEachProvider('RFC-330 —— employee-case.members.changed 帧门', (harness) => {
-  const db = harness.db
+  // `harness.db` 是**惰性** getter，只有 beforeEach 之后才有库：写在 describe 体里就是
+  // **注册期**读取，harness 会当场抛 `ProviderHarness 只能在 test 体内读取`。
+  // 本地单文件跑可能撞不上（取决于同进程里前一个文件留下的状态），CI 上必红。
+  const dbOf = (): ProviderNeutralDatabase => harness.db
   const gate = WS_CHANNELS['tasks-list'].frameGate!
   const caseId = 'case-audience'
   const visibleUserIds = new Set(['previous-owner', 'next-owner', 'removed-member', 'added-member'])
@@ -32,38 +36,58 @@ describeEachProvider('RFC-330 —— employee-case.members.changed 帧门', (har
   test('before ∪ after 受众收到帧；局外人收不到；tasks:read:all 恒收到', async () => {
     for (const userId of visibleUserIds) {
       expect(
-        await gate({ db, actor: makeActor('user', userId), cache: new Map() }, message, context),
+        await gate(
+          { db: dbOf(), actor: makeActor('user', userId), cache: new Map() },
+          message,
+          context,
+        ),
       ).toBe(true)
     }
     expect(
-      await gate({ db, actor: makeActor('user', 'outsider'), cache: new Map() }, message, context),
+      await gate(
+        { db: dbOf(), actor: makeActor('user', 'outsider'), cache: new Map() },
+        message,
+        context,
+      ),
     ).toBe(false)
     expect(
-      await gate({ db, actor: makeActor('admin', 'root'), cache: new Map() }, message, context),
+      await gate(
+        { db: dbOf(), actor: makeActor('admin', 'root'), cache: new Map() },
+        message,
+        context,
+      ),
     ).toBe(true)
   })
 
   test('没有受众快照、或快照指向别的案例 ⇒ 丢帧（不会退回任务可见性判定）', async () => {
     expect(
       await gate(
-        { db, actor: makeActor('user', 'next-owner'), cache: new Map() },
+        { db: dbOf(), actor: makeActor('user', 'next-owner'), cache: new Map() },
         message,
         undefined,
       ),
     ).toBe(false)
     expect(
-      await gate({ db, actor: makeActor('user', 'next-owner'), cache: new Map() }, message, {
-        ...context,
-        caseId: 'another-case',
-      }),
+      await gate(
+        { db: dbOf(), actor: makeActor('user', 'next-owner'), cache: new Map() },
+        message,
+        {
+          ...context,
+          caseId: 'another-case',
+        },
+      ),
     ).toBe(false)
     // 任务帧的受众上下文不能冒充案例帧的受众。
     expect(
-      await gate({ db, actor: makeActor('user', 'next-owner'), cache: new Map() }, message, {
-        kind: 'task.members-changed-audience',
-        taskId: caseId,
-        visibleUserIds,
-      }),
+      await gate(
+        { db: dbOf(), actor: makeActor('user', 'next-owner'), cache: new Map() },
+        message,
+        {
+          kind: 'task.members-changed-audience',
+          taskId: caseId,
+          visibleUserIds,
+        },
+      ),
     ).toBe(false)
   })
 })

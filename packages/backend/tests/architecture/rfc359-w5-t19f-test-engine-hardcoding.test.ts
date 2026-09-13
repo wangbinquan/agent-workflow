@@ -631,6 +631,53 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
   },
 ]
 
+/**
+ * **注册期读 harness 的那一类错**（2026-09-13 推红 main 实撞，4 个分片同时红）。
+ *
+ * `harness.db` / `harness.session` / `harness.capabilities` 都是**惰性 getter**：库要等
+ * `beforeEach` 建好才有，提前读会抛 `ProviderHarness 只能在 test 体内读取`。而 `describe` 的
+ * 函数体是在**注册期**执行的——写在那里的 `const db = harness.db` 会在任何用例开始之前就跑。
+ *
+ * 为什么必须上守卫而不是靠 review：**本地单文件跑可能是绿的**。惰性 getter 抛不抛，取决于
+ * 同进程里前一个文件是否刚好把状态留成非空；单跑一个文件、和在 CI 的分片里跟几十个文件一起跑，
+ * 结果不一样。实撞那次本地 25 pass 全绿、CI 上四个分片同时红。
+ *
+ * 判据只认**立即求值**的读取：`const db = () => harness.db` 这种把读取推迟到调用时的写法是对的，
+ * `test(...)` / `beforeEach(...)` 里的读取也是对的（回调晚于注册期执行）。
+ */
+function eagerHarnessReads(rel: string, text: string): string[] {
+  const src = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const HARNESS_MEMBER =
+    /(?<![A-Za-z0-9_.])(harness|scope\.harness)\s*\.\s*(db|session|capabilities)\b/
+  const found: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text.startsWith('describeEachProvider')
+    ) {
+      const body = node.arguments.find(ts.isArrowFunction)
+      if (body !== undefined && ts.isBlock(body.body)) {
+        for (const statement of body.body.statements) {
+          if (!ts.isVariableStatement(statement)) continue
+          for (const declaration of statement.declarationList.declarations) {
+            const initializer = declaration.initializer
+            if (initializer === undefined) continue
+            // a function initializer defers the read to call time — that is the correct shape
+            if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) continue
+            if (!HARNESS_MEMBER.test(initializer.getText(src))) continue
+            const line = src.getLineAndCharacterOfPosition(statement.getStart(src)).line + 1
+            found.push(`${rel}:${line}`)
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(src)
+  return found
+}
+
 /** 纯判据：只看路径与内容，不碰磁盘——负 fixture 直接喂它伪造输入。 */
 function sanctionFor(rel: string, text: string): string | null {
   const code = codeOnly(text)
@@ -830,6 +877,34 @@ describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降�
     expect(sanctionFor('plain.test.ts', "await db.insert(tasks).values({ id: 't1' })\n")).toBeNull()
     // 注释里提到某个符号**不算**用了它——否则一句解释性注释就能把一条真待办挪进 sanctioned。
     expect(sanctionFor('plain.test.ts', '// 这里解释 db.$client 与 PRAGMA 为什么危险\n')).toBeNull()
+  }, 30_000)
+
+  test('注册期读 harness 判据的负 fixture：立即读要抓到，推迟读与用例内读要放过', () => {
+    const eager = "describeEachProvider('x', (harness) => { const db = harness.db })\n"
+    expect(eagerHarnessReads('plain.test.ts', eager)).toEqual(['plain.test.ts:1'])
+    const lazy = "describeEachProvider('x', (harness) => { const db = () => harness.db })\n"
+    expect(eagerHarnessReads('plain.test.ts', lazy)).toEqual([])
+    const inTest =
+      "describeEachProvider('x', (harness) => { test('t', () => { const db = harness.db }) })\n"
+    expect(eagerHarnessReads('plain.test.ts', inTest)).toEqual([])
+  }, 30_000)
+
+  test('没有人在 describe 体里（注册期）直接读 harness——本地可能绿，CI 必红', () => {
+    const offenders: string[] = []
+    for (const rel of CORPUS_FILES) {
+      if (EXEMPT.has(rel)) continue
+      const text = readFileSync(join(TESTS, rel), 'utf8')
+      if (!text.includes('describeEachProvider')) continue
+      offenders.push(...eagerHarnessReads(rel, text))
+    }
+    expect(
+      offenders,
+      '这些地方在 `describe` 体里立即读了 `harness.db` / `harness.session` / `harness.capabilities`。' +
+        'describe 体在**注册期**执行，那时 `beforeEach` 还没建库，惰性 getter 会抛 ' +
+        '`ProviderHarness 只能在 test 体内读取`。**本地单文件跑可能是绿的**（取决于同进程前一个文件' +
+        '留下的状态），CI 分片里必红——2026-09-13 就这么把 main 推红过，四个分片同时挂。' +
+        '改法：把读取挪进 `test` / `beforeEach`，或写成 `const db = () => harness.db` 这种调用时才读的形式。',
+    ).toEqual([])
   }, 30_000)
 
   test('账本按路径字典序、无重复（清点稳定的前提）', () => {

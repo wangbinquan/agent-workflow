@@ -8684,3 +8684,32 @@ helper 不在任何块里，却会被 provider 用例调用**，那才是真正�
   而作用域的 app home 是 `open()` 现建的——得像 `rfc294-route-gate-compat` 那样改成在
   `open()` 之后往**作用域的** appHome 里建目录。形状可迁，但两个 builder × 四个 describe，
   单独一刀更稳。
+
+
+## 5dc. 推红一次：`describe` 体里读 `harness.db` 是**注册期**读取（本地可能绿，CI 必红）
+
+`d50fc1ca5` 把 main 推红了，**四个分片同时挂**（ubuntu 3/8、6/8，macos 2/6、3/6），
+全是同一条：`error: ProviderHarness 只能在 test 体内读取（beforeEach 之后才有库）`。
+
+肇事的是两处 `const db = harness.db`——写在 `describeEachProvider(name, (harness) => { … })`
+的**函数体顶层**。那段代码在**注册期**执行（bun 先跑一遍 describe 体把用例登记上），
+那时 `beforeEach` 还没建库，惰性 getter 当场抛。
+
+**为什么本地没抓到**：惰性 getter 抛不抛，取决于同进程里**前一个文件**是否刚好把 harness 状态
+留成非空。单跑这两个文件时本地 25 pass 全绿；在 CI 分片里跟几十个文件一起跑就必红。
+这与 §5ct 记的「PostgreSQL 上 fixture DDL 跨用例污染」是同一个教训的另一面：
+**「本地这个文件全绿」不能证明没有跨文件耦合**。
+
+### 变换器的第六条前置条件
+
+`apply6` 判「构造点在哪个作用域」用的是**最近的函数式祖先**；对写在 describe 体顶层的
+`const db = createInMemoryDb(...)`，那个祖先**就是 describe 自己的箭头函数**，于是它通过了
+「同一作用域只建一次」的检查、被替换成 `harness.db`，正好落在注册期。现在显式拒绝这种位置。
+
+### 上了守卫（这条不该靠 review 兜）
+
+`rfc359-w5-t19f` 里新增「注册期读 harness」判据：扫整棵测试树，找 `describeEachProvider`
+**体内直接求值**的 `harness.db` / `harness.session` / `harness.capabilities`。
+判据只认**立即求值**——`const db = () => harness.db` 与 `test(...)` / `beforeEach(...)` 里的读取
+都放过（回调晚于注册期）。同批配了负 fixture：立即读要抓到、推迟读与用例内读要放过，
+否则判据被改坏时整条会静默变成永远绿。

@@ -27,8 +27,9 @@ describeEachProvider('RFC-159 — scheduled-tasks WS frame gate', (harness) => {
 
   const spec = WS_CHANNELS['scheduled-tasks']
   const gate = spec.frameGate!
-  const db = harness.db
-  const ctx = (a: Actor) => ({ db, actor: a, cache: new Map<string, boolean>() })
+  // `harness.db` 是**惰性** getter（beforeEach 之后才有库）：在 describe 体里读就是注册期读取，
+  // 会抛 `ProviderHarness 只能在 test 体内读取`。`ctx()` 只在用例里被调用，所以把读取推迟到它里面。
+  const ctx = (a: Actor) => ({ db: harness.db, actor: a, cache: new Map<string, boolean>() })
   const msg: ScheduledTaskWsMessage = { type: 'scheduled.fired', id: 's1', ownerUserId: 'bob' }
 
   test('owner receives, stranger drops, admin receives', async () => {
