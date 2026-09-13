@@ -812,10 +812,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 334,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-359 —— 资源包 apply 引擎合一的同一笔里补上落盘工件的跨格式回落：新增 `composeResourcePackageApplyArtifactRecoveryChain`（写出侧统一后，legacy 格式的半成品仍要读得回来），后台作业清单因此 +1。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -857,10 +854,7 @@
       "file": "architecture/facades.json",
       "symbol": "entries",
       "baseline": 322,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
-      "allowGrowth": {
-        "why": "RFC-359 —— 资源包 apply 两台引擎合一：新增 `services/resourcePackage/pluginInstallerAdapter.ts`（两个 provider 共用的插件安装绑定，此前 `main.ts` 的 PG 分支内联一份、legacy SQLite 依赖里一份），于是 facade 归属与模块符号各 +1。本次同时退役了两个零生产消费者的 SQLite 专属装配，净账是收敛。"
-      }
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
@@ -888,10 +882,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24915,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 —— 资源包 apply 两台引擎合一：新增 `services/resourcePackage/pluginInstallerAdapter.ts`（两个 provider 共用的插件安装绑定，此前 `main.ts` 的 PG 分支内联一份、legacy SQLite 依赖里一份），于是 facade 归属与模块符号各 +1。本次同时退役了两个零生产消费者的 SQLite 专属装配，净账是收敛。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -908,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "63d6f00410efff829c8dabb3b5f0ae4d49736071",
-    "contentDigest": "sha256:3946f016afe2185c9ef528c289a29d69e53360b630fee478977968134c263700",
+    "currentSnapshotSha": "eb88d590e60afb77afa86efebeab3315622516e7",
+    "contentDigest": "sha256:03201a0bc662c3e0eba0efc7e8abb6f18233505f14dbb301547eecb8fdff6291",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
