@@ -1,5 +1,4 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   createCapabilityTemplateOperations,
   type CapabilityTemplateOperations,
@@ -22,20 +21,12 @@ export type {
   PreparedCapabilityTemplateWrite,
 } from '../application/ports/capabilityTemplatePersistence'
 
-export function composeSqliteCapabilityTemplateOperations(input: {
-  readonly db: DbClient
-  readonly access: CapabilityTemplateResourceAccess
-  readonly now?: () => number
-}): CapabilityTemplateOperations {
-  return createCapabilityTemplateOperations({
-    persistence: createCapabilityTemplatePersistence(input.db),
-    access: input.access,
-    ...(input.now === undefined ? {} : { now: input.now }),
-  })
-}
-
-export function composePostgresqlCapabilityTemplateOperations(input: {
-  readonly db: PostgresqlDatabaseClient
+/**
+ * RFC-359：此前是两个**函数体逐字相同**的孪生，唯一差别是形参上 `db` 的声明类型——
+ * 而 `createCapabilityTemplatePersistence` 本来就收中立客户端。收成一份（plan §5ds）。
+ */
+export function composeCapabilityTemplateOperations(input: {
+  readonly db: ProviderNeutralDatabase
   readonly access: CapabilityTemplateResourceAccess
   readonly now?: () => number
 }): CapabilityTemplateOperations {

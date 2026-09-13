@@ -181,9 +181,9 @@ import {
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
-import { composeSqliteCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import { composeSqliteCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
-import { composeSqliteDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composeCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
+import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
+import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import {
   composeDevelopmentEmployeeWorkspace,
@@ -2166,8 +2166,8 @@ async function composeSqliteProviderSession(
   try {
     const { seedDemoContent } = await import('@/services/demoSeed')
     const result = await seedDemoContent({
-      resourceCatalog: composeSqliteDemoResourceCatalogSeedParticipant(db),
-      codeCapability: composeSqliteCodeCapabilityDemoSeedParticipant(db),
+      resourceCatalog: composeDemoResourceCatalogSeedParticipant(db),
+      codeCapability: composeCodeCapabilityDemoSeedParticipant(db),
     })
     if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
   } catch (err) {
@@ -2234,7 +2234,7 @@ async function composeSqliteProviderSession(
   const workflowCatalog = classicCatalogs.workflow
   const workgroupCatalog = composeWorkgroupCatalog({ db, resourceCatalog })
   const capabilityTemplateAccess: Parameters<
-    typeof composeSqliteCapabilityTemplateOperations
+    typeof composeCapabilityTemplateOperations
   >[0]['access'] = {
     filterVisible(actor, rows) {
       return resourceCatalog.authorization.filterVisibleRows(actor, 'capability_template', rows)
@@ -2250,7 +2250,7 @@ async function composeSqliteProviderSession(
     },
     assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
   }
-  const capabilityTemplateOperations = composeSqliteCapabilityTemplateOperations({
+  const capabilityTemplateOperations = composeCapabilityTemplateOperations({
     db,
     access: capabilityTemplateAccess,
   })

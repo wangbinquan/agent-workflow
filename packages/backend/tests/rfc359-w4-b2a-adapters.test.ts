@@ -10,7 +10,7 @@ import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { mcps, plugins, users } from '@/db/schema'
-import { composeSqliteDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { createDatabaseAgentResourceInventoryReadPort } from '@/modules/resource-catalog/infrastructure/agentResourceInventory'
 import { createDemoResourceCatalogSeedPersistence } from '@/modules/resource-catalog/infrastructure/demoResourceCatalogSeed'
 import { createMcpProbeStore } from '@/modules/resource-catalog/infrastructure/mcpProbeStore'
@@ -88,9 +88,7 @@ describeEachProvider('RFC-359 W4-B2a —— 演示目录种子', (harness) => {
       },
     ])
     // 两个 bootstrap 具名装配是同一份实现。
-    expect(typeof composeSqliteDemoResourceCatalogSeedParticipant(db as never).seed).toBe(
-      'function',
-    )
+    expect(typeof composeDemoResourceCatalogSeedParticipant(db as never).seed).toBe('function')
   })
 })
 

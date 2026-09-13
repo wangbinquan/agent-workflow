@@ -9317,3 +9317,21 @@ CI 那次的 0.38 也照样过；真出回归（CPU-bound 语句记到 cpuMs≈0
 **扫描脚本的判据**（可复跑）：`compose|create|make|build` + `Sqlite|LegacySqlite|Postgresql` + 同一个
 base；两侧函数体 `replace(/\s+/g, ' ').trim()` 后全等。这条判据挑不出「体不同但语义相同」的那些
 （那类要靠 §5dp 的成对账本与对拍），但它挑出来的每一条都是**无可争辩**的纯名字重复。
+
+### 5ds 收尾：**14 对全部还清，并留下一条常驻守卫**
+
+最后六对（`CapabilityTemplateOperations` / `CodeCapabilityDemoSeedParticipant` /
+`DemoResourceCatalogSeedParticipant` / `LegacyCodeReadProviders` / `RealtimeRuntime` /
+`WebhookEndpointServiceDependencies`）与前八对形状不同：**没有**现成的中立函数，两侧相同的函数体是
+**内联**的。处置是先把那段体提成一份中立实现（形参放宽到 `ProviderNeutralDatabase`），再让两个
+装配根都装它。
+
+**扫描结果：14 → 0。** provider 命名的函数从 162 降到 135。
+
+归零之后判据留下来当守卫：`rfc359-w5-identical-provider-twins`（AST + 六条自变异 fixture，
+含「函数体真的不同 ⇒ 放行」「独苗 ⇒ 放行」「动词不同 ⇒ 不是同一个 base」三条反向格）。
+再写出一对当场红，错误信息里直接给处置：**把形参放宽到中立类型、收成一份、两个装配根都装它**；
+并写明「若函数体相同却确有机制差异，那说明差异根本没写在代码里，更该合」。
+
+三处语料下限跟着降到实测值（只降不升、各留署名记录）：组合根 80 → 76 → 70 → **58**；
+适配器声明分母 150 → 145 → **133**；新守卫自己的 provider 函数分母钉 **120**。

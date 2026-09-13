@@ -438,6 +438,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // `execute` 填 map」的胶水整段删掉了（目录概览端口现在直接收请求者投影），换成一条
   // `composeSystemOverviewQuery({...})` 赋值。降，不是升。
   //
+  // RFC-359（2026-09-13，第五次）：语句条数仍是 160，摘要再次变化——同一批的第三档，
+  // 最后六对孪生的相同函数体提成中立实现后，PG 根改调
+  // `composeCapabilityTemplateOperations` / `composeCodeCapabilityDemoSeedParticipant` /
+  // `composeDemoResourceCatalogSeedParticipant` / `composeLegacyCodeReadProviders` /
+  // `composeRealtimeRuntimeFor` / `composeWebhookEndpointServiceDependencies`（plan §5ds）。
+  //
   // RFC-359（2026-09-13，第四次）：语句条数仍是 160，摘要再次变化——同一批的第二档，
   // PG 根改调 `composeCollaborationRouteOperations` / `composeWorkspaceMaintenanceCommand` /
   // `composeResourceCatalogFor`（plan §5ds）。
@@ -469,7 +475,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(160)
     expect(digest(restored, pg)).toBe(
-      'ad350f0be68323149b0c107193673299f24c3c1e0f64eee6422f04e2e8a18a0f',
+      '7a993e2ff434d06271f96767ad1691f1df59f27a63686ae50bc9f66816f53290',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -493,12 +499,15 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
     //
+    // RFC-359（2026-09-13，第三档）：摘要再变——这一层也改调
+    // `composeCapabilityTemplateOperations` / `composeRealtimeRuntimeFor` 等中立实现（plan §5ds）。
+    //
     // RFC-359（2026-09-13，第二档）：摘要再变——这一层也改调 `composeResourceCatalogFor`。
     //
     // RFC-359（2026-09-13）：摘要变了——同一批别名退役波及这一层的
     // `composeSqliteWebhookIngressPersistence` → `composeWebhookIngressPersistenceFor`（plan §5ds）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'df836b1a5535dd0959a2406f1605c36b98c78bc6200fe0603be43d4d77e52d55',
+      '3bccb54f8c71f3354e3b577f9ed461e64506090111bb17034ccf71536fb22bfd',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '3e6131c32a868090e7236eb8e554605e8b46a5df15a149671acd396c0a072194',

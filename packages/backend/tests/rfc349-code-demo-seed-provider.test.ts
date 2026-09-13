@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { capabilityTemplates, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
-import { composePostgresqlCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
+import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { createCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/application/demoSeed'
 import { createCodeCapabilityDemoSeedPersistence } from '@/modules/code-capability/infrastructure/demoSeedPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -92,7 +92,7 @@ describe('RFC-349 Code Capability demo-seed participant', () => {
 
   test('PostgreSQL commits template, work item, round and stages in one fenced transaction', async () => {
     const fake = postgresqlFixture()
-    const receipt = await composePostgresqlCodeCapabilityDemoSeedParticipant(fake.db).ensure({
+    const receipt = await composeCodeCapabilityDemoSeedParticipant(fake.db).ensure({
       agentId: 'demo-agent',
     })
 

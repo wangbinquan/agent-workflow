@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e8fc9a5d481e4e829823e6be9e5504a9a78adc4e7c69492bcfe482f0b3f9f556`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ede83b879c708924ae3571baf0aaf41b4cd84f65ef7978d701dc7923ab38fc3d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -18,7 +18,7 @@
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 494 |
-| background work entries | 334 |
+| background work entries | 333 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
 | RFC-317 boundary census（inbound / outbound） | 288 / 35 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4722 |
-| `backgroundJobs` | 334 |
-| `crossContextImports` | 5256 |
+| `architectureExceptions` | 4715 |
+| `backgroundJobs` | 333 |
+| `crossContextImports` | 5249 |
 | `facades` | 322 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24920 |
+| `moduleSymbolOwners` | 24914 |
 | `mutationEntrypoints` | 1727 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 983 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3110 |
-| legacy-inbound | 1432 |
+| legacy-outbound | 3104 |
+| legacy-inbound | 1431 |
 | infrastructure-external | 275 |
 | offered-consumption | 160 |
 | off-dag-offered | 88 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3110 |
-| legacy-inbound | 1432 |
+| legacy-outbound | 3104 |
+| legacy-inbound | 1431 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 81 |
 | no-circular | 6 |
@@ -227,7 +227,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2373 |
+| W9 | 2367 |
 | W4-E1 | 821 |
 | W4-C | 399 |
 | W4-E0 | 216 |
@@ -239,7 +239,7 @@
 | W4-E7 | 48 |
 | W4-E4a | 44 |
 | W4-E2 | 38 |
-| W4-E4b | 36 |
+| W4-E4b | 35 |
 | W4-E3 | 27 |
 | W2-D/W3/W5 | 7 |
 | W9-E | 6 |

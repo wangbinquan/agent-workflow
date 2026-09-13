@@ -24,7 +24,7 @@ import { createPostgresqlIdentityAccessRuntime } from '@/modules/identity-access
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { composePostgresqlMemoryCatalogOperations } from '@/modules/memory/composition'
-import { composePostgresqlDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composePostgresqlIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import {
   composePostgresqlSkillArtifactCompensation,
@@ -90,9 +90,7 @@ function definition(): WorkflowDefinition {
 describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) => {
   test('演示目录种子参与者：首次种下、重跑幂等、id 被别的名字占用只告警不覆盖', async () => {
     const owner = await seedActor(harness.db, 'admin')
-    const participant = composePostgresqlDemoResourceCatalogSeedParticipant(
-      asPostgresql(harness.db),
-    )
+    const participant = composeDemoResourceCatalogSeedParticipant(asPostgresql(harness.db))
     const ids = { agent: `a_${ulid()}`, wf1: `wf_${ulid()}`, wf2: `wf_${ulid()}` }
     const input = (agentName: string) => ({
       marker: { kind: 'initial-demo-offer' as const, ownerUserId: owner.user.id, offeredAt: T0 },

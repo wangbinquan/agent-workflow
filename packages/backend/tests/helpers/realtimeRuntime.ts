@@ -5,8 +5,7 @@ import type { ProviderNeutralDatabase } from '../../src/db/query'
 import type { ProviderApplicationBinding } from './eachProvider'
 import type { IdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import {
-  composePostgresqlRealtimeRuntime,
-  composeSqliteRealtimeRuntime,
+  composeRealtimeRuntimeFor,
   type RealtimeCompositionPolicy,
 } from '../../src/modules/runtime-management/composition'
 import type {
@@ -53,7 +52,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
   readonly redactTaskEventPayload?: (payload: unknown, source: ActorSource) => unknown
 }): RealtimeRuntime {
   const resourceCatalog = composeResourceCatalogFor({ db: input.db })
-  return composeSqliteRealtimeRuntime({
+  return composeRealtimeRuntimeFor({
     db: input.db,
     auth: createAuthRuntimeFor({ db: input.db, onCredentialRevoked: () => {} }),
     directAuthority: input.identityAccess.directAuthority,
@@ -74,7 +73,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
  * RFC-359 AC-6 —— 按 provider 分派的实时运行时。WS 那一簇（11 个文件）的第一层拦路石。
  *
  * 底下本来就全是中立的：`DrizzleRealtimeStore` 的构造器收 `ProviderNeutralDatabase`，
- * `composeSqliteRealtimeRuntime` 与 `composePostgresqlRealtimeRuntime` 的函数体**逐字相同**
+ * `composeRealtimeRuntimeFor` 与 `composeRealtimeRuntimeFor` 的函数体**逐字相同**
  * （差别只在导出包装声明的 `db` 类型），资源目录那边 `composeResourceCatalogFor` 本身就是
  * 导出的中立函数、根本不用分派。
  *
@@ -105,14 +104,14 @@ export function composeTestProviderRealtimeRuntime(input: {
   }
   const directAuthority = input.identityAccess.directAuthority
   if (binding.provider === 'sqlite') {
-    return composeSqliteRealtimeRuntime({
+    return composeRealtimeRuntimeFor({
       db: binding.db,
       auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),
       directAuthority,
       policy,
     })
   }
-  return composePostgresqlRealtimeRuntime({
+  return composeRealtimeRuntimeFor({
     db: binding.db,
     auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),
     directAuthority,

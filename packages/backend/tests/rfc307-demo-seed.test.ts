@@ -35,8 +35,8 @@ import {
   seedDemoContent,
 } from '../src/services/demoSeed'
 import { lookupStageContract } from '../src/modules/code-capability/domain/capabilityRegistry'
-import { composeSqliteCodeCapabilityDemoSeedParticipant } from '../src/modules/code-capability/composition/demoSeed'
-import { composeSqliteDemoResourceCatalogSeedParticipant } from '../src/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composeCodeCapabilityDemoSeedParticipant } from '../src/modules/code-capability/composition/demoSeed'
+import { composeDemoResourceCatalogSeedParticipant } from '../src/modules/resource-catalog/composition/demoResourceCatalogSeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -47,8 +47,8 @@ describe('RFC-307 — demo content', () => {
 
   const seed = () =>
     seedDemoContent({
-      resourceCatalog: composeSqliteDemoResourceCatalogSeedParticipant(db),
-      codeCapability: composeSqliteCodeCapabilityDemoSeedParticipant(db),
+      resourceCatalog: composeDemoResourceCatalogSeedParticipant(db),
+      codeCapability: composeCodeCapabilityDemoSeedParticipant(db),
     })
 
   beforeEach(() => {

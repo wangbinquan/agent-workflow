@@ -27,11 +27,8 @@ import {
   workflows,
   workgroupTaskState,
 } from '@/db/schema'
-import { composePostgresqlCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import {
-  composePostgresqlLegacyCodeReadProviders,
-  composeSqliteLegacyCodeReadProviders,
-} from '@/modules/code-capability/composition/legacyCodeReads'
+import { composeCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
+import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { DrizzleReviewerResolutionRead } from '@/modules/code-capability/infrastructure/reviewerResolutionRead'
 import { composePostgresqlDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
@@ -139,8 +136,8 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
       preSnapshot: 'stash-hash',
     })
 
-    const sqlite = composeSqliteLegacyCodeReadProviders(asSqlite(harness.db))
-    const postgresql = composePostgresqlLegacyCodeReadProviders(asPostgresql(harness.db))
+    const sqlite = composeLegacyCodeReadProviders(asSqlite(harness.db))
+    const postgresql = composeLegacyCodeReadProviders(asPostgresql(harness.db))
 
     const task = await sqlite.workspace.findTask(taskId)
     expect(task).toMatchObject({ id: taskId, status: 'running', repoCount: 1 })
@@ -218,7 +215,7 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
   test('能力模板操作：列表 / 创建 / 读取 / 删除经 Resource Catalog 的授权面落真库', async () => {
     const actor = await seedActor(harness.db)
     const catalog = composeResourceCatalogFor({ db: harness.db })
-    const operations = composePostgresqlCapabilityTemplateOperations({
+    const operations = composeCapabilityTemplateOperations({
       db: asPostgresql(harness.db),
       access: {
         filterVisible: (subject, rows) =>

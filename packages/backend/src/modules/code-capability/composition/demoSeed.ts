@@ -1,5 +1,4 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   createCodeCapabilityDemoSeedParticipant,
   type CodeCapabilityDemoSeedParticipant,
@@ -9,14 +8,12 @@ import { createCodeCapabilityDemoSeedPersistence } from '../infrastructure/demoS
 
 export type { CodeCapabilityDemoSeedParticipant, CodeCapabilityDemoSeedReceipt }
 
-export function composeSqliteCodeCapabilityDemoSeedParticipant(
-  db: DbClient,
-): CodeCapabilityDemoSeedParticipant {
-  return createCodeCapabilityDemoSeedParticipant(createCodeCapabilityDemoSeedPersistence(db))
-}
-
-export function composePostgresqlCodeCapabilityDemoSeedParticipant(
-  db: PostgresqlDatabaseClient,
+/**
+ * RFC-359：此前是两个**函数体逐字相同**的孪生，唯一差别是形参上 `db` 的声明类型——
+ * 而 `createCodeCapabilityDemoSeedPersistence` 本来就收中立客户端。收成一份（plan §5ds）。
+ */
+export function composeCodeCapabilityDemoSeedParticipant(
+  db: ProviderNeutralDatabase,
 ): CodeCapabilityDemoSeedParticipant {
   return createCodeCapabilityDemoSeedParticipant(createCodeCapabilityDemoSeedPersistence(db))
 }

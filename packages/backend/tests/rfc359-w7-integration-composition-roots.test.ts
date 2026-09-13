@@ -55,10 +55,7 @@ import {
 } from '@/modules/integration/composition/webhookDispatch'
 import { createWebhookTriggerAdministration } from '@/modules/integration/infrastructure/webhookTriggerAdministration'
 import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
-import {
-  composePostgresqlWebhookEndpointServiceDependencies,
-  composeSqliteWebhookEndpointServiceDependencies,
-} from '@/modules/integration/composition/webhookEndpoints'
+import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import {
   composeWebhookDeliveryRuntimeFor,
   composeWebhookIngressPersistenceFor,
@@ -406,12 +403,12 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
 
 describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 / 已验证投递', (harness) => {
   test('webhookEndpoints 服务依赖：tryCreate / getByUrlToken / update / delete 走真库', async () => {
-    const sqlite = composeSqliteWebhookEndpointServiceDependencies({
+    const sqlite = composeWebhookEndpointServiceDependencies({
       db: asSqlite(harness.db),
       configPath: '/tmp/aw-rfc359-w7.json',
       secretBox,
     })
-    const postgresql = composePostgresqlWebhookEndpointServiceDependencies({
+    const postgresql = composeWebhookEndpointServiceDependencies({
       db: asPostgresql(harness.db),
       configPath: '/tmp/aw-rfc359-w7.json',
       secretBox,
@@ -736,8 +733,8 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
     composePostgresqlWebhookDispatchPersistence,
     composePostgresqlWebhookTriggerServiceDependencies,
     composeSqliteWebhookTriggerServiceDependencies,
-    composePostgresqlWebhookEndpointServiceDependencies,
-    composeSqliteWebhookEndpointServiceDependencies,
+    composeWebhookEndpointServiceDependencies,
+    composeWebhookEndpointServiceDependencies,
     composeWebhookDeliveryRuntimeFor,
     composeWebhookIngressPersistenceFor,
     composeWebhookDeliveryRuntimeFor,

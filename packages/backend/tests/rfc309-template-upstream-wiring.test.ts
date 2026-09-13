@@ -29,7 +29,7 @@ import {
 } from '../src/modules/code-capability/application/templateUpstreamStatus'
 import { composeCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
 import {
-  composeSqliteCapabilityTemplateOperations,
+  composeCapabilityTemplateOperations,
   createSqliteCapabilityTemplatePersistence,
 } from '../src/modules/code-capability/composition/capabilityTemplateOperations'
 import { createTemplateUpstreamPersistence } from '../src/modules/code-capability/infrastructure/templateUpstreamPersistence'
@@ -547,7 +547,7 @@ describeNativeTemplateCases('RFC-309 T16 — the merge endpoint says which thing
     }
     mountCapabilityTemplateRoutes(app, {
       codeHistoryQueries: composeCodeHistoryQueries(db),
-      capabilityTemplates: composeSqliteCapabilityTemplateOperations({
+      capabilityTemplates: composeCapabilityTemplateOperations({
         db,
         access: {
           filterVisible: async (routeActor, rows) =>

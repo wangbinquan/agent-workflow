@@ -54,9 +54,9 @@ import {
   reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
-import { composePostgresqlLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
+import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import {
-  composePostgresqlCapabilityTemplateOperations,
+  composeCapabilityTemplateOperations,
   createPostgresqlCapabilityTemplatePackageMutationOwner,
   createPostgresqlCapabilityTemplatePersistence,
 } from '@/modules/code-capability/composition/capabilityTemplateOperations'
@@ -234,7 +234,7 @@ import {
   composePostgresqlWebhookTriggerServiceDependencies,
   createPostgresqlWebhookExecutionRuntime,
 } from '@/modules/integration/composition/webhookDispatch'
-import { composePostgresqlWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
+import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import {
   composeWebhookDeliveryRuntimeFor,
   composeWebhookIngressPersistenceFor,
@@ -273,8 +273,8 @@ import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integratio
 import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import { Paths } from '@/util/paths'
-import { composePostgresqlDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
-import { composePostgresqlCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
+import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
 import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
@@ -752,7 +752,7 @@ export async function composePostgresqlApplication(
     implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
   })
   const capabilityTemplatePersistence = createPostgresqlCapabilityTemplatePersistence(input.db)
-  const capabilityTemplateOperations = composePostgresqlCapabilityTemplateOperations({
+  const capabilityTemplateOperations = composeCapabilityTemplateOperations({
     db: input.db,
     access: {
       filterVisible: (actor, rows) =>
@@ -1120,7 +1120,7 @@ export async function composePostgresqlApplication(
     },
   })
 
-  const codeWorkspace = composePostgresqlLegacyCodeReadProviders(input.db).workspace
+  const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
   const collaborationTaskAccess = createPostgresqlCollaborationTaskAccessPort(input.db)
   const taskRoutes = Object.freeze({
     configPath: input.configPath,
@@ -1393,7 +1393,7 @@ export async function composePostgresqlApplication(
       getDefaultRuntime: () => loadConfig(input.configPath).defaultRuntime ?? null,
     }),
     webhookEndpoints: Object.freeze({
-      webhookEndpointService: composePostgresqlWebhookEndpointServiceDependencies({
+      webhookEndpointService: composeWebhookEndpointServiceDependencies({
         db: input.db,
         configPath: input.configPath,
         secretBox: input.secretBox,
@@ -2282,8 +2282,8 @@ export async function composePostgresqlApplication(
     try {
       const { seedDemoContent } = await import('@/services/demoSeed')
       const result = await seedDemoContent({
-        resourceCatalog: composePostgresqlDemoResourceCatalogSeedParticipant(input.db),
-        codeCapability: composePostgresqlCodeCapabilityDemoSeedParticipant(input.db),
+        resourceCatalog: composeDemoResourceCatalogSeedParticipant(input.db),
+        codeCapability: composeCodeCapabilityDemoSeedParticipant(input.db),
       })
       if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
     } catch (err) {

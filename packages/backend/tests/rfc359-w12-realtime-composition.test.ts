@@ -11,10 +11,7 @@ import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
 import type { DirectAuthorityAdmission } from '@/modules/identity-access/public/participants'
-import {
-  composePostgresqlRealtimeRuntime,
-  composeSqliteRealtimeRuntime,
-} from '@/modules/runtime-management/composition'
+import { composeRealtimeRuntimeFor } from '@/modules/runtime-management/composition'
 import type {
   RealtimeCompositionPolicy,
   RealtimeRuntime,
@@ -45,8 +42,8 @@ function runtimeFor(harness: ProviderHarness): RealtimeRuntime {
     redactTaskEventPayload: (payload) => payload,
   }
   return harness.capabilities.isolation === 'exclusive'
-    ? composeSqliteRealtimeRuntime({ db: harness.db as DbClient, auth, directAuthority, policy })
-    : composePostgresqlRealtimeRuntime({
+    ? composeRealtimeRuntimeFor({ db: harness.db as DbClient, auth, directAuthority, policy })
+    : composeRealtimeRuntimeFor({
         db: harness.db as PostgresqlDatabaseClient,
         auth,
         directAuthority,

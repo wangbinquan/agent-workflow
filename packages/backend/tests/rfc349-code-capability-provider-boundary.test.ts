@@ -132,8 +132,8 @@ describe('RFC-349 code-capability provider boundary', () => {
 
   test('demo seed exposes one provider-neutral aggregate participant', () => {
     const source = readFileSync(join(MODULE, 'composition', 'demoSeed.ts'), 'utf8')
-    expect(source).toContain('composeSqliteCodeCapabilityDemoSeedParticipant')
-    expect(source).toContain('composePostgresqlCodeCapabilityDemoSeedParticipant')
+    expect(source).toContain('composeCodeCapabilityDemoSeedParticipant')
+    expect(source).toContain('composeCodeCapabilityDemoSeedParticipant')
     expect(source).toContain('createCodeCapabilityDemoSeedParticipant')
     expect(source).not.toContain('as unknown as')
   })

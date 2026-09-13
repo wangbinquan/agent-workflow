@@ -116,8 +116,8 @@ describe('RFC-349 WebSocket provider boundary', () => {
     }
 
     const composition = readFileSync(resolve(realtimeDir, 'composition.ts'), 'utf8')
-    expect(composition).toContain('composeSqliteRealtimeRuntime')
-    expect(composition).toContain('composePostgresqlRealtimeRuntime')
+    expect(composition).toContain('composeRealtimeRuntimeFor')
+    expect(composition).toContain('composeRealtimeRuntimeFor')
     expect(composition).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient|createInMemoryDb|deasync/)
 
     const hook = readFileSync(resolve(wsDir, 'revalidationHook.ts'), 'utf8')

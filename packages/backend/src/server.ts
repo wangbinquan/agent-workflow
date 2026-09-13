@@ -289,10 +289,10 @@ import {
 import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import {
-  composeSqliteCapabilityTemplateOperations,
+  composeCapabilityTemplateOperations,
   createSqliteCapabilityTemplatePersistence,
 } from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import { composeSqliteLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
+import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import type {
   DevelopmentConfigOperations,
@@ -387,7 +387,7 @@ import {
   composeIntegrationTriggerResourceQueries,
   composeScheduledTaskRuntimeFor,
 } from '@/modules/integration/composition/scheduledTasks'
-import { composeSqliteWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
+import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integration/composition/webhookDispatch'
 import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
@@ -431,8 +431,7 @@ import {
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
 import {
-  composePostgresqlRealtimeRuntime,
-  composeSqliteRealtimeRuntime,
+  composeRealtimeRuntimeFor,
   type RealtimeCompositionPolicy,
 } from '@/modules/runtime-management/composition'
 import type { RealtimeRuntime } from '@/modules/runtime-management/public/participants'
@@ -583,7 +582,7 @@ export function composeSqliteDaemonProviderCore(
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository,
-    realtime: composeSqliteRealtimeRuntime({
+    realtime: composeRealtimeRuntimeFor({
       db: input.db,
       auth: authRuntime,
       directAuthority: identityAccess.directAuthority,
@@ -637,7 +636,7 @@ export function composePostgresqlDaemonProviderCore(
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository,
-    realtime: composePostgresqlRealtimeRuntime({
+    realtime: composeRealtimeRuntimeFor({
       db: input.db,
       auth: authRuntime,
       directAuthority: identityAccess.directAuthority,
@@ -2352,7 +2351,7 @@ function composeSqliteApiRouteMounts(
   const codeHostConnections = deps.codeHostConnections
   const repositoryPublicationTransport = deps.repositoryPublicationTransport
   const schedulerDriver = deps.schedulerDriver
-  const codeWorkspace = composeSqliteLegacyCodeReadProviders(deps.db).workspace
+  const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
   const taskRouteOperations = createSqliteTaskRouteOperations({
     db: deps.db,
     collaboration: deps.collaborationContext,
@@ -2633,7 +2632,7 @@ function composeSqliteApiRouteMounts(
   const webhookEndpointService =
     deps.secretBox === undefined
       ? null
-      : composeSqliteWebhookEndpointServiceDependencies({
+      : composeWebhookEndpointServiceDependencies({
           db: deps.db,
           configPath: deps.configPath,
           secretBox: deps.secretBox,
@@ -2652,7 +2651,7 @@ function composeSqliteApiRouteMounts(
     requireGovern: (actor, row) =>
       requireResourceGovern(deps.db, actor, 'capability_template', row),
     assertNameUnchangedForEditor,
-  } satisfies Parameters<typeof composeSqliteCapabilityTemplateOperations>[0]['access'])
+  } satisfies Parameters<typeof composeCapabilityTemplateOperations>[0]['access'])
   const capabilityTemplateAcl: CapabilityTemplateRouteDeps['capabilityTemplateAcl'] = {
     load: (id) => capabilityTemplatePersistence.load(id),
     canView: (actor, row) => canViewResource(deps.db, actor, 'capability_template', row),
@@ -2664,7 +2663,7 @@ function composeSqliteApiRouteMounts(
   }
   const capabilityTemplateRouteDeps = Object.freeze({
     codeHistoryQueries: deps.codeHistoryQueries,
-    capabilityTemplates: composeSqliteCapabilityTemplateOperations({
+    capabilityTemplates: composeCapabilityTemplateOperations({
       db: deps.db,
       access: capabilityTemplateAccess,
     }),

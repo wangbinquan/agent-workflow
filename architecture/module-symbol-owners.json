@@ -6,7 +6,7 @@
     "moduleFiles": 1188,
     "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24920
+    "symbolsIncludingFileRoots": 24914
   },
   "entries": [
     {
@@ -11763,22 +11763,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#composePostgresqlCapabilityTemplateOperations",
+      "id": "owner:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#composeCapabilityTemplateOperations",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
-      "symbol": "composePostgresqlCapabilityTemplateOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "code-capability",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#composeSqliteCapabilityTemplateOperations",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composeSqliteCapabilityTemplateOperations",
+      "symbol": "composeCapabilityTemplateOperations",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -11823,22 +11811,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/code-capability/composition/demoSeed.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/demoSeed.ts#composePostgresqlCodeCapabilityDemoSeedParticipant",
+      "id": "owner:packages/backend/src/modules/code-capability/composition/demoSeed.ts#composeCodeCapabilityDemoSeedParticipant",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
-      "symbol": "composePostgresqlCodeCapabilityDemoSeedParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "code-capability",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/code-capability/composition/demoSeed.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/demoSeed.ts#composeSqliteCodeCapabilityDemoSeedParticipant",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composeSqliteCodeCapabilityDemoSeedParticipant",
+      "symbol": "composeCodeCapabilityDemoSeedParticipant",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -11895,22 +11871,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/code-capability/composition/legacyCodeReads.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/legacyCodeReads.ts#composePostgresqlLegacyCodeReadProviders",
+      "id": "owner:packages/backend/src/modules/code-capability/composition/legacyCodeReads.ts#composeLegacyCodeReadProviders",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
-      "symbol": "composePostgresqlLegacyCodeReadProviders",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "code-capability",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/code-capability/composition/legacyCodeReads.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/legacyCodeReads.ts#composeSqliteLegacyCodeReadProviders",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composeSqliteLegacyCodeReadProviders",
+      "symbol": "composeLegacyCodeReadProviders",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -58864,34 +58828,22 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/integration/composition/webhookEndpoints.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/webhookEndpoints.ts#composePostgresqlWebhookEndpointServiceDependencies",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composePostgresqlWebhookEndpointServiceDependencies",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/webhookEndpoints.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/webhookEndpoints.ts#composeSqliteWebhookEndpointServiceDependencies",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composeSqliteWebhookEndpointServiceDependencies",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/webhookEndpoints.ts",
       "id": "owner:packages/backend/src/modules/integration/composition/webhookEndpoints.ts#composeWebhookEndpointAdministration",
       "removeAfterWave": "W4-B",
       "status": "current-module",
       "symbol": "composeWebhookEndpointAdministration",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/composition/webhookEndpoints.ts",
+      "id": "owner:packages/backend/src/modules/integration/composition/webhookEndpoints.ts#composeWebhookEndpointServiceDependencies",
+      "removeAfterWave": "W4-B",
+      "status": "current-module",
+      "symbol": "composeWebhookEndpointServiceDependencies",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -82876,22 +82828,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts#composePostgresqlDemoResourceCatalogSeedParticipant",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts#composeDemoResourceCatalogSeedParticipant",
       "removeAfterWave": "W4-C",
       "status": "current-module",
-      "symbol": "composePostgresqlDemoResourceCatalogSeedParticipant",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts#composeSqliteDemoResourceCatalogSeedParticipant",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "composeSqliteDemoResourceCatalogSeedParticipant",
+      "symbol": "composeDemoResourceCatalogSeedParticipant",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -104458,18 +104398,6 @@
     {
       "currentContext": "runtime-management",
       "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/composition.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/composition.ts#composePostgresqlRealtimeRuntime",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlRealtimeRuntime",
-      "targetContext": "runtime-management",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/runtime-management/composition.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/composition.ts#composeRealtimeRuntime",
@@ -104484,10 +104412,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/runtime-management/composition.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/composition.ts#composeSqliteRealtimeRuntime",
+      "id": "owner:packages/backend/src/modules/runtime-management/composition.ts#composeRealtimeRuntimeFor",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "composeSqliteRealtimeRuntime",
+      "symbol": "composeRealtimeRuntimeFor",
       "targetContext": "runtime-management",
       "targetLayer": "composition"
     },
@@ -299741,5 +299669,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e8fc9a5d481e4e829823e6be9e5504a9a78adc4e7c69492bcfe482f0b3f9f556"
+  "sourceDigest": "sha256:ede83b879c708924ae3571baf0aaf41b4cd84f65ef7978d701dc7923ab38fc3d"
 }

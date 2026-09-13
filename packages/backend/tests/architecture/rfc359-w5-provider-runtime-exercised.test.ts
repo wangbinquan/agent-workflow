@@ -348,6 +348,10 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
         BACKEND_TEST_FILES.length,
         'tests 侧扫成空 ⇒ 全部组合根都被判成没构造',
       ).toBeGreaterThanOrEqual(1500)
+      // RFC-359（2026-09-13，第三档）：70 → 58。「函数体逐字相同的孪生」名单清零——最后六对的
+      // 相同函数体是**内联**的，先提成一份中立实现再收（plan §5ds）。零孪生从此由
+      // `rfc359-w5-identical-provider-twins` 常驻守着。
+      //
       // RFC-359（2026-09-13，第二档）：76 → 70。同一批继续还掉四对
       // （`CollaborationRouteOperations` / `WorkspaceMaintenanceCommand` / `ResourceCatalog` /
       // `EventsArchiveStore`），plan §5ds 的名单又短了四行。
@@ -359,7 +363,7 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
       // **降是对的方向**：这个数随合一持续下降，降到它该有的样子就是 RFC-359 收工。
       // 这条只防「匹配器塌了、一条都派生不出来」，所以照旧贴着当前值钉——每次退役都要在这里
       // 留一次有署名的记录，而不是把门槛调宽一次性放过后面所有变化。
-      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(70)
+      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(58)
       // 架构账本排除必须是**真的排除**：该目录确实在语料里（本文件就躺在里面），
       // 才谈得上把它从「现状」证据里摘出去。目录改名会让这条当场红。
       expect(
