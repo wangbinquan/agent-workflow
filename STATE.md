@@ -2,6 +2,23 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 7，**尾巴的形状变了**；账本 **401** / open **95**）
+>
+> 落档 plan §5do。这一批把转换器对着 open 名单里 78 个「只有一处构造」的文件扫了一遍，
+> **收成很低——不是转换器不行，是被转换的对象变了**：22 个候选实跑下来，3 个迁成双引擎、
+> 1 个登记为按裁决单引擎（`pragma_table_info`），**8 个卡在 SQLite-only 的生产签名上**。
+>
+> **结论**：AC-6 的剩余面已经从「测试没迁」变成「**AC-1 的成对引擎没合**」。卡点清单（plan §5do
+> 有表）：`sqliteIntentApplyOperations` 的 `ApplyIntentDeps.db`（4 个测试）、
+> `legacyResourcePackageCommit` 的 `BundleApplyDeps.db`（4 个测试 / **38 个调用点**）、
+> `composeLegacySqliteResourceLimitOperations`、几个 `composeSqlite*` 参与者。
+> 继续压这个数字的正解不再是批量转换测试，而是**逐对收生产侧的引擎**——每收一对，
+> 下游那一串测试自然跟着能迁。资源包 apply 那一对是最大的一块（约 1450 行 vs 约 976 行），
+> 它的退役条件写在 `legacyResourcePackageBundleApply.ts` 头注释里：那批同步 `*InTx` 成员迁到中立事务。
+>
+> 顺手收掉两个「多余收紧」：`setPauseReason(db: DbClient)` → 中立句柄；迁移后的
+> `db.$client.close()` 直接删（库的生命周期归 harness 了）。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 6，账本 **404** / open **99**——open 首次进到两位数）
 >
 > 落档 plan §5dn。`rfc317-cross-context-ports` 10 → 3、`rfc310-type-package-auto-upgrade` 6 → 0。

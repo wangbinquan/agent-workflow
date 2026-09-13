@@ -253,8 +253,9 @@ export async function casGateStatus(
   return updated.length > 0
 }
 
+// RFC-359：体内只有一条中立的 drizzle UPDATE，`DbClient` 是纯粹多余的收紧。
 export async function setPauseReason(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   reason: string | null,
 ): Promise<void> {

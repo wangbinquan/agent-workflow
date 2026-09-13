@@ -17,7 +17,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { CreateWorkflow } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import type { RuntimeRegistryPersistence } from '../src/platform/runtime-registry/application/runtimeRegistryOperations'
 import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
 import { createAgent, updateAgent } from '../src/services/agent'
@@ -29,7 +30,6 @@ import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow } from '../src/services/workflow'
 import { createUser } from '../src/services/users'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const OPENCODE_RUNTIME = 'oc-with-model'
@@ -47,7 +47,7 @@ const AGENT_FIELDS = {
   bodyMd: 'do it',
 }
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let pluginsDir = ''
 let runtimes: RuntimeRegistryPersistence
 
@@ -78,117 +78,119 @@ async function workflowForAgent(agent: { id: string; name: string }, name: strin
   return createWorkflow(db, { name, description: '', definition })
 }
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
-  runtimes = new DrizzleRuntimeRegistryPersistence(db)
-  pluginsDir = await mkdtemp(join(tmpdir(), 'rfc251-plugins-'))
-  resetNpmProbeCacheForTests()
-  await createRuntime(runtimes, {
-    name: OPENCODE_RUNTIME,
-    protocol: 'opencode',
-    model: 'openai/gpt-5.6',
-  })
-})
-
-afterEach(async () => {
-  if (pluginsDir !== '') await rm(pluginsDir, { recursive: true, force: true })
-  resetNpmProbeCacheForTests()
-})
-
-describe('RFC-251 — saving an OpenCode agent with plugins / collaborators', () => {
-  test('create accepts a plugin selection', async () => {
-    const plugin = await createPlugin(pluginBinding(), { name: 'formatter', spec: 'formatter@1' })
-    const agent = await createAgent(db, {
-      ...AGENT_FIELDS,
-      name: 'worker',
-      runtime: OPENCODE_RUNTIME,
-      plugins: [plugin.id],
+describeEachProvider('rfc251-product-boundary', (harness) => {
+  beforeEach(async () => {
+    db = harness.db
+    runtimes = new DrizzleRuntimeRegistryPersistence(db)
+    pluginsDir = await mkdtemp(join(tmpdir(), 'rfc251-plugins-'))
+    resetNpmProbeCacheForTests()
+    await createRuntime(runtimes, {
+      name: OPENCODE_RUNTIME,
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
     })
-    expect(agent.plugins).toEqual([plugin.id])
   })
 
-  test('create accepts a dependsOn closure', async () => {
-    const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    const agent = await createAgent(db, {
-      ...AGENT_FIELDS,
-      name: 'worker',
-      runtime: OPENCODE_RUNTIME,
-      dependsOn: [auditor.id],
-    })
-    expect(agent.dependsOn).toEqual([auditor.id])
+  afterEach(async () => {
+    if (pluginsDir !== '') await rm(pluginsDir, { recursive: true, force: true })
+    resetNpmProbeCacheForTests()
   })
 
-  test('update can ADD collaborators to an existing OpenCode agent', async () => {
-    // The RFC-224 shape of this failure was especially hostile: an operator
-    // could clear the field but never set it.
-    const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    const agent = await createAgent(db, {
-      ...AGENT_FIELDS,
-      name: 'worker',
-      runtime: OPENCODE_RUNTIME,
+  describe('RFC-251 — saving an OpenCode agent with plugins / collaborators', () => {
+    test('create accepts a plugin selection', async () => {
+      const plugin = await createPlugin(pluginBinding(), { name: 'formatter', spec: 'formatter@1' })
+      const agent = await createAgent(db, {
+        ...AGENT_FIELDS,
+        name: 'worker',
+        runtime: OPENCODE_RUNTIME,
+        plugins: [plugin.id],
+      })
+      expect(agent.plugins).toEqual([plugin.id])
     })
-    const updated = await updateAgent(
-      db,
-      agent.id,
-      { dependsOn: [auditor.id] },
-      actor('owner'),
-      undefined,
-    )
-    expect(updated.dependsOn).toEqual([auditor.id])
-  })
-})
 
-describe('RFC-251 — launch surfaces accept the same agent', () => {
-  async function agentWithBoth() {
-    const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    const plugin = await createPlugin(pluginBinding(), { name: 'formatter', spec: 'formatter@1' })
-    return createAgent(db, {
-      ...AGENT_FIELDS,
-      name: 'worker',
-      runtime: OPENCODE_RUNTIME,
-      dependsOn: [auditor.id],
-      plugins: [plugin.id],
+    test('create accepts a dependsOn closure', async () => {
+      const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
+      const agent = await createAgent(db, {
+        ...AGENT_FIELDS,
+        name: 'worker',
+        runtime: OPENCODE_RUNTIME,
+        dependsOn: [auditor.id],
+      })
+      expect(agent.dependsOn).toEqual([auditor.id])
     })
-  }
 
-  test('the workflow launch gate passes', async () => {
-    const agent = await agentWithBoth()
-    const workflow = await workflowForAgent(agent, 'wf-restored')
-    await expect(assertWorkflowLaunchable(db, actor('owner'), workflow.id)).resolves.toBeDefined()
-  })
-
-  test('scheduling that workflow is accepted', async () => {
-    const owner = await createUser(db, {
-      username: 'owner',
-      displayName: 'Owner',
-      role: 'admin',
-      password: 'longEnoughPassword',
+    test('update can ADD collaborators to an existing OpenCode agent', async () => {
+      // The RFC-224 shape of this failure was especially hostile: an operator
+      // could clear the field but never set it.
+      const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
+      const agent = await createAgent(db, {
+        ...AGENT_FIELDS,
+        name: 'worker',
+        runtime: OPENCODE_RUNTIME,
+      })
+      const updated = await updateAgent(
+        db,
+        agent.id,
+        { dependsOn: [auditor.id] },
+        actor('owner'),
+        undefined,
+      )
+      expect(updated.dependsOn).toEqual([auditor.id])
     })
-    const agent = await agentWithBoth()
-    const workflow = await workflowForAgent(agent, 'wf-scheduled')
-    const schedule = await createScheduledTask(
-      db,
-      {
-        name: 'scheduled-workflow',
-        launchKind: 'workflow',
-        launchPayload: { workflowId: workflow.id, name: 'run', inputs: {}, scratch: true },
-        scheduleSpec: SPEC,
-        enabled: true,
-      },
-      { actor: actor(owner.id) },
-    )
-    expect(schedule.id).toBeTruthy()
   })
 
-  test('a missing model is accepted and delegated to the runtime CLI default', async () => {
-    await createRuntime(runtimes, { name: 'oc-no-model', protocol: 'opencode', model: null })
-    const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    const agent = await createAgent(db, {
-      ...AGENT_FIELDS,
-      name: 'worker-with-cli-default',
-      runtime: 'oc-no-model',
-      dependsOn: [auditor.id],
+  describe('RFC-251 — launch surfaces accept the same agent', () => {
+    async function agentWithBoth() {
+      const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
+      const plugin = await createPlugin(pluginBinding(), { name: 'formatter', spec: 'formatter@1' })
+      return createAgent(db, {
+        ...AGENT_FIELDS,
+        name: 'worker',
+        runtime: OPENCODE_RUNTIME,
+        dependsOn: [auditor.id],
+        plugins: [plugin.id],
+      })
+    }
+
+    test('the workflow launch gate passes', async () => {
+      const agent = await agentWithBoth()
+      const workflow = await workflowForAgent(agent, 'wf-restored')
+      await expect(assertWorkflowLaunchable(db, actor('owner'), workflow.id)).resolves.toBeDefined()
     })
-    expect(agent.runtime).toBe('oc-no-model')
+
+    test('scheduling that workflow is accepted', async () => {
+      const owner = await createUser(db, {
+        username: 'owner',
+        displayName: 'Owner',
+        role: 'admin',
+        password: 'longEnoughPassword',
+      })
+      const agent = await agentWithBoth()
+      const workflow = await workflowForAgent(agent, 'wf-scheduled')
+      const schedule = await createScheduledTask(
+        db,
+        {
+          name: 'scheduled-workflow',
+          launchKind: 'workflow',
+          launchPayload: { workflowId: workflow.id, name: 'run', inputs: {}, scratch: true },
+          scheduleSpec: SPEC,
+          enabled: true,
+        },
+        { actor: actor(owner.id) },
+      )
+      expect(schedule.id).toBeTruthy()
+    })
+
+    test('a missing model is accepted and delegated to the runtime CLI default', async () => {
+      await createRuntime(runtimes, { name: 'oc-no-model', protocol: 'opencode', model: null })
+      const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
+      const agent = await createAgent(db, {
+        ...AGENT_FIELDS,
+        name: 'worker-with-cli-default',
+        runtime: 'oc-no-model',
+        dependsOn: [auditor.id],
+      })
+      expect(agent.runtime).toBe('oc-no-model')
+    })
   })
 })

@@ -49,6 +49,9 @@ describe('RFC-274 workgroup output contract', () => {
     expect(resolveWorkgroupOutputContract('invented')).toBe('files')
   })
 
+  // RFC-359：这一条**按定义单引擎**——它读的是 `pragma_table_info`，SQLite 独有的 schema 自省面
+  // （PostgreSQL 上对应的是 `information_schema`，形状与列名都不同）。判据本身问的就是
+  // 「SQLite 迁移链有没有把这两列建成期望的样子」，换成双引擎等于换了一个问题。
   test('migration adds the resource contract and nullable message metadata', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const workgroupColumns = db.all<{ name: string; dflt_value: string | null; notnull: number }>(

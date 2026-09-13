@@ -20,11 +20,10 @@
 //    resolveRoomPauseReason 输出——读方门槛：仅任务当前停在 awaiting_human 时
 //    非 null，陈值永不外泄（列因此无需清理）。
 
-import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { WorkgroupAssignment, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
@@ -280,9 +279,9 @@ describe('resolveRoomPauseReason — 仅 awaiting_human 时外泄，陈值屏蔽
 // ② setPauseReason —— workgroup_task_state.pause_reason 单列写（DB 级）
 // ---------------------------------------------------------------------------
 
-describe('setPauseReason — 状态表单列更新（DB 级）', () => {
+describeEachProvider('setPauseReason — 状态表单列更新（DB 级）', (harness) => {
   test('写入/幂等覆盖 pause_reason；gate 列无损；无行时为空操作', async () => {
-    const db = createInMemoryDb(fileURLToPath(new URL('../db/migrations', import.meta.url)))
+    const db = harness.db
     const wfId = ulid()
     await db.insert(workflows).values({ id: wfId, name: 'wf-pause', definition: '{}' })
     const taskId = ulid()

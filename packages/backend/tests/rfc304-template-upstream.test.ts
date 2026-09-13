@@ -17,8 +17,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 // somebody cared enough to edit.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
 import type { Actor } from '../src/auth/actor'
 import {
   copyTemplate as copyTemplateWithPersistence,
@@ -27,8 +26,6 @@ import {
 } from '../src/services/capabilityTemplates'
 import type { CapabilityTemplatePersistence } from '../src/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function bindTemplatePersistence<Args extends unknown[], Result>(
   operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
@@ -271,14 +268,12 @@ describeEachProvider('RFC-304 T64 — copying records the origin', (harness) => 
   })
 })
 
-describe('RFC-304 T64 — copying records the origin', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 T64 — copying records the origin', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
-  afterEach(() => {
-    db.$client.close()
-  })
+  afterEach(() => {})
 
   test('the digest ignores the ACL, so a visibility change is not a body change', async () => {
     // Otherwise every grant edit upstream would mark healthy copies

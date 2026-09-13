@@ -9119,3 +9119,42 @@ TP-03（`readAuthorityFence`）**有意留在单引擎**，并为此给账本加
 
 `rfc294-cross-context-observed-imports` / `rfc294-architecture-exceptions` 本批不涨，
 守卫会把留着的 `allowGrowth` 判为过期，按规矩删掉。
+
+## 5do. 尾巴的形状变了：剩下的 AC-6 债**大半卡在生产侧的成对引擎**（401 / open **95**）
+
+这一批把批量转换器对着 open 名单里 78 个「只有一处构造」的文件扫了一遍，收成很低——
+**不是转换器不行，是被转换的对象变了**。对 22 个候选实跑一遍的结果：
+
+| 结果                              | 数量 | 说明                                                                     |
+| --------------------------------- | ---- | ------------------------------------------------------------------------ |
+| 迁成双引擎                        | 3    | `rfc251-product-boundary` / `rfc304-template-upstream` / `wg-readonly-claim-and-pause-reason` |
+| 登记为按裁决单引擎                | 1    | `rfc274-workgroup-output-messages`（`pragma_table_info`）                 |
+| **卡在 SQLite-only 的生产签名**   | 8    | 见下表                                                                    |
+
+卡住的那 8 个，卡点全在**生产**侧，不在测试：
+
+| 生产入口                                                  | 卡住的测试                                                             |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `sqliteIntentApplyOperations` 的 `ApplyIntentDeps.db`      | `intent-agent-branch-ports` / `intent-mcp-oauth` / `intent-privileged-node-capability` / `rfc343-intent-apply-correctness` |
+| `legacyResourcePackageCommit` 的 `BundleApplyDeps.db`      | `rfc271-import-commit`(25) / `rfc271-resource-package-hardening`(7) / `rfc271-import-http` / `rfc271-export-closure-authz` |
+| `composeLegacySqliteResourceLimitOperations`（内含 `services/task` 的 `cancelTask`） | `rfc207-runtime-accounting` |
+| `composeSqliteWebhookTerminalWorkspacePrunePolicy`          | `rfc300-terminal-workspace-policy`                                     |
+| `composeSqliteDemoResourceCatalogSeedParticipant` 等        | `rfc307-demo-seed`                                                     |
+| `composeSqliteCapabilityTemplateOperations`                 | `rfc309-template-upstream-wiring`                                      |
+
+**结论**：AC-6 的剩余面从「测试没迁」变成了「**AC-1 的成对引擎没合**」。继续压这个数字的正解不再是
+批量转换测试，而是**逐对收生产侧的引擎**——每收一对，它下游那一串测试自然跟着能迁。
+资源包 apply 那一对（`legacyResourcePackageCommit` + `legacyResourcePackageBundleApply` 约 1450 行
+vs `postgresqlResourcePackageAtomicApply` 约 976 行）是其中最大的一块，一次能解开 4 个文件 / 38 个调用点，
+它自己的退役条件写在 `legacyResourcePackageBundleApply.ts` 的头注释里：**那批同步 `*InTx` 成员迁到中立事务**。
+
+### 顺手收掉的两个「多余收紧」
+
+- `setPauseReason(db: DbClient)` → `ProviderNeutralDatabase`：体内只有一条中立的 drizzle UPDATE。
+- 迁移后的测试里那些 `db.$client.close()` 直接删掉——库的生命周期归 harness 了。
+
+### 账本判据补一格
+
+`pragma_table_info(...)` 是 `PRAGMA` 的**函数**形态（同一张 SQLite 独有的 schema 自省面；
+PostgreSQL 对应的是 `information_schema`，形状与列名都不同），判据不该只认大写语句那一种写法。
+补进 `sqlite-only-primitive` 之后 `rfc274` 从 open 里退出。

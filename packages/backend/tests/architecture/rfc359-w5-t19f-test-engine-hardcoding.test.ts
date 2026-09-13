@@ -286,7 +286,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc248-migration-repo-groups.test.ts: 3',
   'rfc248-readonly-dirty-visible.test.ts: 1',
   'rfc249-migration-repo-group-nodes.test.ts: 1',
-  'rfc251-product-boundary.test.ts: 1',
   'rfc257-webhook-dispatch.test.ts: 1',
   'rfc257-webhook-e2e.test.ts: 1',
   'rfc257-webhook-error-codes.test.ts: 1',
@@ -333,7 +332,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc301-task-launch-origin-inheritance.test.ts: 1',
   'rfc303-node-revival-fence.test.ts: 1',
   'rfc303-verified-ingress.test.ts: 1',
-  'rfc304-template-upstream.test.ts: 1',
   'rfc305-architecture-lock.test.ts: 1',
   'rfc305-user-access-integration.test.ts: 1',
   'rfc306-scheduler-branch.test.ts: 1',
@@ -462,7 +460,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'terminal-maintenance-watermark-coverage.test.ts: 2',
   'upgrade-rolling.test.ts: 7',
   'webhook-trigger-validation-acl-order.test.ts: 1',
-  'wg-readonly-claim-and-pause-reason.test.ts: 1',
   'workflows.test.ts: 1',
   'worktree-files-proxy.test.ts: 1',
 ]
@@ -626,6 +623,10 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
       // 不构成「用了裸驱动面」），其余取用——`serialize()`、语句录制、`EXPLAIN QUERY PLAN`——都算。
       /\.\s*\$client\b(?!\s*\.\s*close\b)/.test(code) ||
       code.includes('PRAGMA') ||
+      // `pragma_table_info(...)` 是同一张面的**函数**形态（SQLite 独有的 schema 自省；
+      // PostgreSQL 对应的是 `information_schema`，形状与列名都不同）。大写的 `PRAGMA` 语句
+      // 与它是一回事，判据不该只认其中一种写法。
+      code.includes('pragma_table_info') ||
       /(?<![A-Za-z0-9_.])dbTxSync\s*\(/.test(code),
   },
 ]
@@ -727,7 +728,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc234-turn-engine.test.ts',
   'rfc238-mcp-runtime-test-real-e2e.test.ts',
   'rfc244-task-operations.test.ts',
-  'rfc251-product-boundary.test.ts',
   'rfc257-webhook-dispatch.test.ts',
   'rfc257-webhook-e2e.test.ts',
   'rfc257-webhook-error-codes.test.ts',
@@ -746,7 +746,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc271-overwrite-ownership.test.ts',
   'rfc271-resource-package-hardening.test.ts',
   'rfc271-roundtrip.test.ts',
-  'rfc274-workgroup-output-messages.test.ts',
   'rfc285-b3-inherited-actor.test.ts',
   'rfc291-closure-call-edges.test.ts',
   'rfc291-commit-auto-mount.test.ts',
@@ -756,7 +755,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc294-apply-replay-recovery-parity.test.ts',
   'rfc294-background-worker-boundary.test.ts',
   'rfc300-terminal-workspace-policy.test.ts',
-  'rfc304-template-upstream.test.ts',
   'rfc305-architecture-lock.test.ts',
   'rfc307-demo-seed.test.ts',
   'rfc309-template-upstream-wiring.test.ts',
@@ -797,7 +795,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'task-file-content.test.ts',
   'terminal-maintenance-watermark-coverage.test.ts',
   'webhook-trigger-validation-acl-order.test.ts',
-  'wg-readonly-claim-and-pause-reason.test.ts',
   'workflows.test.ts',
   'worktree-files-proxy.test.ts',
 ]
