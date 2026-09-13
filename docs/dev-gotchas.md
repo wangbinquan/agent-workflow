@@ -6809,3 +6809,15 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   把回调变 async 会静默改变契约。人来定：无写序依赖的 `.map` 改
   `await Promise.all(xs.map(async …))`（`Promise.all` 保序，断言不用动）；
   有写序依赖的 `forEach` 改 `for (const x of xs) { await … }`。
+
+- **CAS 竞态的插队点要走生产自带的注入口**（例如 `setTaskStatus` 的 `beforeCas`），不要从外面包
+  db 代理：统一事务原语不走 drizzle 的 `db.transaction`、SQLite 上事务句柄**就是 db 对象本身**，
+  老的代理写法在新原语下**一次都不触发**——用例照样绿，却一个并发场景都没验。没有自带注入口时用
+  `tests/helpers/competingWriter.ts`（同时挂 `update` 与 `transaction` 两条来路，插入点用 drizzle
+  builder 的 `then`，所以竞争写可以是异步的）。
+
+- **别把「机器有没有被别人占着」写进判据**。`rfc322` 那条「CPU-bound 语句 cpuMs 与 ms 同量级」
+  写死 `cpuMs >= ms / 2`，在共享 CI runner 上实测 `ms=119 / cpuMs=45` 就红了——进程在那段窗口里
+  被抢走了 74ms。这类判据要改成**相对**形态（同一次探针里 busy 的 CPU 占比 vs idle 的），
+  负载会同时压低两者，两条曲线的距离与负载无关。**绝不以「重跑就过了」收场**：那等于把一条
+  分辨不出真回归的判据留在网里。

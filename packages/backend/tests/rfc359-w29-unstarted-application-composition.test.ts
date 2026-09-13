@@ -438,6 +438,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // `execute` 填 map」的胶水整段删掉了（目录概览端口现在直接收请求者投影），换成一条
   // `composeSystemOverviewQuery({...})` 赋值。降，不是升。
   //
+  // RFC-359（2026-09-13，第二次）：语句条数仍是 160，摘要再次变化——
+  // `composePostgresqlWebhookTerminalWorkspacePrunePolicy` 改名为
+  // `composeWebhookTerminalWorkspacePrunePolicy`。那两个 compose 函数的**函数体逐字相同**，
+  // 唯一差别是形参上 `db` 的声明类型，而它转交给的 `createWebhookTerminalWorkspaceAttributionQueries`
+  // 本来就收中立客户端——不是两台机器，是同一台机器抄了两遍名字，收成一份（plan §5dr）。
+  //
   // RFC-359（2026-09-13）：语句条数**不变**（160），摘要变了——
   // `composePostgresqlDigitalEmployeeExecution({...})` 的实参多了一项
   // `humanReview: { inspect: (ref) => inspectDigitalEmployeeHumanReviewState(input.db, ref) }`。
@@ -454,7 +460,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(160)
     expect(digest(restored, pg)).toBe(
-      'fcb309f13aa64874e605d6567c07090f603f5b20f6bcc8cd0d42f5a6830141a2',
+      '2df39c6901c2153cc0da2337511aa08ffc2a5a9fe8b68ac37016251010c358ed',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

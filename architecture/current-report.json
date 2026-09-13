@@ -2,12 +2,12 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 4732,
-    "backgroundJobs": 335,
-    "crossContextImports": 5266,
+    "architectureExceptions": 4731,
+    "backgroundJobs": 334,
+    "crossContextImports": 5265,
     "facades": 322,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24936,
+    "moduleSymbolOwners": 24935,
     "mutationEntrypoints": 1728,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 983,
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 335,
+    "backgroundEntries": 334,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -158,5 +158,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7c37c8794e9e249dd42034e6ca13f87e5aa410cbe69b6af26924d75294293ddc"
+  "sourceDigest": "sha256:50883e24d743a03a682b9397a6359548e33b7fefce686f75e328ef1498de718b"
 }

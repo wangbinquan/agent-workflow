@@ -384,10 +384,24 @@ describe('RFC-322 [db-slow] 的 CPU 判别', () => {
     ).toBeGreaterThan(100)
   })
 
-  test('真正吃 CPU 的语句 cpuMs 与 ms 同量级 —— 这才是查询问题', () => {
-    const rec = cpuProbe().busy
-    expect(rec.cpuMs).toBeGreaterThan(0)
-    expect(rec.cpuMs).toBeGreaterThanOrEqual(rec.ms / 2)
+  test('真正吃 CPU 的语句 cpuMs 占比远高于「在等」那条 —— 这才是查询问题', () => {
+    const probe = cpuProbe()
+    const busy = probe.busy
+    const idle = probe.idle
+    expect(busy.cpuMs).toBeGreaterThan(0)
+
+    // 判据是**相对**的：同一次探针、同一台机器上，「真在算」那条的 CPU 占比必须远高于
+    // 「在等」那条——这正是 `[db-slow]` 里那个 cpuMs 要让运维分辨的两件事。
+    //
+    // 绝对比值挡不住共享 runner 的调度噪声：2026-09-13 macOS 分片 1/6 实测 busy 记到
+    // ms=119 / cpuMs=45（占比 0.38），进程在那 119ms 里被抢走了 74ms，而判据当时写死
+    // `cpuMs >= ms / 2` ⇒ 红。那次红的不是生产判别力，是把「机器有没有被别人占着」
+    // 混进了判据。**绝不以「重跑就过了」收场**：改成相对判据后，两条曲线离得有多远与
+    // 机器负载无关（负载同时压低两者），而这才是被测的那件事。
+    const busyRatio = busy.cpuMs / busy.ms
+    const idleRatio = idle.cpuMs / idle.ms
+    expect(idleRatio, '「在等」那条的 CPU 占比本来就该接近 0').toBeLessThan(0.1)
+    expect(busyRatio).toBeGreaterThan(Math.max(0.1, idleRatio * 10))
   })
 })
 

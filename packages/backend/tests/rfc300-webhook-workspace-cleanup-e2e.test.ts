@@ -45,7 +45,7 @@ import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/serv
 import { getTask, isTaskActive } from '../src/services/task'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { composeSqliteWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
+import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { createWorkflow } from '../src/services/workflow'
 import { sha1Hex } from '../src/util/hash'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
@@ -257,7 +257,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   )[0]!
 
   registerTerminalWorkspacePrunePolicy(
-    composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+    composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {
@@ -510,7 +510,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   })
 
   registerTerminalWorkspacePrunePolicy(
-    composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+    composeWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {

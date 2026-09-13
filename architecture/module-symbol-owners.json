@@ -6,7 +6,7 @@
     "moduleFiles": 1188,
     "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24936
+    "symbolsIncludingFileRoots": 24935
   },
   "entries": [
     {
@@ -58720,22 +58720,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composePostgresqlWebhookTerminalWorkspacePrunePolicy",
+      "id": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composeWebhookTerminalWorkspacePrunePolicy",
       "removeAfterWave": "W4-B",
       "status": "current-module",
-      "symbol": "composePostgresqlWebhookTerminalWorkspacePrunePolicy",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composeSqliteWebhookTerminalWorkspacePrunePolicy",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composeSqliteWebhookTerminalWorkspacePrunePolicy",
+      "symbol": "composeWebhookTerminalWorkspacePrunePolicy",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -299933,5 +299921,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7c37c8794e9e249dd42034e6ca13f87e5aa410cbe69b6af26924d75294293ddc"
+  "sourceDigest": "sha256:50883e24d743a03a682b9397a6359548e33b7fefce686f75e328ef1498de718b"
 }

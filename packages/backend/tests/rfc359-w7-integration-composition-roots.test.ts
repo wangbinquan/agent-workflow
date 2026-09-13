@@ -49,7 +49,7 @@ import {
   composePostgresqlScheduledTaskRuntime,
   composeSqliteScheduledTaskRuntime,
 } from '@/modules/integration/composition/scheduledTasks'
-import { composePostgresqlWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
+import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import {
   composePostgresqlWebhookDeliveryPersistence,
   composeSqliteWebhookDeliveryPersistence,
@@ -594,7 +594,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
   })
 
   test('terminalWorkspaceCleanup 策略：归属列由策略自己读，缺行不回收，webhook 归属才回收', async () => {
-    const policy = composePostgresqlWebhookTerminalWorkspacePrunePolicy({
+    const policy = composeWebhookTerminalWorkspacePrunePolicy({
       db: asPostgresql(harness.db),
       enabled: () => true,
     })
@@ -737,7 +737,7 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
     composeSqlitePipelineEvidenceRunner,
     composePostgresqlRequirementSourceRunner,
     composePostgresqlScheduledTaskRuntime,
-    composePostgresqlWebhookTerminalWorkspacePrunePolicy,
+    composeWebhookTerminalWorkspacePrunePolicy,
     composePostgresqlWebhookDeliveryPersistence,
     composeSqliteWebhookDeliveryPersistence,
     composePostgresqlWebhookDispatchPersistence,

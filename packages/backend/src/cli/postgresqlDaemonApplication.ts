@@ -269,7 +269,7 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
-import { composePostgresqlWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
+import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import { Paths } from '@/util/paths'
@@ -552,7 +552,7 @@ export async function composePostgresqlApplication(
     // CAS 里写认领，GC 物理删除；每次转移时读配置，开关热生效。此前 PG daemon 从未注册，
     // `webhookTaskWorkspaceAutoCleanup` 在 PG 上完全无效、worktree 永不回收。
     registerTerminalWorkspacePrunePolicy(
-      composePostgresqlWebhookTerminalWorkspacePrunePolicy({
+      composeWebhookTerminalWorkspacePrunePolicy({
         db: input.db,
         enabled: () => loadConfig(input.configPath).webhookTaskWorkspaceAutoCleanup,
       }),

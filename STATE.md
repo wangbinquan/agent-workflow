@@ -2,6 +2,24 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 9，收掉一对**函数体逐字相同**的孪生；账本 **400** / open **94**）
+>
+> 落档 plan §5dr。`composeSqlite/PostgresqlWebhookTerminalWorkspacePrunePolicy` 两个函数体**逐字
+> 相同**，唯一差别是形参上 `db` 的声明类型——而它转交给的
+> `createWebhookTerminalWorkspaceAttributionQueries` 本来就收中立客户端。不是两台机器，是同一台
+> 机器抄了两遍名字。收成一份，五个调用点同步改名，`rfc300-terminal-workspace-policy` 随之双引擎。
+>
+> **迁这一份时撞到的**：CAS 竞态的插队点**必须走生产自带的注入口**（`setTaskStatus` 的
+> `beforeCas`）。从外面包 db 代理的老办法在统一事务原语下**一次都不触发**——那条头注释早写着，
+> 这次是它的又一次复现。顺带把「两个引擎都插得进去」的代理抽成
+> `tests/helpers/competingWriter.ts`，供没有自带注入口的判据用。
+>
+> **`bd476315a` 的 CI macOS 分片 1/6 红**，是一条**按「重跑就过了」会被放过**的红：
+> `rfc322` 的「CPU-bound 语句 cpuMs 与 ms 同量级」实测 `ms=119 / cpuMs=45`，而判据写死
+> `cpuMs >= ms/2`——那 119ms 里进程被别人抢走了 74ms，判据把「机器有没有被别人占着」混进了
+> 被测的那件事。改成**相对**判据（busy 的 CPU 占比 vs idle 的），负载同时压低两者、离得多远与
+> 负载无关。本机实测 idle 0.0033 / busy 1.0000；CI 那次的 0.38 也照样过；真回归仍红。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 8，**最大的一处重复此前不在任何账本里**）
 >
 > 落档 plan §5dp。顺着 §5do 的卡点清单核了一件事：那些卡点**在不在 AC-1 的账本里**。

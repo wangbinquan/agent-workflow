@@ -115,7 +115,7 @@ import {
   readDatabaseSchemaUpgradeGeneration,
 } from '@/modules/system-operations/composition'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
-import { composeSqliteWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
+import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
 import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
@@ -1605,7 +1605,7 @@ async function composeSqliteProviderSession(
   // predicate; lifecycle owns the atomic terminal status+claim write; GC owns
   // physical deletion. Read config at each transition so the setting is hot.
   registerTerminalWorkspacePrunePolicy(
-    composeSqliteWebhookTerminalWorkspacePrunePolicy({
+    composeWebhookTerminalWorkspacePrunePolicy({
       db,
       enabled: () => loadConfig(Paths.config).webhookTaskWorkspaceAutoCleanup,
     }),

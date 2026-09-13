@@ -5454,11 +5454,11 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 8,
-    "entries": 335,
+    "entries": 334,
     "executionLocal": 42,
     "longRunning": 76,
     "managed": 11,
-    "periodic": 209
+    "periodic": 208
   },
   "entries": [
     {
@@ -6651,7 +6651,7 @@
       ],
       "file": "packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composePostgresqlWebhookTerminalWorkspacePrunePolicy",
+      "id": "background:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composeWebhookTerminalWorkspacePrunePolicy",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6663,32 +6663,9 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composePostgresqlWebhookTerminalWorkspacePrunePolicy",
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composeWebhookTerminalWorkspacePrunePolicy",
       "phase": "unknown",
-      "symbol": "composePostgresqlWebhookTerminalWorkspacePrunePolicy",
-      "targetContext": "integration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composeSqliteWebhookTerminalWorkspacePrunePolicy",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composeSqliteWebhookTerminalWorkspacePrunePolicy",
-      "phase": "unknown",
-      "symbol": "composeSqliteWebhookTerminalWorkspacePrunePolicy",
+      "symbol": "composeWebhookTerminalWorkspacePrunePolicy",
       "targetContext": "integration"
     },
     {
@@ -12847,5 +12824,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7c37c8794e9e249dd42034e6ca13f87e5aa410cbe69b6af26924d75294293ddc"
+  "sourceDigest": "sha256:50883e24d743a03a682b9397a6359548e33b7fefce686f75e328ef1498de718b"
 }

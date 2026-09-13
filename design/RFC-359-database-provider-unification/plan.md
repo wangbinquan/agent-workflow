@@ -9234,3 +9234,45 @@ AC-1 的账本里**。资源包 apply 那一对——本仓最大的一处重复
 也就是说：**「一侧 composition 悄悄少实现一个可选方法」这条路径，今天只有那一处，已经堵上了。**
 判它的办法是**装配锁**（把两侧都构造出来、断言 `typeof participant.method === 'function'`，
 其余依赖全给 `null as never`）——行为用例覆盖不到这种缺席，因为缺席的那一侧根本走不到行为断言。
+
+## 5dr. 两个**函数体逐字相同**的孪生（400 / open **94**），以及一条按「重跑就过了」会被放过的红
+
+### `composeSqlite/PostgresqlWebhookTerminalWorkspacePrunePolicy`：同一台机器抄了两遍名字
+
+```ts
+export function composeSqliteWebhookTerminalWorkspacePrunePolicy(input: { db: DbClient; … })
+export function composePostgresqlWebhookTerminalWorkspacePrunePolicy(input: { db: PostgresqlDatabaseClient; … })
+```
+
+**函数体逐字相同**，唯一差别是形参上那个 `db` 的声明类型——而它转交给的
+`createWebhookTerminalWorkspaceAttributionQueries` 本来就收 `ProviderNeutralDatabase`。
+这不是「两台机器」，是同一台机器抄了两遍名字。收成一份
+`composeWebhookTerminalWorkspacePrunePolicy`，五个调用点（两个装配根 + 三份测试）同步改名。
+`rfc300-terminal-workspace-policy` 随之整块双引擎。
+
+### 迁这一份时撞到的：**插队点必须走生产自带的注入口**
+
+`rfc300` 那条 CAS 竞态用例原本从外面包一个 db 代理来插队。迁移后它在**两个引擎上都**变成
+「期望 reject、实际 resolve」——因为 termfix 把代理里那条同步 `.run()` 竞争写改成了 `await`，
+而代理的 `fire()` 不 await 它。
+
+真正的处置不是把 await 补进代理，而是**换注入口**：`setTaskStatus` 早就带着一个
+`beforeCas` 回调，头注释写得很清楚——「统一事务原语不走 drizzle 的 `db.transaction`、SQLite 上
+事务句柄就是 db 对象本身，从外面包 db 代理的老办法在新原语下**一次都不触发**，用例照样绿却一个
+并发场景都没验」。这次正是那句话的又一次复现。
+
+顺带把 §5dj 写的那个「两个引擎都插得进去」的代理抽成共享助手
+`tests/helpers/competingWriter.ts`（挂 `update` + `transaction` 两条来路、插入点用 builder 的
+`then`，所以竞争写可以是异步的），供**没有**自带注入口的 CAS 判据用。
+
+### 一条按「重跑就过了」会被放过的红
+
+`bd476315a` 的 CI macOS 分片 1/6 红在 `rfc322-maintenance-cadence` 的
+「真正吃 CPU 的语句 cpuMs 与 ms 同量级」：实测 `ms=119 / cpuMs=45`（占比 0.38），
+而判据写死 `cpuMs >= ms / 2`。**红的不是生产判别力**——那 119ms 里进程被别人抢走了 74ms。
+判据把「机器有没有被别人占着」混进了被测的那件事。
+
+改成**相对**判据：同一次探针、同一台机器上，「真在算」那条的 CPU 占比必须远高于「在等」那条
+（`busyRatio > max(0.1, idleRatio * 10)`）。负载会同时压低两者，所以两条曲线离得有多远与机器负载
+无关，而那正是 `[db-slow]` 里那个 cpuMs 要让运维分辨的事。本机实测 idle 0.0033 / busy 1.0000，
+CI 那次的 0.38 也照样过；真出回归（CPU-bound 语句记到 cpuMs≈0）仍然红。

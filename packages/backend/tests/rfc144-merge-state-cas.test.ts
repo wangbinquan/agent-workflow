@@ -33,6 +33,7 @@ import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infra
 import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { IllegalMergeStateTransition, type MergeStateOrNull } from '@agent-workflow/shared'
 import type { NodeRunStatus } from '@agent-workflow/shared'
+import { dbWithCompetingWriter } from './helpers/competingWriter'
 import { describeEachProvider } from './helpers/eachProvider'
 
 /** 定长补零 id：字典序 = 数值序，供 supersede 的 id< 边界断言。 */
@@ -89,83 +90,6 @@ async function seedRun(
 
 async function mergeStateOf(db: ProviderNeutralDatabase, id: string): Promise<string | null> {
   return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!.mergeState
-}
-
-/**
- * 真并发模拟（照 rfc097-task-status-cas 的 dbWithCompetingWriter）：CAS 语句**被 await 的
- * 瞬间**（persistence 已完成 SELECT、正要发 UPDATE）先跑竞争写者，再放行原 UPDATE——其
- * merge_state 谓词必然 miss。
- *
- * 竞争写走**同一笔事务的句柄**，所以两个引擎同一条路径：既不靠 bun:sqlite 的单连接语义
- * （外部连接在 PostgreSQL 上会撞行锁自锁），也不需要第二个连接池。两个引擎的事务句柄来路
- * 不同——SQLite 的 `DatabaseSession` 直接把客户端句柄当事务用（显式 BEGIN IMMEDIATE），
- * PostgreSQL 走驱动的 `db.transaction(cb)`——所以代理同时挂在 `update` 与 `transaction` 上，
- * 两条来路都能在 UPDATE 前插进去。
- */
-function fireBeforeAwait<T extends object>(node: T, hook: () => Promise<void>): T {
-  return new Proxy(node, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver) as unknown
-      if (prop === 'then' && typeof value === 'function') {
-        const thenable = value as (
-          onOk?: (v: unknown) => unknown,
-          onErr?: (e: unknown) => unknown,
-        ) => unknown
-        return (onOk?: (v: unknown) => unknown, onErr?: (e: unknown) => unknown) =>
-          hook().then(
-            () => thenable.call(target, onOk, onErr),
-            (error: unknown) => {
-              if (onErr !== undefined) return onErr(error)
-              throw error
-            },
-          )
-      }
-      if (typeof value === 'function') {
-        return (...args: unknown[]) => {
-          const out = (value as (...a: unknown[]) => unknown).apply(target, args)
-          return typeof out === 'object' && out !== null
-            ? fireBeforeAwait(out as object, hook)
-            : out
-        }
-      }
-      return value
-    },
-  }) as T
-}
-
-function dbWithCompetingWriter(
-  real: ProviderNeutralDatabase,
-  sabotage: (tx: DatabaseTransaction) => Promise<void>,
-): ProviderNeutralDatabase {
-  let fired = false
-  const wrap = <T extends object>(node: T): T =>
-    new Proxy(node, {
-      get(target, prop, receiver) {
-        const value = Reflect.get(target, prop, receiver) as unknown
-        if (prop === 'update' && typeof value === 'function') {
-          return (...args: unknown[]) => {
-            const builder = (value as (...a: unknown[]) => unknown).apply(target, args)
-            if (fired || typeof builder !== 'object' || builder === null) return builder
-            fired = true
-            return fireBeforeAwait(builder as object, () =>
-              sabotage(target as unknown as DatabaseTransaction),
-            )
-          }
-        }
-        if (prop === 'transaction' && typeof value === 'function') {
-          return (body: (tx: object) => unknown, ...rest: unknown[]) =>
-            (value as (...a: unknown[]) => unknown).call(
-              target,
-              (innerTx: object) => body(wrap(innerTx)),
-              ...rest,
-            )
-        }
-        return typeof value === 'function'
-          ? (value as (...a: unknown[]) => unknown).bind(target)
-          : value
-      },
-    }) as T
-  return wrap(real as object) as ProviderNeutralDatabase
 }
 
 /** 竞争写者版的 merge_state 迁移：persistence 自己开事务，代理保证 UPDATE 前插得进去。 */
