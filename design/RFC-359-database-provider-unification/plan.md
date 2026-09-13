@@ -8823,3 +8823,28 @@ quarter of the suite is never selected.」——只写分母不写分子，CI �
 处置：用例改成按「最终一致」语义有界等待并注明这是生产差异；**生产代码没动**——要不要在 PG 上
 await（给每个 token 请求加一次写往返）还是改成带确认的后台队列，是**产品决策**，已在
 `docs/audit-backlog.md` 立项。
+
+## 5dh. HTTP 桶第四、五迁：逐例覆盖派发器，以及「别把故意保留的原生块一起包了」（412 / open 107）
+
+### `rfc257-webhook-management`（26 条判据）：§5da 那个逐例覆盖口子的第一个真实用户
+
+它的 `harness()` **每次调用**都新建一个 `dispatched: string[]` 与对应的 `WebhookDispatcher`，
+13 个用例各调一次。派发器是 describe 级选项喂不了的——正好是 §5da 给 `open()` 开的
+逐例覆盖：`await scope.open({ webhookDispatcher: dispatcher })`。
+
+`secretBox` 也不必自建：本文件从不用它自己加解密，只是往 `createApp` 里塞，而作用域交出的
+就是**应用自己装配的那一份**（§5de 已记）。模块级那个 `createSecretBoxFromKey(Buffer.alloc(32, 5))`
+随之退役。
+
+### `workflows.test.ts`（41 条判据）：只包 HTTP 那半，别碰故意保留的原生块
+
+这个文件里**三种块并存**，账本里的两个调用点归属完全不同：
+
+- `describe('workflow service') > describe('SQLite list compatibility')`：**故意**用原生 SQLite 库
+  （`setupNativeServiceDb`）跑 list 兼容判据，旁边就是同一个 describe 里的
+  `describeEachProvider('CRUD')`——一半原生一半双引擎是**设计**，不是漏迁。
+- `describe('workflow HTTP routes')`：`buildHarness()` 建库 + 建应用，可迁。
+
+只迁后者。**规律**：一个文件的账本条目数 > 1 时，先看它们是不是**归属不同的块**——
+盲目把整文件包进作用域会把「故意保留的原生对照」也一起吃掉，那是把有意的单引擎对照删掉，
+不是收敛。

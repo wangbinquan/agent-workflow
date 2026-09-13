@@ -16,7 +16,6 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -27,21 +26,18 @@ import {
 import { validateWorkflowById } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM_PRINCIPAL = { kind: 'system', reason: 'workflow-service-test' } as const
 
-function buildHarness(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
+async function buildHarness(
+  scope: ProviderHttpApplicationScope,
+): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+  return { db: scope.harness.db, app: (await scope.open()).app }
 }
 
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
@@ -273,288 +269,301 @@ describe('workflow service', () => {
   })
 })
 
-describe('workflow HTTP routes', () => {
-  let app: Hono
+describeEachProviderHttpApplication(
+  'workflow HTTP routes',
+  {
+    token: TOKEN,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-workflows-http-',
+  },
+  (scope) => {
+    let app: Hono
 
-  beforeEach(() => {
-    ;({ app } = buildHarness())
-  })
-
-  test('POST creates workflow + GET roundtrips', async () => {
-    const post = await req(app, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'wf1',
-        description: 'd',
-        definition: sampleDefinition(),
-      }),
+    beforeEach(async () => {
+      ;({ app } = await buildHarness(scope))
     })
-    expect(post.status).toBe(201)
-    const created = (await post.json()) as { id: string; version: number }
-    expect(created.version).toBe(1)
 
-    const got = await req(app, `/api/workflows/${created.id}`)
-    expect(got.status).toBe(200)
-  })
-
-  test('ordinary POST/PUT reject name-only agent selectors before persistence', async () => {
-    const nameOnly = {
-      ...sampleDefinition(),
-      nodes: sampleDefinition().nodes.map((node) =>
-        node.kind === 'agent-single'
-          ? { id: node.id, kind: node.kind, agentName: 'code-worker' }
-          : node,
-      ),
-    }
-    const rejectedCreate = await req(app, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'name-only-create', description: '', definition: nameOnly }),
-    })
-    expect(rejectedCreate.status).toBe(422)
-    expect(((await rejectedCreate.json()) as { code: string }).code).toBe(
-      'workflow-agent-id-required',
-    )
-
-    const createdResponse = await req(app, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'canonical',
-        description: '',
-        definition: sampleDefinition(),
-      }),
-    })
-    expect(createdResponse.status).toBe(201)
-    const created = (await createdResponse.json()) as WorkflowDetail
-    const rejectedUpdate = await req(app, `/api/workflows/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(saveInput(created, { definition: nameOnly })),
-    })
-    expect(rejectedUpdate.status).toBe(422)
-    expect(((await rejectedUpdate.json()) as { code: string }).code).toBe(
-      'workflow-agent-id-required',
-    )
-  })
-
-  test('invalid payload returns 422 with workflow-invalid code', async () => {
-    const res = await req(app, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({ name: '', description: '', definition: sampleDefinition() }),
-    })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('workflow-invalid')
-  })
-
-  test('missing $schema_version in definition rejected', async () => {
-    const res = await req(app, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'wf',
-        description: '',
-        definition: { nodes: [], edges: [], inputs: [] },
-      }),
-    })
-    expect(res.status).toBe(422)
-  })
-
-  test('PUT updates fields and increments version', async () => {
-    const created = (await (
-      await req(app, '/api/workflows', {
+    test('POST creates workflow + GET roundtrips', async () => {
+      const post = await req(app, '/api/workflows', {
         method: 'POST',
         body: JSON.stringify({
-          name: 'wf',
+          name: 'wf1',
+          description: 'd',
+          definition: sampleDefinition(),
+        }),
+      })
+      expect(post.status).toBe(201)
+      const created = (await post.json()) as { id: string; version: number }
+      expect(created.version).toBe(1)
+
+      const got = await req(app, `/api/workflows/${created.id}`)
+      expect(got.status).toBe(200)
+    })
+
+    test('ordinary POST/PUT reject name-only agent selectors before persistence', async () => {
+      const nameOnly = {
+        ...sampleDefinition(),
+        nodes: sampleDefinition().nodes.map((node) =>
+          node.kind === 'agent-single'
+            ? { id: node.id, kind: node.kind, agentName: 'code-worker' }
+            : node,
+        ),
+      }
+      const rejectedCreate = await req(app, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'name-only-create', description: '', definition: nameOnly }),
+      })
+      expect(rejectedCreate.status).toBe(422)
+      expect(((await rejectedCreate.json()) as { code: string }).code).toBe(
+        'workflow-agent-id-required',
+      )
+
+      const createdResponse = await req(app, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'canonical',
           description: '',
           definition: sampleDefinition(),
         }),
       })
-    ).json()) as WorkflowDetail
-
-    const put = await req(app, `/api/workflows/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(saveInput(created, { name: 'renamed' })),
+      expect(createdResponse.status).toBe(201)
+      const created = (await createdResponse.json()) as WorkflowDetail
+      const rejectedUpdate = await req(app, `/api/workflows/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(saveInput(created, { definition: nameOnly })),
+      })
+      expect(rejectedUpdate.status).toBe(422)
+      expect(((await rejectedUpdate.json()) as { code: string }).code).toBe(
+        'workflow-agent-id-required',
+      )
     })
-    expect(put.status).toBe(200)
-    const after = (await put.json()) as {
-      snapshot: { name: string }
-      revision: { version: number }
-    }
-    expect(after.snapshot.name).toBe('renamed')
-    expect(after.revision.version).toBe(2)
-  })
 
-  // 2026-07-10 naming unification: workflow names follow the workgroup rules
-  // (WORKFLOW_NAME_RE alias). CREATE is guarded by the strict schema; PUT
-  // validates ONLY a changed name, so stored legacy free-form names keep
-  // auto-saving (grandfather decision — 放行存量，只卡新名).
-  //
-  // RFC-264 EXPLICIT RE-JUDGEMENT: the shared rule is no longer a lowercase
-  // slug, so 'My Workflow' (the old fixture here) is now LEGAL. The invariant
-  // under test is unchanged — create is strictly guarded — so the fixture moves
-  // to a name that is illegal under the current rule.
-  test('POST with an illegal name → 422 workflow-invalid (strict create schema)', async () => {
-    for (const name of ['_reserved', 'two\nlines', '   ']) {
+    test('invalid payload returns 422 with workflow-invalid code', async () => {
       const res = await req(app, '/api/workflows', {
         method: 'POST',
-        body: JSON.stringify({ name, description: '', definition: sampleDefinition() }),
+        body: JSON.stringify({ name: '', description: '', definition: sampleDefinition() }),
       })
       expect(res.status).toBe(422)
       expect(((await res.json()) as { code: string }).code).toBe('workflow-invalid')
-    }
-  })
-
-  // RFC-264 — the user-visible point of the whole RFC.
-  test('POST with a Chinese name → 201, stored folded', async () => {
-    const res = await req(app, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: '代码审计流水线 ',
-        description: '',
-        definition: sampleDefinition(),
-      }),
     })
-    expect(res.status).toBe(201)
-    expect(((await res.json()) as WorkflowDetail).name).toBe('代码审计流水线')
-  })
 
-  test('PUT: unchanged legacy name saves; rename validates against the shared rules', async () => {
-    const { db: hdb, app: happ } = buildHarness()
-    // Route-create with a valid slug, then service-rename to a legacy
-    // free-form value — simulates a row stored before the unification.
-    const post = await req(happ, '/api/workflows', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'legacy-seed',
-        description: '',
-        definition: sampleDefinition(),
-      }),
-    })
-    const created = (await post.json()) as WorkflowDetail
-    // Simulate a row written before the slug rule existed. The current save
-    // service correctly refuses to mint a new invalid name, so this fixture
-    // must bypass it just like a historical migration state would.
-    await hdb
-      .update(workflows)
-      .set({ name: 'Legacy Name With Spaces' })
-      .where(eq(workflows.id, created.id))
-    const legacy = await getWorkflow(hdb, created.id)
-    if (legacy === null) throw new Error('legacy workflow disappeared')
-
-    // Auto-save shape: echoes the stored legacy name → must keep working.
-    const same = await req(happ, `/api/workflows/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(saveInput(legacy, { description: 'touched' })),
-    })
-    expect(same.status).toBe(200)
-    const current = await getWorkflow(hdb, created.id)
-    if (current === null) throw new Error('workflow disappeared after save')
-
-    // An actual rename must satisfy the unified rules. RFC-264 RE-JUDGEMENT:
-    // the old fixture 'Still Bad Name' is legal now, so the illegal fixture
-    // becomes one the CURRENT rule rejects (reserved `_` prefix).
-    const bad = await req(happ, `/api/workflows/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(saveInput(current, { name: '_reserved' })),
-    })
-    expect(bad.status).toBe(422)
-    expect(((await bad.json()) as { code: string }).code).toBe('workflow-name-invalid')
-
-    // RFC-264: renaming TO a Chinese name is an ordinary accepted rename.
-    const zh = await req(happ, `/api/workflows/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(saveInput(current, { name: '代码审计流程' })),
-    })
-    expect(zh.status).toBe(200)
-    expect(((await zh.json()) as { snapshot: { name: string } }).snapshot.name).toBe('代码审计流程')
-    const renamed = await getWorkflow(hdb, created.id)
-    if (renamed === null) throw new Error('workflow disappeared after rename')
-
-    const good = await req(happ, `/api/workflows/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(saveInput(renamed, { name: 'legacy-renamed' })),
-    })
-    expect(good.status).toBe(200)
-    expect(((await good.json()) as { snapshot: { name: string } }).snapshot.name).toBe(
-      'legacy-renamed',
-    )
-  })
-
-  test('GET unknown id returns 404 with workflow-not-found', async () => {
-    const res = await req(app, '/api/workflows/01HFAKEFAKEFAKEFAKEFAKE')
-    expect(res.status).toBe(404)
-    expect(((await res.json()) as { code: string }).code).toBe('workflow-not-found')
-  })
-
-  test('DELETE 204; double DELETE 404', async () => {
-    const created = (await (
-      await req(app, '/api/workflows', {
+    test('missing $schema_version in definition rejected', async () => {
+      const res = await req(app, '/api/workflows', {
         method: 'POST',
         body: JSON.stringify({
           name: 'wf',
           description: '',
-          definition: sampleDefinition(),
+          definition: { nodes: [], edges: [], inputs: [] },
         }),
       })
-    ).json()) as WorkflowDetail
-    const body = JSON.stringify(deleteInput(created))
-    const del = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE', body })
-    expect(del.status).toBe(204)
-    const again = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE', body })
-    expect(again.status).toBe(404)
-  })
+      expect(res.status).toBe(422)
+    })
 
-  test('PUT and DELETE reject missing revision fences', async () => {
-    const created = (await (
-      await req(app, '/api/workflows', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: 'fenced-workflow',
-          description: '',
-          definition: sampleDefinition(),
-        }),
-      })
-    ).json()) as WorkflowDetail
-
-    expect(
-      (
-        await req(app, `/api/workflows/${created.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ name: 'partial-patch' }),
+    test('PUT updates fields and increments version', async () => {
+      const created = (await (
+        await req(app, '/api/workflows', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'wf',
+            description: '',
+            definition: sampleDefinition(),
+          }),
         })
-      ).status,
-    ).toBe(422)
-    expect((await req(app, `/api/workflows/${created.id}`, { method: 'DELETE' })).status).toBe(422)
-  })
+      ).json()) as WorkflowDetail
 
-  test('POST /:id/validate returns ok for an empty workflow', async () => {
-    const created = (await (
-      await req(app, '/api/workflows', {
+      const put = await req(app, `/api/workflows/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(saveInput(created, { name: 'renamed' })),
+      })
+      expect(put.status).toBe(200)
+      const after = (await put.json()) as {
+        snapshot: { name: string }
+        revision: { version: number }
+      }
+      expect(after.snapshot.name).toBe('renamed')
+      expect(after.revision.version).toBe(2)
+    })
+
+    // 2026-07-10 naming unification: workflow names follow the workgroup rules
+    // (WORKFLOW_NAME_RE alias). CREATE is guarded by the strict schema; PUT
+    // validates ONLY a changed name, so stored legacy free-form names keep
+    // auto-saving (grandfather decision — 放行存量，只卡新名).
+    //
+    // RFC-264 EXPLICIT RE-JUDGEMENT: the shared rule is no longer a lowercase
+    // slug, so 'My Workflow' (the old fixture here) is now LEGAL. The invariant
+    // under test is unchanged — create is strictly guarded — so the fixture moves
+    // to a name that is illegal under the current rule.
+    test('POST with an illegal name → 422 workflow-invalid (strict create schema)', async () => {
+      for (const name of ['_reserved', 'two\nlines', '   ']) {
+        const res = await req(app, '/api/workflows', {
+          method: 'POST',
+          body: JSON.stringify({ name, description: '', definition: sampleDefinition() }),
+        })
+        expect(res.status).toBe(422)
+        expect(((await res.json()) as { code: string }).code).toBe('workflow-invalid')
+      }
+    })
+
+    // RFC-264 — the user-visible point of the whole RFC.
+    test('POST with a Chinese name → 201, stored folded', async () => {
+      const res = await req(app, '/api/workflows', {
         method: 'POST',
         body: JSON.stringify({
-          name: 'wf',
+          name: '代码审计流水线 ',
           description: '',
-          definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+          definition: sampleDefinition(),
         }),
       })
-    ).json()) as WorkflowDetail
-    const res = await req(app, `/api/workflows/${created.id}/validate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        expectedVersion: created.version,
-        expectedSnapshotHash: created.snapshotHash,
-      }),
+      expect(res.status).toBe(201)
+      expect(((await res.json()) as WorkflowDetail).name).toBe('代码审计流水线')
     })
-    expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({
-      revision: {
-        workflowId: created.id,
-        version: created.version,
-        snapshotHash: created.snapshotHash,
-      },
-      ok: true,
-      issues: [],
-    })
-  })
 
-  test('all /api/workflows/* require token', async () => {
-    expect((await app.request('/api/workflows')).status).toBe(401)
-  })
-})
+    test('PUT: unchanged legacy name saves; rename validates against the shared rules', async () => {
+      const { db: hdb, app: happ } = await buildHarness(scope)
+      // Route-create with a valid slug, then service-rename to a legacy
+      // free-form value — simulates a row stored before the unification.
+      const post = await req(happ, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'legacy-seed',
+          description: '',
+          definition: sampleDefinition(),
+        }),
+      })
+      const created = (await post.json()) as WorkflowDetail
+      // Simulate a row written before the slug rule existed. The current save
+      // service correctly refuses to mint a new invalid name, so this fixture
+      // must bypass it just like a historical migration state would.
+      await hdb
+        .update(workflows)
+        .set({ name: 'Legacy Name With Spaces' })
+        .where(eq(workflows.id, created.id))
+      const legacy = await getWorkflow(hdb, created.id)
+      if (legacy === null) throw new Error('legacy workflow disappeared')
+
+      // Auto-save shape: echoes the stored legacy name → must keep working.
+      const same = await req(happ, `/api/workflows/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(saveInput(legacy, { description: 'touched' })),
+      })
+      expect(same.status).toBe(200)
+      const current = await getWorkflow(hdb, created.id)
+      if (current === null) throw new Error('workflow disappeared after save')
+
+      // An actual rename must satisfy the unified rules. RFC-264 RE-JUDGEMENT:
+      // the old fixture 'Still Bad Name' is legal now, so the illegal fixture
+      // becomes one the CURRENT rule rejects (reserved `_` prefix).
+      const bad = await req(happ, `/api/workflows/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(saveInput(current, { name: '_reserved' })),
+      })
+      expect(bad.status).toBe(422)
+      expect(((await bad.json()) as { code: string }).code).toBe('workflow-name-invalid')
+
+      // RFC-264: renaming TO a Chinese name is an ordinary accepted rename.
+      const zh = await req(happ, `/api/workflows/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(saveInput(current, { name: '代码审计流程' })),
+      })
+      expect(zh.status).toBe(200)
+      expect(((await zh.json()) as { snapshot: { name: string } }).snapshot.name).toBe(
+        '代码审计流程',
+      )
+      const renamed = await getWorkflow(hdb, created.id)
+      if (renamed === null) throw new Error('workflow disappeared after rename')
+
+      const good = await req(happ, `/api/workflows/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(saveInput(renamed, { name: 'legacy-renamed' })),
+      })
+      expect(good.status).toBe(200)
+      expect(((await good.json()) as { snapshot: { name: string } }).snapshot.name).toBe(
+        'legacy-renamed',
+      )
+    })
+
+    test('GET unknown id returns 404 with workflow-not-found', async () => {
+      const res = await req(app, '/api/workflows/01HFAKEFAKEFAKEFAKEFAKE')
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: string }).code).toBe('workflow-not-found')
+    })
+
+    test('DELETE 204; double DELETE 404', async () => {
+      const created = (await (
+        await req(app, '/api/workflows', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'wf',
+            description: '',
+            definition: sampleDefinition(),
+          }),
+        })
+      ).json()) as WorkflowDetail
+      const body = JSON.stringify(deleteInput(created))
+      const del = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE', body })
+      expect(del.status).toBe(204)
+      const again = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE', body })
+      expect(again.status).toBe(404)
+    })
+
+    test('PUT and DELETE reject missing revision fences', async () => {
+      const created = (await (
+        await req(app, '/api/workflows', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'fenced-workflow',
+            description: '',
+            definition: sampleDefinition(),
+          }),
+        })
+      ).json()) as WorkflowDetail
+
+      expect(
+        (
+          await req(app, `/api/workflows/${created.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name: 'partial-patch' }),
+          })
+        ).status,
+      ).toBe(422)
+      expect((await req(app, `/api/workflows/${created.id}`, { method: 'DELETE' })).status).toBe(
+        422,
+      )
+    })
+
+    test('POST /:id/validate returns ok for an empty workflow', async () => {
+      const created = (await (
+        await req(app, '/api/workflows', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'wf',
+            description: '',
+            definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+          }),
+        })
+      ).json()) as WorkflowDetail
+      const res = await req(app, `/api/workflows/${created.id}/validate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: created.version,
+          expectedSnapshotHash: created.snapshotHash,
+        }),
+      })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toMatchObject({
+        revision: {
+          workflowId: created.id,
+          version: created.version,
+          snapshotHash: created.snapshotHash,
+        },
+        ok: true,
+        issues: [],
+      })
+    })
+
+    test('all /api/workflows/* require token', async () => {
+      expect((await app.request('/api/workflows')).status).toBe(401)
+    })
+  },
+)

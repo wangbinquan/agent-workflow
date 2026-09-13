@@ -295,7 +295,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc257-webhook-e2e.test.ts: 1',
   'rfc257-webhook-error-codes.test.ts: 1',
   'rfc257-webhook-ingress.test.ts: 2',
-  'rfc257-webhook-management.test.ts: 1',
   'rfc258-file-symbols.test.ts: 1',
   'rfc259-webhook-github-e2e.test.ts: 1',
   'rfc261-webhook-delivery-pagination.test.ts: 2',
@@ -472,7 +471,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'upgrade-rolling.test.ts: 7',
   'webhook-trigger-validation-acl-order.test.ts: 1',
   'wg-readonly-claim-and-pause-reason.test.ts: 1',
-  'workflows.test.ts: 2',
+  'workflows.test.ts: 1',
   'worktree-files-proxy.test.ts: 1',
 ]
 
@@ -734,7 +733,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc257-webhook-e2e.test.ts',
   'rfc257-webhook-error-codes.test.ts',
   'rfc257-webhook-ingress.test.ts',
-  'rfc257-webhook-management.test.ts',
   'rfc258-file-symbols.test.ts',
   'rfc259-webhook-github-e2e.test.ts',
   'rfc268-webhook-scratch-launch.test.ts',
