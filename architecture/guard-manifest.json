@@ -1813,7 +1813,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 520
+      "lines": 602
     },
     {
       "id": "rfc359-w5-provider-runtime-exercised",
@@ -2495,8 +2495,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "51aeda3f33941194700355319dcc2a389d635131",
-    "contentDigest": "sha256:6ad07a2d6a3cecb08ae644662da9be227b10fa5b0462bf3e7189de96bc03083c",
+    "currentSnapshotSha": "5b706bca8ea9baf968692df608973f3feb338146",
+    "contentDigest": "sha256:ab310862c82d4ca673f0b637ad590997762ca92ee7223fac8c53c6bb2e4c3e2e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

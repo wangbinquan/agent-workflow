@@ -9158,3 +9158,44 @@ vs `postgresqlResourcePackageAtomicApply` 约 976 行）是其中最大的一块
 `pragma_table_info(...)` 是 `PRAGMA` 的**函数**形态（同一张 SQLite 独有的 schema 自省面；
 PostgreSQL 对应的是 `information_schema`，形状与列名都不同），判据不该只认大写语句那一种写法。
 补进 `sqlite-only-primitive` 之后 `rfc274` 从 open 里退出。
+
+## 5dp. 最大的一处重复此前**不在任何账本里**：资源包 apply 引擎
+
+§5do 查到「AC-6 压不动了，卡点在生产侧的成对引擎」之后，顺手核了一件事：那些卡点**在不在
+AC-1 的账本里**。资源包 apply 那一对——本仓最大的一处重复——**不在**。
+
+原因是 `rfc359-w5-provider-pair-conformance` 的判据是纯机械的「**同目录** + 去掉引擎前缀后**同名**」，
+而这一对是**跨目录 + 改了名**：
+
+| 侧       | 文件                                                                   | 行数 |
+| -------- | ---------------------------------------------------------------------- | ---- |
+| SQLite   | `platform/persistence/sqlite/legacyResourcePackageCommit.ts`            | ~796 |
+|          | `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`       | ~652 |
+| PostgreSQL | `platform/persistence/postgresqlResourcePackageAtomicApply.ts`        | ~976 |
+
+同一件事（把一个资源包的决策落成库里的行 + 盘上的工件，失败要补偿），两台机器。那条规则挡得住
+「再抄一份同名文件」，却完全看不见「抄一份、换个目录、再换个名字」——**最大的那处重复正好长这样**。
+
+### 处置一：给那条守卫补一张手工登记表
+
+`DECLARED_CROSS_DIRECTORY_PAIRS`，带两条断言：①登记的两侧文件必须真的在树上（退役了就把这一对
+删掉，那正是合一完工的样子，别留死条目）；②**手工登记的对吃同一套状态位判据**（`witnessesPair`，
+与机械那批逐字相同）——登记不等于免责。
+
+### 处置二：补对拍（RFC 自己验证过的办法：合一之前先补对拍）
+
+`rfc359-w13-resource-package-apply-conformance.test.ts`，工作组这条路径在两个引擎上各跑一遍同一批
+用户可见判据：①新建 = 归导入者 + `private` + 零 grants + journal 落 `committed`；②重放同一个
+preview token = 回执逐字相同且不产生第二行；③缺人员映射 = 两个引擎同一个
+`package-human-mapping-missing`；④映射指向不存在的用户 = 同样 422 且什么都没写。**8 格全绿**
+——这条路径上两台机器今天给用户的结果一致，这是它第一次被证明。
+
+### 为什么它仍记 `unverified`（这是判据有意的低估，不是没有对拍）
+
+见证判据只认**直接**值 import；`w13` 与 `w12` 都只直接 import 了 PG 那一侧，SQLite 那侧是经
+`services/resourcePackage/executionAdapter.ts` / `helpers/resourcePackageProvider.ts` 传递进去的。
+守卫头注释的政策是「宁可低估，不要抹平」，所以**不放宽判据**；想翻成 `verified`，正解是让对拍
+直接调那两个 SQLite 侧入口。这条已写进登记表的注释里，避免下一个读者被 `unverified` 误导。
+
+**`UNVERIFIED_PAIR_COUNT` 保持 0**：那个常量钉的是十条**机械**检出的对，手工表另有自己的断言，
+两者不混算——新发现一对不该被记成「覆盖回退」。

@@ -147,6 +147,50 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   'platform/persistence/Migrator: sqlite + postgresql — verified by rfc359-w8-migrator-conformance.test.ts',
 ]
 
+/**
+ * 机械判据**看不见**的那一类对：**跨目录 / 改了名**的孪生。
+ *
+ * `providerPairs()` 的判据是「同目录 + 去掉引擎前缀后同名」——那条规则挡得住「再抄一份同名文件」，
+ * 却完全看不见「抄一份、换个目录、再换个名字」。本仓最大的一处重复就长这样，而且是在 RFC-359
+ * 推进到尾声、AC-6 的账本压不动了才被顺藤摸出来的（plan §5do）：
+ *
+ *   SQLite 侧  `platform/persistence/sqlite/legacyResourcePackageCommit.ts`（约 796 行）
+ *              `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`（约 652 行）
+ *   PG   侧    `platform/persistence/postgresqlResourcePackageAtomicApply.ts`（约 976 行）
+ *
+ * 同一件事——「把一个资源包的决策落成库里的行 + 盘上的工件，失败要补偿」——两台机器。
+ * 目录不同、名字不同，所以十条机械检出的对里没有它。
+ *
+ * **手工登记的对也吃同一套状态位**：下面的用例对每一条都跑 `witnessesPair`，判据与机械那批逐字
+ * 相同（跑双引擎 harness + 两侧各有一条**值** import）。登记不等于免责。
+ *
+ * 它今天记的是 `unverified`，而这是判据**有意的低估**，不是「没有对拍」：
+ * `rfc359-w13-resource-package-apply-conformance.test.ts` 已经在两个引擎上各跑一遍同一批工作组
+ * apply 判据（新建的归属 / 可见性 / 零 grants / journal 终态、重放幂等、两类拒收码），
+ * `rfc359-w12-mcp-mutation-conformance.test.ts` 也在两侧各驱动一遍 MCP 的发布与覆盖。
+ * 两份都只对 **PG 那一侧**有直接的值 import——SQLite 那侧是经
+ * `services/resourcePackage/executionAdapter.ts` / `helpers/resourcePackageProvider.ts` 传递进去的，
+ * 而本守卫的见证判据只认**直接**值 import。这与头注释那条「宁可低估，不要抹平」的偏斜政策一致：
+ * 想把它翻成 `verified`，正解是让对拍**直接**调那两个 SQLite 侧入口，不是放宽判据。
+ *
+ * **为什么这条债很重**：`rfc271-import-commit`(25 个调用点) / `rfc271-resource-package-hardening`(7)
+ * / `rfc271-import-http` / `rfc271-export-closure-authz` 这四份测试——工作组 / 代理 / 技能 / 插件 /
+ * 密钥 / 人员映射 / 重放 / 围栏的全部判据——**只跑 SQLite 那台机器**。PG 那台上这些路径的行为
+ * 今天没有任何断言，正是本 RFC 反复照出的「合一那一刻才第一次看见差异」的形状。
+ */
+export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = [
+  {
+    key: 'platform/persistence/ResourcePackageApplyEngine',
+    sqlite: [
+      'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts',
+      'platform/persistence/sqlite/legacyResourcePackageCommit.ts',
+    ],
+    postgresql: ['platform/persistence/postgresqlResourcePackageAtomicApply.ts'],
+    sqlitePrefixes: ['legacySqlite'],
+    postgresqlPrefixes: ['postgresql'],
+  },
+]
+
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
 export const PROVIDER_PAIR_COUNT = 10
 
@@ -394,6 +438,44 @@ describe('RFC-359 W5 —— 成对 provider 适配器：合一进度 + 对拍覆
     },
     TIMEOUT_MS,
   )
+
+  // -------------------------------------------------------------------------
+  // 手工登记的跨目录 / 改名对（机械判据按设计看不见它们）
+  // -------------------------------------------------------------------------
+  test('手工登记的每一对：两侧文件都真的在树上（登记条目不许悄悄过期）', () => {
+    const missing: string[] = []
+    for (const pair of DECLARED_CROSS_DIRECTORY_PAIRS) {
+      for (const path of [...pair.sqlite, ...pair.postgresql]) {
+        if (!SOURCE_FILES.includes(path)) missing.push(`${pair.key}: ${path}`)
+      }
+    }
+    expect(
+      missing,
+      '手工登记的对指向了不存在的源文件。要么路径写错了，要么那一侧已经退役——' +
+        '退役了就把这一对从登记表里删掉（那正是合一完工的样子），别让一条死条目继续占着位置。',
+    ).toEqual([])
+  })
+
+  test('手工登记的每一对吃同一套状态位判据（登记 ≠ 免责）', () => {
+    // 判据与机械那批逐字相同：`witnessesPair`（跑双引擎 harness + 两侧各有一条**值** import）。
+    // 今天这一对是 `unverified`：唯一驱动两条 apply 路径的
+    // `rfc359-w12-mcp-mutation-conformance.test.ts` 只 import 了 PG 那侧的 src 文件，
+    // SQLite 那侧是经测试助手进去的。这与头注释的「宁可低估，不要抹平」一致。
+    const rows = DECLARED_CROSS_DIRECTORY_PAIRS.map((pair) => {
+      const witnesses = TEST_UNITS.filter((unit) => witnessesPair(unit, pair))
+        .map((unit) => unit.path)
+        .sort()
+      const shape = `${pair.sqlitePrefixes.join('/')} + ${pair.postgresqlPrefixes.join('/')}`
+      return `${pair.key}: ${shape} — ${witnesses.length === 0 ? 'unverified' : `verified by ${witnesses.join(', ')}`}`
+    })
+    expect(
+      rows,
+      '手工登记的对的状态位变了。**变成 verified 是好事**——把这一行改过来；' +
+        '**从 verified 退回 unverified** 说明对拍被删了或改成了单引擎，那是回退。',
+    ).toEqual([
+      'platform/persistence/ResourcePackageApplyEngine: legacySqlite + postgresql — unverified',
+    ])
+  })
 
   test('账本按 pair 路径字典序、无重复，且两个计数常量与账本自洽（清点稳定的前提）', () => {
     const keys = PROVIDER_PAIR_CONFORMANCE_LEDGER.map((row) => row.slice(0, row.indexOf(':')))
