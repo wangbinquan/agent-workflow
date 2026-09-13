@@ -194,7 +194,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'review-iterate-drops-prior-clarify-history.test.ts: 1',
   'review-iterate-file-path-in-prompt.test.ts: 1',
   'review-iterate-sibling-cascade.test.ts: 1',
-  'review-multidoc-inherit.test.ts: 1',
   'review-state-machine.test.ts: 1',
   'reviews-comment-patch.test.ts: 1',
   'reviews-iterate-mints-new-run.test.ts: 1',

@@ -587,7 +587,10 @@ export type { HumanGateTaskTransition } from '@/modules/task-execution/public/ty
  * outside `allowedFrom`, ConcurrentTaskTransition when the CAS lost a race.
  */
 export async function setTaskStatus(args: {
-  db: DbClient
+  // RFC-359 AC-6：形参放宽到中立客户端。函数体本来就是中立的——它走
+  // `databaseSessionFor(db).transaction(...)` + 中立异步 CAS，一条 bun:sqlite 同步游标都没有
+  // （W8 把那条 `.get()` 预读改掉时就是为此）。放宽是向后兼容的：`DbClient` 是它的子类型。
+  db: ProviderNeutralDatabase
   taskId: string
   to: TaskStatus
   allowedFrom: readonly TaskStatus[]
@@ -833,7 +836,7 @@ export async function trySetTaskStatus(args: {
  * over incrementally (Codex audit cross-check: two-step, no big-bang churn).
  */
 export async function transitionTaskStatusByEvent(args: {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   event: TaskTransitionEvent
   allowTerminal?: boolean

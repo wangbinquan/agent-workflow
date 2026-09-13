@@ -8028,3 +8028,25 @@ await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
 处置：把这一条 test 拆成文件末尾一个单引擎 `describe`、留在账本上，其余 21 条双引擎跑绿。
 
 账本 466 → 465。
+
+## 5ci. `setTaskStatus` / `transitionTaskStatusByEvent` 形参放宽——零外溢
+
+`platform/persistence/sqlite/taskLifecycle.ts` 的这两个入口形参还写死 `DbClient`，卡住
+`review-multidoc-inherit`。**它们的函数体本来就是中立的**：走
+`databaseSessionFor(db).transaction(...)` + 中立异步 CAS，一条 bun:sqlite 同步游标都没有——
+W8 把那条 `.get()` 预读改掉时就是为此（文件里 134 行那条注释）。
+
+放宽后 **typecheck 零新增错误**（同文件另两处 `db: DbClient` 与 `DbClient | DbTxSync` 原样保留，
+它们所在的函数体仍有同步终结符，属另一刀）。`rfc097-task-status-cas` /
+`lifecycle-transitions-current` / `lifecycle-cas-race` / `review-multidoc-inherit` 合计
+80 pass / 0 fail（双引擎）。
+
+**没能一起解掉的两条**，都不是「形参写窄了」：
+
+- `buildStartTaskDeps` —— 放宽它自己只剩 1 个错，但那个错在 `StartTaskDeps.db`
+  （`services/task.ts:457`，也是 `LegacySqliteTaskDatabase`）。再往下就是 §5by 实测过的
+  「`services/task.ts` 函数体真在用 SQLite 同步面」那一片，要先把那片搬到中立事务口。
+- `inspectDigitalEmployeeHumanReviewState` / `createEmployeeReactionRoundQueries` ——
+  卡 `execution-contract-platform`，同属 digital-employee 那一簇，留给下一波。
+
+账本 465 → 464。
