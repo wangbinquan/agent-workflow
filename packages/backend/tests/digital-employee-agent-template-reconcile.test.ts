@@ -14,11 +14,9 @@
  * A drifted row is compared against the snapshot taken right after the first
  * seed, so these cases stay honest without restating the template text.
  */
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents as agentRows } from '@/db/schema'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
@@ -30,8 +28,6 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { describeEachProvider } from './helpers/eachProvider'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function templateCatalog(db: ProviderNeutralDatabase) {
   return composeDigitalEmployeeAgentTemplateCatalogFor(
@@ -66,7 +62,6 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
           frontmatterExtra: '{}',
         })
         .where(eq(agentRows.id, id))
-        .run()
     }
 
     await ensureDigitalEmployeeAgentTemplates(catalog)
@@ -86,7 +81,7 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     const seeded = await definitionOf(db, id)
     const seededCount = (await listAgents(db)).length
 
-    await db.update(agentRows).set({ name: 'drifted-name' }).where(eq(agentRows.id, id)).run()
+    await db.update(agentRows).set({ name: 'drifted-name' }).where(eq(agentRows.id, id))
     await ensureDigitalEmployeeAgentTemplates(catalog)
 
     expect(await definitionOf(db, id)).toEqual(seeded)
@@ -99,7 +94,7 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
 
-    await db.update(agentRows).set({ description: 'drifted' }).where(eq(agentRows.id, id)).run()
+    await db.update(agentRows).set({ description: 'drifted' }).where(eq(agentRows.id, id))
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const repaired = await getAgentById(db, id)
 
@@ -108,14 +103,14 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
   })
 })
 
-describe('digital employee Agent template reconciliation', () => {
+describeEachProvider('digital employee Agent template reconciliation', (harness) => {
   test('a built-in an administrator made private does not cost the daemon its boot', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = templateCatalog(db)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const privatedId = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[8]
 
-    db.update(agentRows).set({ visibility: 'private' }).where(eq(agentRows.id, privatedId)).run()
+    await db.update(agentRows).set({ visibility: 'private' }).where(eq(agentRows.id, privatedId))
 
     await ensureDigitalEmployeeAgentTemplates(catalog)
 
@@ -125,18 +120,25 @@ describe('digital employee Agent template reconciliation', () => {
     expect(await listDigitalEmployeeAgentTemplates(catalog)).toHaveLength(7)
   })
 
-  test('a stable id squatted by a row that is not the platform is still refused', async () => {
-    for (const squat of [{ builtin: false }, { ownerUserId: '01JUSERUSERUSERUSERUSERUS' }]) {
-      const db = createInMemoryDb(MIGRATIONS)
+  // RFC-359 AC-6：原来这条用 for 循环跑两种占位，每轮**各自新建一个库**。双引擎 harness 是
+  // 「每个 test 一个干净库」，循环里共用同一个库会让第一轮的占位活到第二轮——第二轮的
+  // `ensureDigitalEmployeeAgentTemplates` 在**建立前提**那一步就先抛了，判据变成空洞。
+  // 所以拆成两条 test，一条一种占位，各自拿自己的干净库。
+  for (const [label, squat] of [
+    ['not builtin', { builtin: false }],
+    ['owned by a user', { ownerUserId: '01JUSERUSERUSERUSERUSERUS' }],
+  ] as const) {
+    test(`a stable id squatted by a row that is not the platform is still refused (${label})`, async () => {
+      const db = harness.db
       const catalog = templateCatalog(db)
       await ensureDigitalEmployeeAgentTemplates(catalog)
       const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
 
-      db.update(agentRows).set(squat).where(eq(agentRows.id, id)).run()
+      await db.update(agentRows).set(squat).where(eq(agentRows.id, id))
 
       await expect(ensureDigitalEmployeeAgentTemplates(catalog)).rejects.toMatchObject({
         code: 'builtin-agent-id-collision',
       })
-    }
-  })
+    })
+  }
 })

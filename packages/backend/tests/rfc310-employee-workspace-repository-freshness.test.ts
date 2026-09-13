@@ -2,13 +2,13 @@
 // Digital Employee Case must refresh its cached repository before freezing the
 // Case baseline. Once frozen, later retries must keep that exact baseline.
 
-import { afterAll, describe, expect, test } from 'bun:test'
+import { afterAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { employeeCases, employeeCaseWorkspaces, employeeReactionRounds } from '@/db/schema'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
@@ -25,7 +25,6 @@ import {
 import { resolveCachedRepo } from '@/services/gitRepoCache'
 import { DomainError } from '@/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const root = mkdtempSync(join(tmpdir(), 'rfc310-workspace-freshness-'))
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -56,7 +55,7 @@ function commitAndPush(source: string, body: string, message: string): string {
   return git(source, 'rev-parse', 'HEAD')
 }
 
-describe('RFC-310 Digital Employee workspace repository freshness', () => {
+describeEachProvider('RFC-310 Digital Employee workspace repository freshness', (harness) => {
   test('fails closed instead of falling back to a stale local default branch', () => {
     const inspect = (
       input: Parameters<typeof assertDevelopmentWorkspaceRepositoryFreshness>[0],
@@ -98,7 +97,10 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
   })
 
   test('refreshes before the first baseline freeze and never refreshes an existing Case scene', async () => {
-    const testRoot = join(root, 'fresh-before-freeze')
+    // RFC-359 AC-6：目录名带唯一后缀。`root` 是模块级、只建一次，而双引擎 harness 会把
+    // 整个 body 跑两遍——固定名字的话第二个引擎会踩到第一个引擎留下的 git 仓库
+    // （`remote origin already exists`）。
+    const testRoot = mkdtempSync(join(root, 'fresh-before-freeze-'))
     const source = join(testRoot, 'source')
     const remote = join(testRoot, 'remote.git')
     const appHome = join(testRoot, 'home')
@@ -109,7 +111,7 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
     git(source, 'remote', 'add', 'origin', `file://${remote}`)
     const initialSha = commitAndPush(source, 'version 1\n', 'initial')
 
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const repositoryStore = composeSqliteRepositoryWorkspaceStore(db)
     const remoteUrl = `file://${remote}`
     const cached = await resolveCachedRepo({ store: repositoryStore, appHome }, { url: remoteUrl })
@@ -167,53 +169,49 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
       },
       inputEnvelopeJson: JSON.stringify({ contextsJson: JSON.stringify([issueContext]) }),
     } as const
-    db.insert(employeeCases)
-      .values({
-        id: 'case-freshness',
-        employeeId: 'employee-freshness',
-        employeeRevision: 1,
-        typeId: 'development',
-        typeRevision: 10,
-        primaryContextId: 'issue-freshness',
-        executionPolicyRevision: 1,
-        state: 'active',
-        terminalKind: null,
-        blockReason: null,
-        currentWorkItemRef: 'analyze-implement',
-        activeRoundId: 'round-freshness',
-        revision: 1,
-        writerGeneration: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        terminalAt: null,
-      })
-      .run()
-    db.insert(employeeReactionRounds)
-      .values({
-        id: 'round-freshness',
-        caseId: 'case-freshness',
-        caseRevision: 1,
-        inboxId: null,
-        employeeId: 'employee-freshness',
-        employeeRevision: 1,
-        ruleId: 'continue-freshness',
-        workItemRef: 'analyze-implement',
-        workContractId: 'development.analyze-implement',
-        workContractVersion: 1,
-        toolId: null,
-        toolRevision: null,
-        executionPolicyRevision: 1,
-        inputContextRefsJson: '[]',
-        planJson: JSON.stringify(plan),
-        state: 'running',
-        executionRef: 'task-freshness',
-        outputJson: null,
-        attemptOrdinal: 0,
-        createdAt: 2,
-        updatedAt: 2,
-        settledAt: null,
-      })
-      .run()
+    await db.insert(employeeCases).values({
+      id: 'case-freshness',
+      employeeId: 'employee-freshness',
+      employeeRevision: 1,
+      typeId: 'development',
+      typeRevision: 10,
+      primaryContextId: 'issue-freshness',
+      executionPolicyRevision: 1,
+      state: 'active',
+      terminalKind: null,
+      blockReason: null,
+      currentWorkItemRef: 'analyze-implement',
+      activeRoundId: 'round-freshness',
+      revision: 1,
+      writerGeneration: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      terminalAt: null,
+    })
+    await db.insert(employeeReactionRounds).values({
+      id: 'round-freshness',
+      caseId: 'case-freshness',
+      caseRevision: 1,
+      inboxId: null,
+      employeeId: 'employee-freshness',
+      employeeRevision: 1,
+      ruleId: 'continue-freshness',
+      workItemRef: 'analyze-implement',
+      workContractId: 'development.analyze-implement',
+      workContractVersion: 1,
+      toolId: null,
+      toolRevision: null,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: JSON.stringify(plan),
+      state: 'running',
+      executionRef: 'task-freshness',
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: 2,
+      updatedAt: 2,
+      settledAt: null,
+    })
 
     let preparationCalls = 0
     const productionPreparation = buildDevelopmentWorkspaceRepositoryPreparation(
@@ -253,11 +251,13 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
     expect(first.baselineSha).toBe(freshSha)
     expect(readFileSync(join(first.workspacePath, 'version.txt'), 'utf8')).toBe('version 2\n')
     expect(
-      db
-        .select({ baselineSha: employeeCaseWorkspaces.baselineSha })
-        .from(employeeCaseWorkspaces)
-        .where(eq(employeeCaseWorkspaces.caseId, 'case-freshness'))
-        .get()?.baselineSha,
+      (
+        await db
+          .select({ baselineSha: employeeCaseWorkspaces.baselineSha })
+          .from(employeeCaseWorkspaces)
+          .where(eq(employeeCaseWorkspaces.caseId, 'case-freshness'))
+          .limit(1)
+      )[0]?.baselineSha,
     ).toBe(freshSha)
 
     commitAndPush(source, 'version 3\n', 'advance after Case freeze')

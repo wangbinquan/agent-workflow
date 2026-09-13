@@ -1,5 +1,4 @@
 import { join } from 'node:path'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'

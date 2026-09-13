@@ -8077,3 +8077,24 @@ inspectHumanReview?(executionRef: string): DigitalEmployeeHumanReviewState | nul
 同簇里**能放宽的已经放宽**：`createEmployeeReactionRoundQueries` 的形参换成
 `ProviderNeutralDatabase`（它与 PG 孪生的函数体逐字相同，都只是把 db 转交给中立的
 `createReactionRoundQueries`），typecheck 零外溢，5 个消费文件 16 pass / 0 fail。
+
+## 5ck. 迁移的第四类坑：**「一个 test 一个干净库」会打破「循环里每轮自己建库」的夹具**
+
+双引擎 harness 的语义是「每个 `test` 开始时库是刚迁移完的状态」。迁移时有两类夹具会因此失效，
+两条都是实撞：
+
+1. **循环里每轮自己建库** —— `digital-employee-agent-template-reconcile` 的占位用例原来是
+   `for (const squat of [...]) { const db = createInMemoryDb(...); … }`，每轮一个新库。
+   换成 `harness.db` 后两轮共用同一个库，第一轮的占位活到第二轮，第二轮在**建立前提**那一步
+   （`ensureDigitalEmployeeAgentTemplates`）就先抛了，判据变成空洞绿/红。
+   **正解是把循环拆成多条 `test`**，一条一种输入，各自拿自己的干净库。
+2. **模块级只建一次的外部夹具** —— `rfc310-employee-workspace-repository-freshness` 的
+   `const root = mkdtempSync(...)` 是模块级、只建一次，用例里按**固定名字**在它下面建 git 仓库。
+   双引擎把整个 body 跑两遍，第二个引擎踩到第一个引擎留下的仓库：
+   `git remote add origin … failed: remote origin already exists`。
+   **正解是目录名带唯一后缀**（`mkdtempSync(join(root, 'prefix-'))`）。
+
+这两条与 §5bx 的「构造点必须在 lazy hook 里」是同一族：**双引擎 harness 改变的是「什么东西一个
+test 一份」**，凡是原来靠「自己建、自己命名」拿到隔离的夹具都要重新过一遍。
+
+账本 464 → 462。

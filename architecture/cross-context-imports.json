@@ -58432,23 +58432,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/digital-employee/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:bd66f0825ede230d0aa5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "digital-employee",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
       "fromPath": "packages/backend/src/modules/intent/application/graphValidation.ts",
       "fromSymbol": "$file",
@@ -80463,9 +80446,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4733,
+    "architectureExceptions": 4732,
     "implementationSccs": 0,
-    "observedEdges": 5267,
+    "observedEdges": 5266,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -141723,22 +141706,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "digital-employee",
-      "fromFile": "packages/backend/src/modules/digital-employee/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
-      "id": "import:bd66f0825ede230d0aa5",
-      "owner": "digital-employee",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/application/graphValidation.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
@@ -165283,7 +165250,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:62f1769a8c23b7e9098212fbb014a038f6cea4623def0b249803edb7ef4b053e",
+  "sourceDigest": "sha256:c2f60f2b44d798c8a909d678aa68c977223c2ce75f9d24d688403a2ca8032f3a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
