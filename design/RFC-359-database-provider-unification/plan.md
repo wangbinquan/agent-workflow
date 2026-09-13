@@ -8748,3 +8748,47 @@ PostgreSQL 根**当场拒绝**（400），不留任务行。于是 PG 部署上 
 
 **这正是 AC-6 的价值所在**：把测试迁到双引擎不是为了让账本变小，是为了让这种分叉在**有人看的地方**
 暴露出来。这两条在迁移之前，PostgreSQL 侧是零覆盖的。
+
+## 5de. `rfc247-api-docs`：`secretBox` 那一组其实什么都不缺（413 / open 108）
+
+§5da 统计里「缺 `secretBox`」的 6 个文件，其实**一个新 dep 都不用加**：作用域交出的
+`opened.secretBox` 就是**应用自己装配的那一份**，而这些用例真正需要的正是那一份
+（另建一个 box 去解同一批加密行会解成乱码——`providerHttpApplication.ts` 的注释早写了）。
+它们自己 `createSecretBoxFromKey(randomBytes(32))` 只是因为没有作用域时无处可取。
+
+`rfc247-api-docs` 迁完（44 条判据两引擎全绿），三件事值得记：
+
+1. **配置覆盖必须走 `open({ config })`**。原用例有个 `configFile(overrides)` 助手，往自建 tmp
+   目录写一份 `config.json` 再把路径塞给 `createApp`。作用域里应用读的是它**现建**的那个
+   configPath，自写的那份会被整份绕开——迁的时候要把 `configFile({...})` 直接变成
+   `open({ config: {...} })` 的实参，而不是保留那个助手。
+2. **`beforeAll` 里不能碰 `harness`**。本文件原有一个 `beforeAll(() => realApp())`，用途只是
+   **把生产路由表灌进共享注册表**（`buildApiDocs` 读那张表）。`beforeAll` 跑在 harness 建库
+   **之前**，`scope.harness.db` 在那里会抛——必须改成 `beforeEach`。这是 §5dc 那条
+   「注册期读 harness」的**近亲**：`beforeAll` 也早于 `beforeEach`。
+3. `{ bootstrap: 'ready' }` 与 harness 默认等价（只有 `'required'` 才改行为），可以安全丢。
+
+
+## 5df. Ubuntu backend 分片 8 → 12：AC-6 的双引擎迁移正在把 CI 的 job 预算吃满
+
+连续两次 run 的 `Backend tests (ubuntu-latest shard 1/8)` 都被杀掉，而**其余 38 个作业全 success**：
+
+| run | shard 1/8 | 判读 |
+| --- | --- | --- |
+| `bed6680c8` | 测试体跑完（3049 pass / 0 fail，851s）之后才 `The operation was canceled` | 超的是**整个 job**（装依赖 + 跑测 + 收尾），不是某条用例挂住 |
+| `1a3ff5ebd` | `14:27:52 → 14:43:07` = **15:15** | 正好越过 `timeout-minutes: 15` |
+
+GitHub 把 job 超时报成 `cancelled`，聚合 job `CI required` 随之判红——很容易被读成玄学。
+
+run `34762730963` 实测八片：15.25 / 10.7 / 10.05 / 10.5 / 13.9 / 11.3 / 10.07 / 12.5 分钟，
+合计 ~94 分钟、均值 11.8、最长片是均值的 **1.29 倍**、已贴到预算 **101%**（次长 93%）。
+十片只能压到 ~12.2 分钟（81%），而 macOS 那次的教训正是 **88% 也不够**；
+十二片压到 ~10.1 分钟（**67%**），与 macOS 定的「~10 分钟量级」同一目标。
+
+**这笔账要算在 AC-6 头上**：`ci.yml` 的注释写着「Ubuntu now runs both providers」，
+而本轮每迁一个文件到 `describeEachProvider`，Ubuntu 侧就多跑一遍。这正是那条注释里说的
+「as the provider workload grows」，处置也照它自己立的规矩：**加 runner，不动预算、
+不改单条用例的超时**（macOS 四片→六片是同一条规矩的上一次执行）。
+
+**对后续波次的含义**：AC-6 还剩 108 条待办，继续迁会继续加 Ubuntu 侧的时长。
+十二片留出的方差空间够下一批用，但**再迁一大批就要再量一次**——判据是「最长片 ≤ 预算 67%」。

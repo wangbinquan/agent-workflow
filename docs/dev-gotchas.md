@@ -6705,3 +6705,21 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   单跑一个文件和在 CI 分片里跟几十个文件一起跑结果不一样。2026-09-13 实撞：本地 25 pass 全绿、
   CI 上 **4 个分片同时红**。已上守卫（`rfc359-w5-t19f` 里的「注册期读 harness」判据 + 负 fixture），
   再犯会在 push 门禁直接红。
+
+- **`beforeAll` 里同样不能读 `harness.db`**——它跑在 harness 建库（`beforeEach`）**之前**，
+  与「在 describe 体里读」是同一类错（见上一条）。典型场景：某个 `beforeAll` 只为**灌一次
+  全局副作用**（比如把生产路由表灌进共享注册表），迁到作用域后要改成 `beforeEach`。
+
+- **迁到 HTTP 作用域时，用例自己写的 `config.json` 会被整份绕开**。应用读的是 `open()`
+  **现建**的那个 configPath；原来「自建 tmp 目录 → 写 config → 把路径塞给 `createApp`」的助手
+  必须换成 `open({ config: {...} })`，否则测出来的永远是默认值（且**不会报错**，只是判据失真）。
+
+- **CI 里一片 backend 分片「莫名 cancelled」= 它撞了 `timeout-minutes: 15` 的 job 预算**，
+  不是有人取消。GitHub 把 job 超时报成 `cancelled`，聚合 job `CI required` 随之判红——
+  而其余几十个作业全是 `success`，很容易被读成「玄学」。判断方法：看那一片的
+  `started_at → completed_at` 是不是正好 15 分出头；再看它的日志末尾是不是**测试体已经跑完**
+  （`N pass / 0 fail`）之后才出现 `The operation was canceled`——那说明超的是整个 job
+  （装依赖 + 跑测 + 收尾），不是某条用例挂住。
+  **处置照 `.github/workflows/ci.yml` 自己立的规矩：加 runner（多分片），不动预算、
+  也不改单条用例的超时。** 2026-09-13 Ubuntu 因此从八片加到十二片；此前 macOS 同因从四片加到六片。
+  经验值：最长的一片压到预算的 **~67%** 才有足够方差空间（88% 实测不够）。

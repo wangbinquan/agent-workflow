@@ -5024,3 +5024,27 @@ PostgreSQL 的错误归因在这一支上可能落错分支。**要定的是一�
 这 5 条判据已按 `scope.harness.capabilities.provider !== 'sqlite'` 登记为单引擎，用例注释里写明了
 两侧各自的返回与原因，**不掩盖**。要收口得先定语义（①统一空 worktree 的前置检查与错误归因；
 ②决定 G7 的「先接受、后台失败」形态是否在 PG 上也要成立），属于产品行为决策，不夹在测试迁移里做。
+
+## `rfc223-pr1-impl-gate` 在**并行压力下**贴近单条用例 5s 预算（2026-09-13，判为时序、非逻辑缺陷）
+
+**现象**：`source-guard-sweep` 的一次运行里，
+`RFC-223 PR-1 P1-2 … [postgresql] > a public agent member is stored by resolved id`
+以 `this test timed out after 5000ms` 挂掉（实测 5365ms），随后打出
+`Failed query: rollback`。
+
+**判据（不是「重跑就过了」）**：
+- **没有任何断言失败**，挂的是 bun 默认的单条用例 5s 超时；`rollback` 报错是用例被超时拆掉时
+  事务善后失败的**后果**，不是原因。
+- 单文件跑：33 条用例 14.1s（均值 ~430ms），连跑两次均 33 pass / 0 fail。
+- 它在 RFC-359 W5 的 104 文件作用域回归里也是绿的（2160 pass / 0 fail）。
+- sweep 一批并行跑 ~20 个文件，而 harness **每个文件建一个 PostgreSQL 库**，峰值竞争远高于单跑。
+
+**结论**：真 PostgreSQL + 高并行下的时序余量问题，不是逻辑缺陷。**但余量确实薄**——
+同一条用例单跑 ~430ms、压力下 5365ms，相差一个数量级。
+
+**背景**：sweep 从第 22 次起才带 `AW_TEST_POSTGRESQL_URL` 双引擎跑（此前因缺库整批失败），
+负载约翻倍，这是第一条越过预算的用例。
+
+**没有动手**：不改单条用例超时、也不加 skip——`.github/workflows/ci.yml` 立的规矩是
+「加 runner，不动预算、不改单条用例的超时」。若后续复现，正解是继续拆分并行度
+（sweep 的批大小），而不是放宽这条用例。
