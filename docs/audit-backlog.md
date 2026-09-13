@@ -36,10 +36,20 @@ tasks:                owner_user_id            -> users(id)
 users:                created_by               -> users(id)
 ```
 
-**未决**：①把这 8 条按迁移 DDL 的 ON UPDATE / ON DELETE 动作补进 `db/schema.ts` 的列声明
-（只影响 PostgreSQL 侧生成的 DDL——SQLite 侧本来就有）；②把外键并入 W5-T19g 的对账口径，
-让这一类从此可清点、只降不升。清点脚本见本条上面的做法：`PRAGMA foreign_key_list(<table>)`
-对 `getTableConfig(t).foreignKeys` + 列级 `.references()`。
+**已试过一遍并回退（2026-09-13）**：把 8 条按实时动作写进 `db/schema.ts` 后，清点确实归零
+（142 = 142），typecheck / `rfc349-schema-contract` / `rfc359-w5-t19g` / architecture 663 守卫全绿。
+**但上不了车**——PostgreSQL 侧的不可变 schema 历史只有一种 append 步骤类型
+（`PostgresqlIndexUpgrade`，`platform/persistence/postgresqlMigrationSequence.ts`），它硬性要求
+①`rowContract` 逐字不变（外键属于其中的「键」）②只接受非 unique 的普通覆盖索引
+③一步 PG 升级必须配一条**新增的 SQLite 迁移**（而这 8 条在 SQLite 侧本来就有，不会新增迁移）。
+实跑 `bun run db:rfc349-postgresql-schema -- --append 0003_…` 直接报
+`index-only upgrade changed a row, codec, key or disposition`。
+
+**待办**（定形任务见 `design/RFC-359-database-provider-unification/plan.md §5cc` 的 T-FK1/2/3）：
+先给升级机制加一种**约束新增**步骤类型（与索引新增并列，不改既有 3 步的 digest），
+再补声明 + append 一步，最后把外键并入 W5-T19g 的对账口径。
+还要想清楚存量库上加外键遇到既有悬空行怎么办（先清洗，还是 `NOT VALID` 分两步）。
+清点做法：`PRAGMA foreign_key_list(<table>)` 对 `getTableConfig(t).foreignKeys` + 列级 `.references()`。
 
 ## 审计报告索引（`design/`）
 

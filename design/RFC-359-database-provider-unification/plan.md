@@ -7875,3 +7875,46 @@ bigint 列取回成**字符串**，`toBe(number)` 当场失败——改成 drizz
   处置：把这个 describe 拆成两个——C9 留单引擎，C10 进双引擎块。
 
 三个文件合计 24 pass / 0 fail（双引擎），账本 474 → 472。
+
+## 5cc. 那 8 条外键补不进去——PostgreSQL 的升级机制**只认索引新增**（实测，已回退）
+
+§5cb 清点出 8 条「SQLite 有、PostgreSQL 没有」的外键后，先按正解做了一遍：逐条按**实时**动作
+取值（`PRAGMA foreign_key_list(<table>)`，不照着某一版迁移 SQL 抄——表重建过的列动作会变，
+`tasks.owner_user_id` 在 0020 里是 `set null`、在后来的重建 DDL 里写成 `restrict`，实时值是 `set null`），
+写进 `db/schema.ts` 的列声明（自引用四条走 drizzle 的 `(): AnySQLiteColumn => …` 回调式，
+`workgroup_messages.trigger_message_id` / `tasks.parent_task_id` 早就是这个写法）。
+
+**结果是对的**：重新清点 184 张表，**142 = 142，两个方向都归零**；typecheck 干净；
+`rfc349-schema-contract` 与 `rfc359-w5-t19g` 在重生成 `schema-contract.{json,md}` 后都绿；
+architecture 663 守卫全绿。
+
+**但它上不了车**。PostgreSQL 侧有一套**不可变的 schema 历史**
+（`db/postgresql-migrations/` + `meta/*.upgrade.json`，`platform/persistence/postgresqlMigrationSequence.ts`），
+改动 drizzle 声明必须显式 append 一步。实跑
+`bun run db:rfc349-postgresql-schema -- --append 0003_…` 报：
+
+```
+PostgresqlMigrationSequenceError: index-only upgrade changed a row, codec, key or disposition
+  at logicalIndexAdditions (postgresqlMigrationSequence.ts:260)
+```
+
+查下来这**不是参数用法问题，是机制边界**：现有 append 只有一种步骤类型
+`PostgresqlIndexUpgrade`，它硬性要求
+
+1. `exact(rowContract(from), rowContract(to), …)` —— 行 / 编解码 / 键 / 处置**逐字不变**，
+   外键属于其中的「键」，所以加外键必然触发；
+2. `appendLogicalIndexes` 只接受**普通覆盖索引**（`!index.unique`）；
+3. `requireSequence(to.sqliteMigrations.length > from.sqliteMigrations.length, 'index upgrade
+   requires an appended SQLite migration')` —— 一步 PG 升级必须配一条**新增的 SQLite 迁移**，
+   而这 8 条外键在 SQLite 侧本来就有，压根不会新增迁移。
+
+所以补这 8 条要先给升级机制加一种新的步骤类型（约束新增），它与索引新增的不变量不同
+（不配 SQLite 迁移、要改 rowContract、渲染 `ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY …`），
+还要想清楚存量库上加外键遇到既有悬空行怎么办（先清洗还是 `NOT VALID` 分两步）。
+**本波把 schema 改动原样回退**，只留清点结果与这份取证；机制扩展单独立一步做。
+
+**待办（已定形，不是模糊 backlog）**：
+- T-FK1：给 `postgresqlMigrationSequence.ts` 加约束新增步骤类型，
+  journal 形状与 `PostgresqlIndexUpgrade` 并列而不是改它（既有 3 步的 digest 不能动）；
+- T-FK2：8 条外键补进 `db/schema.ts`，按 T-FK1 append 一步；
+- T-FK3：把**外键**并入 `rfc359-w5-t19g` 的对账口径，让这一类从此可清点、只降不升。
