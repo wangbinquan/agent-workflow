@@ -47,7 +47,7 @@ import {
   composeIntentMaintenanceSnapshotQueriesFor,
 } from '@/modules/intent/composition/maintenance'
 import {
-  composePostgresqlIntentApplyResourceBinding,
+  composeIntentApplyResourceBinding,
   createPostgresqlIntentPluginArtifactLifecycle,
   createPostgresqlIntentSkillArtifactLifecycle,
 } from '@/modules/resource-catalog/composition/intentApply'
@@ -84,14 +84,14 @@ function signal() {
 
 // RFC-359 —— 两个 provider 共用同一份装配。此处此前是 `isolation === 'exclusive'` 的二分：
 // SQLite 走 `composeSqliteIntentApplyOperations` + legacy 资源会话 + `composeSqlite…Maintenance`，
-// PostgreSQL 走 `createPostgresqlIntentApplyOperations` + PG 资源会话 + `composePostgresql…`。
+// PostgreSQL 走 `createIntentApplyEngine` + PG 资源会话 + `composePostgresql…`。
 function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => Promise<void>) {
   const pluginsDir = join(appHome, 'plugins')
   const { authority } = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
     { userId: OWNER, source: 'session' },
     'http',
   )
-  const binding = composePostgresqlIntentApplyResourceBinding({
+  const binding = composeIntentApplyResourceBinding({
     db: harness.db,
     mcpLifecycle: createMcpTransactionLifecycle(),
     pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({ pluginsDir }),

@@ -10283,3 +10283,59 @@ PAT 侧没跟上——同一个文件 `auth/infrastructure/authPersistence.ts` �
 进程内 SQLite 的 1.5–1.7ms 之下——库里真正干的活不到 0.02ms，差额全是进程外引擎的往返本身。
 `right.p95 <= left.p95` 这条零容差判据对这类**微端点**是否是正确的验收口径，需要单独裁决；
 真实负载的三个重端点（`tasks-first` 137→75ms、`tasks-running` 86→47ms）PG 是**快约一倍**的。
+
+## §5ek —— AC-6 第三波并行（4 agent × 3 文件）与 AC-12 的 intent apply 改名
+
+### AC-6 第三波结果
+
+| 结果 | 文件 |
+| --- | --- |
+| 迁移完成（10 文件 / 25 调用点） | `rfc244-task-operations` `lifecycle-wrapper-nested` `commit-push-runner` `rfc257-webhook-e2e` `reviews-comment-patch` `rfc311-repos-page` `clarify-baseline-rest-ws` `rfc309-template-upstream-wiring` `rfc310-pr9-cutover` `skill-zip-commit` `rfc271-resource-package-hardening` |
+| 部分迁移 | `workflows`——两条 `SQLite validation compatibility` 卡 `legacy/workflow.validator.ts:430` 的 `validateWorkflowById(db: DbClient)`；**它底下调的全是中立的**（`getWorkflow` / `loadWorkflowValidationContext(db: ProviderNeutralDatabase)`），整个阻塞就是那一行标注 |
+
+账本：`TEST_ENGINE_HARDCODING_DEBT` 369 → 359，`OPEN_MIGRATION_DEBT` 63 → 53。三条「语料非空」
+门槛随之下调并各记一次实测值（116 / 47 / 114）——**它们掉到门槛以下不是判据坏了，是分母在收敛**。
+
+**第二条真的假绿，而且三种模式全中**：`rfc271-resource-package-hardening` 的两个手写
+`Proxy`-over-`db` 故障注入 seam 在 PG 上都被事务绕开（模式③），注入写用的是 `.run()`（模式①），
+还有一处断言拿没 await 的 `.get()` 去 `toBe`（模式②）。改完做了**变异验证**：只停掉 `transaction`
+那一支拦截，两条围栏用例在 PG 上立刻变成 `Received: undefined`（注入没发生、导出成功、没有错误码）
+——证明 tx 重包是承重的，且新加的 `fired()` 计数器确实能把回归抓成红而不是放过去。
+同一族的 `rfc271-export-closure-authz` 上一波刚修过同样的病，说明**这是族群性缺陷，不是个例**。
+
+### 两条 harness 语义差异（迁移时必踩，已进 `docs/dev-gotchas.md`）
+
+① **`createInMemoryDb` 每次调用给一个全新库，harness 给的是同一个库 + 用例间 TRUNCATE。**
+所以「一个 test body 里 seed 两次」的用例在 harness 下会撞主键（`reviews-comment-patch` 两处）。
+处置是给每次 seed 一组带序号后缀的 id，而不是去动判据。
+
+② **后台轮询器必须在 `afterEach` 里兜底停掉。** 原来的写法把 `stop()` 放在 test body 最后一句，
+用例一旦失败就会有个 `setInterval` 活着跑进下一个用例的整库 TRUNCATE（harness 头注释里记的
+40P01 场景）。`stop()` 本身幂等，加兜底不影响原有调用。
+
+### AC-12：intent apply 五个文件改名去 provider 前缀
+
+§5ea 合一时 legacy 侧整条退役（`legacyIntentApplyResourceParticipants` 1062 行 +
+`legacyIntentApplyResourceDependencies` 141 行 + 两个 `sqliteIntentApply*` 共 940 行），
+PG 侧那几个文件因此成为**两个 provider 唯一的实现**——provider 前缀就此名不副实，
+正是 AC-12 修订第三款要消灭的第②类。本刀改名（51 文件 / 278 处标识符）：
+
+| 旧 | 新 |
+| --- | --- |
+| `infrastructure/postgresqlIntentApplyOperations.ts` | `infrastructure/intentApplyEngine.ts` |
+| `infrastructure/postgresqlIntentApplyArtifactLifecycle.ts` | `infrastructure/intentApplyArtifactLifecycle.ts` |
+| `aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts` | `aggregateAdapters/intentApplyResourceParticipants.ts` |
+| `aggregateAdapters/postgresqlIntentApplyResourcePorts.ts` | `aggregateAdapters/intentApplyResourcePorts.ts` |
+| `aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts` | `aggregateAdapters/intentApplyArtifactOwners.ts` |
+
+`PostgresqlIntentApplyOperations` 去前缀会与既有端口 `IntentApplyOperations` 撞名，故改叫
+**`IntentApplyEngine`**（连同 `…EngineRequest` / `…EngineDependencies`）——它本来就是端口之上多带
+`converge` / `activeJournalIds` 的那台引擎，名字比「又一个 Operations」更准。
+
+改名顺带销掉一处**重复类型声明**：`IntentApplyRecoveryArtifact` 在引擎文件里是本地 `type`、
+在 lifecycle 文件里是导出 `type`，两处定义逐字相同。现在引擎文件导出它、lifecycle 改为 import
+再 re-export，单一事实源。
+
+账本：`PROVIDER_NAMED_FILE_DEBT` 44 → 39。T17 里那段把 intent apply 判成「真分叉、孪生顶着
+`legacy*`、体量 2397 : 2761」的裁决注释**已经过期**，一并改写成销账记录——留着它会让下一个人
+按早就不存在的 legacy 侧行数去推导一次已经做完的合一。

@@ -4,18 +4,19 @@
 // preview→commit 被“root 必须 local”硬拒。本文件刻意跨越真实边界，覆盖正常、
 // 劫持、篡改、并发漂移与坏行 fail-closed。
 
-import { describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, mcps, runtimes, users, workflows } from '../src/db/schema'
+import { describeEachProvider } from './helpers/eachProvider'
 import { translateDecisions } from '../src/services/resourcePackage/commit'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
@@ -25,7 +26,6 @@ import { encodeZip } from '../src/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
 
@@ -36,7 +36,7 @@ const actorOf = (id: string, permissions: readonly string[] = []): Actor =>
     permissions: new Set<string>(['resource-acl:private', ...permissions]),
   }) as unknown as Actor
 
-async function seedUser(db: DbClient, id: string): Promise<void> {
+async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
   await db.insert(users).values({
     id,
     username: id,
@@ -50,7 +50,7 @@ async function seedUser(db: DbClient, id: string): Promise<void> {
 }
 
 async function seedWorkflow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: { id: string; name: string; builtin: boolean; owner: string; version?: number },
 ): Promise<void> {
   await db.insert(workflows).values({
@@ -76,97 +76,224 @@ async function codeOf(promise: Promise<unknown>): Promise<string | undefined> {
   }
 }
 
-describe('built-in 根：完整跨实例导入', () => {
-  test('export→parse→preview→commit 绑定目标实例真 built-in，重放不复制', async () => {
-    const source = createInMemoryDb(MIGRATIONS)
-    const target = createInMemoryDb(MIGRATIONS)
-    const sourceHome = mkdtempSync(join(tmpdir(), 'rfc271-builtin-src-'))
-    const targetHome = mkdtempSync(join(tmpdir(), 'rfc271-builtin-dst-'))
-    try {
-      await seedUser(source, 'u1')
-      await seedUser(target, 'u1')
-      await seedWorkflow(source, {
-        id: 'SRC_BUILTIN',
-        name: 'aw-builtin-probe',
-        builtin: true,
-        owner: '__system__',
-      })
-      // 攻击者同名普通行与真正 built-in 并存；只能命中后者。
-      await seedWorkflow(target, {
-        id: 'ATTACKER',
-        name: 'aw-builtin-probe',
-        builtin: false,
-        owner: 'u-attacker',
-      })
-      await seedWorkflow(target, {
-        id: 'DST_BUILTIN',
-        name: 'aw-builtin-probe',
-        builtin: true,
-        owner: '__system__',
-      })
+interface MidExportWrite {
+  /** 传给 `exportResourcePackage` 的句柄。 */
+  readonly db: ProviderNeutralDatabase
+  /** 该表被读到的总次数——原判据「至少读了两回」就是拿它断言的。 */
+  reads(): number
+  /**
+   * 注入点实际触发的次数。**每条用例都要断言它**：注入一旦失效，被测的末端复核根本没被
+   * 执行到，用例会以假绿的方式「通过」（同 `rfc271-export-closure-authz` 文件头记的那次）。
+   */
+  fired(): number
+}
 
-      const exported = await exportResourcePackage(
-        source,
-        actorOf('u1'),
-        { type: 'workflow', id: 'SRC_BUILTIN' },
-        { appHome: sourceHome },
-      )
-      const pkg = await parseResourcePackage(exported.zip)
-      const preview = await buildPackagePreview(target, actorOf('u1'), pkg, {
-        box,
-        importId: ulid(),
-      })
-      // RFC-286 F3 AC-3 运行时对拍：后端真实 preview 产出必须过 shared wire
-      // schema 的 zod parse（satisfies 只锚编译期；这里锚运行时形状——含
-      // requirements 七字段必填）。实现门路 1 P3-2 / 路 2 P3-1 补账。
-      expect(() => PackagePreviewSchema.parse(preview)).not.toThrow()
-      expect(preview.entries).toEqual([])
+/**
+ * 在导出**中途**注入一次写：闭包遍历读过该表之后、末端复核读它之前。
+ *
+ * ⚠️ 不能图省事在调用 `exportResourcePackage` **之前**改数据——那样撞上的是闭包遍历时的
+ * 第一道门，末端复核根本没被执行到。`nth = 2` 才构成「捕获之后、复核之前」的窗口：第 1 次
+ * （闭包）读到旧值，第 2 次（复核）读到新值。
+ *
+ * RFC-359 双引擎 —— 这道 seam 上有两处引擎差异，两处都必须接住，否则它在 PostgreSQL 上
+ * **一次都不会触发**而用例照样绿：
+ *   ① 读端口的每次查询都在 `databaseSessionFor(db).serializable(...)` 里发。SQLite 的事务
+ *      句柄就是客户端本身，代理天然带进去；PostgreSQL 的 `db.transaction(cb)` 交给回调的是
+ *      **另一个对象**，所以 `transaction` 也要拦一道、把事务句柄重新包一层。
+ *   ② SQLite 的写是同步的（旧版直接 `.run()` 当场跑完）；PostgreSQL 上写是 async，必须在
+ *      这条查询真正执行**之前**被 await 掉，否则读写乱序、注入形同虚设。drizzle 的查询构造器
+ *      是 thenable，接管 `then` 就能在执行前插进一次 await；链式方法返回 `this`，要把代理
+ *      身份带下去，否则一调用就脱代理。
+ * 注入写走**这次读所在的那个句柄**：PG 上就是那笔事务的连接，写与读因此天然有序。
+ */
+function dbWithMidExportWrite(
+  db: ProviderNeutralDatabase,
+  table: unknown,
+  nth: number,
+  mutate: (handle: ProviderNeutralDatabase) => Promise<void>,
+): MidExportWrite {
+  let reads = 0
+  let fired = 0
 
-      const input = { pkg, previewToken: preview.previewToken, decisions: [] }
-      const first = await commitResourcePackageForTest(
-        { db: target, appHome: targetHome, box },
-        actorOf('u1'),
-        input,
-      )
-      expect(() => PackageImportReceiptSchema.parse(first)).not.toThrow() // commit 侧同锚
-      expect(first.applied).toEqual([])
-      expect(first.root).toEqual({
-        resourceType: 'workflow',
-        resourceId: 'DST_BUILTIN',
-        name: 'aw-builtin-probe',
-        action: 'reuse',
-      })
-      expect(
-        target.select().from(workflows).where(eq(workflows.name, 'aw-builtin-probe')).all(),
-      ).toHaveLength(2)
+  const deferExecution = (builder: object, pending: () => Promise<void>): object => {
+    const proxy: object = new Proxy(builder, {
+      get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver)
+        if (typeof value !== 'function') return value
+        if (property === 'then') {
+          return (onFulfilled?: never, onRejected?: never) =>
+            pending()
+              .then(() => target as PromiseLike<unknown>)
+              .then(onFulfilled, onRejected)
+        }
+        return (...args: unknown[]) => {
+          const result = (value as (...called: unknown[]) => unknown).apply(target, args)
+          return result === target ? proxy : result
+        }
+      },
+    })
+    return proxy
+  }
 
-      const replay = await commitResourcePackageForTest(
-        { db: target, appHome: targetHome, box },
-        actorOf('u1'),
-        input,
-      )
-      expect(replay).toEqual(first)
-    } finally {
-      removeTempDirSync(sourceHome)
-      removeTempDirSync(targetHome)
-    }
+  const wrapHandle = (handle: object): object =>
+    new Proxy(handle, {
+      get(target, property, receiver) {
+        const original = Reflect.get(target, property, receiver)
+        if (typeof original !== 'function') return original
+        if (property === 'transaction') {
+          return (body: (tx: object) => unknown, ...rest: unknown[]) =>
+            (original as (...called: unknown[]) => unknown).call(
+              target,
+              (tx: object) => body(wrapHandle(tx)),
+              ...rest,
+            )
+        }
+        if (property !== 'select') return original.bind(target)
+        return (...args: unknown[]) => {
+          const builder = (original as (...called: unknown[]) => unknown).apply(
+            target,
+            args,
+          ) as object
+          return new Proxy(builder, {
+            get(queryTarget, queryProperty, queryReceiver) {
+              const queryMethod = Reflect.get(queryTarget, queryProperty, queryReceiver)
+              if (queryProperty !== 'from' || typeof queryMethod !== 'function') {
+                return typeof queryMethod === 'function'
+                  ? queryMethod.bind(queryTarget)
+                  : queryMethod
+              }
+              return (t: unknown) => {
+                const next = (queryMethod as (...called: unknown[]) => unknown).call(
+                  queryTarget,
+                  t,
+                ) as object
+                if (t !== table) return next
+                reads += 1
+                if (reads !== nth) return next
+                fired += 1
+                let started: Promise<void> | undefined
+                return deferExecution(next, () => {
+                  started ??= mutate(target as ProviderNeutralDatabase)
+                  return started
+                })
+              }
+            },
+          })
+        }
+      },
+    })
+
+  return Object.freeze({
+    db: wrapHandle(db as object) as unknown as ProviderNeutralDatabase,
+    reads: () => reads,
+    fired: () => fired,
   })
+}
 
-  test('目标只有同名普通资源时 fail closed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const appHome = mkdtempSync(join(tmpdir(), 'rfc271-builtin-missing-'))
-    try {
-      await seedUser(db, 'u1')
-      await seedWorkflow(db, {
-        id: 'ATTACKER',
-        name: 'aw-builtin-probe',
-        builtin: false,
-        owner: 'u-attacker',
+// RFC-359 AC-6 —— 资源包的导出 / 预检 / 提交在 RFC-359 之后是「一份实现两个 provider 共用」，
+// 所以这一组**真的读写库**的判据在两个引擎上各跑一遍。跨实例导入需要两台互不相干的真库，
+// 由 harness 的 `databaseCount: 2` 给出（SQLite 是两个内存库，PostgreSQL 是两个真库）。
+// 不碰库的那三组（manifest / token / serializer、decision 翻译、slug 边界）留在文件下半部
+// 单跑一遍：给它们建库只会白付一次迁移，测不出任何引擎差异。
+describeEachProvider(
+  'RFC-271 资源包边界的真库跨层回归（双引擎）',
+  (harness) => {
+    let source: ProviderNeutralDatabase
+    let target: ProviderNeutralDatabase
+    beforeEach(() => {
+      source = harness.database(0).db
+      target = harness.database(1).db
+    })
+
+    describe('built-in 根：完整跨实例导入', () => {
+      test('export→parse→preview→commit 绑定目标实例真 built-in，重放不复制', async () => {
+        const sourceHome = mkdtempSync(join(tmpdir(), 'rfc271-builtin-src-'))
+        const targetHome = mkdtempSync(join(tmpdir(), 'rfc271-builtin-dst-'))
+        try {
+          await seedUser(source, 'u1')
+          await seedUser(target, 'u1')
+          await seedWorkflow(source, {
+            id: 'SRC_BUILTIN',
+            name: 'aw-builtin-probe',
+            builtin: true,
+            owner: '__system__',
+          })
+          // 攻击者同名普通行与真正 built-in 并存；只能命中后者。
+          await seedWorkflow(target, {
+            id: 'ATTACKER',
+            name: 'aw-builtin-probe',
+            builtin: false,
+            owner: 'u-attacker',
+          })
+          await seedWorkflow(target, {
+            id: 'DST_BUILTIN',
+            name: 'aw-builtin-probe',
+            builtin: true,
+            owner: '__system__',
+          })
+
+          const exported = await exportResourcePackage(
+            source,
+            actorOf('u1'),
+            { type: 'workflow', id: 'SRC_BUILTIN' },
+            { appHome: sourceHome },
+          )
+          const pkg = await parseResourcePackage(exported.zip)
+          const preview = await buildPackagePreview(target, actorOf('u1'), pkg, {
+            box,
+            importId: ulid(),
+          })
+          // RFC-286 F3 AC-3 运行时对拍：后端真实 preview 产出必须过 shared wire
+          // schema 的 zod parse（satisfies 只锚编译期；这里锚运行时形状——含
+          // requirements 七字段必填）。实现门路 1 P3-2 / 路 2 P3-1 补账。
+          expect(() => PackagePreviewSchema.parse(preview)).not.toThrow()
+          expect(preview.entries).toEqual([])
+
+          const input = { pkg, previewToken: preview.previewToken, decisions: [] }
+          const first = await commitResourcePackageForTest(
+            { db: target, appHome: targetHome, box },
+            actorOf('u1'),
+            input,
+          )
+          expect(() => PackageImportReceiptSchema.parse(first)).not.toThrow() // commit 侧同锚
+          expect(first.applied).toEqual([])
+          expect(first.root).toEqual({
+            resourceType: 'workflow',
+            resourceId: 'DST_BUILTIN',
+            name: 'aw-builtin-probe',
+            action: 'reuse',
+          })
+          expect(
+            await target.select().from(workflows).where(eq(workflows.name, 'aw-builtin-probe')),
+          ).toHaveLength(2)
+
+          const replay = await commitResourcePackageForTest(
+            { db: target, appHome: targetHome, box },
+            actorOf('u1'),
+            input,
+          )
+          expect(replay).toEqual(first)
+        } finally {
+          removeTempDirSync(sourceHome)
+          removeTempDirSync(targetHome)
+        }
       })
-      const zip = encodeZip([
-        {
-          path: 'manifest.yaml',
-          bytes: utf8(`formatVersion: 1
+
+      test('目标只有同名普通资源时 fail closed', async () => {
+        const db = source
+        const appHome = mkdtempSync(join(tmpdir(), 'rfc271-builtin-missing-'))
+        try {
+          await seedUser(db, 'u1')
+          await seedWorkflow(db, {
+            id: 'ATTACKER',
+            name: 'aw-builtin-probe',
+            builtin: false,
+            owner: 'u-attacker',
+          })
+          const zip = encodeZip([
+            {
+              path: 'manifest.yaml',
+              bytes: utf8(`formatVersion: 1
 exportedAt: 0
 root: { slug: workflow-aw-builtin-probe, type: workflow, name: aw-builtin-probe }
 resources: []
@@ -174,58 +301,234 @@ builtins: [{ type: workflow, name: aw-builtin-probe }]
 requirements: {}
 secrets: []
 `),
-        },
-        {
-          path: 'bundle.json',
-          bytes: utf8(
-            JSON.stringify({
-              bundleVersion: 1,
-              ops: [],
-              rootRef: 'builtin:workflow/aw-builtin-probe',
-            }),
-          ),
-        },
-      ])
-      const pkg = await parseResourcePackage(zip)
+            },
+            {
+              path: 'bundle.json',
+              bytes: utf8(
+                JSON.stringify({
+                  bundleVersion: 1,
+                  ops: [],
+                  rootRef: 'builtin:workflow/aw-builtin-probe',
+                }),
+              ),
+            },
+          ])
+          const pkg = await parseResourcePackage(zip)
 
-      // ① AC-9 要求「本地没有 → **预检页**报错」。built-in 绑不上是一个**环境前提
-      // 不满足**，用户能做的只有升级/修复对端实例，不是在这个包里改点什么——所以它
-      // 必须出现在「要不要导入」这个决策**之前**，而不是等用户逐条选完、填完凭据、
-      // 点了提交才被告知这个包在本实例根本装不了。
-      //
-      // 判据是「同名 **且** builtin=true」：这里目标实例只有一行同名的**用户自建**
-      // 资源（owner=u-attacker、builtin=false）。只按名字查会绑上去，等于把别人的
-      // 资源当框架内置件用。
-      expect(
-        await codeOf(buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: ulid() })),
-      ).toBe('package-builtin-missing')
+          // ① AC-9 要求「本地没有 → **预检页**报错」。built-in 绑不上是一个**环境前提
+          // 不满足**，用户能做的只有升级/修复对端实例，不是在这个包里改点什么——所以它
+          // 必须出现在「要不要导入」这个决策**之前**，而不是等用户逐条选完、填完凭据、
+          // 点了提交才被告知这个包在本实例根本装不了。
+          //
+          // 判据是「同名 **且** builtin=true」：这里目标实例只有一行同名的**用户自建**
+          // 资源（owner=u-attacker、builtin=false）。只按名字查会绑上去，等于把别人的
+          // 资源当框架内置件用。
+          expect(
+            await codeOf(buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: ulid() })),
+          ).toBe('package-builtin-missing')
 
-      // ② 引擎兜底仍在：绕开预检（手工签一个 token）直接提交，`resolveIdentityRef`
-      // 照样 fail closed。两层都要有——预检那层是**产品要求**（早点告诉用户），引擎
-      // 这层是**安全要求**（不信任何绕过预检的调用方）。
-      const importId = ulid()
-      const forgedToken = signPreviewToken(box, {
-        importId,
-        actorUserId: 'u1',
-        packageDigest: pkg.digest,
-        expiresAt: Date.now() + 60_000,
-        baseline: [],
-        humanBaseline: [],
+          // ② 引擎兜底仍在：绕开预检（手工签一个 token）直接提交，`resolveIdentityRef`
+          // 照样 fail closed。两层都要有——预检那层是**产品要求**（早点告诉用户），引擎
+          // 这层是**安全要求**（不信任何绕过预检的调用方）。
+          const importId = ulid()
+          const forgedToken = signPreviewToken(box, {
+            importId,
+            actorUserId: 'u1',
+            packageDigest: pkg.digest,
+            expiresAt: Date.now() + 60_000,
+            baseline: [],
+            humanBaseline: [],
+          })
+          expect(
+            await codeOf(
+              commitResourcePackageForTest({ db, appHome, box }, actorOf('u1'), {
+                pkg,
+                previewToken: forgedToken,
+                decisions: [],
+              }),
+            ),
+          ).toBe('bundle-builtin-missing')
+        } finally {
+          removeTempDirSync(appHome)
+        }
       })
-      expect(
-        await codeOf(
-          commitResourcePackageForTest({ db, appHome, box }, actorOf('u1'), {
-            pkg,
-            previewToken: forgedToken,
-            decisions: [],
-          }),
-        ),
-      ).toBe('bundle-builtin-missing')
-    } finally {
-      removeTempDirSync(appHome)
-    }
-  })
-})
+    })
+
+    describe('agent 行为字段真 DB 往返', () => {
+      test('非默认 runtime 与声明 inputs 跨实例保持，不静默回落', async () => {
+        const sourceHome = mkdtempSync(join(tmpdir(), 'rfc271-agent-src-'))
+        const targetHome = mkdtempSync(join(tmpdir(), 'rfc271-agent-dst-'))
+        try {
+          await seedUser(source, 'u1')
+          await seedUser(target, 'u1')
+          for (const db of [source, target]) {
+            await db.insert(runtimes).values({
+              id: ulid(),
+              name: 'custom-runtime',
+              protocol: 'opencode',
+              enabled: true,
+            })
+          }
+          const inputs = [
+            { name: 'repository', kind: 'path<dir>', required: true, description: 'repo root' },
+          ]
+          await source.insert(agents).values({
+            id: 'SOURCE_AGENT',
+            name: 'typed-agent',
+            description: '',
+            outputs: '[]',
+            inputs: JSON.stringify(inputs),
+            runtime: 'custom-runtime',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '[]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: 'u1',
+            visibility: 'private',
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+
+          const exported = await exportResourcePackage(
+            source,
+            actorOf('u1'),
+            { type: 'agent', id: 'SOURCE_AGENT' },
+            { appHome: sourceHome },
+          )
+          const pkg = await parseResourcePackage(exported.zip)
+          const preview = await buildPackagePreview(target, actorOf('u1', ['agents:create']), pkg, {
+            box,
+            importId: ulid(),
+          })
+          const receipt = await commitResourcePackageForTest(
+            { db: target, appHome: targetHome, box },
+            actorOf('u1', ['agents:create']),
+            {
+              pkg,
+              previewToken: preview.previewToken,
+              decisions: [{ localSlug: 'agent-typed-agent', action: 'new' }],
+            },
+          )
+          const imported = (
+            await target
+              .select()
+              .from(agents)
+              .where(eq(agents.id, receipt.root?.resourceId ?? ''))
+              .limit(1)
+          )[0]
+          expect(imported?.runtime).toBe('custom-runtime')
+          expect(JSON.parse(imported?.inputs ?? '[]')).toEqual(inputs)
+        } finally {
+          removeTempDirSync(sourceHome)
+          removeTempDirSync(targetHome)
+        }
+      })
+    })
+
+    describe('exact root fence 覆盖闭包之后的 live 读取窗口', () => {
+      test('初检后、最终复核前 version 漂移 ⇒ 409，不返回混合快照', async () => {
+        const db = source
+        const appHome = mkdtempSync(join(tmpdir(), 'rfc271-final-fence-'))
+        try {
+          await seedUser(db, 'u1')
+          await seedWorkflow(db, {
+            id: 'WF1',
+            name: 'racy',
+            builtin: false,
+            owner: 'u1',
+            version: 1,
+          })
+
+          const raced = dbWithMidExportWrite(db, workflows, 2, async (handle) => {
+            await handle
+              .update(workflows)
+              .set({ version: 2, updatedAt: 2 })
+              .where(eq(workflows.id, 'WF1'))
+          })
+
+          expect(
+            await codeOf(
+              exportResourcePackage(
+                raced.db,
+                actorOf('u1'),
+                { type: 'workflow', id: 'WF1' },
+                { appHome, expect: { expectedVersion: 1 } },
+              ),
+            ),
+          ).toBe('package-root-changed')
+          expect(raced.reads()).toBeGreaterThanOrEqual(2)
+          expect(raced.fired()).toBe(1)
+        } finally {
+          removeTempDirSync(appHome)
+        }
+      })
+
+      test('root 未变但传递依赖在遍历后漂移 ⇒ 409，不拼接跨版本闭包', async () => {
+        const db = source
+        const appHome = mkdtempSync(join(tmpdir(), 'rfc271-closure-fence-'))
+        try {
+          await seedUser(db, 'u1')
+          await db.insert(mcps).values({
+            id: 'M1',
+            name: 'tools',
+            description: '',
+            type: 'remote',
+            config: JSON.stringify({ url: 'https://v1.test/mcp' }),
+            enabled: true,
+            ownerUserId: 'u1',
+            visibility: 'private',
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+          await db.insert(agents).values({
+            id: 'A1',
+            name: 'root',
+            description: '',
+            outputs: '[]',
+            inputs: '[]',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '["M1"]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: 'u1',
+            visibility: 'private',
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+
+          const raced = dbWithMidExportWrite(db, mcps, 2, async (handle) => {
+            await handle
+              .update(mcps)
+              .set({ config: JSON.stringify({ url: 'https://v2.test/mcp' }), updatedAt: 2 })
+              .where(eq(mcps.id, 'M1'))
+          })
+
+          expect(
+            await codeOf(
+              exportResourcePackage(
+                raced.db,
+                actorOf('u1'),
+                { type: 'agent', id: 'A1' },
+                { appHome },
+              ),
+            ),
+          ).toBe('package-closure-changed')
+          expect(raced.reads()).toBeGreaterThanOrEqual(2)
+          expect(raced.fired()).toBe(1)
+        } finally {
+          removeTempDirSync(appHome)
+        }
+      })
+    })
+  },
+  { databaseCount: 2 },
+)
 
 describe('manifest / token / serializer 的异常输入', () => {
   test('manifest 漏报或重复 built-in 声明都被拒绝', async () => {
@@ -485,224 +788,5 @@ describe('slug 边界', () => {
       { type: 'workflow', id: 'unicode', name: '全中文名字', row: {}, referencedBy: [] },
     ]).get('unicode')
     expect(nonAscii).toBe('workflow-workflow')
-  })
-})
-
-describe('agent 行为字段真 DB 往返', () => {
-  test('非默认 runtime 与声明 inputs 跨实例保持，不静默回落', async () => {
-    const source = createInMemoryDb(MIGRATIONS)
-    const target = createInMemoryDb(MIGRATIONS)
-    const sourceHome = mkdtempSync(join(tmpdir(), 'rfc271-agent-src-'))
-    const targetHome = mkdtempSync(join(tmpdir(), 'rfc271-agent-dst-'))
-    try {
-      await seedUser(source, 'u1')
-      await seedUser(target, 'u1')
-      for (const db of [source, target]) {
-        await db.insert(runtimes).values({
-          id: ulid(),
-          name: 'custom-runtime',
-          protocol: 'opencode',
-          enabled: true,
-        })
-      }
-      const inputs = [
-        { name: 'repository', kind: 'path<dir>', required: true, description: 'repo root' },
-      ]
-      await source.insert(agents).values({
-        id: 'SOURCE_AGENT',
-        name: 'typed-agent',
-        description: '',
-        outputs: '[]',
-        inputs: JSON.stringify(inputs),
-        runtime: 'custom-runtime',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-
-      const exported = await exportResourcePackage(
-        source,
-        actorOf('u1'),
-        { type: 'agent', id: 'SOURCE_AGENT' },
-        { appHome: sourceHome },
-      )
-      const pkg = await parseResourcePackage(exported.zip)
-      const preview = await buildPackagePreview(target, actorOf('u1', ['agents:create']), pkg, {
-        box,
-        importId: ulid(),
-      })
-      const receipt = await commitResourcePackageForTest(
-        { db: target, appHome: targetHome, box },
-        actorOf('u1', ['agents:create']),
-        {
-          pkg,
-          previewToken: preview.previewToken,
-          decisions: [{ localSlug: 'agent-typed-agent', action: 'new' }],
-        },
-      )
-      const imported = target
-        .select()
-        .from(agents)
-        .where(eq(agents.id, receipt.root?.resourceId ?? ''))
-        .get()
-      expect(imported?.runtime).toBe('custom-runtime')
-      expect(JSON.parse(imported?.inputs ?? '[]')).toEqual(inputs)
-    } finally {
-      removeTempDirSync(sourceHome)
-      removeTempDirSync(targetHome)
-    }
-  })
-})
-
-describe('exact root fence 覆盖闭包之后的 live 读取窗口', () => {
-  test('初检后、最终复核前 version 漂移 ⇒ 409，不返回混合快照', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const appHome = mkdtempSync(join(tmpdir(), 'rfc271-final-fence-'))
-    try {
-      await seedUser(db, 'u1')
-      await seedWorkflow(db, {
-        id: 'WF1',
-        name: 'racy',
-        builtin: false,
-        owner: 'u1',
-        version: 1,
-      })
-
-      let workflowReads = 0
-      const racedDb = new Proxy(db as object, {
-        get(target, property, receiver) {
-          const original = Reflect.get(target, property, receiver)
-          if (property !== 'select' || typeof original !== 'function') {
-            return typeof original === 'function' ? original.bind(target) : original
-          }
-          return (...args: unknown[]) => {
-            const builder = original.apply(target, args)
-            return new Proxy(builder as object, {
-              get(queryTarget, queryProperty, queryReceiver) {
-                const queryMethod = Reflect.get(queryTarget, queryProperty, queryReceiver)
-                if (queryProperty !== 'from' || typeof queryMethod !== 'function') {
-                  return typeof queryMethod === 'function'
-                    ? queryMethod.bind(queryTarget)
-                    : queryMethod
-                }
-                return (table: unknown) => {
-                  if (table === workflows) {
-                    workflowReads += 1
-                    if (workflowReads === 2) {
-                      db.update(workflows)
-                        .set({ version: 2, updatedAt: 2 })
-                        .where(eq(workflows.id, 'WF1'))
-                        .run()
-                    }
-                  }
-                  return queryMethod.call(queryTarget, table)
-                }
-              },
-            })
-          }
-        },
-      }) as unknown as DbClient
-
-      expect(
-        await codeOf(
-          exportResourcePackage(
-            racedDb,
-            actorOf('u1'),
-            { type: 'workflow', id: 'WF1' },
-            { appHome, expect: { expectedVersion: 1 } },
-          ),
-        ),
-      ).toBe('package-root-changed')
-      expect(workflowReads).toBeGreaterThanOrEqual(2)
-    } finally {
-      removeTempDirSync(appHome)
-    }
-  })
-
-  test('root 未变但传递依赖在遍历后漂移 ⇒ 409，不拼接跨版本闭包', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const appHome = mkdtempSync(join(tmpdir(), 'rfc271-closure-fence-'))
-    try {
-      await seedUser(db, 'u1')
-      await db.insert(mcps).values({
-        id: 'M1',
-        name: 'tools',
-        description: '',
-        type: 'remote',
-        config: JSON.stringify({ url: 'https://v1.test/mcp' }),
-        enabled: true,
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      await db.insert(agents).values({
-        id: 'A1',
-        name: 'root',
-        description: '',
-        outputs: '[]',
-        inputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '["M1"]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-
-      let mcpReads = 0
-      const racedDb = new Proxy(db as object, {
-        get(target, property, receiver) {
-          const original = Reflect.get(target, property, receiver)
-          if (property !== 'select' || typeof original !== 'function') {
-            return typeof original === 'function' ? original.bind(target) : original
-          }
-          return (...args: unknown[]) => {
-            const builder = original.apply(target, args)
-            return new Proxy(builder as object, {
-              get(queryTarget, queryProperty, queryReceiver) {
-                const queryMethod = Reflect.get(queryTarget, queryProperty, queryReceiver)
-                if (queryProperty !== 'from' || typeof queryMethod !== 'function') {
-                  return typeof queryMethod === 'function'
-                    ? queryMethod.bind(queryTarget)
-                    : queryMethod
-                }
-                return (table: unknown) => {
-                  if (table === mcps && ++mcpReads === 2) {
-                    db.update(mcps)
-                      .set({ config: JSON.stringify({ url: 'https://v2.test/mcp' }), updatedAt: 2 })
-                      .where(eq(mcps.id, 'M1'))
-                      .run()
-                  }
-                  return queryMethod.call(queryTarget, table)
-                }
-              },
-            })
-          }
-        },
-      }) as unknown as DbClient
-
-      expect(
-        await codeOf(
-          exportResourcePackage(racedDb, actorOf('u1'), { type: 'agent', id: 'A1' }, { appHome }),
-        ),
-      ).toBe('package-closure-changed')
-      expect(mcpReads).toBeGreaterThanOrEqual(2)
-    } finally {
-      removeTempDirSync(appHome)
-    }
   })
 })

@@ -195,7 +195,7 @@ describe('intent apply 的 MCP update 分支已经带上围栏（源码层）', 
         'resource-catalog',
         'infrastructure',
         'aggregateAdapters',
-        'postgresqlIntentApplyResourcePorts.ts',
+        'intentApplyResourcePorts.ts',
       ),
       'utf8',
     )

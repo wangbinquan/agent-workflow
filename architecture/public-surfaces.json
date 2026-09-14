@@ -47614,11 +47614,10 @@
       "consumerEdgeIds": [
         "import:1bd139794715352aee84",
         "import:1dc5b5e49c264dc6c757",
+        "import:1ff4ac60c6101faef218",
         "import:21b3773c293753f457b6",
         "import:264f1f75c792f73ac9aa",
-        "import:28c8b7c44dc9df9bc168",
         "import:31b426d815e3d91a0412",
-        "import:32db6e8314969ba5f0fe",
         "import:4f2d65e593b82a16fee0",
         "import:50852e2935736cc3abfc",
         "import:570be319a11e6d5d6c15",
@@ -47627,6 +47626,7 @@
         "import:71521a150e7c0f378adb",
         "import:73f94018dc22a2dd8ad7",
         "import:9ee6effafe6c4d1cff39",
+        "import:a664f6aa0428d1103bd6",
         "import:b45d3c7ac9ba7c8496c5",
         "import:ba1e3dfa291d7b7deafb",
         "import:d0e837f4f6a50c96ddeb",
@@ -47666,9 +47666,9 @@
           "consumerEdgeIds": [
             "import:1dc5b5e49c264dc6c757",
             "import:31b426d815e3d91a0412",
-            "import:32db6e8314969ba5f0fe",
             "import:5e235bf49d40017d0720",
             "import:73f94018dc22a2dd8ad7",
+            "import:a664f6aa0428d1103bd6",
             "import:ba1e3dfa291d7b7deafb",
             "import:ffeb63bdfdb7de4e4c02"
           ],
@@ -47677,8 +47677,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:32db6e8314969ba5f0fe",
             "import:73f94018dc22a2dd8ad7",
+            "import:a664f6aa0428d1103bd6",
             "import:ba1e3dfa291d7b7deafb"
           ],
           "fieldPath": "user.displayName",
@@ -47688,16 +47688,16 @@
           "consumerEdgeIds": [
             "import:1bd139794715352aee84",
             "import:1dc5b5e49c264dc6c757",
+            "import:1ff4ac60c6101faef218",
             "import:264f1f75c792f73ac9aa",
-            "import:28c8b7c44dc9df9bc168",
             "import:31b426d815e3d91a0412",
-            "import:32db6e8314969ba5f0fe",
             "import:50852e2935736cc3abfc",
             "import:5e235bf49d40017d0720",
             "import:6ebf85e57f22809a3d37",
             "import:71521a150e7c0f378adb",
             "import:73f94018dc22a2dd8ad7",
             "import:9ee6effafe6c4d1cff39",
+            "import:a664f6aa0428d1103bd6",
             "import:b45d3c7ac9ba7c8496c5",
             "import:ba1e3dfa291d7b7deafb",
             "import:d0e837f4f6a50c96ddeb",
@@ -47752,10 +47752,10 @@
         },
         {
           "consumerEdgeIds": [
-            "import:32db6e8314969ba5f0fe",
             "import:50852e2935736cc3abfc",
             "import:71521a150e7c0f378adb",
             "import:73f94018dc22a2dd8ad7",
+            "import:a664f6aa0428d1103bd6",
             "import:ba1e3dfa291d7b7deafb",
             "import:d0e837f4f6a50c96ddeb"
           ],
@@ -47785,6 +47785,12 @@
         },
         {
           "context": "resource-catalog",
+          "edgeId": "import:1ff4ac60c6101faef218",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts#$file"
+        },
+        {
+          "context": "resource-catalog",
           "edgeId": "import:21b3773c293753f457b6",
           "file": "packages/backend/src/modules/resource-catalog/application/agents/importPorts.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/agents/importPorts.ts#$file"
@@ -47796,22 +47802,10 @@
           "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/platformInventory.ts#$file"
         },
         {
-          "context": "resource-catalog",
-          "edgeId": "import:28c8b7c44dc9df9bc168",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#$file"
-        },
-        {
           "context": "intent",
           "edgeId": "import:31b426d815e3d91a0412",
           "file": "packages/backend/src/modules/intent/application/ports/intentPersistence.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentPersistence.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
-          "edgeId": "import:32db6e8314969ba5f0fe",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#$file"
         },
         {
           "context": "legacy",
@@ -47860,6 +47854,12 @@
           "edgeId": "import:9ee6effafe6c4d1cff39",
           "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentImportSnapshot.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentImportSnapshot.ts#$file"
+        },
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:a664f6aa0428d1103bd6",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#$file"
         },
         {
           "context": "development-automation",
@@ -100364,10 +100364,10 @@
         "import:48701b748499c8fe3294",
         "import:669e36ea8d1a61626da9",
         "import:93a496890562d0d68db2",
+        "import:9a6c78cbb85ec0d2db48",
         "import:a7869069fdaf3d810f3b",
         "import:b1e3426a3850d35d6f34",
-        "import:c44892f461465161319e",
-        "import:cf05431d12871ab59909"
+        "import:c44892f461465161319e"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -100411,6 +100411,12 @@
           "ownerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentApplyOperations.ts#$file"
         },
         {
+          "context": "intent",
+          "edgeId": "import:9a6c78cbb85ec0d2db48",
+          "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#$file"
+        },
+        {
           "context": "task-execution",
           "edgeId": "import:a7869069fdaf3d810f3b",
           "file": "packages/backend/src/modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts",
@@ -100427,12 +100433,6 @@
           "edgeId": "import:c44892f461465161319e",
           "file": "packages/backend/src/services/scheduledTasks.ts",
           "ownerEntryId": "owner:packages/backend/src/services/scheduledTasks.ts#$file"
-        },
-        {
-          "context": "intent",
-          "edgeId": "import:cf05431d12871ab59909",
-          "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -159758,7 +159758,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1194ee382f7c1c09eae321fc112ad9969c5520d49b20753c57f2d4b6022bb9b8",
+  "sourceDigest": "sha256:a702772b64054d7a60f4db87f743f14e752c5d4aed3cc4bef66a4fcb05fc77ef",
   "targetContexts": [
     "collaboration",
     "development-automation",

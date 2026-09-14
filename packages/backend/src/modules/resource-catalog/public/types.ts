@@ -857,10 +857,10 @@ export type VersionedIntentResourceChangesetPlan =
 //
 // 它是 Intent apply 资源会话**提交臂的返回值**。两台 apply 引擎合一之前，那个句柄由
 // `public/participants.ts` 的 `IntentApplyResourceParticipantInTx` 声明，于是收据也得从
-// `public/` 出；现行会话交出的是 `PostgresqlIntentApplyResourceTransactionAttempt`
+// `public/` 出；现行会话交出的是 `IntentApplyResourceTransactionAttempt`
 // （RC 自己的 infrastructure 类型），收据跟着它走。公共面只降不升——没有跨上下文消费者的
 // 符号不该留在 `public/`。声明现在在
-// `infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`。
+// `infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts`。
 //
 // （`VersionedIntentResourceChangesetPlan` 留在这里：intent 的
 // `application/intentResourcePlan.ts` 按值构造它，是真的跨上下文合同。）

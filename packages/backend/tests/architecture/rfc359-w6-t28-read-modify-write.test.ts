@@ -90,7 +90,7 @@
 //        不被重试）冒成 500，SQLite 上则是干净的 409。W8-T28 已按 §10.1 加 `lockAggregateRoot` 修掉。
 //   modules/collaboration/infrastructure/clarifyRounds.ts     1 处
 //     :605  clarifyRounds —— 读出 draftAnswersJson 反序列化、塞一条、整个写回（JSON 合并）
-//   modules/intent/infrastructure/postgresqlIntentApplyOperations.ts      1 处
+//   modules/intent/infrastructure/intentApplyEngine.ts      1 处
 //     :349  intentSessions —— commitSeq / contextManifestJson 由 sessionRow 算出后写回
 //     —— **不可达**（W8-T28 实测判定）：`apply` 的每一条入口都先过
 //        `applyLock.run(sessionId, …)`（`application/sessionApplyLock.ts`，同 sessionId 排成一条
@@ -531,7 +531,7 @@ const CORPUS_FILES: readonly string[] = (() => {
 
 /** `<相对 src 的路径>: <未加锁的读—改—写处数>`，按路径字典序。只降不升。 */
 export const READ_MODIFY_WRITE_DEBT: readonly string[] = [
-  'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 1',
+  'modules/intent/infrastructure/intentApplyEngine.ts: 1',
   // W8-T28：`acceptMessage` 的两处已按 §10.1 取会话聚合根行锁修掉（10 → 8）。剩下 8 处实测不可达，
   // 理由见上面清单里那段与 `tests/rfc359-w8-t28-mcp-runtime-lost-update.test.ts` 的头注释。
   'modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts: 8',

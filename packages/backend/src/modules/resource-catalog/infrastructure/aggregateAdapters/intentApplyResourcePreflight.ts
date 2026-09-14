@@ -1,7 +1,7 @@
 // RFC-359 W8 —— Intent apply 会话的归属预检：**一份实现，两个 provider 共用**。
 //
 // 合一前这三个 interface 加一个函数在同目录的两个适配器里各有一份**逐字相同**的副本
-// （`legacyIntentApplyResourceParticipants.ts` 与 `postgresqlIntentApplyResourceParticipants.ts`），
+// （`legacyIntentApplyResourceParticipants.ts` 与 `intentApplyResourceParticipants.ts`），
 // 差别只有类型名上的 `Legacy` / `Postgresql` 前缀——是纯粹的**命名分叉**，不是能力分叉：
 // 函数体只经 `ResourceCatalogAclIdentityReadPort` 这个闭合端口取数，一行方言都没有。
 //

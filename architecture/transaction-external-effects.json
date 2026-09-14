@@ -1226,6 +1226,44 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#transaction:223",
+      "line": 223,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#rollForwardLegacySkillArtifacts",
+      "status": "clear",
+      "symbol": "rollForwardLegacySkillArtifacts",
+      "targetContext": "intent",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#transaction:221",
+      "line": 221,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#createIntentApplyEngine",
+      "status": "clear",
+      "symbol": "createIntentApplyEngine",
+      "targetContext": "intent",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
+        "push"
+      ],
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#transaction:400",
+      "line": 400,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#createIntentApplyEngine",
+      "status": "co-located-risk",
+      "symbol": "createIntentApplyEngine",
+      "targetContext": "intent",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/intent/infrastructure/intentSqlPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/intent/infrastructure/intentSqlPersistence.ts#transaction:1032",
@@ -1569,44 +1607,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlProgramRunner.ts#PlainIntentSqlProgramRunner",
       "status": "clear",
       "symbol": "PlainIntentSqlProgramRunner",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#transaction:225",
-      "line": 225,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#rollForwardLegacySkillArtifacts",
-      "status": "clear",
-      "symbol": "rollForwardLegacySkillArtifacts",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#transaction:221",
-      "line": 221,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations",
-      "status": "clear",
-      "symbol": "createPostgresqlIntentApplyOperations",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#transaction:400",
-      "line": 400,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations",
-      "status": "co-located-risk",
-      "symbol": "createPostgresqlIntentApplyOperations",
       "targetContext": "intent",
       "transactionCallee": "transaction"
     },
@@ -3100,7 +3100,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1194ee382f7c1c09eae321fc112ad9969c5520d49b20753c57f2d4b6022bb9b8",
+  "sourceDigest": "sha256:a702772b64054d7a60f4db87f743f14e752c5d4aed3cc4bef66a4fcb05fc77ef",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

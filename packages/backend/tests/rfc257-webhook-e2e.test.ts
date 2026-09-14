@@ -1,13 +1,19 @@
 // RFC-257/RFC-310 全链路端到端：HTTP POST → EventRecord → per-rule Delivery
 // → source-neutral WorkStart → 真 dispatcher，只在最终 launch 处注入 fake。
-import { describe, expect, test } from 'bun:test'
+//
+// RFC-359 AC-6（双引擎）：整条链路的装配点——dispatch core / ingress 持久化 / 事件中心 /
+// 路由目录与投递消费者 / 身份运行时 / MR 终态控制的两个持久化端口——形参都已是中立面，
+// 夹具只把库句柄换成 harness 现建的那一个。唯一仍是两份实现的是「任务源终止参与者」，
+// 按 `harness.capabilities.isolation` 取生产上同一侧的那份（同
+// `rfc359-w8-source-termination-conformance` 的姿势），否则 PG 上跑的是 SQLite 那台机器。
+import { afterEach, describe, expect, test } from 'bun:test'
 import { createHmac } from 'node:crypto'
-import { resolve } from 'node:path'
 import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { DbClient } from '../src/db/client'
+import type { PostgresqlDatabaseClient } from '../src/platform/persistence/postgresqlDatabaseClient'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import {
@@ -32,7 +38,16 @@ import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
-import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { composeMrTerminalControlWithPorts } from '../src/modules/integration/composition/webhookTerminalControl'
+import {
+  createMrLaunchGuardPersistence,
+  createMrTerminalEffectPersistence,
+} from '../src/modules/integration/infrastructure/mrTerminalControlPersistence'
+import {
+  composePostgresqlTaskSourceTermination,
+  composeTaskSourceTermination,
+} from '../src/modules/task-execution/composition/sourceTermination'
+import type { MrTerminalControl } from '../src/modules/integration/public/mrTerminalControl'
 import { composeEventCenter } from '../src/modules/event-center/composition'
 import {
   createCodeHostWebhookDeliveryConsumer,
@@ -43,10 +58,13 @@ import {
   codeHostEventTypeRef,
 } from '../src/modules/integration/public/events'
 import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 3))
 const SECRET = 'e2e-secret'
+
+/** 本用例装出来的 MR 终态控制器；`afterEach` 负责收尾（见 `seedFixture`）。 */
+const startedTerminalControls: MrTerminalControl[] = []
 
 async function waitFor<T>(fn: () => Promise<T | null>, ms = 4000): Promise<T> {
   const deadline = Date.now() + ms
@@ -58,8 +76,21 @@ async function waitFor<T>(fn: () => Promise<T | null>, ms = 4000): Promise<T> {
   }
 }
 
-async function harness() {
-  const db = createInMemoryDb(MIGRATIONS)
+/**
+ * 生产上这一对由各自的组合根选：SQLite 根走 `composeTaskSourceTermination`，PostgreSQL 根走
+ * `composePostgresqlTaskSourceTermination`。harness 有意不交出 provider 名，所以按能力分派
+ * （`isolation === 'exclusive'` 即 SQLite）。
+ */
+function taskSourceTerminationFor(providerHarness: ProviderHarness) {
+  return providerHarness.capabilities.isolation === 'exclusive'
+    ? composeTaskSourceTermination(providerHarness.db as unknown as DbClient)
+    : composePostgresqlTaskSourceTermination(
+        providerHarness.db as unknown as PostgresqlDatabaseClient,
+      )
+}
+
+async function seedFixture(providerHarness: ProviderHarness) {
+  const db = providerHarness.db
   const owner = await createUser(db, {
     username: 'owner',
     displayName: 'Owner',
@@ -100,7 +131,16 @@ async function harness() {
   })
   const canceled: string[] = []
   const failLaunchNames = new Set<string>()
-  const terminalControl = composeMrTerminalControl(db)
+  const terminalControl = composeMrTerminalControlWithPorts({
+    persistence: {
+      launchGuards: createMrLaunchGuardPersistence(db),
+      terminalEffects: createMrTerminalEffectPersistence(db),
+    },
+    taskTermination: taskSourceTerminationFor(providerHarness),
+  })
+  // 后台恢复扫描是 setInterval 驱动的：用例失败时也必须停，否则 PostgreSQL 侧它会在下一个
+  // 用例的整库 TRUNCATE 期间继续读表（harness 头注记的 40P01 现场）。
+  startedTerminalControls.push(terminalControl)
   await terminalControl.reconcileOnBoot()
   // 真 dispatcher；只在 launch/cancel 处注入（fake launch 落真 tasks 行，
   // 让归属列与 supersede 走真实查询面）。
@@ -128,6 +168,12 @@ async function harness() {
         ownerUserId: actor.user.id,
         inputs: '{}',
         startedAt: Date.now(),
+        // SQLite 的 `rfc328_tasks_lineage_after_insert` 会补这两列，PostgreSQL 按设计没有
+        // 对应触发器——直插 `tasks` 的夹具必须自己给，两个引擎的物理行才一样。
+        executionLineageId: taskId,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+        ]),
         eventSubscriptionId: invoker.eventSubscriptionId,
         eventDeliveryId: invoker.eventDeliveryId,
         triggerContextJson: JSON.stringify(invoker.triggerContext),
@@ -256,269 +302,281 @@ function githubPullRequestBody(
   }
 }
 
-describe('RFC-257 T14 · HTTP 入站 → 真分发器 → 任务行（全链路）', () => {
-  test('同一 Webhook 命中两条规则：每条订阅独立投递，一条启动失败不吞掉另一条', async () => {
-    const h = await harness()
-    await h.db.insert(webhookTriggers).values({
-      id: 'tr-2',
-      name: '第二处理人',
-      endpointId: 'ep-1',
-      ownerUserId: h.ownerId,
-      repoScope: JSON.stringify({ kind: 'prefix', prefix: 'platform/' }),
-      eventTypes: JSON.stringify(['pipeline_failed']),
-      ignoreUsernames: JSON.stringify(['aw-bot']),
-      launchKind: 'workflow',
-      launchRefId: h.workflowId,
-      launchPayload: JSON.stringify({ inputs: {} }),
-    })
-    h.failLaunchNames.add('[修到绿] platform/api!42')
+describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness) => {
+  afterEach(async () => {
+    for (const control of startedTerminalControls.splice(0, startedTerminalControls.length)) {
+      await control.stop()
+    }
+  })
 
-    const incoming = pipelineFailedBody('uuid-multicast')
-    const response = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
-      method: 'POST',
-      headers: incoming.headers,
-      body: incoming.body,
-    })
-    expect(response.status).toBe(200)
-    const { deliveryId } = (await response.json()) as { deliveryId: string }
+  describe('RFC-257 T14 · HTTP 入站 → 真分发器 → 任务行（全链路）', () => {
+    test('同一 Webhook 命中两条规则：每条订阅独立投递，一条启动失败不吞掉另一条', async () => {
+      const h = await seedFixture(harness)
+      await h.db.insert(webhookTriggers).values({
+        id: 'tr-2',
+        name: '第二处理人',
+        endpointId: 'ep-1',
+        ownerUserId: h.ownerId,
+        repoScope: JSON.stringify({ kind: 'prefix', prefix: 'platform/' }),
+        eventTypes: JSON.stringify(['pipeline_failed']),
+        ignoreUsernames: JSON.stringify(['aw-bot']),
+        launchKind: 'workflow',
+        launchRefId: h.workflowId,
+        launchPayload: JSON.stringify({ inputs: {} }),
+      })
+      h.failLaunchNames.add('[修到绿] platform/api!42')
 
-    const fires = await waitFor(async () => {
-      const rows = await h.db
-        .select()
-        .from(webhookTriggerFires)
-        .where(eq(webhookTriggerFires.deliveryId, deliveryId))
-      return rows.length === 2 ? rows : null
-    })
-    expect(fires.map((fire) => fire.outcome).sort()).toEqual(['launch-failed', 'launched'])
-    expect(await h.db.select().from(tasks)).toHaveLength(1)
+      const incoming = pipelineFailedBody('uuid-multicast')
+      const response = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
+        method: 'POST',
+        headers: incoming.headers,
+        body: incoming.body,
+      })
+      expect(response.status).toBe(200)
+      const { deliveryId } = (await response.json()) as { deliveryId: string }
 
-    const event = (
-      await h.db
-        .select()
-        .from(eventRecords)
-        .where(
-          and(
-            eq(eventRecords.payloadArtifactRef, `webhook-delivery:${deliveryId}`),
-            eq(eventRecords.eventTypeId, codeHostEventTypeRef('pipeline_failed').id),
-          ),
-        )
-        .limit(1)
-    )[0]
-    if (event === undefined) throw new Error('expected immutable EventRecord')
-    const deliveries = await waitFor(async () => {
-      const rows = await h.db
-        .select()
-        .from(eventDeliveries)
-        .where(eq(eventDeliveries.eventId, event.id))
-      return rows.length === 2 && rows.every((row) => row.state === 'accepted') ? rows : null
-    })
-    expect(new Set(deliveries.map((delivery) => delivery.subscriptionId)).size).toBe(2)
-    expect(new Set(deliveries.map((delivery) => delivery.id)).size).toBe(2)
-    expect(
-      (
+      const fires = await waitFor(async () => {
+        const rows = await h.db
+          .select()
+          .from(webhookTriggerFires)
+          .where(eq(webhookTriggerFires.deliveryId, deliveryId))
+        return rows.length === 2 ? rows : null
+      })
+      expect(fires.map((fire) => fire.outcome).sort()).toEqual(['launch-failed', 'launched'])
+      expect(await h.db.select().from(tasks)).toHaveLength(1)
+
+      const event = (
         await h.db
           .select()
-          .from(webhookDeliveries)
-          .where(eq(webhookDeliveries.id, deliveryId))
+          .from(eventRecords)
+          .where(
+            and(
+              eq(eventRecords.payloadArtifactRef, `webhook-delivery:${deliveryId}`),
+              eq(eventRecords.eventTypeId, codeHostEventTypeRef('pipeline_failed').id),
+            ),
+          )
           .limit(1)
-      )[0]?.status,
-    ).toBe('matched')
-    await h.terminalControl.stop()
-  })
-
-  test('pipeline_failed 事件落任务；第二发 supersede 第一发；归属列成链', async () => {
-    const h = await harness()
-    const first = pipelineFailedBody('uuid-e2e-1')
-    const res = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
-      method: 'POST',
-      headers: first.headers,
-      body: first.body,
-    })
-    expect(res.status).toBe(200)
-    const { deliveryId } = (await res.json()) as { deliveryId: string }
-
-    // 异步分发推进到 matched + fires launched + 真 tasks 行
-    const fire = await waitFor(async () => {
-      const rows = await h.db
-        .select()
-        .from(webhookTriggerFires)
-        .where(eq(webhookTriggerFires.deliveryId, deliveryId))
-      return rows[0] ?? null
-    })
-    expect(fire.outcome).toBe('launched')
-    expect(fire.streamKey).toBe('platform/api|mr:42')
-    const delivery = (
-      await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
-    )[0]
-    expect(delivery?.status).toBe('matched')
-    const task = (
-      await h.db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.id, fire.taskId ?? ''))
-        .limit(1)
-    )[0]
-    expect(task?.webhookTriggerId).toBeNull()
-    expect(task?.eventSubscriptionId).not.toBeNull()
-    expect(task?.eventDeliveryId).toBe(fire.id)
-    expect(task?.ownerUserId).toBe(h.ownerId)
-    expect(task?.name).toBe('[修到绿] platform/api!42')
-
-    // 第二发（同 MR）：supersede 取消第一发的任务
-    const second = pipelineFailedBody('uuid-e2e-2')
-    const res2 = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
-      method: 'POST',
-      headers: second.headers,
-      body: second.body,
-    })
-    expect(res2.status).toBe(200)
-    const { deliveryId: secondDeliveryId } = (await res2.json()) as { deliveryId: string }
-    await waitFor(async () => {
-      if (h.canceled.length === 0) return null
-      const fires = await h.db
-        .select()
-        .from(webhookTriggerFires)
-        .where(eq(webhookTriggerFires.deliveryId, secondDeliveryId))
-      return fires.find((entry) => entry.outcome === 'launched') ?? null
-    })
-    expect(h.canceled).toEqual([task?.id ?? '(missing)'])
-    const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
-    expect(running.length).toBe(1) // 每流至多一活任务（AC-9/AC-11）
-    await h.terminalControl.stop()
-  })
-
-  test('RFC-303 protected MR open launches once; close is control-only and durably cancels it', async () => {
-    const h = await harness()
-    await h.db
-      .update(webhookTriggers)
-      .set({
-        eventTypes: JSON.stringify(['mr_opened']),
-        ignoreUsernames: '[]',
-        cancelOnMrTerminal: true,
+      )[0]
+      if (event === undefined) throw new Error('expected immutable EventRecord')
+      const deliveries = await waitFor(async () => {
+        const rows = await h.db
+          .select()
+          .from(eventDeliveries)
+          .where(eq(eventDeliveries.eventId, event.id))
+        return rows.length === 2 && rows.every((row) => row.state === 'accepted') ? rows : null
       })
-      .where(eq(webhookTriggers.id, 'tr-1'))
-    const opened = mergeRequestBody('uuid-open', 'open')
-    const openResponse = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
-      method: 'POST',
-      headers: opened.headers,
-      body: opened.body,
+      expect(new Set(deliveries.map((delivery) => delivery.subscriptionId)).size).toBe(2)
+      expect(new Set(deliveries.map((delivery) => delivery.id)).size).toBe(2)
+      expect(
+        (
+          await h.db
+            .select()
+            .from(webhookDeliveries)
+            .where(eq(webhookDeliveries.id, deliveryId))
+            .limit(1)
+        )[0]?.status,
+      ).toBe('matched')
+      await h.terminalControl.stop()
     })
-    expect(openResponse.status).toBe(200)
-    const openDeliveryId = ((await openResponse.json()) as { deliveryId: string }).deliveryId
-    const task = await waitFor(async () => {
-      const fire = (
+
+    test('pipeline_failed 事件落任务；第二发 supersede 第一发；归属列成链', async () => {
+      const h = await seedFixture(harness)
+      const first = pipelineFailedBody('uuid-e2e-1')
+      const res = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
+        method: 'POST',
+        headers: first.headers,
+        body: first.body,
+      })
+      expect(res.status).toBe(200)
+      const { deliveryId } = (await res.json()) as { deliveryId: string }
+
+      // 异步分发推进到 matched + fires launched + 真 tasks 行
+      const fire = await waitFor(async () => {
+        const rows = await h.db
+          .select()
+          .from(webhookTriggerFires)
+          .where(eq(webhookTriggerFires.deliveryId, deliveryId))
+        return rows[0] ?? null
+      })
+      expect(fire.outcome).toBe('launched')
+      expect(fire.streamKey).toBe('platform/api|mr:42')
+      const delivery = (
+        await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
+      )[0]
+      expect(delivery?.status).toBe('matched')
+      const task = (
+        await h.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, fire.taskId ?? ''))
+          .limit(1)
+      )[0]
+      expect(task?.webhookTriggerId).toBeNull()
+      expect(task?.eventSubscriptionId).not.toBeNull()
+      expect(task?.eventDeliveryId).toBe(fire.id)
+      expect(task?.ownerUserId).toBe(h.ownerId)
+      expect(task?.name).toBe('[修到绿] platform/api!42')
+
+      // 第二发（同 MR）：supersede 取消第一发的任务
+      const second = pipelineFailedBody('uuid-e2e-2')
+      const res2 = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
+        method: 'POST',
+        headers: second.headers,
+        body: second.body,
+      })
+      expect(res2.status).toBe(200)
+      const { deliveryId: secondDeliveryId } = (await res2.json()) as { deliveryId: string }
+      await waitFor(async () => {
+        if (h.canceled.length === 0) return null
+        const fires = await h.db
+          .select()
+          .from(webhookTriggerFires)
+          .where(eq(webhookTriggerFires.deliveryId, secondDeliveryId))
+        return fires.find((entry) => entry.outcome === 'launched') ?? null
+      })
+      expect(h.canceled).toEqual([task?.id ?? '(missing)'])
+      const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
+      expect(running.length).toBe(1) // 每流至多一活任务（AC-9/AC-11）
+      await h.terminalControl.stop()
+    })
+
+    test('RFC-303 protected MR open launches once; close is control-only and durably cancels it', async () => {
+      const h = await seedFixture(harness)
+      await h.db
+        .update(webhookTriggers)
+        .set({
+          eventTypes: JSON.stringify(['mr_opened']),
+          ignoreUsernames: '[]',
+          cancelOnMrTerminal: true,
+        })
+        .where(eq(webhookTriggers.id, 'tr-1'))
+      const opened = mergeRequestBody('uuid-open', 'open')
+      const openResponse = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
+        method: 'POST',
+        headers: opened.headers,
+        body: opened.body,
+      })
+      expect(openResponse.status).toBe(200)
+      const openDeliveryId = ((await openResponse.json()) as { deliveryId: string }).deliveryId
+      const task = await waitFor(async () => {
+        const fire = (
+          await h.db
+            .select()
+            .from(webhookTriggerFires)
+            .where(eq(webhookTriggerFires.deliveryId, openDeliveryId))
+        )[0]
+        if (fire?.taskId === null || fire?.taskId === undefined) return null
+        return (
+          (await h.db.select().from(tasks).where(eq(tasks.id, fire.taskId)).limit(1))[0] ?? null
+        )
+      })
+      expect(task.sourceTerminationBinding).not.toBeNull()
+
+      const closed = mergeRequestBody('uuid-close', 'close')
+      const closeResponse = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
+        method: 'POST',
+        headers: closed.headers,
+        body: closed.body,
+      })
+      expect(closeResponse.status).toBe(200)
+      const closeDeliveryId = ((await closeResponse.json()) as { deliveryId: string }).deliveryId
+      const canceled = await waitFor(async () => {
+        const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]
+        return row?.status === 'canceled' ? row : null
+      })
+      expect(canceled.sourceTerminationFence).toBe('closed')
+      expect(canceled.errorSummary).toContain('已关闭')
+      const effect = await waitFor(async () => {
+        const row = (
+          await h.db
+            .select()
+            .from(webhookMrControlEffects)
+            .where(eq(webhookMrControlEffects.deliveryId, closeDeliveryId))
+        )[0]
+        return row?.status === 'succeeded' ? row : null
+      })
+      expect(effect.kind).toBe('fence-closed')
+      expect(
         await h.db
           .select()
           .from(webhookTriggerFires)
-          .where(eq(webhookTriggerFires.deliveryId, openDeliveryId))
-      )[0]
-      if (fire?.taskId === null || fire?.taskId === undefined) return null
-      return (await h.db.select().from(tasks).where(eq(tasks.id, fire.taskId)).limit(1))[0] ?? null
+          .where(eq(webhookTriggerFires.deliveryId, closeDeliveryId)),
+      ).toHaveLength(0)
+      expect(await h.db.select().from(tasks)).toHaveLength(1)
+      await h.terminalControl.stop()
     })
-    expect(task.sourceTerminationBinding).not.toBeNull()
 
-    const closed = mergeRequestBody('uuid-close', 'close')
-    const closeResponse = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
-      method: 'POST',
-      headers: closed.headers,
-      body: closed.body,
-    })
-    expect(closeResponse.status).toBe(200)
-    const closeDeliveryId = ((await closeResponse.json()) as { deliveryId: string }).deliveryId
-    const canceled = await waitFor(async () => {
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]
-      return row?.status === 'canceled' ? row : null
-    })
-    expect(canceled.sourceTerminationFence).toBe('closed')
-    expect(canceled.errorSummary).toContain('已关闭')
-    const effect = await waitFor(async () => {
-      const row = (
-        await h.db
-          .select()
-          .from(webhookMrControlEffects)
-          .where(eq(webhookMrControlEffects.deliveryId, closeDeliveryId))
-      )[0]
-      return row?.status === 'succeeded' ? row : null
-    })
-    expect(effect.kind).toBe('fence-closed')
-    expect(
+    test('RFC-303 GitHub protected PR open launches once; merged close is control-only', async () => {
+      const h = await seedFixture(harness)
       await h.db
-        .select()
-        .from(webhookTriggerFires)
-        .where(eq(webhookTriggerFires.deliveryId, closeDeliveryId)),
-    ).toHaveLength(0)
-    expect(await h.db.select().from(tasks)).toHaveLength(1)
-    await h.terminalControl.stop()
-  })
+        .update(webhookEndpoints)
+        .set({ provider: 'github' })
+        .where(eq(webhookEndpoints.id, 'ep-1'))
+      await h.db
+        .update(webhookTriggers)
+        .set({
+          eventTypes: JSON.stringify(['mr_opened']),
+          ignoreUsernames: '[]',
+          cancelOnMrTerminal: true,
+        })
+        .where(eq(webhookTriggers.id, 'tr-1'))
 
-  test('RFC-303 GitHub protected PR open launches once; merged close is control-only', async () => {
-    const h = await harness()
-    await h.db
-      .update(webhookEndpoints)
-      .set({ provider: 'github' })
-      .where(eq(webhookEndpoints.id, 'ep-1'))
-    await h.db
-      .update(webhookTriggers)
-      .set({
-        eventTypes: JSON.stringify(['mr_opened']),
-        ignoreUsernames: '[]',
-        cancelOnMrTerminal: true,
+      const opened = githubPullRequestBody('guid-open', 'opened')
+      const openResponse = await h.app.request('/webhooks/github/aw_whk_e2e', {
+        method: 'POST',
+        headers: opened.headers,
+        body: opened.body,
       })
-      .where(eq(webhookTriggers.id, 'tr-1'))
+      expect(openResponse.status).toBe(200)
+      const openDeliveryId = ((await openResponse.json()) as { deliveryId: string }).deliveryId
+      const task = await waitFor(async () => {
+        const fire = (
+          await h.db
+            .select()
+            .from(webhookTriggerFires)
+            .where(eq(webhookTriggerFires.deliveryId, openDeliveryId))
+        )[0]
+        if (fire?.taskId === null || fire?.taskId === undefined) return null
+        return (
+          (await h.db.select().from(tasks).where(eq(tasks.id, fire.taskId)).limit(1))[0] ?? null
+        )
+      })
+      expect(task.sourceTerminationBinding).toStartWith('st1:')
 
-    const opened = githubPullRequestBody('guid-open', 'opened')
-    const openResponse = await h.app.request('/webhooks/github/aw_whk_e2e', {
-      method: 'POST',
-      headers: opened.headers,
-      body: opened.body,
-    })
-    expect(openResponse.status).toBe(200)
-    const openDeliveryId = ((await openResponse.json()) as { deliveryId: string }).deliveryId
-    const task = await waitFor(async () => {
-      const fire = (
+      const merged = githubPullRequestBody('guid-merged', 'closed', true)
+      const mergedResponse = await h.app.request('/webhooks/github/aw_whk_e2e', {
+        method: 'POST',
+        headers: merged.headers,
+        body: merged.body,
+      })
+      expect(mergedResponse.status).toBe(200)
+      const mergedDeliveryId = ((await mergedResponse.json()) as { deliveryId: string }).deliveryId
+      const canceled = await waitFor(async () => {
+        const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]
+        return row?.status === 'canceled' ? row : null
+      })
+      expect(canceled.sourceTerminationFence).toBe('merged')
+      expect(canceled.errorSummary).toContain('已合入')
+      const effect = await waitFor(async () => {
+        const row = (
+          await h.db
+            .select()
+            .from(webhookMrControlEffects)
+            .where(eq(webhookMrControlEffects.deliveryId, mergedDeliveryId))
+        )[0]
+        return row?.status === 'succeeded' ? row : null
+      })
+      expect(effect.kind).toBe('fence-merged')
+      if (task.sourceTerminationBinding === null) throw new Error('expected frozen source binding')
+      expect(effect.binding).toBe(task.sourceTerminationBinding)
+      expect(
         await h.db
           .select()
           .from(webhookTriggerFires)
-          .where(eq(webhookTriggerFires.deliveryId, openDeliveryId))
-      )[0]
-      if (fire?.taskId === null || fire?.taskId === undefined) return null
-      return (await h.db.select().from(tasks).where(eq(tasks.id, fire.taskId)).limit(1))[0] ?? null
+          .where(eq(webhookTriggerFires.deliveryId, mergedDeliveryId)),
+      ).toHaveLength(0)
+      expect(await h.db.select().from(tasks)).toHaveLength(1)
+      await h.terminalControl.stop()
     })
-    expect(task.sourceTerminationBinding).toStartWith('st1:')
-
-    const merged = githubPullRequestBody('guid-merged', 'closed', true)
-    const mergedResponse = await h.app.request('/webhooks/github/aw_whk_e2e', {
-      method: 'POST',
-      headers: merged.headers,
-      body: merged.body,
-    })
-    expect(mergedResponse.status).toBe(200)
-    const mergedDeliveryId = ((await mergedResponse.json()) as { deliveryId: string }).deliveryId
-    const canceled = await waitFor(async () => {
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]
-      return row?.status === 'canceled' ? row : null
-    })
-    expect(canceled.sourceTerminationFence).toBe('merged')
-    expect(canceled.errorSummary).toContain('已合入')
-    const effect = await waitFor(async () => {
-      const row = (
-        await h.db
-          .select()
-          .from(webhookMrControlEffects)
-          .where(eq(webhookMrControlEffects.deliveryId, mergedDeliveryId))
-      )[0]
-      return row?.status === 'succeeded' ? row : null
-    })
-    expect(effect.kind).toBe('fence-merged')
-    if (task.sourceTerminationBinding === null) throw new Error('expected frozen source binding')
-    expect(effect.binding).toBe(task.sourceTerminationBinding)
-    expect(
-      await h.db
-        .select()
-        .from(webhookTriggerFires)
-        .where(eq(webhookTriggerFires.deliveryId, mergedDeliveryId)),
-    ).toHaveLength(0)
-    expect(await h.db.select().from(tasks)).toHaveLength(1)
-    await h.terminalControl.stop()
   })
 })

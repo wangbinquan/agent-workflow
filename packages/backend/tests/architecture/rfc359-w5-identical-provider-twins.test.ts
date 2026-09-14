@@ -105,10 +105,12 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
     expect(REAL_FILES.length, 'src 扫成空').toBeGreaterThanOrEqual(500)
     // RFC-359（2026-09-13）：162 → 135。十四对孪生退役，分母跟着小一截；这个数随合一持续下降，
     // 门槛只能往下调，并在这里记一次实测值。
+    // RFC-359 AC-12（2026-09-14，plan §5ek）：135 → 116。intent apply 的五个文件随合一改名去掉
+    // provider 前缀（`legacy*` 孪生早已随 §5ea 退役），于是它们的函数整批退出本判据的分母。
     expect(
       REAL_FUNCTIONS.length,
       'provider 命名的函数一个都没扫到 ⇒ 命名匹配器塌了',
-    ).toBeGreaterThanOrEqual(120)
+    ).toBeGreaterThanOrEqual(116)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

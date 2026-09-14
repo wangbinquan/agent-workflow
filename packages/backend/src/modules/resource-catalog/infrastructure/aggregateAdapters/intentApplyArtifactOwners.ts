@@ -1,6 +1,6 @@
 // RFC-355 T6（RFC-294 W4-E4a）—— 本文件自 `modules/intent/infrastructure/` 迁来。
 //
-// **它实现的是 resource-catalog 的端口（`postgresqlIntentApplyResourcePorts`），
+// **它实现的是 resource-catalog 的端口（`intentApplyResourcePorts`），
 // 用的是 resource-catalog 自己的技能文件机制**（`skillFsPublish` / `skillHash` /
 // `skillIdentityPaths`）与插件安装器——从头到尾是 RC 的能力，只是此前住在 intent 里。
 //
@@ -30,7 +30,7 @@ import type {
   PostgresqlIntentPluginInstallResult,
   PostgresqlIntentSkillArtifactLifecycle,
   PostgresqlIntentSkillStageResult,
-} from './postgresqlIntentApplyResourcePorts'
+} from './intentApplyResourcePorts'
 import { cleanupOpDirs, opCandidateDir, opStagedDir, swapInStaged } from '../legacy/skillFsPublish'
 import { hashRegularFileTree } from '../legacy/skillHash'
 import {

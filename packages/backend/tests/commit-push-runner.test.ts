@@ -7,27 +7,29 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { eq, sql } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns } from '../src/db/schema'
+import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { runCommitPush, type CommitPushParams } from '../src/services/commitPushRunner'
 import type { CommitPushMeta } from '@agent-workflow/shared'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Fixture {
   repo: string
   remote: string
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   cleanup: () => void
 }
 
-async function build(opts?: { rejectUnlessOk?: boolean }): Promise<Fixture> {
+async function build(
+  harness: ProviderHarness,
+  opts?: { rejectUnlessOk?: boolean },
+): Promise<Fixture> {
   const remote = mkdtempSync(join(tmpdir(), 'aw-cpr-remote-'))
   await runGit(remote, ['init', '-q', '--bare', '-b', 'main'])
   if (opts?.rejectUnlessOk === true) {
@@ -59,21 +61,45 @@ exit 0
   await runGit(repo, ['push', '-q', '-u', 'origin', 'main'])
   await runGit(repo, ['checkout', '-q', '-b', 'feature/x'])
 
-  const db = createInMemoryDb(MIGRATIONS)
-  await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
+  // RFC-359 AC-6: the fixture used raw `INSERT INTO …` text, which only parses
+  // against the bun:sqlite dialect. The same rows through the neutral query
+  // builder run unchanged on both engines.
+  const db = harness.db
+  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
   const taskId = 'task-cpr'
-  await db.run(sql`
-    INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-      base_branch, branch, status, inputs, started_at, schema_version)
-    VALUES (${taskId}, 'cpr', 'wf', '{}', ${repo}, ${repo}, 'main', 'feature/x', 'running', '{}', 1, 1)
-  `)
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'cpr',
+    workflowId: 'wf',
+    workflowSnapshot: '{}',
+    repoPath: repo,
+    worktreePath: repo,
+    baseBranch: 'main',
+    branch: 'feature/x',
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+    schemaVersion: 1,
+    // The SQLite-only `rfc328_tasks_lineage_after_insert` trigger has no PostgreSQL
+    // counterpart by design, so a direct fixture INSERT writes both causal columns
+    // itself (root task ⇒ lineage id = own id, single `task-root` frame).
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+  })
   // RFC-098 WP-10: the commit container row is born 'running' and the mint
   // factory enforces "born-running ⟹ child row" (frontier invisibility), so
   // the fixture provides the triggering agent run the way production does.
-  await db.run(sql`
-    INSERT INTO node_runs (id, task_id, node_id, status, retry_index, iteration, started_at)
-    VALUES ('parent-agent-run', ${taskId}, 'agent-1', 'done', 0, 0, 1)
-  `)
+  await db.insert(nodeRuns).values({
+    id: 'parent-agent-run',
+    taskId,
+    nodeId: 'agent-1',
+    status: 'done',
+    retryIndex: 0,
+    iteration: 0,
+    startedAt: 1,
+  })
 
   return {
     repo,
@@ -119,389 +145,399 @@ async function readMeta(
   return { status: row.status, meta: JSON.parse(row.commitPushJson!) as CommitPushMeta }
 }
 
-describe('runCommitPush', () => {
-  let f: Fixture
-  afterEach(() => f.cleanup())
+describeEachProvider('提交并推送执行器（双引擎）', (harness) => {
+  describe('runCommitPush', () => {
+    let f: Fixture
+    afterEach(() => f.cleanup())
 
-  test('happy path: stage + commit + push, remote advanced, node done', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
-    const { nodeRunId, meta } = await runCommitPush(
-      baseParams(f),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('pushed')
-    expect(meta.messageSource).toBe('llm')
-    expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
-    expect(meta.filesChanged).toBe(1)
-    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(true)
-    const { status } = await readMeta(f, nodeRunId)
-    expect(status).toBe('done')
-  })
+    test('happy path: stage + commit + push, remote advanced, node done', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
+      const { nodeRunId, meta } = await runCommitPush(
+        baseParams(f),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushOutcome).toBe('pushed')
+      expect(meta.messageSource).toBe('llm')
+      expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
+      expect(meta.filesChanged).toBe(1)
+      expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(true)
+      const { status } = await readMeta(f, nodeRunId)
+      expect(status).toBe('done')
+    })
 
-  test('null task identity → fixed platform fallback commits (never ambient config)', async () => {
-    // RFC-165 regression lock (CI incident 29104878034): a URL/scratch
-    // worktree's cache-clone parent carries no local user.*, and CI hosts
-    // have no global gitconfig — "inherit the ambient config" made every
-    // identity-less autoCommitPush task die as commit-local-failed. The
-    // runner must inject the fixed platform identity via `-c`, which also
-    // OVERRIDES whatever ambient config a dev machine happens to have —
-    // asserting the author string proves the fallback took effect here.
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    const { meta } = await runCommitPush(
-      baseParams(f, { gitUserName: null, gitUserEmail: null }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('pushed')
-    const author = await runGit(f.repo, ['log', '-1', '--format=%an <%ae>'])
-    expect(author.stdout.trim()).toBe('agent-workflow <agent-workflow@localhost>')
-  })
-
-  test('inherited GIT_AUTHOR_*/GIT_COMMITTER_* env cannot leak into framework commits', async () => {
-    // Codex P2: git gives GIT_AUTHOR_*/GIT_COMMITTER_* env precedence over
-    // `-c user.*`, and runGit passes process.env through — a daemon started
-    // from a shell exporting those would stamp (or break) every framework
-    // commit. The runner must inject its own identity env on commit-class
-    // operations, outranking whatever it inherited.
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    const prev = { ...process.env }
-    process.env.GIT_AUTHOR_NAME = 'Evil Ambient'
-    process.env.GIT_AUTHOR_EMAIL = 'evil@ambient'
-    process.env.GIT_COMMITTER_NAME = 'Evil Ambient'
-    process.env.GIT_COMMITTER_EMAIL = 'evil@ambient'
-    try {
+    test('null task identity → fixed platform fallback commits (never ambient config)', async () => {
+      // RFC-165 regression lock (CI incident 29104878034): a URL/scratch
+      // worktree's cache-clone parent carries no local user.*, and CI hosts
+      // have no global gitconfig — "inherit the ambient config" made every
+      // identity-less autoCommitPush task die as commit-local-failed. The
+      // runner must inject the fixed platform identity via `-c`, which also
+      // OVERRIDES whatever ambient config a dev machine happens to have —
+      // asserting the author string proves the fallback took effect here.
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'x\n')
       const { meta } = await runCommitPush(
         baseParams(f, { gitUserName: null, gitUserEmail: null }),
         composeSqliteCommitPushDeps(f.db),
       )
       expect(meta.pushOutcome).toBe('pushed')
-      const author = await runGit(f.repo, ['log', '-1', '--format=%an <%ae> %cn <%ce>'])
-      expect(author.stdout.trim()).toBe(
-        'agent-workflow <agent-workflow@localhost> agent-workflow <agent-workflow@localhost>',
-      )
-    } finally {
-      for (const k of [
-        'GIT_AUTHOR_NAME',
-        'GIT_AUTHOR_EMAIL',
-        'GIT_COMMITTER_NAME',
-        'GIT_COMMITTER_EMAIL',
-      ]) {
-        if (prev[k] === undefined) delete process.env[k]
-        else process.env[k] = prev[k]
-      }
-    }
-  })
-
-  test('no changes → skipped-empty, no commit', async () => {
-    f = await build()
-    const { meta } = await runCommitPush(baseParams(f), composeSqliteCommitPushDeps(f.db))
-    expect(meta.pushOutcome).toBe('skipped-empty')
-    expect(meta.commitSha).toBeNull()
-    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
-  })
-
-  test('RFC-308 mixed changes commit only allowed paths and expose a bounded receipt', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
-    writeFileSync(join(f.repo, 'b.txt'), 'publish me\n')
-    const { meta } = await runCommitPush(
-      baseParams(f, { excludePatterns: ['/a.txt'] }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-
-    expect(meta.pushOutcome).toBe('pushed')
-    expect(meta.exclusions).toMatchObject({ count: 1, paths: ['a.txt'], historyBlocked: false })
-    expect((await runGit(f.repo, ['show', '--format=', '--name-only', 'HEAD'])).stdout).toContain(
-      'b.txt',
-    )
-    expect((await runGit(f.repo, ['show', 'HEAD:a.txt'])).stdout).toBe('original\n')
-    expect((await runGit(f.repo, ['status', '--short'])).stdout).toContain('a.txt')
-  })
-
-  test('RFC-308 all candidates excluded → skipped-excluded, no commit or push', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
-    const before = (await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim()
-    const { meta } = await runCommitPush(
-      baseParams(f, { excludePatterns: ['/a.txt'] }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-
-    expect(meta.pushOutcome).toBe('skipped-excluded')
-    expect(meta.exclusions?.paths).toEqual(['a.txt'])
-    expect((await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(before)
-    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
-  })
-
-  test('RFC-308 local ancestor leak blocks the later platform push', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'leak.trace'), 'secret\n')
-    await runGit(f.repo, ['add', '-A'])
-    await runGit(f.repo, ['commit', '-q', '-m', 'agent local commit'])
-    writeFileSync(join(f.repo, 'b.txt'), 'otherwise publishable\n')
-
-    const { nodeRunId, meta } = await runCommitPush(
-      baseParams(f, { excludePatterns: ['*.trace'] }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('commit-local-excluded-history')
-    expect(meta.exclusions).toMatchObject({ paths: ['leak.trace'], historyBlocked: true })
-    expect((await readMeta(f, nodeRunId)).status).toBe('failed')
-    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
-  })
-
-  test('git add failure is never misreported as skipped-empty', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'must remain visible\n')
-    const fakeRunGit = (async (cwd: string, args: string[], opts?: Parameters<typeof runGit>[2]) =>
-      args[0] === 'add'
-        ? { stdout: '', stderr: 'fatal: index is locked', exitCode: 128 }
-        : runGit(cwd, args, opts)) as typeof runGit
-    const { nodeRunId, meta } = await runCommitPush(
-      baseParams(f),
-      composeSqliteCommitPushDeps(f.db, { runGit: fakeRunGit }),
-    )
-    expect(meta.pushOutcome).toBe('commit-local-failed')
-    expect(meta.pushError).toContain('index is locked')
-    expect((await readMeta(f, nodeRunId)).status).toBe('failed')
-    expect((await runGit(f.repo, ['status', '--short'])).stdout).toContain('b.txt')
-  })
-
-  test('null LLM message → deterministic fallback, still pushes', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    const { meta } = await runCommitPush(
-      baseParams(f, { generateMessage: async () => ({ message: null }) }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('pushed')
-    expect(meta.messageSource).toBe('fallback')
-  })
-
-  test('unreaped commit-message child blocks framework commit and push', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'must not be committed\n')
-    const { meta } = await runCommitPush(
-      baseParams(f, {
-        generateMessage: async () => ({ message: null, processUnreaped: true }),
-      }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('commit-local-failed')
-    expect(meta.pushError).toContain('could not be reaped')
-    expect((await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()).toBe('init')
-    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
-  })
-
-  test('auth failure → commit-local-auth (degraded, not retried), local commit lands', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    // Inject a push that always reports an auth failure; everything else is real git.
-    const fakeRunGit = (async (cwd: string, args: string[]) =>
-      args.includes('push')
-        ? { stdout: '', stderr: 'fatal: Authentication failed for https://host/x.git', exitCode: 1 }
-        : runGit(cwd, args)) as typeof runGit
-
-    const { nodeRunId, meta } = await runCommitPush(
-      baseParams(f),
-      composeSqliteCommitPushDeps(f.db, { runGit: fakeRunGit }),
-    )
-    expect(meta.pushOutcome).toBe('commit-local-auth')
-    expect(meta.repairAttempts).toBe(0)
-    expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
-    const { status } = await readMeta(f, nodeRunId)
-    expect(status).toBe('done') // degraded, not failed → task continues
-    // Local commit exists on feature/x even though push failed.
-    const head = (await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()
-    expect(head).toBe('feat: change a')
-  })
-
-  test('RFC-321 personal auth failure keeps one fixed session and never falls back to global', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    let openings = 0
-    let closes = 0
-    let networkPushes = 0
-    const publicationTransport: RepositoryPublicationTransport = {
-      async open(input) {
-        openings += 1
-        expect(input.subject).toEqual({ kind: 'user', userId: 'owner-user' })
-        return {
-          ok: true,
-          session: {
-            endpointUrl: 'https://git.example.test/team/repository.git',
-            receipt: {
-              credentialSource: 'personal',
-              credentialRevision: 7,
-              endpointSource: 'admin-mapping',
-              endpointBindingDigest: 'a'.repeat(64),
-            },
-            runNetwork(repoPath, args, options) {
-              if (args.includes('push')) {
-                networkPushes += 1
-                return Promise.resolve({
-                  stdout: '',
-                  stderr: 'fatal: Authentication failed for repository',
-                  exitCode: 1,
-                })
-              }
-              return runGit(repoPath, [...args], options)
-            },
-            close() {
-              closes += 1
-            },
-          },
-        }
-      },
-    }
-
-    const { meta } = await runCommitPush(
-      baseParams(f, {
-        ownerUserId: 'owner-user',
-        generateRepair: async () => {
-          throw new Error('authentication failures must not enter repair')
-        },
-      }),
-      composeSqliteCommitPushDeps(f.db, { publicationTransport }),
-    )
-
-    expect(meta.pushOutcome).toBe('commit-local-auth')
-    expect(meta.pushError).toBe('repository-push-authentication-failed')
-    expect(meta.repairAttempts).toBe(0)
-    expect(meta.publicationReceipt).toMatchObject({
-      credentialSource: 'personal',
-      credentialRevision: 7,
+      const author = await runGit(f.repo, ['log', '-1', '--format=%an <%ae>'])
+      expect(author.stdout.trim()).toBe('agent-workflow <agent-workflow@localhost>')
     })
-    expect(openings).toBe(1)
-    expect(networkPushes).toBe(1)
-    expect(closes).toBe(1)
-  })
 
-  test('server-hook rejection → repair → success (repairAttempts=1)', async () => {
-    f = await build({ rejectUnlessOk: true })
-    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    const { meta } = await runCommitPush(
-      baseParams(f, {
-        generateMessage: async () => ({ message: 'bad message' }),
-        generateRepair: async () => ({ message: 'OK: corrected subject' }),
-      }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('pushed')
-    expect(meta.messageSource).toBe('llm-repair')
-    expect(meta.repairAttempts).toBe(1)
-    // The accepted commit carries the repaired message.
-    const remoteMsg = (
-      await runGit(f.remote, ['log', '-1', '--format=%s', 'feature/x'])
-    ).stdout.trim()
-    expect(remoteMsg).toBe('OK: corrected subject')
-  })
+    test('inherited GIT_AUTHOR_*/GIT_COMMITTER_* env cannot leak into framework commits', async () => {
+      // Codex P2: git gives GIT_AUTHOR_*/GIT_COMMITTER_* env precedence over
+      // `-c user.*`, and runGit passes process.env through — a daemon started
+      // from a shell exporting those would stamp (or break) every framework
+      // commit. The runner must inject its own identity env on commit-class
+      // operations, outranking whatever it inherited.
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+      const prev = { ...process.env }
+      process.env.GIT_AUTHOR_NAME = 'Evil Ambient'
+      process.env.GIT_AUTHOR_EMAIL = 'evil@ambient'
+      process.env.GIT_COMMITTER_NAME = 'Evil Ambient'
+      process.env.GIT_COMMITTER_EMAIL = 'evil@ambient'
+      try {
+        const { meta } = await runCommitPush(
+          baseParams(f, { gitUserName: null, gitUserEmail: null }),
+          composeSqliteCommitPushDeps(f.db),
+        )
+        expect(meta.pushOutcome).toBe('pushed')
+        const author = await runGit(f.repo, ['log', '-1', '--format=%an <%ae> %cn <%ce>'])
+        expect(author.stdout.trim()).toBe(
+          'agent-workflow <agent-workflow@localhost> agent-workflow <agent-workflow@localhost>',
+        )
+      } finally {
+        for (const k of [
+          'GIT_AUTHOR_NAME',
+          'GIT_AUTHOR_EMAIL',
+          'GIT_COMMITTER_NAME',
+          'GIT_COMMITTER_EMAIL',
+        ]) {
+          if (prev[k] === undefined) delete process.env[k]
+          else process.env[k] = prev[k]
+        }
+      }
+    })
 
-  test('repair never satisfies the hook → exhausts retries → commit-local-failed', async () => {
-    f = await build({ rejectUnlessOk: true })
-    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    const { nodeRunId, meta } = await runCommitPush(
-      baseParams(f, {
-        maxRepairRetries: 2,
-        generateMessage: async () => ({ message: 'still bad' }),
-        generateRepair: async () => ({ message: 'also bad' }),
-      }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('commit-local-failed')
-    expect(meta.repairAttempts).toBe(2)
-    const { status } = await readMeta(f, nodeRunId)
-    expect(status).toBe('failed')
-    // Local commit still present (work preserved) — carries the last repaired
-    // subject since repair amends even though the push kept failing, and the
-    // staged change is in history.
-    expect((await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()).toBe('also bad')
-    expect((await runGit(f.repo, ['show', '--stat', 'HEAD'])).stdout).toContain('b.txt')
-  })
+    test('no changes → skipped-empty, no commit', async () => {
+      f = await build(harness)
+      const { meta } = await runCommitPush(baseParams(f), composeSqliteCommitPushDeps(f.db))
+      expect(meta.pushOutcome).toBe('skipped-empty')
+      expect(meta.commitSha).toBeNull()
+      expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
+    })
 
-  test('non-fast-forward → bounded fetch+merge → re-push succeeds', async () => {
-    f = await build()
-    // Advance feature/x on the remote from a second clone (different file → no conflict).
-    const other = mkdtempSync(join(tmpdir(), 'aw-cpr-other-'))
-    await runGit(other, ['clone', '-q', f.remote, '.'])
-    await runGit(other, ['config', 'user.email', 'o@o.test'])
-    await runGit(other, ['config', 'user.name', 'Other'])
-    await runGit(other, ['checkout', '-q', '-b', 'feature/x', 'origin/main'])
-    writeFileSync(join(other, 'remote-side.txt'), 'from remote\n')
-    await runGit(other, ['add', '.'])
-    await runGit(other, ['commit', '-q', '-m', 'remote work'])
-    await runGit(other, ['push', '-q', 'origin', 'feature/x'])
-    rmSync(other, { recursive: true, force: true })
+    test('RFC-308 mixed changes commit only allowed paths and expose a bounded receipt', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
+      writeFileSync(join(f.repo, 'b.txt'), 'publish me\n')
+      const { meta } = await runCommitPush(
+        baseParams(f, { excludePatterns: ['/a.txt'] }),
+        composeSqliteCommitPushDeps(f.db),
+      )
 
-    // Local commit on the stale feature/x → first push is non-FF.
-    writeFileSync(join(f.repo, 'local-side.txt'), 'from local\n')
-    const { meta } = await runCommitPush(
-      baseParams(f, { excludePatterns: ['/remote-side.txt'] }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    expect(meta.pushOutcome).toBe('pushed')
-    expect(meta.repairAttempts).toBe(1) // one non-FF merge cycle
-    // Remote now has both files reachable from feature/x.
-    expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(true)
-  })
+      expect(meta.pushOutcome).toBe('pushed')
+      expect(meta.exclusions).toMatchObject({ count: 1, paths: ['a.txt'], historyBlocked: false })
+      expect((await runGit(f.repo, ['show', '--format=', '--name-only', 'HEAD'])).stdout).toContain(
+        'b.txt',
+      )
+      expect((await runGit(f.repo, ['show', 'HEAD:a.txt'])).stdout).toBe('original\n')
+      expect((await runGit(f.repo, ['status', '--short'])).stdout).toContain('a.txt')
+    })
 
-  // RFC-076 C4 — the write lock (scheduler's writeSem) protects both local Git
-  // mutation windows: stage+diff capture, then commit. It remains released for
-  // slow LLM generation and network push, so a concurrent writer is serialized
-  // only where sharing the worktree/index would corrupt function.
-  test('C4: write lock spans stage+diff and commit, but is released during message-gen', async () => {
-    f = await build()
-    writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
-    const events: string[] = []
-    let held = false
-    const observedRunGit: typeof runGit = async (cwd, args, opts) => {
-      if (args[0] === 'commit') events.push(`commit(held=${held})`)
-      return runGit(cwd, args, opts)
-    }
-    await runCommitPush(
-      baseParams(f, {
-        acquireWrite: async () => {
-          held = true
-          events.push('acquire')
-          return () => {
-            held = false
-            events.push('release')
+    test('RFC-308 all candidates excluded → skipped-excluded, no commit or push', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
+      const before = (await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim()
+      const { meta } = await runCommitPush(
+        baseParams(f, { excludePatterns: ['/a.txt'] }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+
+      expect(meta.pushOutcome).toBe('skipped-excluded')
+      expect(meta.exclusions?.paths).toEqual(['a.txt'])
+      expect((await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(before)
+      expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
+    })
+
+    test('RFC-308 local ancestor leak blocks the later platform push', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'leak.trace'), 'secret\n')
+      await runGit(f.repo, ['add', '-A'])
+      await runGit(f.repo, ['commit', '-q', '-m', 'agent local commit'])
+      writeFileSync(join(f.repo, 'b.txt'), 'otherwise publishable\n')
+
+      const { nodeRunId, meta } = await runCommitPush(
+        baseParams(f, { excludePatterns: ['*.trace'] }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushOutcome).toBe('commit-local-excluded-history')
+      expect(meta.exclusions).toMatchObject({ paths: ['leak.trace'], historyBlocked: true })
+      expect((await readMeta(f, nodeRunId)).status).toBe('failed')
+      expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
+    })
+
+    test('git add failure is never misreported as skipped-empty', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'must remain visible\n')
+      const fakeRunGit = (async (
+        cwd: string,
+        args: string[],
+        opts?: Parameters<typeof runGit>[2],
+      ) =>
+        args[0] === 'add'
+          ? { stdout: '', stderr: 'fatal: index is locked', exitCode: 128 }
+          : runGit(cwd, args, opts)) as typeof runGit
+      const { nodeRunId, meta } = await runCommitPush(
+        baseParams(f),
+        composeSqliteCommitPushDeps(f.db, { runGit: fakeRunGit }),
+      )
+      expect(meta.pushOutcome).toBe('commit-local-failed')
+      expect(meta.pushError).toContain('index is locked')
+      expect((await readMeta(f, nodeRunId)).status).toBe('failed')
+      expect((await runGit(f.repo, ['status', '--short'])).stdout).toContain('b.txt')
+    })
+
+    test('null LLM message → deterministic fallback, still pushes', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+      const { meta } = await runCommitPush(
+        baseParams(f, { generateMessage: async () => ({ message: null }) }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushOutcome).toBe('pushed')
+      expect(meta.messageSource).toBe('fallback')
+    })
+
+    test('unreaped commit-message child blocks framework commit and push', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'must not be committed\n')
+      const { meta } = await runCommitPush(
+        baseParams(f, {
+          generateMessage: async () => ({ message: null, processUnreaped: true }),
+        }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushOutcome).toBe('commit-local-failed')
+      expect(meta.pushError).toContain('could not be reaped')
+      expect((await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()).toBe('init')
+      expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
+    })
+
+    test('auth failure → commit-local-auth (degraded, not retried), local commit lands', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+      // Inject a push that always reports an auth failure; everything else is real git.
+      const fakeRunGit = (async (cwd: string, args: string[]) =>
+        args.includes('push')
+          ? {
+              stdout: '',
+              stderr: 'fatal: Authentication failed for https://host/x.git',
+              exitCode: 1,
+            }
+          : runGit(cwd, args)) as typeof runGit
+
+      const { nodeRunId, meta } = await runCommitPush(
+        baseParams(f),
+        composeSqliteCommitPushDeps(f.db, { runGit: fakeRunGit }),
+      )
+      expect(meta.pushOutcome).toBe('commit-local-auth')
+      expect(meta.repairAttempts).toBe(0)
+      expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
+      const { status } = await readMeta(f, nodeRunId)
+      expect(status).toBe('done') // degraded, not failed → task continues
+      // Local commit exists on feature/x even though push failed.
+      const head = (await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()
+      expect(head).toBe('feat: change a')
+    })
+
+    test('RFC-321 personal auth failure keeps one fixed session and never falls back to global', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+      let openings = 0
+      let closes = 0
+      let networkPushes = 0
+      const publicationTransport: RepositoryPublicationTransport = {
+        async open(input) {
+          openings += 1
+          expect(input.subject).toEqual({ kind: 'user', userId: 'owner-user' })
+          return {
+            ok: true,
+            session: {
+              endpointUrl: 'https://git.example.test/team/repository.git',
+              receipt: {
+                credentialSource: 'personal',
+                credentialRevision: 7,
+                endpointSource: 'admin-mapping',
+                endpointBindingDigest: 'a'.repeat(64),
+              },
+              runNetwork(repoPath, args, options) {
+                if (args.includes('push')) {
+                  networkPushes += 1
+                  return Promise.resolve({
+                    stdout: '',
+                    stderr: 'fatal: Authentication failed for repository',
+                    exitCode: 1,
+                  })
+                }
+                return runGit(repoPath, [...args], options)
+              },
+              close() {
+                closes += 1
+              },
+            },
           }
         },
-        generateMessage: async () => {
-          events.push(`msg(held=${held})`)
-          return { message: 'feat: locked capture' }
-        },
-      }),
-      composeSqliteCommitPushDeps(f.db, { runGit: observedRunGit }),
-    )
-    // Capture is locked, message generation is not, and local commit reacquires
-    // the lock before touching Git's shared index/ref state.
-    expect(events).toEqual([
-      'acquire',
-      'release',
-      'msg(held=false)',
-      'acquire',
-      'commit(held=true)',
-      'release',
-    ])
-  })
+      }
 
-  test('C4: write lock is released even when nothing is staged (skipped-empty)', async () => {
-    f = await build()
-    let released = false
-    const { meta } = await runCommitPush(
-      baseParams(f, {
-        acquireWrite: async () => () => {
-          released = true
-        },
-      }),
-      composeSqliteCommitPushDeps(f.db),
-    )
-    // The finally around stage+diff must release even on the early skip return.
-    expect(meta.pushOutcome).toBe('skipped-empty')
-    expect(released).toBe(true)
+      const { meta } = await runCommitPush(
+        baseParams(f, {
+          ownerUserId: 'owner-user',
+          generateRepair: async () => {
+            throw new Error('authentication failures must not enter repair')
+          },
+        }),
+        composeSqliteCommitPushDeps(f.db, { publicationTransport }),
+      )
+
+      expect(meta.pushOutcome).toBe('commit-local-auth')
+      expect(meta.pushError).toBe('repository-push-authentication-failed')
+      expect(meta.repairAttempts).toBe(0)
+      expect(meta.publicationReceipt).toMatchObject({
+        credentialSource: 'personal',
+        credentialRevision: 7,
+      })
+      expect(openings).toBe(1)
+      expect(networkPushes).toBe(1)
+      expect(closes).toBe(1)
+    })
+
+    test('server-hook rejection → repair → success (repairAttempts=1)', async () => {
+      f = await build(harness, { rejectUnlessOk: true })
+      writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+      const { meta } = await runCommitPush(
+        baseParams(f, {
+          generateMessage: async () => ({ message: 'bad message' }),
+          generateRepair: async () => ({ message: 'OK: corrected subject' }),
+        }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushOutcome).toBe('pushed')
+      expect(meta.messageSource).toBe('llm-repair')
+      expect(meta.repairAttempts).toBe(1)
+      // The accepted commit carries the repaired message.
+      const remoteMsg = (
+        await runGit(f.remote, ['log', '-1', '--format=%s', 'feature/x'])
+      ).stdout.trim()
+      expect(remoteMsg).toBe('OK: corrected subject')
+    })
+
+    test('repair never satisfies the hook → exhausts retries → commit-local-failed', async () => {
+      f = await build(harness, { rejectUnlessOk: true })
+      writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+      const { nodeRunId, meta } = await runCommitPush(
+        baseParams(f, {
+          maxRepairRetries: 2,
+          generateMessage: async () => ({ message: 'still bad' }),
+          generateRepair: async () => ({ message: 'also bad' }),
+        }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushOutcome).toBe('commit-local-failed')
+      expect(meta.repairAttempts).toBe(2)
+      const { status } = await readMeta(f, nodeRunId)
+      expect(status).toBe('failed')
+      // Local commit still present (work preserved) — carries the last repaired
+      // subject since repair amends even though the push kept failing, and the
+      // staged change is in history.
+      expect((await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()).toBe('also bad')
+      expect((await runGit(f.repo, ['show', '--stat', 'HEAD'])).stdout).toContain('b.txt')
+    })
+
+    test('non-fast-forward → bounded fetch+merge → re-push succeeds', async () => {
+      f = await build(harness)
+      // Advance feature/x on the remote from a second clone (different file → no conflict).
+      const other = mkdtempSync(join(tmpdir(), 'aw-cpr-other-'))
+      await runGit(other, ['clone', '-q', f.remote, '.'])
+      await runGit(other, ['config', 'user.email', 'o@o.test'])
+      await runGit(other, ['config', 'user.name', 'Other'])
+      await runGit(other, ['checkout', '-q', '-b', 'feature/x', 'origin/main'])
+      writeFileSync(join(other, 'remote-side.txt'), 'from remote\n')
+      await runGit(other, ['add', '.'])
+      await runGit(other, ['commit', '-q', '-m', 'remote work'])
+      await runGit(other, ['push', '-q', 'origin', 'feature/x'])
+      rmSync(other, { recursive: true, force: true })
+
+      // Local commit on the stale feature/x → first push is non-FF.
+      writeFileSync(join(f.repo, 'local-side.txt'), 'from local\n')
+      const { meta } = await runCommitPush(
+        baseParams(f, { excludePatterns: ['/remote-side.txt'] }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushOutcome).toBe('pushed')
+      expect(meta.repairAttempts).toBe(1) // one non-FF merge cycle
+      // Remote now has both files reachable from feature/x.
+      expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(true)
+    })
+
+    // RFC-076 C4 — the write lock (scheduler's writeSem) protects both local Git
+    // mutation windows: stage+diff capture, then commit. It remains released for
+    // slow LLM generation and network push, so a concurrent writer is serialized
+    // only where sharing the worktree/index would corrupt function.
+    test('C4: write lock spans stage+diff and commit, but is released during message-gen', async () => {
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
+      const events: string[] = []
+      let held = false
+      const observedRunGit: typeof runGit = async (cwd, args, opts) => {
+        if (args[0] === 'commit') events.push(`commit(held=${held})`)
+        return runGit(cwd, args, opts)
+      }
+      await runCommitPush(
+        baseParams(f, {
+          acquireWrite: async () => {
+            held = true
+            events.push('acquire')
+            return () => {
+              held = false
+              events.push('release')
+            }
+          },
+          generateMessage: async () => {
+            events.push(`msg(held=${held})`)
+            return { message: 'feat: locked capture' }
+          },
+        }),
+        composeSqliteCommitPushDeps(f.db, { runGit: observedRunGit }),
+      )
+      // Capture is locked, message generation is not, and local commit reacquires
+      // the lock before touching Git's shared index/ref state.
+      expect(events).toEqual([
+        'acquire',
+        'release',
+        'msg(held=false)',
+        'acquire',
+        'commit(held=true)',
+        'release',
+      ])
+    })
+
+    test('C4: write lock is released even when nothing is staged (skipped-empty)', async () => {
+      f = await build(harness)
+      let released = false
+      const { meta } = await runCommitPush(
+        baseParams(f, {
+          acquireWrite: async () => () => {
+            released = true
+          },
+        }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      // The finally around stage+diff must release even on the early skip return.
+      expect(meta.pushOutcome).toBe('skipped-empty')
+      expect(released).toBe(true)
+    })
   })
 })

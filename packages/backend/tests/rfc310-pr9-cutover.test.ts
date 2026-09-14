@@ -19,17 +19,17 @@
 // / cutover-rollback-after-flip / cutover-adopt-rejected /
 // cutover-repo-binding-missing。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
+import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import type { CodeHostEvent } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {
   legacyCodeWorkItemLinks,
   tasks,
@@ -57,13 +57,12 @@ import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
-import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const BOX = createSecretBoxFromKey(Buffer.alloc(32, 7))
 const NOW = 1_755_500_000_000
+const ROUNDS_TOKEN = 'b'.repeat(64)
+const CUTOVER_TOKEN = 'c'.repeat(64)
 
 function freshDeps(db: ProviderNeutralDatabase) {
   let seq = 0
@@ -129,164 +128,6 @@ describe('RFC-310 PR-9 — cutover state machine (domain)', () => {
   })
 })
 
-describeEachProvider(
-  'RFC-310 PR-9 — cutover commands persist through the sqlite store',
-  (harness) => {
-    let db: ProviderNeutralDatabase
-    beforeEach(() => {
-      db = harness.db
-    })
-
-    test('freeze → flip survive a re-read; rollback after flip is refused durably', async () => {
-      const deps = freshDeps(db)
-      expect((await runCutoverCommand(deps, 'flip')).ok).toBe(false)
-      expect((await runCutoverCommand(deps, 'freeze')).ok).toBe(true)
-      // 重读面（新 store 实例=重启模拟）：frozen 落盘。
-      expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('frozen')
-      const flipped = await runCutoverCommand(freshDeps(db), 'flip')
-      expect(flipped.ok).toBe(true)
-      if (flipped.ok) expect(flipped.state.generation).not.toBeNull()
-      const refused = await runCutoverCommand(freshDeps(db), 'rollback')
-      expect(refused.ok).toBe(false)
-      if (!refused.ok) expect(refused.code).toBe('cutover-rollback-after-flip')
-      expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('live')
-    })
-  },
-)
-
-// ---------------------------------------------------------------------------
-// legacy 双入口 gate
-// ---------------------------------------------------------------------------
-
-describe('RFC-310 PR-9 — the rounds API refuses new legacy work once frozen', () => {
-  const TOKEN = 'b'.repeat(64)
-  let db: DbClient
-  let app: ReturnType<typeof createApp>
-
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    app = createApp({
-      token: TOKEN,
-      configPath: '',
-      opencodeVersion: '1.15.0',
-      dbVersion: 1,
-      db,
-      secretBox: BOX,
-    })
-  })
-  afterEach(() => db.$client.close())
-
-  const post = async () =>
-    await app.request('/api/code/rounds', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ repoId: 'group/project', templateId: 'tpl', input: {} }),
-    })
-
-  test('the legacy rounds entry no longer exists at all (T104: stronger than a 409 gate)', async () => {
-    // PR-9 曾以 409 legacy-admission-frozen 冻结该入口；T104 把路由整个删除
-    // ——404 是比 gate 更强的收缩证明，且与 cutover phase 无关（pre 也 404）。
-    expect((await post()).status).toBe(404)
-    expect((await runCutoverCommand(freshDeps(db), 'freeze')).ok).toBe(true)
-    expect((await post()).status).toBe(404)
-  })
-})
-
-describe('RFC-310 PR-9 — a frozen cutover skips webhook code-round fires', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => db.$client.close())
-
-  async function fireCodeRoundDelivery(): Promise<string> {
-    const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
-    const owner = await createUser(db, {
-      username: `cutover-owner-${ulid().toLowerCase()}`,
-      displayName: 'Cutover Owner',
-      role: 'admin',
-      password: 'longEnoughPassword',
-    })
-    const endpointId = ulid()
-    await db.insert(webhookEndpoints).values({
-      id: endpointId,
-      name: 'cutover gate endpoint',
-      provider: 'gitlab',
-      urlToken: `aw_whk_${ulid()}`,
-      secretEnc: box.seal('secret'),
-      enabled: true,
-    })
-    const endpoint = (
-      await db.select().from(webhookEndpoints).where(eq(webhookEndpoints.id, endpointId)).limit(1)
-    )[0]!
-    const triggerId = ulid()
-    await db.insert(webhookTriggers).values({
-      id: triggerId,
-      name: 'cutover gate ci-fix',
-      endpointId,
-      ownerUserId: owner.id,
-      repoScope: JSON.stringify({ kind: 'all' }),
-      eventTypes: JSON.stringify(['pipeline_failed']),
-      ignoreUsernames: JSON.stringify([]),
-      launchKind: 'code-round',
-      launchRefId: 'ci-fix',
-      launchPayload: JSON.stringify({ capability: 'ci-fix' }),
-      autoRegisterRepos: false,
-    })
-    const event: CodeHostEvent = {
-      provider: 'gitlab',
-      eventUuid: ulid(),
-      eventType: 'pipeline_failed',
-      repoPath: 'platform/api',
-      repoHttpUrl: 'https://gitlab.invalid/platform/api.git',
-      repoSshUrl: 'git@gitlab.invalid:platform/api.git',
-      branch: 'main',
-      pipelineStatus: 'failed',
-      author: { username: 'developer' },
-      raw: {},
-    }
-    const deliveryId = ulid()
-    await db.insert(webhookDeliveries).values({
-      id: deliveryId,
-      endpointId,
-      eventUuid: event.eventUuid,
-      status: 'received',
-      eventType: event.eventType,
-      repoPath: event.repoPath,
-    })
-    const dispatcher = createWebhookDispatcher({
-      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
-      ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-      getDefaultRuntime: async () => null,
-      launch: async () => {
-        throw new Error('code-round tombstone must not launch')
-      },
-      cancel: async () => undefined,
-    })
-    await dispatcher.dispatch({ deliveryId, endpoint, event })
-    return triggerId
-  }
-
-  test('a historical code-round trigger row fires as skipped-trigger-invalid, zero tasks (T104 tombstone)', async () => {
-    // PR-9 的 cutover gate（skipped-legacy-admission-frozen）随 writer 一并
-    // 退役：T104 后 code-round fire 无论 cutover phase 一律落
-    // skipped-trigger-invalid 留痕，绝不启动任务。
-    const triggerId = await fireCodeRoundDelivery()
-    const fires = await db
-      .select()
-      .from(webhookTriggerFires)
-      .where(eq(webhookTriggerFires.triggerId, triggerId))
-    expect(fires).toHaveLength(1)
-    expect(fires[0]!.outcome).toBe('skipped-trigger-invalid')
-    expect(fires[0]!.taskId).toBeNull()
-    expect(await db.select().from(tasks)).toHaveLength(0)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// adoptActiveMr 验收样本
-// ---------------------------------------------------------------------------
-
 function mrEffectsObserving(
   state: 'opened' | 'merged' | 'closed',
   overrides: Partial<{ sourceSha: string | null; targetBranch: string | null }> = {},
@@ -308,309 +149,452 @@ function mrEffectsObserving(
   }
 }
 
-describeEachProvider(
-  'RFC-310 PR-9 — adoptActiveMr builds missions from external truth',
-  (harness) => {
+// RFC-359 AC-6 —— cutover 的落盘面、legacy 双入口 gate、adopt 与路由错误码在 RFC-359 之后是
+// 「一份实现两个 provider 共用」，所以这一整组判据在两个引擎上各跑一遍。两个需要真应用的子
+// 套件（rounds 入口、cutover 路由）用同一个双引擎 HTTP 作用域现装应用，各自的 token 按子套件
+// 覆盖；不需要应用的子套件只读 `scope.harness.db`，不调 `open()`。
+describeEachProviderHttpApplication(
+  'RFC-310 PR-9 — cutover 落盘 / legacy 双入口 gate / adopt / 路由错误码（双引擎）',
+  {
+    tempPrefix: 'aw-rfc310-pr9-cutover-',
+    token: ROUNDS_TOKEN,
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+  },
+  (scope) => {
     let db: ProviderNeutralDatabase
     beforeEach(() => {
-      db = harness.db
+      db = scope.harness.db
     })
 
-    const input = {
-      repositoryId: 'repo-1',
-      mrIid: '42',
-      codeHostEndpointRef: 'gitlab',
-      stableProjectRef: 'team/app',
-      employee: { id: 'emp-1', revision: 3 },
-      policy: null,
-      legacyWorkItemId: 'wi-9',
-      legacyRoundId: null,
-      actorUserId: null,
-    }
+    describe('cutover commands persist through the store', () => {
+      test('freeze → flip survive a re-read; rollback after flip is refused durably', async () => {
+        const deps = freshDeps(db)
+        expect((await runCutoverCommand(deps, 'flip')).ok).toBe(false)
+        expect((await runCutoverCommand(deps, 'freeze')).ok).toBe(true)
+        // 重读面（新 store 实例=重启模拟）：frozen 落盘。
+        expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('frozen')
+        const flipped = await runCutoverCommand(freshDeps(db), 'flip')
+        expect(flipped.ok).toBe(true)
+        if (flipped.ok) expect(flipped.state.generation).not.toBeNull()
+        const refused = await runCutoverCommand(freshDeps(db), 'rollback')
+        expect(refused.ok).toBe(false)
+        if (!refused.ok) expect(refused.code).toBe('cutover-rollback-after-flip')
+        expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('live')
+      })
+    })
 
-    test('an open MR becomes a watching mission with an active claim and a legacy link', async () => {
-      const store = createMissionPersistence(db)
-      const deps = {
-        store: createMissionPersistence(db),
-        ports: { mrEffects: mrEffectsObserving('opened') },
-        ...freshDeps(db),
+    // -----------------------------------------------------------------------
+    // legacy 双入口 gate
+    // -----------------------------------------------------------------------
+
+    describe('the rounds API refuses new legacy work once frozen', () => {
+      let app: Hono
+      beforeEach(async () => {
+        app = (await scope.open()).app
+      })
+
+      const post = async () =>
+        await app.request('/api/code/rounds', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${ROUNDS_TOKEN}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ repoId: 'group/project', templateId: 'tpl', input: {} }),
+        })
+
+      test('the legacy rounds entry no longer exists at all (T104: stronger than a 409 gate)', async () => {
+        // PR-9 曾以 409 legacy-admission-frozen 冻结该入口；T104 把路由整个删除
+        // ——404 是比 gate 更强的收缩证明，且与 cutover phase 无关（pre 也 404）。
+        expect((await post()).status).toBe(404)
+        expect((await runCutoverCommand(freshDeps(db), 'freeze')).ok).toBe(true)
+        expect((await post()).status).toBe(404)
+      })
+    })
+
+    describe('a frozen cutover skips webhook code-round fires', () => {
+      async function fireCodeRoundDelivery(): Promise<string> {
+        const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
+        const owner = await createUser(db, {
+          username: `cutover-owner-${ulid().toLowerCase()}`,
+          displayName: 'Cutover Owner',
+          role: 'admin',
+          password: 'longEnoughPassword',
+        })
+        const endpointId = ulid()
+        await db.insert(webhookEndpoints).values({
+          id: endpointId,
+          name: 'cutover gate endpoint',
+          provider: 'gitlab',
+          urlToken: `aw_whk_${ulid()}`,
+          secretEnc: box.seal('secret'),
+          enabled: true,
+        })
+        const endpoint = (
+          await db
+            .select()
+            .from(webhookEndpoints)
+            .where(eq(webhookEndpoints.id, endpointId))
+            .limit(1)
+        )[0]!
+        const triggerId = ulid()
+        await db.insert(webhookTriggers).values({
+          id: triggerId,
+          name: 'cutover gate ci-fix',
+          endpointId,
+          ownerUserId: owner.id,
+          repoScope: JSON.stringify({ kind: 'all' }),
+          eventTypes: JSON.stringify(['pipeline_failed']),
+          ignoreUsernames: JSON.stringify([]),
+          launchKind: 'code-round',
+          launchRefId: 'ci-fix',
+          launchPayload: JSON.stringify({ capability: 'ci-fix' }),
+          autoRegisterRepos: false,
+        })
+        const event: CodeHostEvent = {
+          provider: 'gitlab',
+          eventUuid: ulid(),
+          eventType: 'pipeline_failed',
+          repoPath: 'platform/api',
+          repoHttpUrl: 'https://gitlab.invalid/platform/api.git',
+          repoSshUrl: 'git@gitlab.invalid:platform/api.git',
+          branch: 'main',
+          pipelineStatus: 'failed',
+          author: { username: 'developer' },
+          raw: {},
+        }
+        const deliveryId = ulid()
+        await db.insert(webhookDeliveries).values({
+          id: deliveryId,
+          endpointId,
+          eventUuid: event.eventUuid,
+          status: 'received',
+          eventType: event.eventType,
+          repoPath: event.repoPath,
+        })
+        const dispatcher = createWebhookDispatcher({
+          ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+          ...integrationTriggerWebhookAuthorityDependencies(
+            db,
+            createIdentityAccessRuntime({ db }),
+          ),
+          getDefaultRuntime: async () => null,
+          launch: async () => {
+            throw new Error('code-round tombstone must not launch')
+          },
+          cancel: async () => undefined,
+        })
+        await dispatcher.dispatch({ deliveryId, endpoint, event })
+        return triggerId
       }
-      const result = await adoptActiveMr(deps, input)
-      expect(result.ok).toBe(true)
-      if (!result.ok) return
-      expect(result.terminal).toBeNull()
 
-      const mission = (await store.getMission(result.missionId))!
-      expect(mission.status).toBe('watching')
-      expect(mission.deliveryKind).toBe('adopt-merge-request')
-      expect(mission.adoptedMrRef).toBe('42')
-      expect(mission.deliveryTargetRef).toBe('main')
-      expect(mission.employeeRevision).toBe(3)
-      expect(mission.mrClaimId).not.toBeNull()
-      const claim = await store.findMrClaim({
+      test('a historical code-round trigger row fires as skipped-trigger-invalid, zero tasks (T104 tombstone)', async () => {
+        // PR-9 的 cutover gate（skipped-legacy-admission-frozen）随 writer 一并
+        // 退役：T104 后 code-round fire 无论 cutover phase 一律落
+        // skipped-trigger-invalid 留痕，绝不启动任务。
+        const triggerId = await fireCodeRoundDelivery()
+        const fires = await db
+          .select()
+          .from(webhookTriggerFires)
+          .where(eq(webhookTriggerFires.triggerId, triggerId))
+        expect(fires).toHaveLength(1)
+        expect(fires[0]!.outcome).toBe('skipped-trigger-invalid')
+        expect(fires[0]!.taskId).toBeNull()
+        expect(await db.select().from(tasks)).toHaveLength(0)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // adoptActiveMr 验收样本
+    // -----------------------------------------------------------------------
+
+    describe('adoptActiveMr builds missions from external truth', () => {
+      const input = {
+        repositoryId: 'repo-1',
+        mrIid: '42',
         codeHostEndpointRef: 'gitlab',
         stableProjectRef: 'team/app',
-        mrIid: '42',
-      })
-      expect(claim?.missionId).toBe(result.missionId)
-
-      const links = await db
-        .select()
-        .from(legacyCodeWorkItemLinks)
-        .where(eq(legacyCodeWorkItemLinks.missionId, result.missionId))
-      expect(links).toHaveLength(1)
-      expect(links[0]!.legacyWorkItemId).toBe('wi-9')
-      expect(JSON.parse(links[0]!.cutoverReceiptJson)).toMatchObject({
-        observedState: 'opened',
-        targetBranch: 'main',
-      })
-    })
-
-    test('a merged MR is adopted as authoritative terminal: no claim, no action', async () => {
-      const store = createMissionPersistence(db)
-      const deps = {
-        store: createMissionPersistence(db),
-        ports: { mrEffects: mrEffectsObserving('merged') },
-        ...freshDeps(db),
+        employee: { id: 'emp-1', revision: 3 },
+        policy: null,
+        legacyWorkItemId: 'wi-9',
+        legacyRoundId: null,
+        actorUserId: null,
       }
-      const result = await adoptActiveMr(deps, input)
-      expect(result.ok).toBe(true)
-      if (!result.ok) return
-      expect(result.terminal).toBe('merged')
-      const mission = (await store.getMission(result.missionId))!
-      expect(mission.status).toBe('merged')
-      expect(mission.terminalAt).toBe(NOW)
-      expect(mission.mrClaimId).toBeNull()
-      expect(mission.currentActionRunId).toBeNull()
-      expect(
-        await store.findMrClaim({
+
+      test('an open MR becomes a watching mission with an active claim and a legacy link', async () => {
+        const store = createMissionPersistence(db)
+        const deps = {
+          store: createMissionPersistence(db),
+          ports: { mrEffects: mrEffectsObserving('opened') },
+          ...freshDeps(db),
+        }
+        const result = await adoptActiveMr(deps, input)
+        expect(result.ok).toBe(true)
+        if (!result.ok) return
+        expect(result.terminal).toBeNull()
+
+        const mission = (await store.getMission(result.missionId))!
+        expect(mission.status).toBe('watching')
+        expect(mission.deliveryKind).toBe('adopt-merge-request')
+        expect(mission.adoptedMrRef).toBe('42')
+        expect(mission.deliveryTargetRef).toBe('main')
+        expect(mission.employeeRevision).toBe(3)
+        expect(mission.mrClaimId).not.toBeNull()
+        const claim = await store.findMrClaim({
           codeHostEndpointRef: 'gitlab',
           stableProjectRef: 'team/app',
           mrIid: '42',
-        }),
-      ).toBeNull()
-    })
+        })
+        expect(claim?.missionId).toBe(result.missionId)
 
-    test('a closed MR maps to closed-unmerged', async () => {
-      const store = createMissionPersistence(db)
-      const deps = {
-        store: createMissionPersistence(db),
-        ports: { mrEffects: mrEffectsObserving('closed') },
-        ...freshDeps(db),
-      }
-      const result = await adoptActiveMr(deps, input)
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.terminal).toBe('closed-unmerged')
-        expect((await store.getMission(result.missionId))!.status).toBe('closed-unmerged')
-      }
-    })
-
-    test('re-running the same adopt is idempotent (runbook is re-runnable)', async () => {
-      const deps = {
-        store: createMissionPersistence(db),
-        ports: { mrEffects: mrEffectsObserving('opened') },
-        ...freshDeps(db),
-      }
-      const first = await adoptActiveMr(deps, input)
-      const second = await adoptActiveMr(
-        {
-          store: createMissionPersistence(db),
-          ports: { mrEffects: mrEffectsObserving('opened') },
-          ...freshDeps(db),
-        },
-        input,
-      )
-      expect(first.ok && second.ok).toBe(true)
-      if (first.ok && second.ok) expect(second.missionId).toBe(first.missionId)
-      const links = await db.select().from(legacyCodeWorkItemLinks)
-      expect(links).toHaveLength(1)
-    })
-
-    test('an MR already claimed by a non-adopt mission is refused', async () => {
-      // 同 (endpoint, project, iid) 的重复 **adopt** 是幂等命中（launch key 相同，
-      // 上一测试锁定）；「被另一 mission 占用」发生在 MR 已被正常 delivery 链
-      // （create-merge-request mission 的 claimMr）持有时——adopt 的 createMission
-      // 走新 launch key 成功建行，claim 撞唯一后 findMrClaim 归属他人 ⇒ typed 拒。
-      const store = createMissionPersistence(db)
-      const holdingMissionId = ulid()
-      await store.createMission({
-        id: holdingMissionId,
-        revision: 0,
-        epoch: 0,
-        status: 'watching',
-        automationMode: 'active',
-        transitionFence: 'none',
-        repositoryId: 'repo-legacy',
-        sourceKind: 'direct',
-        sourceContentDigest: null,
-        requestedSourceKey: null,
-        externalId: null,
-        resolvedSourceKey: null,
-        resolvedAdapterId: null,
-        resolvedAdapterRevision: null,
-        deliveryKind: 'create-merge-request',
-        deliveryTargetRef: 'main',
-        deliverySourceBranch: 'aw/holding',
-        adoptedMrRef: null,
-        assignmentId: null,
-        employeeId: null,
-        employeeRevision: null,
-        policyId: null,
-        policyRevision: null,
-        requirementBundleRef: null,
-        repositoryFactsRef: null,
-        uploadPlanRef: null,
-        uploadPlacementRef: null,
-        uploadPublicationRef: null,
-        mrClaimId: null,
-        currentActionRunId: null,
-        readinessJson: null,
-        blockCode: null,
-        blockDetail: null,
-        terminalKind: null,
-        terminalUploadFulfillment: null,
-        terminalAt: null,
-        launchIdempotencyKey: `holder:${ulid()}`,
-        createdBy: null,
-        createdAt: NOW,
-        updatedAt: NOW,
+        const links = await db
+          .select()
+          .from(legacyCodeWorkItemLinks)
+          .where(eq(legacyCodeWorkItemLinks.missionId, result.missionId))
+        expect(links).toHaveLength(1)
+        expect(links[0]!.legacyWorkItemId).toBe('wi-9')
+        expect(JSON.parse(links[0]!.cutoverReceiptJson)).toMatchObject({
+          observedState: 'opened',
+          targetBranch: 'main',
+        })
       })
-      expect(
-        (
-          await store.claimMr({
-            id: ulid(),
+
+      test('a merged MR is adopted as authoritative terminal: no claim, no action', async () => {
+        const store = createMissionPersistence(db)
+        const deps = {
+          store: createMissionPersistence(db),
+          ports: { mrEffects: mrEffectsObserving('merged') },
+          ...freshDeps(db),
+        }
+        const result = await adoptActiveMr(deps, input)
+        expect(result.ok).toBe(true)
+        if (!result.ok) return
+        expect(result.terminal).toBe('merged')
+        const mission = (await store.getMission(result.missionId))!
+        expect(mission.status).toBe('merged')
+        expect(mission.terminalAt).toBe(NOW)
+        expect(mission.mrClaimId).toBeNull()
+        expect(mission.currentActionRunId).toBeNull()
+        expect(
+          await store.findMrClaim({
             codeHostEndpointRef: 'gitlab',
             stableProjectRef: 'team/app',
             mrIid: '42',
-            missionId: holdingMissionId,
-            epoch: 0,
-            headSha: null,
-            now: NOW,
-          })
-        ).ok,
-      ).toBe(true)
-      const clashing = await adoptActiveMr(
-        {
+          }),
+        ).toBeNull()
+      })
+
+      test('a closed MR maps to closed-unmerged', async () => {
+        const store = createMissionPersistence(db)
+        const deps = {
+          store: createMissionPersistence(db),
+          ports: { mrEffects: mrEffectsObserving('closed') },
+          ...freshDeps(db),
+        }
+        const result = await adoptActiveMr(deps, input)
+        expect(result.ok).toBe(true)
+        if (result.ok) {
+          expect(result.terminal).toBe('closed-unmerged')
+          expect((await store.getMission(result.missionId))!.status).toBe('closed-unmerged')
+        }
+      })
+
+      test('re-running the same adopt is idempotent (runbook is re-runnable)', async () => {
+        const deps = {
           store: createMissionPersistence(db),
           ports: { mrEffects: mrEffectsObserving('opened') },
           ...freshDeps(db),
-        },
-        input,
-      )
-      expect(clashing.ok).toBe(false)
-      if (!clashing.ok) expect(clashing.code).toBe('mr-owned-by-another-mission')
-      // 拒绝路径不留 legacy link 半行。
-      expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+        }
+        const first = await adoptActiveMr(deps, input)
+        const second = await adoptActiveMr(
+          {
+            store: createMissionPersistence(db),
+            ports: { mrEffects: mrEffectsObserving('opened') },
+            ...freshDeps(db),
+          },
+          input,
+        )
+        expect(first.ok && second.ok).toBe(true)
+        if (first.ok && second.ok) expect(second.missionId).toBe(first.missionId)
+        const links = await db.select().from(legacyCodeWorkItemLinks)
+        expect(links).toHaveLength(1)
+      })
+
+      test('an MR already claimed by a non-adopt mission is refused', async () => {
+        // 同 (endpoint, project, iid) 的重复 **adopt** 是幂等命中（launch key 相同，
+        // 上一测试锁定）；「被另一 mission 占用」发生在 MR 已被正常 delivery 链
+        // （create-merge-request mission 的 claimMr）持有时——adopt 的 createMission
+        // 走新 launch key 成功建行，claim 撞唯一后 findMrClaim 归属他人 ⇒ typed 拒。
+        const store = createMissionPersistence(db)
+        const holdingMissionId = ulid()
+        await store.createMission({
+          id: holdingMissionId,
+          revision: 0,
+          epoch: 0,
+          status: 'watching',
+          automationMode: 'active',
+          transitionFence: 'none',
+          repositoryId: 'repo-legacy',
+          sourceKind: 'direct',
+          sourceContentDigest: null,
+          requestedSourceKey: null,
+          externalId: null,
+          resolvedSourceKey: null,
+          resolvedAdapterId: null,
+          resolvedAdapterRevision: null,
+          deliveryKind: 'create-merge-request',
+          deliveryTargetRef: 'main',
+          deliverySourceBranch: 'aw/holding',
+          adoptedMrRef: null,
+          assignmentId: null,
+          employeeId: null,
+          employeeRevision: null,
+          policyId: null,
+          policyRevision: null,
+          requirementBundleRef: null,
+          repositoryFactsRef: null,
+          uploadPlanRef: null,
+          uploadPlacementRef: null,
+          uploadPublicationRef: null,
+          mrClaimId: null,
+          currentActionRunId: null,
+          readinessJson: null,
+          blockCode: null,
+          blockDetail: null,
+          terminalKind: null,
+          terminalUploadFulfillment: null,
+          terminalAt: null,
+          launchIdempotencyKey: `holder:${ulid()}`,
+          createdBy: null,
+          createdAt: NOW,
+          updatedAt: NOW,
+        })
+        expect(
+          (
+            await store.claimMr({
+              id: ulid(),
+              codeHostEndpointRef: 'gitlab',
+              stableProjectRef: 'team/app',
+              mrIid: '42',
+              missionId: holdingMissionId,
+              epoch: 0,
+              headSha: null,
+              now: NOW,
+            })
+          ).ok,
+        ).toBe(true)
+        const clashing = await adoptActiveMr(
+          {
+            store: createMissionPersistence(db),
+            ports: { mrEffects: mrEffectsObserving('opened') },
+            ...freshDeps(db),
+          },
+          input,
+        )
+        expect(clashing.ok).toBe(false)
+        if (!clashing.ok) expect(clashing.code).toBe('mr-owned-by-another-mission')
+        // 拒绝路径不留 legacy link 半行。
+        expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+      })
+
+      test('observe failure propagates its typed code (the "MR does not exist" sample)', async () => {
+        const failing: MrEffectsPort = {
+          ...mrEffectsObserving('opened'),
+          observe: () =>
+            Promise.resolve({ ok: false as const, code: 'mr-not-found', detail: '42' }),
+        }
+        const result = await adoptActiveMr(
+          {
+            store: createMissionPersistence(db),
+            ports: { mrEffects: failing },
+            ...freshDeps(db),
+          },
+          input,
+        )
+        expect(result.ok).toBe(false)
+        if (!result.ok) expect(result.code).toBe('mr-not-found')
+        expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+      })
     })
 
-    test('observe failure propagates its typed code (the "MR does not exist" sample)', async () => {
-      const failing: MrEffectsPort = {
-        ...mrEffectsObserving('opened'),
-        observe: () => Promise.resolve({ ok: false as const, code: 'mr-not-found', detail: '42' }),
+    describe('cutover route error codes are named', () => {
+      // route error code ratchet 点名（见文件头）：cutover-adopt-rejected 与
+      // cutover-repo-binding-missing 在 adopt 路由抛出；cutover-phase-invalid 与
+      // cutover-rollback-after-flip 在命令路由抛出；legacy-admission-frozen 在
+      // rounds 路由抛出（上方 409 测试已实测）。此处对 4 个 cutover 码做路由级
+      // 实测（无 binding 的 adopt 400、pre 状态 flip 409）。
+      let app: Hono
+      beforeEach(async () => {
+        app = (await scope.open({ token: CUTOVER_TOKEN })).app
+      })
+
+      const headers = {
+        authorization: `Bearer ${CUTOVER_TOKEN}`,
+        'content-type': 'application/json',
       }
-      const result = await adoptActiveMr(
-        {
-          store: createMissionPersistence(db),
-          ports: { mrEffects: failing },
-          ...freshDeps(db),
-        },
-        input,
-      )
-      expect(result.ok).toBe(false)
-      if (!result.ok) expect(result.code).toBe('mr-not-found')
-      expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+
+      test('flip before freeze is a 409 cutover-phase-invalid', async () => {
+        const res = await app.request('/api/code/cutover/flip', {
+          method: 'POST',
+          headers,
+          body: '{}',
+        })
+        expect(res.status).toBe(409)
+        expect(JSON.stringify(await res.json())).toContain('cutover-phase-invalid')
+      })
+
+      test('rollback after flip is a 409 cutover-rollback-after-flip', async () => {
+        expect((await runCutoverCommand(freshDeps(db), 'freeze')).ok).toBe(true)
+        expect((await runCutoverCommand(freshDeps(db), 'flip')).ok).toBe(true)
+        const res = await app.request('/api/code/cutover/rollback', {
+          method: 'POST',
+          headers,
+          body: '{}',
+        })
+        expect(res.status).toBe(409)
+        expect(JSON.stringify(await res.json())).toContain('cutover-rollback-after-flip')
+      })
+
+      test('adopt on a repository without a code-host binding is a 422 cutover-repo-binding-missing', async () => {
+        const res = await app.request('/api/code/cutover/adopt-mr', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ repositoryId: 'no-such-repo', mrIid: '1' }),
+        })
+        expect(res.status).toBe(422)
+        expect(JSON.stringify(await res.json())).toContain('cutover-repo-binding-missing')
+      })
+
+      test('cutover state read face returns state + preflight report shape', async () => {
+        const res = await app.request('/api/code/cutover', { headers })
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as {
+          state: { phase: string }
+          preflight: { items: unknown[] }
+          persisted: unknown
+        }
+        expect(body.state.phase).toBe('pre')
+        expect(Array.isArray(body.preflight.items)).toBe(true)
+        expect(body.persisted).toBeNull()
+      })
+
+      test('the adopt route surfaces port rejections as 409 cutover-adopt-rejected', () => {
+        // adopt 的 409 面：claim 被占/observe 失败在 route 层统一以
+        // 'cutover-adopt-rejected' 呈现（携带内层 code）。真实 binding + 假
+        // code-host 的组合在单测里过重；内层全部拒绝路径已在上方 application 级
+        // 逐一实测，这里以源码断言锁住 route 层的错误码壳不被改名。
+        const source = readFileSync(
+          resolve(
+            import.meta.dir,
+            '..',
+            'src',
+            'modules',
+            'development-automation',
+            'composition',
+            'missionOperations.ts',
+          ),
+          'utf8',
+        )
+        expect(source).toContain("new ConflictError('cutover-adopt-rejected'")
+      })
     })
   },
 )
-
-describe('RFC-310 PR-9 — cutover route error codes are named', () => {
-  // route error code ratchet 点名（见文件头）：cutover-adopt-rejected 与
-  // cutover-repo-binding-missing 在 adopt 路由抛出；cutover-phase-invalid 与
-  // cutover-rollback-after-flip 在命令路由抛出；legacy-admission-frozen 在
-  // rounds 路由抛出（上方 409 测试已实测）。此处对 4 个 cutover 码做路由级
-  // 实测（无 binding 的 adopt 400、pre 状态 flip 409）。
-  const TOKEN = 'c'.repeat(64)
-  let db: DbClient
-  let app: ReturnType<typeof createApp>
-
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    app = createApp({
-      token: TOKEN,
-      configPath: '',
-      opencodeVersion: '1.15.0',
-      dbVersion: 1,
-      db,
-      secretBox: BOX,
-    })
-  })
-  afterEach(() => db.$client.close())
-
-  const headers = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }
-
-  test('flip before freeze is a 409 cutover-phase-invalid', async () => {
-    const res = await app.request('/api/code/cutover/flip', {
-      method: 'POST',
-      headers,
-      body: '{}',
-    })
-    expect(res.status).toBe(409)
-    expect(JSON.stringify(await res.json())).toContain('cutover-phase-invalid')
-  })
-
-  test('rollback after flip is a 409 cutover-rollback-after-flip', async () => {
-    expect((await runCutoverCommand(freshDeps(db), 'freeze')).ok).toBe(true)
-    expect((await runCutoverCommand(freshDeps(db), 'flip')).ok).toBe(true)
-    const res = await app.request('/api/code/cutover/rollback', {
-      method: 'POST',
-      headers,
-      body: '{}',
-    })
-    expect(res.status).toBe(409)
-    expect(JSON.stringify(await res.json())).toContain('cutover-rollback-after-flip')
-  })
-
-  test('adopt on a repository without a code-host binding is a 422 cutover-repo-binding-missing', async () => {
-    const res = await app.request('/api/code/cutover/adopt-mr', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ repositoryId: 'no-such-repo', mrIid: '1' }),
-    })
-    expect(res.status).toBe(422)
-    expect(JSON.stringify(await res.json())).toContain('cutover-repo-binding-missing')
-  })
-
-  test('cutover state read face returns state + preflight report shape', async () => {
-    const res = await app.request('/api/code/cutover', { headers })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      state: { phase: string }
-      preflight: { items: unknown[] }
-      persisted: unknown
-    }
-    expect(body.state.phase).toBe('pre')
-    expect(Array.isArray(body.preflight.items)).toBe(true)
-    expect(body.persisted).toBeNull()
-  })
-
-  test('the adopt route surfaces port rejections as 409 cutover-adopt-rejected', () => {
-    // adopt 的 409 面：claim 被占/observe 失败在 route 层统一以
-    // 'cutover-adopt-rejected' 呈现（携带内层 code）。真实 binding + 假
-    // code-host 的组合在单测里过重；内层全部拒绝路径已在上方 application 级
-    // 逐一实测，这里以源码断言锁住 route 层的错误码壳不被改名。
-    const source = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'development-automation',
-        'composition',
-        'missionOperations.ts',
-      ),
-      'utf8',
-    )
-    expect(source).toContain("new ConflictError('cutover-adopt-rejected'")
-  })
-})

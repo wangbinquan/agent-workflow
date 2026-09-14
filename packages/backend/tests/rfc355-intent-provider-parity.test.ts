@@ -1,7 +1,7 @@
 // RFC-355 T1（RFC-294 W4-E4a）—— intent apply 的**判据不许被抄成两份** + apply 面错误码清单。
 //
 // 立项时的形态：`intent-apply` 的编排在仓里有**逐行并行的两份**——
-// `sqliteIntentApplyOperations.ts`(842 行) 与 `postgresqlIntentApplyOperations.ts`(684 行)，
+// `sqliteIntentApplyOperations.ts`(842 行) 与 `intentApplyEngine.ts`(684 行)，
 // claim 判据序列逐条对应、连 15 行的 session 串行锁都各写一遍。本文件当时把「已经漂了多少」
 // 变成机器判据（T1 先红，T2～T5 转绿）。
 //
@@ -19,7 +19,7 @@ const SRC = join(import.meta.dir, '..', 'src')
 const read = (...parts: string[]): string => readFileSync(join(SRC, ...parts), 'utf-8')
 
 /** 合一之后唯一那台 apply 编排。 */
-const APPLY = ['modules', 'intent', 'infrastructure', 'postgresqlIntentApplyOperations.ts'] as const
+const APPLY = ['modules', 'intent', 'infrastructure', 'intentApplyEngine.ts'] as const
 
 /**
  * 用户可见的错误码 = 真正被 `throw new XxxError(...)` 抛出的那些。
@@ -165,20 +165,20 @@ describe('RFC-355 T6 —— intent 深取 resource-catalog 内部实现的账本
   // T6 的做法是让 RC 出一个技能工件 participant，两个 provider 的 intent 都从那里取
   // ——形态复用 RFC-353 已验证过的 participant + bootstrap 装配。
   const DEEP_IMPORT_DEBT: Readonly<Record<string, readonly string[]>> = {
-    // T6 已销账：`postgresqlIntentApplyArtifactOwners.ts` 整份迁进 resource-catalog
+    // T6 已销账：`intentApplyArtifactOwners.ts` 整份迁进 resource-catalog
     // （它实现的是 RC 的端口、用的是 RC 自己的机制，见 T0 结论），文件在 intent 下已不存在；
     // 两个 ArtifactLifecycle 的运行时深取改为经 `ports/skillArtifactCompensation` 注入。
     //
-    // **剩下这 2 条是纯类型 import**：`PostgresqlIntentApplyArtifact` /
-    // `PostgresqlIntentApplyResourceSession` 是 RC 定义的工件与会话形状，intent 的 PostgreSQL
+    // **剩下这 2 条是纯类型 import**：`IntentApplyArtifact` /
+    // `IntentApplyResourceSession` 是 RC 定义的工件与会话形状，intent 的 PostgreSQL
     // 适配器按它们标注参数。把它们搬进 public 会让 `Postgresql*` 命名的 provider 类型出现在
     // 公共面上（RFC-349 的 provider-cutover 账本「只能缩不能涨」正是防这件事），
     // 所以按既有口径作为**已入账的纯类型边**留着，随 RC 自己的下一波收口。
-    'postgresqlIntentApplyArtifactLifecycle.ts': [
-      '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants',
+    'intentApplyArtifactLifecycle.ts': [
+      '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants',
     ],
-    'postgresqlIntentApplyOperations.ts': [
-      '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants',
+    'intentApplyEngine.ts': [
+      '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants',
     ],
   }
 

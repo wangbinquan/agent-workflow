@@ -138,7 +138,7 @@ test('shared intent rendering preserves field-read order and immediate error ide
 // RFC-359 —— 写方从两个变成一个：`legacyIntentApplyResourceParticipants` 随两台 apply 引擎
 // 合一一起退役。判据不变——**唯一那个写方仍然消费共享序列化器**，而不是在本文件里重抄一份。
 test('the actual intent artifact writer calls the existing shared serializer', () => {
-  const owners = [['postgresqlIntentApplyArtifactOwners', 'skillMarkdown']] as const
+  const owners = [['intentApplyArtifactOwners', 'skillMarkdown']] as const
   for (const [owner, local] of owners) {
     const source = ts.createSourceFile(
       `${owner}.ts`,

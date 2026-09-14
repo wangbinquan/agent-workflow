@@ -2135,7 +2135,7 @@ export function composeSqliteApplicationDeps(
         })()
   // RFC-359 —— Intent apply 两个 provider 共用**同一台**引擎与同一份装配。此处此前是
   // SQLite 专属的那条线（legacy 资源会话 + SQLite 工件生命周期），与 PostgreSQL 根的
-  // `createPostgresqlIntentApplyOperations` 并行存在；判据长期只喂其中一侧。
+  // `createIntentApplyEngine` 并行存在；判据长期只喂其中一侧。
   const intentApply = composeIntentApplyOperations({
     db: effectiveDeps.db,
     appHome,

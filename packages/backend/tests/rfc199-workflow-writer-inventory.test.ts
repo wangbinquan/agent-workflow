@@ -26,7 +26,7 @@ const EXPECTED_WRITERS = {
     'modules/task-execution/composition/actionExecutionRunners.ts': 1,
     'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts': 2,
     'modules/knowledge-evolution/infrastructure/fusionRepository.ts': 1,
-    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+    'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
@@ -35,7 +35,7 @@ const EXPECTED_WRITERS = {
   },
   updateEditable: {
     'modules/knowledge-evolution/infrastructure/fusionRepository.ts': 1,
-    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+    'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
     'modules/resource-catalog/infrastructure/workflowRepository.ts': 1,
@@ -165,7 +165,7 @@ describe('RFC-199 workflow writer inventory', () => {
       'cli/postgresqlDaemonApplication.ts': 'serializeWorkflowDefinitionStorageV1(',
       'modules/knowledge-evolution/infrastructure/fusionRepository.ts':
         'repairFusionWorkflowDefinition(',
-      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts':
+      'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts':
         'serializeWorkflowDefinitionStorageV1(',
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts':
         'createWorkflowPersistenceValues(',

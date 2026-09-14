@@ -1,7 +1,7 @@
 // RFC-355 T3（RFC-294 W4-E4a）—— 「同一 session 的 apply 串行化」的**唯一**实现。
 //
 // 在它之前这段 15 行的算法在仓里有两份：`sqliteIntentApplyOperations.ts` 的
-// `withSessionApplyLock`（模块级 `applyLocks` Map）与 `postgresqlIntentApplyOperations.ts` 的
+// `withSessionApplyLock`（模块级 `applyLocks` Map）与 `intentApplyEngine.ts` 的
 // `withSessionLock`（工厂闭包里的 `locks` Map）。**同一个算法、两个名字**，与 provider 无关：
 // 它排的是本进程内对同一个 session 的并发 apply，不涉及数据库、事务或任何 provider 机制。
 //

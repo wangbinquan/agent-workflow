@@ -447,8 +447,8 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 44,
-      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。 RFC-359：`sqliteNodeRunMintParticipant.ts` 退役——它只是 `nodeRunMintProgram` 的同步解释器，src 侧唯一的到达路径是 `mintLegacySqliteNodeRunInTx` → `services/nodeRunMint.ts#mintNodeRunTx`，而后者生产零调用方；事务内铸行的调用方本来就走中立的 `createNodeRunMintParticipantInTx`，50 → 49。。RFC-359（2026-09-13）49 → 48：同上，那条死门面连同它的三处账本条目一起删。RFC-359（2026-09-13，apply 引擎合一 §5dw）48 → 47：`modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts` 退役——它的四个同步 `*InTx` 只服务 legacy 提交路径，随 `legacyResourcePackageCommit.ts` 一起删；两个 async 读早就由中立的 `packageResourceRows.ts` 提供"
+      "baseline": 39,
+      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。 RFC-359：`sqliteNodeRunMintParticipant.ts` 退役——它只是 `nodeRunMintProgram` 的同步解释器，src 侧唯一的到达路径是 `mintLegacySqliteNodeRunInTx` → `services/nodeRunMint.ts#mintNodeRunTx`，而后者生产零调用方；事务内铸行的调用方本来就走中立的 `createNodeRunMintParticipantInTx`，50 → 49。。RFC-359（2026-09-13）49 → 48：同上，那条死门面连同它的三处账本条目一起删。RFC-359（2026-09-13，apply 引擎合一 §5dw）48 → 47：`modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts` 退役——它的四个同步 `*InTx` 只服务 legacy 提交路径，随 `legacyResourcePackageCommit.ts` 一起删；两个 async 读早就由中立的 `packageResourceRows.ts` 提供。RFC-359 AC-12（2026-09-14，plan §5ek）44 → 39：intent apply 合一后 `legacy*` 孪生已整条退役，PG 侧那五个文件成为两个 provider 唯一的实现，provider 前缀名不副实，随之改名——`intentApplyEngine` / `intentApplyArtifactLifecycle` / `aggregateAdapters/intentApply{ResourceParticipants,ResourcePorts,ArtifactOwners}`"
     },
     {
       "id": "rfc359-w5-provider-pair-conformance",
@@ -517,15 +517,15 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 369,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点"
+      "baseline": 359,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点"
     },
     {
       "id": "rfc359-w5-test-engine-open-migration-debt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "OPEN_MIGRATION_DEBT",
-      "baseline": 63,
-      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎"
+      "baseline": 53,
+      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -881,12 +881,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24737,
+      "baseline": 24736,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:1194ee382f7c1c09eae321fc112ad9969c5520d49b20753c57f2d4b6022bb9b8",
+    "sourceDigest": "sha256:a702772b64054d7a60f4db87f743f14e752c5d4aed3cc4bef66a4fcb05fc77ef",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a26bebba6cb3b7ae0720748b07a551bee2249b7a",
-    "contentDigest": "sha256:76c5008f4486ebc36c1e82fae3a06c920d9a20872e551a1bab7a6161cd025ccd",
+    "currentSnapshotSha": "f03eee666c63a03b8997d2a4925bb39eade735f3",
+    "contentDigest": "sha256:151591847ad178ddb24887b7a7b231a320f37e81f3d217aa20296228ae2b23fd",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

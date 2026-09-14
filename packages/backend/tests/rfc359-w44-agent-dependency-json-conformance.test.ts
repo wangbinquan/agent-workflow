@@ -371,7 +371,7 @@ test('RFC-359 W49 persistence decoder preserves ordered values and catch boundar
 
 test('RFC-359 W49 Intent decoder preserves ordered values and catch boundaries', () => {
   checkStringDecoder(
-    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
     'parseStringArray',
     ['dependsOn'],
   )

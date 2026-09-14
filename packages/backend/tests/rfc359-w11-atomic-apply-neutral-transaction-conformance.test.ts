@@ -46,8 +46,8 @@ import {
   users,
 } from '@/db/schema'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
-import { createPostgresqlIntentApplyOperations } from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
-import type { PostgresqlIntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
+import { createIntentApplyEngine } from '@/modules/intent/infrastructure/intentApplyEngine'
+import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
@@ -187,7 +187,7 @@ function intentCommand(fixture: IntentFixture): IntentApplyInput {
 }
 
 /** 最小资源会话替身：正向全通过，提交臂只回一张收据（不写库）。 */
-function intentResourceSession(): PostgresqlIntentApplyResourceSession {
+function intentResourceSession(): IntentApplyResourceSession {
   return {
     async preflight() {
       return Object.freeze({
@@ -214,12 +214,12 @@ function intentResourceSession(): PostgresqlIntentApplyResourceSession {
     async rollForwardCommitted() {},
     async broadcastCommitted() {},
     async abortPrepared() {},
-  } as unknown as PostgresqlIntentApplyResourceSession
+  } as unknown as IntentApplyResourceSession
 }
 
 function intentApplyPort(harness: ProviderHarness) {
   const session = intentResourceSession()
-  return createPostgresqlIntentApplyOperations({
+  return createIntentApplyEngine({
     db: harness.db as PostgresqlDatabaseClient,
     resources: { createSession: () => session },
     artifacts: {

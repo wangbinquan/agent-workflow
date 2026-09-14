@@ -1,7 +1,7 @@
 // RFC-355 T4（RFC-294 W4-E4a）—— apply 的 claim 段判据，**两个 provider 共用这一份**。
 //
 // 在它之前，这一串 8 条判据在 `sqliteIntentApplyOperations.ts` 与
-// `postgresqlIntentApplyOperations.ts` 里**逐条对应地各写了一遍**：同样的顺序、同样的错误码、
+// `intentApplyEngine.ts` 里**逐条对应地各写了一遍**：同样的顺序、同样的错误码、
 // 同样的措辞。判据属于 domain，事务与取数才属于 provider。
 //
 // ⚠️ **刻意拆成三个断言而不是一个大函数**：claim 的读取是与判断交错的

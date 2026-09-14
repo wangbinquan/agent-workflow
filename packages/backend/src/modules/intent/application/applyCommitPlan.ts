@@ -1,6 +1,6 @@
 // RFC-355 T4（RFC-294 W4-E4a）—— apply 大事务里**能算的那一半**，两个 provider 共用一份。
 //
-// 两个 provider 的 apply 编排（`sqliteIntentApplyOperations` / `postgresqlIntentApplyOperations`）
+// 两个 provider 的 apply 编排（`sqliteIntentApplyOperations` / `intentApplyEngine`）
 // 逐段对照下来只有一处真差别：**事务机制**——SQLite 的 `dbTxSync` 是同步回调，PostgreSQL 的
 // `db.transaction` 是 async。RFC-353 已经实测过：同步事务回调里 `await` 会让事务在 Promise
 // 兑现前提交。所以事务边界必须留在 provider，不能塞进 application。

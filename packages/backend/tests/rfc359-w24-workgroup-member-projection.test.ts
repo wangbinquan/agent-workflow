@@ -169,7 +169,7 @@ const commonSource = sourceEntry(
   'workgroupDraftSnapshotOf',
 )
 const intentSource = sourceEntry(
-  '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+  '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
   'workgroupSnapshotFromRows',
 )
 const commonMember = exposeFunction<MemberProjection>(commonSource.callback)

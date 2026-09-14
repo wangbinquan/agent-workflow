@@ -2,7 +2,7 @@
 //
 // # 为什么是对拍而不是「合一后的回归」
 //
-// `sqliteIntentApplyOperations.ts`(706) / `postgresqlIntentApplyOperations.ts`(541) 的**管线骨架**
+// `sqliteIntentApplyOperations.ts`(706) / `intentApplyEngine.ts`(541) 的**管线骨架**
 // 确实是同一套：claim → preflight → prepare → 图校验 → prestage → 大事务 → 前滚 → 收敛，
 // 判据也早已搬进共享的 `domain/applyClaim` / `application/{applyCommitPlan,journalConvergence,…}`。
 // 但两份挂的是**两套不同的资源会话协议**，而那两套协议背后是两套不同的技能 / 插件暂存机制：
@@ -11,7 +11,7 @@
 //   提交期句柄          participantInTransaction        createTransactionAttempt → {participant, commitSucceeded}
 //   提交后资源尾巴      —                                rollForwardCommitted()
 //   资源侧中止          —（补偿全靠 journal 工件）       abortPrepared({databaseCommitted})
-//   工件词汇            IntentJournalArtifactV1          PostgresqlIntentApplyArtifact
+//   工件词汇            IntentJournalArtifactV1          IntentApplyArtifact
 //   工件信封            {"version":1,"artifacts":[…]}    裸数组 […]
 //   id / now 注入       无（直接 ulid / Date.now）       有
 //
@@ -64,10 +64,10 @@ import type {
 } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentJournalArtifactV1 } from '@/modules/intent/domain/journalArtifacts'
 import {
-  createPostgresqlIntentApplyOperations,
+  createIntentApplyEngine,
   type ApplyIntentFaults,
-} from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
-import type { PostgresqlIntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
+} from '@/modules/intent/infrastructure/intentApplyEngine'
+import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { Logger } from '@/util/log'
@@ -286,8 +286,8 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
     async abortPrepared(input: { readonly databaseCommitted: boolean }) {
       calls.abortPrepared.push(input)
     },
-  } as unknown as PostgresqlIntentApplyResourceSession
-  const operations = createPostgresqlIntentApplyOperations({
+  } as unknown as IntentApplyResourceSession
+  const operations = createIntentApplyEngine({
     db: harness.db as PostgresqlDatabaseClient,
     resources: { createSession: () => session },
     artifacts: artifacts as never,

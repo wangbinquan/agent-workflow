@@ -1,7 +1,7 @@
 // RFC-355 T2（RFC-294 W4-E4a）—— 「一个 resolved intent op 变成什么资源变更计划」的**纯判据**。
 //
 // 这个函数在此之前是**两个 provider 各一份**：`sqliteIntentApplyOperations.ts` L205-248 与
-// `postgresqlIntentApplyOperations.ts` L85-128，**逐字节相同，只有形参名 `op` vs `operation` 不同**。
+// `intentApplyEngine.ts` L85-128，**逐字节相同，只有形参名 `op` vs `operation` 不同**。
 // 它不碰数据库、不碰事务、不碰任何 provider 机制——纯粹是「op + manifest → plan」的映射，
 // 不属于任何 provider。
 //

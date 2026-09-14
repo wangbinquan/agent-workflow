@@ -227,7 +227,7 @@ const entries = [
   },
   {
     name: 'intent',
-    path: '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+    path: '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
     symbol: 'workgroupSnapshotFromRows',
   },
   {

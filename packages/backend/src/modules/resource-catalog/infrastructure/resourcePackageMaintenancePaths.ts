@@ -7,7 +7,7 @@
 // `assertManagedPath` 尤其不该有两份：它决定「哪些路径算在托管根之内」，两侧一旦漂开，
 // 同一个清扫动作在两个 provider 上会得出不同的「可删」结论，而两条路径各自的用例都还绿着。
 //
-// 注意：`modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts` 也有一个叫
+// 注意：`modules/intent/infrastructure/intentApplyArtifactLifecycle.ts` 也有一个叫
 // `assertManagedPath` 的函数，但那是**另一个实现**（走 `pathInside`、抛另一个错误码），
 // 不属于这一对，别顺手合过来。
 import { isAbsolute, relative, resolve, sep } from 'node:path'

@@ -14,12 +14,10 @@
 // reason somebody copied. So the absence of a base has to make the merge do
 // LESS, not guess.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { capabilityTemplates } from '../src/db/schema'
@@ -55,7 +53,6 @@ import {
 import type { Permission } from '@agent-workflow/shared'
 import { errorHandler } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 const readUpstreamReport = async (
@@ -101,24 +98,6 @@ const AUTHOR = {
   source: 'session',
 } as unknown as Actor
 
-let db: DbClient
-
-async function row(id: string) {
-  const found = (
-    await db.select().from(capabilityTemplates).where(eq(capabilityTemplates.id, id))
-  )[0]
-  if (found === undefined) throw new Error(`no template ${id}`)
-  return found
-}
-
-/** Move upstream on, the way a department fixing a script would. */
-async function moveUpstream(patch: Partial<typeof capabilityTemplates.$inferInsert>) {
-  await db
-    .update(capabilityTemplates)
-    .set({ updatedAt: NOW + 5_000, ...patch })
-    .where(eq(capabilityTemplates.id, 'up-1'))
-}
-
 function createProviderTemplateRows(db: ProviderNeutralDatabase) {
   async function row(id: string) {
     const found = (
@@ -128,6 +107,7 @@ function createProviderTemplateRows(db: ProviderNeutralDatabase) {
     return found
   }
 
+  /** Move upstream on, the way a department fixing a script would. */
   async function moveUpstream(patch: Partial<typeof capabilityTemplates.$inferInsert>) {
     await db
       .update(capabilityTemplates)
@@ -137,23 +117,18 @@ function createProviderTemplateRows(db: ProviderNeutralDatabase) {
   return { row, moveUpstream }
 }
 
-function describeNativeTemplateCases(name: string, cases: () => void) {
-  describe(name, () => {
-    beforeEach(async () => {
-      db = await createInMemoryDb(MIGRATIONS)
-      await db.insert(capabilityTemplates).values({
-        id: 'up-1',
-        name: 'department review',
-        capability: 'mr-review',
-        scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
-        paramsJson: JSON.stringify({ maxFindings: 20 }),
-        agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
-        visibility: 'public',
-        createdAt: NOW,
-        updatedAt: NOW,
-      })
-    })
-    cases()
+/** The department original every case in this file descends from. */
+async function seedUpstreamTemplate(db: ProviderNeutralDatabase): Promise<void> {
+  await db.insert(capabilityTemplates).values({
+    id: 'up-1',
+    name: 'department review',
+    capability: 'mr-review',
+    scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
+    paramsJson: JSON.stringify({ maxFindings: 20 }),
+    agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
+    visibility: 'public',
+    createdAt: NOW,
+    updatedAt: NOW,
   })
 }
 
@@ -365,9 +340,7 @@ describeEachProvider('RFC-309 T16 — merging only what was not overridden', (ha
     })
     expect(await row(copy.id)).toEqual(before)
   })
-})
 
-describeNativeTemplateCases('RFC-309 T16 — merging only what was not overridden', () => {
   test('without scripts:author the merge is refused BEFORE anything is read', async () => {
     // AC-6's shape applied to the merge: a person who cannot author a script
     // must not be able to install one by pressing "update from upstream". The
@@ -510,11 +483,16 @@ describeEachProvider(
 // The HTTP face. Kept in this file rather than a separate one because the codes
 // below only make sense next to the states above — and the guard that requires
 // every route-thrown error code to be NAMED by a test reads this file for them.
-describeNativeTemplateCases('RFC-309 T16 — the merge endpoint says which thing went wrong', () => {
+describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went wrong', (harness) => {
   const TOKEN = 'aw-fixture-upstream-token'
+  let db: ProviderNeutralDatabase
+  let row: ReturnType<typeof createProviderTemplateRows>['row']
   let app: Hono
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    db = harness.db
+    await seedUpstreamTemplate(db)
+    ;({ row } = createProviderTemplateRows(db))
     resetRouteMetaRegistry()
     app = new Hono()
     const actor = buildActor({
@@ -565,7 +543,7 @@ describeNativeTemplateCases('RFC-309 T16 — the merge endpoint says which thing
     })
   })
   afterEach(() => {
-    db.$client.close()
+    // The harness owns the database lifecycle; only the route registry is ours.
     resetRouteMetaRegistry()
   })
 

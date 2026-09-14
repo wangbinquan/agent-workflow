@@ -18,16 +18,16 @@ import { skillOperationStateQuery } from '../infrastructure/skillOperationStateQ
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ResourceCatalogAclIdentityReadPort } from '../application/ports/providerResourceCatalogPersistence'
 import {
-  createPostgresqlIntentApplyResourceSession,
-  type PostgresqlIntentApplyResourceSession,
-  type PostgresqlIntentApplyResourceSessionOptions,
-} from '../infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
+  createIntentApplyResourceSession,
+  type IntentApplyResourceSession,
+  type IntentApplyResourceSessionOptions,
+} from '../infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import {
-  createPostgresqlIntentApplyResourcePortFactory,
-  type PostgresqlIntentApplyResourcePortFactoryDependencies,
-} from '../infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts'
+  createIntentApplyResourcePortFactory,
+  type IntentApplyResourcePortFactoryDependencies,
+} from '../infrastructure/aggregateAdapters/intentApplyResourcePorts'
 
-export interface PostgresqlIntentApplyResourceCompositionDependencies extends PostgresqlIntentApplyResourcePortFactoryDependencies {
+export interface IntentApplyResourceCompositionDependencies extends IntentApplyResourcePortFactoryDependencies {
   readonly aclIdentities: ResourceCatalogAclIdentityReadPort
 }
 
@@ -37,28 +37,22 @@ export interface PostgresqlIntentApplyResourceCompositionDependencies extends Po
  * caller supplies only the admitted authority pair and later its reserved
  * transaction.
  */
-export function composePostgresqlIntentApplyResourceBinding(
-  input: PostgresqlIntentApplyResourceCompositionDependencies,
+export function composeIntentApplyResourceBinding(
+  input: IntentApplyResourceCompositionDependencies,
 ): Readonly<{
-  createSession(
-    options: PostgresqlIntentApplyResourceSessionOptions,
-  ): PostgresqlIntentApplyResourceSession
+  createSession(options: IntentApplyResourceSessionOptions): IntentApplyResourceSession
 }> {
-  const factory = createPostgresqlIntentApplyResourcePortFactory(input)
+  const factory = createIntentApplyResourcePortFactory(input)
   return Object.freeze({
     createSession(options) {
-      return createPostgresqlIntentApplyResourceSession(
-        options,
-        input.aclIdentities,
-        factory.create(options),
-      )
+      return createIntentApplyResourceSession(options, input.aclIdentities, factory.create(options))
     },
   })
 }
 
 // RFC-355 T6 —— PostgreSQL 路径的技能 / 插件工件 owner。
 //
-// 这两个工厂此前住在 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts`，
+// 这两个工厂此前住在 `modules/intent/infrastructure/intentApplyArtifactOwners.ts`，
 // 但它们实现的是 RC 的端口、用的是 RC 自己的技能文件机制——对照 SQLite 路径就清楚：
 // 同一件事在那边由 RC 的 `legacyIntentApplyResourceParticipants` 提供。
 // 迁进 RC 之后从 composition 出（**不从 `public/` 出 provider 适配器**——RFC-349 的
@@ -66,7 +60,7 @@ export function composePostgresqlIntentApplyResourceBinding(
 export {
   createPostgresqlIntentPluginArtifactLifecycle,
   createPostgresqlIntentSkillArtifactLifecycle,
-} from '../infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners'
+} from '../infrastructure/aggregateAdapters/intentApplyArtifactOwners'
 
 // RFC-355 T6 —— intent 恢复路径要的技能工件补偿原语，由 RC 提供、bootstrap 注入。
 //

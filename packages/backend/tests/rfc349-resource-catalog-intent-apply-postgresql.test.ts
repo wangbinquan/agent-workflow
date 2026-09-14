@@ -5,11 +5,11 @@ import { join } from 'node:path'
 const root = join(import.meta.dir, '..')
 const participantPath = join(
   root,
-  'src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts',
+  'src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
 )
 const portsPath = join(
   root,
-  'src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+  'src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
 )
 const compositionPath = join(root, 'src/modules/resource-catalog/composition/intentApply.ts')
 // RFC-359 W8：归属预检的两份 provider 副本（只差类型名前缀）合一到这里。**锚点跟着实现走**
@@ -76,7 +76,7 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     // 判据本体：占用名按 kind 全量取、copy-only 按 manifest 行的真实 owner 判。
     expect(preflight).toContain('listOwnedNames(type, ownerUserId)')
     expect(preflight).toContain('getOwner(entry.resourceType, entry.resourceId)')
-    expect(source).toContain('recordArtifact(artifact: PostgresqlIntentApplyArtifact)')
+    expect(source).toContain('recordArtifact(artifact: IntentApplyArtifact)')
     expect(source).toContain('rollForwardCommitted?')
     expect(source).toContain('abortPrepared?')
     expect(source).toContain('readonly databaseCommitted: boolean')
@@ -104,8 +104,8 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     const source = readFileSync(compositionPath, 'utf8')
     const participant = readFileSync(participantPath, 'utf8')
 
-    expect(source).toContain('PostgresqlIntentApplyResourcePortFactoryDependencies')
-    expect(source).toContain('createPostgresqlIntentApplyResourcePortFactory(input)')
+    expect(source).toContain('IntentApplyResourcePortFactoryDependencies')
+    expect(source).toContain('createIntentApplyResourcePortFactory(input)')
     expect(source).toContain('aclIdentities: ResourceCatalogAclIdentityReadPort')
     expect(source).toContain('factory.create(options)')
     expect(participant).toContain('readonly actor: DirectAuthenticatedAuthority')

@@ -56,14 +56,14 @@ import {
 } from '@/db/schema'
 import type { IntentJournalArtifactV1 } from '@/modules/intent/domain/journalArtifacts'
 import {
-  createPostgresqlIntentApplyOperations,
+  createIntentApplyEngine,
   type ApplyIntentFaults,
-} from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
+} from '@/modules/intent/infrastructure/intentApplyEngine'
 import type {
   IntentApplyInput,
   IntentApplyReceipt,
 } from '@/modules/intent/application/ports/intentApplyOperations'
-import type { PostgresqlIntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
+import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { Logger } from '@/util/log'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -81,11 +81,11 @@ const PRESTAGE_ADAPTER = resolve(
   'resource-catalog',
   'infrastructure',
   'aggregateAdapters',
-  'postgresqlIntentApplyResourcePorts.ts',
+  'intentApplyResourcePorts.ts',
 )
 
 describe('I14 record-before-act —— Intent 生产 prestage 链的每一处 recordArtifact 都必须 await', () => {
-  test('postgresqlIntentApplyResourcePorts.ts 里没有未 await 的 recordArtifact', () => {
+  test('intentApplyResourcePorts.ts 里没有未 await 的 recordArtifact', () => {
     const source = readFileSync(PRESTAGE_ADAPTER, 'utf8')
     const calls = [...source.matchAll(/(\S*\s*)context\.recordArtifact\(/g)]
     expect(
@@ -321,12 +321,12 @@ function applyPortFor(
     async rollForwardCommitted() {},
     async broadcastCommitted() {},
     async abortPrepared() {},
-  } as unknown as PostgresqlIntentApplyResourceSession
+  } as unknown as IntentApplyResourceSession
   const artifacts = {
     compensate: options.compensate ?? (async () => {}),
     rollForward: options.rollForward ?? (async () => true),
   }
-  const operations = createPostgresqlIntentApplyOperations({
+  const operations = createIntentApplyEngine({
     db: harness.db,
     resources: { createSession: () => session },
     artifacts: artifacts as never,

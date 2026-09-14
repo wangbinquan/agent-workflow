@@ -44,9 +44,9 @@ import {
   intentSessions,
 } from '@/db/schema'
 import type {
-  PostgresqlIntentApplyArtifact,
-  PostgresqlIntentApplyResourceSession,
-} from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
+  IntentApplyArtifact,
+  IntentApplyResourceSession,
+} from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import {
   databaseSessionFor,
@@ -60,22 +60,22 @@ import { type IntentManifestEntry } from '@/modules/intent/application/manifest'
 import { resolveIntentBundle } from '@/modules/intent/application/resolveChangeset'
 import { sessionManifest } from '@/modules/intent/application/session'
 
-type IntentApplyRecoveryArtifact = PostgresqlIntentApplyArtifact | IntentJournalArtifact
+export type IntentApplyRecoveryArtifact = IntentApplyArtifact | IntentJournalArtifact
 
-export interface PostgresqlIntentApplyArtifactLifecycle {
+export interface IntentApplyArtifactLifecycle {
   compensate(artifact: IntentApplyRecoveryArtifact): Promise<void>
   /** Returns false when a committed tail remains retryable. */
   rollForward(artifacts: readonly IntentApplyRecoveryArtifact[], log: Logger): Promise<boolean>
 }
 
-export interface PostgresqlIntentApplyResourceBinding {
+export interface IntentApplyResourceBinding {
   createSession(input: {
     readonly actor: Actor
     readonly authority: ResourceRequestContext
     /** RFC-359 —— 预暂存的两个崩溃断点，由本次请求的 `faults` 透传给资源会话。 */
     readonly afterSkillStage?: () => void
     readonly afterPluginInstall?: () => void
-  }): PostgresqlIntentApplyResourceSession
+  }): IntentApplyResourceSession
 }
 
 /**
@@ -97,7 +97,7 @@ export interface ApplyIntentFaults {
   beforeArtifactCompensation?: (artifact: IntentJournalArtifact) => void
 }
 
-export interface PostgresqlIntentApplyRequest {
+export interface IntentApplyEngineRequest {
   readonly actor: Actor
   readonly authority: ResourceRequestContext
   readonly command: IntentApplyInput
@@ -105,8 +105,8 @@ export interface PostgresqlIntentApplyRequest {
   readonly log?: Logger
 }
 
-export interface PostgresqlIntentApplyOperations extends IntentApplyOperations {
-  apply(request: PostgresqlIntentApplyRequest): Promise<IntentApplyReceipt>
+export interface IntentApplyEngine extends IntentApplyOperations {
+  apply(request: IntentApplyEngineRequest): Promise<IntentApplyReceipt>
   converge(
     log?: Logger,
     options?: { readonly activeJournalIds?: readonly string[] },
@@ -114,10 +114,10 @@ export interface PostgresqlIntentApplyOperations extends IntentApplyOperations {
   activeJournalIds(): readonly string[]
 }
 
-export interface PostgresqlIntentApplyDependencies {
+export interface IntentApplyEngineDependencies {
   readonly db: ProviderNeutralDatabase
-  readonly resources: PostgresqlIntentApplyResourceBinding
-  readonly artifacts: PostgresqlIntentApplyArtifactLifecycle
+  readonly resources: IntentApplyResourceBinding
+  readonly artifacts: IntentApplyArtifactLifecycle
   /** RFC-358 §7 —— 提交期图校验。缺省不拦（既有测试装配保持原样）。 */
   readonly graphValidation?: IntentWorkflowGraphValidationPort
   readonly id?: () => string
@@ -140,7 +140,7 @@ const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
  * 两套 apply 引擎合一时随之消失。
  */
 type IntentApplyCatalogTransaction = Parameters<
-  PostgresqlIntentApplyResourceSession['createTransactionAttempt']
+  IntentApplyResourceSession['createTransactionAttempt']
 >[0]
 
 function catalogTransaction(transaction: DatabaseTransaction): IntentApplyCatalogTransaction {
@@ -158,7 +158,7 @@ function catalogTransaction(transaction: DatabaseTransaction): IntentApplyCatalo
  *
  * 同一条道理、同一种处置，资源包那边是 `composeResourcePackageApplyArtifactRecoveryChain`
  * （plan §5dw）；这里因为 codec 本来就在 domain 层，直接回落一次即可。
- * 工件生命周期那一侧早就这么做了（`postgresqlIntentApplyArtifactLifecycle.ts:95`），
+ * 工件生命周期那一侧早就这么做了（`intentApplyArtifactLifecycle.ts:95`），
  * 收敛这一侧此前漏了。
  */
 function decodeRecoveryArtifacts(json: string): IntentApplyRecoveryArtifact[] {
@@ -189,7 +189,7 @@ function decodeRecoveryArtifacts(json: string): IntentApplyRecoveryArtifact[] {
  * RFC-355 T3：算法在 `application/sessionApplyLock`。
  *
  * RFC-359 —— 这个实例是**模块级**的，不是每次装配一份。两台引擎合一之前，这里曾是
- * `createPostgresqlIntentApplyOperations` 的局部变量，而 SQLite 那台是模块级；生产上各只
+ * `createIntentApplyEngine` 的局部变量，而 SQLite 那台是模块级；生产上各只
  * 装配一次，差别看不见。合一之后装配点变多了（兼容门面 `applyIntentChangeset` 每次调用现装
  * 一台），局部变量意味着**同一个 session 的两笔并发 apply 各自拿到一把自己的锁**——串行保证
  * 当场消失。判据：`rfc343-intent-apply-correctness`。
@@ -207,14 +207,14 @@ export async function __withSessionApplyLockForTests<T>(
   return applyLock.run(sessionId, fn)
 }
 
-export function createPostgresqlIntentApplyOperations(
-  dependencies: PostgresqlIntentApplyDependencies,
-): PostgresqlIntentApplyOperations {
+export function createIntentApplyEngine(
+  dependencies: IntentApplyEngineDependencies,
+): IntentApplyEngine {
   const nextId = dependencies.id ?? ulid
   const now = dependencies.now ?? Date.now
   const active = new Set<string>()
 
-  async function applyUnlocked(request: PostgresqlIntentApplyRequest): Promise<IntentApplyReceipt> {
+  async function applyUnlocked(request: IntentApplyEngineRequest): Promise<IntentApplyReceipt> {
     const { actor, authority, command: input } = request
     const log = request.log ?? createLogger('intentApply')
     const journalId = nextId()
@@ -279,7 +279,7 @@ export function createPostgresqlIntentApplyOperations(
     if (claim.kind === 'replay') return intentApplyReplayOutcomeOf(claim.existing)
     active.add(journalId)
     const artifacts: IntentApplyRecoveryArtifact[] = []
-    const recordArtifact = async (artifact: PostgresqlIntentApplyArtifact): Promise<void> => {
+    const recordArtifact = async (artifact: IntentApplyArtifact): Promise<void> => {
       const nextArtifacts = [...artifacts, artifact]
       await dependencies.db
         .update(intentApplyJournal)
@@ -647,7 +647,7 @@ export function createPostgresqlIntentApplyOperations(
   }
 
   return Object.freeze({
-    apply(request: PostgresqlIntentApplyRequest) {
+    apply(request: IntentApplyEngineRequest) {
       return applyLock.run(request.command.sessionId, () => applyUnlocked(request))
     },
     converge,

@@ -50,7 +50,7 @@ import {
   type AclCatalogKind,
   type GrantTargetKind,
 } from '../src/modules/resource-catalog/domain/resourceKinds'
-import type { IntentResourceChangesetReceipt } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
+import type { IntentResourceChangesetReceipt } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import { resourceRef } from '../src/modules/resource-catalog/domain/resourceRef'
 import { resourceSummaryRevisionEquals } from '../src/modules/resource-catalog/domain/resourceRevision'
 import type {
@@ -136,7 +136,7 @@ assertType<
 assertType<Equal<ResourceMemoryScopeRef['kind'], 'agent' | 'workflow'>>(true)
 assertType<Equal<VersionedIntentResourceChangesetPlan['kind'], CatalogSelectorKind>>(true)
 // RFC-359：收据类型搬出 `public/`（只在 RC 自己的提交臂与 intent 的编排之间流动，
-// 而 intent 拿到它是经 `PostgresqlIntentApplyResourceSession` 这个 infrastructure 合同）。
+// 而 intent 拿到它是经 `IntentApplyResourceSession` 这个 infrastructure 合同）。
 // 判据照旧——闭集仍是 `CatalogSelectorKind`，只是从新家取。
 assertType<Equal<IntentResourceChangesetReceipt['kind'], CatalogSelectorKind>>(true)
 assertType<Equal<AgentPackageMutation['kind'], 'agent-create' | 'agent-update'>>(true)
@@ -658,15 +658,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
   })
 
   // RFC-359 —— 两台 apply 引擎合一之后这条判据整体挪到**生产在用的那一份**上：引擎从
-  // `sqliteIntentApplyOperations.ts` 换成 `postgresqlIntentApplyOperations.ts`，适配器从
-  // `legacyIntentApplyResourceParticipants.ts` 换成 `postgresqlIntentApplyResourceParticipants.ts`
-  // + `postgresqlIntentApplyResourcePorts.ts`，`legacyIntentApplyResourceDependencies.ts`
+  // `sqliteIntentApplyOperations.ts` 换成 `intentApplyEngine.ts`，适配器从
+  // `legacyIntentApplyResourceParticipants.ts` 换成 `intentApplyResourceParticipants.ts`
+  // + `intentApplyResourcePorts.ts`，`legacyIntentApplyResourceDependencies.ts`
   // 那张依赖表随之消失（现行绑定的依赖由 ports 工厂闭包持有）。**锁的东西一条没变**：
   // 次序、不许回到 `services/*` 的老写点、authority 同一性、路由只消费窄端口。
   test('T4b Intent apply consumes one exact authority pair and one in-tx participant', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const engine = readFileSync(
-      resolve(sourceRoot, 'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts'),
+      resolve(sourceRoot, 'modules/intent/infrastructure/intentApplyEngine.ts'),
       'utf8',
     )
     const route = readFileSync(
@@ -680,14 +680,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const adapter = readFileSync(
       resolve(
         sourceRoot,
-        'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts',
+        'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
       ),
       'utf8',
     )
     const ports = readFileSync(
       resolve(
         sourceRoot,
-        'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+        'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
       ),
       'utf8',
     )
@@ -726,14 +726,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(ports).toContain("from '@/db/schema'")
     expect(adapter).toContain('authority !== options.authority')
     expect(adapter).toContain("throw new Error('foreign-postgresql-intent-apply-authority')")
-    expect(composition).toContain('composePostgresqlIntentApplyResourceBinding')
-    expect(composition).toContain('createPostgresqlIntentApplyResourceSession')
+    expect(composition).toContain('composeIntentApplyResourceBinding')
+    expect(composition).toContain('createIntentApplyResourceSession')
 
     expect(route).toContain('export interface IntentSessionRouteDependencies')
     expect(route).not.toContain('AppDeps')
     expect(route).toContain('directRequestAuthority(deps.directAuthority, actor)')
     expect(route).toContain('const receipt = await deps.intentApply.apply({')
-    expect(composition).toContain('createPostgresqlIntentApplyResourceSession(\n')
+    expect(composition).toContain('createIntentApplyResourceSession(\n')
   })
 
   test('T4c integration triggers consume five snapshots through exact direct and delegated pairs', () => {

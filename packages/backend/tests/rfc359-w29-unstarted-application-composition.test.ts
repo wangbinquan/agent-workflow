@@ -475,9 +475,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // 于是计划人审闸门在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、
   // PG 显示「规划中」）。装的是与 SQLite 侧同一份中立实现，见 plan §5dm。
   // RFC-359（2026-09-14，intent apply 引擎合一，plan §5ea）：语句条数仍是 160，摘要变了——
-  // PG 根这一段此前是 `createPostgresqlIntentApplyArtifactLifecycle` +
-  // `createPostgresqlIntentApplyOperations`（自己拼资源绑定与工件生命周期）+
-  // `composePostgresqlIntentApplyOperations` 的窄化，现在是与 SQLite 根**逐字同一份**的
+  // PG 根这一段此前是 `createIntentApplyArtifactLifecycle` +
+  // `createIntentApplyEngine`（自己拼资源绑定与工件生命周期）+
+  // `composeIntentApplyOperations` 的窄化，现在是与 SQLite 根**逐字同一份**的
   // `composeIntentApplyArtifactLifecycle` + `composeIntentApplyOperations`；
   // `composePostgresqlIntentMaintenanceSnapshotQueries` 一并改叫
   // `composeIntentMaintenanceSnapshotQueriesFor`。

@@ -77,12 +77,12 @@ import {
 } from '../workgroupPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
 import type {
-  PostgresqlIntentApplyArtifact,
-  PostgresqlIntentApplyMutationPort,
-  PostgresqlIntentApplyResourcePorts,
-  PostgresqlIntentApplyResourceSessionOptions,
+  IntentApplyArtifact,
+  IntentApplyMutationPort,
+  IntentApplyResourcePorts,
+  IntentApplyResourceSessionOptions,
   IntentResourceChangesetReceipt,
-} from './postgresqlIntentApplyResourceParticipants'
+} from './intentApplyResourceParticipants'
 import { parseAgentDependencyIds } from '../agentDependencyJson'
 
 type PlanOf<K extends CatalogSelectorKind> = Extract<
@@ -96,7 +96,7 @@ type ReceiptOf<K extends CatalogSelectorKind> = Extract<
 >
 
 interface StagedArtifactCapability<TResult> {
-  readonly artifact: PostgresqlIntentApplyArtifact
+  readonly artifact: IntentApplyArtifact
   stage(): Promise<TResult>
   compensate(): Promise<void>
   rollForward(): Promise<void>
@@ -157,7 +157,7 @@ export interface PostgresqlIntentResourceCommitEvent {
   readonly revision: number
 }
 
-export interface PostgresqlIntentApplyResourcePortFactoryDependencies {
+export interface IntentApplyResourcePortFactoryDependencies {
   readonly db: ProviderNeutralDatabase
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlIntentPluginArtifactLifecycle
@@ -194,9 +194,7 @@ interface PreparedSkill {
 type PreparedWorkflow = Readonly<{ definition: WorkflowDefinition }>
 type PreparedWorkgroup = Readonly<{ snapshot: WorkgroupDraftSnapshot }>
 
-function exactActor(
-  options: PostgresqlIntentApplyResourceSessionOptions,
-): DirectAuthenticatedAuthority {
+function exactActor(options: IntentApplyResourceSessionOptions): DirectAuthenticatedAuthority {
   return options.actor
 }
 
@@ -497,9 +495,9 @@ function applyAgentPatch(current: Agent, patch: Readonly<Record<string, unknown>
 }
 
 function createAgentPort(
-  options: PostgresqlIntentApplyResourceSessionOptions,
+  options: IntentApplyResourceSessionOptions,
   now: () => number,
-): PostgresqlIntentApplyMutationPort<'agent', PreparedAgent> {
+): IntentApplyMutationPort<'agent', PreparedAgent> {
   const actor = exactActor(options)
   return Object.freeze({
     async prepare(plan, context) {
@@ -626,7 +624,7 @@ function createAgentPort(
         aclRevision: changed.aclRevision,
       })
     },
-  } satisfies PostgresqlIntentApplyMutationPort<'agent', PreparedAgent>)
+  } satisfies IntentApplyMutationPort<'agent', PreparedAgent>)
 }
 
 function mcpConfigWithPreservedOauth(
@@ -641,10 +639,10 @@ function mcpConfigWithPreservedOauth(
 }
 
 function createMcpPort(
-  options: PostgresqlIntentApplyResourceSessionOptions,
+  options: IntentApplyResourceSessionOptions,
   lifecycle: McpTransactionLifecycle,
   now: () => number,
-): PostgresqlIntentApplyMutationPort<'mcp', PreparedMcp> {
+): IntentApplyMutationPort<'mcp', PreparedMcp> {
   const actor = exactActor(options)
   return Object.freeze({
     async prepare(plan) {
@@ -715,15 +713,15 @@ function createMcpPort(
         configHash: mcpConfigHash(mcpFromPersistenceRow(changed)),
       })
     },
-  } satisfies PostgresqlIntentApplyMutationPort<'mcp', PreparedMcp>)
+  } satisfies IntentApplyMutationPort<'mcp', PreparedMcp>)
 }
 
 function createPluginPort(
-  options: PostgresqlIntentApplyResourceSessionOptions,
+  options: IntentApplyResourceSessionOptions,
   db: ProviderNeutralDatabase,
   artifacts: PostgresqlIntentPluginArtifactLifecycle,
   now: () => number,
-): PostgresqlIntentApplyMutationPort<'plugin', PreparedPlugin> {
+): IntentApplyMutationPort<'plugin', PreparedPlugin> {
   const actor = exactActor(options)
   return Object.freeze({
     async prepare(plan) {
@@ -838,7 +836,7 @@ function createPluginPort(
       if (databaseCommitted) await prepared.install.rollForward()
       else await prepared.install.compensate()
     },
-  } satisfies PostgresqlIntentApplyMutationPort<'plugin', PreparedPlugin>)
+  } satisfies IntentApplyMutationPort<'plugin', PreparedPlugin>)
 }
 
 async function artifactsForPluginUpdate(
@@ -861,12 +859,12 @@ async function artifactsForPluginUpdate(
 }
 
 function createSkillPort(
-  options: PostgresqlIntentApplyResourceSessionOptions,
+  options: IntentApplyResourceSessionOptions,
   db: ProviderNeutralDatabase,
   artifacts: PostgresqlIntentSkillArtifactLifecycle,
   nextId: () => string,
   now: () => number,
-): PostgresqlIntentApplyMutationPort<'skill', PreparedSkill> {
+): IntentApplyMutationPort<'skill', PreparedSkill> {
   const actor = exactActor(options)
   return Object.freeze({
     async prepare(plan) {
@@ -1017,7 +1015,7 @@ function createSkillPort(
       if (databaseCommitted) await prepared.stage.rollForward()
       else await prepared.stage.compensate()
     },
-  } satisfies PostgresqlIntentApplyMutationPort<'skill', PreparedSkill>)
+  } satisfies IntentApplyMutationPort<'skill', PreparedSkill>)
 }
 
 function skillFromRow(row: typeof skills.$inferSelect): Skill {
@@ -1171,10 +1169,10 @@ function assertCanonicalAgentIds(definition: WorkflowDefinition): void {
 }
 
 function createWorkflowPort(
-  options: PostgresqlIntentApplyResourceSessionOptions,
-  committed: PostgresqlIntentApplyResourcePortFactoryDependencies['committed'],
+  options: IntentApplyResourceSessionOptions,
+  committed: IntentApplyResourcePortFactoryDependencies['committed'],
   now: () => number,
-): PostgresqlIntentApplyMutationPort<'workflow', PreparedWorkflow> {
+): IntentApplyMutationPort<'workflow', PreparedWorkflow> {
   const actor = exactActor(options)
   return Object.freeze({
     async prepare(plan) {
@@ -1321,7 +1319,7 @@ function createWorkflowPort(
         revision: result.revision.version,
       })
     },
-  } satisfies PostgresqlIntentApplyMutationPort<'workflow', PreparedWorkflow>)
+  } satisfies IntentApplyMutationPort<'workflow', PreparedWorkflow>)
 }
 
 function workgroupSnapshotFromRows(
@@ -1391,11 +1389,11 @@ function leaderMemberId(
 }
 
 function createWorkgroupPort(
-  options: PostgresqlIntentApplyResourceSessionOptions,
-  committed: PostgresqlIntentApplyResourcePortFactoryDependencies['committed'],
+  options: IntentApplyResourceSessionOptions,
+  committed: IntentApplyResourcePortFactoryDependencies['committed'],
   nextId: () => string,
   now: () => number,
-): PostgresqlIntentApplyMutationPort<'workgroup', PreparedWorkgroup> {
+): IntentApplyMutationPort<'workgroup', PreparedWorkgroup> {
   const actor = exactActor(options)
   return Object.freeze({
     async prepare(plan) {
@@ -1544,7 +1542,7 @@ function createWorkgroupPort(
         revision: result.revision.version,
       })
     },
-  } satisfies PostgresqlIntentApplyMutationPort<'workgroup', PreparedWorkgroup>)
+  } satisfies IntentApplyMutationPort<'workgroup', PreparedWorkgroup>)
 }
 
 /**
@@ -1552,12 +1550,12 @@ function createWorkgroupPort(
  * lifecycles (MCP transition + filesystem artifacts); all six database arms
  * are fixed here and consume the transaction reserved by Intent.
  */
-export function createPostgresqlIntentApplyResourcePortFactory(
-  input: PostgresqlIntentApplyResourcePortFactoryDependencies,
+export function createIntentApplyResourcePortFactory(
+  input: IntentApplyResourcePortFactoryDependencies,
 ): Readonly<{
   create(
-    options: PostgresqlIntentApplyResourceSessionOptions,
-  ): PostgresqlIntentApplyResourcePorts<
+    options: IntentApplyResourceSessionOptions,
+  ): IntentApplyResourcePorts<
     PreparedAgent,
     PreparedSkill,
     PreparedMcp,

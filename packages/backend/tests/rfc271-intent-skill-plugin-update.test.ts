@@ -29,9 +29,9 @@ import { createResourceCatalogAclIdentityReadPort } from '../src/modules/resourc
 // RFC-349 把 apply 引擎搬进 infrastructure 后那里只剩装配门面，断言等于空跑；现在直接
 // 钉住引擎本体。
 // RFC-359 —— 两台 apply 引擎合一，三个锚点全部挪到**生产在用的那一份**上：
-// 引擎 `sqliteIntentApplyOperations.ts` → `postgresqlIntentApplyOperations.ts`；
-// 参与者 `legacyIntentApplyResourceParticipants.ts` → `postgresqlIntentApplyResourcePorts.ts`；
-// 工件生命周期 `sqliteIntentApplyArtifactLifecycle.ts` → `postgresqlIntentApplyArtifactLifecycle.ts`。
+// 引擎 `sqliteIntentApplyOperations.ts` → `intentApplyEngine.ts`；
+// 参与者 `legacyIntentApplyResourceParticipants.ts` → `intentApplyResourcePorts.ts`；
+// 工件生命周期 `sqliteIntentApplyArtifactLifecycle.ts` → `intentApplyArtifactLifecycle.ts`。
 const SRC = resolve(
   import.meta.dir,
   '..',
@@ -39,7 +39,7 @@ const SRC = resolve(
   'modules',
   'intent',
   'infrastructure',
-  'postgresqlIntentApplyOperations.ts',
+  'intentApplyEngine.ts',
 )
 const PARTICIPANT_SRC = resolve(
   import.meta.dir,
@@ -49,7 +49,7 @@ const PARTICIPANT_SRC = resolve(
   'resource-catalog',
   'infrastructure',
   'aggregateAdapters',
-  'postgresqlIntentApplyResourcePorts.ts',
+  'intentApplyResourcePorts.ts',
 )
 const ARTIFACT_SRC = resolve(
   import.meta.dir,
@@ -67,7 +67,7 @@ const ARTIFACT_LIFECYCLE_SRC = resolve(
   'modules',
   'intent',
   'infrastructure',
-  'postgresqlIntentApplyArtifactLifecycle.ts',
+  'intentApplyArtifactLifecycle.ts',
 )
 
 const actorOf = (id: string) =>
@@ -244,7 +244,7 @@ describe('T17 · plugin 半边的两条要害（源码层）', () => {
         'resource-catalog',
         'infrastructure',
         'aggregateAdapters',
-        'postgresqlIntentApplyArtifactOwners.ts',
+        'intentApplyArtifactOwners.ts',
       ),
       'utf8',
     )

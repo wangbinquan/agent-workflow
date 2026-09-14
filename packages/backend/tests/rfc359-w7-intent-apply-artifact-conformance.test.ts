@@ -3,7 +3,7 @@
 // # 这份文件此前锁的是「不能合」，现在锁的是「合成了什么」
 //
 // 原始结论是两份生命周期（`sqliteIntentApplyArtifactLifecycle.ts` 138 行 /
-// `postgresqlIntentApplyArtifactLifecycle.ts` 439 行）**不能合**，理由三条：工件词汇互不可解、
+// `intentApplyArtifactLifecycle.ts` 439 行）**不能合**，理由三条：工件词汇互不可解、
 // 前滚算法的事实源不同、能力缺口双向。第三条已经不成立了——合一没有取某一侧，而是取**并集**：
 //
 //   · 现行机制取 PG 那套（`skills` / `skill_versions` 行 + 目录内容哈希重推，
@@ -37,9 +37,9 @@ import {
   type IntentJournalArtifact,
 } from '@/modules/intent/domain/journalArtifacts'
 import {
-  createPostgresqlIntentApplyArtifactLifecycle,
-  decodePostgresqlIntentApplyRecoveryArtifacts,
-} from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
+  createIntentApplyArtifactLifecycle,
+  decodeIntentApplyRecoveryArtifacts,
+} from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
 import type {
   LegacyIntentSkillArtifactCompat,
   PostgresqlSkillArtifactCompensation,
@@ -174,7 +174,7 @@ function lifecycleFor(
   harness: ProviderHarness,
   legacy?: LegacyIntentSkillArtifactCompat,
 ): ArtifactLifecyclePort {
-  return createPostgresqlIntentApplyArtifactLifecycle({
+  return createIntentApplyArtifactLifecycle({
     db: harness.db,
     appHome,
     pluginsDir,
@@ -394,7 +394,7 @@ test('工件词汇 ③：兼容是单向的 —— 现行解码器认旧信封�
   const sqliteEnvelope = encodeIntentJournalArtifacts([
     { kind: 'plugin-install', pluginId: 'p', generationId: 'g', generationDir: '/tmp/g' },
   ])
-  expect(decodePostgresqlIntentApplyRecoveryArtifacts(sqliteEnvelope)).toEqual([
+  expect(decodeIntentApplyRecoveryArtifacts(sqliteEnvelope)).toEqual([
     { kind: 'plugin-install', pluginId: 'p', generationId: 'g', generationDir: '/tmp/g' },
   ])
   // 反向：现行引擎写的是**裸数组**，旧解码器把裸数组当 pre-v1 处理，
@@ -408,8 +408,6 @@ test('工件词汇 ④：**裸数组**里的 skill-version-stage 是 pre-v1 残�
   // （pre-v1 只存了三个字段，不足以发布一个已提交的版本）。带 v1 信封的那条路走得通，
   // 见上面「旧词汇的 skill-version-stage —— 前滚走兼容面」。
   expect(() =>
-    decodePostgresqlIntentApplyRecoveryArtifacts(
-      JSON.stringify([legacySkillVersionStageArtifact()]),
-    ),
+    decodeIntentApplyRecoveryArtifacts(JSON.stringify([legacySkillVersionStageArtifact()])),
   ).toThrow(/legacy skill-version-stage artifact is incomplete/)
 })

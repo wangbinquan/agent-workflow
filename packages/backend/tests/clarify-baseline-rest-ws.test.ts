@@ -9,12 +9,15 @@
 // payload shape will trip these — confirm any drift was intended (e.g. a
 // new optional field is fine; renaming `clarifyNodeRunId` would break
 // frontend code).
+//
+// RFC-359 AC-6: the whole file runs on BOTH engines. Every service under test
+// already takes the provider-neutral client, so the wire shapes above are now
+// pinned on PostgreSQL too rather than only on bun:sqlite.
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRoundWithDecision } from '../src/services/clarifyAutoDispatch'
@@ -30,11 +33,10 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   withCross: boolean,
 ): Promise<{ taskId: string; definition: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
@@ -106,6 +108,12 @@ async function seedTask(
     status: 'running',
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
+    // Stated rather than inferred: the SQLite trigger rfc328_tasks_lineage_after_insert
+    // backfills these, and PostgreSQL has no counterpart by design.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return { taskId, definition }
 }
@@ -140,7 +148,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // designer entry. The designer rerun is now minted by reassigning the answered round's questioner
 // card to the graph designer node + dispatching that designer entry.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -158,10 +166,9 @@ async function reassignThenDispatchDesigner(
 
 let uninstallProjection = (): void => {}
 
-async function createProjectionDb(): Promise<DbClient> {
-  const db = createInMemoryDb(MIGRATIONS)
+/** Deterministic in-process frame delivery for the cases that read WS events. */
+async function installProjection(db: ProviderNeutralDatabase): Promise<void> {
   uninstallProjection = await installCommittedEventProjectionHarness(db)
-  return db
 }
 
 beforeEach(() => {
@@ -174,386 +181,390 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-058 baseline T6 — list summaries shape', () => {
-  test('listClarifySummaries: rows carry taskName + sourceAgent + iteration', async () => {
-    const db = await createProjectionDb()
-    const { taskId } = await seedTask(db, false)
-    await db.insert(nodeRuns).values({
-      id: 'nr_src',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_src',
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion()],
-    })
-    const list = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
-    expect(list.length).toBe(1)
-    const row = list[0]!
-    // RFC-058 baseline locks: ClarifySessionSummary wire fields
-    expect(row.taskId).toBe(taskId)
-    expect(row.taskName).toBe('rest-baseline-task')
-    expect(row.askingNodeId).toBe('designer')
-    expect(row.iteration).toBe(0)
-    expect(row.status).toBe('awaiting_human')
-    expect(row.questionCount).toBe(1)
+describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）', (harness) => {
+  let db: ProviderNeutralDatabase
+
+  beforeEach(() => {
+    db = harness.db
   })
 
-  test('listCrossClarifySummaries: rows carry crossClarifyNodeId + sourceQuestioner + iteration', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTask(db, true)
-    await db.insert(nodeRuns).values({
-      id: 'nr_q1',
-      taskId,
-      nodeId: 'questioner',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    const list = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
-    expect(list.length).toBe(1)
-    const row = list[0]!
-    expect(row.taskId).toBe(taskId)
-    expect(row.intermediaryNodeId).toBe('cc1')
-    expect(row.askingNodeId).toBe('questioner')
-    expect(row.targetConsumerNodeId).toBe('designer')
-    expect(row.iteration).toBe(0)
-    expect(row.status).toBe('awaiting_human')
-  })
-
-  test('mixed inbox: REST route merges + sorts by createdAt desc (simulated)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTask(db, true)
-    await db.insert(nodeRuns).values([
-      {
+  describe('RFC-058 baseline T6 — list summaries shape', () => {
+    test('listClarifySummaries: rows carry taskName + sourceAgent + iteration', async () => {
+      await installProjection(db)
+      const { taskId } = await seedTask(db, false)
+      await db.insert(nodeRuns).values({
         id: 'nr_src',
         taskId,
         nodeId: 'designer',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
-      },
-      {
+      })
+      await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_src',
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion()],
+      })
+      const list = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
+      expect(list.length).toBe(1)
+      const row = list[0]!
+      // RFC-058 baseline locks: ClarifySessionSummary wire fields
+      expect(row.taskId).toBe(taskId)
+      expect(row.taskName).toBe('rest-baseline-task')
+      expect(row.askingNodeId).toBe('designer')
+      expect(row.iteration).toBe(0)
+      expect(row.status).toBe('awaiting_human')
+      expect(row.questionCount).toBe(1)
+    })
+
+    test('listCrossClarifySummaries: rows carry crossClarifyNodeId + sourceQuestioner + iteration', async () => {
+      const { taskId } = await seedTask(db, true)
+      await db.insert(nodeRuns).values({
         id: 'nr_q1',
         taskId,
         nodeId: 'questioner',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
-      },
-    ])
-    await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_src',
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion()],
+      })
+      await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      const list = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
+      expect(list.length).toBe(1)
+      const row = list[0]!
+      expect(row.taskId).toBe(taskId)
+      expect(row.intermediaryNodeId).toBe('cc1')
+      expect(row.askingNodeId).toBe('questioner')
+      expect(row.targetConsumerNodeId).toBe('designer')
+      expect(row.iteration).toBe(0)
+      expect(row.status).toBe('awaiting_human')
     })
-    await new Promise((r) => setTimeout(r, 5))
-    await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    const selfList = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
-    const crossList = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
-    // Simulating the REST route's merge + tag logic.
-    const merged = [
-      ...selfList.map((r) => ({ ...r, kind: 'self' as const })),
-      ...crossList.map((r) => ({ ...r, kind: 'cross' as const })),
-    ].sort((a, b) => b.createdAt - a.createdAt)
-    expect(merged.length).toBe(2)
-    expect(merged.every((m) => m.kind === 'self' || m.kind === 'cross')).toBe(true)
-  })
-})
 
-describe('RFC-058 baseline T6 — detail wire shape', () => {
-  test('getClarifyDetail returns ClarifySession with full questions array', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTask(db, false)
-    await db.insert(nodeRuns).values({
-      id: 'nr_src',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
+    test('mixed inbox: REST route merges + sorts by createdAt desc (simulated)', async () => {
+      const { taskId } = await seedTask(db, true)
+      await db.insert(nodeRuns).values([
+        {
+          id: 'nr_src',
+          taskId,
+          nodeId: 'designer',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+        {
+          id: 'nr_q1',
+          taskId,
+          nodeId: 'questioner',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+      ])
+      await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_src',
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion()],
+      })
+      await new Promise((r) => setTimeout(r, 5))
+      await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      const selfList = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
+      const crossList = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
+      // Simulating the REST route's merge + tag logic.
+      const merged = [
+        ...selfList.map((r) => ({ ...r, kind: 'self' as const })),
+        ...crossList.map((r) => ({ ...r, kind: 'cross' as const })),
+      ].sort((a, b) => b.createdAt - a.createdAt)
+      expect(merged.length).toBe(2)
+      expect(merged.every((m) => m.kind === 'self' || m.kind === 'cross')).toBe(true)
     })
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_src',
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion({ title: 'detail Q' })],
-    })
-    const detail = await getClarifyRoundDetail(db, clarifyNodeRunId)
-    expect(detail.taskId).toBe(taskId)
-    expect(detail.intermediaryNodeId).toBe('clarify1')
-    expect(detail.questions[0]?.title).toBe('detail Q')
-    expect(detail.status).toBe('awaiting_human')
-  })
-
-  test('getCrossClarifyDetail returns CrossClarifySession with full questions array', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTask(db, true)
-    await db.insert(nodeRuns).values({
-      id: 'nr_q1',
-      taskId,
-      nodeId: 'questioner',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion({ title: 'cross detail Q' })],
-    })
-    const detail = await getClarifyRoundDetail(db, crossClarifyNodeRunId)
-    expect(detail.taskId).toBe(taskId)
-    expect(detail.intermediaryNodeId).toBe('cc1')
-    expect(detail.targetConsumerNodeId).toBe('designer')
-    expect(detail.questions[0]?.title).toBe('cross detail Q')
-  })
-})
-
-describe('RFC-058 baseline T6 — WS event payload shape', () => {
-  test('clarify.created event carries clarifyNodeId + iterationIndex + session summary', async () => {
-    const db = await createProjectionDb()
-    const { taskId } = await seedTask(db, false)
-    await db.insert(nodeRuns).values({
-      id: 'nr_src',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    const received: TaskWsMessage[] = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_src',
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion()],
-    })
-    const m = received.find((message) => message.type === 'clarify.created')!
-    expect(m.type).toBe('clarify.created')
-    expect((m as { clarifyNodeId?: string }).clarifyNodeId).toBe('clarify1')
-    expect((m as { iterationIndex?: number }).iterationIndex).toBe(0)
   })
 
-  test('cross-clarify.created event carries crossClarifyNodeId + iteration + targetDesigner', async () => {
-    const db = await createProjectionDb()
-    const { taskId } = await seedTask(db, true)
-    await db.insert(nodeRuns).values({
-      id: 'nr_q1',
-      taskId,
-      nodeId: 'questioner',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    const received: TaskWsMessage[] = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    const m = received.find((message) => message.type === 'cross-clarify.created')!
-    expect(m.type).toBe('cross-clarify.created')
-  })
-
-  test('cross-clarify.answered + designer rerun dispatched on successful continue submit', async () => {
-    const db = await createProjectionDb()
-    const { taskId } = await seedTask(db, true)
-    await db.insert(nodeRuns).values([
-      {
-        id: 'nr_designer_prior',
+  describe('RFC-058 baseline T6 — detail wire shape', () => {
+    test('getClarifyDetail returns ClarifySession with full questions array', async () => {
+      const { taskId } = await seedTask(db, false)
+      await db.insert(nodeRuns).values({
+        id: 'nr_src',
         taskId,
         nodeId: 'designer',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
-        startedAt: Date.now() - 100,
-      },
-      {
+      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_src',
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion({ title: 'detail Q' })],
+      })
+      const detail = await getClarifyRoundDetail(db, clarifyNodeRunId)
+      expect(detail.taskId).toBe(taskId)
+      expect(detail.intermediaryNodeId).toBe('clarify1')
+      expect(detail.questions[0]?.title).toBe('detail Q')
+      expect(detail.status).toBe('awaiting_human')
+    })
+
+    test('getCrossClarifyDetail returns CrossClarifySession with full questions array', async () => {
+      const { taskId } = await seedTask(db, true)
+      await db.insert(nodeRuns).values({
         id: 'nr_q1',
         taskId,
         nodeId: 'questioner',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
-      },
-    ])
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
+      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion({ title: 'cross detail Q' })],
+      })
+      const detail = await getClarifyRoundDetail(db, crossClarifyNodeRunId)
+      expect(detail.taskId).toBe(taskId)
+      expect(detail.intermediaryNodeId).toBe('cc1')
+      expect(detail.targetConsumerNodeId).toBe('designer')
+      expect(detail.questions[0]?.title).toBe('cross detail Q')
     })
-    const received: TaskWsMessage[] = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await autoDispatchClarifyRoundWithDecision({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAnswer()],
-      directive: 'continue',
-      ifMatchIteration: 0,
-      actor,
-    })
-    const types = received.map((m) => m.type)
-    // RFC-058 baseline, RFC-132 update: continue submit fires .answered. The legacy
-    // .designer-rerun-batched event was emitted only by the deleted immediate-mint path.
-    // RFC-162: the designer continuation is now an explicit reassign+dispatch of the answered
-    // round, observable on the dispatch result.
-    expect(types).toContain('cross-clarify.answered')
-    const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
-    expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
   })
 
-  test('cross-clarify.rejected on stop submit', async () => {
-    const db = await createProjectionDb()
-    const { taskId } = await seedTask(db, true)
-    await db.insert(nodeRuns).values([
-      {
-        id: 'nr_designer_prior',
+  describe('RFC-058 baseline T6 — WS event payload shape', () => {
+    test('clarify.created event carries clarifyNodeId + iterationIndex + session summary', async () => {
+      await installProjection(db)
+      const { taskId } = await seedTask(db, false)
+      await db.insert(nodeRuns).values({
+        id: 'nr_src',
         taskId,
         nodeId: 'designer',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
-        startedAt: Date.now() - 100,
-      },
-      {
+      })
+      const received: TaskWsMessage[] = []
+      taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
+      await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_src',
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion()],
+      })
+      const m = received.find((message) => message.type === 'clarify.created')!
+      expect(m.type).toBe('clarify.created')
+      expect((m as { clarifyNodeId?: string }).clarifyNodeId).toBe('clarify1')
+      expect((m as { iterationIndex?: number }).iterationIndex).toBe(0)
+    })
+
+    test('cross-clarify.created event carries crossClarifyNodeId + iteration + targetDesigner', async () => {
+      await installProjection(db)
+      const { taskId } = await seedTask(db, true)
+      await db.insert(nodeRuns).values({
         id: 'nr_q1',
         taskId,
         nodeId: 'questioner',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
-      },
-    ])
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
+      })
+      const received: TaskWsMessage[] = []
+      taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
+      await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      const m = received.find((message) => message.type === 'cross-clarify.created')!
+      expect(m.type).toBe('cross-clarify.created')
     })
-    const received: TaskWsMessage[] = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await autoDispatchClarifyRoundWithDecision({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAnswer()],
-      directive: 'stop',
-      ifMatchIteration: 0,
-      actor,
-    })
-    const types = received.map((m) => m.type)
-    expect(types).toContain('cross-clarify.answered')
-    expect(types).toContain('cross-clarify.rejected')
-  })
 
-  test('clarify.answered on self-clarify submit', async () => {
-    const db = await createProjectionDb()
-    const { taskId } = await seedTask(db, false)
-    await db.insert(nodeRuns).values({
-      id: 'nr_src',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
+    test('cross-clarify.answered + designer rerun dispatched on successful continue submit', async () => {
+      await installProjection(db)
+      const { taskId } = await seedTask(db, true)
+      await db.insert(nodeRuns).values([
+        {
+          id: 'nr_designer_prior',
+          taskId,
+          nodeId: 'designer',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+          startedAt: Date.now() - 100,
+        },
+        {
+          id: 'nr_q1',
+          taskId,
+          nodeId: 'questioner',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+      ])
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      const received: TaskWsMessage[] = []
+      taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
+      await autoDispatchClarifyRoundWithDecision({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAnswer()],
+        directive: 'continue',
+        ifMatchIteration: 0,
+        actor,
+      })
+      const types = received.map((m) => m.type)
+      // RFC-058 baseline, RFC-132 update: continue submit fires .answered. The legacy
+      // .designer-rerun-batched event was emitted only by the deleted immediate-mint path.
+      // RFC-162: the designer continuation is now an explicit reassign+dispatch of the answered
+      // round, observable on the dispatch result.
+      expect(types).toContain('cross-clarify.answered')
+      const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
+      expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
     })
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_src',
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion()],
+
+    test('cross-clarify.rejected on stop submit', async () => {
+      await installProjection(db)
+      const { taskId } = await seedTask(db, true)
+      await db.insert(nodeRuns).values([
+        {
+          id: 'nr_designer_prior',
+          taskId,
+          nodeId: 'designer',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+          startedAt: Date.now() - 100,
+        },
+        {
+          id: 'nr_q1',
+          taskId,
+          nodeId: 'questioner',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+      ])
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      const received: TaskWsMessage[] = []
+      taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
+      await autoDispatchClarifyRoundWithDecision({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAnswer()],
+        directive: 'stop',
+        ifMatchIteration: 0,
+        actor,
+      })
+      const types = received.map((m) => m.type)
+      expect(types).toContain('cross-clarify.answered')
+      expect(types).toContain('cross-clarify.rejected')
     })
-    const received: TaskWsMessage[] = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await autoDispatchClarifyRoundWithDecision({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: clarifyNodeRunId,
-      answers: [makeAnswer()],
-      directive: 'continue',
-      ifMatchIteration: 0,
-      actor,
+
+    test('clarify.answered on self-clarify submit', async () => {
+      await installProjection(db)
+      const { taskId } = await seedTask(db, false)
+      await db.insert(nodeRuns).values({
+        id: 'nr_src',
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_src',
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion()],
+      })
+      const received: TaskWsMessage[] = []
+      taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
+      await autoDispatchClarifyRoundWithDecision({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: clarifyNodeRunId,
+        answers: [makeAnswer()],
+        directive: 'continue',
+        ifMatchIteration: 0,
+        actor,
+      })
+      const types = received.map((m) => m.type)
+      expect(types).toContain('clarify.answered')
     })
-    const types = received.map((m) => m.type)
-    expect(types).toContain('clarify.answered')
   })
 })

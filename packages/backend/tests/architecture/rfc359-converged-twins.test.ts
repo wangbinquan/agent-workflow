@@ -131,13 +131,13 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     // 归一体本身留着——它当初解决的分叉（两份各写一遍同一段预检）不会因为少了一侧而失效，
     // 下一次有人再写第二个适配器时它仍是那条「别再抄一份」的落点。
     consumers: [
-      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`,
+      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts`,
     ],
     // `forkedFrom` 是**历史**（同 `preparedPackageMutation` 那条的口径）：当初分叉的两处，
     // legacy 那一处已随合一删除，判据只要求「两处、且至少一处仍存在」。
     forkedFrom: [
       `${B}modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts`,
-      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`,
+      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts`,
     ],
   },
   {
@@ -167,7 +167,7 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     ],
     homonyms: [
       {
-        path: `${B}modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts`,
+        path: `${B}modules/intent/infrastructure/intentApplyArtifactLifecycle.ts`,
         why: '同名异物：走 `pathInside` 判定、抛 `intent-apply-maintenance-path-outside-managed-root`，属于 intent 上下文自己的托管根合同。合它要新开一条 intent → resource-catalog 的内部边，而两个上下文的「托管根」本来就不是同一个根。',
       },
     ],

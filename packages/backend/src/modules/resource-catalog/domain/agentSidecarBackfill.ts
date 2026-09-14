@@ -3,7 +3,7 @@
 // 四个字段在 intent 变更集里是 `.optional()`：省略表示「保持存值」（RFC-348 用户裁决 ①）。
 // 此前这条判据在两个 provider 各写了一份，而且**只覆盖了 update**：
 //   · SQLite  `legacyIntentApplyResourceParticipants.ts` 的 agent-update 分支
-//   · PostgreSQL `postgresqlIntentApplyResourcePorts.ts` 的 `applyAgentPatch`
+//   · PostgreSQL `intentApplyResourcePorts.ts` 的 `applyAgentPatch`
 //
 // create 分支两边都没有回填——于是 `applyMode:'copy'`（它把 update 归一成 create）会
 // **静默丢掉**这四个字段。挂载 builtin / 他人资源时 copy 是唯一合法模式，所以「复制一个

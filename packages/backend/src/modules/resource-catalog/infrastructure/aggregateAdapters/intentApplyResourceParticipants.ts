@@ -23,13 +23,13 @@ type ReceiptOf<K extends CatalogSelectorKind> = Extract<
   { readonly kind: K }
 >
 
-export interface PostgresqlIntentApplyPrepareContext {
+export interface IntentApplyPrepareContext {
   readonly pendingIds: ReadonlySet<string>
   readonly pendingAgentNames: ReadonlyMap<string, string>
   readonly clientMutationId: string
 }
 
-export type PostgresqlIntentApplyArtifact =
+export type IntentApplyArtifact =
   | Readonly<{
       readonly kind: 'plugin-install'
       readonly pluginId: string
@@ -51,11 +51,11 @@ export type PostgresqlIntentApplyArtifact =
       readonly versionDirectory: string
     }>
 
-export interface PostgresqlIntentApplyPrestageContext {
-  recordArtifact(artifact: PostgresqlIntentApplyArtifact): Promise<void>
+export interface IntentApplyPrestageContext {
+  recordArtifact(artifact: IntentApplyArtifact): Promise<void>
 }
 
-export interface PostgresqlIntentApplyCommitContext {
+export interface IntentApplyCommitContext {
   readonly bundleCreatedNames: Readonly<{
     readonly workflow: ReadonlySet<string>
     readonly workgroup: ReadonlySet<string>
@@ -67,22 +67,19 @@ export interface PostgresqlIntentApplyCommitContext {
  * staging happen before the owning Intent transaction; commit receives the
  * exact reserved PostgreSQL transaction and cannot open a shadow transaction.
  */
-export interface PostgresqlIntentApplyMutationPort<
-  K extends CatalogSelectorKind,
-  TPrepared extends object,
-> {
-  prepare(plan: PlanOf<K>, context: PostgresqlIntentApplyPrepareContext): Promise<TPrepared>
+export interface IntentApplyMutationPort<K extends CatalogSelectorKind, TPrepared extends object> {
+  prepare(plan: PlanOf<K>, context: IntentApplyPrepareContext): Promise<TPrepared>
   prestage?(
     plan: PlanOf<K>,
     prepared: TPrepared,
-    context: PostgresqlIntentApplyPrestageContext,
+    context: IntentApplyPrestageContext,
   ): Promise<void>
   commitInTransaction(input: {
     readonly transaction: PostgresqlResourceCatalogTransaction
     readonly authority: ResourceRequestContext
     readonly plan: PlanOf<K>
     readonly prepared: TPrepared
-    readonly context: PostgresqlIntentApplyCommitContext
+    readonly context: IntentApplyCommitContext
   }): Promise<ReceiptOf<K>>
   afterCommitted?(input: {
     readonly plan: PlanOf<K>
@@ -102,7 +99,7 @@ export interface PostgresqlIntentApplyMutationPort<
   }): Promise<void> | void
 }
 
-export interface PostgresqlIntentApplyResourcePorts<
+export interface IntentApplyResourcePorts<
   TAgent extends object,
   TSkill extends object,
   TMcp extends object,
@@ -110,15 +107,15 @@ export interface PostgresqlIntentApplyResourcePorts<
   TWorkflow extends object,
   TWorkgroup extends object,
 > {
-  readonly agent: PostgresqlIntentApplyMutationPort<'agent', TAgent>
-  readonly skill: PostgresqlIntentApplyMutationPort<'skill', TSkill>
-  readonly mcp: PostgresqlIntentApplyMutationPort<'mcp', TMcp>
-  readonly plugin: PostgresqlIntentApplyMutationPort<'plugin', TPlugin>
-  readonly workflow: PostgresqlIntentApplyMutationPort<'workflow', TWorkflow>
-  readonly workgroup: PostgresqlIntentApplyMutationPort<'workgroup', TWorkgroup>
+  readonly agent: IntentApplyMutationPort<'agent', TAgent>
+  readonly skill: IntentApplyMutationPort<'skill', TSkill>
+  readonly mcp: IntentApplyMutationPort<'mcp', TMcp>
+  readonly plugin: IntentApplyMutationPort<'plugin', TPlugin>
+  readonly workflow: IntentApplyMutationPort<'workflow', TWorkflow>
+  readonly workgroup: IntentApplyMutationPort<'workgroup', TWorkgroup>
 }
 
-export interface PostgresqlIntentApplyResourceParticipantInTransaction {
+export interface IntentApplyResourceParticipantInTransaction {
   authorizeAndCommit(
     authority: ResourceRequestContext,
     plan: VersionedIntentResourceChangesetPlan,
@@ -128,7 +125,7 @@ export interface PostgresqlIntentApplyResourceParticipantInTransaction {
 /**
  * Intent apply 资源会话**提交臂的返回值**。RFC-359 从 `public/types.ts` 搬来——它只在
  * RC 自己的提交臂与 intent 的编排之间流动，而 intent 拿到它是经
- * `PostgresqlIntentApplyResourceSession` 这个 infrastructure 合同，不是经 `public/`。
+ * `IntentApplyResourceSession` 这个 infrastructure 合同，不是经 `public/`。
  */
 interface IntentResourceChangesetReceiptOf<K extends CatalogSelectorKind> {
   readonly kind: K
@@ -144,35 +141,35 @@ type DistributedIntentResourceChangesetReceipt<K extends CatalogSelectorKind> =
 export type IntentResourceChangesetReceipt =
   DistributedIntentResourceChangesetReceipt<CatalogSelectorKind>
 
-export interface PostgresqlIntentApplyResourceTransactionAttempt {
-  readonly participant: PostgresqlIntentApplyResourceParticipantInTransaction
+export interface IntentApplyResourceTransactionAttempt {
+  readonly participant: IntentApplyResourceParticipantInTransaction
   /** Promote this attempt's tail only after the outer Intent transaction commits. */
   commitSucceeded(): void
 }
 
-export interface PostgresqlIntentApplyResourceSession {
+export interface IntentApplyResourceSession {
   preflight(
     manifest: readonly IntentApplyManifestEntry[],
     changeset: IntentApplyChangeset,
   ): Promise<IntentApplyResourcePreflight>
   prepare(
     plan: VersionedIntentResourceChangesetPlan,
-    context: PostgresqlIntentApplyPrepareContext,
+    context: IntentApplyPrepareContext,
   ): Promise<void>
   prestage(
     plan: VersionedIntentResourceChangesetPlan,
-    context: PostgresqlIntentApplyPrestageContext,
+    context: IntentApplyPrestageContext,
   ): Promise<void>
   createTransactionAttempt(
     transaction: PostgresqlResourceCatalogTransaction,
-    context: PostgresqlIntentApplyCommitContext,
-  ): PostgresqlIntentApplyResourceTransactionAttempt
+    context: IntentApplyCommitContext,
+  ): IntentApplyResourceTransactionAttempt
   rollForwardCommitted(): Promise<void>
   broadcastCommitted(): Promise<void>
   abortPrepared(input: { readonly databaseCommitted: boolean }): Promise<void>
 }
 
-export interface PostgresqlIntentApplyResourceSessionOptions {
+export interface IntentApplyResourceSessionOptions {
   readonly actor: DirectAuthenticatedAuthority
   readonly authority: ResourceRequestContext
   /**
@@ -197,7 +194,7 @@ function missingPreparation(plan: VersionedIntentResourceChangesetPlan): Error {
  * object, so a structurally identical plan from another request cannot reuse a
  * prepared filesystem/plugin capability.
  */
-export function createPostgresqlIntentApplyResourceSession<
+export function createIntentApplyResourceSession<
   TAgent extends object,
   TSkill extends object,
   TMcp extends object,
@@ -205,10 +202,10 @@ export function createPostgresqlIntentApplyResourceSession<
   TWorkflow extends object,
   TWorkgroup extends object,
 >(
-  options: PostgresqlIntentApplyResourceSessionOptions,
+  options: IntentApplyResourceSessionOptions,
   identities: ResourceCatalogAclIdentityReadPort,
-  ports: PostgresqlIntentApplyResourcePorts<TAgent, TSkill, TMcp, TPlugin, TWorkflow, TWorkgroup>,
-): PostgresqlIntentApplyResourceSession {
+  ports: IntentApplyResourcePorts<TAgent, TSkill, TMcp, TPlugin, TWorkflow, TWorkgroup>,
+): IntentApplyResourceSession {
   const agent = new WeakMap<PlanOf<'agent'>, TAgent>()
   const skill = new WeakMap<PlanOf<'skill'>, TSkill>()
   const mcp = new WeakMap<PlanOf<'mcp'>, TMcp>()
@@ -220,7 +217,7 @@ export function createPostgresqlIntentApplyResourceSession<
   const committedRollForwardTail: Array<() => Promise<void>> = []
   const committedAfterTail: Array<() => Promise<void>> = []
 
-  const session: PostgresqlIntentApplyResourceSession = {
+  const session: IntentApplyResourceSession = {
     preflight(manifest, changeset) {
       return resolveIntentApplyResourcePreflight(
         identities,
@@ -329,12 +326,12 @@ export function createPostgresqlIntentApplyResourceSession<
     },
     createTransactionAttempt(
       transaction: PostgresqlResourceCatalogTransaction,
-      context: PostgresqlIntentApplyCommitContext,
-    ): PostgresqlIntentApplyResourceTransactionAttempt {
+      context: IntentApplyCommitContext,
+    ): IntentApplyResourceTransactionAttempt {
       const attemptTail: Array<() => Promise<void>> = []
       const attemptRollForwardTail: Array<() => Promise<void>> = []
       let promoted = false
-      const participant: PostgresqlIntentApplyResourceParticipantInTransaction = Object.freeze({
+      const participant: IntentApplyResourceParticipantInTransaction = Object.freeze({
         async authorizeAndCommit(
           authority: ResourceRequestContext,
           plan: VersionedIntentResourceChangesetPlan,

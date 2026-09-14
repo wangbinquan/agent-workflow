@@ -3,7 +3,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 
 import { intentApplyJournal, plugins, skills, skillVersions } from '@/db/schema'
-import type { PostgresqlIntentApplyArtifact } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
+import type { IntentApplyArtifact } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type {
   LegacyIntentSkillArtifactCompat,
   PostgresqlSkillArtifactCompensation,
@@ -20,11 +20,9 @@ import {
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { safeJoin } from '@/util/safePath'
 import type { Logger } from '@/util/log'
-import type { PostgresqlIntentApplyArtifactLifecycle } from './postgresqlIntentApplyOperations'
+import type { IntentApplyArtifactLifecycle, IntentApplyRecoveryArtifact } from './intentApplyEngine'
 
-export type PostgresqlIntentApplyRecoveryArtifact =
-  | PostgresqlIntentApplyArtifact
-  | IntentJournalArtifact
+export type { IntentApplyRecoveryArtifact }
 
 function pathInside(root: string, target: string): boolean {
   const rel = relative(resolve(root), resolve(target))
@@ -52,7 +50,7 @@ function positiveIntegerField(value: Readonly<Record<string, unknown>>, key: str
   return field as number
 }
 
-function decodePostgresqlArtifact(value: unknown): PostgresqlIntentApplyArtifact | null {
+function decodePostgresqlArtifact(value: unknown): IntentApplyArtifact | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
   const record = value as Readonly<Record<string, unknown>>
   switch (record.kind) {
@@ -87,9 +85,9 @@ function decodePostgresqlArtifact(value: unknown): PostgresqlIntentApplyArtifact
 }
 
 /** Decode both native PostgreSQL rows and lossless rows migrated from SQLite. */
-export function decodePostgresqlIntentApplyRecoveryArtifacts(
+export function decodeIntentApplyRecoveryArtifacts(
   json: string,
-): readonly PostgresqlIntentApplyRecoveryArtifact[] {
+): readonly IntentApplyRecoveryArtifact[] {
   let value: unknown
   try {
     value = JSON.parse(json)
@@ -106,19 +104,19 @@ export function decodePostgresqlIntentApplyRecoveryArtifacts(
   })
 }
 
-function operationIdOf(artifact: PostgresqlIntentApplyArtifact): string {
+function operationIdOf(artifact: IntentApplyArtifact): string {
   return artifact.kind === 'plugin-install' ? artifact.generationId : artifact.operationId
 }
 
 function versionOf(
-  artifact: Extract<PostgresqlIntentApplyArtifact, { kind: 'skill-stage' | 'skill-version-stage' }>,
+  artifact: Extract<IntentApplyArtifact, { kind: 'skill-stage' | 'skill-version-stage' }>,
 ): number {
   return artifact.kind === 'skill-stage' ? 1 : artifact.version
 }
 
 async function assertPluginPublished(input: {
   readonly db: ProviderNeutralDatabase
-  readonly artifact: Extract<PostgresqlIntentApplyRecoveryArtifact, { kind: 'plugin-install' }>
+  readonly artifact: Extract<IntentApplyRecoveryArtifact, { kind: 'plugin-install' }>
 }): Promise<void> {
   const row = await input.db
     .select({ cachedPath: plugins.cachedPath })
@@ -240,10 +238,7 @@ async function rollForwardPostgresqlSkill(input: {
   readonly rc: PostgresqlSkillArtifactCompensation
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
-  readonly artifact: Extract<
-    PostgresqlIntentApplyArtifact,
-    { kind: 'skill-stage' | 'skill-version-stage' }
-  >
+  readonly artifact: Extract<IntentApplyArtifact, { kind: 'skill-stage' | 'skill-version-stage' }>
 }): Promise<void> {
   const version = versionOf(input.artifact)
   const skill = await input.db
@@ -325,10 +320,7 @@ async function rollForwardPostgresqlSkill(input: {
 function compensatePostgresqlSkill(input: {
   readonly rc: PostgresqlSkillArtifactCompensation
   readonly appHome: string
-  readonly artifact: Extract<
-    PostgresqlIntentApplyArtifact,
-    { kind: 'skill-stage' | 'skill-version-stage' }
-  >
+  readonly artifact: Extract<IntentApplyArtifact, { kind: 'skill-stage' | 'skill-version-stage' }>
 }): void {
   const version = versionOf(input.artifact)
   const liveDirectory = input.rc.skillFilesAbs(input.appHome, input.artifact.skillId)
@@ -376,7 +368,7 @@ function compensateLegacyArtifact(input: {
 }
 
 /** Real PostgreSQL artifact recovery shared by apply-time and boot/hourly convergence. */
-export function createPostgresqlIntentApplyArtifactLifecycle(input: {
+export function createIntentApplyArtifactLifecycle(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly pluginsDir: string
@@ -387,12 +379,10 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
    * （`composeIntentApplyArtifactLifecycle`），只喂新词汇的测试装配可以省。
    */
   readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
-}): PostgresqlIntentApplyArtifactLifecycle {
+}): IntentApplyArtifactLifecycle {
   const rc = input.skillArtifacts
   return Object.freeze({
-    async compensate(
-      artifact: Parameters<PostgresqlIntentApplyArtifactLifecycle['compensate']>[0],
-    ) {
+    async compensate(artifact: Parameters<IntentApplyArtifactLifecycle['compensate']>[0]) {
       const postgresql = decodePostgresqlArtifact(artifact)
       if (postgresql?.kind === 'plugin-install') {
         assertManagedPath(input.pluginsDir, postgresql.generationDir)
@@ -411,7 +401,7 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
       })
     },
     async rollForward(
-      artifacts: Parameters<PostgresqlIntentApplyArtifactLifecycle['rollForward']>[0],
+      artifacts: Parameters<IntentApplyArtifactLifecycle['rollForward']>[0],
       log: Logger,
     ) {
       let complete = true
@@ -488,7 +478,7 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
   })
 }
 
-export interface PostgresqlIntentApplyJournalConvergence {
+export interface IntentApplyJournalConvergence {
   converge(input: {
     readonly activeJournalIds: readonly string[]
   }): Promise<{ readonly failed: number; readonly rolledForward: number }>
@@ -496,12 +486,12 @@ export interface PostgresqlIntentApplyJournalConvergence {
 
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
 
-export function createPostgresqlIntentApplyJournalConvergence(input: {
+export function createIntentApplyJournalConvergence(input: {
   readonly db: ProviderNeutralDatabase
-  readonly artifacts: PostgresqlIntentApplyArtifactLifecycle
+  readonly artifacts: IntentApplyArtifactLifecycle
   readonly now?: () => number
   readonly log: Logger
-}): PostgresqlIntentApplyJournalConvergence {
+}): IntentApplyJournalConvergence {
   const now = input.now ?? Date.now
   return Object.freeze({
     async converge(command: { readonly activeJournalIds: readonly string[] }) {
@@ -511,9 +501,9 @@ export function createPostgresqlIntentApplyJournalConvergence(input: {
       let rolledForward = 0
       for (const row of await input.db.select().from(intentApplyJournal)) {
         if (row.state === 'failed') continue
-        let artifacts: readonly PostgresqlIntentApplyRecoveryArtifact[]
+        let artifacts: readonly IntentApplyRecoveryArtifact[]
         try {
-          artifacts = decodePostgresqlIntentApplyRecoveryArtifacts(row.preparedArtifactsJson)
+          artifacts = decodeIntentApplyRecoveryArtifacts(row.preparedArtifactsJson)
         } catch (error) {
           input.log.warn('intent-journal-artifact-corrupt', {
             journalId: row.id,

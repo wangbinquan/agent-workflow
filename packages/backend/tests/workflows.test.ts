@@ -97,19 +97,15 @@ describe('workflow service', () => {
     db = createInMemoryDb(MIGRATIONS)
   }
 
-  describe('SQLite list compatibility', () => {
-    beforeEach(setupNativeServiceDb)
-
-    test('list empty -> []', async () => {
-      expect(await listWorkflows(db)).toEqual([])
-    })
-  })
-
   describeEachProvider('CRUD', (harness) => {
     let db: ProviderDatabaseHarness['db']
 
     beforeEach(() => {
       db = harness.db
+    })
+
+    test('list empty -> []', async () => {
+      expect(await listWorkflows(db)).toEqual([])
     })
 
     test('create stores definition + sets version=1', async () => {
@@ -237,6 +233,14 @@ describe('workflow service', () => {
     })
   })
 
+  // RFC-359 AC-6: single-engine ON PURPOSE. `validateWorkflowById` still takes
+  // the bun:sqlite-only client —
+  // `src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts:430-433`
+  // (`db: DbClient`) — so the provider-neutral handle the harness hands out does
+  // not type-check through it. Everything it calls underneath
+  // (`getWorkflow`, `loadWorkflowValidationContext`) is already neutral, so this
+  // block goes dual as soon as that one parameter does; routing around the
+  // entry point instead would stop pinning the wiring these two cases exist for.
   describe('SQLite validation compatibility', () => {
     beforeEach(setupNativeServiceDb)
 

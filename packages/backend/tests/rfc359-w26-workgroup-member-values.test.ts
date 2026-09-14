@@ -87,7 +87,7 @@ const originalIntent: MemberValues = (workgroupId, members, now, names, nextId) 
 function intentMemberValues(): MemberValues {
   const path = fileURLToPath(
     new URL(
-      '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+      '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
       import.meta.url,
     ),
   )
@@ -249,7 +249,7 @@ const actor = buildActor({
 
 // RFC-359 —— 两个 provider 共用同一份装配。此处此前是 `isolation === 'exclusive'` 的二分：
 // SQLite 走 `composeSqliteIntentApplyOperations` + legacy 资源会话，PostgreSQL 走
-// `createPostgresqlIntentApplyOperations` + PG 资源会话。
+// `createIntentApplyEngine` + PG 资源会话。
 function composeFor(harness: ProviderHarness, appHome: string) {
   const { authority } = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
     { userId: OWNER, source: 'session' },

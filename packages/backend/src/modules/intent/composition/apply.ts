@@ -3,16 +3,16 @@ import { join } from 'node:path'
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
-  createPostgresqlIntentApplyOperations,
+  createIntentApplyEngine,
   type ApplyIntentFaults,
-  type PostgresqlIntentApplyArtifactLifecycle,
-  type PostgresqlIntentApplyOperations,
-  type PostgresqlIntentApplyResourceBinding,
-} from '../infrastructure/postgresqlIntentApplyOperations'
-import { createPostgresqlIntentApplyArtifactLifecycle } from '../infrastructure/postgresqlIntentApplyArtifactLifecycle'
+  type IntentApplyArtifactLifecycle,
+  type IntentApplyEngine,
+  type IntentApplyResourceBinding,
+} from '../infrastructure/intentApplyEngine'
+import { createIntentApplyArtifactLifecycle } from '../infrastructure/intentApplyArtifactLifecycle'
 import {
   composeLegacyIntentSkillArtifactCompat,
-  composePostgresqlIntentApplyResourceBinding,
+  composeIntentApplyResourceBinding,
   composePostgresqlSkillArtifactCompensation,
   createPostgresqlIntentPluginArtifactLifecycle,
   createPostgresqlIntentSkillArtifactLifecycle,
@@ -26,12 +26,12 @@ import type { Actor } from '@/auth/actor'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { Logger } from '@/util/log'
 
-export type { ApplyIntentFaults } from '../infrastructure/postgresqlIntentApplyOperations'
+export type { ApplyIntentFaults } from '../infrastructure/intentApplyEngine'
 export type { IntentApplyReceipt } from '../application/ports/intentApplyOperations'
 export {
   __intentApplyLockCountForTests,
   __withSessionApplyLockForTests,
-} from '../infrastructure/postgresqlIntentApplyOperations'
+} from '../infrastructure/intentApplyEngine'
 
 /**
  * RFC-359 —— Intent apply **一台引擎两个 provider**。
@@ -39,7 +39,7 @@ export {
  * 此前这里是两条并行的装配线：SQLite 根走 `composeSqliteIntentApplyOperations` +
  * legacy 资源会话（`sqliteIntentApplyOperations.ts` 762 行 +
  * `sqliteIntentApplyArtifactLifecycle.ts` 178 行 + `legacyIntentApplyResourceParticipants.ts`），
- * PostgreSQL 根走 `createPostgresqlIntentApplyOperations` + PG 资源会话。两条线做的是同一件
+ * PostgreSQL 根走 `createIntentApplyEngine` + PG 资源会话。两条线做的是同一件
  * 事——claim → preflight → prepare → 图校验 → prestage → 大事务 → 前滚 → 收敛——而判据
  * 长期只喂其中一侧（`rfc294-apply-replay-recovery-parity` 的存在理由就是「两台 apply 引擎」）。
  *
@@ -52,12 +52,12 @@ export interface IntentApplyCompositionDependencies {
   /** ACL 归属读面。两个 bootstrap 根各自已有一份，测试装配可省略（按 db 现取）。 */
   readonly aclIdentities?: ResourceCatalogAclIdentityReadPort
   /** 已装配好的工件生命周期；省略时按 `db` + `appHome` 现装一份。 */
-  readonly artifacts?: PostgresqlIntentApplyArtifactLifecycle
+  readonly artifacts?: IntentApplyArtifactLifecycle
   /**
    * 已装配好的资源会话绑定；省略时按 `db` + `appHome` + `aclIdentities` 现装一份。
    * 用例用它在真实会话外面包一层观测（例：在 `prepare` 返回后放行一个并发 apply）。
    */
-  readonly resources?: PostgresqlIntentApplyResourceBinding
+  readonly resources?: IntentApplyResourceBinding
   /** RFC-358 §7 —— 提交期工作流图校验（AC-6）。 */
   readonly graphValidation?: IntentWorkflowGraphValidationPort
   readonly id?: () => string
@@ -71,8 +71,8 @@ export interface IntentApplyCompositionDependencies {
 export function composeIntentApplyArtifactLifecycle(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
-}): PostgresqlIntentApplyArtifactLifecycle {
-  return createPostgresqlIntentApplyArtifactLifecycle({
+}): IntentApplyArtifactLifecycle {
+  return createIntentApplyArtifactLifecycle({
     db: input.db,
     appHome: input.appHome,
     pluginsDir: join(input.appHome, 'plugins'),
@@ -84,13 +84,13 @@ export function composeIntentApplyArtifactLifecycle(input: {
 /** The single Intent apply composition. Both bootstrap roots call exactly this. */
 export function composeIntentApplyOperations(
   dependencies: IntentApplyCompositionDependencies,
-): PostgresqlIntentApplyOperations {
+): IntentApplyEngine {
   const appHome = dependencies.appHome
-  return createPostgresqlIntentApplyOperations({
+  return createIntentApplyEngine({
     db: dependencies.db,
     resources:
       dependencies.resources ??
-      composePostgresqlIntentApplyResourceBinding({
+      composeIntentApplyResourceBinding({
         db: dependencies.db,
         mcpLifecycle: createMcpTransactionLifecycle(),
         pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({
@@ -113,13 +113,11 @@ export function composeIntentApplyOperations(
 
 /**
  * RFC-359 —— 两个根此前各有一个「把引擎包成窄端口」的适配函数
- * （`composeSqliteIntentApplyOperations` / `composePostgresqlIntentApplyOperations`）。
- * 引擎合一之后只剩这一个：`PostgresqlIntentApplyOperations` 本来就 extends
+ * （`composeSqliteIntentApplyOperations` / `composeIntentApplyOperations`）。
+ * 引擎合一之后只剩这一个：`IntentApplyEngine` 本来就 extends
  * `IntentApplyOperations`，窄化是为了让路由层只看见 `apply`。
  */
-export function narrowIntentApplyOperations(
-  operations: PostgresqlIntentApplyOperations,
-): IntentApplyOperations {
+export function narrowIntentApplyOperations(operations: IntentApplyEngine): IntentApplyOperations {
   return operations
 }
 
@@ -141,7 +139,7 @@ export interface ApplyIntentDeps {
 
 export function applyIntentChangeset(
   dependencies: ApplyIntentDeps,
-  input: Parameters<PostgresqlIntentApplyOperations['apply']>[0]['command'],
+  input: Parameters<IntentApplyEngine['apply']>[0]['command'],
 ) {
   return composeIntentApplyOperations({
     db: dependencies.db,

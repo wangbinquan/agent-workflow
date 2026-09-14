@@ -12656,6 +12656,122 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#createIntentApplyArtifactLifecycle",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#createIntentApplyArtifactLifecycle",
+      "symbol": "createIntentApplyArtifactLifecycle",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#createIntentApplyJournalConvergence",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#createIntentApplyJournalConvergence",
+      "symbol": "createIntentApplyJournalConvergence",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#ApplyIntentFaults",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#ApplyIntentFaults",
+      "symbol": "ApplyIntentFaults",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#applyLock",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#applyLock",
+      "symbol": "applyLock",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#createIntentApplyEngine",
+      "missingControls": [
+        "audit",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#createIntentApplyEngine",
+      "symbol": "createIntentApplyEngine",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": false,
@@ -12872,122 +12988,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlProgramRunner.ts#execute",
       "symbol": "execute",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyArtifactLifecycle",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyArtifactLifecycle",
-      "symbol": "createPostgresqlIntentApplyArtifactLifecycle",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyJournalConvergence",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyJournalConvergence",
-      "symbol": "createPostgresqlIntentApplyJournalConvergence",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#ApplyIntentFaults",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#ApplyIntentFaults",
-      "symbol": "ApplyIntentFaults",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#applyLock",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#applyLock",
-      "symbol": "applyLock",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations",
-      "missingControls": [
-        "audit",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations",
-      "symbol": "createPostgresqlIntentApplyOperations",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -16170,9 +16170,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#createPostgresqlIntentPluginArtifactLifecycle",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentPluginArtifactLifecycle",
       "missingControls": [
         "audit",
         "authority",
@@ -16181,7 +16181,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#createPostgresqlIntentPluginArtifactLifecycle",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentPluginArtifactLifecycle",
       "symbol": "createPostgresqlIntentPluginArtifactLifecycle",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16195,9 +16195,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#createPostgresqlIntentSkillArtifactLifecycle",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentSkillArtifactLifecycle",
       "missingControls": [
         "audit",
         "authority",
@@ -16206,7 +16206,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#createPostgresqlIntentSkillArtifactLifecycle",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentSkillArtifactLifecycle",
       "symbol": "createPostgresqlIntentSkillArtifactLifecycle",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16220,15 +16220,15 @@
         "fenceOrOcc": false,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#createSkillStage",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createSkillStage",
       "missingControls": [
         "audit",
         "authority",
         "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#createSkillStage",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createSkillStage",
       "symbol": "createSkillStage",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16242,16 +16242,16 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#publishSkillStage",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#publishSkillStage",
       "missingControls": [
         "audit",
         "authority",
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#publishSkillStage",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#publishSkillStage",
       "symbol": "publishSkillStage",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16265,16 +16265,16 @@
         "fenceOrOcc": false,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#createPostgresqlIntentApplyResourceSession",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts#createIntentApplyResourceSession",
       "missingControls": [
         "audit",
         "authority",
         "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#createPostgresqlIntentApplyResourceSession",
-      "symbol": "createPostgresqlIntentApplyResourceSession",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts#createIntentApplyResourceSession",
+      "symbol": "createIntentApplyResourceSession",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -16287,9 +16287,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#applyAgentPatch",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#applyAgentPatch",
       "missingControls": [
         "audit",
         "authority",
@@ -16298,7 +16298,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#applyAgentPatch",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#applyAgentPatch",
       "symbol": "applyAgentPatch",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16312,16 +16312,41 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createAgentPort",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createAgentPort",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createAgentPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createAgentPort",
       "symbol": "createAgentPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createIntentApplyResourcePortFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createIntentApplyResourcePortFactory",
+      "symbol": "createIntentApplyResourcePortFactory",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -16334,15 +16359,15 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createMcpPort",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createMcpPort",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createMcpPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createMcpPort",
       "symbol": "createMcpPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16356,41 +16381,16 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createPluginPort",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createPluginPort",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createPluginPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createPluginPort",
       "symbol": "createPluginPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createPostgresqlIntentApplyResourcePortFactory",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createPostgresqlIntentApplyResourcePortFactory",
-      "symbol": "createPostgresqlIntentApplyResourcePortFactory",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -16403,15 +16403,15 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createSkillPort",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createSkillPort",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createSkillPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createSkillPort",
       "symbol": "createSkillPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16425,15 +16425,15 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createWorkflowPort",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createWorkflowPort",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createWorkflowPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createWorkflowPort",
       "symbol": "createWorkflowPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16447,15 +16447,15 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createWorkgroupPort",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createWorkgroupPort",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#createWorkgroupPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createWorkgroupPort",
       "symbol": "createWorkgroupPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16469,9 +16469,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#StagedArtifactCapability",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#StagedArtifactCapability",
       "missingControls": [
         "audit",
         "authorization",
@@ -16479,7 +16479,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#StagedArtifactCapability",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#StagedArtifactCapability",
       "symbol": "StagedArtifactCapability",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -16493,9 +16493,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#UpdatePlanOf",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#UpdatePlanOf",
       "missingControls": [
         "audit",
         "authority",
@@ -16504,7 +16504,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts#UpdatePlanOf",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#UpdatePlanOf",
       "symbol": "UpdatePlanOf",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -40571,7 +40571,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1194ee382f7c1c09eae321fc112ad9969c5520d49b20753c57f2d4b6022bb9b8",
+  "sourceDigest": "sha256:a702772b64054d7a60f4db87f743f14e752c5d4aed3cc4bef66a4fcb05fc77ef",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

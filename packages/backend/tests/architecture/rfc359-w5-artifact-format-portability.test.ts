@@ -38,8 +38,8 @@
 // # 正解长什么样：意图侧已经做过一次
 //
 // 同一张表形态的 `intent_apply_journal.prepared_artifacts_json` **已经**有跨格式桥接：
-// `modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts:82-99` 的
-// `decodePostgresqlIntentApplyRecoveryArtifacts` 逐条先试 PG 形状、不认就回落到 SQLite 解码器。
+// `modules/intent/infrastructure/intentApplyArtifactLifecycle.ts:82-99` 的
+// `decodeIntentApplyRecoveryArtifacts` 逐条先试 PG 形状、不认就回落到 SQLite 解码器。
 // 也就是说「能桥接」在本仓是**已经证实可行**的形态，不是设想。资源包侧欠的就是这一步。
 //
 // # 判据为什么是行为式，不是纸面比对
@@ -62,7 +62,7 @@
 // 逐字相等：
 //   · 出现**新的 rejects**（新 kind、新的一侧不认）——又多了一处只有一个引擎能读的落盘格式，
 //     去建桥，别扩账本；
-//   · 原有的 rejects **变成 accepts**——缺口补上了（照 `postgresqlIntentApplyArtifactLifecycle.ts:82-99`
+//   · 原有的 rejects **变成 accepts**——缺口补上了（照 `intentApplyArtifactLifecycle.ts:82-99`
 //     那样加跨格式回落），**把这条账本条目一起改掉**，让这次收敛留下一次有署名的提交记录；
 //   · 同引擎那 6 格必须恒为 accepts——它们掉成 rejects 说明样本或解码器坏了，此刻本守卫零预言力。
 //
@@ -98,7 +98,7 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
  * `<写出引擎>/<kind> -> <读回引擎>: accepts|rejects`，按行字典序。
  *
  * 六格 `rejects` 就是本条守卫钉住的缺口：**跨引擎迁移后存量恢复工件读不回来**。补上桥接
- * （形如 `modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts:82-99`）之后
+ * （形如 `modules/intent/infrastructure/intentApplyArtifactLifecycle.ts:82-99`）之后
  * 把对应行改成 `accepts`，不要删掉整条守卫——矩阵本身还要继续防守新增的不可移植格式。
  *
  * 它**不是** RFC-317 T72 意义上的债务账本，所以不带 `_DEBT` 后缀、也不进
@@ -410,7 +410,7 @@ describe('RFC-359 W5 —— 落盘恢复工件的跨引擎可读性', () => {
       '落盘恢复工件的跨引擎可读性矩阵与账本不符。\n' +
         '**新出现 rejects**：又多了一种只有单个引擎读得回来的落盘格式——跨引擎迁移后它名下的 ' +
         'journal 行会永久卡住、半成品目录永远收不掉。请给读回侧加跨格式回落，' +
-        '照 `modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts:82-99` 的形状写，' +
+        '照 `modules/intent/infrastructure/intentApplyArtifactLifecycle.ts:82-99` 的形状写，' +
         '不要靠扩账本了事。\n' +
         '**rejects 变成 accepts**：缺口已补——把账本里这一行改成 accepts，' +
         '让这次收敛留下一次有署名的提交记录。\n' +

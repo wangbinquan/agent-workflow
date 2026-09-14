@@ -35,13 +35,13 @@ describe('RFC-225 workgroup writer inventory', () => {
   test('workgroup row insert/update/delete has only the active and compatibility authorities', () => {
     expect(inventory(/\.insert\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
-      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.update\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
-      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
@@ -54,13 +54,13 @@ describe('RFC-225 workgroup writer inventory', () => {
   test('member replacement writes cannot grow a second path', () => {
     expect(inventory(/\.insert\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
-      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 2,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 2,
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.delete\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
-      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })

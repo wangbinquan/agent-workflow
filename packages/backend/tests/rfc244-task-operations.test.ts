@@ -1,11 +1,9 @@
 import { TaskCatalogPageSchema, type TaskLaunchOrigin } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
@@ -14,8 +12,6 @@ import { parseTaskOperationsQuery } from '../src/modules/task-execution/infrastr
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { createUser } from '../src/services/users'
 import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 type Db = ProviderNeutralDatabase
 
@@ -175,89 +171,90 @@ describe('RFC-244 task operations query', () => {
       expect(unsearched.facets).toEqual({ all: 4, active: 1, attention: 1, finished: 3 })
       expect(unsearched.items[0]?.id).toBe('root-old')
     })
-  })
 
-  test('ACL boundary promotes visible child to neutral unavailable root', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await db.insert(tasks).values([
-      task('private-parent', 'bob', 'done', { startedAt: 100 }),
-      task('visible-child', 'alice', 'running', {
-        parentTaskId: 'private-parent',
-        startedAt: 200,
-      }),
-    ])
-
-    const page = await listTaskOperationsPage(db, actor('alice'), {})
-    expect(page.kind).toBe('root')
-    if (page.kind !== 'root') throw new Error('expected root page')
-    expect(page.items.map((item) => item.id)).toEqual(['visible-child'])
-    expect(page.items[0]?.listContext.parentAvailability).toBe('unavailable')
-    expect(page.items[0]?.parentTaskId).toBe('private-parent')
-  })
-
-  test('child page is subtree-bounded, carries context, and rejects invisible parent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await db
-      .insert(tasks)
-      .values([
-        task('parent', 'alice'),
-        task('mid', 'alice', 'done', { parentTaskId: 'parent' }),
-        task('active-leaf', 'alice', 'running', { parentTaskId: 'mid' }),
-        task('private-parent', 'bob'),
-        task('private-child', 'bob', 'running', { parentTaskId: 'private-parent' }),
+    test('ACL boundary promotes visible child to neutral unavailable root', async () => {
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      await db.insert(tasks).values([
+        task('private-parent', 'bob', 'done', { startedAt: 100 }),
+        task('visible-child', 'alice', 'running', {
+          parentTaskId: 'private-parent',
+          startedAt: 200,
+        }),
       ])
 
-    const page = await listTaskOperationsPage(db, actor('alice'), {
-      parent_id: 'parent',
-      view: 'active',
+      const page = await listTaskOperationsPage(db, actor('alice'), {})
+      expect(page.kind).toBe('root')
+      if (page.kind !== 'root') throw new Error('expected root page')
+      expect(page.items.map((item) => item.id)).toEqual(['visible-child'])
+      expect(page.items[0]?.listContext.parentAvailability).toBe('unavailable')
+      expect(page.items[0]?.parentTaskId).toBe('private-parent')
     })
-    expect(page.kind).toBe('children')
-    if (page.kind !== 'children') throw new Error('expected child page')
-    expect(page).not.toHaveProperty('facets')
-    expect(page.items.map((item) => [item.id, item.listContext.matchKind])).toEqual([
-      ['mid', 'context'],
-    ])
-    expect(page.items[0]?.listContext.parentAvailability).toBe('visible')
 
-    await expect(
-      listTaskOperationsPage(db, actor('alice'), { parent_id: 'private-parent' }),
-    ).rejects.toMatchObject({ code: 'task-not-found', status: 404 })
-  })
+    test('child page is subtree-bounded, carries context, and rejects invisible parent', async () => {
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      await db
+        .insert(tasks)
+        .values([
+          task('parent', 'alice'),
+          task('mid', 'alice', 'done', { parentTaskId: 'parent' }),
+          task('active-leaf', 'alice', 'running', { parentTaskId: 'mid' }),
+          task('private-parent', 'bob'),
+          task('private-child', 'bob', 'running', { parentTaskId: 'private-parent' }),
+        ])
 
-  test('keyset cursor has stable id tie-breaker and is actor/filter bound', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await db
-      .insert(tasks)
-      .values([
-        task('task-c', 'alice', 'done', { startedAt: 100 }),
-        task('task-b', 'alice', 'done', { startedAt: 100 }),
-        task('task-a', 'alice', 'done', { startedAt: 100 }),
+      const page = await listTaskOperationsPage(db, actor('alice'), {
+        parent_id: 'parent',
+        view: 'active',
+      })
+      expect(page.kind).toBe('children')
+      if (page.kind !== 'children') throw new Error('expected child page')
+      expect(page).not.toHaveProperty('facets')
+      expect(page.items.map((item) => [item.id, item.listContext.matchKind])).toEqual([
+        ['mid', 'context'],
       ])
+      expect(page.items[0]?.listContext.parentAvailability).toBe('visible')
 
-    const first = await listTaskOperationsPage(db, actor('alice'), { limit: '2' })
-    expect(first.items.map((item) => item.id)).toEqual(['task-c', 'task-b'])
-    expect(first.nextCursor).not.toBeNull()
-    const second = await listTaskOperationsPage(db, actor('alice'), {
-      limit: '2',
-      cursor: first.nextCursor ?? undefined,
+      await expect(
+        listTaskOperationsPage(db, actor('alice'), { parent_id: 'private-parent' }),
+      ).rejects.toMatchObject({ code: 'task-not-found', status: 404 })
     })
-    expect(second.items.map((item) => item.id)).toEqual(['task-a'])
 
-    await expect(
-      listTaskOperationsPage(db, actor('bob'), {
+    test('keyset cursor has stable id tie-breaker and is actor/filter bound', async () => {
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      await db
+        .insert(tasks)
+        .values([
+          task('task-c', 'alice', 'done', { startedAt: 100 }),
+          task('task-b', 'alice', 'done', { startedAt: 100 }),
+          task('task-a', 'alice', 'done', { startedAt: 100 }),
+        ])
+
+      const first = await listTaskOperationsPage(db, actor('alice'), { limit: '2' })
+      expect(first.items.map((item) => item.id)).toEqual(['task-c', 'task-b'])
+      expect(first.nextCursor).not.toBeNull()
+      const second = await listTaskOperationsPage(db, actor('alice'), {
         limit: '2',
         cursor: first.nextCursor ?? undefined,
-      }),
-    ).rejects.toMatchObject({ code: 'task-page-cursor-invalid' })
-    await expect(
-      listTaskOperationsPage(db, actor('alice'), { cursor: 'not_base64url' }),
-    ).rejects.toMatchObject({ code: 'task-page-cursor-invalid' })
-  })
+      })
+      expect(second.items.map((item) => item.id)).toEqual(['task-a'])
 
-  describeEachProvider('RFC-359 W53 task operations query', (harness) => {
+      await expect(
+        listTaskOperationsPage(db, actor('bob'), {
+          limit: '2',
+          cursor: first.nextCursor ?? undefined,
+        }),
+      ).rejects.toMatchObject({ code: 'task-page-cursor-invalid' })
+      await expect(
+        listTaskOperationsPage(db, actor('alice'), { cursor: 'not_base64url' }),
+      ).rejects.toMatchObject({ code: 'task-page-cursor-invalid' })
+    })
+
     test('query canonicalization is strict and corrupt frozen JSON degrades to null', async () => {
       const parsed = parseTaskOperationsQuery(taskListViewerOf(actor('alice')), {
         statuses: 'running,pending,running',
@@ -283,35 +280,34 @@ describe('RFC-244 task operations query', () => {
       const page = await listTaskOperationsPage(db, actor('alice'), {})
       expect(page.items[0]?.workgroupName).toBeNull()
     })
-  })
 
-  test('shared scope uses membership for self-match but retains owned parent context', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await db
-      .insert(tasks)
-      .values([
-        task('owned-parent', 'admin'),
-        task('shared-child', 'bob', 'running', { parentTaskId: 'owned-parent' }),
-      ])
-    await db.insert(taskCollaborators).values({
-      taskId: 'shared-child',
-      userId: 'admin',
-      role: 'collaborator',
-      addedBy: 'bob',
-      addedAt: 100,
+    test('shared scope uses membership for self-match but retains owned parent context', async () => {
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      await db
+        .insert(tasks)
+        .values([
+          task('owned-parent', 'admin'),
+          task('shared-child', 'bob', 'running', { parentTaskId: 'owned-parent' }),
+        ])
+      await db.insert(taskCollaborators).values({
+        taskId: 'shared-child',
+        userId: 'admin',
+        role: 'collaborator',
+        addedBy: 'bob',
+        addedAt: 100,
+      })
+
+      const page = await listTaskOperationsPage(db, actor('admin', 'admin'), {
+        scope: 'shared',
+        view: 'active',
+      })
+      expect(page.items.map((item) => item.id)).toEqual(['owned-parent'])
+      expect(page.items[0]?.listContext.matchKind).toBe('context')
+      expect(page.items[0]?.listContext.parentAvailability).toBe('none')
     })
 
-    const page = await listTaskOperationsPage(db, actor('admin', 'admin'), {
-      scope: 'shared',
-      view: 'active',
-    })
-    expect(page.items.map((item) => item.id)).toEqual(['owned-parent'])
-    expect(page.items[0]?.listContext.matchKind).toBe('context')
-    expect(page.items[0]?.listContext.parentAvailability).toBe('none')
-  })
-
-  describeEachProvider('RFC-359 W53 task operations query', (harness) => {
     test('subject and origin filters stay distinct and large launch JSON never reaches the list wire', async () => {
       const db = harness.db
       const task = createProviderTask()
@@ -406,7 +402,7 @@ describe('RFC-244 task operations query', () => {
   })
 
   // RFC-359 AC-6：这条此前只跑 SQLite（自建 `createInMemoryDb` + `createApp`），
-  // 判据在上面三个 `describeEachProvider` 块里并不存在。
+  // 判据在上面那个 `describeEachProvider` 块里并不存在。
   describeEachProviderHttpApplication(
     'RFC-244 registered task source through the unified catalog',
     {

@@ -58,7 +58,7 @@ function deps() {
     authority,
     // RFC-359 —— 两个 provider 同一份装配。此处此前是 `isolation === 'exclusive'` 的二分：
     // SQLite 走 `composeSqliteIntentApplyOperations` + legacy 资源会话，PostgreSQL 走
-    // `createPostgresqlIntentApplyOperations` + PG 资源会话。
+    // `createIntentApplyEngine` + PG 资源会话。
     operations: composeIntentApplyOperations({
       db,
       appHome,

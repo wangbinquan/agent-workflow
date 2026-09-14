@@ -288,7 +288,7 @@ function insertValues(source: ts.SourceFile, table: string) {
 }
 
 test('Intent retains its statements, omitted schema version, defaults and exact insert delegation', () => {
-  const source = sourceFile('aggregateAdapters/postgresqlIntentApplyResourcePorts.ts')
+  const source = sourceFile('aggregateAdapters/intentApplyResourcePorts.ts')
   const mcp = insertValues(source, 'mcps')
   const plugin = insertValues(source, 'plugins')
   expect(compact(mcp.arguments[0]?.getText(source) ?? '')).toBe(

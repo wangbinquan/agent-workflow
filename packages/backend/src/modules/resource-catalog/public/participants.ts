@@ -216,7 +216,7 @@ export interface TaskExecutionResourceSnapshotInTx {
 
 // RFC-359 —— `IntentApplyResourceParticipantInTx` 与它的工厂随两台 apply 引擎合一一起退役。
 // 它是 legacy 会话的**提交期句柄**（`participantInTransaction(tx)`）；现行会话交出的是
-// `PostgresqlIntentApplyResourceTransactionAttempt`（`{participant, commitSucceeded}`），
+// `IntentApplyResourceTransactionAttempt`（`{participant, commitSucceeded}`），
 // 因为提交后还有一条尾巴要在外层事务提交之后才放行。唯一的消费者随 legacy 参与者一起删了。
 
 // memory 的资源 scope（agent / workflow）访问判定参与者**不在这里**：那是 memory 自己声明的端口

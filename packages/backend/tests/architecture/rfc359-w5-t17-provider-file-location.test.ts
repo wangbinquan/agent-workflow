@@ -36,8 +36,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'cli/postgresqlDaemonApplication.ts',
   'modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts',
   'modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts',
-  'modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts',
-  'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts',
   // ┌─ RFC-359 W10 —— resource-catalog 这 13 条**逐个核过**的分类。落在这里是因为 W9 已经证明
   // │  「这个数不等于分叉数」，而每一刀都在重新推导同一份分类；把结论钉在账本旁边，下一刀直接接。
   // │  分类判据：**看这份实现在生产里跑在什么句柄上、它的孪生在哪**，不看文件名。
@@ -48,22 +46,20 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │  `ProviderNeutralDatabase` 的子类型（`db/query.ts:20`），查询构建器两侧同一套。
   // │  所以「这个文件吃 PostgresqlDatabaseClient」**不构成**它是真分叉的证据，只说明签名没放宽。
   // │
-  // │  ① **真分叉（两侧各写一份业务逻辑，会漂）—— 7 条，是本模块剩下的全部靶心**
-  // │     `aggregateAdapters/postgresql*` 五个 + `postgresqlResourcePackageArtifacts.ts` +
+  // │  ① **真分叉（两侧各写一份业务逻辑，会漂）—— 3 条，是本模块剩下的全部靶心**
+  // │     `aggregateAdapters/postgresqlResourcePackageMutation{Arms,Participants}.ts` +
   // │     `composition/postgresqlResourcePackageCatalog.ts` 的 `mutationSessionFactory` 那一支。
   // │     **孪生顶着 `legacy*` 前缀、且一半藏在别的目录里**，所以 T17 的成对判据与
-  // │     `rfc359-w5-provider-pair-conformance.test.ts` 的成对账本**同时看不见这一对**：
-  // │       · intent apply：PG 侧 `postgresqlIntentApplyResourceParticipants`(510) +
-  // │         `…ResourcePorts`(1591) + `…ArtifactOwners`(296) = 2397 行 ≈ 2099 行代码；
-  // │         legacy 侧 `legacyIntentApplyResourceParticipants`(1118) +
-  // │         `composition/legacyIntentApplyResourceDependencies`(143) + 注入的聚合写手 ≈ 1500 行
-  // │         （agent 450 / workflow 333 / workgroup 248 / skill 282 / mcp 75 / plugin 44 …）
-  // │         ⇒ **求和 ≈ 2761 行 ≈ 2219 行代码**。逐方法对位：
-  // │         `createPostgresqlIntentApplyResourceSession` ↔ `createLegacyIntentApplyResourceSession`、
-  // │         `createPostgresqlIntentApplyResourcePortFactory` ↔ `LegacyIntentApplyResourceDependencies`
-  // │         的六条注入臂、`create…SkillArtifactLifecycle`/`…PluginArtifactLifecycle` ↔ legacy 的
-  // │         inline `writeSkillTree` + 注入的 `stageManagedSkill`/`stageSkillVersion`/`installPlugin`。
-  // │         PG 独有：`…MutationPort` / `…ResourcePorts` / 两阶段 `commitSucceeded()` attempt 提升。
+  // │     `rfc359-w5-provider-pair-conformance.test.ts` 的成对账本**同时看不见这一对**。
+  // │
+  // │     ✅ **intent apply 这一支已销账（RFC-359 plan §5ea + §5ek）**——不要再照下面那套
+  // │     行数去推导它。legacy 侧整条退役（`legacyIntentApplyResourceParticipants` 1062 行 +
+  // │     `composition/legacyIntentApplyResourceDependencies` 141 行 + 两个 `sqliteIntentApply*`
+  // │     共 940 行全部删除），PG 侧那三个文件成为**两个 provider 唯一的实现**，随之改名去掉
+  // │     provider 前缀（`intentApplyResource{Participants,Ports}` / `intentApplyArtifactOwners`
+  // │     / `intentApplyEngine` / `intentApplyArtifactLifecycle`）。合一照出三处用户可见缺陷，
+  // │     逐条见 plan §5ea。
+  // │
   // │       · 资源包导入：PG 侧 `postgresqlResourcePackageMutationParticipants`(1405) +
   // │         `…MutationArms`(1725) + `postgresqlResourcePackageArtifacts`(489) = 3619 行 ≈ 3069 行代码；
   // │         legacy 侧 `legacyResourcePackageMutationParticipants`(1277) +
@@ -122,9 +118,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │     `rfc349-provider-cutover.test.ts` 的导出账本（并发刀正在改那份），留给下一刀。
   // └─
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts',
-  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts',
-  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts',
-  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
   'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',

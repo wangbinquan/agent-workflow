@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
-  createPostgresqlIntentApplyJournalConvergence,
-  decodePostgresqlIntentApplyRecoveryArtifacts,
-} from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
+  createIntentApplyJournalConvergence,
+  decodeIntentApplyRecoveryArtifacts,
+} from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -103,7 +103,7 @@ afterEach(() => {
 describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
   test('recovery decoder accepts native PostgreSQL and versioned migrated artifacts', () => {
     expect(
-      decodePostgresqlIntentApplyRecoveryArtifacts(
+      decodeIntentApplyRecoveryArtifacts(
         JSON.stringify([
           {
             kind: 'skill-version-stage',
@@ -126,14 +126,14 @@ describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
       },
     ])
     expect(
-      decodePostgresqlIntentApplyRecoveryArtifacts(JSON.stringify({ version: 1, artifacts: [] })),
+      decodeIntentApplyRecoveryArtifacts(JSON.stringify({ version: 1, artifacts: [] })),
     ).toEqual([])
   })
 
   test('stale prepared journals compensate and settle through PostgreSQL CAS', async () => {
     const fake = fixture(100)
     let compensations = 0
-    const convergence = createPostgresqlIntentApplyJournalConvergence({
+    const convergence = createIntentApplyJournalConvergence({
       db: fake.db,
       artifacts: {
         async compensate() {
@@ -161,7 +161,7 @@ describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
 
   test('active or fresh journals are never reaped by maintenance', async () => {
     const fake = fixture(999_999)
-    const convergence = createPostgresqlIntentApplyJournalConvergence({
+    const convergence = createIntentApplyJournalConvergence({
       db: fake.db,
       artifacts: {
         async compensate() {

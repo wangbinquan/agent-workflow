@@ -1,10 +1,10 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createLogger, type Logger } from '@/util/log'
 import {
-  createPostgresqlIntentApplyArtifactLifecycle,
-  createPostgresqlIntentApplyJournalConvergence,
-  type PostgresqlIntentApplyJournalConvergence,
-} from '../infrastructure/postgresqlIntentApplyArtifactLifecycle'
+  createIntentApplyArtifactLifecycle,
+  createIntentApplyJournalConvergence,
+  type IntentApplyJournalConvergence,
+} from '../infrastructure/intentApplyArtifactLifecycle'
 import {
   composeLegacyIntentSkillArtifactCompat,
   composePostgresqlSkillArtifactCompensation,
@@ -17,11 +17,11 @@ export function composeIntentApplyConvergence(input: {
   readonly pluginsDir: string
   readonly now?: () => number
   readonly log?: Logger
-}): PostgresqlIntentApplyJournalConvergence {
+}): IntentApplyJournalConvergence {
   const log = input.log ?? createLogger('intentApplyMaintenance')
-  return createPostgresqlIntentApplyJournalConvergence({
+  return createIntentApplyJournalConvergence({
     db: input.db,
-    artifacts: createPostgresqlIntentApplyArtifactLifecycle({
+    artifacts: createIntentApplyArtifactLifecycle({
       skillArtifacts: composePostgresqlSkillArtifactCompensation(),
       legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
       db: input.db,

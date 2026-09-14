@@ -163,7 +163,7 @@ interface ProviderIntentMaintenanceCompositionInput {
 /**
  * RFC-359 —— 维护侧（boot / hourly 的 journal 收敛）两个 provider 共用这一份装配。
  * 此处此前是一对：SQLite 走 `convergeIntentApplyJournal` + SQLite 工件生命周期，
- * PostgreSQL 走 `createPostgresqlIntentApplyJournalConvergence`。两者收敛的是同一张
+ * PostgreSQL 走 `createIntentApplyJournalConvergence`。两者收敛的是同一张
  * `intent_apply_journal`、判的是同一套三态。
  */
 export function composeIntentMaintenanceCommandsForDatabase(

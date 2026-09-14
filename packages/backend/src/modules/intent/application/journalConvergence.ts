@@ -2,7 +2,7 @@
 //
 // 收敛回答的是「重启之后，这条没走完的 apply 该怎么收场」。判据在此之前是两份：
 // SQLite 的 `convergeIntentApplyJournal` 与 PostgreSQL 的
-// `createPostgresqlIntentApplyJournalConvergence`，结构逐段并行、只有写回方式不同。
+// `createIntentApplyJournalConvergence`，结构逐段并行、只有写回方式不同。
 //
 // 两份的代价已经看得见：**诊断标签开始分叉**——`intent-converge-left-retryable`
 // 只有 SQLite 记，`intent-resource-abort-failed` / `intent-resource-roll-forward-recovery-failed`
@@ -16,8 +16,8 @@
 //     判插件发布存在性），SQLite 补上同一判定后共用同一常量。
 //   · **仍欠**：`intent-converge-left-retryable`（**收敛期**，上面那条的孪生词）到今天还是
 //     只有 SQLite 记——PG 的 converge 在补偿失败时写回了 error 却不记这个词。它是同一族的
-//     最后一条残差，抬齐它需要动 PG 的两处 converge（`postgresqlIntentApplyOperations` 与
-//     `postgresqlIntentApplyArtifactLifecycle` 各一份），单独立项。
+//     最后一条残差，抬齐它需要动 PG 的两处 converge（`intentApplyEngine` 与
+//     `intentApplyArtifactLifecycle` 各一份），单独立项。
 //   · `intent-resource-*` 两条对应 PG 独有的资源会话中止/提交后尾巴，是**真能力差**，
 //     不是欠账（SQLite 的会话根本没有那两个方法），对拍里作为显式分叉留在 B 段。
 //

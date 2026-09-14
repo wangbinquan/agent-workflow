@@ -12,12 +12,13 @@
 // → review_comment) so we don't have to spin up the scheduler. The service
 // function is the source of truth for the 200/404/409 branches; the route is
 // covered once via app.fetch for the happy path + 400 validation.
+//
+// RFC-359 AC-6：整份文件跑双引擎——`seed` 只收 harness 现建的库句柄，不再自建 SQLite 内存库。
+// 每次 `seed` 用一组新 id：同一个用例里连着种两份夹具（作者矩阵那两条）在共库上会撞主键，
+// 而合一前每次 `createInMemoryDb` 都是一个新库，天然不会。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import type { AppDeps } from '../src/server'
 import { deleteReviewComment, updateReviewCommentText } from '../src/services/review'
@@ -34,32 +35,27 @@ import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory
 import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-interface Seed<Database extends ProviderNeutralDatabase = DbClient> {
-  db: Database
+interface Seed {
+  db: ProviderNeutralDatabase
   taskId: string
   nodeRunId: string
   docVersionId: string
   commentId: string
 }
 
-function seed(opts?: { decision?: 'pending' | 'approved' }): Promise<Seed>
-function seed(
-  opts: { decision?: 'pending' | 'approved' } | undefined,
-  suppliedDb: ProviderNeutralDatabase,
-): Promise<Seed<ProviderNeutralDatabase>>
+let fixtureOrdinal = 0
+
 async function seed(
+  db: ProviderNeutralDatabase,
   opts: { decision?: 'pending' | 'approved' } = {},
-  suppliedDb?: ProviderNeutralDatabase,
-): Promise<Seed<ProviderNeutralDatabase>> {
+): Promise<Seed> {
   const decision = opts.decision ?? 'pending'
-  const db = suppliedDb ?? createInMemoryDb(MIGRATIONS)
-  const workflowId = 'wf_test'
-  const taskId = 'task_test'
-  const nodeRunId = 'run_test'
-  const docVersionId = 'dv_test'
-  const commentId = 'cmt_test'
+  const ordinal = (fixtureOrdinal += 1)
+  const workflowId = `wf_test_${ordinal}`
+  const taskId = `task_test_${ordinal}`
+  const nodeRunId = `run_test_${ordinal}`
+  const docVersionId = `dv_test_${ordinal}`
+  const commentId = `cmt_test_${ordinal}`
 
   await db.insert(workflows).values({
     id: workflowId,
@@ -84,7 +80,12 @@ async function seed(
     status: 'awaiting_review',
     inputs: '{}',
     startedAt: 1,
-    ...(suppliedDb === undefined ? {} : providerTaskLineage(taskId)),
+    // SQLite 的 `rfc328_tasks_lineage_after_insert` 会补这两列，PostgreSQL 按设计没有对应
+    // 触发器——直插 `tasks` 的夹具自己给，两个引擎的物理行才一样。
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   await db.insert(nodeRuns).values({
     id: nodeRunId,
@@ -133,83 +134,75 @@ async function seed(
 const OWNER_AUTHZ = { actorUserId: 'u_owner_authz', role: 'owner' as const }
 
 describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => {
-  describe('fixture lifetime', () => {
-    test('200 happy path — updates commentText, returns new row, fires ws event', async () => {
-      const s = await seedForProvider(harness.db)
-      const uninstallProjection = await installCommittedEventProjectionHarness(s.db)
+  test('200 happy path — updates commentText, returns new row, fires ws event', async () => {
+    const s = await seed(harness.db)
+    const uninstallProjection = await installCommittedEventProjectionHarness(s.db)
 
-      let captured: unknown = null
-      const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(s.taskId), (evt) => {
-        captured = evt
-      })
-
-      const updated = await updateReviewCommentText(
-        s.db,
-        s.nodeRunId,
-        s.commentId,
-        'revised text',
-        OWNER_AUTHZ,
-      ).finally(() => {
-        unsub()
-        uninstallProjection()
-      })
-
-      expect(updated.commentText).toBe('revised text')
-      expect(updated.id).toBe(s.commentId)
-      expect(updated.anchor.selectedText).toBe('Hello')
-
-      const stored = await s.db
-        .select()
-        .from(reviewComments)
-        .where(eq(reviewComments.id, s.commentId))
-      expect(stored[0]?.commentText).toBe('revised text')
-
-      expect(captured).toMatchObject({
-        type: 'review.comment_updated',
-        nodeRunId: s.nodeRunId,
-        docVersionId: s.docVersionId,
-      })
+    let captured: unknown = null
+    const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(s.taskId), (evt) => {
+      captured = evt
     })
 
-    test('404 — commentId does not exist', async () => {
-      const s = await seedForProvider(harness.db)
-      await expect(
-        updateReviewCommentText(s.db, s.nodeRunId, 'cmt_missing', 'x', OWNER_AUTHZ),
-      ).rejects.toBeInstanceOf(NotFoundError)
+    const updated = await updateReviewCommentText(
+      s.db,
+      s.nodeRunId,
+      s.commentId,
+      'revised text',
+      OWNER_AUTHZ,
+    ).finally(() => {
+      unsub()
+      uninstallProjection()
+    })
+
+    expect(updated.commentText).toBe('revised text')
+    expect(updated.id).toBe(s.commentId)
+    expect(updated.anchor.selectedText).toBe('Hello')
+
+    const stored = await s.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, s.commentId))
+    expect(stored[0]?.commentText).toBe('revised text')
+
+    expect(captured).toMatchObject({
+      type: 'review.comment_updated',
+      nodeRunId: s.nodeRunId,
+      docVersionId: s.docVersionId,
     })
   })
-})
 
-describe('RFC-009-T1 updateReviewCommentText service', () => {
+  test('404 — commentId does not exist', async () => {
+    const s = await seed(harness.db)
+    await expect(
+      updateReviewCommentText(s.db, s.nodeRunId, 'cmt_missing', 'x', OWNER_AUTHZ),
+    ).rejects.toBeInstanceOf(NotFoundError)
+  })
+
   test('404 — nodeRunId mismatched (cross-review write)', async () => {
-    const s = await seed()
+    const s = await seed(harness.db)
     await expect(
       updateReviewCommentText(s.db, 'run_other', s.commentId, 'x', OWNER_AUTHZ),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
-})
 
-describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => {
-  describe('fixture lifetime', () => {
-    test('409 — doc_version no longer pending (review already decided)', async () => {
-      const s = await seedForProvider(harness.db, { decision: 'approved' })
-      await expect(
-        updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
-      ).rejects.toBeInstanceOf(ConflictError)
+  test('409 — doc_version no longer pending (review already decided)', async () => {
+    const s = await seed(harness.db, { decision: 'approved' })
+    await expect(
+      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
+    ).rejects.toBeInstanceOf(ConflictError)
 
-      // Original commentText untouched.
-      const stored = await s.db
-        .select()
-        .from(reviewComments)
-        .where(eq(reviewComments.id, s.commentId))
-      expect(stored[0]?.commentText).toBe('original')
-    })
+    // Original commentText untouched.
+    const stored = await s.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, s.commentId))
+    expect(stored[0]?.commentText).toBe('original')
   })
 })
 
-describe('review comment ownership and terminal guards', () => {
+describeEachProvider('review comment ownership and terminal guards', (harness) => {
   test('delete refuses a comment owned by a different review and preserves it', async () => {
-    const s = await seed()
+    const s = await seed(harness.db)
     await s.db.insert(nodeRuns).values({
       id: 'run_other',
       taskId: s.taskId,
@@ -260,23 +253,19 @@ describe('review comment ownership and terminal guards', () => {
       .where(eq(reviewComments.id, 'cmt_other'))
     expect(preserved).toHaveLength(1)
   })
-})
 
-describeEachProvider('review comment ownership and terminal guards', (harness) => {
-  describe('fixture lifetime', () => {
-    test('terminal task rejects comment edits before touching the row', async () => {
-      const s = await seedForProvider(harness.db)
-      await s.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, s.taskId))
+  test('terminal task rejects comment edits before touching the row', async () => {
+    const s = await seed(harness.db)
+    await s.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, s.taskId))
 
-      await expect(
-        updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
-      ).rejects.toMatchObject({ code: 'task-terminal' })
-      const stored = await s.db
-        .select()
-        .from(reviewComments)
-        .where(eq(reviewComments.id, s.commentId))
-      expect(stored[0]?.commentText).toBe('original')
-    })
+    await expect(
+      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
+    ).rejects.toMatchObject({ code: 'task-terminal' })
+    const stored = await s.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, s.commentId))
+    expect(stored[0]?.commentText).toBe('original')
   })
 })
 
@@ -306,9 +295,9 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
     }
 
     const HEADERS = { Authorization: 'Bearer tok' }
-    let s: Seed<ProviderNeutralDatabase>
+    let s: Seed
     beforeEach(async () => {
-      s = await seedForProvider(harness.db)
+      s = await seed(harness.db)
     })
     afterEach(async () => {
       try {
@@ -381,9 +370,9 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
 // 兜底行（'local'）不等于任何真实 user id ⇒ 自然 owner/admin-only（用户拍板）。
 // ---------------------------------------------------------------------------
 
-describe('RFC-285 B6① — review comment authorship matrix', () => {
+describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harness) => {
   async function seedAuthored(author: string): Promise<Seed> {
-    const s = await seed()
+    const s = await seed(harness.db)
     await s.db.update(reviewComments).set({ author }).where(eq(reviewComments.id, s.commentId))
     return s
   }
@@ -502,7 +491,7 @@ describe('RFC-285 B6① — review comment authorship matrix', () => {
   // 冻结由上方既有「409 conflict」用例双向锁定——此处只锁语序：作者校验在
   // 冻结判之后（decided 行对任何人都是 409，绝不因作者不符而先泄 403）。
   test('冻结优先于作者校验：decided 行对非作者也是 409 而非 403', async () => {
-    const s = await seed({ decision: 'approved' })
+    const s = await seed(harness.db, { decision: 'approved' })
     await expect(
       updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'x', {
         actorUserId: 'u_other',
@@ -511,19 +500,3 @@ describe('RFC-285 B6① — review comment authorship matrix', () => {
     ).rejects.toMatchObject({ code: 'review-not-awaiting', status: 409 })
   })
 })
-
-// RFC-359 W49: preserve the native seed and supply the selected provider to the same seed core.
-function seedForProvider(
-  db: ProviderNeutralDatabase,
-  opts: { decision?: 'pending' | 'approved' } = {},
-) {
-  return seed(opts, db)
-}
-function providerTaskLineage(id: string) {
-  return {
-    executionLineageId: id,
-    lineageSlotPathJson: JSON.stringify([
-      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
-    ]),
-  }
-}

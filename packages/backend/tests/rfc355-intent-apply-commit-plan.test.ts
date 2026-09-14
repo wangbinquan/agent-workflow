@@ -2,7 +2,7 @@
 // 共用一份之后的正向 / 边界 / 错误覆盖。
 //
 // 为什么这些用例存在：这段计算此前在 `sqliteIntentApplyOperations` 与
-// `postgresqlIntentApplyOperations` 里各抄了一份（约 120 行），**没有任何直接可断言的面**
+// `intentApplyEngine` 里各抄了一份（约 120 行），**没有任何直接可断言的面**
 // ——想验「基线在 prestage 期间被 rebase 掉要拒绝」或「复制的谱系记根不记直接来源」，
 // 只能起一个完整的 apply。判据抄两份的代价 T1 已经实测过一次（同一处 changeset 校验两侧
 // 真的漂了）。现在钉死在这里，两个 provider 谁改坏了都会红。

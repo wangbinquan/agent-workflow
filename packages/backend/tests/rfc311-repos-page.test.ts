@@ -97,22 +97,19 @@ async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
     r('r12', 'git@github.com:acme/never-fetched.git', '/repos/a12', 'main', 0, null, null, null),
   ]
   for (const row of repos) {
-    await db
-      .insert(cachedRepos)
-      .values({
-        id: row.id,
-        urlHash: row.id.padEnd(8, '0'),
-        urlRedacted: row.urlRedacted,
-        localPath: row.localPath,
-        defaultBranch: row.defaultBranch,
-        lastFetchedAt: row.lastFetchedAt,
-        createdAt: T0,
-        lastAutoRefreshAt: row.lastAutoRefreshAt,
-        hasSubmodules: row.hasSubmodules,
-        lastSubmoduleSyncOk: row.lastSubmoduleSyncOk,
-        lastSubmoduleSyncError: row.lastSubmoduleSyncOk === false ? 'boom' : null,
-      })
-      .run()
+    await db.insert(cachedRepos).values({
+      id: row.id,
+      urlHash: row.id.padEnd(8, '0'),
+      urlRedacted: row.urlRedacted,
+      localPath: row.localPath,
+      defaultBranch: row.defaultBranch,
+      lastFetchedAt: row.lastFetchedAt,
+      createdAt: T0,
+      lastAutoRefreshAt: row.lastAutoRefreshAt,
+      hasSubmodules: row.hasSubmodules,
+      lastSubmoduleSyncOk: row.lastSubmoduleSyncOk,
+      lastSubmoduleSyncError: row.lastSubmoduleSyncOk === false ? 'boom' : null,
+    })
   }
 
   // 引用面三源:
@@ -121,82 +118,69 @@ async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
   //   r08 ← 仅 scheduled payload 提及(计 1)
   //   r02 ← tasks.cachedRepoId 但该 task 有 task_repos 行(指向 r01)→ tasks 腿
   //         不计(锁 NOT EXISTS 细节),r02 保持 unused。
-  await db
-    .insert(users)
-    .values({
-      id: 'u1',
-      username: 'u1',
-      displayName: 'u1',
-      role: 'admin',
-      createdAt: T0,
-      updatedAt: T0,
-    })
-    .run()
+  await db.insert(users).values({
+    id: 'u1',
+    username: 'u1',
+    displayName: 'u1',
+    role: 'admin',
+    createdAt: T0,
+    updatedAt: T0,
+  })
   await db
     .insert(workflows)
     .values({ id: 'wf1', name: 'wf', definition: '{"nodes":[],"edges":[],"inputs":[]}' })
-    .run()
   const mkTask = async (id: string, cachedRepoId: string | null): Promise<void> => {
-    await db
-      .insert(tasks)
-      .values({
-        id,
-        name: id,
-        workflowId: 'wf1',
-        workflowSnapshot: '{}',
-        repoPath: `/tmp/${id}`,
-        worktreePath: `/tmp/wt-${id}`,
-        baseBranch: 'main',
-        branch: `agent-workflow/${id}`,
-        status: 'done',
-        inputs: '{}',
-        startedAt: T0,
-        finishedAt: T0 + 1,
-        runningMs: 0,
-        ownerUserId: 'u1',
-        launchOrigin: 'manual',
-        cachedRepoId,
-        // Preserve the original SQLite trigger's physical values on both providers.
-        executionLineageId: id,
-        lineageSlotPathJson: JSON.stringify([
-          { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
-        ]),
-      })
-      .run()
+    await db.insert(tasks).values({
+      id,
+      name: id,
+      workflowId: 'wf1',
+      workflowSnapshot: '{}',
+      repoPath: `/tmp/${id}`,
+      worktreePath: `/tmp/wt-${id}`,
+      baseBranch: 'main',
+      branch: `agent-workflow/${id}`,
+      status: 'done',
+      inputs: '{}',
+      startedAt: T0,
+      finishedAt: T0 + 1,
+      runningMs: 0,
+      ownerUserId: 'u1',
+      launchOrigin: 'manual',
+      cachedRepoId,
+      // Preserve the original SQLite trigger's physical values on both providers.
+      executionLineageId: id,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+      ]),
+    })
   }
   await mkTask('tA', null)
   await mkTask('tB', null)
   await mkTask('tC', 'r05')
   await mkTask('tD', 'r02')
   const mkTaskRepo = async (taskId: string, cachedRepoId: string): Promise<void> => {
-    await db
-      .insert(taskRepos)
-      .values({
-        taskId,
-        repoIndex: 0,
-        repoPath: `/tmp/${taskId}`,
-        worktreePath: `/tmp/wt-${taskId}`,
-        cachedRepoId,
-        branch: `agent-workflow/${taskId}`,
-      })
-      .run()
+    await db.insert(taskRepos).values({
+      taskId,
+      repoIndex: 0,
+      repoPath: `/tmp/${taskId}`,
+      worktreePath: `/tmp/wt-${taskId}`,
+      cachedRepoId,
+      branch: `agent-workflow/${taskId}`,
+    })
   }
   await mkTaskRepo('tA', 'r01')
   await mkTaskRepo('tB', 'r01')
   await mkTaskRepo('tD', 'r01')
-  await db
-    .insert(scheduledTasks)
-    .values({
-      id: ulid(),
-      name: 'sched-1',
-      ownerUserId: 'u1',
-      launchKind: 'workflow',
-      launchPayload: JSON.stringify({ body: { repos: [{ cachedRepoId: 'r08' }] } }),
-      scheduleSpec: '{}',
-      createdAt: T0,
-      updatedAt: T0,
-    })
-    .run()
+  await db.insert(scheduledTasks).values({
+    id: ulid(),
+    name: 'sched-1',
+    ownerUserId: 'u1',
+    launchKind: 'workflow',
+    launchPayload: JSON.stringify({ body: { repos: [{ cachedRepoId: 'r08' }] } }),
+    scheduleSpec: '{}',
+    createdAt: T0,
+    updatedAt: T0,
+  })
   return repos
 }
 
@@ -341,7 +325,15 @@ describeEachProvider('RFC-311 T28 — listCachedReposPage oracle', (harness) => 
   })
 })
 
-// These two original assertions exercise SQLite's native EXPLAIN mechanism.
+// RFC-359 AC-6 —— 本文件其余部分已跑双引擎；**只有这一块留单引擎**，因为它断言的东西
+// 只在 SQLite 上存在，不是「还没迁」：
+//   ① 判据文本是 `EXPLAIN QUERY PLAN` 的 detail 列（`idx_cached_repos_fetched_id` /
+//      `TEMP B-TREE`）——PostgreSQL 的 `EXPLAIN` 输出是另一套词汇，同一条断言换引擎后
+//      锁的不是同一件事；
+//   ② 手写 SQL 用的是 SQLite 的位置占位符 `?`（PostgreSQL 是 `$1`），而实现门 P2-4 恰恰
+//      要求用**绑定参数**看计划——字面量下看不出展开式的退化。
+// 想给 PostgreSQL 补一条同类守卫，走 `harness.explain()`（它按引擎各自渲染计划并带真实
+// 绑定参数），而不是把这两条改成双引擎。
 describe('RFC-311 T28 — listCachedReposPage oracle (SQLite query plans)', () => {
   let db: DbClient
   beforeEach(async () => {

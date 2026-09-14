@@ -461,7 +461,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *     :185 webhookMrControlEffects / :226 webhookDeliveries。
  *     why —— 读之前已在同作用域取过串行化（`serializedBeforeRead`），形状登记而已。
  *     removeWhen —— 那把锁被拿掉时这条要重新判。
- *   modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 1
+ *   modules/intent/infrastructure/intentApplyEngine.ts: 1
  *     :177 intentApplyJournal（`uniq_intent_apply_journal_mutation`）。
  *     why —— 同 session 的 apply 由 `application/sessionApplyLock.ts` 的 `applyLock` 串成一条
  *       Promise 链，daemon 又是 flock 单实例；同一 session 的两笔 apply 进不到同一时刻
@@ -469,7 +469,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *     removeWhen —— applyLock 退役或 daemon 变多实例时重判。
  *     :293 intentApplyJournal。why —— 同步事务面 + 同一把 applyLock。
  *     removeWhen —— 随同步面退役。
- *   modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts: 7
+ *   modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 7
  *     :552 agents / :661 mcps / :760 plugins / :925 skills / :1235 workflows / :1451 workgroups /
  *     :1544 workgroupMembers（全是 `*_owner_name_unique` 一族）。
  *     why —— 接过句柄的助手，事务由 intent apply 的 `applyLock` 之下打开；**未复核**。
@@ -539,8 +539,8 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/digital-employee/infrastructure/runtimeStore.ts: 5',
   'modules/event-center/infrastructure/eventStore.ts: 2',
   'modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts: 2',
-  'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 1',
-  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts: 7',
+  'modules/intent/infrastructure/intentApplyEngine.ts: 1',
+  'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 7',
   'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts: 2',
   'modules/resource-catalog/infrastructure/workflowRepository.ts: 1',
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts: 1',

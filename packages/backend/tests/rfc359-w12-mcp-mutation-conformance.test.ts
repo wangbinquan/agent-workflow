@@ -798,14 +798,14 @@ test('intent apply 侧的 MCP 写点在返回前 await 到数据库落库', () =
   // RFC-359 —— 两台 apply 引擎合一之后，intent apply 的MCP写点不再是 legacy 那两个
   // `commit(?:Legacy)?Mcp…InTx` 包装（它们随 `legacyIntentApplyResourceParticipants` /
   // `legacyIntentApplyResourceDependencies` 一起失去了生产消费者），而是**提交臂本身**在
-  // `postgresqlIntentApplyResourcePorts.ts` 里直接写表。判据不变：写必须被 `await` 到落库。
+  // `intentApplyResourcePorts.ts` 里直接写表。判据不变：写必须被 `await` 到落库。
   //
   // 为什么这条判据非要有：drizzle 的查询构建器是**惰性** `QueryPromise`。`.run()` 当场执行、
   // `await` 当场执行，而**既不 `.run()` 也不 `await`** 的写在两个引擎上都一条都不会发生——
   // 漏掉 await 不会让任何行为用例变红，只会让那次写悄悄不发生。
   const file = join(
     import.meta.dir,
-    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
   )
   const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true)
   const writes: string[] = []
