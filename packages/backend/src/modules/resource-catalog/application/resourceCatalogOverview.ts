@@ -38,20 +38,32 @@ export function createResourceCatalogOverviewQuery(input: {
 }): ResourceCatalogOverviewQuery {
   return Object.freeze({
     async load(actor: ResourceAclActorProjection): Promise<ResourceCatalogOverviewCounts> {
-      const load = async (dimension: (typeof dimensions)[number]): Promise<number | null> =>
-        actor.permissions.has(dimension.permission)
-          ? await input.counts.countVisible(actor, dimension.kind, {
-              excludeBuiltin: dimension.builtin,
-            })
-          : null
-      const [agents, skills, mcps, plugins, workflows, workgroups] = await Promise.all([
+      // RFC-359 AC-11（plan §5ef）—— 六条 `count(*)` 收成一条 `UNION ALL`。
+      //
+      // 此前这里是六次 `countVisible`（`Promise.all` 并发）。实测说明 `/api/overview` 在
+      // PostgreSQL 上超绝对预算的原因是**语句条数**而不是查询代价：该端点发 22 条语句，
+      // 22 条的 `wallMs` 合计 77.4ms 而端点墙钟 15.5ms（约 5 路并发），墙钟 ≈
+      //（条数 ÷ 并发度）× 均值，随条数线性增长。见 run `34816698143` 的查询画像。
+      //
+      // **无权限的维度依旧不发查询、依旧回 `null`**（与计数 0 是两件事，前端据此隐藏整格），
+      // 所以请求列表按权限先过滤一遍，再一次问完。
+      const permitted = dimensions.filter((dimension) =>
+        actor.permissions.has(dimension.permission),
+      )
+      const totals = await input.counts.countVisibleMany(
+        actor,
+        permitted.map((dimension) => ({ kind: dimension.kind, excludeBuiltin: dimension.builtin })),
+      )
+      const load = (dimension: (typeof dimensions)[number]): number | null =>
+        actor.permissions.has(dimension.permission) ? (totals.get(dimension.kind) ?? 0) : null
+      const [agents, skills, mcps, plugins, workflows, workgroups] = [
         load(dimensions[0]),
         load(dimensions[1]),
         load(dimensions[2]),
         load(dimensions[3]),
         load(dimensions[4]),
         load(dimensions[5]),
-      ])
+      ]
       return Object.freeze({
         agents,
         skills,

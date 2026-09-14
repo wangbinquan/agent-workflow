@@ -881,12 +881,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24736,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24737,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-11（plan §5ef）：`ResourceCatalogOverviewCountPort` 新增 `countVisibleMany` —— `/api/overview` 是九个端点里唯一没过 PostgreSQL 绝对预算的那个，实测根因是**语句条数**（22 条，九端点之最；22 条 wallMs 合计 77.4ms 对端点墙钟 15.5ms，约 5 路并发，墙钟随条数线性增长）而不是查询代价（四条任务计数全部走 Index Only Scan，库内合计 < 1.6ms）。六张资源表的逐表 count 收成一条 UNION ALL ⇒ -5 条。这是**加一个符号换掉五次往返**，不是加豁免。一次性：下次重采后应当消失。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d645fca9ce14fabce3e4980dff3a54995783e74af82930ee5f670b12f994f881",
+    "sourceDigest": "sha256:9088a5dd22036bd28024dae41233fd6738f1b1106aeefa9bd0c84200b447c3a2",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +902,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "50c01b606c2d6accf271d089886b74007ee50bfe",
-    "contentDigest": "sha256:6f4f2108acd544ec325bdca3e5a7d57a516e680df630a30908fe1668bb03d907",
+    "currentSnapshotSha": "4c3df660fc8c5a36350b8028ab2ed335011e0d7c",
+    "contentDigest": "sha256:d49ee25e667964947e5df967ba696af09262928b2ecd3aa0f82dadf25f843762",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

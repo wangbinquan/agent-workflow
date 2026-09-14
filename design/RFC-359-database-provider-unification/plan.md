@@ -10068,3 +10068,48 @@ PG `workgroup-pending` 此前 max 11.571 超 10，本轮 p95 **4.957**、`pgOK` 
 22 → 约 14。**但这必须实测验证**：本仓规矩是「数字都是跑出来的，不是估的」，而上面这段本身
 就是一次「先猜错、再被 EXPLAIN 纠正」的记录——我最初的假设是「PG 上 count 慢」，plan 数据
 证明恰恰相反。改完要在新 SHA 上再跑一次 `scale=full` 才算数。
+
+## 5ef. AC-11：`overview` 的六条资源计数收成一条 `UNION ALL`（22 → 17 条语句）
+
+§5ee 把根因钉死在**语句条数**上。本批先收其中确定能收的那一半。
+
+### 为什么先收资源计数、不动任务计数
+
+两处都能收，但代价完全不同：
+
+- **资源目录那六条**（`resourceCatalogOverview.ts` 的 `countVisible` 逐维度调用）的判据
+  （`rfc359-w4-b2b-adapters`）是**行为判据**——测的是可见性阶梯（bypass / private / 仅 public），
+  不测语句形状。收成一条 `UNION ALL` 不动它一个字节。
+- **任务那四条**（`taskOverviewQuery.ts`）被 `rfc359-w21-task-overview-prepared-counts` 的
+  **冻结 SQL 预言**盯着：`statementContract(actual) === statementContract(original)`，
+  拿当前实现与一份 pre-W21 的原始实现逐句比形状。W21 当初立这条就是为了保证「模板复用这个
+  性能改动**不改变可观测的语句行为**」。收四条计数会**永久废掉**那条预言，值不值得要等
+  本批实测之后再判——如果 -5 条已经够把 11.003ms 压到 10ms 以下，就不必付这个代价。
+
+### 改法
+
+`ResourceCatalogOverviewCountPort` 加一个 `countVisibleMany`，用 `unionAll` 把六个分支拼成一条；
+**每个分支的 where 逐字复用**原来那条单表路径的 `visibleRowsCondition` + `builtinCondition`，
+所以可见性阶梯一个字节没变。应用层按权限先过滤维度再一次问完——**无权限的维度依旧不进查询、
+依旧回 `null`**（与计数 0 是两件事，前端据此隐藏整格）。
+
+### 判据（`rfc359-w5ef-overview-count-batching`，双引擎 3×2）
+
+锁两件事，缺一不可：
+
+① **数值与逐表路径逐个相等**——只锁条数不锁数值，把谓词写错也能「优化成功」；
+② **六个维度只发一条语句**——只锁数值不锁条数，有人改回逐表循环、数值照样对，
+   而这条判据存在的唯一理由（AC-11 那 1ms）就悄悄没了。
+
+**变异验证已做**：把实现改回逐表循环，②当场红（`Expected: 1, Received: 6`），改回来即绿。
+
+### 账本
+
+`rfc294-module-symbol-owners` 24736 → 24737（新增的那个端口方法），已按规矩写上一次性
+`allowGrowth` 并点名本节——**这是「加一个符号换掉五次往返」，不是加豁免**。
+
+### 还没有的东西：实测
+
+条数从 22 降到 17 是**数出来的**，但「因此 p95 落到 10ms 以下」还是**推算**
+（墙钟 ≈ 条数 ÷ 并发度 × 均值）。按本仓规矩，这一条要在新 SHA 上再跑一次
+`scale=full` 才算数。没跑之前 AC-11 仍然记为未闭合。

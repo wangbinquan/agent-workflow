@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2552,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24736
+    "symbolsIncludingFileRoots": 24737
   },
   "entries": [
     {
@@ -77240,6 +77240,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ResourceCatalogOverviewCountPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceCatalogOverview.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceCatalogOverview.ts#ResourceCatalogOverviewCountRequest",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ResourceCatalogOverviewCountRequest",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -297509,5 +297521,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d645fca9ce14fabce3e4980dff3a54995783e74af82930ee5f670b12f994f881"
+  "sourceDigest": "sha256:9088a5dd22036bd28024dae41233fd6738f1b1106aeefa9bd0c84200b447c3a2"
 }
