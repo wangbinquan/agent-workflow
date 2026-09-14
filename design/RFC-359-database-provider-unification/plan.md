@@ -9958,3 +9958,30 @@ bun:sqlite 的同步执行面。在 PostgreSQL 上 `.run()` 交出的是一个**
 不把它喂到另一个引擎上，这件事永远不会被发现。drizzle 的查询构建器是惰性 `QueryPromise`，
 两个引擎上都只有 `.run()` 或 `await` 才真的执行——本仓的既有教训（`docs/dev-gotchas.md`）在
 生产代码里记过，测试助手这一侧是第一次撞到。
+
+## 5ec. AC-6 第二批：`rfc358` / `rfc293` 转双引擎（392 / open **86**）
+
+同 §5eb 的形状，两个更大的文件：
+
+| 文件 | 行数 | 迁后 | 备注 |
+| --- | ---: | --- | --- |
+| `rfc358-intent-graph-validation` | 887 | 23 → **46** 格 | 顺带修了三处 `.run()` / `.all()`（见下） |
+| `rfc293-intent-state` | 608 | 7 → **13** 格 | 两个 SQLite 专属 describe 各有各的病 |
+
+### `rfc358`：同一个 `.run()` 陷阱，第二次撞到
+
+`installDraft` 的两句写、以及一条下游工作流的 insert 用的都是 `.run()`。同 §5eb：
+在 PostgreSQL 上那是个没人 await 的 Promise。另有两处 `db.select().from(x).all().length`
+——`.all()` 同样是 bun:sqlite 的同步面，中立客户端上返回的是 `Result<…>` 而不是数组，
+`tsc` 当场就报（这一类比 `.run()` 好办，编译期就拦住了）。
+
+### `rfc293`：两个 SQLite 专属 describe，病因不同
+
+- 「native compatibility」那一格**只读一个提示词常量、压根不碰库**，却挂着一个建库的
+  `beforeEach`，于是整份文件被算进「钉死在单引擎上」的账。夹具删掉即可——这一类是**账本
+  虚高**，不是真债。
+- 「Intent working state」的 boot 恢复那一格是真在吃库，而且与同文件里**已经是双引擎**的
+  那个 `describeEachProvider` 块判据同源，只是自建了 `createInMemoryDb`。搬进去即可。
+
+两类都值得记：前者说明 `OPEN_MIGRATION_DEBT` 里混着一部分**根本不需要迁**的文件（只要把无用
+夹具删掉），后者说明同一个文件里可能**一半已迁一半没迁**——按文件计数的账本看不出这件事。

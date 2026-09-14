@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { CreateAgentSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { resumeQueuedIntentWorkingSets } from '@/modules/intent/application/dispatcher'
 import {
   intentDraftResolutions,
@@ -57,18 +55,15 @@ import {
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let db: ProviderNeutralDatabase
 let actor: Actor
 let persistence: IntentPersistence
 let visibility: IntentContextResourceAuthorization
 
+// RFC-359（AC-6）—— 这一格只读一个提示词常量，压根不碰库；此前却挂着一个建库的
+// `beforeEach`，于是整份文件被算进「钉死在单引擎上」的账。夹具删掉即可。
 describe('RFC-293 native compatibility', () => {
-  beforeEach(async () => {
-    await setupNativeIntentFixture()
-  })
-
   test('intent builder keeps the ordinary runtime tool surface', () => {
     expect(INTENT_BUILDER_SYSTEM_PROMPT).toContain('ordinary runtime tools')
     expect(INTENT_BUILDER_SYSTEM_PROMPT).not.toContain('NO shell')
@@ -101,12 +96,6 @@ async function setupIntentFixture(selectedDb: ProviderNeutralDatabase) {
     source: 'session',
   })
   visibility = intentResourceVisibility(intentResourceCatalogBinding(db, actor))
-}
-
-async function setupNativeIntentFixture(): Promise<DbClient> {
-  const nativeDb = createInMemoryDb(MIGRATIONS)
-  await setupIntentFixture(nativeDb)
-  return nativeDb
 }
 
 async function createBareSession(message = 'build it') {
@@ -489,15 +478,9 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
     expect(replay.receipt).toEqual({ ...action.receipt, replayed: true })
     expect(replay.reservation).toBeNull()
   })
-})
 
-describe('RFC-293 Intent working state', () => {
-  let db: DbClient
-
-  beforeEach(async () => {
-    db = await setupNativeIntentFixture()
-  })
-
+  // RFC-359（AC-6）—— 这一格此前住在一个 SQLite 专属的 describe 里（自建 `createInMemoryDb`），
+  // 与本块判据同源却只喂一个引擎。搬进来之后 boot 恢复这条在两个引擎上各跑一遍。
   test('boot recovery resumes an idle queued working-context successor without a browser', async () => {
     const session = await createBareSession('resume after restart')
     await seedFakeRoot(session.id)
