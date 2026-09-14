@@ -10700,3 +10700,37 @@ taskDriverLifecycle.ts:123  persistence: createSqliteTaskExecutionPersistence(db
 按 §5eg 立下的规矩（「放松判据的方向恰好是让数字变好看的方向」）应当由用户拍板。
 探测改动已全部还原（`git checkout -- task.ts taskDriverLifecycle.ts`），
 `rfc287-t13-deferred-prep` + `rfc097-cancel-wins` 复跑 62 格全绿。
+
+## §5er —— 取号解耦的 PostgreSQL 侧补上判据；以及这份覆盖**锁住了多少、没锁住多少**
+
+§5ep 改了 `reviewMutationCoordinator` 的排队原语，但它的预言机
+`review-cancel-concurrency` 是**单引擎**的——也就是说那一刀在 PG 上一直没被直接测过。
+而 PG 恰恰是最该测的一侧：那里的前置读是一次真网络往返，racing 的评审变更窗口比 bun:sqlite 宽得多。
+
+**现在补上了**：11 条 `settleInOrder` 线性化用例转双引擎（SQLite 20 格 / 111 断言**逐字不变**，
+双引擎 31 格 / 195 断言）。9 条留原生并写清两条理由：
+① `delayArchiveSelect` / `observeDbSelect` / `loseFirstCancelCas` 是 `db` 上的 Proxy，
+PG 在 `databaseSessionFor(db).serializable(...)` 里会绕开它，注入不触发、判据静默退化成「没有并发」；
+② `starveTaskCancelCas` 与 WS 监听快照用的是 bun:sqlite 同步面，在同步回调里 PG 没有等价物。
+
+### 变异验证：PG 道确实会红
+
+把 `reserveTaskReviewMutationSlot` 改回拆分前的形态（删掉同步取号那一支，先 await 再入队）：
+
+· `[postgresql] > cancel first makes queued stale-source dispatch perform zero refresh writes` — **红**
+· PG 单跑 **18 pass / 2 fail**——是真用例体失败，不是 `0 pass / 1 fail` 那种环境签名。
+
+所以这份覆盖是真的咬住了契约，不是白绿。
+
+### 但要诚实记下它**没**锁住的部分
+
+同一个变异下，其余几条 `cancel first …`（decision ×3 / comment ×3 / selection）在 PG 上**照样绿**。
+原因：它们的竞争者经 `withReviewNodeMutationLock` 进入，那条路的 `findTaskId` 往返是在
+cancel 的前置读**之后**才发出的，于是 cancel 靠发出顺序侥幸仍然赢。
+
+**真正承重的是 dispatch 那一条**——`dispatchReviewNode` 零前置 await 直接进 task 键队列，
+所以一个取号晚了的 cancel 会被它确定性地超过。
+
+**结论**：PG 侧的契约目前由**一条**用例承重，不是 11 条。要把评审键那几条也在 PG 上锁死，
+得让竞争者的作用域查询强制排在 cancel 的前置读之前——那是另一件事，本刀没做。
+记在这里，免得下一个人从「11 条双跑」推出「11 条都在 PG 上有预言力」。

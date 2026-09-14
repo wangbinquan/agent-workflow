@@ -1,16 +1,30 @@
 // Review mutations and user cancellation share one task-scoped FIFO.  These
 // tests put an explicit holder in front of both operations so the winner order
 // is deterministic rather than an accident of Promise scheduling.
+//
+// RFC-359 —— 线性化判据**跑两个引擎**。
+//
+// `cancelTask` 的排队位置由 `reserveTaskReviewMutationSlot` 在函数入口**同步取号**决定，
+// 之后才 await 自己的前置读。取号与入队被拆开之前，这个顺序的正确性挂在「前置读是
+// bun:sqlite 的同步读」上——也就是只在一个引擎上成立。本文件里的 `cancel first …` /
+// `… first` 正是那条契约的判据，所以它们必须在 PostgreSQL 上也跑：那里前置读是一次真实
+// 的网络往返，留给并发评审写入的窗口宽得多，取号一旦错位就会在 PG 上先暴露。
+//
+// 分两组注册：
+//   · `describeEachProvider(…（双引擎）)` —— 只用 `settleInOrder` 摆顺序的线性化用例，
+//     两个引擎各跑一遍。
+//   · 下面的原生 `describe` —— 见其头注：注入式故障与同步读面的用例只在 SQLite 内存库上跑。
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ReviewDecisionKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   docVersions,
   memoryDistillJobs,
@@ -48,11 +62,11 @@ import {
 } from '../src/ws/broadcaster'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { drainCommittedEventDeliveriesForTests } from './helpers/committedEventHarness'
+import { describeEachProvider } from './helpers/eachProvider'
+import { MIGRATIONS } from './migration-freeze'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-interface Harness {
-  db: DbClient
+interface Harness<Database extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+  db: Database
   appHome: string
   worktreePath: string
   root: string
@@ -73,14 +87,16 @@ afterEach(() => {
   current = undefined
 })
 
-async function seedHarness(options: { multiDoc?: boolean } = {}): Promise<Harness> {
+async function seedHarness<Database extends ProviderNeutralDatabase>(
+  db: Database,
+  options: { multiDoc?: boolean } = {},
+): Promise<Harness<Database>> {
   const root = mkdtempSync(join(tmpdir(), 'aw-review-cancel-lock-'))
   const appHome = join(root, 'app-home')
   const worktreePath = join(root, 'worktree')
   mkdirSync(join(appHome, 'review'), { recursive: true })
   mkdirSync(worktreePath, { recursive: true })
 
-  const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
   const upstreamRunId = ulid()
@@ -122,6 +138,10 @@ async function seedHarness(options: { multiDoc?: boolean } = {}): Promise<Harnes
     status: 'awaiting_review',
     inputs: '{}',
     startedAt: Date.now(),
+    // RFC-359：血缘两列必须**显式**写。SQLite 侧由迁移 0210 的
+    // `rfc328_tasks_lineage_after_insert` 触发器兜底，PostgreSQL 按设计没有对应触发器，
+    // 于是夹具自己补齐——两个引擎从同一行出发。
+    ...taskRootLineage(taskId),
   })
   await db.insert(nodeRuns).values({
     id: upstreamRunId,
@@ -212,6 +232,24 @@ async function seedHarness(options: { multiDoc?: boolean } = {}): Promise<Harnes
   }
 }
 
+/** 迁移 0210 的 SQLite 触发器给根任务写的那一对值，逐字同形。 */
+function taskRootLineage(taskId: string): {
+  executionLineageId: string
+  lineageSlotPathJson: string
+} {
+  return {
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+  }
+}
+
+/** 原生库夹具：只给下面那组 SQLite-only 用例用。 */
+function seedNativeHarness(options: { multiDoc?: boolean } = {}): Promise<Harness<DbClient>> {
+  return seedHarness(createInMemoryDb(MIGRATIONS), options)
+}
+
 async function settleInOrder<A, B>(
   taskId: string,
   first: () => Promise<A>,
@@ -247,7 +285,11 @@ function expectRejectedCode(result: PromiseSettledResult<unknown>, code: string)
   }
 }
 
-function decide(h: Harness, decision: ReviewDecisionKind, db: DbClient = h.db) {
+function decide(
+  h: Harness,
+  decision: ReviewDecisionKind,
+  db: ProviderNeutralDatabase = h.db,
+): ReturnType<typeof submitReviewDecision> {
   return submitReviewDecision({
     db,
     appHome: h.appHome,
@@ -410,11 +452,11 @@ function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void
 // 保持原语义；作者矩阵的专项覆盖在 reviews-comment-patch 的 B6① describe。
 const OWNER_AUTHZ = { actorUserId: 'u_owner_authz', role: 'owner' as const }
 
-describe('review mutation vs task cancellation linearization', () => {
+describeEachProvider('评审写入与取消的线性化（双引擎）', (harness) => {
   test.each(['approved', 'rejected', 'iterated'] as const)(
     'cancel first makes a queued %s decision lose with zero decision side effects',
     async (decision) => {
-      const h = (current = await seedHarness())
+      const h = (current = await seedHarness(harness.db))
       const [cancelResult, decisionResult] = await settleInOrder(
         h.taskId,
         () => cancelTask(h.db, h.taskId),
@@ -454,7 +496,7 @@ describe('review mutation vs task cancellation linearization', () => {
   )
 
   test('approve first commits its complete fact set before queued cancel seals the task', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedHarness(harness.db))
     const [decisionResult, cancelResult] = await settleInOrder(
       h.taskId,
       () => decide(h, 'approved'),
@@ -493,8 +535,199 @@ describe('review mutation vs task cancellation linearization', () => {
     expect(await h.db.select().from(memoryDistillJobs)).toHaveLength(1)
   })
 
+  test('cancel first makes queued stale-source dispatch perform zero refresh writes', async () => {
+    const h = (current = await seedHarness(harness.db))
+    await h.db
+      .update(nodeRuns)
+      .set({ consumedUpstreamRunsJson: JSON.stringify({ writer: h.upstreamRunId }) })
+      .where(eq(nodeRuns.id, h.reviewRunId))
+    const freshUpstreamRunId = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: freshUpstreamRunId,
+      taskId: h.taskId,
+      nodeId: 'writer',
+      status: 'done',
+      iteration: 0,
+      retryIndex: 1,
+      startedAt: Date.now() - 2,
+      finishedAt: Date.now() - 1,
+    })
+    await h.db.insert(nodeRunOutputs).values({
+      nodeRunId: freshUpstreamRunId,
+      portName: 'doc',
+      content: '# fresh upstream body',
+    })
+    const created: unknown[] = []
+    const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), (event) => {
+      if (event.type === 'review.created') created.push(event)
+    })
+    try {
+      const [cancelResult, dispatchResult] = await settleInOrder(
+        h.taskId,
+        () => cancelTask(h.db, h.taskId),
+        () =>
+          dispatchReviewNode({
+            db: h.db,
+            taskId: h.taskId,
+            appHome: h.appHome,
+            definition: h.definition,
+            node: h.definition.nodes.find((node) => node.id === 'review')!,
+            iteration: 0,
+            scopeRoot: h.worktreePath,
+          }),
+      )
+      expect(cancelResult.status).toBe('fulfilled')
+      expect(dispatchResult).toMatchObject({
+        status: 'fulfilled',
+        value: { kind: 'canceled' },
+      })
+    } finally {
+      unsubscribe()
+    }
+    const docs = await h.db
+      .select()
+      .from(docVersions)
+      .where(eq(docVersions.reviewNodeRunId, h.reviewRunId))
+    expect(docs).toHaveLength(1)
+    expect(docs[0]?.decision).toBe('pending')
+    expect(docs[0]?.versionIndex).toBe(1)
+    expect(created).toHaveLength(0)
+    expect(
+      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]
+        ?.consumedUpstreamRunsJson,
+    ).toBe(JSON.stringify({ writer: h.upstreamRunId }))
+  })
+
+  test.each(['add', 'update', 'delete'] as const)(
+    'cancel first makes a queued comment %s leave comment rows untouched',
+    async (operation) => {
+      const h = (current = await seedHarness(harness.db))
+      const mutate = (): Promise<unknown> => {
+        if (operation === 'add') {
+          return addReviewComment({
+            db: h.db,
+            appHome: h.appHome,
+            nodeRunId: h.reviewRunId,
+            anchor: {
+              sectionPath: 'body',
+              paragraphIdx: 0,
+              offsetStart: 2,
+              offsetEnd: 6,
+              selectedText: 'body',
+              contextBefore: '# ',
+              contextAfter: ' inline',
+              occurrenceIndex: 1,
+            },
+            commentText: 'too late',
+          })
+        }
+        if (operation === 'update') {
+          return updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'too late', OWNER_AUTHZ)
+        }
+        return deleteReviewComment(h.db, h.reviewRunId, h.commentId, OWNER_AUTHZ)
+      }
+      const [cancelResult, commentResult] = await settleInOrder(
+        h.taskId,
+        () => cancelTask(h.db, h.taskId),
+        mutate,
+      )
+
+      expect(cancelResult.status).toBe('fulfilled')
+      expectRejectedCode(commentResult, 'task-terminal')
+      const comments = await h.db
+        .select()
+        .from(reviewComments)
+        .where(eq(reviewComments.docVersionId, h.docVersionId))
+      expect(comments).toHaveLength(1)
+      expect(comments[0]?.id).toBe(h.commentId)
+      expect(comments[0]?.commentText).toBe('original')
+    },
+  )
+
+  test('comment first lands before queued cancel and remains an auditable pre-terminal fact', async () => {
+    const h = (current = await seedHarness(harness.db))
+    const [commentResult, cancelResult] = await settleInOrder(
+      h.taskId,
+      () => updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'landed first', OWNER_AUTHZ),
+      () => cancelTask(h.db, h.taskId),
+    )
+
+    expect(commentResult.status).toBe('fulfilled')
+    expect(cancelResult.status).toBe('fulfilled')
+    expect(
+      (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]
+        ?.commentText,
+    ).toBe('landed first')
+    expect(
+      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+    ).toBe('canceled')
+  })
+
+  test('cancel first makes a queued selection leave both selection fields untouched', async () => {
+    const h = (current = await seedHarness(harness.db, { multiDoc: true }))
+    const [cancelResult, selectionResult] = await settleInOrder(
+      h.taskId,
+      () => cancelTask(h.db, h.taskId),
+      () =>
+        setDocumentSelection({
+          db: h.db,
+          nodeRunId: h.reviewRunId,
+          docVersionId: h.docVersionId,
+          selection: 'accepted',
+        }),
+    )
+
+    expect(cancelResult.status).toBe('fulfilled')
+    expectRejectedCode(selectionResult, 'task-terminal')
+    const doc = (
+      await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
+    )[0]!
+    expect(doc.selection).toBe('unselected')
+    expect(doc.selectionStale).toBe(true)
+  })
+
+  test('selection first lands before queued cancel and is not rewritten by the sweep', async () => {
+    const h = (current = await seedHarness(harness.db, { multiDoc: true }))
+    const [selectionResult, cancelResult] = await settleInOrder(
+      h.taskId,
+      () =>
+        setDocumentSelection({
+          db: h.db,
+          nodeRunId: h.reviewRunId,
+          docVersionId: h.docVersionId,
+          selection: 'accepted',
+        }),
+      () => cancelTask(h.db, h.taskId),
+    )
+
+    expect(selectionResult.status).toBe('fulfilled')
+    expect(cancelResult.status).toBe('fulfilled')
+    const doc = (
+      await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
+    )[0]!
+    expect(doc.selection).toBe('accepted')
+    expect(doc.selectionStale).toBe(false)
+  })
+})
+
+/**
+ * SQLite 原生库专属——**这些用例换到 PostgreSQL 上会静默地什么都不验**，所以不进双引擎面。
+ *
+ * 两类原因：
+ *   · **db 代理注入器**（`delayArchiveSelect` / `observeDbSelect` / `loseFirstCancelCas`）：
+ *     被测代码进事务后拿到的是 `databaseSessionFor(db).serializable(...)` 交给它的**另一个
+ *     事务对象**，不是外面那层 Proxy——PG 上注入根本不触发，判据会静默退化成「没有并发」。
+ *     这与 `loseFirstCancelCas` 头注记的旧事故同一形状：注入不发生，用例照样绿。
+ *   · **bun:sqlite 的同步读写面**（`starveTaskCancelCas` 的 `.get()` / `.run()`、
+ *     WS 监听回调里对当刻状态的同步 `.all()`）：PostgreSQL 没有同步读，这些点在同步回调里
+ *     只能拿到未决 Promise。
+ *
+ * 改造这两类注入器不在本次范围内；隔离在这里是为了让「哪些契约已经双引擎、哪些还没有」
+ * 一眼可见。
+ */
+describe('review mutation vs task cancellation linearization (SQLite 原生注入面)', () => {
   test('decision WS is emitted only after outputs and the lifecycle transition are complete', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedNativeHarness())
     let stateAtEvent: { runStatus: string | undefined; outputCount: number } | undefined
     const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), (event) => {
       if (event.type !== 'review.decision_made') return
@@ -521,7 +754,7 @@ describe('review mutation vs task cancellation linearization', () => {
   })
 
   test('a post-claim approve failure emits no false-success decision WS', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedNativeHarness())
     rmSync(join(h.appHome, 'review', 'v1.md'))
     const decisions: unknown[] = []
     const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), (event) => {
@@ -539,7 +772,7 @@ describe('review mutation vs task cancellation linearization', () => {
   })
 
   test('a claimed decision excludes dispatch refresh; refresh reopens on a fresh run after decision', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedNativeHarness())
     const sourcePath = 'doc.md'
     writeFileSync(join(h.worktreePath, sourcePath), '# fresh upstream body')
     await h.db
@@ -638,71 +871,8 @@ describe('review mutation vs task cancellation linearization', () => {
     expect(pending[0]?.versionIndex).toBe(1)
   })
 
-  test('cancel first makes queued stale-source dispatch perform zero refresh writes', async () => {
-    const h = (current = await seedHarness())
-    await h.db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: JSON.stringify({ writer: h.upstreamRunId }) })
-      .where(eq(nodeRuns.id, h.reviewRunId))
-    const freshUpstreamRunId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: freshUpstreamRunId,
-      taskId: h.taskId,
-      nodeId: 'writer',
-      status: 'done',
-      iteration: 0,
-      retryIndex: 1,
-      startedAt: Date.now() - 2,
-      finishedAt: Date.now() - 1,
-    })
-    await h.db.insert(nodeRunOutputs).values({
-      nodeRunId: freshUpstreamRunId,
-      portName: 'doc',
-      content: '# fresh upstream body',
-    })
-    const created: unknown[] = []
-    const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), (event) => {
-      if (event.type === 'review.created') created.push(event)
-    })
-    try {
-      const [cancelResult, dispatchResult] = await settleInOrder(
-        h.taskId,
-        () => cancelTask(h.db, h.taskId),
-        () =>
-          dispatchReviewNode({
-            db: h.db,
-            taskId: h.taskId,
-            appHome: h.appHome,
-            definition: h.definition,
-            node: h.definition.nodes.find((node) => node.id === 'review')!,
-            iteration: 0,
-            scopeRoot: h.worktreePath,
-          }),
-      )
-      expect(cancelResult.status).toBe('fulfilled')
-      expect(dispatchResult).toMatchObject({
-        status: 'fulfilled',
-        value: { kind: 'canceled' },
-      })
-    } finally {
-      unsubscribe()
-    }
-    const docs = await h.db
-      .select()
-      .from(docVersions)
-      .where(eq(docVersions.reviewNodeRunId, h.reviewRunId))
-    expect(docs).toHaveLength(1)
-    expect(docs[0]?.decision).toBe('pending')
-    expect(docs[0]?.versionIndex).toBe(1)
-    expect(created).toHaveLength(0)
-    expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]
-        ?.consumedUpstreamRunsJson,
-    ).toBe(JSON.stringify({ writer: h.upstreamRunId }))
-  })
-
   test('cancel retries when a non-coordinator writer wins CAS into another cancelable state', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedNativeHarness())
     await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
     let firstCasLost = false
 
@@ -724,7 +894,7 @@ describe('review mutation vs task cancellation linearization', () => {
   })
 
   test('cancel status broadcast runs after releasing the task mutation queue', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedNativeHarness())
     let queuePresentAtBroadcast: boolean | undefined
     let listenerReentry: Promise<void> | undefined
     const unsubscribe = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (event) => {
@@ -749,7 +919,7 @@ describe('review mutation vs task cancellation linearization', () => {
   })
 
   test('parent cancel releases the parent mutation lock before waiting on an active child', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedNativeHarness())
     const childId = ulid()
     const workflowId = (
       await h.db.select({ workflowId: tasks.workflowId }).from(tasks).where(eq(tasks.id, h.taskId))
@@ -817,7 +987,7 @@ describe('review mutation vs task cancellation linearization', () => {
   })
 
   test('parent cascade surfaces child cancel starvation instead of reporting success', async () => {
-    const h = (current = await seedHarness())
+    const h = (current = await seedNativeHarness())
     const childId = ulid()
     const workflowId = (
       await h.db.select({ workflowId: tasks.workflowId }).from(tasks).where(eq(tasks.id, h.taskId))
@@ -855,75 +1025,10 @@ describe('review mutation vs task cancellation linearization', () => {
     )
   })
 
-  test.each(['add', 'update', 'delete'] as const)(
-    'cancel first makes a queued comment %s leave comment rows untouched',
-    async (operation) => {
-      const h = (current = await seedHarness())
-      const mutate = (): Promise<unknown> => {
-        if (operation === 'add') {
-          return addReviewComment({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            anchor: {
-              sectionPath: 'body',
-              paragraphIdx: 0,
-              offsetStart: 2,
-              offsetEnd: 6,
-              selectedText: 'body',
-              contextBefore: '# ',
-              contextAfter: ' inline',
-              occurrenceIndex: 1,
-            },
-            commentText: 'too late',
-          })
-        }
-        if (operation === 'update') {
-          return updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'too late', OWNER_AUTHZ)
-        }
-        return deleteReviewComment(h.db, h.reviewRunId, h.commentId, OWNER_AUTHZ)
-      }
-      const [cancelResult, commentResult] = await settleInOrder(
-        h.taskId,
-        () => cancelTask(h.db, h.taskId),
-        mutate,
-      )
-
-      expect(cancelResult.status).toBe('fulfilled')
-      expectRejectedCode(commentResult, 'task-terminal')
-      const comments = await h.db
-        .select()
-        .from(reviewComments)
-        .where(eq(reviewComments.docVersionId, h.docVersionId))
-      expect(comments).toHaveLength(1)
-      expect(comments[0]?.id).toBe(h.commentId)
-      expect(comments[0]?.commentText).toBe('original')
-    },
-  )
-
-  test('comment first lands before queued cancel and remains an auditable pre-terminal fact', async () => {
-    const h = (current = await seedHarness())
-    const [commentResult, cancelResult] = await settleInOrder(
-      h.taskId,
-      () => updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'landed first', OWNER_AUTHZ),
-      () => cancelTask(h.db, h.taskId),
-    )
-
-    expect(commentResult.status).toBe('fulfilled')
-    expect(cancelResult.status).toBe('fulfilled')
-    expect(
-      (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]
-        ?.commentText,
-    ).toBe('landed first')
-    expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
-    ).toBe('canceled')
-  })
-
   test.each(['failed', 'interrupted'] as const)(
     'RFC-202 keeps an awaiting review writable while its task is revivable (%s)',
     async (taskStatus) => {
-      const h = (current = await seedHarness())
+      const h = (current = await seedNativeHarness())
       await h.db.update(tasks).set({ status: taskStatus }).where(eq(tasks.id, h.taskId))
 
       await updateReviewCommentText(
@@ -943,50 +1048,4 @@ describe('review mutation vs task cancellation linearization', () => {
       ).toBe('awaiting_review')
     },
   )
-
-  test('cancel first makes a queued selection leave both selection fields untouched', async () => {
-    const h = (current = await seedHarness({ multiDoc: true }))
-    const [cancelResult, selectionResult] = await settleInOrder(
-      h.taskId,
-      () => cancelTask(h.db, h.taskId),
-      () =>
-        setDocumentSelection({
-          db: h.db,
-          nodeRunId: h.reviewRunId,
-          docVersionId: h.docVersionId,
-          selection: 'accepted',
-        }),
-    )
-
-    expect(cancelResult.status).toBe('fulfilled')
-    expectRejectedCode(selectionResult, 'task-terminal')
-    const doc = (
-      await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
-    )[0]!
-    expect(doc.selection).toBe('unselected')
-    expect(doc.selectionStale).toBe(true)
-  })
-
-  test('selection first lands before queued cancel and is not rewritten by the sweep', async () => {
-    const h = (current = await seedHarness({ multiDoc: true }))
-    const [selectionResult, cancelResult] = await settleInOrder(
-      h.taskId,
-      () =>
-        setDocumentSelection({
-          db: h.db,
-          nodeRunId: h.reviewRunId,
-          docVersionId: h.docVersionId,
-          selection: 'accepted',
-        }),
-      () => cancelTask(h.db, h.taskId),
-    )
-
-    expect(selectionResult.status).toBe('fulfilled')
-    expect(cancelResult.status).toBe('fulfilled')
-    const doc = (
-      await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
-    )[0]!
-    expect(doc.selection).toBe('accepted')
-    expect(doc.selectionStale).toBe(false)
-  })
 })
