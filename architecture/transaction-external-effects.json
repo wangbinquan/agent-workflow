@@ -60,8 +60,8 @@
       ],
       "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:477",
-      "line": 477,
+      "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:483",
+      "line": 483,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
       "status": "co-located-risk",
       "symbol": "createAuthPersistence",
@@ -3100,7 +3100,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9088a5dd22036bd28024dae41233fd6738f1b1106aeefa9bd0c84200b447c3a2",
+  "sourceDigest": "sha256:1194ee382f7c1c09eae321fc112ad9969c5520d49b20753c57f2d4b6022bb9b8",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

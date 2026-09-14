@@ -245,7 +245,7 @@ describeEachProvider(
       })
     })
 
-    test('PAT：解析按撤销 / 过期 / 禁用 fail closed，touch 每次写；本地口令写入拒绝 OIDC 托管账号并可激活邀请账号', async () => {
+    test('PAT：解析按撤销 / 过期 / 禁用 fail closed，touch 按窗口写（首次必写）；本地口令写入拒绝 OIDC 托管账号并可激活邀请账号', async () => {
       const auth = createAuthRuntimeFor({ db: harness.db, onCredentialRevoked: () => undefined })
       const admin = await auth.completeBootstrap(
         { username: `admin_${ulid()}`, displayName: 'A', passwordHash: 'h' },

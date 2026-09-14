@@ -10,6 +10,10 @@
 //
 // 同时锁住反向边界：**真错不吞**。非 not-found 类的失败（I/O 损坏等）必须照常抛，
 // 否则一次真实故障会被伪装成「资源不可用」，把用户引向错误的自救动作。
+//
+// RFC-359 AC-6 —— 真正吃库的那两格（根被删 / 根失去可见性）改成**双引擎**。
+// 另外两格是**客户端代理注入**，用的是 bun:sqlite 的同步执行面，只能留在单引擎：
+// 见下方 `describe('materialize 期竞态与真错不吞…')` 的头注。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -18,16 +22,18 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, skills, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { buildIntentDoc } from '@/modules/intent/domain/intentDoc'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291un_000000'
 const OTHER = 'user_other_rfc291un_000000'
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 
 const actor: Actor = {
@@ -83,86 +89,119 @@ async function seedSkill(name: string): Promise<string> {
 
 const mounts = (refs: Array<{ resourceType: 'agent' | 'skill'; resourceId: string }>) => refs
 
-beforeEach(async () => {
-  appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-un-'))
-  db = createInMemoryDb(MIGRATIONS)
+async function seedUsers(): Promise<void> {
   await seedUser(OWNER)
   await seedUser(OTHER)
-})
-afterEach(() => {
+}
+
+function makeAppHome(): void {
+  appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-un-'))
+}
+
+function dropAppHome(): void {
   rmSync(appHome, { recursive: true, force: true })
+}
+
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
+  makeAppHome()
+  await seedUsers()
+}
+
+describeEachProvider('RFC-291 失效挂载跳过而非抛错（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
+  })
+  afterEach(dropAppHome)
+
+  describe('挂载根不可用时跳过而非抛错（AC-9 / AC-10）', () => {
+    test('资源被删除：整轮不抛错，其余挂载与 inventory 照常', async () => {
+      const alive = await seedAgent('alive-agent')
+      const doomed = await seedAgent('doomed-agent')
+
+      // 先建立一个含两个根的清单（handle 稳定用）
+      const first = await buildIntentDump({
+        db,
+        actor,
+        appHome,
+        mounts: mounts([
+          { resourceType: 'agent', resourceId: alive },
+          { resourceType: 'agent', resourceId: doomed },
+        ]),
+      })
+      const doomedHandle = first.manifest.find((e) => e.resourceId === doomed)?.handle
+      expect(doomedHandle).toBeDefined()
+
+      await db.delete(agents).where(eq(agents.id, doomed))
+
+      const after = await buildIntentDump({
+        db,
+        actor,
+        appHome,
+        mounts: mounts([
+          { resourceType: 'agent', resourceId: alive },
+          { resourceType: 'agent', resourceId: doomed },
+        ]),
+        priorManifest: first.manifest,
+        handleWatermark: first.handleWatermark,
+      })
+
+      // 不抛错，且被跳过的根被如实上报（只有 handle + 类型，没有名字）
+      expect(after.unavailableMounts).toEqual([{ handle: doomedHandle!, resourceType: 'agent' }])
+
+      // AC-10：条目保留、handle 不变、root 仍为 true、但没有 detail/fence
+      const entry = after.manifest.find((e) => e.resourceId === doomed)
+      expect(entry?.handle).toBe(doomedHandle!)
+      expect(entry?.root).toBe(true)
+      expect(entry?.detail).toBe(false)
+      expect(entry?.fence).toBeUndefined()
+
+      // 其余挂载照常 dump
+      const aliveEntry = after.manifest.find((e) => e.resourceId === alive)
+      expect(aliveEntry?.detail).toBe(true)
+      expect(aliveEntry?.fence).toBeDefined()
+      expect(after.seedFiles.some((f) => f.path.startsWith('mounted/'))).toBe(true)
+    })
+
+    test('失去可见性（他人 private）：同样跳过、不泄漏名字', async () => {
+      const mine = await seedAgent('mine-agent')
+      const foreign = await seedAgent('foreign-agent', OTHER)
+
+      const dump = await buildIntentDump({
+        db,
+        actor,
+        appHome,
+        mounts: mounts([
+          { resourceType: 'agent', resourceId: mine },
+          { resourceType: 'agent', resourceId: foreign },
+        ]),
+      })
+
+      expect(dump.unavailableMounts).toHaveLength(1)
+      expect(dump.unavailableMounts[0]?.resourceType).toBe('agent')
+      // 不可见资源的名字不得出现在任何产物里
+      const allText = dump.seedFiles.map((f) => f.content).join('\n')
+      expect(allText).not.toContain('foreign-agent')
+      expect(JSON.stringify(dump.unavailableMounts)).not.toContain('foreign-agent')
+    })
+  })
 })
 
-describe('挂载根不可用时跳过而非抛错（AC-9 / AC-10）', () => {
-  test('资源被删除：整轮不抛错，其余挂载与 inventory 照常', async () => {
-    const alive = await seedAgent('alive-agent')
-    const doomed = await seedAgent('doomed-agent')
-
-    // 先建立一个含两个根的清单（handle 稳定用）
-    const first = await buildIntentDump({
-      db,
-      actor,
-      appHome,
-      mounts: mounts([
-        { resourceType: 'agent', resourceId: alive },
-        { resourceType: 'agent', resourceId: doomed },
-      ]),
-    })
-    const doomedHandle = first.manifest.find((e) => e.resourceId === doomed)?.handle
-    expect(doomedHandle).toBeDefined()
-
-    await db.delete(agents).where(eq(agents.id, doomed))
-
-    const after = await buildIntentDump({
-      db,
-      actor,
-      appHome,
-      mounts: mounts([
-        { resourceType: 'agent', resourceId: alive },
-        { resourceType: 'agent', resourceId: doomed },
-      ]),
-      priorManifest: first.manifest,
-      handleWatermark: first.handleWatermark,
-    })
-
-    // 不抛错，且被跳过的根被如实上报（只有 handle + 类型，没有名字）
-    expect(after.unavailableMounts).toEqual([{ handle: doomedHandle!, resourceType: 'agent' }])
-
-    // AC-10：条目保留、handle 不变、root 仍为 true、但没有 detail/fence
-    const entry = after.manifest.find((e) => e.resourceId === doomed)
-    expect(entry?.handle).toBe(doomedHandle!)
-    expect(entry?.root).toBe(true)
-    expect(entry?.detail).toBe(false)
-    expect(entry?.fence).toBeUndefined()
-
-    // 其余挂载照常 dump
-    const aliveEntry = after.manifest.find((e) => e.resourceId === alive)
-    expect(aliveEntry?.detail).toBe(true)
-    expect(aliveEntry?.fence).toBeDefined()
-    expect(after.seedFiles.some((f) => f.path.startsWith('mounted/'))).toBe(true)
+// RFC-359 AC-6 —— 这两格**留在单引擎**，不是遗漏：它们靠一个 `Proxy` 包住 DB 客户端做故障
+// 注入，而注入点用的是 bun:sqlite 的**同步执行面**——`select` 拦截器是同步函数，第一格要在
+// 它里面当场把行删掉（PostgreSQL 上 `.run()` 只会返回一个没人 await 的 Promise，删除与随后
+// 的 materialize 读之间没有任何定序，判据会退化成掷骰子）；第二格钉的是 bun:sqlite 上
+// 「第 9 次 select」这个序数，换引擎后它指向的阶段不再是 materialize。
+// 被注入的**被测代码**本身是中立的，上面双引擎那两格已经在两个引擎上各跑过一遍。
+describe('materialize 期竞态与真错不吞（客户端代理注入，单引擎）', () => {
+  let sqliteDb: DbClient
+  beforeEach(async () => {
+    sqliteDb = createInMemoryDb(MIGRATIONS)
+    db = sqliteDb
+    makeAppHome()
+    await seedUsers()
   })
-
-  test('失去可见性（他人 private）：同样跳过、不泄漏名字', async () => {
-    const mine = await seedAgent('mine-agent')
-    const foreign = await seedAgent('foreign-agent', OTHER)
-
-    const dump = await buildIntentDump({
-      db,
-      actor,
-      appHome,
-      mounts: mounts([
-        { resourceType: 'agent', resourceId: mine },
-        { resourceType: 'agent', resourceId: foreign },
-      ]),
-    })
-
-    expect(dump.unavailableMounts).toHaveLength(1)
-    expect(dump.unavailableMounts[0]?.resourceType).toBe('agent')
-    // 不可见资源的名字不得出现在任何产物里
-    const allText = dump.seedFiles.map((f) => f.content).join('\n')
-    expect(allText).not.toContain('foreign-agent')
-    expect(JSON.stringify(dump.unavailableMounts)).not.toContain('foreign-agent')
-  })
+  afterEach(dropAppHome)
 
   test('materialize 期竞态：catalog 加载后资源才消失，仍不炸（设计门 P2-a / 路 1 F1）', async () => {
     // 这是初版修法覆盖不到的那条路径：根检查用的是内存快照，skill 的真正读取
@@ -170,7 +209,7 @@ describe('挂载根不可用时跳过而非抛错（AC-9 / AC-10）', () => {
     const skillId = await seedSkill('doomed-skill')
     let catalogLoaded = false
     let deleted = false
-    const proxy = new Proxy(db, {
+    const proxy = new Proxy(sqliteDb, {
       get(target, prop, receiver) {
         const value = Reflect.get(target, prop, receiver) as unknown
         if (prop !== 'select' || typeof value !== 'function') return value
@@ -178,7 +217,7 @@ describe('挂载根不可用时跳过而非抛错（AC-9 / AC-10）', () => {
           // 第一次 select 之后视作 catalog 已载入；随后立刻删除目标行。
           if (catalogLoaded && !deleted) {
             deleted = true
-            db.delete(skills).where(eq(skills.id, skillId)).run()
+            sqliteDb.delete(skills).where(eq(skills.id, skillId)).run()
           }
           catalogLoaded = true
           return (value as (...a: unknown[]) => unknown).apply(target, args)
@@ -201,7 +240,7 @@ describe('挂载根不可用时跳过而非抛错（AC-9 / AC-10）', () => {
     const skillId = await seedSkill('io-fault-skill')
     const boom = new Error('simulated disk failure')
     let calls = 0
-    const proxy = new Proxy(db, {
+    const proxy = new Proxy(sqliteDb, {
       get(target, prop, receiver) {
         const value = Reflect.get(target, prop, receiver) as unknown
         if (prop !== 'select' || typeof value !== 'function') return value

@@ -1,10 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
 import {
   mcps,
   mcpRuntimeTestSessions,
@@ -17,12 +16,12 @@ import { McpRuntimeTestService } from '../src/services/mcpRuntimeTest'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
 import { composeMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   composeMcpServiceBindingForTest,
   getMcpByIdForTest as getMcpById,
 } from './helpers/mcpServiceBinding'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_RUNTIME = resolve(import.meta.dir, 'fixtures', 'rfc238', 'mock-claude-runtime.js')
 const tempDirs: string[] = []
 
@@ -60,7 +59,10 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-describe('RFC-238 real process multi-turn fixture', () => {
+// RFC-359 AC-6 —— 这条端到端夹具此前钉死在 bun:sqlite（`createInMemoryDb`）。MCP 运行时会话的
+// 持久化（`composeMcpRuntimeTestProvider`）、运行时注册表与 MCP 目录装配在 RFC-359 之后都是
+// 「一份实现两个 provider 共用」，所以真进程多轮这条判据在两个引擎上各跑一遍。
+describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness) => {
   // RFC-254 T31: POSIX-form-mock E2E. The mock runtime (`mock-claude-runtime.js`)
   // is copied to an EXTENSIONLESS `bin/mock-claude` and relies on a POSIX
   // `#!`-style launch; win32 cannot spawn an extensionless JS file, so turn 1
@@ -171,32 +173,28 @@ describe('RFC-238 real process multi-turn fixture', () => {
       // environment inheritance keeps the mock's native session across turns.
       process.env.CLAUDE_CONFIG_DIR = join(root, 'operator-claude-config')
       try {
-        const db = createInMemoryDb(MIGRATIONS)
-        db.insert(runtimes)
-          .values({
-            id: 'runtime-claude-fixture',
-            name: 'claude-fixture',
-            protocol: 'claude-code',
-            binaryPath: runtimeBinary,
-            model: 'mock-model',
-            enabled: true,
-          })
-          .run()
-        db.insert(mcps)
-          .values({
-            id: 'mcp-fixture',
-            name: 'stateful_fixture',
-            description: '',
-            type: 'remote',
-            config: JSON.stringify({
-              url: `http://127.0.0.1:${server.port}/mcp`,
-              headers: { Authorization: 'Bearer rfc238-fixture-secret' },
-            }),
-            enabled: true,
-            ownerUserId: SYSTEM_USER_ID,
-            visibility: 'private',
-          })
-          .run()
+        const db = harness.db
+        await db.insert(runtimes).values({
+          id: 'runtime-claude-fixture',
+          name: 'claude-fixture',
+          protocol: 'claude-code',
+          binaryPath: runtimeBinary,
+          model: 'mock-model',
+          enabled: true,
+        })
+        await db.insert(mcps).values({
+          id: 'mcp-fixture',
+          name: 'stateful_fixture',
+          description: '',
+          type: 'remote',
+          config: JSON.stringify({
+            url: `http://127.0.0.1:${server.port}/mcp`,
+            headers: { Authorization: 'Bearer rfc238-fixture-secret' },
+          }),
+          enabled: true,
+          ownerUserId: SYSTEM_USER_ID,
+          visibility: 'private',
+        })
         const mcpBinding = composeMcpServiceBindingForTest(db, { actor })
         const mcp = await getMcpById(mcpBinding, 'mcp-fixture')
         if (mcp === null) throw new Error('fixture MCP missing')
@@ -219,11 +217,13 @@ describe('RFC-238 real process multi-turn fixture', () => {
         await waitFor(
           async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
         )
-        const nativeSessionId = db
-          .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-          .get()?.id
+        const nativeSessionId = (
+          await db
+            .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
+            .get()
+        )?.id
         expect(nativeSessionId).toMatch(
           /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
         )
@@ -242,11 +242,13 @@ describe('RFC-238 real process multi-turn fixture', () => {
         expect(session.status).toBe('active')
         expect(session.turns.map((turn) => turn.status)).toEqual(['succeeded', 'succeeded'])
         expect(
-          db
-            .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-            .from(mcpRuntimeTestSessions)
-            .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-            .get()?.id,
+          (
+            await db
+              .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+              .from(mcpRuntimeTestSessions)
+              .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
+              .get()
+          )?.id,
         ).toBe(nativeSessionId)
         expect(requests.map((request) => request.method)).toEqual([
           'initialize',
@@ -276,7 +278,7 @@ describe('RFC-238 real process multi-turn fixture', () => {
         expect(rendered).toContain('mcp__stateful_fixture__stateful_increment')
         expect(rendered).toContain('counter=1')
         expect(rendered).toContain('counter=2')
-        const turnReceipts = db
+        const turnReceipts = await db
           .select({
             binary: mcpRuntimeTestTurns.spawnBinaryPath,
           })
@@ -287,8 +289,8 @@ describe('RFC-238 real process multi-turn fixture', () => {
         for (const receipt of turnReceipts) {
           expect(receipt.binary).toBe(runtimeBinary)
         }
-        expect(db.select().from(tasks).all()).toHaveLength(0)
-        expect(db.select().from(nodeRuns).all()).toHaveLength(0)
+        expect(await db.select().from(tasks).all()).toHaveLength(0)
+        expect(await db.select().from(nodeRuns).all()).toHaveLength(0)
 
         const ended = await service.end(actor, mcp.id, session.id)
         expect(ended.session.status).toBe('ended')

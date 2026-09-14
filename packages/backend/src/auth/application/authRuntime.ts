@@ -28,7 +28,7 @@ import type {
 } from './authPersistence'
 
 export const SESSION_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000
-export const SESSION_LAST_USED_WRITE_INTERVAL_MS = 1_000
+export const AUTH_LAST_USED_WRITE_INTERVAL_MS = 1_000
 
 export interface SessionView {
   readonly id: string
@@ -258,7 +258,7 @@ export function createAuthRuntime(input: {
       hash,
       now,
       touch,
-      touchIntervalMs: SESSION_LAST_USED_WRITE_INTERVAL_MS,
+      touchIntervalMs: AUTH_LAST_USED_WRITE_INTERVAL_MS,
     })
     return active === null ? null : resolvedSession(active, now, touch)
   }
@@ -271,6 +271,7 @@ export function createAuthRuntime(input: {
       hash,
       now,
       touch: (opts.touch ?? true) && sourceWritable(),
+      touchIntervalMs: AUTH_LAST_USED_WRITE_INTERVAL_MS,
     })
     return active === null ? null : resolvedPat(active)
   }

@@ -421,7 +421,13 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
       ) {
         return null
       }
-      if (input.touch) {
+      // 与会话侧同一条窗口（`AUTH_LAST_USED_WRITE_INTERVAL_MS`）。`last_used_at` 可空，
+      // 空值必须绕开窗口直接写——否则 `now - null` 得 `NaN`，比较恒假，从未使用过的 PAT
+      // 会永远记不下首次使用。
+      if (
+        input.touch &&
+        (row.pat.lastUsedAt === null || input.now - row.pat.lastUsedAt >= input.touchIntervalMs)
+      ) {
         await db
           .update(userPats)
           .set({ lastUsedAt: input.now })

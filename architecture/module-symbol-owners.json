@@ -303,6 +303,18 @@
       "currentLayer": "auth",
       "exported": true,
       "file": "packages/backend/src/auth/application/authRuntime.ts",
+      "id": "owner:packages/backend/src/auth/application/authRuntime.ts#AUTH_LAST_USED_WRITE_INTERVAL_MS",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "AUTH_LAST_USED_WRITE_INTERVAL_MS",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/application/authRuntime.ts",
       "id": "owner:packages/backend/src/auth/application/authRuntime.ts#AuthRuntime",
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
@@ -535,18 +547,6 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "SESSION_DEFAULT_TTL_MS",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "auth",
-      "exported": true,
-      "file": "packages/backend/src/auth/application/authRuntime.ts",
-      "id": "owner:packages/backend/src/auth/application/authRuntime.ts#SESSION_LAST_USED_WRITE_INTERVAL_MS",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "SESSION_LAST_USED_WRITE_INTERVAL_MS",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -297521,5 +297521,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9088a5dd22036bd28024dae41233fd6738f1b1106aeefa9bd0c84200b447c3a2"
+  "sourceDigest": "sha256:1194ee382f7c1c09eae321fc112ad9969c5520d49b20753c57f2d4b6022bb9b8"
 }

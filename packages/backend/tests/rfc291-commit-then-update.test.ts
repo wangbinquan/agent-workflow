@@ -14,6 +14,10 @@
 // 本文件走真实链路 commit → buildIntentDump → update，覆盖**六类资源各一条**
 // （设计门 P2-e：初版只测 agent，其余五类的 dump / fence / 接线坏掉仍会全绿）。
 // 末尾的负向锁保证守卫本身没有被这个 RFC 改松——两处必须**各断言一次**（AC-17）。
+//
+// RFC-359 AC-6 —— 改成**双引擎**。这条链路（apply 大事务 → buildIntentDump → 两道守卫）
+// 全程吃库；apply 引擎与资源目录合一成中立实现之后，同一份 body 在 SQLite 与 PostgreSQL
+// 上各跑一遍。末尾那条纯内存的负向锁不需要库，但留在同一个 describe 里跑两遍无害。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
@@ -28,7 +32,7 @@ import {
   WORKFLOW_SCHEMA_VERSION,
   type IntentResourceType,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
@@ -45,11 +49,11 @@ import {
   resolveIntentBundle,
   validateDraftChangeset,
 } from '@/modules/intent/application/resolveChangeset'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291e2e_00000'
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 
 const actor: Actor = {
@@ -63,33 +67,35 @@ function deps(over: Partial<ApplyIntentDeps> = {}): ApplyIntentDeps {
   return { ...resolved, ...intentApplyResourceBinding(db, resolved.actor) }
 }
 
-function installDraft(
+async function installDraft(
   sessionId: string,
   changeset: unknown,
   manifest: IntentContextManifest,
-): { draftRevision: number; draftHash: string } {
+): Promise<{ draftRevision: number; draftHash: string }> {
   const parsed = parseIntentChangeset(JSON.stringify(changeset))
   if (!parsed.ok) throw new Error(parsed.errors.join('; '))
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  const session = db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).get()
-  db.insert(intentDrafts)
-    .values({
-      id: draftId,
-      sessionId,
-      revision: 1,
-      changesetJson: canonical,
-      validationJson: '{"errors":[],"credentialFindings":[]}',
-      draftHash,
-      contextRevision: session?.contextRevision ?? 0,
-      createdAt: Date.now(),
-    })
-    .run()
-  db.update(intentSessions)
+  const session = await db
+    .select()
+    .from(intentSessions)
+    .where(eq(intentSessions.id, sessionId))
+    .get()
+  await db.insert(intentDrafts).values({
+    id: draftId,
+    sessionId,
+    revision: 1,
+    changesetJson: canonical,
+    validationJson: '{"errors":[],"credentialFindings":[]}',
+    draftHash,
+    contextRevision: session?.contextRevision ?? 0,
+    createdAt: Date.now(),
+  })
+  await db
+    .update(intentSessions)
     .set({ currentDraftId: draftId, contextManifestJson: JSON.stringify(manifest) })
     .where(eq(intentSessions.id, sessionId))
-    .run()
   return { draftRevision: 1, draftHash }
 }
 
@@ -113,7 +119,7 @@ function filePluginFixture(): string {
 
 /** Re-run the dump exactly like the turn engine does, from the session row. */
 async function dumpFromSession(sessionId: string) {
-  const row = db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).get()
+  const row = await db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).get()
   const manifest = JSON.parse(row?.contextManifestJson ?? '[]') as IntentContextManifest
   return buildIntentDump({
     db,
@@ -127,9 +133,9 @@ async function dumpFromSession(sessionId: string) {
   })
 }
 
-beforeEach(async () => {
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
   appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e2e-'))
-  db = createInMemoryDb(MIGRATIONS)
   await db.insert(users).values({
     id: OWNER,
     username: 'owner',
@@ -139,7 +145,7 @@ beforeEach(async () => {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   } as typeof users.$inferInsert)
-})
+}
 afterEach(() => {
   rmSync(appHome, { recursive: true, force: true })
 })
@@ -305,137 +311,143 @@ function updateOpFor(
   }
 }
 
-describe('提交入库后，创建物在下一轮可直接修改（AC-2，六类各一条）', () => {
-  test('六类 create 提交 → dump 后全部 detail:true 且带该类型的 fence', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'build a pipeline' })
-    const draft = installDraft(session.id, creationBundle(filePluginFixture()), [])
-    const receipt = await applyIntentChangeset(deps(), {
-      sessionId: session.id,
-      clientMutationId: ulid(),
-      ...draft,
-      decisions: PLUGIN_SPEC_WAIVER,
-    })
-    expect(receipt.applied).toHaveLength(6)
-
-    const dump = await dumpFromSession(session.id)
-
-    for (const applied of receipt.applied) {
-      const entry = dump.manifest.find((e) => e.resourceId === applied.resourceId)
-      expect(entry, `${applied.resourceType} missing from manifest`).toBeDefined()
-      // 缺陷形态就是这一条为 false —— 那时它只在 inventory 里
-      expect(entry?.detail, `${applied.resourceType} not dumped in detail`).toBe(true)
-      expect(entry?.root, `${applied.resourceType} not a mount root`).toBe(true)
-      // fence 是 update 的前提；每类的 fence 形状各不相同，缺一类就说明该类接线坏了
-      // 回执里的 resourceType 是 wire 层 string；fence.kind 是同一取值域的联合类型
-      // `IntentResourceType`, not `AclResourceType`: a fence kind is one of the
-      // six types a package/intent op can carry, and RFC-304's capability
-      // templates are ACL resources that are neither.
-      expect(entry?.fence?.kind, `${applied.resourceType} fence missing`).toBe(
-        applied.resourceType as IntentResourceType,
-      )
-      // 文档真的进了 mounted/
-      expect(
-        dump.seedFiles.some((f) =>
-          f.path.startsWith(`mounted/${entry?.handle.replace(/#/g, '.')}`),
-        ),
-        `${applied.resourceType} has no mounted/ document`,
-      ).toBe(true)
-    }
+describeEachProvider('RFC-291 提交入库后可继续修改（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
   })
 
-  test.each([
-    ['agent', 'op-4'],
-    ['skill', 'op-1'],
-    ['mcp', 'op-2'],
-    ['plugin', 'op-3'],
-    ['workflow', 'op-5'],
-    ['workgroup', 'op-6'],
-  ] as const)('%s：提交后针对它的 update 通过两道守卫', async (type, opId) => {
-    const { session } = await createIntentSession(db, actor, { message: 'build a pipeline' })
-    const draft = installDraft(session.id, creationBundle(filePluginFixture()), [])
-    const receipt = await applyIntentChangeset(deps(), {
-      sessionId: session.id,
-      clientMutationId: ulid(),
-      ...draft,
-      decisions: PLUGIN_SPEC_WAIVER,
-    })
-    const dump = await dumpFromSession(session.id)
+  describe('提交入库后，创建物在下一轮可直接修改（AC-2，六类各一条）', () => {
+    test('六类 create 提交 → dump 后全部 detail:true 且带该类型的 fence', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'build a pipeline' })
+      const draft = await installDraft(session.id, creationBundle(filePluginFixture()), [])
+      const receipt = await applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: PLUGIN_SPEC_WAIVER,
+      })
+      expect(receipt.applied).toHaveLength(6)
 
-    const applied = receipt.applied.find((a) => a.opId === opId)
-    expect(applied).toBeDefined()
-    const entry = dump.manifest.find((e) => e.resourceId === applied?.resourceId)
-    expect(entry).toBeDefined()
+      const dump = await dumpFromSession(session.id)
 
-    const changeset = parseIntentChangeset(
-      JSON.stringify({
-        $schema_version: 1,
-        ops: [
-          updateOpFor(
-            type,
-            entry?.handle ?? '',
-            applied?.name ?? 'x',
-            // workgroup 的 leader 必须是 agent 成员：指向本批创建的那个 agent
-            dump.manifest.find(
-              (e) =>
-                e.resourceType === 'agent' &&
-                e.resourceId === receipt.applied.find((a) => a.opId === 'op-4')?.resourceId,
-            )?.handle ?? 'res#agent#1',
+      for (const applied of receipt.applied) {
+        const entry = dump.manifest.find((e) => e.resourceId === applied.resourceId)
+        expect(entry, `${applied.resourceType} missing from manifest`).toBeDefined()
+        // 缺陷形态就是这一条为 false —— 那时它只在 inventory 里
+        expect(entry?.detail, `${applied.resourceType} not dumped in detail`).toBe(true)
+        expect(entry?.root, `${applied.resourceType} not a mount root`).toBe(true)
+        // fence 是 update 的前提；每类的 fence 形状各不相同，缺一类就说明该类接线坏了
+        // 回执里的 resourceType 是 wire 层 string；fence.kind 是同一取值域的联合类型
+        // `IntentResourceType`, not `AclResourceType`: a fence kind is one of the
+        // six types a package/intent op can carry, and RFC-304's capability
+        // templates are ACL resources that are neither.
+        expect(entry?.fence?.kind, `${applied.resourceType} fence missing`).toBe(
+          applied.resourceType as IntentResourceType,
+        )
+        // 文档真的进了 mounted/
+        expect(
+          dump.seedFiles.some((f) =>
+            f.path.startsWith(`mounted/${entry?.handle.replace(/#/g, '.')}`),
           ),
-        ],
-      }),
-    )
-    if (!changeset.ok) throw new Error(changeset.errors.join('; '))
+          `${applied.resourceType} has no mounted/ document`,
+        ).toBe(true)
+      }
+    })
 
-    // 守卫 ①：草稿校验不得再报 inventory-only
-    const report = validateDraftChangeset(dump.manifest, changeset.changeset)
-    expect(report.errors).toEqual([])
+    test.each([
+      ['agent', 'op-4'],
+      ['skill', 'op-1'],
+      ['mcp', 'op-2'],
+      ['plugin', 'op-3'],
+      ['workflow', 'op-5'],
+      ['workgroup', 'op-6'],
+    ] as const)('%s：提交后针对它的 update 通过两道守卫', async (type, opId) => {
+      const { session } = await createIntentSession(db, actor, { message: 'build a pipeline' })
+      const draft = await installDraft(session.id, creationBundle(filePluginFixture()), [])
+      const receipt = await applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: PLUGIN_SPEC_WAIVER,
+      })
+      const dump = await dumpFromSession(session.id)
 
-    // 守卫 ②：resolve 不得再抛 intent-target-not-mounted
-    expect(() =>
-      resolveIntentBundle({
-        manifest: dump.manifest,
-        changeset: changeset.changeset,
-        decisions: [],
-        occupiedNames: new Map(),
-      }),
-    ).not.toThrow()
+      const applied = receipt.applied.find((a) => a.opId === opId)
+      expect(applied).toBeDefined()
+      const entry = dump.manifest.find((e) => e.resourceId === applied?.resourceId)
+      expect(entry).toBeDefined()
+
+      const changeset = parseIntentChangeset(
+        JSON.stringify({
+          $schema_version: 1,
+          ops: [
+            updateOpFor(
+              type,
+              entry?.handle ?? '',
+              applied?.name ?? 'x',
+              // workgroup 的 leader 必须是 agent 成员：指向本批创建的那个 agent
+              dump.manifest.find(
+                (e) =>
+                  e.resourceType === 'agent' &&
+                  e.resourceId === receipt.applied.find((a) => a.opId === 'op-4')?.resourceId,
+              )?.handle ?? 'res#agent#1',
+            ),
+          ],
+        }),
+      )
+      if (!changeset.ok) throw new Error(changeset.errors.join('; '))
+
+      // 守卫 ①：草稿校验不得再报 inventory-only
+      const report = validateDraftChangeset(dump.manifest, changeset.changeset)
+      expect(report.errors).toEqual([])
+
+      // 守卫 ②：resolve 不得再抛 intent-target-not-mounted
+      expect(() =>
+        resolveIntentBundle({
+          manifest: dump.manifest,
+          changeset: changeset.changeset,
+          decisions: [],
+          occupiedNames: new Map(),
+        }),
+      ).not.toThrow()
+    })
   })
-})
 
-describe('负向锁：未挂载目标仍被两道守卫各自拒绝（AC-17）', () => {
-  test('inventory-only 目标：草稿校验报 inventory-only，resolve 抛 intent-target-not-mounted', () => {
-    // 与上面同形的 update，但目标条目 detail:false（即 RFC-291 之前新建资源的处境）。
-    const manifest: IntentContextManifest = [
-      {
-        handle: 'res#agent#1',
-        resourceType: 'agent',
-        resourceId: ulid(),
-        root: false,
-        detail: false,
-      },
-    ]
-    const changeset = parseIntentChangeset(
-      JSON.stringify({
-        $schema_version: 1,
-        ops: [updateOpFor('agent', 'res#agent#1', 'auditor')],
-      }),
-    )
-    if (!changeset.ok) throw new Error(changeset.errors.join('; '))
+  describe('负向锁：未挂载目标仍被两道守卫各自拒绝（AC-17）', () => {
+    test('inventory-only 目标：草稿校验报 inventory-only，resolve 抛 intent-target-not-mounted', () => {
+      // 与上面同形的 update，但目标条目 detail:false（即 RFC-291 之前新建资源的处境）。
+      const manifest: IntentContextManifest = [
+        {
+          handle: 'res#agent#1',
+          resourceType: 'agent',
+          resourceId: ulid(),
+          root: false,
+          detail: false,
+        },
+      ]
+      const changeset = parseIntentChangeset(
+        JSON.stringify({
+          $schema_version: 1,
+          ops: [updateOpFor('agent', 'res#agent#1', 'auditor')],
+        }),
+      )
+      if (!changeset.ok) throw new Error(changeset.errors.join('; '))
 
-    // 守卫 ①：草稿校验
-    const report = validateDraftChangeset(manifest, changeset.changeset)
-    expect(report.errors.join(' ')).toContain('intent-target-not-mounted')
+      // 守卫 ①：草稿校验
+      const report = validateDraftChangeset(manifest, changeset.changeset)
+      expect(report.errors.join(' ')).toContain('intent-target-not-mounted')
 
-    // 守卫 ②：resolve。它把草稿校验作为前置，所以外层看到的是 blocking-errors；
-    // resolveChangeset.ts 里针对 `!entry.detail` 的 intent-target-not-mounted
-    // 是**第二道**（前置被绕过时才轮到它）。两道都必须拒绝这个输入。
-    expect(() =>
-      resolveIntentBundle({
-        manifest,
-        changeset: changeset.changeset,
-        decisions: [],
-        occupiedNames: new Map(),
-      }),
-    ).toThrow()
+      // 守卫 ②：resolve。它把草稿校验作为前置，所以外层看到的是 blocking-errors；
+      // resolveChangeset.ts 里针对 `!entry.detail` 的 intent-target-not-mounted
+      // 是**第二道**（前置被绕过时才轮到它）。两道都必须拒绝这个输入。
+      expect(() =>
+        resolveIntentBundle({
+          manifest,
+          changeset: changeset.changeset,
+          decisions: [],
+          occupiedNames: new Map(),
+        }),
+      ).toThrow()
+    })
   })
 })

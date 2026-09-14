@@ -10216,3 +10216,70 @@ AC-6 的迁移者看到 `Sqlite` 前缀的第一反应是「这条路被钉死�
 看不出这件事（§5eg 第②类的另一种形态）。`worktree-files-proxy` 甚至有**五个**同名 describe
 注册点（3 provider + 2 native），合并成一个之后 13 格 → 26 格而总耗时不变——每个注册点都要
 付一次 `CREATE DATABASE` + 全量迁移的开销。
+
+## §5ej —— AC-6 第二波并行（4 agent × 4 文件）与 AC-11 的真正根因
+
+### AC-6 第二波结果
+
+| 结果 | 文件 |
+| --- | --- |
+| 迁移完成（9 文件 / 15 调用点） | `rfc257-webhook-ingress` `rfc294-background-worker-boundary` `terminal-maintenance-watermark-coverage` `rfc165-workspace-gc` `rfc307-demo-seed` `rfc238-mcp-runtime-test-real-e2e` `rfc271-export-closure-authz` `rfc291-commit-auto-mount` `rfc291-commit-then-update` |
+| 部分迁移（其余判据有据留单引擎） | `rfc291-closure-call-edges`（AC-14 对拍锁的是 `freezeCallClosure(db: DbClient)` 这个**具体函数**，换成中立替身等于换掉被测物）；`rfc291-unavailable-mount`（两条是 bun:sqlite **同步** client Proxy 故障注入，PG 上 `.run()` 不定序，判据会退化成掷骰子） |
+| 本来就已双引擎 | `rfc311-task-page-fastpath` `rfc189-wg-round` `rfc359-w7-catalog-composition-roots` |
+| 卡生产签名 | `rfc269-webhook-code-host-context-e2e` ⇒ `buildStartTaskDeps(db: LegacySqliteTaskDatabase)` / `startExecution(db: StartTaskDeps['db'])` |
+| 判不适用 | `rfc349-websocket-provider`——同 §5ei 的 `rfc349-execution-peripheral-provider`，被测物是两个 provider **各自的 client**，真引擎等价性已由 `rfc359-w7-realtime-store-conformance` 双引擎覆盖 |
+
+账本：`TEST_ENGINE_HARDCODING_DEBT` 378 → 369，`OPEN_MIGRATION_DEBT` 72 → 63。
+
+**这一波抓到一条真的假绿**：`rfc271-export-closure-authz` 的「导出中途注入写」Proxy 在
+PostgreSQL 上**从来没触发过**——读口在 `databaseSessionFor(db).serializable()` 里发查询，
+SQLite 的 `createSqliteDatabaseSession` 用 `const tx = db`（Proxy 顺带进事务），PG 的
+`db.transaction()` 交回的是**另一个对象**，钩子被整个绕开；而 6 处注入写又都是 `.run()`
+（PG 上是没 await 的 Promise）。四条「必须成功」的用例本会在 PG 上静静变绿。修法是拦
+`transaction` 并重包 tx 句柄 + 让被拦读的 builder 的 `then` 先 await 那笔写，并补一个
+`fired()` 计数器把「seam 真的触发了」本身变成判据。
+
+### AC-11：恒定 +6 的根因，以及它不在 SQL 里
+
+`scale=full` 实测（run `34816698143`，`948d9b5fb`）的验收判据是
+`scripts/perf-compare.ts:347` 的 `postgresqlNoSlower: right.p95 <= left.p95`——**零容差**，
+九个端点逐个都要 PG 不慢于进程内 SQLite。九格里四格红：`repos-first`、`reviews-pending`、
+`clarify-pending`、`overview`。
+
+按端点数语句（口径同 `perf-query-profile.ts`）后，根因与「某条 SQL 慢」无关：
+
+| 端点 | SQLite | PostgreSQL（修前） | PostgreSQL（修后） |
+| --- | --- | --- | --- |
+| tasks-first | 17 | 22 | 18 |
+| tasks-second | 8 | 14 | 10 |
+| tasks-running | 17 | 23 | 19 |
+| repos-first | 10 | 16 | 12 |
+| repos-referenced | 8 | 14 | 10 |
+| reviews-pending | 5 | 11 | 7 |
+| clarify-pending | 5 | 11 | 7 |
+| workgroup-pending | 7 | 14 | 10 |
+| overview | 14 | 20 | 16 |
+
+PG 在**每个**端点上恒定多 6 条，来源钉死：`postgresqlDatabaseClient.ts` 的 `withWriteFence`
+给每笔**非事务写**都要 `BEGIN` + 世代围栏 `SELECT` + 写 + `COMMIT` 四个往返，而每个认证请求
+固定带两笔这样的写——`token_audit` 插入与 PAT 的 `last_used_at` 更新。2 × 3 = 6。
+于是 `reviews-pending` 这种只读端点 11 条语句里 **8 条是认证记账**，真业务查询只有 1 条。
+
+**其中一笔是可以直接摘掉的缺陷**：`d275618a5`（2026-08-28，"bound session activity writes"）
+给**会话**解析加了 `SESSION_LAST_USED_WRITE_INTERVAL_MS` 窗口，那一刀**只改了会话**，
+PAT 侧没跟上——同一个文件 `auth/infrastructure/authPersistence.ts` 里两条同构路径就此分叉：
+`resolveSessionByHash` 带窗口，`resolvePatByHash` 每请求无条件写。性能语料正是用 PAT 认证的，
+所以九个端点全都在付这笔钱。
+
+修法是把 PAT 纳入同一条窗口（常量随之改名 `AUTH_LAST_USED_WRITE_INTERVAL_MS`，它不再只管会话），
+**两个引擎同时受益**：PG 每端点 −4 条、SQLite −1 条。
+
+**一个必须单独放行的空值**：PAT 的 `last_used_at` 可空（`schema.ts` 无 `.notNull()`，会话侧不是）。
+照抄会话侧的 `now - lastUsedAt >= interval` 会算出 `NaN`，`NaN >= 1000` 恒假，
+**从未使用过的 PAT 将永远记不下首次使用**。`rfc359-ac11-pat-touch-throttle` 的第 ① 条就锁这个。
+
+**剩下的结构性事实**（未再动刀，留给后续裁决）：另一笔 `token_audit` 插入仍是每请求一笔
+写事务（4 个往返）。而即便把它也摘掉，`reviews-pending` 这类端点的 PG 绝对值仍难压到
+进程内 SQLite 的 1.5–1.7ms 之下——库里真正干的活不到 0.02ms，差额全是进程外引擎的往返本身。
+`right.p95 <= left.p95` 这条零容差判据对这类**微端点**是否是正确的验收口径，需要单独裁决；
+真实负载的三个重端点（`tasks-first` 137→75ms、`tasks-running` 86→47ms）PG 是**快约一倍**的。

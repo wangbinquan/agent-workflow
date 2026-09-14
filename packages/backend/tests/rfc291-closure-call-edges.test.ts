@@ -253,9 +253,7 @@ registerProviderCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-
     expect(dump.manifest.find((e) => e.resourceId === b)?.detail).toBe(true)
     expect(dump.manifest.filter((e) => e.resourceId === a)).toHaveLength(1)
   })
-})
 
-registerNativeCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13）', () => {
   test('call 目标不存在 → 计入 hiddenDependencies，不抛错、不泄漏名字（AC-15）', async () => {
     const parent = await seedWorkflow('parent-flow', defOf([callWorkflowNode('c1', 'ghost-flow')]))
     const dump = await dumpMounting('workflow', parent)
@@ -265,6 +263,12 @@ registerNativeCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13
   })
 })
 
+// RFC-359 AC-6 —— 这一格**留在单引擎**，不是遗漏：对拍的 freeze 侧是
+// `services/execution/closure.ts` 的 `freezeCallClosure(db: DbClient, …)`
+// （正身 `modules/task-execution/infrastructure/legacyCallClosure.ts:267`），形参钉死在
+// bun:sqlite 的同步客户端上——它就是 RFC-349 留下的 legacy SQLite 特征行走本身。
+// 换成中立的 `createTaskExecutionResourceBinding(...).freezeCallClosure` 等于换掉被测函数，
+// 那不是迁移而是改判据，所以这里照旧只在 SQLite 上对拍。
 registerNativeCases('freeze / dump 同解（AC-14，同一份 DB 夹具对拍）', () => {
   test('同名两行 + id 缓存指向较新那个 → 两侧选出同一行', async () => {
     // 名字不唯一是合法状态；缓存记录了用户在下拉里的选择。
@@ -344,7 +348,9 @@ registerProviderCases('复杂度与收口（AC-16 / 设计门 P2-c）', (useFixt
   })
 })
 
-registerNativeCases('复杂度与收口（AC-16 / 设计门 P2-c）', () => {
+// 源码层文本断言，一行库都不读——此前它挂在 `registerNativeCases` 上白建一个内存库
+// （RFC-359 AC-6 的 idle-fixture：跑两遍不多一分信息，建库反而是纯开销）。
+describe('复杂度与收口（AC-16 / 设计门 P2-c）', () => {
   test('闭包展开不再手写 agent 节点 walker（AC-16 口径已收窄）', () => {
     const src = readFileSync(
       join(import.meta.dir, '..', 'src', 'modules', 'intent', 'application', 'dumpBuilder.ts'),

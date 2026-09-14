@@ -27,7 +27,6 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '@/db/client'
 import { taskExecutionLineageOperationRecords, tasks } from '@/db/schema'
 import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem'
@@ -43,34 +42,34 @@ import {
 import { createVerifiedStopProof } from '@/modules/task-execution/domain/ownership'
 import { retainedWatermarkCoversSettledEffect } from '@/modules/task-execution/domain/terminalMaintenance'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
 ]
 
-function seedTask(database: DbClient, taskId: string, worktreePath: string): void {
-  database
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: taskId,
-      workflowId: 'workflow-watermark-coverage',
-      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      workflowVersion: 1,
-      repoPath: '/tmp/repo',
-      worktreePath,
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'pending',
-      inputs: '{}',
-      spaceKind: 'scratch',
-      startedAt: 1,
-      executionLineageId: taskId,
-      lineageSlotPathJson: canonicalJson(rootPath(taskId)),
-    })
-    .run()
+async function seedTask(
+  database: ProviderNeutralDatabase,
+  taskId: string,
+  worktreePath: string,
+): Promise<void> {
+  await database.insert(tasks).values({
+    id: taskId,
+    name: taskId,
+    workflowId: 'workflow-watermark-coverage',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    workflowVersion: 1,
+    repoPath: '/tmp/repo',
+    worktreePath,
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'pending',
+    inputs: '{}',
+    spaceKind: 'scratch',
+    startedAt: 1,
+    executionLineageId: taskId,
+    lineageSlotPathJson: canonicalJson(rootPath(taskId)),
+  })
 }
 
 function continuation(taskId: string): CanonicalContinuationRequest {
@@ -94,12 +93,13 @@ function continuation(taskId: string): CanonicalContinuationRequest {
  * One family that settled TWO business generations carrying different requests
  * — what a re-run of the same slot leaves behind — then went quiescent.
  */
-async function settledTwoGenerationTask(taskId: string): Promise<{
-  readonly database: DbClient
+async function settledTwoGenerationTask(
+  database: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<{
   readonly module: ReturnType<typeof createTaskExecutionTestModule>
 }> {
-  const database = createInMemoryDb(MIGRATIONS)
-  seedTask(database, taskId, '/tmp/worktree')
+  await seedTask(database, taskId, '/tmp/worktree')
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
   const intent = await submitIntent(database, {
     request: continuation(taskId),
@@ -154,7 +154,7 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
   await settleGeneration(0, { operation: 'first-request' }, 61)
   await settleGeneration(1, { operation: 'second-request' }, 63)
 
-  database.update(tasks).set({ status: 'done', finishedAt: 65 }).where(eq(tasks.id, taskId)).run()
+  await database.update(tasks).set({ status: 'done', finishedAt: 65 }).where(eq(tasks.id, taskId))
   const owner = (await module.ownershipFor(database).read(taskId))!
   await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
     token: owned.token,
@@ -168,10 +168,10 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
     }),
     now: 66,
   })
-  return { database, module }
+  return { module }
 }
 
-async function claimWorkspaceGc(database: DbClient, taskId: string): Promise<void> {
+async function claimWorkspaceGc(database: ProviderNeutralDatabase, taskId: string): Promise<void> {
   const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(database)
   const members = await terminalMaintenance.snapshotTree(taskId)
   await terminalMaintenance.claim({
@@ -214,56 +214,59 @@ function effectsOf(db: ProviderNeutralDatabase): DrizzleTaskExecutionEffectPersi
   return new DrizzleTaskExecutionEffectPersistence(db)
 }
 
-describe('terminal maintenance retained-watermark coverage', () => {
-  test('a family that settled two generations with different requests can still be claimed', async () => {
-    const taskId = 'task-two-generation-family'
-    const { database } = await settledTwoGenerationTask(taskId)
-    await expect(claimWorkspaceGc(database, taskId)).resolves.toBeUndefined()
-  })
+describeEachProvider('终态维护保留水位覆盖（双引擎）', (harness) => {
+  describe('terminal maintenance retained-watermark coverage', () => {
+    test('a family that settled two generations with different requests can still be claimed', async () => {
+      const taskId = 'task-two-generation-family'
+      const database = harness.db
+      await settledTwoGenerationTask(database, taskId)
+      await expect(claimWorkspaceGc(database, taskId)).resolves.toBeUndefined()
+    })
 
-  test('coverage is still refused when the retained watermark is gone', async () => {
-    const taskId = 'task-watermark-erased'
-    const { database } = await settledTwoGenerationTask(taskId)
-    database.delete(taskExecutionLineageOperationRecords).run()
-    await expect(claimWorkspaceGc(database, taskId)).rejects.toThrow(
-      /lacks a complete retained watermark/,
-    )
-  })
+    test('coverage is still refused when the retained watermark is gone', async () => {
+      const taskId = 'task-watermark-erased'
+      const database = harness.db
+      await settledTwoGenerationTask(database, taskId)
+      await database.delete(taskExecutionLineageOperationRecords)
+      await expect(claimWorkspaceGc(database, taskId)).rejects.toThrow(
+        /lacks a complete retained watermark/,
+      )
+    })
 
-  test('a terminal-maintenance conflict is busy, not a failed finalization', async () => {
-    const taskId = 'task-conflict-is-busy'
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-watermark-coverage-'))
-    try {
-      const database = createInMemoryDb(MIGRATIONS)
-      seedTask(database, taskId, join(appHome, 'scratch', taskId))
-      const module = createTaskExecutionTestModule('daemon-conflict-is-busy')
-      const intent = await submitIntent(database, {
-        request: continuation(taskId),
-        intentId: 'intent-conflict-is-busy',
-      })
-      // Left claimed on purpose: the execution plane is not quiescent, so the
-      // terminal maintenance store rejects the claim with a transient conflict.
-      const owned = await module.claim({ db: database, intentId: intent.intentId, now: 60 })
-      module.claimGate.leave(owned.permit)
-      database
-        .update(tasks)
-        .set({ status: 'done', finishedAt: 65, workspacePruningAt: 66 })
-        .where(eq(tasks.id, taskId))
-        .run()
+    test('a terminal-maintenance conflict is busy, not a failed finalization', async () => {
+      const taskId = 'task-conflict-is-busy'
+      const appHome = mkdtempSync(join(tmpdir(), 'aw-watermark-coverage-'))
+      try {
+        const database = harness.db
+        await seedTask(database, taskId, join(appHome, 'scratch', taskId))
+        const module = createTaskExecutionTestModule('daemon-conflict-is-busy')
+        const intent = await submitIntent(database, {
+          request: continuation(taskId),
+          intentId: 'intent-conflict-is-busy',
+        })
+        // Left claimed on purpose: the execution plane is not quiescent, so the
+        // terminal maintenance store rejects the claim with a transient conflict.
+        const owned = await module.claim({ db: database, intentId: intent.intentId, now: 60 })
+        module.claimGate.leave(owned.permit)
+        await database
+          .update(tasks)
+          .set({ status: 'done', finishedAt: 65, workspacePruningAt: 66 })
+          .where(eq(tasks.id, taskId))
 
-      const command = createWorkspaceMaintenanceCommand({
-        store: new DrizzleWorkspaceMaintenanceStore(database),
-        terminalMaintenance: new DrizzleTerminalMaintenancePersistence(database),
-        filesystem: createNodeWorkspaceMaintenanceFilesystem({
-          appHome,
-          isMaterializingTask: () => false,
-          invalidateWorkspacePath: () => {},
-        }),
-      })
-      await expect(command.finalizeClaimedWorkspace(taskId, 67)).resolves.toBeUndefined()
-    } finally {
-      rmSync(appHome, { recursive: true, force: true })
-    }
+        const command = createWorkspaceMaintenanceCommand({
+          store: new DrizzleWorkspaceMaintenanceStore(database),
+          terminalMaintenance: new DrizzleTerminalMaintenancePersistence(database),
+          filesystem: createNodeWorkspaceMaintenanceFilesystem({
+            appHome,
+            isMaterializingTask: () => false,
+            invalidateWorkspacePath: () => {},
+          }),
+        })
+        await expect(command.finalizeClaimedWorkspace(taskId, 67)).resolves.toBeUndefined()
+      } finally {
+        rmSync(appHome, { recursive: true, force: true })
+      }
+    })
   })
 })
 

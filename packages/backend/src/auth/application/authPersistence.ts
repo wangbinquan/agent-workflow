@@ -124,6 +124,7 @@ export interface AuthPersistence {
     readonly hash: string
     readonly now: number
     readonly touch: boolean
+    readonly touchIntervalMs: number
   }): Promise<ActiveAuthPat | null>
   findPatOwner(patId: string): Promise<string | null>
   revokePat(patId: string, now: number): Promise<void>
