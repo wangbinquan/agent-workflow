@@ -9985,3 +9985,27 @@ bun:sqlite 的同步执行面。在 PostgreSQL 上 `.run()` 交出的是一个**
 
 两类都值得记：前者说明 `OPEN_MIGRATION_DEBT` 里混着一部分**根本不需要迁**的文件（只要把无用
 夹具删掉），后者说明同一个文件里可能**一半已迁一半没迁**——按文件计数的账本看不出这件事。
+
+## 5ed. AC-6 第三批：两份最大的 intent 用例转双引擎（390 / open **84**）
+
+| 文件 | 行数 | 迁后 |
+| --- | ---: | --- |
+| `rfc234-apply-changeset` | 1570 | 35 → **70** 格 |
+| `intent-privileged-node-capability` | 1102 | 52 → **104** 格 |
+
+这两份是 §5ea 那三处缺陷的**主判据所在**：`rfc234` 的 call-ref 那一组先红照出了「名字域
+dangle 容忍写反」，`intent-privileged-node-capability` 的 boundary / normal 两组照出了
+「特权节点回填整段没有」。合一当天它们只能在一个引擎上跑；现在两个引擎各跑一遍，
+真 PostgreSQL 上 174/174。
+
+### `.run()` / `.all()` / `.get()` 三件套，一次收齐
+
+`rfc234` 里有 27 处 bun:sqlite 的同步执行面。三者的危险程度完全不同，值得分开记：
+
+- **`.get()`（22 处）**：中立客户端上返回 `Promise`，漏 `await` 时下游取字段当场是
+  `undefined`，`tsc` 基本都能拦（`'pending' is possibly 'undefined'` 之类）。
+- **`.all()`（2 处）**：返回 `Result<…>` 而不是数组，`.length` 一取就编译错。**最安全**。
+- **`.run()`（6 处）**：**最毒**。它返回一个没人 await 的 Promise，类型上完全合法、
+  `tsc` 一声不吭，运行时那句写**根本没发生**。§5eb / §5ec / 本批连撞三次，全是这一种。
+
+⇒ 迁移时的顺序应当是：先全文搜 `.run()`（编译器帮不上忙的那一类），再让 `tsc` 去扫其余两种。
