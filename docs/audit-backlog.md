@@ -4303,6 +4303,22 @@ tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新�
 （`## Protocol errors in your previous reply`），以及 `runHistory` 里它们的时间戳分布。
 判据：`workgroup-matrix.spec.ts:348` + `Expected length: 5`。
 
+**第二次（2026-09-13，`e37de7f7b` 的 macOS e2e 分片 3/3）**：同一条断言、同一处行号，收到 **9**。
+新增两条信息，都与第一次的读法不同：
+
+- **换了平台**：第一次在 Windows 分片 4/4，这次在 macOS 分片 3/3。所以它不是某个平台的
+  调度特性，更像「慢 lane 上协议重提示更容易多发生一次」这条共性——两次都发生在
+  同一个 CI run 里**别的腿正在刷满机器**的时候。
+- **这次没有「还在涨」**：第一次是 6 → 重试 9，这次是 **9 → 重试 9**。也就是说
+  「采样到一个还在动的目标」不是唯一解释；至少这一次，同一个 daemon 上重跑得到的是**同一个**
+  计数。Playwright 的 retry 在 `describe.configure({ mode: 'serial' })` 下复用同一个 daemon，
+  所以第一次那个 6 → 9 也可能是「第一次跑污染了状态、重试在脏状态上跑」，而不是目标在动。
+- 本机复跑该 spec 六条全绿（两种 runtime 各三条），仍未本地复现。
+
+**下次仍要抓的证据不变**（那几轮领队的 `promptText` 是不是重提示块、`runHistory` 时间戳分布），
+另外加一条：**把 Playwright 的 retry 关掉再看**——若关掉 retry 后第一次就是 9，那「重试在脏状态上
+跑」这一支就被排除掉了。在拿到证据之前**不动这条断言**（放宽它会让真的多轮回归从此看不见）。
+
 ## O(k²) 守卫用**墙钟毫秒**当判据，在共享 runner 上会假红（2026-09-06 实撞）
 
 `rfc349-target-coverage-linear-grouping.test.ts` 断言「1 万个分片的分组 < 150ms」，用来防

@@ -32,7 +32,12 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { buildActor, type Actor } from '@/auth/actor'
+import { buildActor } from '@/auth/actor'
+import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
+import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
+import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { composePostgresqlResourcePackageProvider } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
+import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { agents, resourceBundleApplies, users } from '@/db/schema'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
@@ -47,6 +52,10 @@ const OWNER = 'w14-journal-owner'
 const T0 = 1_700_000_000_000
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
 const roots: string[] = []
+
+type PackageMutationSession = ReturnType<
+  ReturnType<typeof composePostgresqlResourcePackageProvider>['mutationSessionFactory']['create']
+>
 
 const agentPackageZip = (name: string): Uint8Array =>
   encodeZip([
@@ -98,6 +107,71 @@ danglingCallRefs: []
     },
   ])
 
+/**
+ * 同一个包里 A 依赖 B，两条都选 `new`。B 在库里还不存在，所以 A 的引用只能靠**预铸 id**
+ * 解析——引擎在 prepare 之前就给每个 create op 铸好了 id（`session.request.ids.mintCreate`）。
+ */
+const dependentAgentsPackageZip = (): Uint8Array => {
+  const agentPayload = (name: string, dependsOn: readonly string[]) => ({
+    name,
+    description: 'from package',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [...dependsOn],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: '',
+  })
+  return encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: agent-lead
+  type: agent
+  name: lead
+resources:
+  - slug: agent-lead
+    type: agent
+    name: lead
+  - slug: agent-helper
+    type: agent
+    name: helper
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'agent-create',
+              slug: 'agent-lead',
+              payload: agentPayload('lead', ['local:agent-helper']),
+            },
+            {
+              opId: 'op-2',
+              kind: 'agent-create',
+              slug: 'agent-helper',
+              payload: agentPayload('helper', []),
+            },
+          ],
+          rootRef: 'local:agent-lead',
+        }),
+      ),
+    },
+  ])
+}
+
 afterEach(() => {
   while (roots.length > 0) removeTempDirSync(roots.pop()!)
 })
@@ -109,16 +183,7 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
     error: 'forced agent insert failure',
   } as const
 
-  async function fixture(): Promise<{
-    readonly db: typeof harness.db
-    readonly actor: Actor
-    readonly deps: {
-      db: typeof harness.db
-      appHome: string
-      box: ReturnType<typeof createSecretBoxFromKey>
-    }
-    commit(bytes: Uint8Array, importId: string): Promise<unknown>
-  }> {
+  async function fixture() {
     const db = harness.db
     await db.insert(users).values({
       id: OWNER,
@@ -153,6 +218,65 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
           pkg,
           previewToken: preview.previewToken,
           decisions: [{ localSlug: pkg.manifest.root.slug, action: 'new' }],
+        })
+      },
+      /** 包里每一条都选 `new`（多资源包用）。 */
+      async commitAll(bytes: Uint8Array, importId: string) {
+        const pkg = await parseResourcePackage(bytes)
+        const preview = await buildPackagePreview(db, actor, pkg, { box: deps.box, importId })
+        return commitResourcePackageForTest(deps, actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: preview.entries.map((entry) => ({
+            localSlug: entry.localSlug,
+            action: 'new' as const,
+          })),
+        })
+      },
+      /**
+       * 同一条提交，但把写会话包一层——用来在**数据库事务已经提交之后**的那一段注入故障。
+       * 这里必须自己装引擎（不走 `commitResourcePackageForTest`），因为要拿到
+       * `mutationSessionFactory` 才包得住会话。
+       */
+      async commitWith(
+        pkg: Awaited<ReturnType<typeof parseResourcePackage>>,
+        previewToken: string,
+        wrap: (session: PackageMutationSession) => PackageMutationSession,
+      ) {
+        const provider = composePostgresqlResourcePackageProvider({
+          db,
+          appHome,
+          authorityResolver: { resolve: () => actor },
+          mcpLifecycle: createMcpTransactionLifecycle(),
+          capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db }),
+          pluginInstaller: {
+            plannedGenerationDirectory() {
+              throw new Error('journal fixture must not install plugins')
+            },
+            async install() {
+              throw new Error('journal fixture must not install plugins')
+            },
+          },
+        })
+        const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+          db,
+          box: deps.box,
+        })
+        return atomicApply.apply({
+          authority: new AuthorityClaimRegistry().mintLocalAuthority({
+            userId: OWNER,
+            source: 'system' as const,
+          }),
+          actor,
+          package: pkg,
+          previewToken,
+          decisions: [{ localSlug: pkg.manifest.root.slug, action: 'new' }],
+          humanMemberMappings: [],
+          secretInputs: [],
+          mutationSessionFactory: Object.freeze({
+            create: (request: Parameters<typeof provider.mutationSessionFactory.create>[0]) =>
+              wrap(provider.mutationSessionFactory.create(request)),
+          }),
         })
       },
     }
@@ -254,5 +378,51 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
     // 逐字锁会把一个驱动实现细节变成引擎分叉。
     expect(journal[0]?.error ?? '').not.toBe('')
     expect(journal[0]?.error ?? '').toMatch(/agent/i)
+  })
+
+  test('⑥ 预铸 id 早于落库：同包内 A 依赖 B，A 指向的是**这次建出来的** B', async () => {
+    const f = await fixture()
+    await f.commitAll(dependentAgentsPackageZip(), ulid())
+
+    const rows = await f.db.select().from(agents)
+    const lead = rows.find((row) => row.name === 'lead')
+    const helper = rows.find((row) => row.name === 'helper')
+    expect(lead).toBeDefined()
+    expect(helper).toBeDefined()
+    // 指向的必须是这次新建的那一行——不是包内 slug、也不是别的同名行。
+    expect(JSON.parse(lead?.dependsOn ?? '[]')).toEqual([helper?.id])
+  })
+
+  test('⑦ 提交之后再抛错**绝不补偿**：journal 仍是 committed，资源仍然可见', async () => {
+    const f = await fixture()
+    const bytes = agentPackageZip('worker')
+    const importId = ulid()
+    const pkg = await parseResourcePackage(bytes)
+    const preview = await buildPackagePreview(f.db, f.actor, pkg, {
+      box: f.deps.box,
+      importId,
+    })
+
+    // 数据库事务已经提交之后才抛的那一段（`afterCommitted`）：此时回滚是**错的**——
+    // 资源已经对用户可见、journal 也已经是 committed，补偿会把用户看得见的东西删掉。
+    // 引擎的处置是「补偿走 databaseCommitted: true 那一支（只做前滚收尾）+ 原样抛出」。
+    const error = await f
+      .commitWith(pkg, preview.previewToken, (session) => ({
+        ...session,
+        afterCommitted: () => Promise.reject(new Error('post-commit boom')),
+      }))
+      .then(
+        () => null,
+        (e: unknown) => e as Error,
+      )
+    expect(error?.message).toContain('post-commit boom')
+
+    const journal = await f.db
+      .select()
+      .from(resourceBundleApplies)
+      .where(eq(resourceBundleApplies.key, importId))
+    expect(journal[0]?.state).toBe('committed')
+    expect(journal[0]?.receiptJson ?? '').not.toBe('')
+    expect((await f.db.select().from(agents)).map((row) => row.name)).toEqual(['worker'])
   })
 })

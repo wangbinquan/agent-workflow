@@ -2,6 +2,32 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 15，退役通用 bundle 引擎的**前置对账**：补上 I5 / I8 两条）
+>
+> 落档 plan §5dx。`e37de7f7b` 的 CI：**backend 四分片全绿**（续 14 那两条账本 / 源码锁修对了），
+> e2e 只剩 macOS 分片 3/3 的 `workgroup-matrix` 一条——**是 `docs/audit-backlog.md` 已登记的那条
+> 已知 flake**（同一断言同一行号 `:348` + `Expected length: 5`），本机复跑该 spec 六条全绿、
+> 与本批改动无机制关联。按仓规**不拿「重跑就过了」当通过**：把这次观测补进那条 backlog——
+> 换了平台（Windows → macOS）、且这次计数**没有在重试之间涨**（9 → 9，上次是 6 → 9），
+> 于是「目标还在动」不再是唯一解释，「retry 在脏 daemon 上跑」同样成立；下次要抓的证据里
+> 加一条「关掉 Playwright retry 再看」。
+>
+> **本批内容**：通用 bundle 引擎（约 2500 行，生产零调用方）还被四份判据当作被测对象，
+> 删它之前逐条对账。八条里六条已在统一引擎上有落点（三态重放 / pre-commit 零可见 / big tx 原子性 /
+> 归属 / 收敛 / 插件补偿 / 技能前滚），两条缺：
+>
+> - **I5 预铸 id 早于落库**：同包 agent A `dependsOn` agent B、两条都选 new ⇒ A 指向的必须是
+>   **这次建出来的** B 的 id；
+> - **I8 post-commit 绝不补偿**：事务已提交之后才抛的那一段，回滚是错的——判据把写会话包一层
+>   让 `afterCommitted` 抛错，断言错误原样抛出、journal 仍 committed 且带回执、资源仍在库里。
+>
+> 两条都补进 `rfc359-w14-unified-apply-journal-replay`（双引擎，14 格全绿）。
+> `I7 finalizeInTx` / `I1 serializationKey` 是 legacy 引擎自有的概念，随代码一起退役。
+>
+> **顺带记下一条本地观测（不是 CI 红）**：383 个文件塞进同一个 bun 进程会稳定出 8 条红，
+> 全在本批没碰过的文件里、单跑与两两组合全绿——`docs/dev-gotchas.md` 记过的进程级串扰那一类，
+> 判据也是那里写的定式。记在 plan §5dx 里，免得被当成「重跑就过了」。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 14，合一照出一条 **PostgreSQL 上一直存在**的用户可见缺陷）
 >
 > 落档 plan §5dw。`eb88d590e` 推上去后 CI 红：4 个 backend 分片 + 3 个 e2e 分片。

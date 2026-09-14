@@ -9567,3 +9567,51 @@ PostgreSQL 上跑过的代码搬到了有 e2e 的那台机器上**，于是那�
 / `rfc359-w7-sync-transaction-cutover` 当作**通用 bundle 引擎**在测。删它们之前要逐条确认那些判据
 在统一引擎上还在——§5dv 后已补了 `rfc359-w14-unified-apply-journal-replay`（journal 三态重放 + 失败终态），
 剩下的（收敛 CAS、record-before-act、插件补偿 oracle、技能版本前滚幂等）要同样对账。
+
+
+## 5dx. 退役通用 bundle 引擎的**前置对账**：把它锁的判据逐条搬到统一引擎上
+
+§5dw 结尾列了一条待办：那条**通用 bundle 引擎**（`services/bundle/apply.ts` 一族，约 2500 行）
+生产零调用方，但仍被四份判据当作被测对象。删它之前要逐条确认这些判据在统一引擎上还在。
+本节是那份对账，以及补齐缺口。
+
+| `rfc271-bundle-engine` 的判据 | 统一引擎上的落点 |
+| --- | --- |
+| I2/I3 claim 与三态重放（committed / failed / 未结） | §5dw 的 `rfc359-w14-unified-apply-journal-replay` ①②③④ |
+| pre-commit 失败 ⇒ 零可见 + journal failed | 同上 ⑤ |
+| I13 big tx 原子性（事务内抛 ⇒ 资源与 journal 一起消失） | `rfc359-w11-atomic-apply-neutral-transaction-conformance` |
+| T12 update 目标必须归 actor 所有 | `rfc271-overwrite-ownership`（§5dv 已接到统一引擎） |
+| **I5 预铸 id 早于落库（同包引用能解析）** | **本批新增** `rfc359-w14-…-journal-replay` ⑥ |
+| **I8 post-commit 绝不补偿** | **本批新增** 同上 ⑦ |
+| I9 收敛（10 分钟下限 / active 跳过 / committed 只前滚） | `rfc349-resource-package-maintenance`（判据在中立的 converge 命令上） |
+| I7 `finalizeInTx` / I1 `serializationKey` 源码锁 | **legacy 引擎自有的概念**，统一引擎没有对应物，随代码一起退役 |
+
+`rfc271-bundle-recovery-hardening` 的两个主题同样有落点：插件安装失败的补偿 oracle →
+`rfc359-w12-plugin-publication-conformance`（7 例，含「发布与创建一起回滚」）；
+已提交技能版本尾巴的前滚幂等 → `rfc359-w9-resource-package-skill-recovery-conformance`（4 例，
+含「账面更新后陈旧代际不得被换回去」「已删技能不得复活」）。
+
+### 本批补的两条
+
+**⑥ 预铸 id 早于落库**：同一个包里 agent A `dependsOn` agent B，两条都选 `new`——B 在库里还不存在，
+A 的引用只能靠引擎在 prepare 之前铸好的 id（`session.request.ids.mintCreate`）解析。
+判据断言 A 的 `dependsOn` 逐字等于**这次新建的** B 的 id，不是包内 slug、也不是别的同名行。
+
+**⑦ post-commit 绝不补偿**：数据库事务已经提交之后才抛的那一段（`afterCommitted`），
+此时回滚是**错的**——资源已经对用户可见、journal 也已经是 committed，补偿会把用户看得见的东西删掉。
+判据把写会话包一层、让 `afterCommitted` 抛错，然后断言：错误原样抛出、journal 仍是 `committed`
+且带回执、资源仍然在库里。（这条要拿到 `mutationSessionFactory` 才包得住会话，所以它自己装引擎，
+不走 `commitResourcePackageForTest`。）
+
+两条都是双引擎，各 2 格，全绿。
+
+### 一条如实记下的本地观测（**不是** CI 红）
+
+把 383 个文件塞进**同一个 bun 进程**跑（`rfc271-* + rfc294-* + rfc304-* + rfc310-* + rfc345-* +
+rfc349-* + rfc359-w1*`）会稳定出 8 条红，全在 `rfc310-pr9-cutover` / `rfc310 pr7b` /
+`rfc349-daemon-provider-core` 这些**本批没碰过**的文件里；它们单跑绿、两两组合绿、
+`rfc310-*` 全家 819 条全绿、`rfc271-*` 全家 + 那两个文件 511 条全绿。
+这正是 `docs/dev-gotchas.md` 记过的那一类进程级串扰（`mock.module` 是进程级、全局 registry 不按文件隔离），
+判据也是那里写的定式：「新用例本文件绿、全量红，且红的是你没碰过的文件」。CI 分片（ubuntu 12 / macOS 6）
+不会产生这个组合，历史上也一直绿。**记在这里是为了不把它当成「重跑就过了」**——它没被修，
+只是被归类；哪天要真查，从「哪个更早的文件污染了全局 registry」入手。
