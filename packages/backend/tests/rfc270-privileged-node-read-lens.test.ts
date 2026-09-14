@@ -16,6 +16,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
+  privilegedNodeLensFor,
   WorkflowsWsMessageSchema,
   type Permission,
   type WorkflowDefinition,
@@ -29,7 +30,6 @@ import {
   serializeWorkflowReceiptFor,
   workflowReadLensFor,
 } from '@/services/tokenRedaction'
-import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 
 const SCRIPT_BODY = 'import os\nprint(os.environ["AW_PORT_DIFF"])\n'
 
@@ -251,8 +251,15 @@ describe('RFC-270 · 接线：每个定义出口都过镜头', () => {
   })
 
   test('两个 author 门与镜头共用同一个权限点字符串', () => {
-    expect(src('services/privilegedNodeLens.ts')).toContain("'scripts:author'")
-    expect(src('services/privilegedNodeLens.ts')).toContain("'code-host-calls:author'")
+    // RFC-359：镜头搬进 `@agent-workflow/shared` 的 `privilegedNodeRedaction.ts`——它与
+    // `rehydratePrivilegedNodes` / `PRIVILEGED_LENS_TRANSPARENT` 本来就是一套，
+    // 隔着 `services/` 那层门面让 resource-catalog 的提交臂取不到（边界守卫禁止深取 services）。
+    const lens = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'privilegedNodeRedaction.ts'),
+      'utf8',
+    )
+    expect(lens).toContain("'scripts:author'")
+    expect(lens).toContain("'code-host-calls:author'")
     expect(src('services/scriptAuthorGate.ts')).toContain("'scripts:author'")
     expect(src('services/codeHostAuthorGate.ts')).toContain("'code-host-calls:author'")
   })

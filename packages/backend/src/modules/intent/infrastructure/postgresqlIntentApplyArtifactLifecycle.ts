@@ -4,8 +4,11 @@ import { and, eq } from 'drizzle-orm'
 
 import { intentApplyJournal, plugins, skills, skillVersions } from '@/db/schema'
 import type { PostgresqlIntentApplyArtifact } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
-import type { PostgresqlSkillArtifactCompensation } from '../ports/skillArtifactCompensation'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type {
+  LegacyIntentSkillArtifactCompat,
+  PostgresqlSkillArtifactCompensation,
+} from '../ports/skillArtifactCompensation'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   decodeIntentJournalArtifacts,
   type IntentJournalArtifact,
@@ -14,6 +17,7 @@ import {
   INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
   INTENT_APPLY_DIAGNOSTICS,
 } from '../application/journalConvergence'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { safeJoin } from '@/util/safePath'
 import type { Logger } from '@/util/log'
 import type { PostgresqlIntentApplyArtifactLifecycle } from './postgresqlIntentApplyOperations'
@@ -113,7 +117,7 @@ function versionOf(
 }
 
 async function assertPluginPublished(input: {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly artifact: Extract<PostgresqlIntentApplyRecoveryArtifact, { kind: 'plugin-install' }>
 }): Promise<void> {
   const row = await input.db
@@ -127,9 +131,114 @@ async function assertPluginPublished(input: {
   }
 }
 
+async function assertLegacyPluginPublished(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly pluginId: string
+}): Promise<void> {
+  const row = await input.db
+    .select({ cachedPath: plugins.cachedPath })
+    .from(plugins)
+    .where(eq(plugins.id, input.pluginId))
+    .limit(1)
+    .get()
+  if (row === undefined || !existsSync(row.cachedPath)) {
+    throw new Error(`intent-apply-plugin-publication-missing:${input.pluginId}`)
+  }
+}
+
+/**
+ * RFC-359 —— 合一之前由 SQLite 那台引擎写下的技能工件的前滚。
+ *
+ * 这段逻辑逐字来自被退役的 `sqliteIntentApplyArtifactLifecycle.ts`：先按 `skill_operations`
+ * 的 `(active, phase)` 判断哪些暂存版本还能重放，整批 `unmarkSkillBootVerified` 之后逐条
+ * `publishStagedSkillVersion`，最后把 `db-committed` 的 `skill-stage` 操作行收尾。
+ * 判据：`rfc343-intent-apply-correctness` 的「committed skill-version convergence」。
+ */
+async function rollForwardLegacySkillArtifacts(input: {
+  readonly recovery: LegacyIntentSkillArtifactCompat
+  readonly db: ProviderNeutralDatabase
+  readonly appHome: string
+  readonly artifacts: readonly IntentJournalArtifact[]
+  readonly log: Logger
+}): Promise<boolean> {
+  const { recovery, db, log } = input
+  let complete = true
+
+  const stagedVersions = input.artifacts.flatMap((artifact) =>
+    artifact.kind === 'skill-version-stage' ? [artifact.staged] : [],
+  )
+  const stages = input.artifacts.flatMap((artifact) =>
+    artifact.kind === 'skill-stage' ? [{ skillId: artifact.skillId, opId: artifact.opId }] : [],
+  )
+
+  const pending: typeof stagedVersions = []
+  for (const staged of stagedVersions) {
+    if (staged.noop !== null) continue
+    if (staged.opId === null) {
+      pending.push(staged)
+      continue
+    }
+    const operation = await recovery.loadSkillOperationState(db, staged.opId)
+    if (
+      operation?.active === 1 &&
+      (operation.phase === 'db-committed' || operation.phase === 'fs-published')
+    ) {
+      pending.push(staged)
+      continue
+    }
+    if (operation?.phase !== 'done') {
+      complete = false
+      log.warn('intent-skill-publish-op-not-replayable', {
+        skillId: staged.skillId,
+        opId: staged.opId,
+        phase: operation?.phase ?? 'missing',
+      })
+    }
+  }
+
+  for (const staged of pending) recovery.unmarkSkillBootVerified(staged.skillId)
+  for (const staged of pending) {
+    try {
+      await recovery.publishStagedSkillVersion(db, { appHome: input.appHome }, staged)
+    } catch (error) {
+      complete = false
+      log.warn('intent-skill-publish-replayed-or-failed', {
+        skillId: staged.skillId,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  for (const stage of stages) {
+    const operation = await recovery.loadSkillOperationState(db, stage.opId)
+    if (operation?.active === 0 && operation.phase === 'done') continue
+    if (operation?.active !== 1 || operation.phase !== 'db-committed') {
+      complete = false
+      log.warn('intent-skill-finish-op-not-replayable', {
+        skillId: stage.skillId,
+        opId: stage.opId,
+        phase: operation?.phase ?? 'missing',
+      })
+      continue
+    }
+    try {
+      await databaseSessionFor(db).transaction(
+        async (transaction) => await recovery.finishOperation(transaction, stage.opId),
+      )
+    } catch (error) {
+      complete = false
+      log.warn('intent-skill-finish-replayed-or-failed', {
+        skillId: stage.skillId,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return complete
+}
+
 async function rollForwardPostgresqlSkill(input: {
   readonly rc: PostgresqlSkillArtifactCompensation
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly artifact: Extract<
     PostgresqlIntentApplyArtifact,
@@ -268,11 +377,16 @@ function compensateLegacyArtifact(input: {
 
 /** Real PostgreSQL artifact recovery shared by apply-time and boot/hourly convergence. */
 export function createPostgresqlIntentApplyArtifactLifecycle(input: {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly pluginsDir: string
   /** RFC-355 T6：技能工件原语由 resource-catalog 提供、bootstrap 注入。 */
   readonly skillArtifacts: PostgresqlSkillArtifactCompensation
+  /**
+   * RFC-359 —— 读到**合一之前**写下的旧词汇工件时要的那几件原语。生产装配必须给
+   * （`composeIntentApplyArtifactLifecycle`），只喂新词汇的测试装配可以省。
+   */
+  readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
 }): PostgresqlIntentApplyArtifactLifecycle {
   const rc = input.skillArtifacts
   return Object.freeze({
@@ -301,6 +415,10 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
       log: Logger,
     ) {
       let complete = true
+      // 旧词汇的技能工件按**批**前滚（先整批 unmark、再逐条发布），与合一之前 SQLite 那台
+      // 引擎的顺序逐字相同——单条处理会让「同一次 apply 里多个技能版本」的 boot 标记状态
+      // 中途可见。
+      const legacySkillArtifacts: IntentJournalArtifact[] = []
       for (const artifact of artifacts) {
         try {
           const postgresql = decodePostgresqlArtifact(artifact)
@@ -320,7 +438,18 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
           if ((artifact as IntentJournalArtifact).kind === 'legacy-plugin-install-untracked') {
             continue
           }
-          throw new Error('legacy intent artifact needs manual source-provider recovery')
+          if ((artifact as IntentJournalArtifact).kind === 'plugin-install') {
+            // 旧词汇的 plugin-install 带的是 `pluginId` + `generationDir`；判据与新词汇逐字相同
+            // （行在 + 目录在 = 装成了），只是取 id 的字段名不同。
+            await assertLegacyPluginPublished({
+              db: input.db,
+              pluginId: (artifact as Extract<IntentJournalArtifact, { kind: 'plugin-install' }>)
+                .pluginId,
+            })
+            continue
+          }
+          legacySkillArtifacts.push(artifact as IntentJournalArtifact)
+          continue
         } catch (error) {
           complete = false
           log.warn(INTENT_APPLY_DIAGNOSTICS.artifactRollForwardRetryable, {
@@ -331,6 +460,27 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
                 : operationIdOf(decodePostgresqlArtifact(artifact)!),
             err: error instanceof Error ? error.message : String(error),
           })
+        }
+      }
+      if (legacySkillArtifacts.length > 0) {
+        const recovery = input.legacySkillArtifacts
+        if (recovery === undefined) {
+          complete = false
+          log.warn(INTENT_APPLY_DIAGNOSTICS.artifactRollForwardRetryable, {
+            kind: 'legacy-skill',
+            operationId: 'legacy',
+            err: 'legacy intent artifact recovery is not composed',
+          })
+        } else if (
+          !(await rollForwardLegacySkillArtifacts({
+            recovery,
+            db: input.db,
+            appHome: input.appHome,
+            artifacts: legacySkillArtifacts,
+            log,
+          }))
+        ) {
+          complete = false
         }
       }
       return complete
@@ -347,7 +497,7 @@ export interface PostgresqlIntentApplyJournalConvergence {
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
 
 export function createPostgresqlIntentApplyJournalConvergence(input: {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly artifacts: PostgresqlIntentApplyArtifactLifecycle
   readonly now?: () => number
   readonly log: Logger

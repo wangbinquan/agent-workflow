@@ -127,10 +127,14 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: 'Intent apply 会话的归属预检：占用名集合 + 只能复制的目标（两个适配器曾各一份，纯命名分叉）',
     fn: 'resolveIntentApplyResourcePreflight',
     definedIn: `${B}modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts`,
+    // RFC-359：legacy 那个消费者随两台 apply 引擎合一一起退役了，只剩现行这一个。
+    // 归一体本身留着——它当初解决的分叉（两份各写一遍同一段预检）不会因为少了一侧而失效，
+    // 下一次有人再写第二个适配器时它仍是那条「别再抄一份」的落点。
     consumers: [
-      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts`,
       `${B}modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`,
     ],
+    // `forkedFrom` 是**历史**（同 `preparedPackageMutation` 那条的口径）：当初分叉的两处，
+    // legacy 那一处已随合一删除，判据只要求「两处、且至少一处仍存在」。
     forkedFrom: [
       `${B}modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts`,
       `${B}modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`,

@@ -794,46 +794,49 @@ test('MCP create and update have one SQL atom and retain separate rename', () =>
   })
 })
 
-test('intent apply 侧的 legacy MCP 提交与其代理都 await 到数据库落库', () => {
-  // RFC-359（plan §5dy）：**资源包那两份**（legacy 参与者 + 依赖表）随通用 bundle 引擎退役，
-  // 它们名下的 `commitMcpCreateInTx` / `commitMcpUpdateInTx` 调用点一并消失；资源包侧的
-  // 「commit 必须 await」现在由 `rfc359-w7-sync-transaction-cutover`（I14 源码兜底，指生产参与者）
-  // 与 `rfc359-w5-unattended-void-promise` 一起盯着。
+test('intent apply 侧的 MCP 写点在返回前 await 到数据库落库', () => {
+  // RFC-359 —— 两台 apply 引擎合一之后，intent apply 的MCP写点不再是 legacy 那两个
+  // `commit(?:Legacy)?Mcp…InTx` 包装（它们随 `legacyIntentApplyResourceParticipants` /
+  // `legacyIntentApplyResourceDependencies` 一起失去了生产消费者），而是**提交臂本身**在
+  // `postgresqlIntentApplyResourcePorts.ts` 里直接写表。判据不变：写必须被 `await` 到落库。
   //
-  // 留下的是 **intent apply 那两份**——它们仍是 legacy 同步形态，这条判据对它们照旧成立。
-  const paths = [
-    'modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts',
-    'modules/resource-catalog/composition/legacyIntentApplyResourceDependencies.ts',
-  ]
-  const results = paths.map((path) => {
-    const file = join(import.meta.dir, '../src', path)
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, 'utf8'),
-      ts.ScriptTarget.Latest,
-      true,
-    )
-    const calls: string[] = [],
-      unawaited: string[] = []
-    const visit = (node: ts.Node): void => {
-      if (ts.isCallExpression(node)) {
-        const name = ts.isIdentifier(node.expression)
-          ? node.expression.text
-          : ts.isPropertyAccessExpression(node.expression)
-            ? node.expression.name.text
-            : ''
-        if (/^commit(?:Legacy)?Mcp(?:Create|Update)InTx$/.test(name)) {
-          calls.push(name)
-          if (!ts.isAwaitExpression(node.parent)) unawaited.push(name)
-        }
-      }
-      ts.forEachChild(node, visit)
+  // 为什么这条判据非要有：drizzle 的查询构建器是**惰性** `QueryPromise`。`.run()` 当场执行、
+  // `await` 当场执行，而**既不 `.run()` 也不 `await`** 的写在两个引擎上都一条都不会发生——
+  // 漏掉 await 不会让任何行为用例变红，只会让那次写悄悄不发生。
+  const file = join(
+    import.meta.dir,
+    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+  )
+  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true)
+  const writes: string[] = []
+  const unawaited: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      (node.expression.name.text === 'insert' || node.expression.name.text === 'update') &&
+      node.arguments.length === 1 &&
+      node.arguments[0] !== undefined &&
+      ts.isIdentifier(node.arguments[0]) &&
+      node.arguments[0].text === 'mcps'
+    ) {
+      // 写链的形态是 `await transaction.insert(x).values(...).returning().get()`——
+      // 沿着属性访问链往上走到最外层调用，`await` 挂在那里。
+      let outermost: ts.Node = node
+      while (
+        ts.isPropertyAccessExpression(outermost.parent) ||
+        (ts.isCallExpression(outermost.parent) && outermost.parent.expression === outermost)
+      )
+        outermost = outermost.parent
+      writes.push(node.expression.name.text)
+      if (!ts.isAwaitExpression(outermost.parent)) unawaited.push(node.expression.name.text)
     }
-    visit(source)
-    return { calls, unawaited }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  expect(writes.length, '语料失效：一处 `mcps` 写点都没扫到').toBeGreaterThanOrEqual(2)
+  expect({ writes: [...new Set(writes)].sort(), unawaited }).toEqual({
+    writes: ['insert', 'update'],
+    unawaited: [],
   })
-  expect(results).toEqual([
-    { calls: ['commitMcpCreateInTx', 'commitMcpUpdateInTx'], unawaited: [] },
-    { calls: ['commitLegacyMcpCreateInTx', 'commitLegacyMcpUpdateInTx'], unawaited: [] },
-  ])
 })

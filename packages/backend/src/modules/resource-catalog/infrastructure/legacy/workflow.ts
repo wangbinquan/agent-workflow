@@ -21,6 +21,7 @@ import type {
   WorkflowSnapshotHash,
 } from '@agent-workflow/shared'
 import {
+  privilegedNodeLensFor,
   TERMINAL_TASK_STATUSES,
   CopyWorkflowRequestSchema,
   DeleteWorkflowSchema,
@@ -38,7 +39,6 @@ import { and, eq, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from '@/services/scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
-import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 

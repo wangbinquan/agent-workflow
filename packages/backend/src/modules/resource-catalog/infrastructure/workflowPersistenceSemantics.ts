@@ -1,4 +1,5 @@
 import {
+  privilegedNodeLensFor,
   TERMINAL_TASK_STATUSES,
   RESOURCE_DISPLAY_NAME_MAX,
   WorkflowDraftSnapshotSchema,
@@ -20,7 +21,6 @@ import { agents, scheduledTasks, tasks, workflows, workgroups } from '@/db/schem
 import { ConflictError, ValidationError } from '@/util/errors'
 import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
-import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { assertScriptAuthorAllowed } from '@/services/scriptAuthorGate'
 
 import { assertNameUnchangedForEditor } from '../application/resourceAccess'

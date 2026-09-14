@@ -1,15 +1,18 @@
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createLogger, type Logger } from '@/util/log'
 import {
   createPostgresqlIntentApplyArtifactLifecycle,
   createPostgresqlIntentApplyJournalConvergence,
   type PostgresqlIntentApplyJournalConvergence,
 } from '../infrastructure/postgresqlIntentApplyArtifactLifecycle'
-import { composePostgresqlSkillArtifactCompensation } from '@/modules/resource-catalog/composition/intentApply'
+import {
+  composeLegacyIntentSkillArtifactCompat,
+  composePostgresqlSkillArtifactCompensation,
+} from '@/modules/resource-catalog/composition/intentApply'
 
-/** Recovery-only PostgreSQL composition; it never constructs apply resources. */
-export function composePostgresqlIntentApplyConvergence(input: {
-  readonly db: PostgresqlDatabaseClient
+/** Recovery-only composition (both providers); it never constructs apply resources. */
+export function composeIntentApplyConvergence(input: {
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly pluginsDir: string
   readonly now?: () => number
@@ -20,6 +23,7 @@ export function composePostgresqlIntentApplyConvergence(input: {
     db: input.db,
     artifacts: createPostgresqlIntentApplyArtifactLifecycle({
       skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+      legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
       db: input.db,
       appHome: input.appHome,
       pluginsDir: input.pluginsDir,

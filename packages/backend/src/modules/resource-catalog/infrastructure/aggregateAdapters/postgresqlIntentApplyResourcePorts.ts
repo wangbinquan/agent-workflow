@@ -1,5 +1,6 @@
 import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 import {
+  privilegedNodeLensFor,
   CreateAgentSchema,
   CreateMcpSchema,
   CreateWorkgroupSchema,
@@ -11,6 +12,7 @@ import {
   definitionHasScriptNode,
   migrateWorkflowDefinitionToLatest,
   resolveWorkgroupOutputContract,
+  rehydratePrivilegedNodes,
   serializeCodeHostSensitiveProjectionV1,
   serializeScriptSensitiveProjectionV1,
   serializeWorkflowDefinitionStorageV1,
@@ -41,7 +43,7 @@ import {
   workgroups,
 } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   ConflictError,
   ForbiddenError,
@@ -53,10 +55,7 @@ import { monotonicNow } from '@/util/time'
 import { encodeSkillToken } from '../../application/skills/skillToken'
 import { hasResourceAclBypass } from '../../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
-import type {
-  IntentResourceChangesetReceipt,
-  VersionedIntentResourceChangesetPlan,
-} from '../../public/types'
+import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
 import {
   agentFromPersistenceRow,
   createAgentPersistenceValues,
@@ -82,6 +81,7 @@ import type {
   PostgresqlIntentApplyMutationPort,
   PostgresqlIntentApplyResourcePorts,
   PostgresqlIntentApplyResourceSessionOptions,
+  IntentResourceChangesetReceipt,
 } from './postgresqlIntentApplyResourceParticipants'
 import { parseAgentDependencyIds } from '../agentDependencyJson'
 
@@ -158,7 +158,7 @@ export interface PostgresqlIntentResourceCommitEvent {
 }
 
 export interface PostgresqlIntentApplyResourcePortFactoryDependencies {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlIntentPluginArtifactLifecycle
   readonly skillArtifacts: PostgresqlIntentSkillArtifactLifecycle
@@ -720,7 +720,7 @@ function createMcpPort(
 
 function createPluginPort(
   options: PostgresqlIntentApplyResourceSessionOptions,
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   artifacts: PostgresqlIntentPluginArtifactLifecycle,
   now: () => number,
 ): PostgresqlIntentApplyMutationPort<'plugin', PreparedPlugin> {
@@ -842,7 +842,7 @@ function createPluginPort(
 }
 
 async function artifactsForPluginUpdate(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   artifacts: PostgresqlIntentPluginArtifactLifecycle,
   plan: UpdatePlanOf<'plugin'>,
 ): Promise<StagedArtifactCapability<PostgresqlIntentPluginInstallResult> | null> {
@@ -862,7 +862,7 @@ async function artifactsForPluginUpdate(
 
 function createSkillPort(
   options: PostgresqlIntentApplyResourceSessionOptions,
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   artifacts: PostgresqlIntentSkillArtifactLifecycle,
   nextId: () => string,
   now: () => number,
@@ -1114,12 +1114,18 @@ async function assertNamedReferencesVisible(
             .from(workgroups)
             .where(eq(workgroups.name, name))
             .all()
-    if (rows.length === 0) {
-      throw new ValidationError(
-        'resource-reference-not-found',
-        `${type} '${name}' does not resolve to a persisted resource`,
-      )
-    }
+    // RFC-243 §5.3 —— **名字域是 dangle-tolerant 的**：解析不到任何行不是 ACL 违规，
+    // 是启动期的问题（`infrastructure/legacy/resourceRefs.ts` 的
+    // `matched === undefined ⇒ continue // dangling until launch` 才是这条规则的正身）。
+    //
+    // RFC-359 —— 这里此前抛 `resource-reference-not-found`，是两台 apply 引擎合一照出来的
+    // **PostgreSQL 上一直存在的用户可见缺陷**：同一份 changeset——工作流里放一个按名字调用
+    // 别处工作流 / 工作组的节点，而那个名字此刻还不存在——在被退役的那台引擎上正常落库、
+    // 留到启动期再校验，在这台上当场 422。把「先建调用方、后建被调方」「被调方在另一台
+    // 机器上」这两类正常用法整个堵死。判据：`rfc234-apply-changeset` 的
+    // 「an unresolvable name stays dangle-tolerant」+ 双引擎的
+    // `rfc359-w41-intent-apply-provider-parity` ①。
+    if (rows.length === 0) continue
     let visible = false
     for (const row of rows) {
       if (
@@ -1198,22 +1204,41 @@ function createWorkflowPort(
           )
         }
       }
-      assertWorkflowPrivilegedContent(actor, prepared.definition, current?.definition)
+      // RFC-270 特权节点镜头 —— 无 `scripts:author` / `code-host-calls:author` 的作者**看到的
+      // 就是打码后的定义**（遮蔽是 permission-blind 的，所有人都遮）。所以他原样送回来的那份
+      // 里，`script` / `env` / `dependencies`（以及 code-host 的 `params` / `request`）装的是
+      // `INTENT_REDACTED` 占位符，不是正文。先按库里的现值回填，再拿回填后的那份去过门、去写库。
+      //
+      // RFC-359 —— 这一步此前**只有保存路径有**（`workflowPersistenceSemantics.canonicalizeUpdate`
+      // 一直这么做），这台 intent 提交臂直接拿用户送来的那份去比敏感投影，于是占位符 ≠ 正文，
+      // **普通用户改不动任何含脚本节点的工作流**——连改个描述、挪个无关节点、删个普通节点
+      // 都当场 403 `script-author-forbidden`；更糟的是若放行，占位符会被当成正文写进库，
+      // 脚本正文直接丢失。判据：`intent-privileged-node-capability` 的 boundary / normal 两组
+      // + 双引擎的 `rfc359-w41-intent-apply-provider-parity` ②。
+      const definition =
+        current === undefined
+          ? prepared.definition
+          : rehydratePrivilegedNodes(
+              prepared.definition,
+              current.definition,
+              privilegedNodeLensFor(actor),
+            )
+      assertWorkflowPrivilegedContent(actor, definition, current?.definition)
       await assertVisibleReferences(transaction, actor, [
-        { type: 'agent', ids: workflowAgentIds(prepared.definition) },
+        { type: 'agent', ids: workflowAgentIds(definition) },
       ])
       await assertNamedReferencesVisible(
         transaction,
         actor,
         'workflow',
-        workflowCallNames(prepared.definition, 'call-workflow', 'workflowName'),
+        workflowCallNames(definition, 'call-workflow', 'workflowName'),
         context.bundleCreatedNames.workflow,
       )
       await assertNamedReferencesVisible(
         transaction,
         actor,
         'workgroup',
-        workflowCallNames(prepared.definition, 'call-workgroup', 'workgroupName'),
+        workflowCallNames(definition, 'call-workgroup', 'workgroupName'),
         context.bundleCreatedNames.workgroup,
       )
 
@@ -1258,7 +1283,7 @@ function createWorkflowPort(
       const candidateSnapshot = {
         name: plan.payload.name,
         description: plan.payload.description,
-        definition: prepared.definition,
+        definition,
       }
       const currentBytes = serializeWorkflowEditableSnapshotV1(workflowDraftSnapshotOf(current))
       const candidateBytes = serializeWorkflowEditableSnapshotV1(candidateSnapshot)
@@ -1275,7 +1300,9 @@ function createWorkflowPort(
         .update(workflows)
         .set({
           description: plan.payload.description,
-          definition: serializeWorkflowDefinitionStorageV1(prepared.definition),
+          // 回填后的那份。写 `prepared.definition` 等于把 `INTENT_REDACTED` 占位符当正文存进去
+          // ——脚本正文当场丢失，而且是静默的。
+          definition: serializeWorkflowDefinitionStorageV1(definition),
           version: current.version + 1,
           updatedAt: now(),
         })

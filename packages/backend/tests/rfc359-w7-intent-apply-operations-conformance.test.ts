@@ -50,7 +50,6 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import {
   intentApplyJournal,
   intentDraftResolutions,
@@ -65,12 +64,9 @@ import type {
 } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentJournalArtifactV1 } from '@/modules/intent/domain/journalArtifacts'
 import {
-  applyIntentChangeset,
-  convergeIntentApplyJournal,
+  createPostgresqlIntentApplyOperations,
   type ApplyIntentFaults,
-  type IntentApplyResourceSession,
-} from '@/modules/intent/infrastructure/sqliteIntentApplyOperations'
-import { createPostgresqlIntentApplyOperations } from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
+} from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
 import type { PostgresqlIntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -268,50 +264,6 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
     return { kind: 'agent', operationId: 'op-1', resourceId: 'r', action: 'create', revision: {} }
   }
 
-  {
-    const session = {
-      preflight,
-      prepare,
-      async prestage(_plan: unknown, context: { recordArtifact(a: unknown): Promise<void> }) {
-        calls.prestage += 1
-        if (options.artifact !== undefined) await context.recordArtifact(options.artifact)
-      },
-      createTransactionAttempt() {
-        return Object.freeze({
-          participant: { authorizeAndCommit: async () => commitReceipt() },
-          commitSucceeded() {},
-        })
-      },
-      async rollForwardCommitted() {
-        calls.rollForwardCommitted += 1
-      },
-      async broadcastCommitted() {
-        calls.broadcast += 1
-      },
-      async abortPrepared(input: { readonly databaseCommitted: boolean }) {
-        calls.abortPrepared.push(input)
-      },
-    } as unknown as PostgresqlIntentApplyResourceSession
-    const operations = createPostgresqlIntentApplyOperations({
-      db: harness.db as PostgresqlDatabaseClient,
-      resources: { createSession: () => session },
-      artifacts: artifacts as never,
-    })
-    return {
-      async apply(input, log) {
-        return await operations.apply({
-          actor,
-          authority,
-          command: input,
-          ...(options.faults === undefined ? {} : { faults: options.faults }),
-          ...(log === undefined ? {} : { log }),
-        })
-      },
-      converge: (log, convergeOptions) => operations.converge(log, convergeOptions ?? {}),
-      calls,
-    }
-  }
-
   const session = {
     preflight,
     prepare,
@@ -319,32 +271,38 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
       calls.prestage += 1
       if (options.artifact !== undefined) await context.recordArtifact(options.artifact)
     },
-    participantInTransaction() {
-      return { authorizeAndCommit: async () => commitReceipt() }
+    createTransactionAttempt() {
+      return Object.freeze({
+        participant: { authorizeAndCommit: async () => commitReceipt() },
+        commitSucceeded() {},
+      })
     },
-    broadcastCommitted() {
+    async rollForwardCommitted() {
+      calls.rollForwardCommitted += 1
+    },
+    async broadcastCommitted() {
       calls.broadcast += 1
     },
-  } as unknown as IntentApplyResourceSession
-  const db = harness.db as DbClient
+    async abortPrepared(input: { readonly databaseCommitted: boolean }) {
+      calls.abortPrepared.push(input)
+    },
+  } as unknown as PostgresqlIntentApplyResourceSession
+  const operations = createPostgresqlIntentApplyOperations({
+    db: harness.db as PostgresqlDatabaseClient,
+    resources: { createSession: () => session },
+    artifacts: artifacts as never,
+  })
   return {
     async apply(input, log) {
-      return await applyIntentChangeset(
-        {
-          db,
-          appHome,
-          actor,
-          authority,
-          resourceApply: { createSession: () => session },
-          artifacts: artifacts as never,
-          ...(options.faults === undefined ? {} : { faults: options.faults }),
-          ...(log === undefined ? {} : { log }),
-        },
-        { ...input, decisions: [...input.decisions] },
-      )
+      return await operations.apply({
+        actor,
+        authority,
+        command: input,
+        ...(options.faults === undefined ? {} : { faults: options.faults }),
+        ...(log === undefined ? {} : { log }),
+      })
     },
-    converge: (log, convergeOptions) =>
-      convergeIntentApplyJournal(db, artifacts as never, log, convergeOptions ?? {}),
+    converge: (log, convergeOptions) => operations.converge(log, convergeOptions ?? {}),
     calls,
   }
 }

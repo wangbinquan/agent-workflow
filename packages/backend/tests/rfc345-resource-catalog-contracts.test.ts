@@ -27,7 +27,6 @@ import {
   type FrozenIntegrationTriggerResourceSnapshot,
   type FrozenTaskExecutionResourceSnapshot,
   type IntegrationTriggerResourceRequest,
-  type IntentResourceChangesetReceipt,
   type McpCatalogResource,
   type McpPackageMutation,
   type PackageResourceKind,
@@ -51,6 +50,7 @@ import {
   type AclCatalogKind,
   type GrantTargetKind,
 } from '../src/modules/resource-catalog/domain/resourceKinds'
+import type { IntentResourceChangesetReceipt } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
 import { resourceRef } from '../src/modules/resource-catalog/domain/resourceRef'
 import { resourceSummaryRevisionEquals } from '../src/modules/resource-catalog/domain/resourceRevision'
 import type {
@@ -70,7 +70,6 @@ import type {
   WorkgroupQueries,
 } from '../src/modules/resource-catalog/public/queries'
 import type {
-  IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
   SkillZipImportParticipant,
   TaskExecutionResourceSnapshotInTx,
@@ -136,6 +135,9 @@ assertType<
 >(true)
 assertType<Equal<ResourceMemoryScopeRef['kind'], 'agent' | 'workflow'>>(true)
 assertType<Equal<VersionedIntentResourceChangesetPlan['kind'], CatalogSelectorKind>>(true)
+// RFC-359：收据类型搬出 `public/`（只在 RC 自己的提交臂与 intent 的编排之间流动，
+// 而 intent 拿到它是经 `PostgresqlIntentApplyResourceSession` 这个 infrastructure 合同）。
+// 判据照旧——闭集仍是 `CatalogSelectorKind`，只是从新家取。
 assertType<Equal<IntentResourceChangesetReceipt['kind'], CatalogSelectorKind>>(true)
 assertType<Equal<AgentPackageMutation['kind'], 'agent-create' | 'agent-update'>>(true)
 assertType<Equal<SkillPackageMutation['kind'], 'skill-create' | 'skill-update'>>(true)
@@ -175,9 +177,9 @@ assertType<
   >
 >(true)
 assertType<Equal<Extract<keyof TaskExecutionResourceSnapshotInTx, string>, 'loadAuthorized'>>(true)
-assertType<Equal<Extract<keyof IntentApplyResourceParticipantInTx, string>, 'authorizeAndCommit'>>(
-  true,
-)
+// RFC-359：`IntentApplyResourceParticipantInTx` 随 legacy 会话一起退役；现行会话交出的是
+// `{participant, commitSucceeded}` 的 transaction attempt（提交后还有一条尾巴要等外层事务提交
+// 之后才放行），它不从 `public/` 出——RFC-349 的 provider-cutover 账本只能缩不能涨。
 assertType<Equal<Extract<keyof MemoryResourceScopeAccessParticipant<unknown>, string>, 'accessOf'>>(
   true,
 )
@@ -655,10 +657,16 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(secondScopeGate).toBeGreaterThan(refreshActor)
   })
 
+  // RFC-359 —— 两台 apply 引擎合一之后这条判据整体挪到**生产在用的那一份**上：引擎从
+  // `sqliteIntentApplyOperations.ts` 换成 `postgresqlIntentApplyOperations.ts`，适配器从
+  // `legacyIntentApplyResourceParticipants.ts` 换成 `postgresqlIntentApplyResourceParticipants.ts`
+  // + `postgresqlIntentApplyResourcePorts.ts`，`legacyIntentApplyResourceDependencies.ts`
+  // 那张依赖表随之消失（现行绑定的依赖由 ports 工厂闭包持有）。**锁的东西一条没变**：
+  // 次序、不许回到 `services/*` 的老写点、authority 同一性、路由只消费窄端口。
   test('T4b Intent apply consumes one exact authority pair and one in-tx participant', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const engine = readFileSync(
-      resolve(sourceRoot, 'modules/intent/infrastructure/sqliteIntentApplyOperations.ts'),
+      resolve(sourceRoot, 'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts'),
       'utf8',
     )
     const route = readFileSync(
@@ -672,28 +680,28 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const adapter = readFileSync(
       resolve(
         sourceRoot,
-        'modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts',
+        'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts',
       ),
       'utf8',
     )
-    const dependencies = readFileSync(
+    const ports = readFileSync(
       resolve(
         sourceRoot,
-        'modules/resource-catalog/composition/legacyIntentApplyResourceDependencies.ts',
+        'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
       ),
       'utf8',
     )
 
     const prepare = engine.indexOf('await resourceSession.prepare(plan, {')
-    const prestage = engine.indexOf('await resourceSession.prestage(plan, { recordArtifact })')
-    // RFC-359 W4-D23b：大事务改走中立会话；链上仍是同步面的成员经具名 `syncMembers(tx)` 拿到
-    // 同一个句柄（SQLite 上就是 DbClient 本身）。次序判据不变。
-    const bigTransaction = engine.indexOf(
-      'const receipt = await databaseSessionFor(db).transaction(async (tx) =>',
+    const prestage = engine.indexOf(
+      'for (const plan of plans) await resourceSession.prestage(plan, { recordArtifact })',
     )
-    const participant = engine.indexOf('resourceSession.participantInTransaction(syncMembers(tx),')
+    const bigTransaction = engine.indexOf(
+      'const transactionResult = await databaseSessionFor(dependencies.db).transaction(',
+    )
+    const participant = engine.indexOf('const attempt = resourceSession.createTransactionAttempt(')
     const authorize = engine.indexOf(
-      'await resourceParticipant.authorizeAndCommit(deps.authority, plan)',
+      'await attempt.participant.authorizeAndCommit(authority, plan)',
     )
     expect(prepare).toBeGreaterThanOrEqual(0)
     expect(prestage).toBeGreaterThan(prepare)
@@ -712,33 +720,20 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ]) {
       expect(engine).not.toContain(legacyWriter)
       expect(adapter).not.toContain(legacyWriter)
-      expect(dependencies).not.toContain(legacyWriter)
+      expect(ports).not.toContain(legacyWriter)
     }
-    for (const ownerInfrastructure of [
-      '@/modules/resource-catalog/infrastructure/legacy/agent',
-      '@/modules/resource-catalog/infrastructure/mcpPersistence',
-      '@/modules/resource-catalog/infrastructure/pluginPersistence',
-      '@/modules/resource-catalog/infrastructure/legacy/skill',
-      '@/modules/resource-catalog/infrastructure/legacy/skillVersion',
-      '@/modules/resource-catalog/infrastructure/legacy/workflow',
-      '@/modules/resource-catalog/infrastructure/legacy/workgroups',
-    ]) {
-      expect(dependencies).toContain(ownerInfrastructure)
-    }
-    expect(dependencies).toContain("from '@/services/pluginInstaller'")
-    expect(adapter).toContain('createIntentApplyResourceParticipantInTx({')
+    // 提交臂直接落在 RC 自己的表上（drizzle schema），不经任何 `services/*` 门面。
+    expect(ports).toContain("from '@/db/schema'")
     expect(adapter).toContain('authority !== options.authority')
-    expect(adapter).toContain("throw new Error('foreign-intent-apply-authority')")
-    expect(composition).toContain('composeIntentApplyResourceBinding')
-    expect(composition).toContain('createLegacyIntentApplyResourceSession')
+    expect(adapter).toContain("throw new Error('foreign-postgresql-intent-apply-authority')")
+    expect(composition).toContain('composePostgresqlIntentApplyResourceBinding')
+    expect(composition).toContain('createPostgresqlIntentApplyResourceSession')
 
     expect(route).toContain('export interface IntentSessionRouteDependencies')
     expect(route).not.toContain('AppDeps')
     expect(route).toContain('directRequestAuthority(deps.directAuthority, actor)')
     expect(route).toContain('const receipt = await deps.intentApply.apply({')
-    expect(composition).toContain(
-      'createLegacyIntentApplyResourceSession(options, dependencies, aclIdentities)',
-    )
+    expect(composition).toContain('createPostgresqlIntentApplyResourceSession(\n')
   })
 
   test('T4c integration triggers consume five snapshots through exact direct and delegated pairs', () => {

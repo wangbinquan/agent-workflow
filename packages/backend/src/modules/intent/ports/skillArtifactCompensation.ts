@@ -9,25 +9,28 @@
 // 现在 intent 只声明它要的这几件事，实现由 resource-catalog 提供、bootstrap 注入
 // （形态与 RFC-353 给 memory / RC 落 participant 一致）。
 //
-// **为什么按 provider 分两个端口**：两条恢复路径要的原语本就不同（SQLite 走 staged 版本记录 +
-// skill operation 账，PostgreSQL 走目录 swap + 内容哈希），硬凑一个「provider 中性」的合同
-// 只会得到一个两边都用不满的联合体。端口按消费者的真实需要划，不按对称美感划。
+// **为什么是两个端口**：它们不是「两个 provider 的对称两份」——一个是**现行**的工件机制
+// （目录 swap + 内容哈希），另一个是**读旧 journal 行**时才走的兼容面。端口按消费者的真实
+// 需要划，不按对称美感划。
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 
-/** SQLite 恢复路径要的技能工件原语。 */
-export interface SqliteSkillArtifactCompensation {
-  /** 补偿一个未提交的技能暂存（建/改技能的 staging 目录与候选行）。 */
-  compensateManagedSkillStage(db: DbClient, artifact: { readonly [k: string]: unknown }): void
-  /** 丢弃一个已 stage 未提交的技能版本。 */
-  abortStagedSkillVersion(db: DbClient, staged: unknown): void | Promise<void>
+/**
+ * RFC-359 —— **合一之前**由 SQLite 那台 apply 引擎写下的 journal 工件，前滚时要的原语。
+ *
+ * 这个端口此前叫 `SqliteSkillArtifactCompensation`，是「SQLite provider 的恢复路径」。
+ * 两台引擎合一后不再有「SQLite 的恢复路径」——只有**一条**恢复路径，它偶尔会读到一条
+ * 旧词汇的 journal 行。所以这里剩下的只有旧工件前滚真正用得上的那几件；补偿那一侧已经
+ * 由 `compensateLegacyArtifact` 用 PG 原语直接做掉了，不再需要 legacy 版本。
+ */
+export interface LegacyIntentSkillArtifactCompat {
   /** 把一个已提交的技能版本发布成 live files/。 */
   publishStagedSkillVersion(
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     options: { readonly appHome: string },
     staged: unknown,
-  ): void
+  ): void | Promise<void>
   /** 撤销某技能的本次 boot admission（发布前必须撤，见 RC 的 stage/publish 注释）。 */
   unmarkSkillBootVerified(skillId: string): void
   /** 收尾一个 skill operation（在调用方的事务里）。 */
@@ -35,9 +38,12 @@ export interface SqliteSkillArtifactCompensation {
   finishOperation(tx: DatabaseTransaction, operationId: string): void | Promise<void>
   /** 读一个 skill operation 的当前状态；`undefined` = 不存在。 */
   loadSkillOperationState(
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     operationId: string,
-  ): { readonly active: number; readonly phase: string } | undefined
+  ):
+    | { readonly active: number; readonly phase: string }
+    | undefined
+    | Promise<{ readonly active: number; readonly phase: string } | undefined>
 }
 
 /** PostgreSQL 恢复路径要的技能工件原语（目录 swap + 内容哈希 + 路径解析）。 */

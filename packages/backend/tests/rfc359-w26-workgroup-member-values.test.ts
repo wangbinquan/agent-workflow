@@ -19,7 +19,6 @@ import {
   type WorkgroupDraftMember,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import {
   agents,
   intentApplyJournal,
@@ -34,26 +33,14 @@ import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentManifestEntry } from '@/modules/intent/application/manifest'
 import {
-  applyIntentChangeset,
-  composeSqliteIntentApplyArtifactLifecycle,
-  composeSqliteIntentApplyOperations,
+  composeIntentApplyOperations,
   type ApplyIntentFaults,
 } from '@/modules/intent/composition/apply'
-import { createPostgresqlIntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
-import { createPostgresqlIntentApplyOperations } from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
-import {
-  composePostgresqlIntentApplyResourceBinding,
-  composePostgresqlSkillArtifactCompensation,
-  createPostgresqlIntentPluginArtifactLifecycle,
-  createPostgresqlIntentSkillArtifactLifecycle,
-} from '@/modules/resource-catalog/composition/intentApply'
+import {} from '@/modules/resource-catalog/composition/intentApply'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
-import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 import { workgroupMemberPersistenceValues } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 type MemberRow = typeof workgroupMembers.$inferInsert
 type MemberValues = (
@@ -260,57 +247,18 @@ const actor = buildActor({
   source: 'session',
 })
 
+// RFC-359 —— 两个 provider 共用同一份装配。此处此前是 `isolation === 'exclusive'` 的二分：
+// SQLite 走 `composeSqliteIntentApplyOperations` + legacy 资源会话，PostgreSQL 走
+// `createPostgresqlIntentApplyOperations` + PG 资源会话。
 function composeFor(harness: ProviderHarness, appHome: string) {
-  const pluginsDir = join(appHome, 'plugins')
-  if (harness.capabilities.isolation === 'exclusive') {
-    const db = harness.db as DbClient
-    const binding = intentApplyResourceBinding(db, actor)
-    const operations = composeSqliteIntentApplyOperations({
-      db,
-      appHome,
-      resources: binding.resourceApply,
-      artifacts: composeSqliteIntentApplyArtifactLifecycle({ db, appHome }),
-    })
-    return {
-      apply(command: IntentApplyInput, faults?: ApplyIntentFaults) {
-        if (faults === undefined)
-          return operations.apply({ actor, authority: binding.authority, command })
-        return applyIntentChangeset(
-          {
-            db,
-            appHome,
-            actor,
-            authority: binding.authority,
-            resourceApply: binding.resourceApply,
-            faults,
-          },
-          command,
-        )
-      },
-    }
-  }
-  const db = harness.db as PostgresqlDatabaseClient
-  const identity = composeIdentityAccess(db)
-  const { authority } = identity.contexts.fromAuthenticatedPrincipal(
+  const { authority } = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
     { userId: OWNER, source: 'session' },
     'http',
   )
-  const resources = composePostgresqlIntentApplyResourceBinding({
-    db,
-    mcpLifecycle: createMcpTransactionLifecycle(),
-    pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({ pluginsDir }),
-    skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({ appHome }),
-    aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
-  })
-  const operations = createPostgresqlIntentApplyOperations({
-    db,
-    resources,
-    artifacts: createPostgresqlIntentApplyArtifactLifecycle({
-      db,
-      appHome,
-      pluginsDir,
-      skillArtifacts: composePostgresqlSkillArtifactCompensation(),
-    }),
+  const operations = composeIntentApplyOperations({
+    db: harness.db,
+    appHome,
+    aclIdentities: composeResourceCatalogFor({ db: harness.db }).persistence.identities,
   })
   return {
     apply(command: IntentApplyInput, faults?: ApplyIntentFaults) {

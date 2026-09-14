@@ -4287,6 +4287,29 @@ tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新�
 
 判据：上面五条的用例名 + `declared operation has no mounted binding`。
 
+## 全量 backend 同进程跑时稳定红 10 条，两簇、两个签名（2026-09-14 两轮逐条相同）
+
+与上面两条同族的第三次记录。整棵 `tests/` 交给同一个 bun 进程（~1960 文件）跑，**两轮
+逐条相同的 10 条**——不是抖动，是确定性的进程级状态累积：
+
+- **簇 A（4 条）** `rfc349-digital-employee-platform-tools-wiring`：
+  `resource-catalog.export-agent-package.v1: declared operation has no mounted binding`
+  （`platform/operations/catalog.ts:719`）。与上一条「283 个文件」那簇**同一个签名、不同的
+  操作 id**——操作目录是进程级注册表，声明累积、绑定没跟上。
+- **簇 B（6 条）** `lifecycle-repair-U1`：一条 **insert** 报
+  `SQLiteError: near "from": syntax error`。这是**方言 shim 被进程级切到 PostgreSQL**、
+  而客户端还是 bun:sqlite 的典型形态（`db/providerSchema.ts` 的全局 schema provider 选择，
+  `describeEachProvider` 的 PG 腿会切它）。
+
+**归属排除做到这一步**：两簇单跑全绿；两两组合绿；按全量日志里**紧邻的前两个文件**组成三元组
+（`rfc244-task-operations-benchmark` + `rfc349-digital-employee-platform-tools-wiring` +
+`lifecycle-repair-U1`）也绿——说明不是某一对在串味，是**几百个文件累积**之后才越过边界。
+CI 把 backend 分成四片、跑在干净 checkout 上，所以这个顺序在 CI 上不出现；**分片一变就会暴露**。
+
+**下一步要拿的证据**（不要在拿到之前改代码）：给这两个进程级状态各加一次「谁把它改了」的记录
+——`providerSchema` 的 setter 与操作目录的 declare/mount 两侧各打一条带调用栈的 debug 日志，
+再跑一次全量，就能指名道姓说出是哪个文件留下的状态。判据：上面两个签名。
+
 ## `workgroup-matrix` 的领队回合计数在 Windows e2e 上偶发多出几轮（2026-09-06 一次）
 
 `e2e/workgroup-matrix.spec.ts:348` 断言第二道门之前领队恰好跑过 5 轮

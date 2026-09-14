@@ -112,6 +112,11 @@ function oldSqliteStoreReturn(source: ts.SourceFile, body: ts.Block): ts.Block {
     // 查询面暴露出来，交给 `cli/start.ts` 晚绑定给维护服务。合一前这个输入来自
     // `services/bundle/apply.ts` 的模块级集合，SQLite 不再走那条路后它永远为空。
     'resourcePackageApplyActivity:resourcePackageBinding?.applyActivity??NO_RESOURCE_PACKAGE_APPLY_ACTIVITY',
+    // RFC-359（intent apply 引擎合一）：同一个形状的第二例。合一前 SQLite 的「本进程在跑哪些
+    // intent apply」读的是引擎的**模块级**集合（`activeIntentApplyJournalIds()`），装配点在哪
+    // 都无所谓；合一取了 PG 那一侧的强判据——在飞集合是进程内围栏，必须把**选中的那台引擎**
+    // 交出来，于是同样走「暴露 + 晚绑定」。
+    'intentApplyActivity:Object.freeze({activeJournalIds:()=>intentApply.activeJournalIds(),})',
   ]
   if (value === undefined || !ts.isObjectLiteralExpression(value))
     throw new Error('SQLite composition must keep its final frozen return')
@@ -469,6 +474,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // 那是在补一处**用户可见的引擎分叉**：PG 侧的 composition 此前根本没有 `inspectHumanReview`，
   // 于是计划人审闸门在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、
   // PG 显示「规划中」）。装的是与 SQLite 侧同一份中立实现，见 plan §5dm。
+  // RFC-359（2026-09-14，intent apply 引擎合一，plan §5ea）：语句条数仍是 160，摘要变了——
+  // PG 根这一段此前是 `createPostgresqlIntentApplyArtifactLifecycle` +
+  // `createPostgresqlIntentApplyOperations`（自己拼资源绑定与工件生命周期）+
+  // `composePostgresqlIntentApplyOperations` 的窄化，现在是与 SQLite 根**逐字同一份**的
+  // `composeIntentApplyArtifactLifecycle` + `composeIntentApplyOperations`；
+  // `composePostgresqlIntentMaintenanceSnapshotQueries` 一并改叫
+  // `composeIntentMaintenanceSnapshotQueriesFor`。
   test('daemon phase retains the complete original 160-statement graph and ordered effects', () => {
     const body = functionBody(pg, 'composePostgresqlApplication')
     const phaseBlocks = body.statements.filter(
@@ -479,7 +491,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(160)
     expect(digest(restored, pg)).toBe(
-      '7a993e2ff434d06271f96767ad1691f1df59f27a63686ae50bc9f66816f53290',
+      '7c6182a573030eb46abd1448842459702803955a1e4a8b323b46f31033bec3a7',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -503,8 +515,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （SQLite 专属的 legacy `commitResourcePackage` 那条），现在 `composePostgresqlResourcePackageProvider`
     // + `composePostgresqlResourcePackageCatalog` + `createPostgresqlResourcePackageAtomicApplyOperations`
     // （两个 provider 装的同一条），并带出 `ResourcePackageRouteBinding`（目录 + 造 context 的那条路同源）。
+    //
+    // RFC-359（2026-09-14，intent apply 引擎合一，plan §5ea）：摘要又变了，变的是 **intent
+    // apply 那一段**——此前 `composeSqliteIntentApplyOperations` + `composeIntentApplyResourceBinding`
+    // （legacy 资源会话）+ `composeSqliteIntentApplyArtifactLifecycle`，现在是与 PG 根同一份的
+    // `composeIntentApplyOperations`（资源会话与工件生命周期由它自己按 db + appHome 装配）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      'c7fd72ed74414b8c94057d122f177e390ba49d9956e13132cc69462eeb0ab6c8',
+      '38572603b7213cb4d06932596037ad0c4b26c65a2b38e70b3647aec2ffbaab71',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。

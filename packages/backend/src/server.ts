@@ -103,7 +103,6 @@ import {
 } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { type ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
-import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
   canViewResource,
   composeForeignResourceAclFor,
@@ -197,10 +196,9 @@ import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/inbound/intentSessionRoutes'
-import { legacyIntentApplyResourceDependencies } from '@/modules/resource-catalog/composition/legacyIntentApplyResourceDependencies'
+import type { IntentApplyActivitySource } from '@/modules/intent/composition/maintenance'
 import {
-  composeSqliteIntentApplyArtifactLifecycle,
-  composeSqliteIntentApplyOperations,
+  composeIntentApplyOperations,
   createIntentSessionWsPublisher,
 } from '@/modules/intent/composition/apply'
 import {
@@ -1070,6 +1068,12 @@ export interface SqliteAppComposition<
    * `services/bundle/apply` 的模块级集合；现在与 PostgreSQL 一样，读的是 apply 引擎自己的。
    */
   readonly resourcePackageApplyActivity: ResourcePackageApplyActivityQuery
+  /**
+   * RFC-359 —— 同上，Intent apply 那一侧。合一前 SQLite 读的是引擎的**模块级**集合
+   * （`activeIntentApplyJournalIds()`），PostgreSQL 读的是注入进来的那台引擎；两台引擎
+   * 合一后只剩后者——在飞集合是进程内的围栏，从 journal 行反推不出来。
+   */
+  readonly intentApplyActivity: IntentApplyActivitySource
 }
 
 export type ProviderComposedAppDeps<
@@ -2129,23 +2133,19 @@ export function composeSqliteApplicationDeps(
             },
           })
         })()
-  const intentApply = composeSqliteIntentApplyOperations({
+  // RFC-359 —— Intent apply 两个 provider 共用**同一台**引擎与同一份装配。此处此前是
+  // SQLite 专属的那条线（legacy 资源会话 + SQLite 工件生命周期），与 PostgreSQL 根的
+  // `createPostgresqlIntentApplyOperations` 并行存在；判据长期只喂其中一侧。
+  const intentApply = composeIntentApplyOperations({
     db: effectiveDeps.db,
     appHome,
+    aclIdentities: providerResourceCatalog.persistence.identities,
     // RFC-358 §7（AC-6）—— 提交期的图校验。draft 期那道门挡的是模型；这道挡的是
     // draft 与 apply 之间的漂移（别人改了被引用 agent 的端口、上线前的存量草稿）。
     graphValidation: composeIntentWorkflowGraphValidation({
       validationQueries: workflowCatalog.validationQueries,
       workflowQueries: workflowCatalog.queries,
       authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-    }),
-    resources: composeIntentApplyResourceBinding(
-      legacyIntentApplyResourceDependencies,
-      providerResourceCatalog.persistence.identities,
-    ),
-    artifacts: composeSqliteIntentApplyArtifactLifecycle({
-      db: effectiveDeps.db,
-      appHome,
     }),
   })
   const identityUserOperations = composeIdentityUserOperations({
@@ -2204,6 +2204,9 @@ export function composeSqliteApplicationDeps(
     collaborationContext: effectiveDeps.collaborationContext,
     resourcePackageApplyActivity:
       resourcePackageBinding?.applyActivity ?? NO_RESOURCE_PACKAGE_APPLY_ACTIVITY,
+    intentApplyActivity: Object.freeze({
+      activeJournalIds: () => intentApply.activeJournalIds(),
+    }),
   })
 }
 

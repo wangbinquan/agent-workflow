@@ -10,10 +10,7 @@ import { createTokenCallAudit } from '@/auth/composition'
 import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { openDb, type DbClient } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
-import {
-  composePostgresqlIntentMaintenanceCommandsForAppHome,
-  composeSqliteIntentMaintenanceCommandsForAppHome,
-} from '@/modules/intent/composition/maintenance'
+import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
 import type { IntentMaintenanceCommands } from '@/modules/intent/public/commands'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import {
@@ -625,7 +622,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       const resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand =
         resourcePackageMaintenance.command
       const intentMaintenanceLog = createLogger('intentMaintenance')
-      intentMaintenanceCommands = composePostgresqlIntentMaintenanceCommandsForAppHome({
+      intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
         db: client,
         appHome,
         scratchDirectoryName: INTENT_SCRATCH_DIRNAME,
@@ -721,10 +718,11 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       })
       const resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand =
         resourcePackageMaintenance.command
-      intentMaintenanceCommands = composeSqliteIntentMaintenanceCommandsForAppHome({
+      intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
         db: sqliteDb,
         appHome,
         scratchDirectoryName: INTENT_SCRATCH_DIRNAME,
+        pluginsDir: join(appHome, 'plugins'),
         resourcePackages: {
           converge: ({ activeApplyIds }) =>
             resourcePackageMaintenanceCommand.converge({ activeApplyIds }),

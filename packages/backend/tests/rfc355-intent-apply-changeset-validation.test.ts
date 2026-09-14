@@ -23,35 +23,19 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
-import type { DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import type { PostgresqlDatabaseClient } from '../src/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import {
-  composeSqliteIntentApplyOperations,
-  composeSqliteIntentApplyArtifactLifecycle,
-  composePostgresqlIntentApplyOperations,
-} from '../src/modules/intent/composition/apply'
+import { composeIntentApplyOperations } from '../src/modules/intent/composition/apply'
 import { createIntentSession as createSession } from '../src/modules/intent/application/session'
 import { intentResourceVisibility } from '../src/modules/intent/application/resourceCatalog'
 import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type { IntentApplyInput } from '../src/modules/intent/application/ports/intentApplyOperations'
-import { createPostgresqlIntentApplyOperations } from '../src/modules/intent/infrastructure/postgresqlIntentApplyOperations'
-import { createPostgresqlIntentApplyArtifactLifecycle } from '../src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import {
-  composePostgresqlIntentApplyResourceBinding,
-  composePostgresqlSkillArtifactCompensation,
-  createPostgresqlIntentPluginArtifactLifecycle,
-  createPostgresqlIntentSkillArtifactLifecycle,
-} from '../src/modules/resource-catalog/composition/intentApply'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { createMcpTransactionLifecycle } from '../src/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
-import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 const OWNER = 'user_owner_rfc355_00000000'
 
@@ -66,45 +50,20 @@ const actor: Actor = {
 }
 
 function deps() {
-  if (harness.capabilities.isolation === 'exclusive') {
-    const sqlite = db as DbClient
-    const binding = intentApplyResourceBinding(sqlite, actor)
-    return {
-      authority: binding.authority,
-      operations: composeSqliteIntentApplyOperations({
-        db: sqlite,
-        appHome,
-        resources: binding.resourceApply,
-        artifacts: composeSqliteIntentApplyArtifactLifecycle({ db: sqlite, appHome }),
-      }),
-    }
-  }
-  const postgresql = db as PostgresqlDatabaseClient
-  const pluginsDir = join(appHome, 'plugins')
   const { authority } = composeIdentityAccess(db).contexts.fromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },
     'http',
   )
   return {
     authority,
-    operations: composePostgresqlIntentApplyOperations(
-      createPostgresqlIntentApplyOperations({
-        db: postgresql,
-        resources: composePostgresqlIntentApplyResourceBinding({
-          db: postgresql,
-          mcpLifecycle: createMcpTransactionLifecycle(),
-          pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({ pluginsDir }),
-          skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({ appHome }),
-          aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
-        }),
-        artifacts: createPostgresqlIntentApplyArtifactLifecycle({
-          db: postgresql,
-          appHome,
-          pluginsDir,
-          skillArtifacts: composePostgresqlSkillArtifactCompensation(),
-        }),
-      }),
-    ),
+    // RFC-359 —— 两个 provider 同一份装配。此处此前是 `isolation === 'exclusive'` 的二分：
+    // SQLite 走 `composeSqliteIntentApplyOperations` + legacy 资源会话，PostgreSQL 走
+    // `createPostgresqlIntentApplyOperations` + PG 资源会话。
+    operations: composeIntentApplyOperations({
+      db,
+      appHome,
+      aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
+    }),
   }
 }
 

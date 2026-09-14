@@ -208,7 +208,8 @@ import {
 } from '@/modules/intent/composition/auxiliaryQueries'
 import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
 import {
-  composePostgresqlIntentApplyOperations,
+  composeIntentApplyArtifactLifecycle,
+  composeIntentApplyOperations,
   createIntentSessionWsPublisher,
 } from '@/modules/intent/composition/apply'
 import { createPostgresqlIntentApplyOperations } from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
@@ -221,7 +222,7 @@ import { composePostgresqlIntentApplyResourceBinding } from '@/modules/resource-
 import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import { composePostgresqlFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
-import { composePostgresqlIntentMaintenanceSnapshotQueries } from '@/modules/intent/composition/maintenance'
+import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 import { composePostgresqlTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import {
@@ -474,7 +475,7 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly mcpRuntimeTests: ReturnType<typeof getMcpRuntimeTestService>
   readonly webhookTerminalControl: ReturnType<typeof composePostgresqlMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
-  readonly intentMaintenance: ReturnType<typeof composePostgresqlIntentMaintenanceSnapshotQueries>
+  readonly intentMaintenance: ReturnType<typeof composeIntentMaintenanceSnapshotQueriesFor>
   readonly resourcePackageActivity: Pick<
     ReturnType<typeof createPostgresqlResourcePackageAtomicApplyOperations>,
     'activeApplyIds'
@@ -1796,34 +1797,24 @@ export async function composePostgresqlApplication(
     db: input.db,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
-  const intentArtifactRecovery = createPostgresqlIntentApplyArtifactLifecycle({
-    skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+  const intentArtifactRecovery = composeIntentApplyArtifactLifecycle({
     db: input.db,
     appHome: input.appHome,
-    pluginsDir: join(input.appHome, 'plugins'),
   })
-  const intentApplyOperations = createPostgresqlIntentApplyOperations({
+  // RFC-359 —— 与 SQLite 根**逐字同一份**装配（`composeIntentApplyOperations`）。
+  const intentApplyOperations = composeIntentApplyOperations({
     db: input.db,
+    appHome: input.appHome,
+    aclIdentities: resourceCatalog.persistence.identities,
+    artifacts: intentArtifactRecovery,
     // RFC-358 §7（AC-6）—— 与 SQLite provider 同一道门、同一份判据。
     graphValidation: composeIntentWorkflowGraphValidation({
       validationQueries: classicCatalogs.workflow.validationQueries,
       workflowQueries: classicCatalogs.workflow.queries,
       authorityFor,
     }),
-    resources: composePostgresqlIntentApplyResourceBinding({
-      db: input.db,
-      mcpLifecycle: createMcpTransactionLifecycle(),
-      pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({
-        pluginsDir: join(input.appHome, 'plugins'),
-      }),
-      skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({
-        appHome: input.appHome,
-      }),
-      aclIdentities: resourceCatalog.persistence.identities,
-    }),
-    artifacts: intentArtifactRecovery,
   })
-  const intentApply = composePostgresqlIntentApplyOperations(intentApplyOperations)
+  const intentApply = intentApplyOperations
   const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
     authorityFor: intentAuthorityFor,
     capabilityTemplates: capabilityTemplateOperations,
@@ -1854,7 +1845,7 @@ export async function composePostgresqlApplication(
     }),
     resourceCatalogFor: intentResourceCatalogFor,
   })
-  const intentMaintenance = composePostgresqlIntentMaintenanceSnapshotQueries({
+  const intentMaintenance = composeIntentMaintenanceSnapshotQueriesFor({
     db: input.db,
     activity: intentApplyOperations,
   })

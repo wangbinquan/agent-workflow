@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 849,
+    "consumers": 846,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1042,
+    "methods": 1041,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20307,
-    "symbols": 961
+    "recursiveFields": 20303,
+    "symbols": 959
   },
   "entries": [
     {
@@ -50204,7 +50204,6 @@
         "public:knowledge-evolution:operations:startFusionReconcileLoop",
         "public:knowledge-evolution:participants:FusionOperations",
         "public:memory:operations:MemoryOperations",
-        "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
         "public:resource-catalog:participants:IntentContextResourceAuthorizationSession",
         "public:resource-catalog:participants:ResourceRequestContext",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
@@ -98748,72 +98747,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:b2d82ebf2a8487245032"
-      ],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:authorizeAndCommit.$parameter:plan",
-          "type": "K extends CatalogSelectorKind ? IntentCreateResourcePlan<K> | IntentUpdateResourcePlan<K> : never"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:authorizeAndCommit.$return.$variant:0",
-          "type": "K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:authorizeAndCommit.$return.$variant:1",
-          "type": "K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
-      "members": [
-        "[intentApplyResourceParticipantInTxBrand]",
-        "authorizeAndCommit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:b2d82ebf2a8487245032"
-          ],
-          "name": "authorizeAndCommit",
-          "signatureDigest": "sha256:eab4d7768dbadf283e36bd083bad41960525d4a3165166ca0033bd61f59a9207"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#IntentApplyResourceParticipantInTx",
-      "productionConsumers": [
-        {
-          "context": "intent",
-          "edgeId": "import:b2d82ebf2a8487245032",
-          "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:84c2ebfa741776554c1d491bedec5fe696f94b98befd9e9dd00101e23fe00100",
-      "status": "target-context-current-surface",
-      "symbol": "IntentApplyResourceParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
         "import:ee9f8232a6df167b6457"
       ],
       "context": "resource-catalog",
@@ -100434,8 +100367,7 @@
         "import:a7869069fdaf3d810f3b",
         "import:b1e3426a3850d35d6f34",
         "import:c44892f461465161319e",
-        "import:cf05431d12871ab59909",
-        "import:ec4db4214639dda6fcb0"
+        "import:cf05431d12871ab59909"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -100501,17 +100433,10 @@
           "edgeId": "import:cf05431d12871ab59909",
           "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#$file"
-        },
-        {
-          "context": "intent",
-          "edgeId": "import:ec4db4214639dda6fcb0",
-          "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
         "public:intent:operations:IntentApplyOperations",
-        "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
         "public:resource-catalog:participants:IntentContextResourceAuthorizationSession",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
         "public:task-execution:commands:TaskExecutionResourceAuthority"
@@ -110629,44 +110554,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$value",
-          "type": "K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "public:resource-catalog:types:IntentResourceChangesetReceipt",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#IntentResourceChangesetReceipt",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:IntentApplyResourceParticipantInTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:98afb0bcbd21978349952fbdc6f078f940e0e8942a331330d19cfd85debfb0c8",
-      "status": "target-context-current-surface",
-      "symbol": "IntentResourceChangesetReceipt",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [
         "import:2020946c274364f950e7"
       ],
@@ -115442,8 +115329,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:0d6e4bc1be86e9e51a6d",
-        "import:769e4e7516da0f50fd97"
+        "import:0d6e4bc1be86e9e51a6d"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -115467,17 +115353,9 @@
           "edgeId": "import:0d6e4bc1be86e9e51a6d",
           "file": "packages/backend/src/modules/intent/application/intentResourcePlan.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/application/intentResourcePlan.ts#$file"
-        },
-        {
-          "context": "intent",
-          "edgeId": "import:769e4e7516da0f50fd97",
-          "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:IntentApplyResourceParticipantInTx"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:de2855e7173722b8db11354501512d40dfe188bfe52431d74ceb71fc053d3f14",
@@ -159880,7 +159758,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:59748861caa36e90a0aa30e0b996a9070787acbedd2915682147e5fe62110d0a",
+  "sourceDigest": "sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e",
   "targetContexts": [
     "collaboration",
     "development-automation",

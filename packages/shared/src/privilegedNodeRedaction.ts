@@ -24,13 +24,14 @@ import {
   definitionHasCodeHostCallNode,
   serializeCodeHostSensitiveProjectionV1,
 } from './codeHost/authorProjection'
+import type { Permission } from './schemas/permission'
 import type { WorkflowDefinition, WorkflowNode } from './schemas/workflow'
 
 /**
  * 每类特权节点是否要对当前观察者遮蔽。`true` = 遮。
  *
- * 由 permissions 推出（后端 `services/privilegedNodeLens.ts`），因此「能写的一定
- * 能看」是构造保证的，不需要额外断言。
+ * 由 permissions 推出（`privilegedNodeLensFor`，就在下面），因此「能写的一定能看」
+ * 是构造保证的，不需要额外断言。
  */
 export interface PrivilegedNodeLens {
   scripts: boolean
@@ -42,6 +43,31 @@ export const PRIVILEGED_LENS_TRANSPARENT: PrivilegedNodeLens = { scripts: false,
 
 export function lensIsTransparent(lens: PrivilegedNodeLens): boolean {
   return !lens.scripts && !lens.codeHost
+}
+
+/**
+ * RFC-270 §2.1 —— 把一个调用方的权限翻译成特权节点的**观察镜头**。
+ *
+ * 判据与两个 author 门读的是**同一个 `permissions` 集合**（`scriptAuthorGate` 的
+ * `'scripts:author'` / `codeHostAuthorGate` 的 `'code-host-calls:author'`），所以
+ * 「能写的一定能看」是构造保证的，不可能漂移出「看得见但存不了」或反过来的组合。
+ *
+ * 刻意不复用 `tokenRedaction` 的 `shouldRedactFor(source)`：那条轴问的是「这是不是令牌
+ * 通道」，本轴问的是「这个人有没有创作权」。两条轴正交且叠加——一个既是 PAT 又无
+ * `scripts:author` 的调用方两条都吃。
+ *
+ * RFC-359 —— 此前住在后端的 `services/privilegedNodeLens.ts`。它与 `rehydratePrivilegedNodes`
+ * / `PRIVILEGED_LENS_TRANSPARENT` 本来就是一套东西，却隔着一层 `services/` 门面；
+ * intent 的提交臂要用它做回填（普通作者送回的是打码后的定义）时撞上「infrastructure
+ * 不得深取 `@/services/`」的边界守卫，顺手把它挪到正身旁边。
+ */
+export function privilegedNodeLensFor(principal: {
+  readonly permissions: ReadonlySet<Permission>
+}): PrivilegedNodeLens {
+  const scripts = !principal.permissions.has('scripts:author')
+  const codeHost = !principal.permissions.has('code-host-calls:author')
+  // 常量复用而不是新造对象：读出口靠「镜头透明 ⇒ 返回同一引用」短路，能少一次全量节点遍历。
+  return scripts || codeHost ? { scripts, codeHost } : PRIVILEGED_LENS_TRANSPARENT
 }
 
 /**

@@ -350,8 +350,11 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
   // 分母本身会随 RFC-359 收敛一路变小（开账当天 242 → W7 成对合一后 203 → W8 死代码清理批 188
   // → 2026-09-13 退役八个「函数体逐字相同」的装配别名后 145 → 全部十四对清零后 133
   // → 资源包 apply 两台引擎合一、SQLite 专属的 provider / execution 装配退役后 131
-  // → 通用 bundle 引擎整条退役（含 legacy 参与者 / lowering / refs 与那个同步的能力模板提交臂）后 130，
-  //   plan §5ds/§5dv/§5dy），
+  // → 通用 bundle 引擎整条退役（含 legacy 参与者 / lowering / refs 与那个同步的能力模板提交臂）后 130
+  // → Intent apply 两台引擎合一（`sqliteIntentApplyOperations` / `sqliteIntentApplyArtifactLifecycle` /
+  //   `legacyIntentApplyResourceParticipants` 整条退役，装配改成不带引擎前缀的
+  //   `composeIntentApply*` / `composeIntentMaintenance*`）后 120，
+  //   plan §5ds/§5dv/§5dy/§5ea），
   // 所以这个门槛只能跟着**往下**调，不许往上——往上会把「收敛成功」判成红。真正证明判据没坏的是
   // 文件末尾那三条自变异 fixture（伪造源码喂给两个决定过程），它们与真实语料的大小完全无关；
   // 分母哪天真的走到零，删掉这条即可，fixture 仍然守着。
@@ -362,7 +365,7 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
         '[形容词]<Provider>…` / `class <Provider>…`），要么动词表被改坏；此刻账本再准也毫无预言力。' +
         '注意：数字掉到门槛以下**未必**是判据坏了——RFC-359 每合一批适配器分母就小一截，' +
         '确认是收敛就把门槛跟着调低（只降不升），并在注释里记下这一档的实测值。',
-    ).toBeGreaterThanOrEqual(130)
+    ).toBeGreaterThanOrEqual(120)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

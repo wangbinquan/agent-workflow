@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import {
+  privilegedNodeLensFor,
   INTENT_RESOURCE_TYPES,
   type IntentResourceType,
   INTENT_LIMITS,
@@ -43,7 +44,6 @@ import type { SystemAgentOutputEvidence } from '@/services/runtime/types'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
 import { parseHandleWatermark } from './manifest'
-import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { buildIntentDoc, privilegesFromLens, type IntentDocTurn } from '../domain/intentDoc'
 import { validateDraftChangeset } from './resolveChangeset'
 import { validateChangesetWorkflowGraphs } from './graphValidation'

@@ -2,6 +2,47 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 续 18，**intent apply 引擎整条退役——两台 apply 引擎全部合一**）
+>
+> 落档 plan §5ea。§5dz 停在「已证可移植 + 兼容面已补」，这一批把剩下三步一次做完：收资源绑定、
+> 切两个 bootstrap 根、退役 SQLite 那台。**src 净删 1943 行**（+560 / −2503），生产侧从此只有一条 intent apply 路径。
+> 退役：`sqliteIntentApplyOperations`(762) + `sqliteIntentApplyArtifactLifecycle`(178) +
+> `legacyIntentApplyResourceParticipants`(1062) + `legacyIntentApplyResourceDependencies`(141) +
+> `application/participants/intentApplyResourceParticipant`(61)。装配不再按 provider 命名
+> （`composeIntentApplyOperations` / `…ArtifactLifecycle` / `…Convergence` /
+> `composeIntentMaintenanceCommandsForDatabase` / `…SnapshotQueriesFor`，两个根调同一个）。
+>
+> **合一取并集，不是取某一侧**。工件生命周期那一对当初判「不能合」的三条理由里，第三条
+> 「能力缺口双向」已不成立：现行机制取 PG 那套（目录 swap + 内容哈希 + 托管根检查 + 逐工件
+> 错误隔离），SQLite 独有的 `skill_operations` 账重放 **原样保留**，降级成只在读到旧词汇工件时
+> 才走的兼容面。前两条依然为真，正是兼容面存在的理由——journal 行比进程活得久。
+>
+> **合一照出三处用户可见缺陷，全部在 PostgreSQL 那一侧**（正是 `rfc359-w5-t19d` 账本里
+> `IntentApplyOperations: sqlite 21/3 对 postgresql 7/5` 这条本仓最深的覆盖倒挂预言的形状）：
+> ①**名字域的 dangle 容忍写反了**——`call-workflow` / `call-workgroup` 按名字选目标，解析不到
+> 任何行本该留给启动期，PG 当场抛 422；「先建调用方后建被调方」「被调方在另一台机器上」
+> 两类正常用法在 PG 上整个被堵死。②**特权节点回填整段没有**——无 `scripts:author` 的作者看到的
+> 就是打码后的定义，PG 直接拿他送回的占位符去比敏感投影：**普通用户改不动任何含脚本节点的
+> 工作流**，连改描述 / 挪无关节点都 403；若放行还会把占位符当正文写进库、脚本正文静默丢失。
+> ③**in-place 改名在 SQLite 上没挡住**——v1 契约是 rename 只能经 finalName / copy
+> （RFC-234 plan:142，RFC-319 独立复现），PG 五类全挡、SQLite 只挡了 agent 一类。这条方向相反，
+> 强侧是 PG，合一取 PG。
+>
+> 另修一处**合一会引入**的回归：PG 引擎的 session 串行锁此前是装配的局部变量，合一后装配点变多
+> （兼容门面每次调用现装一台），同一 session 的两笔并发 apply 会各拿一把锁——改成模块级。
+>
+> **八处按路径写死的源码锁**一次性全部搬到活的那份上（§5dy 被这件事咬过一次，`13a72be52` 推红
+> 主干）：`tsc` 与 import 级 grep 都看不见 `readFileSync(<写死路径>)`。
+>
+> 新增双引擎判据 `rfc359-w41-intent-apply-provider-parity`（3 格 × 2 引擎）把①②钉住，**先红后绿
+> 已实测**：逐条回退修复后 ①② 当场红、①b（「别人私有的名字仍然拒」的对照格）照旧绿；
+> 恢复后 SQLite 3/3、真 PostgreSQL 3/3。顺带把 `privilegedNodeLensFor` 从后端 `services/`
+> 搬进 `@agent-workflow/shared`（它与 `rehydratePrivilegedNodes` 本来就是一套，隔着 services
+> 那层门面撞上「infrastructure 不得深取 services」的边界守卫），七个调用点一起受益。
+>
+> 账本：成对适配器 10 → **8**、覆盖对等 10 → **8**、倒挂名单 7 → **5**、provider 命名文件 47 → **44**、
+> 唯一插入 17 → **16**；两条语料下限 57 → 48 / 130 → 120。架构守卫 691/691 绿，shared 2284/2284 绿。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 17，下一对：intent apply 引擎——先证可移植 + 补兼容面）
 >
 > 落档 plan §5dz。资源包那一对收完之后逐对量了剩下的 10 对：**只有 intent apply 那一对是两侧

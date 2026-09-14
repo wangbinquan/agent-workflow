@@ -25,6 +25,7 @@
 // "read-only tokens can't leak secrets", which would be false.
 
 import {
+  privilegedNodeLensFor,
   maskWorkflowScriptEnv,
   redactPrivilegedNodes,
   type PrivilegedNodeLens,
@@ -32,7 +33,6 @@ import {
 import type { Task } from '@agent-workflow/shared'
 import type { Actor, ActorSource } from '@/auth/actor'
 import { REDACTED, redactMcpRecord, redactRepoUrl } from '@/auth/application/tokenSnapshotRedaction'
-import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { redactSensitiveString } from '@/util/redact'
 
 export { REDACTED, redactMcpRecord, redactRepoUrl }

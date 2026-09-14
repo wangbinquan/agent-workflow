@@ -174,7 +174,18 @@ describeEachProvider('围栏的另一面：读取之后、提交之前的 owner 
 })
 
 describe('intent apply 的 MCP update 分支已经带上围栏（源码层）', () => {
-  test('传的是「授权时看到的 owner」，不是 actor 自己', () => {
+  // RFC-359 —— 两台 apply 引擎合一，这条判据挪到**生产在用的那一份**上。
+  //
+  // 围栏的形态变了、挡的东西没变。合一之前 legacy 那份在 preflight 期读到行、把
+  // `expectedOwnerUserId: existing.ownerUserId` 带进提交期，由 `commitLegacyMcpUpdateInTx`
+  // 在事务里比对；现行这份**在事务里自己重读那一行**（`transaction.select().from(mcps)`），
+  // 于是不需要把 owner 当参数带过去——重读拿到的就是提交那一刻的真值，比「带一个快照过去」
+  // 更直接。两者挡的都是「授权之后 owner 变了」。
+  //
+  // 「在 intent 里改别人的资源」本身在更上游就被挡掉了（`application/resolveChangeset.ts` 的
+  // `intent-foreign-modify-forbidden`：preflight 把非己有的目标标成 copy-only，只能复制一份），
+  // 两个引擎同一条路——这里这道是提交期的同一件事再核一次。
+  test('提交期在事务里重读 owner，而不是信任 preflight 时的快照', () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -184,12 +195,17 @@ describe('intent apply 的 MCP update 分支已经带上围栏（源码层）', 
         'resource-catalog',
         'infrastructure',
         'aggregateAdapters',
-        'legacyIntentApplyResourceParticipants.ts',
+        'postgresqlIntentApplyResourcePorts.ts',
       ),
       'utf8',
     )
-    // `existing` 是 preflight 期读到的那一行 —— 用它才能同时覆盖「伪造」与
-    // 「授权后转移」两种情形；写死 actor.user.id 会把 admin 代改的合法场景也拦掉。
-    expect(src).toContain('expectedOwnerUserId: existing.ownerUserId')
+    const reread = src.indexOf(
+      'const row = await transaction.select().from(mcps).where(eq(mcps.id, plan.resourceId)).get()',
+    )
+    expect(reread, '语料失效：提交期那次重读一处都没扫到').toBeGreaterThanOrEqual(0)
+    const fence = src.indexOf("requireOwner(actor, 'mcp', current)", reread)
+    expect(fence, 'owner 核对必须在重读之后').toBeGreaterThan(reread)
+    // 写回还带一道 `updatedAt` 的 CAS：重读与写回之间行又变了就落空。
+    expect(src.indexOf('eq(mcps.updatedAt, current.updatedAt)', fence)).toBeGreaterThan(fence)
   })
 })

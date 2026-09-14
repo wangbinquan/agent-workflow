@@ -47,7 +47,6 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import {
   intentApplyJournal,
   intentDrafts,
@@ -57,13 +56,14 @@ import {
 } from '@/db/schema'
 import type { IntentJournalArtifactV1 } from '@/modules/intent/domain/journalArtifacts'
 import {
-  applyIntentChangeset,
-  convergeIntentApplyJournal,
+  createPostgresqlIntentApplyOperations,
   type ApplyIntentFaults,
-  type ApplyIntentInput,
-  type IntentApplyReceipt,
-  type IntentApplyResourceSession,
-} from '@/modules/intent/infrastructure/sqliteIntentApplyOperations'
+} from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
+import type {
+  IntentApplyInput,
+  IntentApplyReceipt,
+} from '@/modules/intent/application/ports/intentApplyOperations'
+import type { PostgresqlIntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { Logger } from '@/util/log'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -72,6 +72,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 // I14 的生产链兜底（源码层文本断言）
 // ─────────────────────────────────────────────────────────────────────────────
 
+// RFC-359 —— 生产 prestage 链退役了 legacy 那一份；现在唯一的 prestage 适配器是这个。
 const PRESTAGE_ADAPTER = resolve(
   import.meta.dir,
   '..',
@@ -80,17 +81,17 @@ const PRESTAGE_ADAPTER = resolve(
   'resource-catalog',
   'infrastructure',
   'aggregateAdapters',
-  'legacyIntentApplyResourceParticipants.ts',
+  'postgresqlIntentApplyResourcePorts.ts',
 )
 
 describe('I14 record-before-act —— Intent 生产 prestage 链的每一处 recordArtifact 都必须 await', () => {
-  test('legacyIntentApplyResourceParticipants.ts 里没有未 await 的 recordArtifact', () => {
+  test('postgresqlIntentApplyResourcePorts.ts 里没有未 await 的 recordArtifact', () => {
     const source = readFileSync(PRESTAGE_ADAPTER, 'utf8')
     const calls = [...source.matchAll(/(\S*\s*)context\.recordArtifact\(/g)]
     expect(
       calls.length,
       '语料失效：适配器里一处 recordArtifact 调用都没扫到',
-    ).toBeGreaterThanOrEqual(3)
+    ).toBeGreaterThanOrEqual(2)
     for (const call of calls) {
       expect(
         call[1],
@@ -206,7 +207,7 @@ async function seedSession(harness: ProviderHarness, name: string): Promise<Sess
   return { sessionId, draftId, draftRevision: 1, draftHash }
 }
 
-function command(fixture: SessionFixture, clientMutationId = ulid()): ApplyIntentInput {
+function command(fixture: SessionFixture, clientMutationId = ulid()): IntentApplyInput {
   return {
     sessionId: fixture.sessionId,
     clientMutationId,
@@ -273,7 +274,7 @@ interface PortOptions {
 }
 
 interface ApplyPort {
-  apply(input: ApplyIntentInput): Promise<IntentApplyReceipt>
+  apply(input: IntentApplyInput): Promise<IntentApplyReceipt>
   converge(options?: {
     readonly activeJournalIds?: readonly string[]
   }): Promise<{ failed: number; rolledForward: number }>
@@ -281,7 +282,7 @@ interface ApplyPort {
 }
 
 /**
- * 生产装配的那条 apply 编排，资源会话换成替身。替身把 SQLite 专属的六条同步提交臂挡在外面，
+ * 生产装配的那条 apply 编排，资源会话换成替身。替身把 RC 的六条提交臂挡在外面，
  * 于是剩下的编排层（claim / 三笔写 / 大事务 / 收敛）在两个引擎上跑的是**同一段代码**。
  */
 function applyPortFor(
@@ -290,7 +291,7 @@ function applyPortFor(
   options: PortOptions = {},
 ): ApplyPort {
   let prestaged = 0
-  const session: IntentApplyResourceSession = {
+  const session = {
     async preflight() {
       return Object.freeze({
         occupiedNames: new Map(),
@@ -298,46 +299,48 @@ function applyPortFor(
       })
     },
     async prepare() {},
-    async prestage(_plan, context) {
+    async prestage(_plan: unknown, context: { recordArtifact(a: unknown): Promise<void> }) {
       prestaged += 1
       if (options.artifact !== undefined) await context.recordArtifact(options.artifact)
       if (options.afterRecord !== undefined) await options.afterRecord()
     },
-    participantInTransaction() {
-      return {
-        authorizeAndCommit: async () => ({
-          kind: 'agent',
-          operationId: 'op-1',
-          resourceId: 'r',
-          action: 'create',
-          revision: {},
-        }),
-      } as never
+    createTransactionAttempt() {
+      return Object.freeze({
+        participant: {
+          authorizeAndCommit: async () => ({
+            kind: 'agent',
+            operationId: 'op-1',
+            resourceId: 'r',
+            action: 'create',
+            revision: {},
+          }),
+        },
+        commitSucceeded() {},
+      })
     },
-    broadcastCommitted() {},
-  }
+    async rollForwardCommitted() {},
+    async broadcastCommitted() {},
+    async abortPrepared() {},
+  } as unknown as PostgresqlIntentApplyResourceSession
   const artifacts = {
     compensate: options.compensate ?? (async () => {}),
     rollForward: options.rollForward ?? (async () => true),
   }
-  const db = harness.db as DbClient
+  const operations = createPostgresqlIntentApplyOperations({
+    db: harness.db,
+    resources: { createSession: () => session },
+    artifacts: artifacts as never,
+  })
   return {
     apply: (input) =>
-      applyIntentChangeset(
-        {
-          db,
-          appHome,
-          actor,
-          authority,
-          resourceApply: { createSession: () => session },
-          artifacts: artifacts as never,
-          log: silentLog(),
-          ...(options.faults === undefined ? {} : { faults: options.faults }),
-        },
-        { ...input, decisions: [...input.decisions] },
-      ),
-    converge: (convergeOptions) =>
-      convergeIntentApplyJournal(db, artifacts as never, silentLog(), convergeOptions ?? {}),
+      operations.apply({
+        actor,
+        authority,
+        command: { ...input, decisions: [...input.decisions] },
+        log: silentLog(),
+        ...(options.faults === undefined ? {} : { faults: options.faults }),
+      }),
+    converge: (convergeOptions) => operations.converge(silentLog(), convergeOptions ?? {}),
     prestaged: () => prestaged,
   }
 }
@@ -445,10 +448,10 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     // 判据是「登记 await 返回的那一刻」的库内状态，不是 apply 结束后的最终状态——
     // 漏掉 await 时后者照样对（写最终会落库），前者是 '[]'，而崩溃窗口里可见的正是前者。
     expect(seenDuringPrestage).not.toBeNull()
-    expect(JSON.parse(seenDuringPrestage ?? 'null')).toEqual({
-      version: 1,
-      artifacts: [ARTIFACT],
-    })
+    // RFC-359 —— 新写的行用**现行词汇**（裸数组）。合一之前 SQLite 那台写的是带版本号的信封
+    // `{version:1, artifacts:[…]}`；那种行仍然读得回来（收敛侧的回落，判据在
+    // `rfc359-w7-intent-apply-artifact-conformance` 的「工件词汇 ③」），但不再有人写它。
+    expect(JSON.parse(seenDuringPrestage ?? 'null')).toEqual([ARTIFACT])
   })
 
   test('settleFailed：提交前失败 ⇒ apply 落地时 journal **已经**是 failed', async () => {

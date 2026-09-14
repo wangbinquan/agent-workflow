@@ -858,19 +858,37 @@ describe('normal: the author gates do not touch ordinary work', () => {
     expect(nodes.find((n) => n.kind === 'script')?.script).toBe(SCRIPT_NODE.script)
   })
 
-  test('a plain user may rename a workflow that contains a script node', async () => {
-    const wf = await seedWorkflow('old-name', PLAIN, storedDefinition())
-    await applyAs(
-      plain,
-      updateBundle(
-        [{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode()],
-        'a new human name',
-      ),
-      manifestFor(wf.id, wf.version),
-    )
-    const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]
-    expect(row!.name).toBe('a new human name')
-  })
+  // RFC-359 —— 这条此前断言的是「普通用户可以给含脚本节点的工作流改名」，而它**断言错了**。
+  //
+  // v1 的产品契约是「rename 经 finalName / copy，**in-place rename 一律拒绝**
+  // （`intent-rename-unsupported`）」（`design/RFC-234-intent-driven-builder/plan.md:142`；
+  // RFC-319 做 e2e 时又独立撞出同一条并记进 `plan.md:199` ②）。PostgreSQL 那台引擎对
+  // 五类资源逐个挡住；SQLite 那台**只挡了 agent 一类**，于是工作流 / 工作组 / MCP 的 in-place
+  // 改名在 SQLite 部署上一直静默生效——这条用例正是那个缺口的化石。两台引擎合一时照了出来。
+  //
+  // 本组要钉的是「作者门不碰普通工作」，所以改名这件事在这里的正确判据是：它被拒**不是因为
+  // 脚本门**——有没有 `scripts:author` 都一样拒，拒的码是 rename 那条。
+  for (const lane of [
+    { who: 'plain-user', actor: () => plain, owner: PLAIN },
+    { who: 'script-author', actor: () => boss, owner: BOSS },
+  ] as const) {
+    test(`in-place rename is refused for a ${lane.who} (contract, not the script gate)`, async () => {
+      const original = `old-name-${lane.who}`
+      const wf = await seedWorkflow(original, lane.owner, storedDefinition())
+      await expect(
+        applyAs(
+          lane.actor(),
+          updateBundle(
+            [{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode()],
+            'a new human name',
+          ),
+          manifestFor(wf.id, wf.version),
+        ),
+      ).rejects.toMatchObject({ code: 'intent-rename-unsupported' })
+      const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]
+      expect(row!.name).toBe(original)
+    })
+  }
 })
 
 // ---------------------------------------------------------------------------

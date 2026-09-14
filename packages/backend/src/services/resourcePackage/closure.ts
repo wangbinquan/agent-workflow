@@ -24,6 +24,7 @@
 
 import type { BundleResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import {
+  privilegedNodeLensFor,
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
   migrateWorkflowDefinitionToLatest,
@@ -31,7 +32,6 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { isVisibleRow } from '@/services/resourceAcl'
-import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { ValidationError } from '@/util/errors'
 import { resourcePackageDocumentOf, type ResourcePackageReadPort } from './providerReadPort'
 

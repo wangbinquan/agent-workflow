@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 318,
+    "serviceFiles": 317,
     "thinFacades": 67
   },
   "entries": [
@@ -2938,11 +2938,9 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0f52e015fa2aeb5be1d1",
         "import:20152e3c3cd4d76c961e",
         "import:6e737b2f4e57899def77",
         "import:88b9cee8fd1da9fe92d1",
-        "import:ab4c1e2e40e738032002",
         "import:b3ad7714d8c4910a2c4f",
         "import:cc633659ca1ea381d3c8"
       ],
@@ -3045,24 +3043,6 @@
       "file": "packages/backend/src/services/portArtifacts.ts",
       "id": "facade:packages/backend/src/services/portArtifacts.ts",
       "ownerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:29346df9f63b4eb07931",
-        "import:353e7952a8112a2742b5",
-        "import:bf6b031b5b5aee955949",
-        "import:faac6dadf0ec140299df"
-      ],
-      "exportedSymbols": [
-        "privilegedNodeLensFor"
-      ],
-      "file": "packages/backend/src/services/privilegedNodeLens.ts",
-      "id": "facade:packages/backend/src/services/privilegedNodeLens.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/privilegedNodeLens.ts#$file",
       "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
       "targetContext": "task-execution",
@@ -6656,5 +6636,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:59748861caa36e90a0aa30e0b996a9070787acbedd2915682147e5fe62110d0a"
+  "sourceDigest": "sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e"
 }

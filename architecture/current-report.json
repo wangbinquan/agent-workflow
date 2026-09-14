@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 4631,
+    "architectureExceptions": 4612,
     "backgroundJobs": 334,
-    "crossContextImports": 5164,
-    "facades": 318,
+    "crossContextImports": 5125,
+    "facades": 317,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24791,
-    "mutationEntrypoints": 1709,
+    "moduleSymbolOwners": 24736,
+    "mutationEntrypoints": 1698,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 961,
-    "transactionExternalEffects": 264
+    "publicSurfaces": 959,
+    "transactionExternalEffects": 253
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1781,
+    "backendProductionFiles": 1775,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -87,7 +87,7 @@
       },
       {
         "context": "intent",
-        "files": 65
+        "files": 63
       },
       {
         "context": "knowledge-evolution",
@@ -99,7 +99,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 209
+        "files": 206
       },
       {
         "context": "runtime-management",
@@ -122,7 +122,7 @@
         "files": 294
       }
     ],
-    "moduleFiles": 1186,
+    "moduleFiles": 1181,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -135,7 +135,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 35,
+    "outboundBoundaryEdges": 33,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -153,10 +153,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 318,
+    "serviceFiles": 317,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:59748861caa36e90a0aa30e0b996a9070787acbedd2915682147e5fe62110d0a"
+  "sourceDigest": "sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e"
 }

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:59748861caa36e90a0aa30e0b996a9070787acbedd2915682147e5fe62110d0a`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1781 |
-| `services/` 文件 | 318 |
-| `modules/**` 文件 / 非空 context | 1186 / 17 |
+| backend production TS 文件 | 1775 |
+| `services/` 文件 | 317 |
+| `modules/**` 文件 / 非空 context | 1181 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 334 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 260 / 35 |
+| RFC-317 boundary census（inbound / outbound） | 260 / 33 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4631 |
+| `architectureExceptions` | 4612 |
 | `backgroundJobs` | 334 |
-| `crossContextImports` | 5164 |
-| `facades` | 318 |
+| `crossContextImports` | 5125 |
+| `facades` | 317 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24791 |
-| `mutationEntrypoints` | 1709 |
+| `moduleSymbolOwners` | 24736 |
+| `mutationEntrypoints` | 1698 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 961 |
-| `transactionExternalEffects` | 264 |
+| `publicSurfaces` | 959 |
+| `transactionExternalEffects` | 253 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -47,17 +47,17 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| resource-catalog / infrastructure | 105 |
+| resource-catalog / infrastructure | 104 |
 | task-execution / infrastructure | 97 |
 | task-execution / application | 87 |
-| resource-catalog / application | 56 |
+| resource-catalog / application | 55 |
 | development-automation / application | 51 |
 | task-execution / composition | 51 |
 | collaboration / infrastructure | 46 |
 | collaboration / application | 35 |
-| resource-catalog / composition | 34 |
 | development-automation / domain | 33 |
 | development-automation / infrastructure | 33 |
+| resource-catalog / composition | 33 |
 | task-execution / domain | 31 |
 | intent / application | 25 |
 | identity-access / application | 24 |
@@ -74,7 +74,6 @@
 | digital-employee / application | 13 |
 | code-capability / domain | 11 |
 | system-operations / application | 11 |
-| intent / infrastructure | 10 |
 | memory / application | 10 |
 | source-control / application | 10 |
 | identity-access / infrastructure | 9 |
@@ -82,6 +81,7 @@
 | source-control / infrastructure | 9 |
 | collaboration / composition | 8 |
 | digital-employee / infrastructure | 8 |
+| intent / infrastructure | 8 |
 | knowledge-evolution / domain | 8 |
 | memory / domain | 8 |
 | development-automation / engine | 7 |
@@ -141,7 +141,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 187 |
+| task-execution | 186 |
 | platform | 143 |
 | identity-access | 44 |
 | resource-catalog | 44 |
@@ -163,7 +163,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 120 |
+| task-execution | 119 |
 | runtime-management | 39 |
 | resource-catalog | 31 |
 | workspace-insight | 29 |
@@ -180,7 +180,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 119 |
+| W4-E1 | 118 |
 | W4-E4b | 39 |
 | W4-C | 31 |
 | W4-E5 | 29 |
@@ -200,25 +200,25 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3086 |
-| legacy-inbound | 1365 |
-| infrastructure-external | 273 |
-| offered-consumption | 160 |
+| legacy-outbound | 3061 |
+| legacy-inbound | 1363 |
+| infrastructure-external | 270 |
+| offered-consumption | 157 |
+| temporary-internal-debt | 89 |
 | off-dag-offered | 88 |
-| temporary-internal-debt | 81 |
 | authority-type-only | 58 |
-| provider-mirror | 28 |
 | required-implementation | 22 |
+| provider-mirror | 14 |
 | external-layer-debt | 3 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3086 |
-| legacy-inbound | 1365 |
+| legacy-outbound | 3061 |
+| legacy-inbound | 1363 |
+| temporary-internal-debt | 89 |
 | off-dag-offered | 88 |
-| temporary-internal-debt | 81 |
 | no-circular | 6 |
 | external-layer-debt | 3 |
 | no-util-to-upper | 2 |
@@ -227,17 +227,17 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2346 |
-| W4-E1 | 820 |
-| W4-C | 340 |
-| W4-E0 | 215 |
+| W9 | 2329 |
+| W4-E1 | 815 |
+| W4-C | 336 |
+| W4-E0 | 214 |
 | W4 | 193 |
 | W4-B | 184 |
 | W5 | 152 |
 | W4-E8 | 110 |
 | W4-E9 | 61 |
+| W4-E4a | 52 |
 | W4-E7 | 48 |
-| W4-E4a | 44 |
 | W4-E2 | 38 |
 | W4-E4b | 35 |
 | W4-E3 | 27 |
@@ -252,7 +252,7 @@
 
 | context | 数量 |
 | --- | --- |
-| resource-catalog | 227 |
+| resource-catalog | 225 |
 | task-execution | 212 |
 | collaboration | 122 |
 | identity-access | 62 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 137 / 961）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 137 / 959）
 
 | context | 数量 |
 | --- | --- |

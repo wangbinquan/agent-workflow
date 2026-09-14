@@ -77,7 +77,7 @@ import {
   WORKFLOW_OUTPUT_TEACHING,
   WORKFLOW_PORT_REF_TEACHING,
 } from '../src/modules/intent/domain/teaching/workflowParts'
-import { privilegedNodeLensFor } from '../src/services/privilegedNodeLens'
+import { privilegedNodeLensFor } from '@agent-workflow/shared'
 
 const ALL: IntentDocPrivileges = { mayAuthorScripts: true, mayAuthorCodeHostCalls: true }
 const NONE: IntentDocPrivileges = { mayAuthorScripts: false, mayAuthorCodeHostCalls: false }

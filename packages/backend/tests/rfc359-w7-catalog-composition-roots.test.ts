@@ -28,7 +28,7 @@ import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-ca
 import { composePostgresqlIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import {
   composePostgresqlSkillArtifactCompensation,
-  composeSqliteSkillArtifactCompensation,
+  composeLegacyIntentSkillArtifactCompat,
 } from '@/modules/resource-catalog/composition/intentApply'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
@@ -342,14 +342,17 @@ describeEachProvider('RFC-359 W7 —— Identity Access / Auth / Memory 组合�
 // 不吃数据库的组合根（纯闭包 / 文件系统），在两个引擎的 describe 之外各驱动一次
 // ---------------------------------------------------------------------------
 
-test('技能工件补偿原语：两个 provider 各交出自己那半套，路径与哈希都是真结果', async () => {
-  const sqlite = composeSqliteSkillArtifactCompensation()
+test('技能工件原语：现行机制交出真路径与真哈希，旧词汇兼容面交齐它那几件', async () => {
+  // RFC-359 —— 此前这里是「两个 provider 各交出自己那半套」。两台 apply 引擎合一之后不再
+  // 按 provider 分：`composePostgresqlSkillArtifactCompensation` 是**现行**机制（两个 provider
+  // 共用），`composeLegacyIntentSkillArtifactCompat` 是只在读到旧词汇 journal 行时才走的兼容面。
+  const legacy = composeLegacyIntentSkillArtifactCompat()
   const postgresql = composePostgresqlSkillArtifactCompensation()
-  // SQLite 那半套的可执行面：其余（发布 / 中止 / 补偿）都要一个已 claim 的操作行，
+  // 兼容面的可执行面：其余（发布 / 收尾）都要一个已 claim 的操作行，
   // 这里驱动的是它唯一无副作用的读——缺行时返回 undefined。
-  expect(typeof sqlite.compensateManagedSkillStage).toBe('function')
-  expect(typeof sqlite.publishStagedSkillVersion).toBe('function')
-  expect(typeof sqlite.abortStagedSkillVersion).toBe('function')
+  expect(typeof legacy.publishStagedSkillVersion).toBe('function')
+  expect(typeof legacy.finishOperation).toBe('function')
+  expect(typeof legacy.unmarkSkillBootVerified).toBe('function')
 
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc359-w7-skill-'))
   try {

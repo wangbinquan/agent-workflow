@@ -1,40 +1,26 @@
-// RFC-359 W7 —— Intent apply **工件生命周期**的双引擎对拍。
+// RFC-359 —— Intent apply **工件生命周期**：一台机制 + 一层旧词汇兼容面。
 //
-// # 这份对拍锁的是「**不能合**」，不是「合完没退化」
+// # 这份文件此前锁的是「不能合」，现在锁的是「合成了什么」
 //
-// 本波的缺省动作是把成对适配器合成一份中立实现（见 `intentSqlProgramRunner.ts` /
-// `intentPersistence.ts`）。`sqliteIntentApplyArtifactLifecycle.ts`（138 行）与
-// `postgresqlIntentApplyArtifactLifecycle.ts`（439 行）**不属于那一类**：两份不是同一个算法
-// 抄了两遍，是**两套不同的恢复设计**，各自配一套自己的日志工件词汇与技能发布机制。
+// 原始结论是两份生命周期（`sqliteIntentApplyArtifactLifecycle.ts` 138 行 /
+// `postgresqlIntentApplyArtifactLifecycle.ts` 439 行）**不能合**，理由三条：工件词汇互不可解、
+// 前滚算法的事实源不同、能力缺口双向。第三条已经不成立了——合一没有取某一侧，而是取**并集**：
 //
-// 判据（逐条在下面有可跑的断言，不是纸面结论）：
+//   · 现行机制取 PG 那套（`skills` / `skill_versions` 行 + 目录内容哈希重推，
+//     candidate→version 的 rename、staged 的 swap-in、托管根包含性检查、逐工件错误隔离）；
+//   · SQLite 独有的那条——重放 `skill_operations` 账（`phase` = db-committed / fs-published /
+//     done）与 `finishOperation` 收尾——**原样保留**，降级成只在读到旧词汇工件时才走的兼容面
+//     （`rollForwardLegacySkillArtifacts`）。
 //
-//   ① **工件词汇互不可解**。同一列 `intent_apply_journal.prepared_artifacts_json`，
-//      两侧写进去的形状不同，且各自的解码器**拒收**对方的形状：
-//        SQLite  skill-stage         `{skillId, opId, skillDir}`
-//        PG      skill-stage         `{skillId, operationId, stagingDirectory}`
-//        SQLite  skill-version-stage `{staged:{publishId,newVersion,newHash,filesDir,…}}`
-//        PG      skill-version-stage `{skillId, operationId, version, stagingDirectory, versionDirectory}`
-//      信封也不同：SQLite 是 `{version:1,artifacts:[…]}`，PG 是裸数组。
-//      PG 的解码器**单向**兼容 SQLite（RFC-349 逻辑复制是 SQLite→PG 的单向迁移），反向没有。
+// 前两条**依然为真**，而且正是兼容面存在的理由：journal 行比进程活得久。一台跑着合一之前
+// 引擎的 daemon 在 apply 的提交后阶段崩了，库里留着一条 `committed` 的行，工件是旧词汇；
+// 升级之后收敛器仍然要把那条尾巴走完。原始结论里的这一句是这条路唯一走得通的方向：
+// 「PG 的解码器**单向**兼容 SQLite（RFC-349 逻辑复制是 SQLite→PG 的单向迁移），反向没有。」
 //
-//   ② **前滚算法的事实源不同**。SQLite 重放 `skill_operations` 账（`phase` =
-//      db-committed / fs-published / done）；PG 没有那本账，改从 `skills` / `skill_versions`
-//      行 + 目录内容哈希重新推导，自己做 candidate→version 的 rename 与 staged 的 swap-in。
-//      两边的写路径分别只产出自己那一套事实，换一侧跑就是**无据可依**。
-//
-//   ③ **能力缺口是双向的**，谁也不是另一边的超集：
-//        PG 独有：托管根包含性检查、逐工件错误隔离；
-//        SQLite 独有：skill operation 账的可重放性判定与 `finishOperation` 收尾。
-//      合一 = 把某一侧的缺口伪装成「已完成」，正是本波要防的事（同 `TaskLifecycleAutoRepairCommand`）。
-//
-// # 「不能合」不等于「一侧可以更弱」（RFC-359 W7 抬齐）
-//
-// 上面三条讲的是**恢复设计不同**，不是**一侧可以少做判定**。本轮从 B 段搬回 A 段一条：
-// `plugin-install` 的**发布存在性判定**此前只有 PG 做（查 `plugins` 行 + `existsSync(cachedPath)`），
-// SQLite 把插件工件整类跳过，于是「插件其实没装成」在 SQLite 部署上永远发现不了。
-// 它与①②无关——两侧的插件工件字段名逐字相同、同一个对象在两个解码器下都解得出来，
-// 差的只是解码之后有没有人去判。抬齐后判据与诊断词都逐字相同，用例进 A 段。
+// 于是本文件分三段：
+//   A. 现行机制在两个 provider 上逐条同义（`describeEachProvider` 一份 body 跑两遍）；
+//   B. 旧词汇的兼容面——补偿与前滚各自认得出、走得完；
+//   C. 工件词汇的纯编解码判据（不碰库，两个 provider 上结论相同，只跑一遍）。
 //
 // 端口层早有同结论的记载（`modules/intent/ports/skillArtifactCompensation.ts` 头注释：
 // 「端口按消费者的真实需要划，不按对称美感划」）——这份测试把它从注释变成可跑的判据。
@@ -45,22 +31,19 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import { plugins } from '@/db/schema'
-import type { DbClient } from '@/db/client'
 import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
   type IntentJournalArtifact,
 } from '@/modules/intent/domain/journalArtifacts'
-import { createSqliteIntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle'
 import {
   createPostgresqlIntentApplyArtifactLifecycle,
   decodePostgresqlIntentApplyRecoveryArtifacts,
 } from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
 import type {
+  LegacyIntentSkillArtifactCompat,
   PostgresqlSkillArtifactCompensation,
-  SqliteSkillArtifactCompensation,
 } from '@/modules/intent/ports/skillArtifactCompensation'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { Logger } from '@/util/log'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -89,18 +72,13 @@ function recordingLog(): RecordingLog {
   return { log, warnings: () => warnings }
 }
 
-/** SQLite 恢复路径的技能原语替身：本用例不测 RC 自己的机制，只数它被怎么调。 */
-function sqliteSkillArtifacts(): SqliteSkillArtifactCompensation & {
-  readonly calls: () => readonly string[]
-} {
+/** 旧词汇恢复路径的技能原语替身：本用例不测 RC 自己的机制，只数它被怎么调。 */
+function legacySkillRecovery(operation?: {
+  readonly active: number
+  readonly phase: string
+}): LegacyIntentSkillArtifactCompat & { readonly calls: () => readonly string[] } {
   const calls: string[] = []
   return {
-    compensateManagedSkillStage() {
-      calls.push('compensateManagedSkillStage')
-    },
-    abortStagedSkillVersion() {
-      calls.push('abortStagedSkillVersion')
-    },
     publishStagedSkillVersion() {
       calls.push('publishStagedSkillVersion')
     },
@@ -112,7 +90,7 @@ function sqliteSkillArtifacts(): SqliteSkillArtifactCompensation & {
     },
     loadSkillOperationState() {
       calls.push('loadSkillOperationState')
-      return undefined
+      return operation
     },
     calls: () => calls,
   }
@@ -152,7 +130,7 @@ function postgresqlSkillArtifacts(): PostgresqlSkillArtifactCompensation & {
   }
 }
 
-/** 两侧共用的端口形状：`{compensate, rollForward}`。合一的候选就是它。 */
+/** 两个 provider 共用的端口形状：`{compensate, rollForward}`。 */
 interface ArtifactLifecyclePort {
   compensate(artifact: never): Promise<void>
   rollForward(artifacts: readonly never[], log: Logger): Promise<boolean>
@@ -187,20 +165,21 @@ function pluginInstallArtifact(pluginId: string, dir: string) {
   })
 }
 
-/** 本引擎在生产上真正装配的那一个工件生命周期。 */
-function lifecycleFor(harness: ProviderHarness): ArtifactLifecyclePort {
-  if (harness.capabilities.provider === 'postgresql') {
-    return createPostgresqlIntentApplyArtifactLifecycle({
-      db: harness.db as PostgresqlDatabaseClient,
-      appHome,
-      pluginsDir,
-      skillArtifacts: postgresqlSkillArtifacts(),
-    }) as unknown as ArtifactLifecyclePort
-  }
-  return createSqliteIntentApplyArtifactLifecycle({
-    db: harness.db as DbClient,
+/**
+ * 生产上真正装配的那一个工件生命周期——**两个 provider 逐字同一个**。
+ * （生产装配见 `modules/intent/composition/apply.ts` 的 `composeIntentApplyArtifactLifecycle`；
+ * 这里注替身只为数调用，机制本身由 RC 自己的用例覆盖。）
+ */
+function lifecycleFor(
+  harness: ProviderHarness,
+  legacy?: LegacyIntentSkillArtifactCompat,
+): ArtifactLifecyclePort {
+  return createPostgresqlIntentApplyArtifactLifecycle({
+    db: harness.db,
     appHome,
-    skillArtifacts: sqliteSkillArtifacts(),
+    pluginsDir,
+    skillArtifacts: postgresqlSkillArtifacts(),
+    ...(legacy === undefined ? {} : { legacySkillArtifacts: legacy }),
   }) as unknown as ArtifactLifecyclePort
 }
 
@@ -280,36 +259,76 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
 // B. 实测分叉：同一份工件、同一个方法，两个引擎给出**不同的答案**
 // ─────────────────────────────────────────────────────────────────────────────
 
-describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 实测分叉', (harness) => {
-  test('分叉①：托管根之外的 generationDir —— PG 拒绝，SQLite 照删', async () => {
+describeEachProvider('RFC-359 Intent apply 工件生命周期 · 旧词汇兼容面', (harness) => {
+  // 合一之前这一条是「实测分叉①：托管根之外的 generationDir —— PG 拒绝，SQLite 照删」。
+  // 取并集的结果是**两个 provider 都拒绝**：那道包含性检查是强侧独有的能力，不是 provider 差异。
+  test('托管根之外的 generationDir —— 两个 provider 都拒绝补偿，目录原样还在', async () => {
     const lifecycle = lifecycleFor(harness)
     const outside = join(appHome, 'not-plugins', 'gen-1')
     mkdirSync(outside, { recursive: true })
-    const artifact = pluginInstallArtifact('escapee', outside) as never
 
-    if (harness.capabilities.provider === 'postgresql') {
-      await expect(lifecycle.compensate(artifact)).rejects.toThrow(
-        'intent-apply-maintenance-path-outside-managed-root',
-      )
-      expect(existsSync(outside), 'PG 侧拒绝之后目录必须原样还在').toBe(true)
-      return
-    }
-    // SQLite 侧没有这道包含性检查：日志里写了什么就删什么。
-    await lifecycle.compensate(artifact)
-    expect(existsSync(outside)).toBe(false)
+    await expect(
+      lifecycle.compensate(pluginInstallArtifact('escapee', outside) as never),
+    ).rejects.toThrow('intent-apply-maintenance-path-outside-managed-root')
+    expect(existsSync(outside), '拒绝之后目录必须原样还在').toBe(true)
   })
 
-  // 原「分叉②：plugin-install 的前滚」已于 RFC-359 W7 抬齐（SQLite 也查 `plugins` 行 +
-  // `existsSync(cachedPath)`），用例搬进 A 段「plugin-install 前滚：没落地的发布判 false …」。
+  // 合一之前这一条是「实测分叉③：SQLite 形状的 skill-version-stage —— PG 的前滚拒收，
+  // 要求人工按源 provider 恢复」。那个「拒收」在合一之后会变成**真实部署上的永久卡死**：
+  // 一台旧引擎留下的 committed 行，收敛器每小时看一次、每次都前滚不了。所以兼容面必须在。
+  test('旧词汇的 skill-version-stage —— 前滚走兼容面：整批先撤 boot 标记再逐条发布', async () => {
+    const recovery = legacySkillRecovery({ active: 1, phase: 'db-committed' })
+    const lifecycle = lifecycleFor(harness, recovery)
+    const recorder = recordingLog()
 
-  test('分叉③：SQLite 形状的 skill-version-stage —— PG 的前滚拒收，要求人工按源 provider 恢复', async () => {
-    if (harness.capabilities.provider !== 'postgresql') return
+    await expect(
+      lifecycle.rollForward([legacySkillVersionStageArtifact()] as never[], recorder.log),
+    ).resolves.toBe(true)
+    expect(recorder.warnings(), '走得完就不该记 retryable').toEqual([])
+    expect(recovery.calls()).toEqual([
+      'loadSkillOperationState',
+      'unmarkSkillBootVerified',
+      'publishStagedSkillVersion',
+    ])
+  })
+
+  test('旧词汇的 skill-version-stage —— operation 账不可重放时判 false 并记 retryable', async () => {
+    const recovery = legacySkillRecovery({ active: 0, phase: 'fs-staged' })
+    const lifecycle = lifecycleFor(harness, recovery)
+    const recorder = recordingLog()
+
+    await expect(
+      lifecycle.rollForward([legacySkillVersionStageArtifact()] as never[], recorder.log),
+    ).resolves.toBe(false)
+    expect(recorder.warnings()).toEqual(['intent-skill-publish-op-not-replayable'])
+    expect(recovery.calls()).toEqual(['loadSkillOperationState'])
+  })
+
+  test('旧词汇的 skill-stage —— 前滚把 db-committed 的 operation 行收尾', async () => {
+    const recovery = legacySkillRecovery({ active: 1, phase: 'db-committed' })
+    const lifecycle = lifecycleFor(harness, recovery)
+    const recorder = recordingLog()
+
+    await expect(
+      lifecycle.rollForward(
+        [
+          { kind: 'skill-stage', skillId: 'skill-1', opId: 'op-1', skillDir: '/tmp/skill-1' },
+        ] as never[],
+        recorder.log,
+      ),
+    ).resolves.toBe(true)
+    expect(recorder.warnings()).toEqual([])
+    expect(recovery.calls()).toEqual(['loadSkillOperationState', 'finishOperation'])
+  })
+
+  // 兼容面没装配 = 旧行前滚不了。判 false（留着重试）而**不是**判 failed——把一条还能救的
+  // 行终态化成失败，等于把半成品永久留在盘上。
+  test('兼容面未装配时旧词汇工件判 false 并记 retryable，绝不终态化', async () => {
     const lifecycle = lifecycleFor(harness)
     const recorder = recordingLog()
-    // SQLite 的 skill-version-stage 把一切塞在 `staged` 子对象里，顶层没有 operationId /
-    // stagingDirectory ⇒ `decodePostgresqlArtifact` 回 null ⇒ 落到 legacy 分支。
+
     await expect(
-      lifecycle.rollForward([sqliteSkillVersionStageArtifact()] as never[], recorder.log),
+      lifecycle.rollForward([legacySkillVersionStageArtifact()] as never[], recorder.log),
     ).resolves.toBe(false)
     expect(recorder.warnings()).toEqual(['intent-apply-artifact-roll-forward-retryable'])
   })
@@ -319,7 +338,7 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 实测分叉
 // C. 工件词汇：纯编解码判据（不碰库，两个引擎上结论相同，所以只跑一遍）
 // ─────────────────────────────────────────────────────────────────────────────
 
-function sqliteSkillVersionStageArtifact(): IntentJournalArtifact {
+function legacySkillVersionStageArtifact(): IntentJournalArtifact {
   return {
     kind: 'skill-version-stage',
     staged: {
@@ -353,11 +372,11 @@ const POSTGRESQL_SKILL_VERSION_STAGE = Object.freeze({
   versionDirectory: '/tmp/skill-1/versions/v2',
 })
 
-test('工件词汇 ①：PG 写的 skill-stage 过不了 SQLite 的解码器（字段集不同）', () => {
+test('工件词汇 ①：现行词汇的 skill-stage 过不了旧解码器（字段集不同）', () => {
   expect(() => decodeIntentJournalArtifacts(JSON.stringify([POSTGRESQL_SKILL_STAGE]))).toThrow(
     /legacy intent journal artifact is invalid/,
   )
-  // 套上 SQLite 的信封也一样：`.strict()` 的 skill-stage 要 opId + skillDir。
+  // 套上旧信封也一样：`.strict()` 的 skill-stage 要 opId + skillDir。
   expect(() =>
     decodeIntentJournalArtifacts(
       JSON.stringify({ version: 1, artifacts: [POSTGRESQL_SKILL_STAGE] }),
@@ -365,30 +384,32 @@ test('工件词汇 ①：PG 写的 skill-stage 过不了 SQLite 的解码器（�
   ).toThrow(/envelope is invalid/)
 })
 
-test('工件词汇 ②：PG 写的 skill-version-stage 被 SQLite 的解码器判成不可安全收敛', () => {
+test('工件词汇 ②：现行词汇的 skill-version-stage 被旧解码器判成不可安全收敛', () => {
   expect(() =>
     decodeIntentJournalArtifacts(JSON.stringify([POSTGRESQL_SKILL_VERSION_STAGE])),
   ).toThrow(/legacy skill-version-stage artifact is incomplete/)
 })
 
-test('工件词汇 ③：兼容是单向的 —— PG 的解码器认 SQLite 的信封，反之不成立', () => {
+test('工件词汇 ③：兼容是单向的 —— 现行解码器认旧信封，反之不成立', () => {
   const sqliteEnvelope = encodeIntentJournalArtifacts([
     { kind: 'plugin-install', pluginId: 'p', generationId: 'g', generationDir: '/tmp/g' },
   ])
   expect(decodePostgresqlIntentApplyRecoveryArtifacts(sqliteEnvelope)).toEqual([
     { kind: 'plugin-install', pluginId: 'p', generationId: 'g', generationDir: '/tmp/g' },
   ])
-  // 反向：PG 写的是**裸数组**，SQLite 的解码器把裸数组当 legacy 处理，
-  // 于是 PG 的原生形状在那条路径上一条都过不去（见词汇 ①/②）。
+  // 反向：现行引擎写的是**裸数组**，旧解码器把裸数组当 pre-v1 处理，
+  // 于是现行形状在那条路径上一条都过不去（见词汇 ①/②）。
   expect(JSON.parse(sqliteEnvelope)).toHaveProperty('version', 1)
 })
 
-test('工件词汇 ④：SQLite 的 skill-version-stage 在 PG 的解码器里退成 legacy 并抛错', () => {
+test('工件词汇 ④：**裸数组**里的 skill-version-stage 是 pre-v1 残骸，解码器明确拒收', () => {
   // 顶层缺 operationId / stagingDirectory ⇒ decodePostgresqlArtifact 回 null ⇒
-  // 交给 decodeIntentJournalArtifacts 的 legacy 数组分支 ⇒ 该分支明确拒收 skill-version-stage。
+  // 交给 decodeIntentJournalArtifacts 的**裸数组**分支 ⇒ 该分支明确拒收 skill-version-stage
+  // （pre-v1 只存了三个字段，不足以发布一个已提交的版本）。带 v1 信封的那条路走得通，
+  // 见上面「旧词汇的 skill-version-stage —— 前滚走兼容面」。
   expect(() =>
     decodePostgresqlIntentApplyRecoveryArtifacts(
-      JSON.stringify([sqliteSkillVersionStageArtifact()]),
+      JSON.stringify([legacySkillVersionStageArtifact()]),
     ),
   ).toThrow(/legacy skill-version-stage artifact is incomplete/)
 })

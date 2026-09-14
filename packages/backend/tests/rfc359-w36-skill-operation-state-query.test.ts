@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { skillOperations } from '@/db/schema'
-import { loadLegacyIntentSkillOperationState } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants'
+import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
 import { skillOperationStateQuery } from '@/modules/resource-catalog/infrastructure/skillOperationStateQuery'
 import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
 import { recordStatements } from './helpers/statementRecorder'
@@ -176,8 +176,12 @@ if (resolveTestProviders(process.env).includes('sqlite')) {
       try {
         const builder = skillOperationStateQuery(db, 'operation-done')
         expect(recording.statements).toHaveLength(0)
+        // RFC-359 —— 读取口此前是被退役的 legacy 参与者上的 `loadLegacyIntentSkillOperationState`。
+        // 同一个查询现在从旧词汇恢复面出（`composeLegacyIntentSkillArtifactCompat`），语义不变：
+        // bun:sqlite 上仍是**同步**返回真实行 / undefined，而不是一个 Promise。
+        const recovery = composeLegacyIntentSkillArtifactCompat()
         for (const opId of [...operations.map((row) => row.opId), 'operation-missing']) {
-          const returned = loadLegacyIntentSkillOperationState(db, opId)
+          const returned = recovery.loadSkillOperationState(db, opId)
           const row = operations.find((operation) => operation.opId === opId)
           expect(returned).not.toBeInstanceOf(Promise)
           expect(returned).toEqual(

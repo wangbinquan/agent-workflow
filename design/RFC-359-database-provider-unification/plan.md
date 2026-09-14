@@ -23,7 +23,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 
 | AC    | 判据                                              | 实测                                                                                                                                                                                                                                                                                                     | 状态   |
 | ----- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录153→9对已登记；W55将两个读取owner的三对完整资源快照投影共享，保原7调用及完整冻结/返回合同。三个SQLite原语的落位单独记为T17 59→56，不计业务合一。**W57 收掉两条内联真实重复**：①`/api/overview` 的两套完整实现（SQLite `buildOverview` / PG `composeSystemOverviewQuery`，逐个聚合键语义等价）收成一份，删 316 行；②任务可见性判据 `or(owner=我, id IN 我参与的)` 的**七份**逐字副本（含一份 provider 专属）收成一份，连带四份分块 `visibleTaskIds`（其中两份逐字相同、三份硬写字面量 500）；两条都带新守卫，可见性那条在收敛前 HEAD 上验红 6/6。**2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定——PG 侧此前**根本没有** `inspectHumanReview`，闸门在 PostgreSQL 上永远报不出 `waiting`（§5dm）；③**找到本仓最大的一处重复，且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS`，并按 RFC 自己的办法**先补对拍**（`rfc359-w13-resource-package-apply-conformance.test.ts`，三种资源类型 / 16 格双引擎全绿，§5dp）。**跨目录真实重复缺口仍开**：那一对本身尚未合一。**2026-09-13 再续（§5dv）**：**那一对已合一**——先把 `rfc359-w13` 的 SQLite 泳道换成 PG 那台原子 apply 引擎实跑（22 格全绿、一格没改），确认「这一对从来不是两台机器，是一台中立引擎加一条 SQLite 专属老路」（七臂参与者 2977 行里 `PostgresqlDatabaseClient` / `DbClient` / `DbTxSync` 零处出现，唯一品牌痕迹是三个形参标注）；再把 `main.ts` / `server.ts` 两个 `provider === 'sqlite' ? …` 三元删成一条，退役两个零生产消费者的 SQLite 专属装配。**剩余**：`commitResourcePackage` 那条 legacy 链（约 3300 行）生产已零调用、仅剩 43 个测试调用点，退役是下一批。                                                                                         **2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定，PG 侧此前**根本没有** `inspectHumanReview`（§5dm）；③**找到本仓最大的一处重复且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），因为成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS` 并补上 16 格双引擎对拍（§5dp）。**跨目录真实重复缺口仍开**：那一对尚未合一。 | 进行中 |
+| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录153→9对已登记；W55将两个读取owner的三对完整资源快照投影共享，保原7调用及完整冻结/返回合同。三个SQLite原语的落位单独记为T17 59→56，不计业务合一。**W57 收掉两条内联真实重复**：①`/api/overview` 的两套完整实现（SQLite `buildOverview` / PG `composeSystemOverviewQuery`，逐个聚合键语义等价）收成一份，删 316 行；②任务可见性判据 `or(owner=我, id IN 我参与的)` 的**七份**逐字副本（含一份 provider 专属）收成一份，连带四份分块 `visibleTaskIds`（其中两份逐字相同、三份硬写字面量 500）；两条都带新守卫，可见性那条在收敛前 HEAD 上验红 6/6。**2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定——PG 侧此前**根本没有** `inspectHumanReview`，闸门在 PostgreSQL 上永远报不出 `waiting`（§5dm）；③**找到本仓最大的一处重复，且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS`，并按 RFC 自己的办法**先补对拍**（`rfc359-w13-resource-package-apply-conformance.test.ts`，三种资源类型 / 16 格双引擎全绿，§5dp）。**跨目录真实重复缺口仍开**：那一对本身尚未合一。**2026-09-13 再续（§5dv）**：**那一对已合一**——先把 `rfc359-w13` 的 SQLite 泳道换成 PG 那台原子 apply 引擎实跑（22 格全绿、一格没改），确认「这一对从来不是两台机器，是一台中立引擎加一条 SQLite 专属老路」（七臂参与者 2977 行里 `PostgresqlDatabaseClient` / `DbClient` / `DbTxSync` 零处出现，唯一品牌痕迹是三个形参标注）；再把 `main.ts` / `server.ts` 两个 `provider === 'sqlite' ? …` 三元删成一条，退役两个零生产消费者的 SQLite 专属装配。**2026-09-14（§5dy / §5ea）AC-1 的成对面收口**：①通用 bundle 引擎整条退役（约 2800 行）；②**intent apply 引擎整条退役**（`sqliteIntentApplyOperations` 762 + `sqliteIntentApplyArtifactLifecycle` 178 + `legacyIntentApplyResourceParticipants` 1062 + 依赖表 141 + 提交期句柄 61），两个 bootstrap 根调同一个 `composeIntentApplyOperations`。账本 10 对 → **8 对**，剩下的八对已逐条判不合（迁移器 / 落盘格式 / 运行时引擎 / journal 事务包装）或已是薄转交。合一照出**三处 PostgreSQL 上一直存在的用户可见缺陷**（名字域 dangle 容忍写反、特权节点回填整段没有、in-place 改名两侧不一致），逐条修复并加双引擎判据 `rfc359-w41-intent-apply-provider-parity`（先红后绿实测）。                                                                                         **2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定，PG 侧此前**根本没有** `inspectHumanReview`（§5dm）；③**找到本仓最大的一处重复且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），因为成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS` 并补上 16 格双引擎对拍（§5dp）。**跨目录真实重复缺口仍开**：那一对尚未合一。 | 进行中 |
 | AC-2  | 一个 boot 序列，无 provider literal 执行分支      | `servePostgresqlDaemon` 已删除，入口 provider literal 分支为 0                                                                                                                                                                                                                                           | ✅     |
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
@@ -34,7 +34,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | **2026-09-13 连续 exact-SHA 全绿**：`63030aaea` / `b41a8cab2` / `55864e0c8` / `51aeda3f3` / `5b706bca8` / `7482255fc` 六笔各自的 push CI run 终态 success（十二个 ubuntu 后端分片带真 postgres:17、macOS 六分片、lint/format/depcheck、单二进制 build smoke、Playwright e2e）。同期修掉两次自己推出的红并各带回归用例：①`void <promise>` 没接 rejection（PG 上 `0 fail` 却退 1 的形态，§5dk）；②铸行 id 非单调（macOS 分片随机红，§5dl）。**仍待办**：RFC 收口后需要在最终 SHA 上再取一次终态取证。 | 进行中 |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                                                                                                                         | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新已核仍是 W52 full `34427756137` 的 360 样本 / 18 组：两项绝对失败——SQLite `tasks-first` p95 150.616ms 未低于 150ms 预算、PG `workgroup-pending` **max** 11.571ms 未低于 10ms 预算；其余 16 项通过。**闭合条件是明确的**：在当前 SHA 上跑一次 `scale=full`（`scripts/perf-run.ts`，100k tasks / 10M events，判据见 `scripts/perf-compare.ts` 的 `PERF_HTTP_SCENARIOS`）。本轮**没有**动性能代码——本仓规矩是「数字都是跑出来的，不是估的」，没有 full 实测就不做盲优化；`workgroup-pending` 那一格若复现，第一嫌疑是 `pendingRows` 里跟着可见任务数走的两条 `inArray(...)`（`workgroupTaskRoomQueries.ts`）。 | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。                                                                                    | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。**2026-09-14（§5ea）**：intent apply 合一带走九个 provider 命名的装配 / 工厂（`compose{Sqlite,Postgresql}IntentApplyOperations` / `compose|createSqliteIntentApplyArtifactLifecycle` / `compose{Sqlite,Postgresql}IntentMaintenance{CommandsForAppHome,SnapshotQueries}` / `composePostgresqlIntentApplyConvergence` / `composeSqliteSkillArtifactCompensation` / `createLegacyIntentApplyResourceSession`），换成不带引擎前缀的 `composeIntentApply*` / `composeIntentMaintenance*`。provider 命名文件 47 → **44**、适配器语料 130 → **120**、组合根 57 → **48**。                                                                                    | 进行中 |
 
 ### AC-9 取证（2026-09-10，exact `03b34a783`）
 
@@ -9787,3 +9787,143 @@ SQLite 那台写下的行是带版本号的信封 `{ version: 1, artifacts: [...
 （`sqliteIntentApplyOperations.ts` 762 行 + `sqliteIntentApplyArtifactLifecycle.ts` 178 行）。
 
 这一批停在「判据已经证明可移植、兼容面已经补好」这条边界上，是为了让那一步的 diff 只剩装配。
+
+## 5ea. Intent apply 引擎整条退役——**两台 apply 引擎至此全部合一**（AC-1）
+
+§5dz 停在「已证可移植 + 兼容面已补」。这一批把剩下的三步一次做完：收资源绑定、切两个
+bootstrap 根、退役 SQLite 那台。净删 **1943 行**（src：+560 / −2503），生产侧从此只有一条 intent apply 路径。
+
+### 退役清单
+
+| 文件 | 行数 | 去处 |
+| --- | ---: | --- |
+| `modules/intent/infrastructure/sqliteIntentApplyOperations.ts` | 762 | `postgresqlIntentApplyOperations.ts`（已中立化） |
+| `modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts` | 178 | `postgresqlIntentApplyArtifactLifecycle.ts` + 旧词汇兼容面 |
+| `modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts` | 1062 | `postgresqlIntentApplyResourceParticipants.ts` + `…ResourcePorts.ts` |
+| `modules/resource-catalog/composition/legacyIntentApplyResourceDependencies.ts` | 141 | ports 工厂闭包 |
+| `modules/resource-catalog/application/participants/intentApplyResourceParticipant.ts` | 61 | 提交期句柄换成 `{participant, commitSucceeded}` 的 transaction attempt |
+
+公共面同步缩：`public/participants.ts` 去掉 `IntentApplyResourceParticipantInTx`（唯一消费者
+随 legacy 一起删了），`public/types.ts` 的 `IntentResourceChangesetReceipt` 搬进 RC 自己的
+infrastructure（只在 RC 的提交臂与 intent 的编排之间流动，intent 拿到它是经
+`PostgresqlIntentApplyResourceSession` 这个 infrastructure 合同，不是经 `public/`）。
+
+装配也不再按 provider 命名：`composeIntentApplyOperations` / `composeIntentApplyArtifactLifecycle`
+/ `composeIntentApplyConvergence` / `composeIntentMaintenanceCommandsForDatabase` /
+`composeIntentMaintenanceSnapshotQueriesFor` 各一份，两个 bootstrap 根调同一个。
+
+### 合一取的是**并集**，不是某一侧
+
+工件生命周期那一对当初被判「不能合」，理由三条（`rfc359-w7-intent-apply-artifact-conformance`
+文件头）。第三条「能力缺口双向」**已经不成立**：
+
+- 现行机制取 PG 那套（`skills` / `skill_versions` 行 + 目录内容哈希重推，candidate→version 的
+  rename、staged 的 swap-in、托管根包含性检查、逐工件错误隔离）；
+- SQLite 独有的那条——重放 `skill_operations` 账（`phase` = db-committed / fs-published / done）
+  与 `finishOperation` 收尾——**原样保留**，降级成只在读到旧词汇工件时才走的兼容面
+  （`rollForwardLegacySkillArtifacts` + `composeLegacyIntentSkillArtifactCompat`）。
+
+前两条（工件词汇互不可解、前滚事实源不同）**依然为真**，而且正是兼容面存在的理由：
+journal 行比进程活得久。一台跑着合一之前引擎的 daemon 在 apply 的提交后阶段崩了，库里留着
+一条 `committed` 的行、工件是旧词汇；升级之后收敛器仍然要把那条尾巴走完，否则技能版本
+永远停在暂存态、那条 journal 行每小时被看一次每次都前滚不了。补偿那一侧本来就已经认旧词汇，
+缺的只有前滚这一半——这一批补上。
+
+### 合一照出**三处用户可见缺陷**，全部在 PostgreSQL 那一侧
+
+这三条都是「SQLite 上是对的、PostgreSQL 上不对」，而判据长期只喂 SQLite 那一侧——正是
+`rfc359-w5-t19d` 账本里 `IntentApplyOperations: sqlite 21/3 对 postgresql 7/5` 这条**本仓最深的
+覆盖倒挂**预言的形状。
+
+**① 名字域的 dangle 容忍被写反了。** `call-workflow` / `call-workgroup` 按**名字**选目标，
+而名字域的规则是 dangle-tolerant：解析不到任何行不是 ACL 违规，是启动期的问题
+（`infrastructure/legacy/resourceRefs.ts` 的 `matched === undefined ⇒ continue // dangling until launch`
+才是这条规则的正身）。PG 的 `assertNamedReferencesVisible` 在 `rows.length === 0` 时抛
+`resource-reference-not-found`（422）。后果：**「先建调用方、后建被调方」「被调方在另一台机器上」
+这两类正常用法在 PostgreSQL 上整个被堵死**，同一份 changeset 在 SQLite 上正常落库。
+判据：`rfc234-apply-changeset` 的「an unresolvable name stays dangle-tolerant」。
+
+**② 特权节点的回填整段没有。** 无 `scripts:author` / `code-host-calls:author` 的作者**看到的就是
+打码后的定义**（遮蔽是 permission-blind 的），所以他原样送回来的那份里 `script` / `env` /
+`dependencies`（以及 code-host 的 `params` / `request`）装的是 `INTENT_REDACTED` 占位符。
+保存路径一直先按库里的现值回填再比敏感投影（`workflowPersistenceSemantics.canonicalizeUpdate`），
+PG 的 intent 提交臂**直接拿用户送来的那份去比**。后果：**普通用户改不动任何含脚本节点的工作流**
+——连改个描述、挪个无关节点、删个普通节点都当场 403 `script-author-forbidden`；更糟的是若放行，
+占位符会被当成正文写进库，脚本正文静默丢失。修法：提交臂先 `rehydratePrivilegedNodes`，
+回填后的那份既过门也写库。判据：`intent-privileged-node-capability` 的 boundary / normal 两组。
+
+**③ in-place 改名在 SQLite 上没挡住。** v1 的产品契约是「rename 经 finalName / copy，
+**in-place rename 一律拒绝**」（`design/RFC-234-intent-driven-builder/plan.md:142`；RFC-319 做 e2e 时
+又独立撞出同一条并记进 `plan.md:199` ②）。PG 那台对五类资源逐个挡住；SQLite 那台**只挡了
+agent 一类**，于是工作流 / 工作组 / MCP 的 in-place 改名在 SQLite 部署上一直静默生效。
+这一条方向相反——**强侧是 PG**，合一取 PG。`intent-privileged-node-capability` 里那条
+「普通用户可以给含脚本节点的工作流改名」正是那个缺口的化石，本批改成按契约断言拒绝，
+并加一格「有 `scripts:author` 也一样拒」证明拒的是 rename 那条门、不是脚本门。
+
+### 顺带修的一处**合一会引入**的回归
+
+PG 引擎的 session 串行锁此前是 `createPostgresqlIntentApplyOperations` 的**局部变量**，
+SQLite 那台是模块级。生产上各只装配一次，差别看不见。合一之后装配点变多了（兼容门面
+`applyIntentChangeset` 每次调用现装一台），局部变量意味着**同一个 session 的两笔并发 apply
+各自拿到一把自己的锁**——串行保证当场消失。改成模块级，与被退役的那台同形。
+判据：`rfc343-intent-apply-correctness`。
+
+### 「本进程在跑哪些 apply」取强侧
+
+`composeSqliteIntentMaintenanceSnapshotQueries(db)` 读的是引擎的**模块级**集合，
+`composePostgresqlIntentMaintenanceSnapshotQueries({db, activity})` 要求把**选中的那台引擎**
+注进来。后者才是对的——在飞集合是进程内的围栏，不是能从 journal 行反推的东西。合一取强侧，
+`server.ts` 因此多暴露一个 `intentApplyActivity`，`cli/start.ts` 晚绑定给维护服务（形状与
+§5dv 的 `resourcePackageApplyActivity` 逐字相同）。
+
+### 账本
+
+| 账本 | 前 | 后 |
+| --- | ---: | ---: |
+| `PROVIDER_PAIR_CONFORMANCE_LEDGER` | 10 | **8** |
+| `COVERAGE_PARITY_LEDGER` | 10 | **8** |
+| `INVERTED_PAIRS` | 7 | **5** |
+| `PROVIDER_NAMED_FILE_DEBT` | 47 | **44** |
+| `rfc359-w8-unnormalized-unique-insert` | 17 | **16** |
+| provider 命名组合根语料下限 | 57 | **48** |
+| provider 适配器声明语料下限 | 130 | **120** |
+
+### 判据的搬迁（八处按路径写死的源码锁）
+
+合一删文件时 `tsc` 与 import 级 grep **都看不见**按路径 `readFileSync(<写死路径>)` 的锁——
+§5dy 已经被这件事咬过一次（`13a72be52` 的主干红）。这一批一次性把它们全部找出来并逐条搬到
+生产在用的那一份上：`rfc345-resource-catalog-contracts`(T4b 次序 + authority 同一性)、
+`rfc271-mcp-owner-fence`、`rfc271-intent-skill-plugin-update`(四条)、
+`rfc359-w12-mcp-mutation-conformance`、`rfc359-w12-plugin-publication-conformance`、
+`rfc359-w47-intent-skill-document`、`rfc359-w9-intent-apply-sync-transaction-cutover`(I14)、
+`rfc355-intent-provider-parity`。搬迁时**锁的东西一条没放宽**，只是锚点换到活的那份上；
+其中 `rfc271-mcp-owner-fence` 的围栏形态确实变了（legacy 带 owner 快照进提交期比对 →
+现行在事务里自己重读），注释里写清了两者挡的是同一件事。
+
+### 留下的债
+
+- `mcpPersistence.ts` 的 `commitLegacyMcp{Create,Update}InTx` / `prepareLegacyMcpCreate` /
+  `loadLegacyMcpById` 与 `pluginPersistence.ts` 的 `commitLegacyPlugin{Create,Publish}InTx`
+  **生产零消费者**了（只剩两个 conformance 用例把它们当行为夹具驱动）。删它们要先把那两个
+  用例改成驱动活的提交臂，是独立的一步，不并进这一批。
+
+### 判据搬迁顺带撞出的一条边界
+
+`rehydratePrivilegedNodes` 要的镜头此前住在后端的 `services/privilegedNodeLens.ts`，而
+`rfc349-resource-catalog-intent-apply-postgresql` 有一条边界守卫：intent 的提交臂
+（`postgresqlIntentApplyResourcePorts.ts`）**不得深取 `@/services/`**。镜头与
+`rehydratePrivilegedNodes` / `PRIVILEGED_LENS_TRANSPARENT` 本来就是一套东西，却隔着一层
+`services/` 门面——搬进 `@agent-workflow/shared` 的 `privilegedNodeRedaction.ts`（正身旁边），
+七个调用点一起受益，后端那个文件删除。入参从 `Actor` 放宽成
+`{ permissions: ReadonlySet<Permission> }`——它本来就只读这一个字段。
+
+### 双引擎判据
+
+新增 `rfc359-w41-intent-apply-provider-parity.test.ts`（`describeEachProvider`，3 格 × 2 引擎）：
+① 按名字调用一个**还不存在**的工作流 ⇒ 提交通过、定义原样落库；
+①b 按名字调用一个**别人私有**的工作流 ⇒ 仍然拒（`acl-missing-refs`）、整包零落库
+——这一格是 ① 的对照：容忍的只有「不存在」，不是「看不见」；
+② 无 `scripts:author` 的作者省掉三个被遮蔽字段送回 ⇒ 改得动，且脚本正文 / env 按库里现值回填。
+
+**先红后绿已实测**：把两处修复逐条回退，① 与 ② 当场红、①b 照旧绿（证明修复没有放宽可见性判据）；
+恢复后 SQLite 3/3、真 PostgreSQL 3/3。

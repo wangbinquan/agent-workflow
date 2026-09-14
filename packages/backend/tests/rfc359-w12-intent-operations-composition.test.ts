@@ -41,22 +41,13 @@ import {
 } from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
+import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
 import {
-  composePostgresqlIntentApplyOperations,
-  composeSqliteIntentApplyArtifactLifecycle,
-  composeSqliteIntentApplyOperations,
-} from '@/modules/intent/composition/apply'
-import {
-  composePostgresqlIntentMaintenanceCommandsForAppHome,
-  composePostgresqlIntentMaintenanceSnapshotQueries,
-  composeSqliteIntentMaintenanceCommandsForAppHome,
-  composeSqliteIntentMaintenanceSnapshotQueries,
+  composeIntentMaintenanceCommandsForDatabase,
+  composeIntentMaintenanceSnapshotQueriesFor,
 } from '@/modules/intent/composition/maintenance'
-import { createPostgresqlIntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
-import { createPostgresqlIntentApplyOperations } from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
 import {
   composePostgresqlIntentApplyResourceBinding,
-  composePostgresqlSkillArtifactCompensation,
   createPostgresqlIntentPluginArtifactLifecycle,
   createPostgresqlIntentSkillArtifactLifecycle,
 } from '@/modules/resource-catalog/composition/intentApply'
@@ -69,7 +60,6 @@ import {
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 const OWNER = 'rfc359-intent-composition-owner'
 const SCRATCH_DIRECTORY = 'intent-scratch-composition'
@@ -92,14 +82,32 @@ function signal() {
   return { promise, resolve }
 }
 
+// RFC-359 —— 两个 provider 共用同一份装配。此处此前是 `isolation === 'exclusive'` 的二分：
+// SQLite 走 `composeSqliteIntentApplyOperations` + legacy 资源会话 + `composeSqlite…Maintenance`，
+// PostgreSQL 走 `createPostgresqlIntentApplyOperations` + PG 资源会话 + `composePostgresql…`。
 function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => Promise<void>) {
   const pluginsDir = join(appHome, 'plugins')
-  if (harness.capabilities.isolation === 'exclusive') {
-    const db = harness.db as DbClient
-    const binding = intentApplyResourceBinding(db, actor)
-    const resources: typeof binding.resourceApply = {
+  const { authority } = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
+    { userId: OWNER, source: 'session' },
+    'http',
+  )
+  const binding = composePostgresqlIntentApplyResourceBinding({
+    db: harness.db,
+    mcpLifecycle: createMcpTransactionLifecycle(),
+    pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({ pluginsDir }),
+    skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({ appHome }),
+    aclIdentities: composeResourceCatalogFor({ db: harness.db }).persistence.identities,
+  })
+  const operations = composeIntentApplyOperations({
+    db: harness.db,
+    appHome,
+    resources: {
       createSession(options) {
-        const session = binding.resourceApply.createSession(options)
+        // 引擎按 `Actor` 声明这个入参，绑定按 `DirectAuthenticatedAuthority` 收——运行期是
+        // 同一个对象（品牌是纯名义的，见 `exactActor`），窄化只发生在这一处。
+        const session = binding.createSession(
+          options as unknown as Parameters<typeof binding.createSession>[0],
+        )
         return {
           ...session,
           async prepare(plan, context) {
@@ -108,80 +116,33 @@ function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => 
           },
         }
       },
-    }
-    const resourcePackages = composeSqliteResourcePackageApplyMaintenance({
-      db,
-      appHome,
-      pluginsDir,
-      activitySource: createResourcePackageApplyActivityRegistry().query,
-    }).command
-    return {
-      authority: binding.authority,
-      apply: composeSqliteIntentApplyOperations({
-        db,
-        appHome,
-        resources,
-        artifacts: composeSqliteIntentApplyArtifactLifecycle({ db, appHome }),
-      }),
-      snapshots: composeSqliteIntentMaintenanceSnapshotQueries(db),
-      maintenance: composeSqliteIntentMaintenanceCommandsForAppHome({
-        db,
-        appHome,
-        scratchDirectoryName: SCRATCH_DIRECTORY,
-        resourcePackages,
-      }),
-    }
-  }
-
-  const db = harness.db as PostgresqlDatabaseClient
-  const identity = composeIdentityAccess(db)
-  const { authority } = identity.contexts.fromAuthenticatedPrincipal(
-    { userId: OWNER, source: 'session' },
-    'http',
-  )
-  const binding = composePostgresqlIntentApplyResourceBinding({
-    db,
-    mcpLifecycle: createMcpTransactionLifecycle(),
-    pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({ pluginsDir }),
-    skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({ appHome }),
-    aclIdentities: composeResourceCatalogFor({ db }).persistence.identities,
-  })
-  const resources: typeof binding = {
-    createSession(options) {
-      const session = binding.createSession(options)
-      return {
-        ...session,
-        async prepare(plan, context) {
-          await session.prepare(plan, context)
-          await prepared?.()
-        },
-      }
     },
-  }
-  const operations = createPostgresqlIntentApplyOperations({
-    db,
-    resources,
-    artifacts: createPostgresqlIntentApplyArtifactLifecycle({
-      db,
-      appHome,
-      pluginsDir,
-      skillArtifacts: composePostgresqlSkillArtifactCompensation(),
-    }),
   })
   return {
     authority,
-    apply: composePostgresqlIntentApplyOperations(operations),
-    snapshots: composePostgresqlIntentMaintenanceSnapshotQueries({ db, activity: operations }),
-    maintenance: composePostgresqlIntentMaintenanceCommandsForAppHome({
-      db,
+    apply: operations,
+    snapshots: composeIntentMaintenanceSnapshotQueriesFor({
+      db: harness.db,
+      activity: operations,
+    }),
+    maintenance: composeIntentMaintenanceCommandsForDatabase({
+      db: harness.db,
       appHome,
       pluginsDir,
       scratchDirectoryName: SCRATCH_DIRECTORY,
-      resourcePackages: composePostgresqlResourcePackageApplyMaintenance({
-        db,
-        appHome,
-        pluginsDir,
-      }).command,
+      resourcePackages:
+        harness.capabilities.isolation === 'exclusive'
+          ? composeSqliteResourcePackageApplyMaintenance({
+              db: harness.db as DbClient,
+              appHome,
+              pluginsDir,
+              activitySource: createResourcePackageApplyActivityRegistry().query,
+            }).command
+          : composePostgresqlResourcePackageApplyMaintenance({
+              db: harness.db as PostgresqlDatabaseClient,
+              appHome,
+              pluginsDir,
+            }).command,
     }),
   }
 }

@@ -27,6 +27,7 @@ import type {
   Workgroup,
 } from '@agent-workflow/shared'
 import {
+  privilegedNodeLensFor,
   maskFreeJsonSecrets,
   INTENT_REDACTED,
   maskWorkflowScriptEnv,
@@ -42,7 +43,6 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { NotFoundError } from '@/util/errors'
-import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
 import { extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'

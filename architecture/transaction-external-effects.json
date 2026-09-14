@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 28,
-    "transactionCallbacks": 264
+    "coLocatedCandidates": 27,
+    "transactionCallbacks": 253
   },
   "entries": [
     {
@@ -1574,10 +1574,22 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#transaction:225",
+      "line": 225,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#rollForwardLegacySkillArtifacts",
+      "status": "clear",
+      "symbol": "rollForwardLegacySkillArtifacts",
+      "targetContext": "intent",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#transaction:178",
-      "line": 178,
+      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#transaction:221",
+      "line": 221,
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations",
       "status": "clear",
       "symbol": "createPostgresqlIntentApplyOperations",
@@ -1590,157 +1602,11 @@
       ],
       "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#transaction:348",
-      "line": 348,
+      "id": "tx:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#transaction:400",
+      "line": 400,
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations",
       "status": "co-located-risk",
       "symbol": "createPostgresqlIntentApplyOperations",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts#transaction:150",
-      "line": 150,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts#rollForward",
-      "status": "clear",
-      "symbol": "rollForward",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:273",
-      "line": 273,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
-      "status": "clear",
-      "symbol": "applyInner",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:343",
-      "line": 343,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
-      "status": "clear",
-      "symbol": "applyInner",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:354",
-      "line": 354,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
-      "status": "clear",
-      "symbol": "applyInner",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:377",
-      "line": 377,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
-      "status": "clear",
-      "symbol": "applyInner",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:395",
-      "line": 395,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
-      "status": "clear",
-      "symbol": "applyInner",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:499",
-      "line": 499,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
-      "status": "co-located-risk",
-      "symbol": "applyInner",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:667",
-      "line": 667,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#convergeIntentApplyJournal",
-      "status": "clear",
-      "symbol": "convergeIntentApplyJournal",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:704",
-      "line": 704,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#convergeIntentApplyJournal",
-      "status": "clear",
-      "symbol": "convergeIntentApplyJournal",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:717",
-      "line": 717,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#convergeIntentApplyJournal",
-      "status": "clear",
-      "symbol": "convergeIntentApplyJournal",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:731",
-      "line": 731,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#convergeIntentApplyJournal",
-      "status": "clear",
-      "symbol": "convergeIntentApplyJournal",
-      "targetContext": "intent",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#transaction:741",
-      "line": 741,
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#convergeIntentApplyJournal",
-      "status": "clear",
-      "symbol": "convergeIntentApplyJournal",
       "targetContext": "intent",
       "transactionCallee": "transaction"
     },
@@ -3234,7 +3100,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:59748861caa36e90a0aa30e0b996a9070787acbedd2915682147e5fe62110d0a",
+  "sourceDigest": "sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

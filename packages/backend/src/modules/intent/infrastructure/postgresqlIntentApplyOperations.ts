@@ -55,7 +55,6 @@ import {
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
-import type { ApplyIntentFaults } from './sqliteIntentApplyOperations'
 import type { IntentJournalArtifact } from '@/modules/intent/domain/journalArtifacts'
 import { type IntentManifestEntry } from '@/modules/intent/application/manifest'
 import { resolveIntentBundle } from '@/modules/intent/application/resolveChangeset'
@@ -73,7 +72,29 @@ export interface PostgresqlIntentApplyResourceBinding {
   createSession(input: {
     readonly actor: Actor
     readonly authority: ResourceRequestContext
+    /** RFC-359 —— 预暂存的两个崩溃断点，由本次请求的 `faults` 透传给资源会话。 */
+    readonly afterSkillStage?: () => void
+    readonly afterPluginInstall?: () => void
   }): PostgresqlIntentApplyResourceSession
+}
+
+/**
+ * Crash seams used by the apply crash matrix (`rfc234-apply-changeset` P2-2).
+ * 每一个都对应一个「盘上 / 库里状态不一致」的真实窗口。
+ */
+export interface ApplyIntentFaults {
+  afterPluginInstall?: () => void
+  afterSkillStage?: () => void
+  /**
+   * RFC-359 W9 —— claim 事务的原子性接缝：在 journal 行**已插入、事务尚未提交**时抛。
+   * 这是「四道读判据 + 认领同生共死」唯一可观测的形态（其余判据都在写之前拒绝）。
+   */
+  inClaimTxAfterJournal?: () => void
+  beforeTx?: () => void
+  inTxAfterOps?: () => void
+  afterTxBeforeRollForward?: () => void
+  /** Test-only seam for proving that partial cleanup never terminalizes a journal. */
+  beforeArtifactCompensation?: (artifact: IntentJournalArtifact) => void
 }
 
 export interface PostgresqlIntentApplyRequest {
@@ -162,14 +183,36 @@ function decodeRecoveryArtifacts(json: string): IntentApplyRecoveryArtifact[] {
   })
 }
 
+/**
+ * Per-session in-process serialization (single-daemon platform).
+ *
+ * RFC-355 T3：算法在 `application/sessionApplyLock`。
+ *
+ * RFC-359 —— 这个实例是**模块级**的，不是每次装配一份。两台引擎合一之前，这里曾是
+ * `createPostgresqlIntentApplyOperations` 的局部变量，而 SQLite 那台是模块级；生产上各只
+ * 装配一次，差别看不见。合一之后装配点变多了（兼容门面 `applyIntentChangeset` 每次调用现装
+ * 一台），局部变量意味着**同一个 session 的两笔并发 apply 各自拿到一把自己的锁**——串行保证
+ * 当场消失。判据：`rfc343-intent-apply-correctness`。
+ */
+const applyLock = createSessionApplyLock()
+
+export function __intentApplyLockCountForTests(): number {
+  return applyLock.size()
+}
+
+export async function __withSessionApplyLockForTests<T>(
+  sessionId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return applyLock.run(sessionId, fn)
+}
+
 export function createPostgresqlIntentApplyOperations(
   dependencies: PostgresqlIntentApplyDependencies,
 ): PostgresqlIntentApplyOperations {
   const nextId = dependencies.id ?? ulid
   const now = dependencies.now ?? Date.now
   const active = new Set<string>()
-  // RFC-355 T3：与 SQLite 侧共用同一个算法（`application/sessionApplyLock`）。
-  const applyLock = createSessionApplyLock()
 
   async function applyUnlocked(request: PostgresqlIntentApplyRequest): Promise<IntentApplyReceipt> {
     const { actor, authority, command: input } = request
@@ -275,7 +318,16 @@ export function createPostgresqlIntentApplyOperations(
     }
 
     let committedReceipt: IntentApplyReceipt | null = null
-    const resourceSession = dependencies.resources.createSession({ actor, authority })
+    const resourceSession = dependencies.resources.createSession({
+      actor,
+      authority,
+      ...(request.faults?.afterSkillStage === undefined
+        ? {}
+        : { afterSkillStage: request.faults.afterSkillStage }),
+      ...(request.faults?.afterPluginInstall === undefined
+        ? {}
+        : { afterPluginInstall: request.faults.afterPluginInstall }),
+    })
     try {
       const manifest = sessionManifest(claim.session)
       const changeset = decodeStoredChangeset(claim.draft.changesetJson)

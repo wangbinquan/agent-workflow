@@ -1,22 +1,19 @@
 import type { Actor } from '../../src/auth/actor'
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
-import { composeIntentApplyResourceBinding } from '../../src/modules/resource-catalog/composition/intentApply'
-import { createResourceCatalogAclIdentityReadPort } from '../../src/modules/resource-catalog/infrastructure/aclReadRepository'
-import { legacyIntentApplyResourceDependencies } from '@/modules/resource-catalog/composition/legacyIntentApplyResourceDependencies'
 
-/** Test-only composition of the same exact authority/resource pair used by the HTTP bootstrap. */
-export function intentApplyResourceBinding(db: DbClient, actor: Actor) {
+/**
+ * Test-only composition of the same exact authority used by the HTTP bootstrap.
+ *
+ * RFC-359 —— 此前这里还交出一个 `resourceApply`（legacy SQLite 资源会话）。两台 apply
+ * 引擎合一后资源会话由 `composeIntentApplyOperations` 自己按 `db` + `appHome` 装配，
+ * 调用方只需要把 authority 递进去。
+ */
+export function intentApplyResourceBinding(db: ProviderNeutralDatabase, actor: Actor) {
   const identityAccess = composeIdentityAccess(db)
   const context = identityAccess.contexts.fromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },
     'http',
   )
-  return Object.freeze({
-    authority: context.authority,
-    resourceApply: composeIntentApplyResourceBinding(
-      legacyIntentApplyResourceDependencies,
-      createResourceCatalogAclIdentityReadPort(db),
-    ),
-  })
+  return Object.freeze({ authority: context.authority })
 }

@@ -1,10 +1,13 @@
 // RFC-294 P0-B/W6 pre-refactor characterization.
 //
-// Intent Apply and BundleApply are still separate engines.  These tests lock
-// the user-visible lifecycle they must both preserve while W6 moves new
-// admissions behind one AtomicApplyEngine: fresh work is not reaped, stale
-// crash residue converges once, failed attempts never re-execute, and a
-// committed receipt remains replayable after mutable surrounding state moves.
+// 立项时 Intent Apply 与 BundleApply 是两台引擎，这几条锁的是两台都必须保住的
+// 用户可见生命周期：新工作不被回收、崩溃残留只收敛一次、失败的尝试绝不重跑、
+// 已提交的收据在周围可变状态变了之后仍然可重放。
+//
+// RFC-359 —— **两边各自的两台引擎都已合一**（`§5dy` 收掉通用 bundle 引擎、`§5ea` 收掉
+// intent apply 引擎），所以这个文件不再是「两台之间的对拍」。它留着的理由变了但仍然充分：
+// 这四条是**合一前后都不许变**的用户可见行为，正是合一最容易悄悄改掉的那一类
+// （回收阈值、收敛的幂等性、失败重放的语义）。任何一条红都说明合一动了不该动的东西。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'

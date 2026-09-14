@@ -467,7 +467,6 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *       Promise 链，daemon 又是 flock 单实例；同一 session 的两笔 apply 进不到同一时刻
  *       （与 W6-T28 账本对该文件的判定同源）。
  *     removeWhen —— applyLock 退役或 daemon 变多实例时重判。
- *   modules/intent/infrastructure/sqliteIntentApplyOperations.ts: 1
  *     :293 intentApplyJournal。why —— 同步事务面 + 同一把 applyLock。
  *     removeWhen —— 随同步面退役。
  *   modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts: 7
@@ -541,7 +540,6 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/event-center/infrastructure/eventStore.ts: 2',
   'modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts: 2',
   'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 1',
-  'modules/intent/infrastructure/sqliteIntentApplyOperations.ts: 1',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts: 7',
   'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts: 2',
   'modules/resource-catalog/infrastructure/workflowRepository.ts: 1',

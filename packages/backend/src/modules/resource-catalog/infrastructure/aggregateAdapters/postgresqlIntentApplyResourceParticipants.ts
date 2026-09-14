@@ -1,6 +1,6 @@
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type {
-  IntentResourceChangesetReceipt,
+  ResourceSummaryRevision,
   VersionedIntentResourceChangesetPlan,
 } from '../../public/types'
 import type { ResourceRequestContext } from '../../public/participants'
@@ -125,6 +125,25 @@ export interface PostgresqlIntentApplyResourceParticipantInTransaction {
   ): Promise<IntentResourceChangesetReceipt>
 }
 
+/**
+ * Intent apply 资源会话**提交臂的返回值**。RFC-359 从 `public/types.ts` 搬来——它只在
+ * RC 自己的提交臂与 intent 的编排之间流动，而 intent 拿到它是经
+ * `PostgresqlIntentApplyResourceSession` 这个 infrastructure 合同，不是经 `public/`。
+ */
+interface IntentResourceChangesetReceiptOf<K extends CatalogSelectorKind> {
+  readonly kind: K
+  readonly operationId: string
+  readonly resourceId: string
+  readonly action: 'create' | 'update'
+  readonly revision: ResourceSummaryRevision<K>
+}
+
+type DistributedIntentResourceChangesetReceipt<K extends CatalogSelectorKind> =
+  K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never
+
+export type IntentResourceChangesetReceipt =
+  DistributedIntentResourceChangesetReceipt<CatalogSelectorKind>
+
 export interface PostgresqlIntentApplyResourceTransactionAttempt {
   readonly participant: PostgresqlIntentApplyResourceParticipantInTransaction
   /** Promote this attempt's tail only after the outer Intent transaction commits. */
@@ -156,6 +175,16 @@ export interface PostgresqlIntentApplyResourceSession {
 export interface PostgresqlIntentApplyResourceSessionOptions {
   readonly actor: DirectAuthenticatedAuthority
   readonly authority: ResourceRequestContext
+  /**
+   * RFC-359 —— 预暂存的两个崩溃断点（技能文件已落盘 / 插件已装到盘上，**事务尚未开始**）。
+   *
+   * 这两个点此前只有被退役的那台引擎有（`ApplyIntentFaults` 的 `afterSkillStage` /
+   * `afterPluginInstall`，`rfc234-apply-changeset` 的 P2-2 崩溃矩阵靠它们各钉一格）。
+   * 两台引擎合一时如果不带上，崩溃矩阵就凭空少两格——而少掉的正是「盘上已有半成品、
+   * 库里什么都没有」这一类，是补偿逻辑最容易写错的一类。
+   */
+  readonly afterSkillStage?: () => void
+  readonly afterPluginInstall?: () => void
 }
 
 function missingPreparation(plan: VersionedIntentResourceChangesetPlan): Error {
@@ -269,6 +298,7 @@ export function createPostgresqlIntentApplyResourceSession<
           const prepared = skill.get(plan)
           if (prepared === undefined) throw missingPreparation(plan)
           await ports.skill.prestage?.(plan, prepared, context)
+          options.afterSkillStage?.()
           return
         }
         case 'mcp': {
@@ -281,6 +311,7 @@ export function createPostgresqlIntentApplyResourceSession<
           const prepared = plugin.get(plan)
           if (prepared === undefined) throw missingPreparation(plan)
           await ports.plugin.prestage?.(plan, prepared, context)
+          options.afterPluginInstall?.()
           return
         }
         case 'workflow': {

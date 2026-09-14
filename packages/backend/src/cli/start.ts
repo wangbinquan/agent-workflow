@@ -53,7 +53,7 @@ import {
   composeSqliteMemoryOperations,
   composeSqliteMemoryInjectionQueries,
 } from '@/modules/memory/composition'
-import { composeSqliteIntentMaintenanceSnapshotQueries } from '@/modules/intent/composition/maintenance'
+import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -2619,7 +2619,13 @@ async function composeSqliteProviderSession(
   // Worker connection. Main only admits durable slots and consumes typed
   // notification/admission deltas; Worker failure never falls back to running
   // the old body on this HTTP event loop.
-  const intentMaintenanceSnapshots = composeSqliteIntentMaintenanceSnapshotQueries(db)
+  // RFC-359 —— 「本进程正在跑哪些 intent apply」同样来自 apply 引擎自己（与 PostgreSQL 同一条）。
+  // 引擎在下面的 `composeSqliteAppDeps` 里装出来，而维护服务先起——这里晚绑定。
+  let intentApplyActivity: (() => readonly string[]) | null = null
+  const intentMaintenanceSnapshots = composeIntentMaintenanceSnapshotQueriesFor({
+    db,
+    activity: { activeJournalIds: () => intentApplyActivity?.() ?? [] },
+  })
   // RFC-359 —— 「本进程正在跑哪些 apply」的来源是 apply 引擎自己（与 PostgreSQL 同一条），
   // 不再是 legacy `services/bundle/apply` 的模块级集合。引擎在下面的 `composeSqliteAppDeps`
   // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
@@ -2724,6 +2730,7 @@ async function composeSqliteProviderSession(
     digitalEmployeeTypePackageDriftPolicy,
   })
   resourcePackageApplyActivity = () => appComposition.resourcePackageApplyActivity.activeApplyIds()
+  intentApplyActivity = () => appComposition.intentApplyActivity.activeJournalIds()
   const app = createComposedApp(appComposition)
 
   const ws = buildWebSocketAdapter({

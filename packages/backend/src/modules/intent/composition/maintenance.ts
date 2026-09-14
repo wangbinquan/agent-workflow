@@ -1,5 +1,4 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createLogger, type Logger } from '@/util/log'
 import type { IntentMaintenancePersistence } from '../application/ports/intentPersistence'
 import {
@@ -7,14 +6,9 @@ import {
   type IntentScratchFilesystem,
 } from '../infrastructure/intentScratchFilesystem'
 import { createIntentPersistence } from '../infrastructure/intentPersistence'
-import { composeSqliteIntentApplyArtifactLifecycle } from './apply'
-import {
-  activeIntentApplyJournalIds,
-  convergeIntentApplyJournal,
-} from '../infrastructure/sqliteIntentApplyOperations'
 import type { IntentMaintenanceCommands } from '../public/commands'
 import type { IntentBootRecoveryInput, IntentScratchSweepInput } from '../public/commands'
-import { composePostgresqlIntentApplyConvergence } from './postgresqlApplyMaintenance'
+import { composeIntentApplyConvergence } from './applyMaintenance'
 
 export interface IntentApplyConvergence {
   converge(input: {
@@ -65,17 +59,14 @@ function composeIntentMaintenanceSnapshotQueries(input: {
   })
 }
 
-export function composeSqliteIntentMaintenanceSnapshotQueries(
-  db: DbClient,
-): IntentMaintenanceSnapshotQueries {
-  return composeIntentMaintenanceSnapshotQueries({
-    persistence: createIntentPersistence(db),
-    activity: { activeJournalIds: activeIntentApplyJournalIds },
-  })
-}
-
-export function composePostgresqlIntentMaintenanceSnapshotQueries(input: {
-  readonly db: PostgresqlDatabaseClient
+/**
+ * RFC-359 —— 两个 provider 共用这一份。此处此前是一对，而两侧的**在飞 journal 从哪来**
+ * 不一样：SQLite 那份从引擎的模块级集合现取（`activeIntentApplyJournalIds()`），
+ * PostgreSQL 那份要求把**选中的那台 apply 引擎**当依赖注进来。后者才是对的——在飞集合是
+ * 进程内的围栏，不是可以从 journal 行反推的东西；合一取强侧。
+ */
+export function composeIntentMaintenanceSnapshotQueriesFor(input: {
+  readonly db: ProviderNeutralDatabase
   /** The exact selected apply-operations instance; its process-local fence must
    * not be reconstructed from persisted journal rows. */
   readonly activity: IntentApplyActivitySource
@@ -169,32 +160,15 @@ interface ProviderIntentMaintenanceCompositionInput {
   readonly log?: Logger
 }
 
-/** SQLite mechanism binding for the provider-neutral maintenance commands. */
-export function composeSqliteIntentMaintenanceCommandsForAppHome(
-  input: ProviderIntentMaintenanceCompositionInput & { readonly db: DbClient },
-): IntentMaintenanceCommands {
-  const log = input.log ?? createLogger('intentMaintenance')
-  const artifacts = composeSqliteIntentApplyArtifactLifecycle({
-    db: input.db,
-    appHome: input.appHome,
-  })
-  return composeIntentMaintenanceCommandsForAppHome({
-    persistence: createIntentPersistence(input.db),
-    appHome: input.appHome,
-    scratchDirectoryName: input.scratchDirectoryName,
-    intentApplies: {
-      converge: ({ activeJournalIds }) =>
-        convergeIntentApplyJournal(input.db, artifacts, log, { activeJournalIds }),
-    },
-    resourcePackages: input.resourcePackages,
-    log,
-  })
-}
-
-/** PostgreSQL mechanism binding for the same provider-neutral commands. */
-export function composePostgresqlIntentMaintenanceCommandsForAppHome(
+/**
+ * RFC-359 —— 维护侧（boot / hourly 的 journal 收敛）两个 provider 共用这一份装配。
+ * 此处此前是一对：SQLite 走 `convergeIntentApplyJournal` + SQLite 工件生命周期，
+ * PostgreSQL 走 `createPostgresqlIntentApplyJournalConvergence`。两者收敛的是同一张
+ * `intent_apply_journal`、判的是同一套三态。
+ */
+export function composeIntentMaintenanceCommandsForDatabase(
   input: ProviderIntentMaintenanceCompositionInput & {
-    readonly db: PostgresqlDatabaseClient
+    readonly db: ProviderNeutralDatabase
     readonly pluginsDir: string
   },
 ): IntentMaintenanceCommands {
@@ -203,7 +177,7 @@ export function composePostgresqlIntentMaintenanceCommandsForAppHome(
     persistence: createIntentPersistence(input.db),
     appHome: input.appHome,
     scratchDirectoryName: input.scratchDirectoryName,
-    intentApplies: composePostgresqlIntentApplyConvergence({
+    intentApplies: composeIntentApplyConvergence({
       db: input.db,
       appHome: input.appHome,
       pluginsDir: input.pluginsDir,

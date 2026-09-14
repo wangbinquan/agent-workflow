@@ -17,7 +17,6 @@ import type {
   CatalogSelectorKind,
   FrozenTaskExecutionResourceSnapshot,
   GetAgentResourceClosureStatusInput,
-  IntentResourceChangesetReceipt,
   McpAclIdentity,
   McpProbeRecord,
   McpProbeWrite,
@@ -28,7 +27,6 @@ import type {
   CommitSkillZipCatalogInput,
   CommitSkillZipCatalogReceipt,
   TaskExecutionResourceRequest,
-  VersionedIntentResourceChangesetPlan,
 } from './types'
 
 /** Opaque request context minted by identity-access; never an Actor-shaped bag. */
@@ -134,7 +132,6 @@ export interface DemoResourceCatalogSeedParticipant {
 }
 
 declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
-declare const intentApplyResourceParticipantInTxBrand: unique symbol
 declare const mcpAclIdentityParticipantBrand: unique symbol
 export interface IntentContextResourceReference {
   readonly resourceType: CatalogSelectorKind
@@ -217,15 +214,10 @@ export interface TaskExecutionResourceSnapshotInTx {
   ): Promise<readonly FrozenTaskExecutionResourceSnapshot[]>
 }
 
-export interface IntentApplyResourceParticipantInTx {
-  readonly [intentApplyResourceParticipantInTxBrand]: 'intent-apply-resource-participant'
-  // RFC-359 W4-D23b：技能提交面迁到中立事务后是异步的，这里放宽成「同步或异步都行」——
-  // PostgreSQL 侧本来就 await 它（`postgresqlIntentApplyOperations`），SQLite 侧现在也 await。
-  authorizeAndCommit(
-    authority: ResourceRequestContext,
-    plan: VersionedIntentResourceChangesetPlan,
-  ): IntentResourceChangesetReceipt | Promise<IntentResourceChangesetReceipt>
-}
+// RFC-359 —— `IntentApplyResourceParticipantInTx` 与它的工厂随两台 apply 引擎合一一起退役。
+// 它是 legacy 会话的**提交期句柄**（`participantInTransaction(tx)`）；现行会话交出的是
+// `PostgresqlIntentApplyResourceTransactionAttempt`（`{participant, commitSucceeded}`），
+// 因为提交后还有一条尾巴要在外层事务提交之后才放行。唯一的消费者随 legacy 参与者一起删了。
 
 // memory 的资源 scope（agent / workflow）访问判定参与者**不在这里**：那是 memory 自己声明的端口
 // （`modules/memory/application/ports/resourceScopeAccess.ts`），resource-catalog 只在装配根上交出一份

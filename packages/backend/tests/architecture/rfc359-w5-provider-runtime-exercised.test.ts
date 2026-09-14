@@ -352,6 +352,15 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
       // `composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`
       // 零生产消费者后退役，两个 provider 装同一条组合根（plan §5dv）。
       //
+      // RFC-359（2026-09-14，第四档）：57 → 48。Intent apply 那一对合一带走九个 provider 命名的
+      // 装配 / 工厂：`composeSqlite|composePostgresql IntentApplyOperations`、
+      // `compose|createSqliteIntentApplyArtifactLifecycle`、
+      // `composeSqlite|composePostgresqlIntentMaintenanceCommandsForAppHome`、
+      // `composeSqlite|composePostgresqlIntentMaintenanceSnapshotQueries`、
+      // `composePostgresqlIntentApplyConvergence`、`composeSqliteSkillArtifactCompensation`、
+      // `createLegacyIntentApplyResourceSession`——换成中立名的 `composeIntentApply*` /
+      // `composeIntentMaintenance*`（不带引擎前缀，所以不进这份语料）。
+      //
       // RFC-359（2026-09-13，第三档）：70 → 58。「函数体逐字相同的孪生」名单清零——最后六对的
       // 相同函数体是**内联**的，先提成一份中立实现再收（plan §5ds）。零孪生从此由
       // `rfc359-w5-identical-provider-twins` 常驻守着。
@@ -367,7 +376,7 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
       // **降是对的方向**：这个数随合一持续下降，降到它该有的样子就是 RFC-359 收工。
       // 这条只防「匹配器塌了、一条都派生不出来」，所以照旧贴着当前值钉——每次退役都要在这里
       // 留一次有署名的记录，而不是把门槛调宽一次性放过后面所有变化。
-      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(57)
+      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(48)
       // 架构账本排除必须是**真的排除**：该目录确实在语料里（本文件就躺在里面），
       // 才谈得上把它从「现状」证据里摘出去。目录改名会让这条当场红。
       expect(

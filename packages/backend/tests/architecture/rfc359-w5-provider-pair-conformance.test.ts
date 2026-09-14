@@ -106,8 +106,12 @@ const VALUE_IMPORT =
  * **对数只降不升，`unverified` 数也只降不升**（两个量在下面各有一条独立断言钉死）。
  */
 export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
-  'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite + postgresql — verified by rfc359-w7-intent-apply-artifact-conformance.test.ts',
-  'modules/intent/infrastructure/IntentApplyOperations: sqlite + postgresql — verified by rfc359-w7-intent-apply-operations-conformance.test.ts',
+  // RFC-359：**`IntentApplyOperations` / `IntentApplyArtifactLifecycle` 这两对已销账**
+  // （`sqliteIntentApplyOperations.ts` 762 行 + `sqliteIntentApplyArtifactLifecycle.ts` 178 行 +
+  // `legacyIntentApplyResourceParticipants.ts` 1062 行整条退役）。合一取的是**并集**而不是某一侧：
+  // 现行机制用 PG 那套（目录 swap + 内容哈希），SQLite 独有的 `skill_operations` 账重放降级成
+  // 只在读到旧词汇 journal 行时才走的兼容面。两个 bootstrap 根现在调同一个
+  // `composeIntentApplyOperations`。合一照出三处用户可见缺陷，逐条见 plan §5ea。
   // RFC-359 W8：判**不合**——`ArtifactRecovery` 那半边是两套落盘工件格式（缺口已由
   // `rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵钉住），`JournalPort` 那半边的
   // 事务包装也不是冗余（SQLite 的 `dbTxSync` 兜着跨上下文事务守卫）。只补对拍，理由见对拍文件头。
@@ -193,7 +197,7 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
 export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
-export const PROVIDER_PAIR_COUNT = 10
+export const PROVIDER_PAIR_COUNT = 8
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

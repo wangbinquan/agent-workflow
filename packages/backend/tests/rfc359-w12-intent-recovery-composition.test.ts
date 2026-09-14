@@ -7,17 +7,13 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
 import { intentApplyJournal, intentSessions, plugins } from '@/db/schema'
 import { INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE } from '@/modules/intent/application/journalConvergence'
-import { composeSqliteIntentApplyArtifactLifecycle } from '@/modules/intent/composition/apply'
-import { composePostgresqlIntentApplyConvergence } from '@/modules/intent/composition/postgresqlApplyMaintenance'
+import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import {
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
 } from '@/modules/intent/domain/journalArtifacts'
-import { convergeIntentApplyJournal } from '@/modules/intent/infrastructure/sqliteIntentApplyOperations'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -40,20 +36,9 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     return { appHome, pluginsDir }
   }
 
+  // RFC-359 —— 两个 provider 共用同一份恢复装配。此处此前是 `isolation === 'exclusive'` 的二分。
   function compose(input: { appHome: string; pluginsDir: string }) {
-    if (harness.capabilities.isolation === 'exclusive') {
-      const db = harness.db as DbClient
-      const artifacts = composeSqliteIntentApplyArtifactLifecycle({ db, appHome: input.appHome })
-      return {
-        converge: (command: { readonly activeJournalIds: readonly string[] }) =>
-          convergeIntentApplyJournal(db, artifacts, log, command),
-      }
-    }
-    return composePostgresqlIntentApplyConvergence({
-      ...input,
-      db: harness.db as PostgresqlDatabaseClient,
-      log,
-    })
+    return composeIntentApplyConvergence({ ...input, db: harness.db, log })
   }
 
   function generation(pluginsDir: string) {
