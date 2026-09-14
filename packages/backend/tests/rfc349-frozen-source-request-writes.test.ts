@@ -21,19 +21,19 @@ import { eq } from 'drizzle-orm'
 import { createAuthRuntimeFor } from '../src/auth/composition'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { userPats, users, userSessions } from '../src/db/schema'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const backendRoot = resolve(import.meta.dir, '..')
 
 const FROZEN = Object.freeze({ writable: () => false })
 const OPEN = Object.freeze({ writable: () => true })
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
   await db.insert(users).values({
     id: 'u-frozen',
     username: 'frozen',
@@ -44,66 +44,77 @@ beforeEach(async () => {
     createdAt: 1,
     updatedAt: 1,
   })
-})
+}
 
-const sessionRow = (id: string) =>
-  db.select().from(userSessions).where(eq(userSessions.id, id)).get()
-const patRow = (id: string) => db.select().from(userPats).where(eq(userPats.id, id)).get()
+const sessionRow = async (id: string) =>
+  await db.select().from(userSessions).where(eq(userSessions.id, id)).get()
+const patRow = async (id: string) =>
+  await db.select().from(userPats).where(eq(userPats.id, id)).get()
 
 describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
-  test('the session last-used projection is skipped while frozen and resumes after', async () => {
-    const created = await createSession({ db, userId: 'u-frozen', now: 1_000 })
-    const before = sessionRow(created.session.id)!.lastUsedAt
-
-    const frozen = createAuthRuntimeFor({ db, sourceWriteWindow: FROZEN })
-    const resolvedWhileFrozen = await frozen.lookupActiveSession(created.token, 900_000)
-    expect(
-      resolvedWhileFrozen,
-      '冻结期间连凭据都认不出来了 ⇒ 迁移进度页会被登出，这不是本条要的效果',
-    ).not.toBeNull()
-    expect(
-      sessionRow(created.session.id)!.lastUsedAt,
-      '冻结窗内写了 last_used_at ⇒ 源库被改，拷贝随后以 sqlite-source-mutated 收场',
-    ).toBe(before)
-
-    const open = createAuthRuntimeFor({ db, sourceWriteWindow: OPEN })
-    await open.lookupActiveSession(created.token, 900_000)
-    expect(
-      sessionRow(created.session.id)!.lastUsedAt,
-      '窗口重新打开后还是不写 ⇒ 这条投影被永久关掉了，不是只在维护窗内让路',
-    ).toBe(900_000)
-  })
-
-  test('the PAT last-used projection is skipped while frozen and resumes after', async () => {
-    const created = await createPat({
-      db,
-      userId: 'u-frozen',
-      name: 'frozen-pat',
-      purpose: 'general',
-      now: 1_000,
+  // RFC-359 AC-6：冻结窗这层判据在**两个引擎**上各钉一遍。窗口本身是 provider-中立的
+  // （`createAuthRuntimeFor` 按 `databaseSessionFor(db).engine.provider` 自选实现），
+  // 而「冻结期间一个字节都不写」恰恰是拷贝源侧的不变量——只跑 SQLite 等于 PostgreSQL
+  // 侧的同一条投影从未被验证过。
+  describeEachProvider('冻结窗内的请求路径写入（双引擎）', (harness) => {
+    beforeEach(async () => {
+      await seedFixture(harness)
     })
-    const before = patRow(created.meta.id)!.lastUsedAt
 
-    const frozen = createAuthRuntimeFor({ db, sourceWriteWindow: FROZEN })
-    expect(await frozen.lookupActivePat(created.token, 900_000)).not.toBeNull()
-    expect(
-      patRow(created.meta.id)!.lastUsedAt,
-      'PAT 的 last_used_at 每次请求都写，冻结窗内一次就够把拷贝判红',
-    ).toBe(before)
+    test('the session last-used projection is skipped while frozen and resumes after', async () => {
+      const created = await createSession({ db, userId: 'u-frozen', now: 1_000 })
+      const before = (await sessionRow(created.session.id))!.lastUsedAt
 
-    const open = createAuthRuntimeFor({ db, sourceWriteWindow: OPEN })
-    await open.lookupActivePat(created.token, 900_000)
-    expect(patRow(created.meta.id)!.lastUsedAt).toBe(900_000)
-  })
+      const frozen = createAuthRuntimeFor({ db, sourceWriteWindow: FROZEN })
+      const resolvedWhileFrozen = await frozen.lookupActiveSession(created.token, 900_000)
+      expect(
+        resolvedWhileFrozen,
+        '冻结期间连凭据都认不出来了 ⇒ 迁移进度页会被登出，这不是本条要的效果',
+      ).not.toBeNull()
+      expect(
+        (await sessionRow(created.session.id))!.lastUsedAt,
+        '冻结窗内写了 last_used_at ⇒ 源库被改，拷贝随后以 sqlite-source-mutated 收场',
+      ).toBe(before)
 
-  test('omitting the window keeps today’s behaviour: every composition without a migration writes', async () => {
-    const created = await createSession({ db, userId: 'u-frozen', now: 1_000 })
-    const runtime = createAuthRuntimeFor({ db })
-    await runtime.lookupActiveSession(created.token, 900_000)
-    expect(
-      sessionRow(created.session.id)!.lastUsedAt,
-      '默认组装也不写了 ⇒ 这个改动越界了，它只该在迁移冻结时让路',
-    ).toBe(900_000)
+      const open = createAuthRuntimeFor({ db, sourceWriteWindow: OPEN })
+      await open.lookupActiveSession(created.token, 900_000)
+      expect(
+        (await sessionRow(created.session.id))!.lastUsedAt,
+        '窗口重新打开后还是不写 ⇒ 这条投影被永久关掉了，不是只在维护窗内让路',
+      ).toBe(900_000)
+    })
+
+    test('the PAT last-used projection is skipped while frozen and resumes after', async () => {
+      const created = await createPat({
+        db,
+        userId: 'u-frozen',
+        name: 'frozen-pat',
+        purpose: 'general',
+        now: 1_000,
+      })
+      const before = (await patRow(created.meta.id))!.lastUsedAt
+
+      const frozen = createAuthRuntimeFor({ db, sourceWriteWindow: FROZEN })
+      expect(await frozen.lookupActivePat(created.token, 900_000)).not.toBeNull()
+      expect(
+        (await patRow(created.meta.id))!.lastUsedAt,
+        'PAT 的 last_used_at 每次请求都写，冻结窗内一次就够把拷贝判红',
+      ).toBe(before)
+
+      const open = createAuthRuntimeFor({ db, sourceWriteWindow: OPEN })
+      await open.lookupActivePat(created.token, 900_000)
+      expect((await patRow(created.meta.id))!.lastUsedAt).toBe(900_000)
+    })
+
+    test('omitting the window keeps today’s behaviour: every composition without a migration writes', async () => {
+      const created = await createSession({ db, userId: 'u-frozen', now: 1_000 })
+      const runtime = createAuthRuntimeFor({ db })
+      await runtime.lookupActiveSession(created.token, 900_000)
+      expect(
+        (await sessionRow(created.session.id))!.lastUsedAt,
+        '默认组装也不写了 ⇒ 这个改动越界了，它只该在迁移冻结时让路',
+      ).toBe(900_000)
+    })
   })
 
   test('the token-call audit consults the same window', () => {

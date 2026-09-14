@@ -517,14 +517,14 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 390,
+      "baseline": 378,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）"
     },
     {
       "id": "rfc359-w5-test-engine-open-migration-debt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "OPEN_MIGRATION_DEBT",
-      "baseline": 84,
+      "baseline": 72,
       "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役"
     },
     {
@@ -882,10 +882,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24737,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-11（plan §5ef）：`ResourceCatalogOverviewCountPort` 新增 `countVisibleMany` —— `/api/overview` 是九个端点里唯一没过 PostgreSQL 绝对预算的那个，实测根因是**语句条数**（22 条，九端点之最；22 条 wallMs 合计 77.4ms 对端点墙钟 15.5ms，约 5 路并发，墙钟随条数线性增长）而不是查询代价（四条任务计数全部走 Index Only Scan，库内合计 < 1.6ms）。六张资源表的逐表 count 收成一条 UNION ALL ⇒ -5 条。这是**加一个符号换掉五次往返**，不是加豁免。一次性：下次重采后应当消失。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -902,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4c3df660fc8c5a36350b8028ab2ed335011e0d7c",
-    "contentDigest": "sha256:d49ee25e667964947e5df967ba696af09262928b2ecd3aa0f82dadf25f843762",
+    "currentSnapshotSha": "6194d343a34aef1f8f1d1daaf7438828795c40cc",
+    "contentDigest": "sha256:f5d881f6a0519db37d9440bb5b93b8cbd5853a744b986dd1ff071abaee06dd08",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

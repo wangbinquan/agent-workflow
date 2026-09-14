@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, plugins, tasks, workflows } from '../src/db/schema'
@@ -34,7 +33,6 @@ import {
 import { pluginOperationConfigHashOf } from '../src/services/pluginOperationRevision'
 import { ConflictError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 let db: ProviderNeutralDatabase
@@ -43,25 +41,19 @@ let binding: PluginServiceBinding
 
 const deps = () => ({ pluginsDir, npmBin: FAKE_NPM })
 
-const setupNativeFixture = async () => {
-  db = createInMemoryDb(MIGRATIONS)
+/** 只要插件存储目录与 fake-npm 环境的那一档：整块不碰库的用例用它，别白建一个库。 */
+async function setupPluginsDirFixture(): Promise<void> {
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc201-plugin-'))
   process.env.FAKE_NPM_MODE = 'success'
   process.env.FAKE_NPM_VERSION = '1.0.0'
   delete process.env.FAKE_NPM_COMMIT
   delete process.env.FAKE_NPM_COUNTER_FILE
   resetNpmProbeCacheForTests()
-  binding = composePluginServiceBindingForTest(db, deps())
 }
 
-async function setupProviderFixture(database: ProviderNeutralDatabase) {
+async function setupProviderFixture(database: ProviderNeutralDatabase): Promise<void> {
   db = database
-  pluginsDir = await mkdtemp(join(tmpdir(), 'rfc201-plugin-'))
-  process.env.FAKE_NPM_MODE = 'success'
-  process.env.FAKE_NPM_VERSION = '1.0.0'
-  delete process.env.FAKE_NPM_COMMIT
-  delete process.env.FAKE_NPM_COUNTER_FILE
-  resetNpmProbeCacheForTests()
+  await setupPluginsDirFixture()
   binding = composePluginServiceBindingForTest(db, deps())
 }
 
@@ -161,10 +153,6 @@ describeEachProvider('source identity update checks', (harness) => {
     expect(checked.available).toBe(true)
     expect(checked.latest).toBe('222222222222')
   })
-})
-
-describe('source identity update checks', () => {
-  beforeEach(setupNativeFixture)
 
   test('legacy cachedPath without manifest fails closed as identity unknown', async () => {
     const created = await createPlugin(binding, { name: 'legacy', spec: 'legacy@1' })
@@ -194,11 +182,13 @@ describe('source identity update checks', () => {
   })
 })
 
+// 整块的判据就是「**一次库读都不发生**」——它拿的是一个读到就抛的 Proxy，双引擎跑两遍
+// 只会把同一条纯文件系统判据抄一份，所以这里只建插件目录、不建库（IDLE-FIXTURE）。
 describe('generation GC safety', () => {
-  beforeEach(setupNativeFixture)
+  beforeEach(setupPluginsDirFixture)
 
   test('empty plugin storage bypasses the active-run database scan', async () => {
-    const dbThatMustNotBeRead = new Proxy({} as DbClient, {
+    const dbThatMustNotBeRead = new Proxy({} as ProviderNeutralDatabase, {
       get() {
         throw new Error('unexpected-database-read')
       },
@@ -219,7 +209,7 @@ describe('generation GC safety', () => {
   test('fresh filesystem generations bypass the reference scan until grace expires', async () => {
     const fresh = join(pluginsDir, 'fresh-id', 'generations', 'fresh-op')
     await mkdir(fresh, { recursive: true })
-    const dbThatMustNotBeRead = new Proxy({} as DbClient, {
+    const dbThatMustNotBeRead = new Proxy({} as ProviderNeutralDatabase, {
       get() {
         throw new Error('unexpected-database-read')
       },
@@ -330,8 +320,8 @@ describeEachProvider('generation GC safety', (harness) => {
   })
 })
 
-// 纯源码 ratchet：整块不用 `setupNativeFixture` 的任何产物（不碰 db / binding / pluginsDir），
-// 那行 beforeEach 白建一个 SQLite 库 + 一个临时目录。判据见 pre-flight 的 IDLE-FIXTURE。
+// 纯源码 ratchet：整块不碰任何夹具产物（db / binding / pluginsDir 都不用），所以一行
+// beforeEach 都不挂——挂了就是白建一个库 + 一个临时目录。判据见 pre-flight 的 IDLE-FIXTURE。
 describe('production coordinator callsite ratchet', () => {
   test('Plugin mutations, Check/Upgrade, create, and generic ACL use the stable id fence', async () => {
     const route = await readFile(

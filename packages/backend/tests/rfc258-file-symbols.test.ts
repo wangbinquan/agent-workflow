@@ -6,12 +6,13 @@
 //  - F-09: completeness is an honest 200 state — degraded (partial parse),
 //    unsupported (no extractor / binary), parse-error — never a silent 'ok'.
 //  - F-05: side='base' reads the base commit's blob, not the worktree.
+//
+// RFC-359 AC-6：整份套件跑双引擎——服务层收的是中立客户端，夹具因此不再自建 SQLite 内存库。
 
-import { afterAll, describe, expect, test } from 'bun:test'
+import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { dirname, join } from 'node:path'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import {
@@ -21,8 +22,6 @@ import {
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const getTaskFileSymbols = (db: ProviderNeutralDatabase, taskId: string, query: FileSymbolsQuery) =>
   getTaskFileSymbolsWithPort(createCodeWorkspaceRead(db), taskId, query)
@@ -60,7 +59,6 @@ async function makeRepo(files: Record<string, string>): Promise<{ dir: string; c
 async function seedTask(
   db: ProviderNeutralDatabase,
   opts: { worktreePath: string; baseCommit: string | null; repoCount?: number },
-  providerTaskLineage = false,
 ): Promise<string> {
   const taskId = `01FS${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
@@ -84,22 +82,14 @@ async function seedTask(
     startedAt: Date.now(),
     baseCommit: opts.baseCommit,
     repoCount: opts.repoCount ?? 1,
-    ...(providerTaskLineage
-      ? {
-          executionLineageId: taskId,
-          lineageSlotPathJson: JSON.stringify([
-            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-          ]),
-        }
-      : {}),
+    // PostgreSQL 的迁移只投影 DDL，不带 `rfc328_tasks_lineage_after_insert` 那条 SQLite
+    // 触发器，所以直插 `tasks` 的夹具两侧都显式写 lineage，两个引擎的起点才相同。
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return taskId
-}
-
-const seedTaskForProvider: typeof seedTask = (db, opts) => seedTask(db, opts, true)
-
-function db(): DbClient {
-  return createInMemoryDb(MIGRATIONS)
 }
 
 const TS_SOURCE = `export class OrderService {
@@ -109,48 +99,44 @@ const TS_SOURCE = `export class OrderService {
 export function topLevel(): number { return 1 }
 `
 
-describe('getTaskFileSymbols — worktree side', () => {
-  describeEachProvider('provider cases 1', (harness) => {
-    const db = () => harness.db
-    const seedTask = seedTaskForProvider
-    test('typescript file yields class + methods + top-level function with 1-based ranges', async () => {
-      const d = db()
-      const repo = await makeRepo({ 'src/svc.ts': TS_SOURCE })
-      const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
-      const res = await getTaskFileSymbols(d, taskId, { path: 'src/svc.ts', side: 'worktree' })
-      expect(res.lang).toBe('typescript')
-      expect(res.status).toBe('ok')
-      const names = res.symbols.map((s) => s.qualifiedName)
-      expect(names).toContain('OrderService')
-      expect(names).toContain('OrderService.charge')
-      expect(names).toContain('topLevel')
-      const cls = res.symbols.find((s) => s.qualifiedName === 'OrderService')
-      expect(cls?.range.startLine).toBe(1)
-    })
+describeEachProvider('getTaskFileSymbols — worktree side（双引擎）', (harness) => {
+  test('typescript file yields class + methods + top-level function with 1-based ranges', async () => {
+    const d = harness.db
+    const repo = await makeRepo({ 'src/svc.ts': TS_SOURCE })
+    const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
+    const res = await getTaskFileSymbols(d, taskId, { path: 'src/svc.ts', side: 'worktree' })
+    expect(res.lang).toBe('typescript')
+    expect(res.status).toBe('ok')
+    const names = res.symbols.map((s) => s.qualifiedName)
+    expect(names).toContain('OrderService')
+    expect(names).toContain('OrderService.charge')
+    expect(names).toContain('topLevel')
+    const cls = res.symbols.find((s) => s.qualifiedName === 'OrderService')
+    expect(cls?.range.startLine).toBe(1)
+  })
 
-    test('unsupported language and binary content are honest 200 states (F-09)', async () => {
-      const d = db()
-      const repo = await makeRepo({ 'notes.txt': 'hello\n', 'bin.dat': 'x\x00y' })
-      const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
-      const txt = await getTaskFileSymbols(d, taskId, { path: 'notes.txt', side: 'worktree' })
-      expect(txt).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
-      const bin = await getTaskFileSymbols(d, taskId, { path: 'bin.dat', side: 'worktree' })
-      expect(bin).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
-    })
+  test('unsupported language and binary content are honest 200 states (F-09)', async () => {
+    const d = harness.db
+    const repo = await makeRepo({ 'notes.txt': 'hello\n', 'bin.dat': 'x\x00y' })
+    const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
+    const txt = await getTaskFileSymbols(d, taskId, { path: 'notes.txt', side: 'worktree' })
+    expect(txt).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
+    const bin = await getTaskFileSymbols(d, taskId, { path: 'bin.dat', side: 'worktree' })
+    expect(bin).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
+  })
 
-    test('oversized file → 413 file-symbols-oversized', async () => {
-      const d = db()
-      const repo = await makeRepo({ 'a.ts': 'export const x = 1\n' })
-      writeFileSync(join(repo.dir, 'big.ts'), `// ${'x'.repeat(1_600_000)}\n`)
-      const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
-      await expect(
-        getTaskFileSymbols(d, taskId, { path: 'big.ts', side: 'worktree' }),
-      ).rejects.toThrow(/analyzable limit/)
-    })
+  test('oversized file → 413 file-symbols-oversized', async () => {
+    const d = harness.db
+    const repo = await makeRepo({ 'a.ts': 'export const x = 1\n' })
+    writeFileSync(join(repo.dir, 'big.ts'), `// ${'x'.repeat(1_600_000)}\n`)
+    const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
+    await expect(
+      getTaskFileSymbols(d, taskId, { path: 'big.ts', side: 'worktree' }),
+    ).rejects.toThrow(/analyzable limit/)
   })
 
   test('missing path / escaping path / missing file map to the declared error codes', async () => {
-    const d = db()
+    const d = harness.db
     const repo = await makeRepo({ 'a.ts': 'export const x = 1\n' })
     const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
     await expect(getTaskFileSymbols(d, taskId, { path: '', side: 'worktree' })).rejects.toThrow(
@@ -166,9 +152,6 @@ describe('getTaskFileSymbols — worktree side', () => {
 })
 
 describeEachProvider('getTaskFileSymbols — remaining language matrix (P1-9⑦)', (harness) => {
-  const db = () => harness.db
-  const seedTask = seedTaskForProvider
-
   const CASES: Array<[string, string, string]> = [
     ['m.go', 'package m\nfunc GoFn() {}\n', 'GoFn'],
     ['l.rs', 'pub fn rust_fn() {}\n', 'rust_fn'],
@@ -178,7 +161,7 @@ describeEachProvider('getTaskFileSymbols — remaining language matrix (P1-9⑦)
   ]
   for (const [file, source, symbol] of CASES) {
     test(`${file} extracts ${symbol}`, async () => {
-      const d = db()
+      const d = harness.db
       const repo = await makeRepo({ [file]: source })
       const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
       const res = await getTaskFileSymbols(d, taskId, { path: file, side: 'worktree' })
@@ -189,11 +172,8 @@ describeEachProvider('getTaskFileSymbols — remaining language matrix (P1-9⑦)
 })
 
 describeEachProvider('getTaskFileSymbols — base side (F-05)', (harness) => {
-  const db = () => harness.db
-  const seedTask = seedTaskForProvider
-
   test('reads the base commit blob, not the edited worktree', async () => {
-    const d = db()
+    const d = harness.db
     const repo = await makeRepo({ 'a.py': 'def old_name():\n    pass\n' })
     // edit the worktree after the commit
     writeFileSync(join(repo.dir, 'a.py'), 'def new_name():\n    pass\n')
@@ -205,7 +185,7 @@ describeEachProvider('getTaskFileSymbols — base side (F-05)', (harness) => {
   })
 
   test('no base commit → task-no-base-commit; file absent in base → not-found', async () => {
-    const d = db()
+    const d = harness.db
     const repo = await makeRepo({ 'a.py': 'x = 1\n' })
     const noBase = await seedTask(d, { worktreePath: repo.dir, baseCommit: null })
     await expect(getTaskFileSymbols(d, noBase, { path: 'a.py', side: 'base' })).rejects.toThrow(
@@ -220,11 +200,8 @@ describeEachProvider('getTaskFileSymbols — base side (F-05)', (harness) => {
 })
 
 describeEachProvider('getTaskFileSymbols — multi-repo wire keys (F-04)', (harness) => {
-  const db = () => harness.db
-  const seedTask = seedTaskForProvider
-
   test("root repo is addressable as '.' and a mounted repo by its mount path", async () => {
-    const d = db()
+    const d = harness.db
     const root = await makeRepo({ 'root.go': 'package main\nfunc RootFn() {}\n' })
     const sub = await makeRepo({ 'lib.rs': 'pub fn sub_fn() {}\n' })
     const taskId = await seedTask(d, {

@@ -19,32 +19,32 @@
 //   没有这条锁，那一天泄漏会静默变成真漏洞。因此测试直接在**服务层**构造一个
 //   role='user' 的 actor，绕开路由权限矩阵，精确断言函数自身的顺序契约。
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { workflows } from '../src/db/schema'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { assertSqliteWebhookTriggerSaveable } from '../src/modules/integration/infrastructure/sqliteWebhookTriggerValidation'
 import { createUser } from '../src/services/users'
 import { NotFoundError, ValidationError } from '../src/util/errors'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   integrationTriggerResourceAuthority,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 /** workflow 的输入结构 —— 这些字面量就是「不得泄漏给不可见者」的内容。 */
 const SECRET_INPUT_KEYS = ['classified_prompt', 'classified_ref', 'classified_mode'] as const
 
-async function harness(): Promise<{
-  db: DbClient
+// RFC-359 AC-6：`assertSqliteWebhookTriggerSaveable` 的三个实参（ScheduledTaskOperations /
+// Actor / IntegrationTriggerResourceAuthority）本来就是中立面，夹具只差一个中立的库句柄。
+async function seedFixture(providerHarness: ProviderHarness): Promise<{
+  db: ProviderNeutralDatabase
   workflowId: string
   owner: Actor
   outsider: Actor
 }> {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = providerHarness.db
   const aliceRow = await createUser(db, {
     username: 'alice',
     displayName: 'alice',
@@ -117,76 +117,78 @@ function candidateFor(workflowId: string, payload: unknown) {
   }
 }
 
-describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
-  test('目标不可见：先 404 同形，且错误里不含 workflow 的任何输入结构', async () => {
-    const h = await harness()
-    let thrown: unknown
-    try {
-      await assertSqliteWebhookTriggerSaveable(
-        scheduledTaskRuntime(h.db).operations,
-        h.outsider,
-        integrationTriggerResourceAuthority(h.db, h.outsider),
-        candidateFor(h.workflowId, leakyPayload()),
-        null,
-      )
-    } catch (err) {
-      thrown = err
-    }
-    // 顺序：ACL 门先于静态校验 ⇒ 必须是 404 同形，不是 422 静态校验失败。
-    expect(thrown).toBeInstanceOf(NotFoundError)
-    expect((thrown as NotFoundError).code).toBe('workflow-not-found')
-    // 正向防泄漏断言：整个错误（含 details）不得出现该 workflow 的任何 input key。
-    const serialized = JSON.stringify({
-      code: (thrown as NotFoundError).code,
-      message: (thrown as Error).message,
-      details: (thrown as { details?: unknown }).details ?? null,
+describeEachProvider('webhook 触发器保存期 · ACL 顺序（双引擎）', (harness) => {
+  describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
+    test('目标不可见：先 404 同形，且错误里不含 workflow 的任何输入结构', async () => {
+      const h = await seedFixture(harness)
+      let thrown: unknown
+      try {
+        await assertSqliteWebhookTriggerSaveable(
+          scheduledTaskRuntime(h.db).operations,
+          h.outsider,
+          integrationTriggerResourceAuthority(h.db, h.outsider),
+          candidateFor(h.workflowId, leakyPayload()),
+          null,
+        )
+      } catch (err) {
+        thrown = err
+      }
+      // 顺序：ACL 门先于静态校验 ⇒ 必须是 404 同形，不是 422 静态校验失败。
+      expect(thrown).toBeInstanceOf(NotFoundError)
+      expect((thrown as NotFoundError).code).toBe('workflow-not-found')
+      // 正向防泄漏断言：整个错误（含 details）不得出现该 workflow 的任何 input key。
+      const serialized = JSON.stringify({
+        code: (thrown as NotFoundError).code,
+        message: (thrown as Error).message,
+        details: (thrown as { details?: unknown }).details ?? null,
+      })
+      for (const key of SECRET_INPUT_KEYS) {
+        expect(serialized).not.toContain(key)
+      }
     })
-    for (const key of SECRET_INPUT_KEYS) {
-      expect(serialized).not.toContain(key)
-    }
-  })
 
-  test('目标不存在：同样 404 同形（存在性不可区分）', async () => {
-    const h = await harness()
-    let thrown: unknown
-    try {
-      await assertSqliteWebhookTriggerSaveable(
-        scheduledTaskRuntime(h.db).operations,
-        h.outsider,
-        integrationTriggerResourceAuthority(h.db, h.outsider),
-        candidateFor('01JMISSINGWORKFLOWID0000', leakyPayload()),
-        null,
-      )
-    } catch (err) {
-      thrown = err
-    }
-    expect(thrown).toBeInstanceOf(NotFoundError)
-    expect((thrown as NotFoundError).code).toBe('workflow-not-found')
-  })
+    test('目标不存在：同样 404 同形（存在性不可区分）', async () => {
+      const h = await seedFixture(harness)
+      let thrown: unknown
+      try {
+        await assertSqliteWebhookTriggerSaveable(
+          scheduledTaskRuntime(h.db).operations,
+          h.outsider,
+          integrationTriggerResourceAuthority(h.db, h.outsider),
+          candidateFor('01JMISSINGWORKFLOWID0000', leakyPayload()),
+          null,
+        )
+      } catch (err) {
+        thrown = err
+      }
+      expect(thrown).toBeInstanceOf(NotFoundError)
+      expect((thrown as NotFoundError).code).toBe('workflow-not-found')
+    })
 
-  test('对照：目标可见时静态校验照常报 422 并回显输入结构（修复不得压掉正常路径）', async () => {
-    const h = await harness()
-    let thrown: unknown
-    try {
-      await assertSqliteWebhookTriggerSaveable(
-        scheduledTaskRuntime(h.db).operations,
-        h.owner,
-        integrationTriggerResourceAuthority(h.db, h.owner),
-        candidateFor(h.workflowId, leakyPayload()),
-        null,
-      )
-    } catch (err) {
-      thrown = err
-    }
-    expect(thrown).toBeInstanceOf(ValidationError)
-    expect((thrown as ValidationError).code).toBe('webhook-trigger-invalid')
-    const issues = ((thrown as { details?: { issues?: Array<{ code: string; detail: string }> } })
-      .details?.issues ?? []) as Array<{ code: string; detail: string }>
-    const codes = issues.map((i) => i.code)
-    expect(codes).toContain('unknown-input')
-    expect(codes).toContain('required-input-unmapped')
-    expect(codes).toContain('input-kind-unmappable')
-    // owner 有权看见自己的结构 —— 回显在这一侧是正确行为。
-    expect(JSON.stringify(issues)).toContain(SECRET_INPUT_KEYS[0])
+    test('对照：目标可见时静态校验照常报 422 并回显输入结构（修复不得压掉正常路径）', async () => {
+      const h = await seedFixture(harness)
+      let thrown: unknown
+      try {
+        await assertSqliteWebhookTriggerSaveable(
+          scheduledTaskRuntime(h.db).operations,
+          h.owner,
+          integrationTriggerResourceAuthority(h.db, h.owner),
+          candidateFor(h.workflowId, leakyPayload()),
+          null,
+        )
+      } catch (err) {
+        thrown = err
+      }
+      expect(thrown).toBeInstanceOf(ValidationError)
+      expect((thrown as ValidationError).code).toBe('webhook-trigger-invalid')
+      const issues = ((thrown as { details?: { issues?: Array<{ code: string; detail: string }> } })
+        .details?.issues ?? []) as Array<{ code: string; detail: string }>
+      const codes = issues.map((i) => i.code)
+      expect(codes).toContain('unknown-input')
+      expect(codes).toContain('required-input-unmapped')
+      expect(codes).toContain('input-kind-unmappable')
+      // owner 有权看见自己的结构 —— 回显在这一侧是正确行为。
+      expect(JSON.stringify(issues)).toContain(SECRET_INPUT_KEYS[0])
+    })
   })
 })

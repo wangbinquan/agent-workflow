@@ -5,12 +5,11 @@
 // 这条 GitHub 形态的接线，含同 PR 二发 supersede。
 import { createHmac } from 'node:crypto'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import {
@@ -40,7 +39,6 @@ import {
 import { codeHostEventCatalogJson } from '../src/modules/integration/public/events'
 import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 4))
 const SECRET = 'gh-e2e-secret'
 
@@ -54,8 +52,10 @@ async function waitFor<T>(fn: () => Promise<T | null>, ms = 4000): Promise<T> {
   }
 }
 
-async function harness() {
-  const db = createInMemoryDb(MIGRATIONS)
+// RFC-359 AC-6：整条链路的装配点（dispatch core / ingress 持久化 / 事件中心 / 路由目录与投递
+// 消费者 / 身份运行时）形参都已是中立面，夹具只把库句柄换成 harness 现建的那一个。
+async function seedFixture(providerHarness: ProviderHarness) {
+  const db = providerHarness.db
   const owner = await createUser(db, {
     username: 'owner',
     displayName: 'Owner',
@@ -176,70 +176,72 @@ function workflowRunFailed(delivery: string): { body: string; headers: Record<st
   }
 }
 
-describe('RFC-259 · GitHub HTTP 入站 → 真分发器 → 任务行（全链路 AC-13）', () => {
-  test('workflow_run failure 落任务；第二发 supersede 第一发；归属列成链', async () => {
-    const h = await harness()
-    const first = workflowRunFailed('guid-e2e-1')
-    const res = await h.app.request('/webhooks/github/aw_whk_gh_e2e', {
-      method: 'POST',
-      headers: first.headers,
-      body: first.body,
-    })
-    expect(res.status).toBe(200)
-    const { deliveryId } = (await res.json()) as { deliveryId: string }
+describeEachProvider('RFC-259 · GitHub webhook 全链路（双引擎）', (harness) => {
+  describe('RFC-259 · GitHub HTTP 入站 → 真分发器 → 任务行（全链路 AC-13）', () => {
+    test('workflow_run failure 落任务；第二发 supersede 第一发；归属列成链', async () => {
+      const h = await seedFixture(harness)
+      const first = workflowRunFailed('guid-e2e-1')
+      const res = await h.app.request('/webhooks/github/aw_whk_gh_e2e', {
+        method: 'POST',
+        headers: first.headers,
+        body: first.body,
+      })
+      expect(res.status).toBe(200)
+      const { deliveryId } = (await res.json()) as { deliveryId: string }
 
-    const fire = await waitFor(async () => {
-      const rows = await h.db
-        .select()
-        .from(webhookTriggerFires)
-        .where(eq(webhookTriggerFires.deliveryId, deliveryId))
-      return rows[0] ?? null
-    })
-    expect({ outcome: fire.outcome, error: fire.error }).toEqual({
-      outcome: 'launched',
-      error: null,
-    })
-    expect(fire.streamKey).toBe('acme/api|mr:42') // PR number 维度（fork 空数组时才落 branch）
-    const delivery = (
-      await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
-    )[0]
-    expect(delivery?.status).toBe('matched')
-    expect(delivery?.gitlabEventHeader).toBe('workflow_run') // D8：provider 原始事件头
-    const task = (
-      await h.db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.id, fire.taskId ?? ''))
-        .limit(1)
-    )[0]
-    expect(task?.launchOrigin).toBe('event')
-    expect(task?.eventSubscriptionId).toBeTruthy()
-    expect(task?.eventDeliveryId).toBe(fire.id)
-    expect(task?.ownerUserId).toBe(h.ownerId)
-    expect(task?.name).toBe('[修到绿] acme/api!42')
+      const fire = await waitFor(async () => {
+        const rows = await h.db
+          .select()
+          .from(webhookTriggerFires)
+          .where(eq(webhookTriggerFires.deliveryId, deliveryId))
+        return rows[0] ?? null
+      })
+      expect({ outcome: fire.outcome, error: fire.error }).toEqual({
+        outcome: 'launched',
+        error: null,
+      })
+      expect(fire.streamKey).toBe('acme/api|mr:42') // PR number 维度（fork 空数组时才落 branch）
+      const delivery = (
+        await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
+      )[0]
+      expect(delivery?.status).toBe('matched')
+      expect(delivery?.gitlabEventHeader).toBe('workflow_run') // D8：provider 原始事件头
+      const task = (
+        await h.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, fire.taskId ?? ''))
+          .limit(1)
+      )[0]
+      expect(task?.launchOrigin).toBe('event')
+      expect(task?.eventSubscriptionId).toBeTruthy()
+      expect(task?.eventDeliveryId).toBe(fire.id)
+      expect(task?.ownerUserId).toBe(h.ownerId)
+      expect(task?.name).toBe('[修到绿] acme/api!42')
 
-    const second = workflowRunFailed('guid-e2e-2')
-    const res2 = await h.app.request('/webhooks/github/aw_whk_gh_e2e', {
-      method: 'POST',
-      headers: second.headers,
-      body: second.body,
+      const second = workflowRunFailed('guid-e2e-2')
+      const res2 = await h.app.request('/webhooks/github/aw_whk_gh_e2e', {
+        method: 'POST',
+        headers: second.headers,
+        body: second.body,
+      })
+      expect(res2.status).toBe(200)
+      const { deliveryId: secondDeliveryId } = (await res2.json()) as { deliveryId: string }
+      // Cancellation is visible before the successor insert; wait for its persisted fire receipt.
+      const secondFire = await waitFor(async () => {
+        const rows = await h.db
+          .select()
+          .from(webhookTriggerFires)
+          .where(eq(webhookTriggerFires.deliveryId, secondDeliveryId))
+        return rows[0] ?? null
+      })
+      expect({ outcome: secondFire.outcome, error: secondFire.error }).toEqual({
+        outcome: 'launched',
+        error: null,
+      })
+      expect(h.canceled).toEqual([task?.id ?? '(missing)'])
+      const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
+      expect(running.length).toBe(1) // 每流至多一活任务
     })
-    expect(res2.status).toBe(200)
-    const { deliveryId: secondDeliveryId } = (await res2.json()) as { deliveryId: string }
-    // Cancellation is visible before the successor insert; wait for its persisted fire receipt.
-    const secondFire = await waitFor(async () => {
-      const rows = await h.db
-        .select()
-        .from(webhookTriggerFires)
-        .where(eq(webhookTriggerFires.deliveryId, secondDeliveryId))
-      return rows[0] ?? null
-    })
-    expect({ outcome: secondFire.outcome, error: secondFire.error }).toEqual({
-      outcome: 'launched',
-      error: null,
-    })
-    expect(h.canceled).toEqual([task?.id ?? '(missing)'])
-    const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
-    expect(running.length).toBe(1) // 每流至多一活任务
   })
 })

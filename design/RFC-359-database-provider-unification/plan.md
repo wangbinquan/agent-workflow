@@ -10113,3 +10113,106 @@ PG `workgroup-pending` 此前 max 11.571 超 10，本轮 p95 **4.957**、`pgOK` 
 条数从 22 降到 17 是**数出来的**，但「因此 p95 落到 10ms 以下」还是**推算**
 （墙钟 ≈ 条数 ÷ 并发度 × 均值）。按本仓规矩，这一条要在新 SHA 上再跑一次
 `scale=full` 才算数。没跑之前 AC-11 仍然记为未闭合。
+
+## 5eg. `OPEN_MIGRATION_DEBT` 这个数字的**校准**：它按文件计数，因此系统性高估
+
+推进 AC-6 时连续撞到三类「账上是债、实际不是待办」的文件。记下来，免得下一个人把 84 当成
+84 个待办：
+
+**① 建了库但从不查库**（db 只是个不透明的构造参数）。`start-task-deps` 断言的是
+`expect(withCmd.db).toBe(db)` 的**透传身份**；`rfc305-architecture-lock` /
+`rfc329-mcp-surface-guard` 把 db 交给 `createApp` 只为把路由元数据注册表灌满，随后断言的是
+`allRouteMeta()`。这类文件迁到双引擎是**纯粹的重复执行**，零信息量。
+
+**② 已经是双引擎，只剩一个结构性单引擎块**。`rfc257-webhook-error-codes` 的三个 describe 全在
+`describeEachProviderHttpApplication` 上，只有一个 `harness({omitDispatcher})` 还建 SQLite 库
+——而它测的状态（应用composed 时**没有** webhookDispatcher）在 PostgreSQL 上**不可能存在**，
+因为 `composePostgresqlApplication` 总是自己构造一个。账本看到 `createInMemoryDb` 就计一条，
+看不出这个文件其实没有剩余待办。
+
+**③ 卡在生产签名上，与测试写法无关**。`rfc268-webhook-scratch-launch` / `limits` /
+`start-task-deps` 都最终落到 `StartTaskDeps['db'] = LegacySqliteTaskDatabase = DbClient`
+（`services/task.ts:457`）。这类**不是**测试债，是 AC-1 的剩余面——收掉那条生产签名，
+下游一串自然解锁（§5eb 已经用 intent apply 验过一次这个规律）。
+
+### 为什么**不**给这些加豁免类目
+
+本文件的豁免类目是**故意机械可判**的，头注释写得很清楚：人工标注会退化成「谁都能给自己新写
+的那条编一个理由」。而上面三类里：①「建了库但不查」用「文件内没有 `.select(`」判会**误伤**
+一大批经 `createApp` 走 HTTP 路由、内部查得很凶的用例；②「那个状态在另一个 provider 上不存在」
+根本不是机械可判的命题。**放松判据的方向恰好是让数字变好看的方向**——宁可让数字偏高，
+也不能让守卫失效。
+
+⇒ 结论：这个数字**只降不升**的棘轮语义依然有效（新写一条无理由的单引擎判据仍然会让它变长），
+但它的绝对值**系统性高于**真实待办量。驱动它归零的人应当按上面三类先分诊，而不是逐个硬迁。
+
+## 5eh. AC-12 的一个被低估的收益：provider 前缀的**别名**会制造「幻觉阻塞」
+
+并行推进 AC-6 时一个 agent 撞到并报回来的：它以为
+`SQLiteRepositoryTransportCredentialRepository` 把用例钉死在 SQLite 上，查下去发现
+（`modules/source-control/composition.ts:65-69`）：
+
+```ts
+export {
+  DrizzleRepositoryTransportCredentialRepository,
+  DrizzleRepositoryTransportCredentialRepository as SQLiteRepositoryTransportCredentialRepository,
+  DrizzleRepositoryTransportCredentialRepository as PostgresqlRepositoryTransportCredentialRepository,
+} from './infrastructure/repositoryTransportCredentialRepository'
+```
+
+**同一个类，构造函数收 `ProviderNeutralDatabase`，套了两个 provider 前缀的别名再导出。**
+`composeSqlite|PostgresqlRepositoryWorkspaceStore` 同理，都指向 `composeRepositoryWorkspaceStore`。
+
+全仓实测这类别名共 **39 处**（4 处类 / 仓库 + 35 处 `compose|create` 函数，集中在
+`modules/collaboration/composition.ts`、`modules/memory/composition.ts`、
+`modules/source-control/composition.ts`）。
+
+### 为什么这比「命名不好看」严重
+
+AC-6 的迁移者看到 `Sqlite` 前缀的第一反应是「这条路被钉死了，我被阻塞了」——而实际上那就是
+中立实现。**一个误导性的名字会让一次本该成功的迁移被错误放弃**，而且放弃得毫无痕迹
+（不会有任何守卫红）。本轮就真实发生了一次，只是那个 agent 多查了一层才没上当。
+
+⇒ AC-12 的「provider 命名文件/符号归零」不是洁癖，它在**给 AC-6 清障**。这 39 处是其中最廉价
+的一批：删掉别名、把调用方指到中立名即可，零行为改动。
+
+（**注意区分**：`composePostgresqlAgentLaunchResourceOperations` 这类**签名真的不同**的不在此列
+——它收 `PostgresqlDatabaseClient` 且要注入 catalog participant，与 `composeSqlite…` 是两个
+不同的入口，不能一并删。判据是「别名指向同一个符号」，不是「名字里有 provider」。）
+
+## 5ei. AC-6 第四批：四路并行迁移 13 个文件（378 / open **72**）
+
+用四个并行 agent 按互不重叠的文件集推进（webhook / 资源包 / 任务执行 / provider 适配器四族）。
+账本 `TEST_ENGINE_HARDCODING_DEBT` 390 → **378**、`OPEN_MIGRATION_DEBT` 84 → **72**。
+十四个文件合跑真 PostgreSQL **188/188**。
+
+| 结果 | 文件 |
+| --- | --- |
+| 迁移完成（13） | `rfc259-webhook-github-e2e` `webhook-trigger-validation-acl-order` `rfc201-plugin-exact-operation` `rfc271-export-fence-http` `rfc271-import-http` `rfc271-overwrite-ownership` `rfc349-frozen-source-request-writes` `rfc285-b3-inherited-actor` `rfc269-code-host-wiring-2026-08-10` `rfc207-runtime-accounting`(7/9 格) `rfc258-file-symbols` `task-file-content` `worktree-files-proxy` |
+| 本来就已双引擎 | `rfc257-webhook-error-codes`（见 §5eg 第②类） |
+| 卡生产签名 | `rfc268-webhook-scratch-launch` ⇒ `StartTaskDeps['db'] = LegacySqliteTaskDatabase`；`rfc207` 剩下那 2 格 ⇒ `composeLegacySqliteResourceLimitOperations` → `cancelTask(db: LegacySqliteTaskDatabase)` |
+| 判不适用 | `rfc349-execution-peripheral-provider`——它的**被测物就是两个 provider 各自的适配器**（一个收裸 db、一个收 `PostgresqlDatabaseClient` + 注入的 catalog 参与者），不是同一入口的两种跑法 |
+
+### 并行的几条纪律（有效，值得复用）
+
+文件集**互不重叠**；agent 只改自己那几个测试文件，**不碰账本、不碰 `architecture/**`、不碰
+`src/`、一律不跑 git 写命令**（共享 index 会被并发 `git add` 搅乱）、**不跑全量套件**（会把彼此
+的时序判据压垮）。账本与提交由主 agent 统一收口。撞到生产签名就**原样还原那个文件**并报回
+签名全路径——不许改 `src/` 绕过。
+
+### 这一批带回来的三个发现
+
+**① 迁移者会被 provider 前缀的别名骗**——已单独落 §5eh（39 处别名指向中立实现，制造「幻觉阻塞」）。
+
+**② 直接写 `tasks` 的测试夹具必须自己填 lineage 两列**，因为 SQLite 的
+`rfc328_tasks_lineage_after_insert` 触发器**在 PostgreSQL 上按设计不存在**。这**不是缺陷**：
+`application/buildNodeRunMintRecord.ts` 的注释写清了裁决——「触发器天生属于一个方言，DDL 投影
+里再造一份 plpgsql 只会让『同一条规则两处写』从一个引擎变成两个」，所以推导搬进应用层纯函数、
+由架构守卫要求每个插入点显式写两列，**守卫对两个引擎同时生效，触发器不能**。
+迁移直接写 `tasks` 的夹具时照做即可。
+
+**③ 一个文件里可能一半已迁一半没迁**：本批四个文件中有三个早前批次已经加过
+`describeEachProvider('provider cases 1', …)` 块、旁边还留着原生 describe。按文件计数的账本
+看不出这件事（§5eg 第②类的另一种形态）。`worktree-files-proxy` 甚至有**五个**同名 describe
+注册点（3 provider + 2 native），合并成一个之后 13 格 → 26 格而总耗时不变——每个注册点都要
+付一次 `CREATE DATABASE` + 全量迁移的开销。

@@ -14,30 +14,44 @@
 // These drive real transitions with an INJECTED clock (setTaskStatus now takes
 // `now`) so the arithmetic is deterministic, and pair the accounting with the
 // limits reader to prove the end-to-end behaviour.
+//
+// RFC-359 AC-6 —— 记账本体（`setTaskStatus`，形参已是中立客户端）跑双引擎。
+// 末尾那一段 `enforceLimits` 的端到端配对**留在 SQLite 单引擎**：`enforceLimits(db, …)`
+// 的裸 db 形参经 `composeLegacySqliteResourceLimitOperations(db: DbClient)` 取
+// `services/task.ts` 的 `cancelTask(db: LegacySqliteTaskDatabase, …)`，PostgreSQL 侧的
+// 对应取消命令来自完整的 PG task-execution provider 装配（`composePostgresqlResourceLimitOperations`
+// 的 `cancelTask` 注入口）。这是 plan §5ac 记的「legacy 契约上的 SQLite 绑定」，
+// 随 legacy 那条线解开，不在本次迁移范围内。
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { tasks, workflows } from '../src/db/schema'
 import { setTaskStatus } from '../src/services/lifecycle'
 import { enforceLimits } from '../src/services/limits'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let workflowId: string
+// PostgreSQL 的迁移只投影 DDL，不带 `rfc328_tasks_lineage_after_insert` 那条 SQLite 触发器，
+// 所以直插 `tasks` 的夹具要自己写 lineage；双引擎下两侧都显式写，两个引擎的起点才相同。
+let seedTaskLineage = false
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+async function seedFixture(database: ProviderNeutralDatabase, lineage: boolean): Promise<void> {
+  db = database
+  seedTaskLineage = lineage
   workflowId = ulid()
   await db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
   })
-})
+}
 
 async function seed(
   status: string,
@@ -56,6 +70,14 @@ async function seed(
     status: status as never,
     inputs: '{}',
     startedAt: 0,
+    ...(seedTaskLineage
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
     ...extra,
   })
   return taskId
@@ -68,143 +90,177 @@ async function acct(taskId: string): Promise<{ runningMs: number; runningSince: 
 
 const T0 = 1_000_000
 
-describe('RFC-207 run-time accounting through real transitions', () => {
-  test('entering running opens a stretch (runningSince set, runningMs untouched)', async () => {
-    const id = await seed('pending')
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'running',
-      allowedFrom: ['pending'],
-      reason: 't',
-      now: T0,
-    })
-    expect(await acct(id)).toEqual({ runningMs: 0, runningSince: T0 })
+describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: ProviderHarness) => {
+  beforeEach(async () => {
+    await seedFixture(harness.db, true)
   })
 
-  test('parking (running → awaiting_human) closes the stretch and clears runningSince', async () => {
-    const id = await seed('pending')
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'running',
-      allowedFrom: ['pending'],
-      reason: 't',
-      now: T0,
+  describe('RFC-207 run-time accounting through real transitions', () => {
+    test('entering running opens a stretch (runningSince set, runningMs untouched)', async () => {
+      const id = await seed('pending')
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'running',
+        allowedFrom: ['pending'],
+        reason: 't',
+        now: T0,
+      })
+      expect(await acct(id)).toEqual({ runningMs: 0, runningSince: T0 })
     })
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'awaiting_human',
-      allowedFrom: ['running'],
-      reason: 'park',
-      now: T0 + 5_000,
+
+    test('parking (running → awaiting_human) closes the stretch and clears runningSince', async () => {
+      const id = await seed('pending')
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'running',
+        allowedFrom: ['pending'],
+        reason: 't',
+        now: T0,
+      })
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'awaiting_human',
+        allowedFrom: ['running'],
+        reason: 'park',
+        now: T0 + 5_000,
+      })
+      // 5s of running accumulated; the clock is now stopped.
+      expect(await acct(id)).toEqual({ runningMs: 5_000, runningSince: null })
     })
-    // 5s of running accumulated; the clock is now stopped.
-    expect(await acct(id)).toEqual({ runningMs: 5_000, runningSince: null })
+
+    test('parked time does NOT accrue, and unparking reopens the clock without double-counting', async () => {
+      const id = await seed('pending')
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'running',
+        allowedFrom: ['pending'],
+        reason: 't',
+        now: T0,
+      })
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'awaiting_human',
+        allowedFrom: ['running'],
+        reason: 'park',
+        now: T0 + 5_000,
+      })
+      // Human takes a long time (1 hour parked) — this must NOT accrue.
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'running',
+        allowedFrom: ['awaiting_human'],
+        reason: 'unpark',
+        now: T0 + 3_605_000,
+      })
+      // runningMs unchanged by the park; a fresh stretch is open.
+      expect(await acct(id)).toEqual({ runningMs: 5_000, runningSince: T0 + 3_605_000 })
+    })
+
+    test('multiple running stretches sum; final done adds the last stretch', async () => {
+      const id = await seed('pending')
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'running',
+        allowedFrom: ['pending'],
+        reason: 't',
+        now: T0,
+      })
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'awaiting_human',
+        allowedFrom: ['running'],
+        reason: 'park',
+        now: T0 + 4_000,
+      })
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'running',
+        allowedFrom: ['awaiting_human'],
+        reason: 'unpark',
+        now: T0 + 100_000,
+      })
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'done',
+        allowedFrom: ['running'],
+        allowTerminal: true,
+        reason: 'finish',
+        now: T0 + 100_000 + 6_000,
+      })
+      // 4s + 6s of running; the 96s parked between them does not count.
+      expect((await acct(id)).runningMs).toBe(10_000)
+    })
+
+    test('a transition NOT involving running leaves the accounting untouched', async () => {
+      const id = await seed('pending', { runningMs: 1234, runningSince: null })
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'canceled',
+        allowedFrom: ['pending'],
+        allowTerminal: true,
+        reason: 'cancel',
+        now: T0,
+      })
+      expect(await acct(id)).toEqual({ runningMs: 1234, runningSince: null })
+    })
+
+    test('COALESCE fallback: leaving running with a null runningSince adds zero, not NaN/negative', async () => {
+      // Defensive: a crash-recovered row can be `running` with runningSince null.
+      const id = await seed('running', { runningMs: 500, runningSince: null })
+      await setTaskStatus({
+        db,
+        taskId: id,
+        to: 'failed',
+        allowedFrom: ['running'],
+        allowTerminal: true,
+        reason: 'fail',
+        now: T0,
+      })
+      expect(await acct(id)).toEqual({ runningMs: 500, runningSince: null })
+    })
   })
 
-  test('parked time does NOT accrue, and unparking reopens the clock without double-counting', async () => {
-    const id = await seed('pending')
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'running',
-      allowedFrom: ['pending'],
-      reason: 't',
-      now: T0,
+  describe('RFC-207 accounting columns are not caller-writable (B2-lifecycle-3 guard)', () => {
+    test('the extra type rejects runningMs / runningSince', () => {
+      // Compile-time lock: extra spreads AFTER the computed accounting, so allowing
+      // these would let a caller clobber it silently. TaskStatusUpdateExtra must
+      // not include them. `@ts-expect-error` fails to compile (TS2353) only while
+      // the exclusion holds — remove either field from the Pick and this reds.
+      const bad = () =>
+        setTaskStatus({
+          db,
+          taskId: 'x',
+          to: 'running',
+          allowedFrom: ['pending'],
+          reason: 'test',
+          // @ts-expect-error — runningMs is computed by writeStatus, never caller-set (RFC-207)
+          extra: { runningMs: 999 },
+        })
+      expect(typeof bad).toBe('function')
     })
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'awaiting_human',
-      allowedFrom: ['running'],
-      reason: 'park',
-      now: T0 + 5_000,
-    })
-    // Human takes a long time (1 hour parked) — this must NOT accrue.
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'running',
-      allowedFrom: ['awaiting_human'],
-      reason: 'unpark',
-      now: T0 + 3_605_000,
-    })
-    // runningMs unchanged by the park; a fresh stretch is open.
-    expect(await acct(id)).toEqual({ runningMs: 5_000, runningSince: T0 + 3_605_000 })
-  })
-
-  test('multiple running stretches sum; final done adds the last stretch', async () => {
-    const id = await seed('pending')
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'running',
-      allowedFrom: ['pending'],
-      reason: 't',
-      now: T0,
-    })
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'awaiting_human',
-      allowedFrom: ['running'],
-      reason: 'park',
-      now: T0 + 4_000,
-    })
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'running',
-      allowedFrom: ['awaiting_human'],
-      reason: 'unpark',
-      now: T0 + 100_000,
-    })
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'done',
-      allowedFrom: ['running'],
-      allowTerminal: true,
-      reason: 'finish',
-      now: T0 + 100_000 + 6_000,
-    })
-    // 4s + 6s of running; the 96s parked between them does not count.
-    expect((await acct(id)).runningMs).toBe(10_000)
-  })
-
-  test('a transition NOT involving running leaves the accounting untouched', async () => {
-    const id = await seed('pending', { runningMs: 1234, runningSince: null })
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'canceled',
-      allowedFrom: ['pending'],
-      allowTerminal: true,
-      reason: 'cancel',
-      now: T0,
-    })
-    expect(await acct(id)).toEqual({ runningMs: 1234, runningSince: null })
-  })
-
-  test('COALESCE fallback: leaving running with a null runningSince adds zero, not NaN/negative', async () => {
-    // Defensive: a crash-recovered row can be `running` with runningSince null.
-    const id = await seed('running', { runningMs: 500, runningSince: null })
-    await setTaskStatus({
-      db,
-      taskId: id,
-      to: 'failed',
-      allowedFrom: ['running'],
-      allowTerminal: true,
-      reason: 'fail',
-      now: T0,
-    })
-    expect(await acct(id)).toEqual({ runningMs: 500, runningSince: null })
   })
 })
 
 describe('RFC-207 accounting drives the limit (end-to-end)', () => {
+  // SQLite 单引擎（见文件头注）：`enforceLimits` 的裸 db 入口钉在 `DbClient` 上。
+  let legacyDb: DbClient
+
+  beforeEach(async () => {
+    legacyDb = createInMemoryDb(MIGRATIONS)
+    await seedFixture(legacyDb, false)
+  })
+
   test('accumulated running time over maxDurationMs makes enforceLimits cancel', async () => {
     const id = await seed('pending', { maxDurationMs: 10_000 })
     await setTaskStatus({
@@ -216,7 +272,7 @@ describe('RFC-207 accounting drives the limit (end-to-end)', () => {
       now: T0,
     })
     // 12s of running elapsed (> the 10s cap).
-    const r = await enforceLimits(db, T0 + 12_000)
+    const r = await enforceLimits(legacyDb, T0 + 12_000)
     expect(r.canceled).toContain(id)
     expect((await db.select().from(tasks).where(eq(tasks.id, id)))[0]!.status).toBe('canceled')
   })
@@ -253,29 +309,9 @@ describe('RFC-207 accounting drives the limit (end-to-end)', () => {
     // though wall-clock elapsed is over an hour. The task is scanned (it IS
     // running) but must survive — proving enforceLimits reads runningMs, not
     // wall-clock. Killing it here is exactly the RFC-207 §3.8 bug.
-    const r = await enforceLimits(db, unpark + 2_000)
+    const r = await enforceLimits(legacyDb, unpark + 2_000)
     expect(r.scanned).toBeGreaterThanOrEqual(1) // it WAS examined
     expect(r.canceled).not.toContain(id)
     expect((await db.select().from(tasks).where(eq(tasks.id, id)))[0]!.status).toBe('running')
-  })
-})
-
-describe('RFC-207 accounting columns are not caller-writable (B2-lifecycle-3 guard)', () => {
-  test('the extra type rejects runningMs / runningSince', () => {
-    // Compile-time lock: extra spreads AFTER the computed accounting, so allowing
-    // these would let a caller clobber it silently. TaskStatusUpdateExtra must
-    // not include them. `@ts-expect-error` fails to compile (TS2353) only while
-    // the exclusion holds — remove either field from the Pick and this reds.
-    const bad = () =>
-      setTaskStatus({
-        db,
-        taskId: 'x',
-        to: 'running',
-        allowedFrom: ['pending'],
-        reason: 'test',
-        // @ts-expect-error — runningMs is computed by writeStatus, never caller-set (RFC-207)
-        extra: { runningMs: 999 },
-      })
-    expect(typeof bad).toBe('function')
   })
 })

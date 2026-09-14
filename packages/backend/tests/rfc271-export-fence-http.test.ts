@@ -15,16 +15,16 @@
 // 前端最容易拼出来的——`?expectedConfigHash=${row.configHash ?? ''}`、表单未填、状态还没
 // 加载完，都会产生它。「显式传了空」与「没传」在语义上是两回事，不能合并。
 
-import { describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, mcps, users, workflows } from '../src/db/schema'
 import type {
   CommandContext,
@@ -33,10 +33,11 @@ import type {
 import { errorHandler } from '../src/util/errors'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
+let db: ProviderNeutralDatabase
 
 function testCommandContext(): CommandContext {
   return Object.freeze({
@@ -59,7 +60,7 @@ function testQueryContext(): QueryContext {
   })
 }
 
-function makeApp(db: DbClient, appHome: string): Hono {
+function makeApp(db: ProviderNeutralDatabase, appHome: string): Hono {
   const box = createSecretBoxFromKey(randomBytes(32))
   const app = new Hono()
   const actor = {
@@ -108,8 +109,16 @@ function makeApp(db: DbClient, appHome: string): Hono {
   return app
 }
 
-async function seed(): Promise<{ db: DbClient; appHome: string; mcpId: string; wfId: string }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
+}
+
+async function seed(): Promise<{
+  db: ProviderNeutralDatabase
+  appHome: string
+  mcpId: string
+  wfId: string
+}> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-fence-http-'))
   tempDirs.push(appHome)
   await db.insert(users).values({
@@ -157,129 +166,137 @@ const bodyCodeOf = async (res: Response): Promise<string> => {
   return String(json.code ?? json.error?.code ?? 'unknown')
 }
 
-describe('AC-12 · 空 fence 参数不得静默降级', () => {
-  test('`?expectedConfigHash=`（显式空）⇒ 422，而不是 200 + 无保护的 zip', async () => {
-    const { db, appHome, mcpId } = await seed()
-    const app = makeApp(db, appHome)
-    const res = await app.request(`/api/mcps/${mcpId}/export-package?expectedConfigHash=`)
-    expect(res.status).toBe(422)
-    expect(await bodyCodeOf(res)).toBe('package-invalid')
-    removeTempDirSync(appHome)
+describeEachProvider('AC-12 · 导出 fence 的路由层解析（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
   })
 
-  test('对照组：值写错 ⇒ 409；完全不带该参数 ⇒ 200 zip', async () => {
-    // 这两条把上一条夹在中间：错值必须 409（fence 生效），不传必须 200（fence 可选）。
-    // 三条一起才说明「显式空」被正确地归到了「错」而不是「不传」。
-    const { db, appHome, mcpId } = await seed()
-    const app = makeApp(db, appHome)
+  describe('AC-12 · 空 fence 参数不得静默降级', () => {
+    test('`?expectedConfigHash=`（显式空）⇒ 422，而不是 200 + 无保护的 zip', async () => {
+      const { db, appHome, mcpId } = await seed()
+      const app = makeApp(db, appHome)
+      const res = await app.request(`/api/mcps/${mcpId}/export-package?expectedConfigHash=`)
+      expect(res.status).toBe(422)
+      expect(await bodyCodeOf(res)).toBe('package-invalid')
+      removeTempDirSync(appHome)
+    })
 
-    const wrong = await app.request(
-      `/api/mcps/${mcpId}/export-package?expectedConfigHash=definitely-not-it`,
-    )
-    expect(wrong.status).toBe(409)
-    expect(await bodyCodeOf(wrong)).toBe('package-root-changed')
+    test('对照组：值写错 ⇒ 409；完全不带该参数 ⇒ 200 zip', async () => {
+      // 这两条把上一条夹在中间：错值必须 409（fence 生效），不传必须 200（fence 可选）。
+      // 三条一起才说明「显式空」被正确地归到了「错」而不是「不传」。
+      const { db, appHome, mcpId } = await seed()
+      const app = makeApp(db, appHome)
 
-    const bare = await app.request(`/api/mcps/${mcpId}/export-package`)
-    expect(bare.status).toBe(200)
-    expect(await bodyCodeOf(bare)).toBe('ZIP')
-    removeTempDirSync(appHome)
-  })
+      const wrong = await app.request(
+        `/api/mcps/${mcpId}/export-package?expectedConfigHash=definitely-not-it`,
+      )
+      expect(wrong.status).toBe(409)
+      expect(await bodyCodeOf(wrong)).toBe('package-root-changed')
 
-  test("`%20`（空白）同样拒绝 —— `Number(' ')` 也是 0", async () => {
-    // 第一版只挡逐字空串，于是 `?expectedVersion=%20` 照样被 `Number(' ')` 变成 0，
-    // 再比出一个假的 409「资源已变更」（实现门第四轮实测）。判据改成「只收纯十进制
-    // 数字串」，任何空白 / 符号 / 小数点一律拒。
-    const { db, appHome, wfId } = await seed()
-    const app = makeApp(db, appHome)
-    const res = await app.request(`/api/workflows/${wfId}/export-package?expectedVersion=%20`)
-    expect(res.status).toBe(422)
-    expect(await bodyCodeOf(res)).toBe('package-invalid')
-    removeTempDirSync(appHome)
-  })
+      const bare = await app.request(`/api/mcps/${mcpId}/export-package`)
+      expect(bare.status).toBe(200)
+      expect(await bodyCodeOf(bare)).toBe('ZIP')
+      removeTempDirSync(appHome)
+    })
 
-  test('`expectedVersion=0` 拒绝，而 `expectedAclRevision=0` 合法 —— 逐字段的取值域', async () => {
-    // 一刀切「非负整数」两头错：`version` / `contentVersion` 从 1 起（正式 schema 就是
-    // positive），0 是不可能存在的值、放进去只会比出假 409；而 `aclRevision` /
-    // `metaRevision` 从 0 起，0 是合法初值、拒掉它等于让新建资源无法带 fence 导出。
-    const { db, appHome, wfId } = await seed()
-    const app = makeApp(db, appHome)
+    test("`%20`（空白）同样拒绝 —— `Number(' ')` 也是 0", async () => {
+      // 第一版只挡逐字空串，于是 `?expectedVersion=%20` 照样被 `Number(' ')` 变成 0，
+      // 再比出一个假的 409「资源已变更」（实现门第四轮实测）。判据改成「只收纯十进制
+      // 数字串」，任何空白 / 符号 / 小数点一律拒。
+      const { db, appHome, wfId } = await seed()
+      const app = makeApp(db, appHome)
+      const res = await app.request(`/api/workflows/${wfId}/export-package?expectedVersion=%20`)
+      expect(res.status).toBe(422)
+      expect(await bodyCodeOf(res)).toBe('package-invalid')
+      removeTempDirSync(appHome)
+    })
 
-    const zeroVersion = await app.request(`/api/workflows/${wfId}/export-package?expectedVersion=0`)
-    expect(zeroVersion.status).toBe(422)
-    expect(await bodyCodeOf(zeroVersion)).toBe('package-invalid')
+    test('`expectedVersion=0` 拒绝，而 `expectedAclRevision=0` 合法 —— 逐字段的取值域', async () => {
+      // 一刀切「非负整数」两头错：`version` / `contentVersion` 从 1 起（正式 schema 就是
+      // positive），0 是不可能存在的值、放进去只会比出假 409；而 `aclRevision` /
+      // `metaRevision` 从 0 起，0 是合法初值、拒掉它等于让新建资源无法带 fence 导出。
+      const { db, appHome, wfId } = await seed()
+      const app = makeApp(db, appHome)
 
-    // agent 的 fence 是 updatedAt + aclRevision，两者都可以是 0（刚建的资源）。
-    const agentId = ulid()
-    await db.insert(agents).values({
-      id: agentId,
-      name: 'fresh',
-      description: '',
-      outputs: '[]',
-      permission: '{}',
-      skills: '[]',
-      dependsOn: '[]',
-      mcp: '[]',
-      plugins: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
-      ownerUserId: 'u1',
-      visibility: 'private',
-      aclRevision: 0,
-      createdAt: 1,
-      updatedAt: 0,
-    } as never)
-    const zeroAcl = await app.request(
-      `/api/agents/${agentId}/export-package?expectedUpdatedAt=0&expectedAclRevision=0`,
-    )
-    expect(zeroAcl.status).toBe(200)
-    expect(await bodyCodeOf(zeroAcl)).toBe('ZIP')
-    removeTempDirSync(appHome)
-  })
+      const zeroVersion = await app.request(
+        `/api/workflows/${wfId}/export-package?expectedVersion=0`,
+      )
+      expect(zeroVersion.status).toBe(422)
+      expect(await bodyCodeOf(zeroVersion)).toBe('package-invalid')
 
-  test('`expectedAclRevision=%20` 也必须拒 —— min=0 的字段挡不住「空白变 0」', async () => {
-    // 反向验证逼出来的一条：把字面量判去掉时，`expectedVersion=%20` 仍然会红，因为它被
-    // `min=1` 那道门顺手捡了漏。真正只有字面量判能挡的是 **min=0 的字段**——`Number(' ')`
-    // 得到 0，而 0 对 aclRevision 是完全合法的初值，于是一个「什么都没填」的请求会被当成
-    // 「我确认它是第 0 版」放行，用户以为有保护而实际没有。
-    const { db, appHome } = await seed()
-    const app = makeApp(db, appHome)
-    const agentId = ulid()
-    await db.insert(agents).values({
-      id: agentId,
-      name: 'a2',
-      description: '',
-      outputs: '[]',
-      permission: '{}',
-      skills: '[]',
-      dependsOn: '[]',
-      mcp: '[]',
-      plugins: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
-      ownerUserId: 'u1',
-      visibility: 'private',
-      aclRevision: 0,
-      createdAt: 1,
-      updatedAt: 0,
-    } as never)
+      // agent 的 fence 是 updatedAt + aclRevision，两者都可以是 0（刚建的资源）。
+      const agentId = ulid()
+      await db.insert(agents).values({
+        id: agentId,
+        name: 'fresh',
+        description: '',
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+        ownerUserId: 'u1',
+        visibility: 'private',
+        aclRevision: 0,
+        createdAt: 1,
+        updatedAt: 0,
+      } as never)
+      const zeroAcl = await app.request(
+        `/api/agents/${agentId}/export-package?expectedUpdatedAt=0&expectedAclRevision=0`,
+      )
+      expect(zeroAcl.status).toBe(200)
+      expect(await bodyCodeOf(zeroAcl)).toBe('ZIP')
+      removeTempDirSync(appHome)
+    })
 
-    const res = await app.request(
-      `/api/agents/${agentId}/export-package?expectedUpdatedAt=0&expectedAclRevision=%20`,
-    )
-    expect(res.status).toBe(422)
-    expect(await bodyCodeOf(res)).toBe('package-invalid')
-    removeTempDirSync(appHome)
-  })
+    test('`expectedAclRevision=%20` 也必须拒 —— min=0 的字段挡不住「空白变 0」', async () => {
+      // 反向验证逼出来的一条：把字面量判去掉时，`expectedVersion=%20` 仍然会红，因为它被
+      // `min=1` 那道门顺手捡了漏。真正只有字面量判能挡的是 **min=0 的字段**——`Number(' ')`
+      // 得到 0，而 0 对 aclRevision 是完全合法的初值，于是一个「什么都没填」的请求会被当成
+      // 「我确认它是第 0 版」放行，用户以为有保护而实际没有。
+      const { db, appHome } = await seed()
+      const app = makeApp(db, appHome)
+      const agentId = ulid()
+      await db.insert(agents).values({
+        id: agentId,
+        name: 'a2',
+        description: '',
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+        ownerUserId: 'u1',
+        visibility: 'private',
+        aclRevision: 0,
+        createdAt: 1,
+        updatedAt: 0,
+      } as never)
 
-  test('数值型 fence 的空值同样拒绝（`?expectedVersion=`）', async () => {
-    // 数值支走的是 `z.coerce.number()`，而 `Number('')` 是 **0** —— 空串会被悄悄
-    // 强转成一个看起来合法的 fence 值 0，然后拿 0 去比 version，稳定 409。
-    // 那是个假阳性：用户没传值，却得到「资源已变更」。这里锁住它报的是格式错。
-    const { db, appHome, wfId } = await seed()
-    const app = makeApp(db, appHome)
-    const res = await app.request(`/api/workflows/${wfId}/export-package?expectedVersion=`)
-    expect(res.status).toBe(422)
-    expect(await bodyCodeOf(res)).toBe('package-invalid')
-    removeTempDirSync(appHome)
+      const res = await app.request(
+        `/api/agents/${agentId}/export-package?expectedUpdatedAt=0&expectedAclRevision=%20`,
+      )
+      expect(res.status).toBe(422)
+      expect(await bodyCodeOf(res)).toBe('package-invalid')
+      removeTempDirSync(appHome)
+    })
+
+    test('数值型 fence 的空值同样拒绝（`?expectedVersion=`）', async () => {
+      // 数值支走的是 `z.coerce.number()`，而 `Number('')` 是 **0** —— 空串会被悄悄
+      // 强转成一个看起来合法的 fence 值 0，然后拿 0 去比 version，稳定 409。
+      // 那是个假阳性：用户没传值，却得到「资源已变更」。这里锁住它报的是格式错。
+      const { db, appHome, wfId } = await seed()
+      const app = makeApp(db, appHome)
+      const res = await app.request(`/api/workflows/${wfId}/export-package?expectedVersion=`)
+      expect(res.status).toBe(422)
+      expect(await bodyCodeOf(res)).toBe('package-invalid')
+      removeTempDirSync(appHome)
+    })
   })
 })

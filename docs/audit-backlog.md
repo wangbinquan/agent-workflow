@@ -4537,6 +4537,7 @@ AbortSignal，让它超时后以可诊断的错误收场。**未实施，未立�
 | --- | --- | --- |
 | `3fad84efa` | 1/3 | `plugins-split-page.test.tsx > Upgrade applies only the exact checked hash…` |
 | `a64c5991e` | 3/3 | `relative-time.test.ts > renders <time> … 30s shared ticker advances the label` |
+| `6194d343a` | 3/3 | `relative-time.test.ts` + `memory-panels-async-state.test.tsx`，两条同时 30000ms |
 
 **为什么判成环境而不是某条用例挂住**（三条证据）：
 1. 每次红的用例不同、分片也不同——不是某一条的固有缺陷；
@@ -4551,6 +4552,13 @@ AbortSignal，让它超时后以可诊断的错误收场。**未实施，未立�
 **注意这与 `rfc321-cached-repo-refresh-credential` 那条相反**：那条的判据是「同文件邻居正常、
 只有它挂死」⇒ 单点挂起；这条是「邻居也慢、每次换人」⇒ 环境停顿。**同一套取证姿势，结论相反**，
 所以不能凭印象套结论，要真去看邻居耗时。
+
+**2026-09-14 第三次（`6194d343a`）多了一条更直接的证据**：该分片的汇总行是
+`Duration 248.23s (transform 35.69s, **setup 220.52s**, import 62.66s)`，275 个文件通过、
+2468 条用例通过、只红 2 条。**`setup 220.52s` 是整机停顿的直接测量**——比「看邻居用例耗时」
+更硬：停顿发生在 vitest 的 setup 阶段，与任何一条用例的逻辑都无关。归属同样明确：该轮 diff
+是**纯后端**（`resource-catalog` 的概览计数 + 后端测试 + 文档/账本），零前端文件；
+同 SHA 的 ubuntu / macOS 前端三分片、两个 backend 泳道（含真 PostgreSQL）、三个 OS 的 e2e 全绿。
 
 **未处置**：抬超时是最省事的办法，但那是治症状（同 credential 那条的教训）。要修得先知道
 Windows runner 上那几十秒花在哪——候选：ICU/`Intl` 冷启动（`toLocaleString()` 无 locale 参数）、

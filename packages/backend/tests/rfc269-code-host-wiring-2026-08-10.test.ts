@@ -15,12 +15,12 @@
 // 同族教训见 `docs/dev-gotchas.md`：RFC-115 的 `defaultRuntime`、RFC-266 的
 // fan-out 上限都是同一形状——「设置页写入 + scheduler 消费 + 中间没人接线」。
 
-import { describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { codeHostConnections } from '../src/db/schema'
 import {
@@ -29,12 +29,18 @@ import {
 } from '../src/services/codeHost/connections'
 import {
   composeRepositoryTransportCredentials,
-  SQLiteRepositoryTransportCredentialRepository,
+  DrizzleRepositoryTransportCredentialRepository,
 } from '../src/modules/source-control/composition'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 夹具刻意不带 glpat- / ghp_ 前缀（gitleaks 规则），同 connections 测试。
 const SECRET_TOKEN = 'aw-fixture-not-a-real-token-8100' // gitleaks:allow
+
+let db: ProviderNeutralDatabase
+
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
+}
 
 function seededHome(): { keyPath: string; key: Buffer } {
   const home = mkdtempSync(join(tmpdir(), 'aw-codehost-wiring-'))
@@ -44,103 +50,115 @@ function seededHome(): { keyPath: string; key: Buffer } {
   return { keyPath, key }
 }
 
-async function dbWithGitlabRow(key: Buffer) {
-  const db = createInMemoryDb(MIGRATIONS)
+function adminConnectionsFor(key: Buffer) {
   const box = createSecretBoxFromKey(key)
-  const repositoryTransport = composeRepositoryTransportCredentials(
-    new SQLiteRepositoryTransportCredentialRepository(db),
+  return {
     box,
-  ).adminConnections
+    repositoryTransport: composeRepositoryTransportCredentials(
+      new DrizzleRepositoryTransportCredentialRepository(db),
+      box,
+    ).adminConnections,
+  }
+}
+
+async function dbWithGitlabRow(key: Buffer) {
+  const { box, repositoryTransport } = adminConnectionsFor(key)
   await createCodeHostConnectionsService({ repositoryTransport, secretBox: box }).upsert('gitlab', {
     baseUrl: 'https://gitlab.corp.example/api/v4',
     token: SECRET_TOKEN,
   })
-  return { db, repositoryTransport }
+  return { repositoryTransport }
 }
 
-describe('RFC-269 凭据服务的磁盘懒解析（scheduler 的唯一接线点）', () => {
-  test('有密钥文件 + 有配置行 ⇒ 不注入也解析得出完整凭据', async () => {
-    const { keyPath, key } = seededHome()
-    const { repositoryTransport } = await dbWithGitlabRow(key)
-
-    const service = resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)
-    expect(service).not.toBeNull()
-
-    const resolved = await service!.resolve('gitlab')
-    expect(resolved).not.toBeNull()
-    expect(resolved!.baseUrl).toBe('https://gitlab.corp.example/api/v4')
-    // 解封后的 token 必须是原值——错的密钥会 unseal 抛错并被吞成 null，
-    // 那正是「配了却像没配」的事故形态，所以这里比对逐字。
-    expect(resolved!.token).toBe(SECRET_TOKEN)
+// RFC-359 AC-6：这条接线回归在**两个引擎**上各跑一遍。事故本身（「设置页写入 + scheduler
+// 消费 + 中间没人接线」）与引擎无关，但它锁的那一段**是真库往返**——凭据行的 upsert、
+// 按 provider 取行、解封失败吞成 null。只跑 SQLite 就等于 PostgreSQL 部署上
+// 「配了却像没配」从来没有被验证过。
+describeEachProvider('code-host 凭据接线（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
   })
 
-  test('未配置的 provider 仍然返回 null（自跳过语义不变）', async () => {
-    const { keyPath, key } = seededHome()
-    const { repositoryTransport } = await dbWithGitlabRow(key)
-    const service = resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)
-    expect(await service!.resolve('github')).toBeNull()
+  describe('RFC-269 凭据服务的磁盘懒解析（scheduler 的唯一接线点）', () => {
+    test('有密钥文件 + 有配置行 ⇒ 不注入也解析得出完整凭据', async () => {
+      const { keyPath, key } = seededHome()
+      const { repositoryTransport } = await dbWithGitlabRow(key)
+
+      const service = resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)
+      expect(service).not.toBeNull()
+
+      const resolved = await service!.resolve('gitlab')
+      expect(resolved).not.toBeNull()
+      expect(resolved!.baseUrl).toBe('https://gitlab.corp.example/api/v4')
+      // 解封后的 token 必须是原值——错的密钥会 unseal 抛错并被吞成 null，
+      // 那正是「配了却像没配」的事故形态，所以这里比对逐字。
+      expect(resolved!.token).toBe(SECRET_TOKEN)
+    })
+
+    test('未配置的 provider 仍然返回 null（自跳过语义不变）', async () => {
+      const { keyPath, key } = seededHome()
+      const { repositoryTransport } = await dbWithGitlabRow(key)
+      const service = resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)
+      expect(await service!.resolve('github')).toBeNull()
+    })
+
+    test('密钥文件不存在 ⇒ 返回 null，且**不创建**密钥文件', async () => {
+      const { key } = seededHome()
+      const home = mkdtempSync(join(tmpdir(), 'aw-codehost-nokey-'))
+      const missing = join(home, 'secret.key')
+      const { repositoryTransport } = await dbWithGitlabRow(key)
+
+      expect(resolveCodeHostConnectionsFromKeyFile(repositoryTransport, missing)).toBeNull()
+      // 承重：这条路径每派发一个 code-host 节点就走一次。`ensureSecretKey` 会在
+      // 缺文件时生成密钥——真用了它，一次节点派发就会在别人的 home 里落下一个
+      // 密钥文件；读取路径必须保持无副作用。
+      expect(existsSync(missing)).toBe(false)
+    })
+
+    test('密钥长度不对 ⇒ 返回 null 而不是抛穿到调度器', () => {
+      const home = mkdtempSync(join(tmpdir(), 'aw-codehost-badkey-'))
+      const keyPath = join(home, 'secret.key')
+      writeFileSync(keyPath, Buffer.alloc(7, 1), { mode: 0o600 })
+      const { repositoryTransport } = adminConnectionsFor(Buffer.alloc(32, 1))
+      expect(resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)).toBeNull()
+    })
+
+    test('密钥换过（密文解不开）⇒ resolve 返回 null，不拿空 token 去打 401', async () => {
+      const { keyPath } = seededHome() // 密钥 = 11
+      const { repositoryTransport } = await dbWithGitlabRow(Buffer.alloc(32, 22)) // 行是用另一把密钥封的
+      const service = resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)
+      expect(service).not.toBeNull()
+      expect(await service!.resolve('gitlab')).toBeNull()
+    })
   })
 
-  test('密钥文件不存在 ⇒ 返回 null，且**不创建**密钥文件', async () => {
-    const { key } = seededHome()
-    const home = mkdtempSync(join(tmpdir(), 'aw-codehost-nokey-'))
-    const missing = join(home, 'secret.key')
-    const { repositoryTransport } = await dbWithGitlabRow(key)
+  describe('RFC-269 接线：node mechanics 侧的解析点必须存在', () => {
+    // 源码层兜底。上面的行为断言可以在「有人把 scheduler 里的 fallback 删掉、
+    // 只留 opts.codeHostConnections」之后继续全绿——那恰好是回归本身。
+    test('node mechanics 只消费 bootstrap 注入的 provider-neutral connection participant', async () => {
+      const src = await Bun.file(
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'task-execution',
+          'composition',
+          'nodeMechanics.ts',
+        ),
+      ).text()
+      expect(src).toContain('const connections = opts.codeHostConnections')
+      expect(src).toContain('await connections.resolve(provider)')
+      expect(src).not.toContain('resolveCodeHostConnectionsFromKeyFile(')
+      expect(src).not.toContain('Paths.secretKeyFile')
+    })
 
-    expect(resolveCodeHostConnectionsFromKeyFile(repositoryTransport, missing)).toBeNull()
-    // 承重：这条路径每派发一个 code-host 节点就走一次。`ensureSecretKey` 会在
-    // 缺文件时生成密钥——真用了它，一次节点派发就会在别人的 home 里落下一个
-    // 密钥文件；读取路径必须保持无副作用。
-    expect(existsSync(missing)).toBe(false)
-  })
-
-  test('密钥长度不对 ⇒ 返回 null 而不是抛穿到调度器', () => {
-    const home = mkdtempSync(join(tmpdir(), 'aw-codehost-badkey-'))
-    const keyPath = join(home, 'secret.key')
-    writeFileSync(keyPath, Buffer.alloc(7, 1), { mode: 0o600 })
-    const db = createInMemoryDb(MIGRATIONS)
-    const repositoryTransport = composeRepositoryTransportCredentials(
-      new SQLiteRepositoryTransportCredentialRepository(db),
-      createSecretBoxFromKey(Buffer.alloc(32, 1)),
-    ).adminConnections
-    expect(resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)).toBeNull()
-  })
-
-  test('密钥换过（密文解不开）⇒ resolve 返回 null，不拿空 token 去打 401', async () => {
-    const { keyPath } = seededHome() // 密钥 = 11
-    const { repositoryTransport } = await dbWithGitlabRow(Buffer.alloc(32, 22)) // 行是用另一把密钥封的
-    const service = resolveCodeHostConnectionsFromKeyFile(repositoryTransport, keyPath)
-    expect(service).not.toBeNull()
-    expect(await service!.resolve('gitlab')).toBeNull()
-  })
-})
-
-describe('RFC-269 接线：node mechanics 侧的解析点必须存在', () => {
-  // 源码层兜底。上面的行为断言可以在「有人把 scheduler 里的 fallback 删掉、
-  // 只留 opts.codeHostConnections」之后继续全绿——那恰好是回归本身。
-  test('node mechanics 只消费 bootstrap 注入的 provider-neutral connection participant', async () => {
-    const src = await Bun.file(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-    ).text()
-    expect(src).toContain('const connections = opts.codeHostConnections')
-    expect(src).toContain('await connections.resolve(provider)')
-    expect(src).not.toContain('resolveCodeHostConnectionsFromKeyFile(')
-    expect(src).not.toContain('Paths.secretKeyFile')
-  })
-
-  test('code_host_connections 行存在时，表结构仍是每 provider 一行', async () => {
-    const { key } = seededHome()
-    const { db } = await dbWithGitlabRow(key)
-    const rows = db.select().from(codeHostConnections).all()
-    expect(rows.length).toBe(1)
-    expect(rows[0]!.provider).toBe('gitlab')
+    test('code_host_connections 行存在时，表结构仍是每 provider 一行', async () => {
+      const { key } = seededHome()
+      await dbWithGitlabRow(key)
+      const rows = await db.select().from(codeHostConnections).all()
+      expect(rows.length).toBe(1)
+      expect(rows[0]!.provider).toBe('gitlab')
+    })
   })
 })

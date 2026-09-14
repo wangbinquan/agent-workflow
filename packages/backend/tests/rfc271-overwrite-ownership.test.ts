@@ -28,24 +28,25 @@
 // ③ 是配套的反向锁：谁想靠「把非自有候选从 candidateIds 里滤掉」来"加固"上游，会
 // 立刻在 ③ 上变红，因为那等于顺手废掉 reuse 别人的资源。
 
-import { describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { users, workgroups } from '../src/db/schema'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
+let db: ProviderNeutralDatabase
 
 const actorOf = (id: string): Actor =>
   ({
@@ -54,13 +55,13 @@ const actorOf = (id: string): Actor =>
     permissions: new Set<string>(['workgroups:create', 'workgroups:update']),
   }) as unknown as Actor
 
-const deps = (db: DbClient) => ({
+const deps = (db: ProviderNeutralDatabase) => ({
   db,
   appHome: mkdtempSync(join(tmpdir(), 'aw-rfc271-own-')),
   box,
 })
 
-async function seedUser(db: DbClient, id: string): Promise<void> {
+async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
   await db.insert(users).values({
     id,
     username: id,
@@ -73,7 +74,11 @@ async function seedUser(db: DbClient, id: string): Promise<void> {
   } as never)
 }
 
-async function seedWorkgroup(db: DbClient, owner: string, name: string): Promise<string> {
+async function seedWorkgroup(
+  db: ProviderNeutralDatabase,
+  owner: string,
+  name: string,
+): Promise<string> {
   const id = ulid()
   await db.insert(workgroups).values({
     id,
@@ -98,9 +103,16 @@ async function seedWorkgroup(db: DbClient, owner: string, name: string): Promise
   return id
 }
 
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
+}
+
 /** 「我有一个 squad，别人也有一个 squad」——让 overwrite 合法出现在 allowedActions。 */
-async function seedRivalWorkgroups(): Promise<{ db: DbClient; mine: string; theirs: string }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function seedRivalWorkgroups(): Promise<{
+  db: ProviderNeutralDatabase
+  mine: string
+  theirs: string
+}> {
   await seedUser(db, 'u1')
   await seedUser(db, 'victim')
   const mine = await seedWorkgroup(db, 'u1', 'squad')
@@ -109,7 +121,7 @@ async function seedRivalWorkgroups(): Promise<{ db: DbClient; mine: string; thei
 }
 
 async function previewAndCommit(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   action: 'overwrite' | 'reuse',
   targetId: string,
 ): Promise<{ ok: true; action: string } | { ok: false; code: string }> {
@@ -135,70 +147,68 @@ async function previewAndCommit(
   )
 }
 
-describe('AC-15 · 包级导入链上的 overwrite 归属边界', () => {
-  test('① 覆盖**别人的**同名可见工作组 ⇒ 拒绝，且对方那一行一个字节没变', async () => {
-    const { db, theirs } = await seedRivalWorkgroups()
-    const before = db
-      .select()
-      .from(workgroups)
-      .all()
-      .find((r) => r.id === theirs)
-
-    const out = await previewAndCommit(db, 'overwrite', theirs)
-
-    // 断言**具体错误码**而不只是「被拒」：码即「哪一层拦的」。两层都真的在——
-    // 引擎的归属检查（`bundle-overwrite-not-owned`）与工作组域服务的写门
-    // （`workgroups.ts` 的 `assertPrincipalCanWrite` ⇒ RFC-324 的 `resource-read-only`）。
-    //
-    // RFC-359（两台 apply 引擎合一）**实测出的一处用户可见差异**：这个码取决于两道门
-    // 谁先跑，而两台引擎的顺序不同——legacy SQLite 引擎先走域服务写门，报
-    // `resource-read-only`；统一后的原子 apply 引擎先做归属检查，报
-    // `bundle-overwrite-not-owned`（`postgresqlResourcePackageMutationArms.ts:484`）。
-    // 也就是说 PostgreSQL 部署上这条路径**一直**报的是后者，SQLite 上报的是前者。
-    // 合一必须二选一：取统一引擎那一个，SQLite 从此与 PostgreSQL 同码。
-    // 两道门一个没少，拒绝这件事本身不变；变的只是先报哪一条理由。
-    expect(out).toEqual({ ok: false, code: 'bundle-overwrite-not-owned' })
-
-    // 不只断言被拒——还要断言**什么都没写下去**。写了一半才抛错的拒绝，与提前拒绝
-    // 的，对受害者的数据是两回事。
-    const after = db
-      .select()
-      .from(workgroups)
-      .all()
-      .find((r) => r.id === theirs)
-    expect(after).toEqual(before)
-    expect(after?.ownerUserId).toBe('victim')
-    expect(after?.description).toBe('owned by victim')
+describeEachProvider('AC-15 · 包级导入链上的 overwrite 归属边界（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
   })
 
-  test('② 覆盖**自己的**照常成功（①不得把正常路径一起收紧）', async () => {
-    const { db, mine } = await seedRivalWorkgroups()
-    const out = await previewAndCommit(db, 'overwrite', mine)
-    // 收据报的是**引擎侧**动作名：导入决策的 `overwrite` 落到引擎是一次 `update`
-    // （而 `reuse` 两侧同名，见③）。这层命名差异值得钉住——收据是给人看的交付物。
-    expect(out).toMatchObject({ ok: true, action: 'update' })
-  })
+  describe('AC-15 · 包级导入链上的 overwrite 归属边界', () => {
+    test('① 覆盖**别人的**同名可见工作组 ⇒ 拒绝，且对方那一行一个字节没变', async () => {
+      const { db, theirs } = await seedRivalWorkgroups()
+      const before = (await db.select().from(workgroups)).find((r) => r.id === theirs)
 
-  test('③ **reuse 别人的仍然成功** —— 「可见即有读权限」是用户明确要的能力', async () => {
-    const { db, theirs } = await seedRivalWorkgroups()
-    const out = await previewAndCommit(db, 'reuse', theirs)
-    expect(out).toMatchObject({ ok: true, action: 'reuse' })
-  })
+      const out = await previewAndCommit(db, 'overwrite', theirs)
 
-  test('④ 决策面按设计是宽的：别人的在候选里、overwrite 仍在 allowedActions', async () => {
-    // 记录**当前分层**，不是主张它应当如此。`candidateIds` 与 reuse 共用，所以决策面
-    // 不按归属收窄；判定下放给引擎。若将来把归属判断上移到 `assertActionsAllowed`
-    // （一个合理的加固），这条会红——提醒改的人连带更新①的错误码期望与本文件顶部
-    // 的分层说明，而不是默默两层都改、留下一份对不上的文档。
-    const { db, mine, theirs } = await seedRivalWorkgroups()
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: ulid() })
-    const entry = preview.entries.find((e) => e.localSlug === 'workgroup-squad')
+      // 断言**具体错误码**而不只是「被拒」：码即「哪一层拦的」。两层都真的在——
+      // 引擎的归属检查（`bundle-overwrite-not-owned`）与工作组域服务的写门
+      // （`workgroups.ts` 的 `assertPrincipalCanWrite` ⇒ RFC-324 的 `resource-read-only`）。
+      //
+      // RFC-359（两台 apply 引擎合一）**实测出的一处用户可见差异**：这个码取决于两道门
+      // 谁先跑，而两台引擎的顺序不同——legacy SQLite 引擎先走域服务写门，报
+      // `resource-read-only`；统一后的原子 apply 引擎先做归属检查，报
+      // `bundle-overwrite-not-owned`（`postgresqlResourcePackageMutationArms.ts:484`）。
+      // 也就是说 PostgreSQL 部署上这条路径**一直**报的是后者，SQLite 上报的是前者。
+      // 合一必须二选一：取统一引擎那一个，SQLite 从此与 PostgreSQL 同码。
+      // 两道门一个没少，拒绝这件事本身不变；变的只是先报哪一条理由。
+      expect(out).toEqual({ ok: false, code: 'bundle-overwrite-not-owned' })
 
-    expect(entry?.allowedActions).toContain('overwrite')
-    expect((entry?.candidates ?? []).map((c) => c.id).sort()).toEqual([mine, theirs].sort())
-    // owned 标记本身是对的——它只是没被用来卡 commit 的 targetId。
-    expect(entry?.candidates.find((c) => c.id === theirs)?.owned).toBe(false)
-    expect(entry?.candidates.find((c) => c.id === mine)?.owned).toBe(true)
+      // 不只断言被拒——还要断言**什么都没写下去**。写了一半才抛错的拒绝，与提前拒绝
+      // 的，对受害者的数据是两回事。
+      const after = (await db.select().from(workgroups)).find((r) => r.id === theirs)
+      expect(after).toEqual(before)
+      expect(after?.ownerUserId).toBe('victim')
+      expect(after?.description).toBe('owned by victim')
+    })
+
+    test('② 覆盖**自己的**照常成功（①不得把正常路径一起收紧）', async () => {
+      const { db, mine } = await seedRivalWorkgroups()
+      const out = await previewAndCommit(db, 'overwrite', mine)
+      // 收据报的是**引擎侧**动作名：导入决策的 `overwrite` 落到引擎是一次 `update`
+      // （而 `reuse` 两侧同名，见③）。这层命名差异值得钉住——收据是给人看的交付物。
+      expect(out).toMatchObject({ ok: true, action: 'update' })
+    })
+
+    test('③ **reuse 别人的仍然成功** —— 「可见即有读权限」是用户明确要的能力', async () => {
+      const { db, theirs } = await seedRivalWorkgroups()
+      const out = await previewAndCommit(db, 'reuse', theirs)
+      expect(out).toMatchObject({ ok: true, action: 'reuse' })
+    })
+
+    test('④ 决策面按设计是宽的：别人的在候选里、overwrite 仍在 allowedActions', async () => {
+      // 记录**当前分层**，不是主张它应当如此。`candidateIds` 与 reuse 共用，所以决策面
+      // 不按归属收窄；判定下放给引擎。若将来把归属判断上移到 `assertActionsAllowed`
+      // （一个合理的加固），这条会红——提醒改的人连带更新①的错误码期望与本文件顶部
+      // 的分层说明，而不是默默两层都改、留下一份对不上的文档。
+      const { db, mine, theirs } = await seedRivalWorkgroups()
+      const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+      const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: ulid() })
+      const entry = preview.entries.find((e) => e.localSlug === 'workgroup-squad')
+
+      expect(entry?.allowedActions).toContain('overwrite')
+      expect((entry?.candidates ?? []).map((c) => c.id).sort()).toEqual([mine, theirs].sort())
+      // owned 标记本身是对的——它只是没被用来卡 commit 的 targetId。
+      expect(entry?.candidates.find((c) => c.id === theirs)?.owned).toBe(false)
+      expect(entry?.candidates.find((c) => c.id === mine)?.owned).toBe(true)
+    })
   })
 })

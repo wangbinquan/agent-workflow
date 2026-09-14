@@ -9,22 +9,27 @@
 // 臂级正向行为（active owner 子任务照常启动）由既有 rfc243-call-* 套件覆盖；
 // 本文件不重复起全调度器。
 
-import { describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { users } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { projectOwnerlessLegacyActor } from '../src/modules/identity-access/application/legacyActorProjection'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+let db: ProviderNeutralDatabase
 
-function makeDb(): DbClient {
-  return createInMemoryDb(MIGRATIONS)
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
 }
 
-async function seedUser(db: DbClient, id: string, status: 'active' | 'disabled'): Promise<void> {
+async function seedUser(
+  db: ProviderNeutralDatabase,
+  id: string,
+  status: 'active' | 'disabled',
+): Promise<void> {
   await db.insert(users).values({
     id,
     username: `u-${id}`,
@@ -53,78 +58,83 @@ async function resolveCallOwner(
   )
 }
 
-describe('RFC-285 B3 — delegated authority 判定单源', () => {
-  test('active owner → 真实用户行重建（daemon 源 + 角色基线权限）', async () => {
-    const db = makeDb()
-    const runtime = composeIdentityAccess(db)
-    await seedUser(db, 'u1', 'active')
-    const actor = await resolveCallOwner(runtime, 'u1')
-    expect(actor).not.toBeNull()
-    expect(actor!.user.id).toBe('u1')
-    expect(actor!.source).toBe('daemon')
-    expect(actor!.permissions.size).toBeGreaterThan(0) // 角色基线，非幽灵空集
+// RFC-359 AC-6：判定单源的四分支在**两个引擎**上各钉一遍。`composeIdentityAccess` 收的是
+// 中立句柄、两个 provider 同一份实现，而这四条分支读的都是真 `users` 行 + 权限围栏缓存——
+// 只跑 SQLite 等于 PostgreSQL 部署上「失活 owner 不再替其新启子任务」从未被验证过。
+describeEachProvider('delegated authority 判定单源（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
   })
 
-  test('active owner → 每次按 grant + revision 重建，撤销无需重启后台', async () => {
-    const db = makeDb()
-    const runtime = composeIdentityAccess(db)
-    await seedUser(db, 'u-grant', 'active')
-    const context = runtime.contexts.fromAuthenticatedPrincipal(
-      { userId: SYSTEM_USER_ID, source: 'cli' },
-      'cli',
-      1_000,
-    )
-    await runtime.updateUserAccess.execute(context, {
-      targetUserId: 'u-grant',
-      access: {
-        role: 'user',
-        additionalPermissions: ['scripts:author'],
-        expectedRevision: 0,
-      },
+  describe('RFC-285 B3 — delegated authority 判定单源', () => {
+    test('active owner → 真实用户行重建（daemon 源 + 角色基线权限）', async () => {
+      const runtime = composeIdentityAccess(db)
+      await seedUser(db, 'u1', 'active')
+      const actor = await resolveCallOwner(runtime, 'u1')
+      expect(actor).not.toBeNull()
+      expect(actor!.user.id).toBe('u1')
+      expect(actor!.source).toBe('daemon')
+      expect(actor!.permissions.size).toBeGreaterThan(0) // 角色基线，非幽灵空集
     })
-    const granted = await resolveCallOwner(runtime, 'u-grant')
-    expect(granted?.permissions.has('scripts:author')).toBe(true)
-    expect(granted?.authorityRevision).toBe(1)
 
-    await runtime.updateUserAccess.execute(context, {
-      targetUserId: 'u-grant',
-      access: { role: 'user', additionalPermissions: [], expectedRevision: 1 },
+    test('active owner → 每次按 grant + revision 重建，撤销无需重启后台', async () => {
+      const runtime = composeIdentityAccess(db)
+      await seedUser(db, 'u-grant', 'active')
+      const context = runtime.contexts.fromAuthenticatedPrincipal(
+        { userId: SYSTEM_USER_ID, source: 'cli' },
+        'cli',
+        1_000,
+      )
+      await runtime.updateUserAccess.execute(context, {
+        targetUserId: 'u-grant',
+        access: {
+          role: 'user',
+          additionalPermissions: ['scripts:author'],
+          expectedRevision: 0,
+        },
+      })
+      const granted = await resolveCallOwner(runtime, 'u-grant')
+      expect(granted?.permissions.has('scripts:author')).toBe(true)
+      expect(granted?.authorityRevision).toBe(1)
+
+      await runtime.updateUserAccess.execute(context, {
+        targetUserId: 'u-grant',
+        access: { role: 'user', additionalPermissions: [], expectedRevision: 1 },
+      })
+      const revoked = await resolveCallOwner(runtime, 'u-grant')
+      expect(revoked?.permissions.has('scripts:author')).toBe(false)
+      expect(revoked?.authorityRevision).toBe(2)
     })
-    const revoked = await resolveCallOwner(runtime, 'u-grant')
-    expect(revoked?.permissions.has('scripts:author')).toBe(false)
-    expect(revoked?.authorityRevision).toBe(2)
-  })
 
-  test('失活 owner → null（错误形态归调用方）', async () => {
-    const db = makeDb()
-    const runtime = composeIdentityAccess(db)
-    await seedUser(db, 'u2', 'disabled')
-    expect(await resolveCallOwner(runtime, 'u2')).toBeNull()
-  })
+    test('失活 owner → null（错误形态归调用方）', async () => {
+      const runtime = composeIdentityAccess(db)
+      await seedUser(db, 'u2', 'disabled')
+      expect(await resolveCallOwner(runtime, 'u2')).toBeNull()
+    })
 
-  test('owner 行缺失 → null', async () => {
-    const db = makeDb()
-    const runtime = composeIdentityAccess(db)
-    expect(await resolveCallOwner(runtime, 'ghost')).toBeNull()
-  })
+    test('owner 行缺失 → null', async () => {
+      const runtime = composeIdentityAccess(db)
+      expect(await resolveCallOwner(runtime, 'ghost')).toBeNull()
+    })
 
-  test('NULL owner（legacy）→ Q5 放行：__system__ 幽灵、空权限（绝不扩权）', async () => {
-    const actor = projectOwnerlessLegacyActor()
-    expect(actor).not.toBeNull()
-    expect(actor!.user.id).toBe(SYSTEM_USER_ID)
-    expect(actor!.permissions.size).toBe(0)
-  })
+    test('NULL owner（legacy）→ Q5 放行：__system__ 幽灵、空权限（绝不扩权）', async () => {
+      const actor = projectOwnerlessLegacyActor()
+      expect(actor).not.toBeNull()
+      expect(actor!.user.id).toBe(SYSTEM_USER_ID)
+      expect(actor!.permissions.size).toBe(0)
+    })
 
-  test("字符串 '__system__' owner → 真身查行臂（有意的行为变化，实现门 P3-3 定界）", async () => {
-    const db = makeDb()
-    const runtime = composeIdentityAccess(db)
-    // createInMemoryDb 迁移链自带 __system__ 系统用户行（admin/active）。
-    const actor = await resolveCallOwner(runtime, SYSTEM_USER_ID)
-    expect(actor).not.toBeNull()
-    expect(actor!.user.id).toBe(SYSTEM_USER_ID)
-    // 与 NULL 臂的空幽灵不同：真身解析、角色基线权限（系统行为自洽；
-    // 普通 session/PAT 无法把任务 owner 写成 __system__，无越权面）。
-    expect(actor!.permissions.size).toBeGreaterThan(0)
+    test("字符串 '__system__' owner → 真身查行臂（有意的行为变化，实现门 P3-3 定界）", async () => {
+      const runtime = composeIdentityAccess(db)
+      // 迁移链自带 __system__ 系统用户行（admin/active）——两个引擎的 harness 起点
+      // 都是「刚迁移完」的库，PostgreSQL 侧的种子行同样来自那条迁移链。
+      const actor = await resolveCallOwner(runtime, SYSTEM_USER_ID)
+      expect(actor).not.toBeNull()
+      expect(actor!.user.id).toBe(SYSTEM_USER_ID)
+      // 与 NULL 臂的空幽灵不同：真身解析、角色基线权限（系统行为自洽；
+      // 普通 session/PAT 无法把任务 owner 写成 __system__，无越权面）。
+      expect(actor!.permissions.size).toBeGreaterThan(0)
+    })
   })
 })
 

@@ -2,6 +2,31 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 续 24，**四路并行**迁移 13 个文件 + 两条账本校准）
+>
+> 落档 plan §5ei / §5eg / §5eh。用四个并行 agent 按互不重叠的文件集推 AC-6：账本
+> 390 → **378** / open 84 → **72**，十四个文件合跑真 PostgreSQL **188/188**。
+> 卡住的两个都卡在同一条生产签名 `LegacySqliteTaskDatabase`（`rfc268` 与 `rfc207` 剩的 2 格），
+> 另一个判不适用（`rfc349-execution-peripheral-provider` 的被测物就是两个 provider 各自的适配器）。
+>
+> **§5eg 账本校准**：`OPEN_MIGRATION_DEBT` 按文件计数，**系统性高于真实待办**。三类：
+> ①建了库但从不查（db 只是不透明构造参数，如 `start-task-deps` 断言 `toBe(db)` 透传）；
+> ②已是双引擎、只剩一个**结构性**单引擎块（`rfc257` 测的「没有 dispatcher 的应用」状态在 PG 上
+> 不可能存在）；③卡生产签名，与测试写法无关。**没有给它们加豁免类目**——本文件的类目故意机械
+> 可判，而①用「没有 `.select(`」判会误伤经 `createApp` 走 HTTP 的用例，②根本不是机械命题；
+> **放松判据的方向恰好是让数字变好看的方向**。
+>
+> **§5eh 一个被低估的收益**：`SQLiteRepositoryTransportCredentialRepository` 其实是
+> `DrizzleRepositoryTransportCredentialRepository`（收 `ProviderNeutralDatabase`）的**别名**。
+> 全仓 39 处这类别名。迁移者看到 `Sqlite` 前缀就以为被阻塞——**一个误导性的名字会让一次本该
+> 成功的迁移被悄悄放弃，且不会有任何守卫红**。本轮真实发生一次。⇒ AC-12 不是洁癖，是给 AC-6 清障。
+>
+> **`6194d343a` 的 CI 红不是本轮改动**：只红 `Frontend tests (windows-latest shard 3/3)`
+> 两条 30000ms 超时，而该分片汇总是 `Duration 248.23s (**setup 220.52s**)`、275 文件 / 2468 格通过。
+> `setup 220.52s` 是整机停顿的**直接测量**。已作为第三次观测并入 `docs/audit-backlog.md`
+> 既有条目「Windows 前端泳道存在间歇性数十秒停顿」。同 SHA 的两个 backend 泳道（含真 PostgreSQL）、
+> 三个 OS 的 e2e、ubuntu/macOS 前端三分片全绿。
+>
 > ## 📌 RFC-359 最新一段（2026-09-14 续 23，AC-11：`overview` 六条资源计数收成一条）
 >
 > 落档 plan §5ef。§5ee 把根因钉死在**语句条数**上，本批先收确定能收的那一半：
