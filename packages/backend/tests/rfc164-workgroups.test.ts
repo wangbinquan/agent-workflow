@@ -4,8 +4,9 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 // RFC-164 PR-1 — workgroups resource: service CRUD + zod shape + route ACL.
 //
 // Locks:
-//   - migration 0082 tables round-trip through the service (createInMemoryDb
-//     applies the real migration folder, so a broken 0082 fails here first);
+//   - migration 0082 tables round-trip through the service (the dual-engine
+//     harness applies the real migration set on both engines, so a broken 0082
+//     fails here first — on either provider);
 //   - leader resolution (displayName → leaderMemberId; lw requires an agent
 //     member; free_collab stores null and reads switches as all-on);
 //   - members full-replace semantics (ids regenerate; per-group displayName
@@ -18,7 +19,6 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import {
@@ -30,7 +30,6 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, users } from '../src/db/schema'
 import { createUser } from '../src/services/users'
@@ -53,7 +52,6 @@ const T6_ACTOR = buildActor({
   source: 'session',
 })
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 const agentId = (name: string): string => `agent-${name}`
 const AGENT_NAMES = ['planner-agent', 'coder-a', 'a', 'b', 'auditor', 'lead-agent'] as const
@@ -290,18 +288,11 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
 })
 
 describe('RFC-164 — services/workgroups.ts CRUD', () => {
-  let db: DbClient
-  const setupNative = async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    await db.insert(agents).values(
-      AGENT_NAMES.map((name) => ({
-        id: agentId(name),
-        name,
-      })),
-    )
-  }
-
-  describeEachProvider('workgroup CRUD persistence', (harness) => {
+  // RFC-359 AC-6：整段服务层断言在两个引擎上各跑一遍。此前 CRUD / rename 两个
+  // `describeEachProvider` 中间还夹着两段写死 SQLite 的 `retained original` ——那是逐条迁移
+  // 留下的形状。每个注册面在 PostgreSQL 上都要现建一个库并跑完整套迁移，所以这里合成
+  // **一个**注册面；夹具语义没变（每条用例前重新种下 AGENT_NAMES 那批代理行）。
+  describeEachProvider('workgroup CRUD + rename persistence', (harness) => {
     let db: ProviderNeutralDatabase
     beforeEach(async () => {
       db = harness.db
@@ -385,10 +376,6 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
       const corrupted = { ...input, leaderDisplayName: 'ghost' }
       await expect(createWorkgroup(db, corrupted)).rejects.toThrow(ValidationError)
     })
-  })
-
-  describe('retained original cases', () => {
-    beforeEach(setupNative)
 
     test('human member must be an existing active user', async () => {
       const withGhostHuman = groupInput({
@@ -397,7 +384,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
           { memberType: 'human', userId: 'no-such-user', displayName: 'pm', roleDesc: '' },
         ],
       })
-      expect(createWorkgroup(db, withGhostHuman)).rejects.toThrow(ValidationError)
+      await expect(createWorkgroup(db, withGhostHuman)).rejects.toThrow(ValidationError)
 
       const u = await createUser(db, {
         username: 'pmuser',
@@ -450,19 +437,6 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
 
       await expect(save).rejects.toMatchObject({ code: 'workgroup-member-user-invalid' })
       expect((await getWorkgroupById(db, created.id))?.description).not.toBe('must not commit')
-    })
-  })
-
-  describeEachProvider('workgroup rename persistence', (harness) => {
-    let db: ProviderNeutralDatabase
-    beforeEach(async () => {
-      db = harness.db
-      await db.insert(agents).values(
-        AGENT_NAMES.map((name) => ({
-          id: agentId(name),
-          name,
-        })),
-      )
     })
 
     test('rename happy path + conflict + delete + not-found', async () => {
@@ -530,9 +504,8 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     })
   })
 
-  describe('retained original utility', () => {
-    beforeEach(setupNative)
-
+  // 纯函数预言：不碰库，两个引擎上是同一件事，因此只注册一遍。
+  describe('diffNewAgentMemberIds (pure)', () => {
     test('diffNewAgentMemberIds — only new agent refs, humans ignored, dedup', () => {
       const prev = {
         members: [

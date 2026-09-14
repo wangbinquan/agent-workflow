@@ -25909,6 +25909,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#$file",
+      "fromPath": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5488b95c3da8f51ea341",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "execution-contract",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#$file",
@@ -53089,23 +53106,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#QueryOperationDescriptor",
       "toPath": "packages/backend/src/platform/operations/contracts.ts",
       "toSymbol": "QueryOperationDescriptor",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#$file",
-      "fromPath": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:b0e40d999ae1c6d8ed35",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "execution-contract",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -105210,6 +105210,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "execution-contract",
+      "fromFile": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#$file",
+      "id": "import:5488b95c3da8f51ea341",
+      "owner": "execution-contract",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
@@ -133962,22 +133978,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#QueryOperationDescriptor"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "execution-contract",
-      "fromFile": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#$file",
-      "id": "import:b0e40d999ae1c6d8ed35",
-      "owner": "execution-contract",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/resourceAcl.ts",
@@ -160723,7 +160723,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:effff43065672967096a6e115ebfd31a49735d140f6ea61319708dfd4c0251bc",
+  "sourceDigest": "sha256:ca7060fb7df71e92d64135eae37c1853b1a1b5276510a03a76a38f1c6aedb15a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

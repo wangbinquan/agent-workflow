@@ -18,17 +18,22 @@
 //     (doc_versions / review_comments / node_runs / node_run_outputs /
 //     merge_state / memory_distill_jobs) and the WS event count are compared
 //     byte-for-byte before and after.
+//
+// RFC-359 AC-6：整份文件跑双引擎。库由 harness 现建（一个文件一个库、每个用例清回迁移态），
+// 夹具只在那个库上种行；REST 那一组走 `describeEachProviderHttpApplication`——`AppDeps.db`
+// 只收 SQLite 句柄，PostgreSQL 侧的应用必须由各自的组合根装配。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { asc, eq } from 'drizzle-orm'
+import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { joinMarkdownDocs } from '@agent-workflow/shared'
 import type { ReviewCommentAnchor, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   agents as agentsTable,
   docVersions,
@@ -48,12 +53,12 @@ import {
   submitReviewDecision,
   type SubmitReviewDecisionArgs,
 } from '../src/services/review'
-import { createApp } from '../src/server'
 import { DomainError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const HEADERS = { Authorization: 'Bearer tok', 'content-type': 'application/json' }
 
@@ -70,7 +75,7 @@ interface Snapshot {
   memoryDistillJobs: unknown[]
 }
 
-async function snapshot(db: DbClient): Promise<Snapshot> {
+async function snapshot(db: ProviderNeutralDatabase): Promise<Snapshot> {
   const runs = await db.select().from(nodeRuns).orderBy(asc(nodeRuns.id))
   return {
     docVersions: await db.select().from(docVersions).orderBy(asc(docVersions.id)),
@@ -138,8 +143,15 @@ const SINGLE_BODY = [
   '',
 ].join('\n')
 
+/** harness 现建的库；每个用例前由 `seedFixture` 指过来。 */
+let db: ProviderNeutralDatabase
+
+function seedFixture(providerHarness: ProviderHarness): void {
+  db = providerHarness.db
+}
+
 interface SingleFixture {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   taskId: string
   reviewRunId: string
@@ -153,11 +165,12 @@ interface SingleFixture {
 
 async function buildSingle(
   taskStatus: 'awaiting_review' | 'running' = 'awaiting_review',
+  /** REST 那一组把夹具种进应用作用域自建的 app home（应用读的就是那一个）。 */
+  homeOverride?: string,
 ): Promise<SingleFixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc326-batch-'))
-  const appHome = join(tmp, 'appHome')
+  const appHome = homeOverride ?? join(tmp, 'appHome')
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const uninstallProjection = await installCommittedEventProjectionHarness(db)
 
   const [ownerId, memberId, strangerId] = ['owner', 'member', 'stranger'].map(() => ulid())
@@ -213,6 +226,12 @@ async function buildSingle(
     inputs: '{}',
     startedAt: NOW,
     ownerUserId: ownerId!,
+    // SQLite 的 `rfc328_tasks_lineage_after_insert` 会补这两列，PostgreSQL 按设计没有对应
+    // 触发器——直插 `tasks` 的夹具自己给，两个引擎的物理行才一样。
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   await db.insert(taskCollaborators).values([
     { taskId, userId: ownerId!, role: 'owner', addedBy: ownerId!, addedAt: NOW },
@@ -269,8 +288,8 @@ async function buildSingle(
     memberId: memberId!,
     strangerId: strangerId!,
     cleanup: () => {
+      // 库的生命周期归 harness；这里只收自己建的目录与全局投影注册。
       uninstallProjection()
-      db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
     },
   }
@@ -280,7 +299,7 @@ const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']
 const bodyFor = (p: string): string => `# Case ${p}\n\nsteps for ${p}\n`
 
 interface MultiFixture {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktree: string
   taskId: string
@@ -294,13 +313,14 @@ interface MultiFixture {
 async function buildMulti(
   kind: 'list<path<md>>' | 'list<markdown>',
   taskStatus: 'awaiting_review' | 'running' = 'awaiting_review',
+  /** 同 `buildSingle`：REST 那一组复用应用作用域自建的 app home。 */
+  homeOverride?: string,
 ): Promise<MultiFixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc326-batch-multi-'))
-  const appHome = join(tmp, 'appHome')
+  const appHome = homeOverride ?? join(tmp, 'appHome')
   const worktree = join(tmp, 'worktree')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(worktree, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const uninstallProjection = await installCommittedEventProjectionHarness(db)
   const caseGenId = ulid()
   await db.insert(agentsTable).values({
@@ -353,6 +373,11 @@ async function buildMulti(
     status: taskStatus,
     inputs: '{}',
     startedAt: NOW,
+    // 同 buildSingle：PostgreSQL 没有 SQLite 那条血缘回填触发器，夹具自己给。
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   const srcRunId = ulid()
   await db.insert(nodeRuns).values({
@@ -399,8 +424,8 @@ async function buildMulti(
     reviewRunId: docs[0]!.reviewNodeRunId,
     docs,
     cleanup: () => {
+      // 库的生命周期归 harness；这里只收自己建的目录与全局投影注册。
       uninstallProjection()
-      db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
     },
   }
@@ -426,478 +451,489 @@ function webAnchor(body: string, quote: string, occurrence = 1): ReviewCommentAn
 // AC-15 — batched iterate carries every comment into the archive + re-run prompt
 // ---------------------------------------------------------------------------
 
-describe('RFC-326 AC-15 — batched iterate', () => {
-  let f: SingleFixture
-  let events: ReturnType<typeof countTaskEvents>
-  afterEach(() => {
-    events?.stop()
-    f?.cleanup()
+describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarness) => {
+  beforeEach(() => {
+    seedFixture(providerHarness)
   })
 
-  test('batch comments join the earlier one-by-one comment in commentsJson / decisionReason / the re-run prompt', async () => {
-    f = await buildSingle()
-    events = countTaskEvents(f.taskId)
-    const earlier = await addReviewComment({
-      db: f.db,
-      appHome: f.appHome,
-      nodeRunId: f.reviewRunId,
-      anchorRequest: { quote: 'partially_refunded' },
-      commentText: 'ONE: name the state',
-    })
-    expect(earlier.warnings).toEqual([])
-
-    const result = await submitReviewDecision({
-      db: f.db,
-      appHome: f.appHome,
-      nodeRunId: f.reviewRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-      author: 'reviewer',
-      comments: [
-        { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
-        { commentText: 'THREE: web form', anchor: webAnchor(SINGLE_BODY, 'Design v1') },
-        // Exact duplicate of TWO inside the same batch → skipped, not double-posted.
-        { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
-      ],
-    })
-    expect(result.batch).toEqual({
-      commentsAdded: 2,
-      commentsSkippedAsDuplicate: 1,
-      selectionsApplied: 0,
-    })
-    expect(result.reviewIteration).toBe(1)
-    expect(result.resumeRequired).toBe(true)
-
-    const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
-    expect(dv.decision).toBe('iterated')
-    const archived = JSON.parse(dv.commentsJson) as Array<{
-      commentText: string
-      anchor: ReviewCommentAnchor
-    }>
-    // Archive order is (anchorParagraphIdx, anchorOffsetStart) — the same order
-    // the page lists comments in. No sorting on either side: reversing the
-    // comparator must turn this red.
-    const offsetOf = (text: string): number => SINGLE_BODY.indexOf(text)
-    expect(offsetOf('Design v1')).toBeLessThan(offsetOf('partially_refunded'))
-    expect(offsetOf('partially_refunded')).toBeLessThan(offsetOf('export job'))
-    expect(archived.map((c) => [c.commentText, c.anchor.offsetStart])).toEqual([
-      ['THREE: web form', offsetOf('Design v1')],
-      ['ONE: name the state', offsetOf('partially_refunded')],
-      ['TWO: also the export job', offsetOf('export job')],
-    ])
-    for (const text of ['ONE: name the state', 'TWO: also the export job', 'THREE: web form']) {
-      expect(dv.decisionReason ?? '').toContain(text)
-    }
-    // Row-side comments are archived away; the review row re-opened at iteration 1.
-    expect(await f.db.select().from(reviewComments)).toEqual([])
-    const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
-    expect(run.status).toBe('pending')
-    expect(run.reviewIteration).toBe(1)
-
-    // The upstream re-run prompt sees ALL comments.
-    const ctx = await buildReviewPromptContext(f.db, f.appHome, 'doc', f.taskId, 0)
-    expect(ctx?.comments ?? '').toContain('ONE: name the state')
-    expect(ctx?.comments ?? '').toContain('TWO: also the export job')
-    expect(ctx?.comments ?? '').toContain('THREE: web form')
-
-    // Events: the one-by-one comment, the two batch comments, the decision.
-    expect(events.types.filter((t) => t === 'review.comment_added').length).toBe(3)
-    expect(events.types.at(-1)).toBe('review.decision_made')
-  })
-
-  test('a batch comment identical to an existing row is skipped, not duplicated', async () => {
-    f = await buildSingle()
-    await addReviewComment({
-      db: f.db,
-      appHome: f.appHome,
-      nodeRunId: f.reviewRunId,
-      anchorRequest: { quote: 'partially_refunded' },
-      commentText: 'same',
-    })
-    const result = await submitReviewDecision({
-      db: f.db,
-      appHome: f.appHome,
-      nodeRunId: f.reviewRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-      comments: [{ commentText: 'same', anchorRequest: { quote: 'partially_refunded' } }],
-    })
-    expect(result.batch).toEqual({
-      commentsAdded: 0,
-      commentsSkippedAsDuplicate: 1,
-      selectionsApplied: 0,
-    })
-    const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
-    expect((JSON.parse(dv.commentsJson) as unknown[]).length).toBe(1)
-  })
-
-  test('a plain decision (no batch) reports no batch counters', async () => {
-    f = await buildSingle()
-    const result = await submitReviewDecision({
-      db: f.db,
-      appHome: f.appHome,
-      nodeRunId: f.reviewRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
-    expect(result.batch).toBeUndefined()
-  })
-})
-
-// ---------------------------------------------------------------------------
-// AC-15 — selections[] + approved from an all-unselected round
-// ---------------------------------------------------------------------------
-
-describe('RFC-326 AC-15 — selections[] + approved curate the round in one request', () => {
-  let m: MultiFixture
-  let events: ReturnType<typeof countTaskEvents>
-  afterEach(() => {
-    events?.stop()
-    m?.cleanup()
-  })
-
-  test('list<path<md>>: the accepted subset is computed from the batched view', async () => {
-    m = await buildMulti('list<path<md>>')
-    events = countTaskEvents(m.taskId)
-    expect(m.docs.map((d) => d.selection)).toEqual(['unselected', 'unselected', 'unselected'])
-    const [a, b, c] = m.docs as [
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-    ]
-
-    const result = await submitReviewDecision({
-      db: m.db,
-      appHome: m.appHome,
-      nodeRunId: m.reviewRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-      selections: [
-        { docVersionId: a.id, selection: 'accepted' },
-        { docVersionId: b.id, selection: 'not_accepted' },
-        { docVersionId: c.id, selection: 'accepted' },
-      ],
-    })
-    expect(result.batch).toEqual({
-      commentsAdded: 0,
-      commentsSkippedAsDuplicate: 0,
-      selectionsApplied: 3,
+  describe('RFC-326 AC-15 — batched iterate', () => {
+    let f: SingleFixture
+    let events: ReturnType<typeof countTaskEvents>
+    afterEach(() => {
+      events?.stop()
+      f?.cleanup()
     })
 
-    const outs = await m.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
-    const byPort = new Map(outs.map((o) => [o.portName, o]))
-    expect(byPort.get('accepted')?.content).toBe('cases/a.md\ncases/c.md')
-    expect(byPort.get('accepted')?.kind).toBe('list<path<md>>')
-    const meta = JSON.parse(byPort.get('approval_meta')!.content) as Record<string, unknown>
-    expect(meta).toMatchObject({
-      decision: 'approved',
-      itemCount: 3,
-      acceptedCount: 2,
-      acceptedItemIndices: [0, 2],
-      reviewIteration: 0,
-    })
+    test('batch comments join the earlier one-by-one comment in commentsJson / decisionReason / the re-run prompt', async () => {
+      f = await buildSingle()
+      events = countTaskEvents(f.taskId)
+      const earlier = await addReviewComment({
+        db: f.db,
+        appHome: f.appHome,
+        nodeRunId: f.reviewRunId,
+        anchorRequest: { quote: 'partially_refunded' },
+        commentText: 'ONE: name the state',
+      })
+      expect(earlier.warnings).toEqual([])
 
-    const rows = await m.db
-      .select()
-      .from(docVersions)
-      .where(eq(docVersions.taskId, m.taskId))
-      .orderBy(asc(docVersions.itemIndex))
-    expect(rows.map((r) => [r.selection, r.selectionStale, r.decision])).toEqual([
-      ['accepted', false, 'approved'],
-      ['not_accepted', false, 'approved'],
-      ['accepted', false, 'approved'],
-    ])
-    const run = (await m.db.select().from(nodeRuns).where(eq(nodeRuns.id, m.reviewRunId)))[0]!
-    expect(run.status).toBe('done')
-    expect(events.types.filter((t) => t === 'review.selection_changed').length).toBe(3)
-    expect(events.types.at(-1)).toBe('review.decision_made')
-  })
-
-  test('list<markdown>: the accepted bodies are joined in item order', async () => {
-    m = await buildMulti('list<markdown>')
-    const [a, b, c] = m.docs as [
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-    ]
-    await submitReviewDecision({
-      db: m.db,
-      appHome: m.appHome,
-      nodeRunId: m.reviewRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-      selections: [
-        { docVersionId: c.id, selection: 'accepted' },
-        { docVersionId: a.id, selection: 'not_accepted' },
-        { docVersionId: b.id, selection: 'accepted' },
-      ],
-    })
-    const outs = await m.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
-    const accepted = outs.find((o) => o.portName === 'accepted')!
-    expect(accepted.kind).toBe('list<markdown>')
-    expect(accepted.content).toBe(joinMarkdownDocs([bodyFor('cases/b.md'), bodyFor('cases/c.md')]))
-    const meta = JSON.parse(outs.find((o) => o.portName === 'approval_meta')!.content) as {
-      acceptedItemIndices: number[]
-    }
-    expect(meta.acceptedItemIndices).toEqual([1, 2])
-  })
-
-  test('a stale inherited selection re-judged in the batch is no longer stale', async () => {
-    m = await buildMulti('list<path<md>>')
-    const [a, b, c] = m.docs as [
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-    ]
-    await m.db
-      .update(docVersions)
-      .set({ selection: 'accepted', selectionStale: true })
-      .where(eq(docVersions.id, a.id))
-    await submitReviewDecision({
-      db: m.db,
-      appHome: m.appHome,
-      nodeRunId: m.reviewRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-      selections: [
-        { docVersionId: a.id, selection: 'accepted' },
-        { docVersionId: b.id, selection: 'not_accepted' },
-        { docVersionId: c.id, selection: 'not_accepted' },
-      ],
-    })
-    const rowA = (await m.db.select().from(docVersions).where(eq(docVersions.id, a.id)))[0]!
-    expect(rowA.selectionStale).toBe(false)
-    const accepted = (
-      await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
-    ).find((o) => o.portName === 'accepted')!
-    expect(accepted.content).toBe('cases/a.md')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// AC-14 — every refusal is a 4xx with zero writes
-// ---------------------------------------------------------------------------
-
-describe('RFC-326 AC-14 — refusals write nothing (six surfaces + WS count)', () => {
-  let f: SingleFixture
-  let m: MultiFixture
-  let events: ReturnType<typeof countTaskEvents>
-  afterEach(() => {
-    events?.stop()
-    f?.cleanup()
-    m?.cleanup()
-  })
-
-  async function expectZeroWrites(
-    db: DbClient,
-    ev: ReturnType<typeof countTaskEvents>,
-    run: () => Promise<unknown>,
-  ): Promise<Refusal> {
-    const before = await snapshot(db)
-    const eventsBefore = ev.count()
-    const refusal = await refusalOf(run)
-    expect(await snapshot(db)).toEqual(before)
-    expect(ev.count()).toBe(eventsBefore)
-    return refusal
-  }
-
-  test('single-document: bad anchors, stale iteration, non-member, fence, terminal task', async () => {
-    f = await buildSingle()
-    events = countTaskEvents(f.taskId)
-    const base: SubmitReviewDecisionArgs = {
-      db: f.db,
-      appHome: f.appHome,
-      nodeRunId: f.reviewRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    }
-    const run = (extra: Partial<SubmitReviewDecisionArgs>) => () =>
-      submitReviewDecision({ ...base, ...extra })
-
-    const notFound = await expectZeroWrites(
-      f.db,
-      events,
-      run({
+      const result = await submitReviewDecision({
+        db: f.db,
+        appHome: f.appHome,
+        nodeRunId: f.reviewRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+        author: 'reviewer',
         comments: [
-          { commentText: 'ok', anchorRequest: { quote: 'export job' } },
-          { commentText: 'bad', anchorRequest: { quote: 'never in the document' } },
+          { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
+          { commentText: 'THREE: web form', anchor: webAnchor(SINGLE_BODY, 'Design v1') },
+          // Exact duplicate of TWO inside the same batch → skipped, not double-posted.
+          { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
         ],
-      }),
-    )
-    expect(notFound.status).toBe(422)
-    expect(notFound.code).toBe('review-anchor-not-found')
-    expect(notFound.message.startsWith('comments[1]: ')).toBe(true)
-    expect((notFound.details as { index: number }).index).toBe(1)
+      })
+      expect(result.batch).toEqual({
+        commentsAdded: 2,
+        commentsSkippedAsDuplicate: 1,
+        selectionsApplied: 0,
+      })
+      expect(result.reviewIteration).toBe(1)
+      expect(result.resumeRequired).toBe(true)
 
-    const ambiguous = await expectZeroWrites(
-      f.db,
-      events,
-      run({
-        comments: [{ commentText: 'x', anchorRequest: { quote: 'enum' } }],
-      }),
-    )
-    expect(ambiguous.code).toBe('review-anchor-ambiguous')
-    expect((ambiguous.details as { candidates: unknown[] }).candidates.length).toBe(2)
+      const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
+      expect(dv.decision).toBe('iterated')
+      const archived = JSON.parse(dv.commentsJson) as Array<{
+        commentText: string
+        anchor: ReviewCommentAnchor
+      }>
+      // Archive order is (anchorParagraphIdx, anchorOffsetStart) — the same order
+      // the page lists comments in. No sorting on either side: reversing the
+      // comparator must turn this red.
+      const offsetOf = (text: string): number => SINGLE_BODY.indexOf(text)
+      expect(offsetOf('Design v1')).toBeLessThan(offsetOf('partially_refunded'))
+      expect(offsetOf('partially_refunded')).toBeLessThan(offsetOf('export job'))
+      expect(archived.map((c) => [c.commentText, c.anchor.offsetStart])).toEqual([
+        ['THREE: web form', offsetOf('Design v1')],
+        ['ONE: name the state', offsetOf('partially_refunded')],
+        ['TWO: also the export job', offsetOf('export job')],
+      ])
+      for (const text of ['ONE: name the state', 'TWO: also the export job', 'THREE: web form']) {
+        expect(dv.decisionReason ?? '').toContain(text)
+      }
+      // Row-side comments are archived away; the review row re-opened at iteration 1.
+      expect(await f.db.select().from(reviewComments)).toEqual([])
+      const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
+      expect(run.status).toBe('pending')
+      expect(run.reviewIteration).toBe(1)
 
-    const both = await expectZeroWrites(
-      f.db,
-      events,
-      run({
-        comments: [
-          {
-            commentText: 'x',
-            anchor: webAnchor(SINGLE_BODY, 'enum'),
-            anchorRequest: { quote: 'enum' },
-          },
-        ],
-      }),
-    )
-    expect(both.code).toBe('review-comment-invalid')
-    expect(both.status).toBe(422)
+      // The upstream re-run prompt sees ALL comments.
+      const ctx = await buildReviewPromptContext(f.db, f.appHome, 'doc', f.taskId, 0)
+      expect(ctx?.comments ?? '').toContain('ONE: name the state')
+      expect(ctx?.comments ?? '').toContain('TWO: also the export job')
+      expect(ctx?.comments ?? '').toContain('THREE: web form')
 
-    const webMissing = await expectZeroWrites(
-      f.db,
-      events,
-      run({
-        comments: [
-          {
-            commentText: 'x',
-            anchor: { ...webAnchor(SINGLE_BODY, 'enum'), selectedText: 'nope-nope' },
-          },
-        ],
-      }),
-    )
-    expect(webMissing.code).toBe('anchor-selection-not-found')
-    expect(webMissing.status).toBe(422)
-
-    const selectionOnSingle = await expectZeroWrites(
-      f.db,
-      events,
-      run({
-        selections: [{ docVersionId: f.dvId, selection: 'accepted' }],
-      }),
-    )
-    expect(selectionOnSingle.code).toBe('review-not-multi-doc')
-    expect(selectionOnSingle.status).toBe(409)
-
-    const unknownTarget = await expectZeroWrites(
-      f.db,
-      events,
-      run({
-        selections: [{ docVersionId: 'nope', selection: 'accepted' }],
-      }),
-    )
-    expect(unknownTarget.code).toBe('doc-version-not-found')
-    expect(unknownTarget.status).toBe(404)
-
-    const stale = await expectZeroWrites(f.db, events, run({ expectedReviewIteration: 7 }))
-    expect(stale.code).toBe('review-iteration-mismatch')
-    expect(stale.status).toBe(409)
-
-    const stranger = await expectZeroWrites(f.db, events, run({ actor: actorFor(f.strangerId) }))
-    expect(stranger.code).toBe('not-task-member')
-    expect(stranger.status).toBe(403)
-
-    await f.db.update(tasks).set({ sourceTerminationFence: 'closed' }).where(eq(tasks.id, f.taskId))
-    const fenced = await expectZeroWrites(f.db, events, run({}))
-    expect(fenced.code).toBe('task-source-terminal-closed')
-    expect(fenced.status).toBe(409)
-    await f.db.update(tasks).set({ sourceTerminationFence: null }).where(eq(tasks.id, f.taskId))
-
-    await f.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, f.taskId))
-    const terminal = await expectZeroWrites(f.db, events, run({}))
-    expect(terminal.code).toBe('task-terminal')
-    expect(terminal.status).toBe(409)
-    await f.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, f.taskId))
-
-    // The fixture is still decidable afterwards — the refusals really were dry.
-    const ok = await submitReviewDecision({
-      ...base,
-      actor: actorFor(f.memberId),
-      comments: [{ commentText: 'fine', anchorRequest: { quote: 'export job' } }],
+      // Events: the one-by-one comment, the two batch comments, the decision.
+      expect(events.types.filter((t) => t === 'review.comment_added').length).toBe(3)
+      expect(events.types.at(-1)).toBe('review.decision_made')
     })
-    expect(ok.batch?.commentsAdded).toBe(1)
+
+    test('a batch comment identical to an existing row is skipped, not duplicated', async () => {
+      f = await buildSingle()
+      await addReviewComment({
+        db: f.db,
+        appHome: f.appHome,
+        nodeRunId: f.reviewRunId,
+        anchorRequest: { quote: 'partially_refunded' },
+        commentText: 'same',
+      })
+      const result = await submitReviewDecision({
+        db: f.db,
+        appHome: f.appHome,
+        nodeRunId: f.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        comments: [{ commentText: 'same', anchorRequest: { quote: 'partially_refunded' } }],
+      })
+      expect(result.batch).toEqual({
+        commentsAdded: 0,
+        commentsSkippedAsDuplicate: 1,
+        selectionsApplied: 0,
+      })
+      const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
+      expect((JSON.parse(dv.commentsJson) as unknown[]).length).toBe(1)
+    })
+
+    test('a plain decision (no batch) reports no batch counters', async () => {
+      f = await buildSingle()
+      const result = await submitReviewDecision({
+        db: f.db,
+        appHome: f.appHome,
+        nodeRunId: f.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      })
+      expect(result.batch).toBeUndefined()
+    })
   })
 
-  test('multi-document: unnamed document, foreign / decided target, incomplete approve', async () => {
-    m = await buildMulti('list<path<md>>')
-    events = countTaskEvents(m.taskId)
-    const [a, b, c] = m.docs as [
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-    ]
-    const base: SubmitReviewDecisionArgs = {
-      db: m.db,
-      appHome: m.appHome,
-      nodeRunId: m.reviewRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    }
-    const run = (extra: Partial<SubmitReviewDecisionArgs>) => () =>
-      submitReviewDecision({ ...base, ...extra })
+  // ---------------------------------------------------------------------------
+  // AC-15 — selections[] + approved from an all-unselected round
+  // ---------------------------------------------------------------------------
 
-    const unnamed = await expectZeroWrites(
-      m.db,
-      events,
-      run({
-        selections: [
-          { docVersionId: a.id, selection: 'accepted' },
-          { docVersionId: b.id, selection: 'accepted' },
-          { docVersionId: c.id, selection: 'accepted' },
-        ],
-        comments: [{ commentText: 'which doc?', anchorRequest: { quote: 'steps' } }],
-      }),
-    )
-    expect(unnamed.code).toBe('review-doc-version-required')
-    expect(unnamed.status).toBe(422)
-    expect((unnamed.details as { index: number }).index).toBe(0)
+  describe('RFC-326 AC-15 — selections[] + approved curate the round in one request', () => {
+    let m: MultiFixture
+    let events: ReturnType<typeof countTaskEvents>
+    afterEach(() => {
+      events?.stop()
+      m?.cleanup()
+    })
 
-    const incomplete = await expectZeroWrites(
-      m.db,
-      events,
-      run({
+    test('list<path<md>>: the accepted subset is computed from the batched view', async () => {
+      m = await buildMulti('list<path<md>>')
+      events = countTaskEvents(m.taskId)
+      expect(m.docs.map((d) => d.selection)).toEqual(['unselected', 'unselected', 'unselected'])
+      const [a, b, c] = m.docs as [
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+      ]
+
+      const result = await submitReviewDecision({
+        db: m.db,
+        appHome: m.appHome,
+        nodeRunId: m.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
         selections: [
           { docVersionId: a.id, selection: 'accepted' },
           { docVersionId: b.id, selection: 'not_accepted' },
-        ],
-      }),
-    )
-    expect(incomplete.code).toBe('review-selection-incomplete')
-    expect(incomplete.status).toBe(409)
-
-    const foreign = await expectZeroWrites(
-      m.db,
-      events,
-      run({
-        selections: [{ docVersionId: 'not-a-member', selection: 'accepted' }],
-      }),
-    )
-    expect(foreign.code).toBe('doc-version-not-found')
-
-    // A refusal AFTER a valid selection in the same batch still writes nothing.
-    const mixed = await expectZeroWrites(
-      m.db,
-      events,
-      run({
-        selections: [
-          { docVersionId: a.id, selection: 'accepted' },
-          { docVersionId: b.id, selection: 'accepted' },
           { docVersionId: c.id, selection: 'accepted' },
         ],
-        comments: [
-          { docVersionId: c.id, commentText: 'bad', anchorRequest: { quote: 'absent text' } },
+      })
+      expect(result.batch).toEqual({
+        commentsAdded: 0,
+        commentsSkippedAsDuplicate: 0,
+        selectionsApplied: 3,
+      })
+
+      const outs = await m.db
+        .select()
+        .from(nodeRunOutputs)
+        .where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
+      const byPort = new Map(outs.map((o) => [o.portName, o]))
+      expect(byPort.get('accepted')?.content).toBe('cases/a.md\ncases/c.md')
+      expect(byPort.get('accepted')?.kind).toBe('list<path<md>>')
+      const meta = JSON.parse(byPort.get('approval_meta')!.content) as Record<string, unknown>
+      expect(meta).toMatchObject({
+        decision: 'approved',
+        itemCount: 3,
+        acceptedCount: 2,
+        acceptedItemIndices: [0, 2],
+        reviewIteration: 0,
+      })
+
+      const rows = await m.db
+        .select()
+        .from(docVersions)
+        .where(eq(docVersions.taskId, m.taskId))
+        .orderBy(asc(docVersions.itemIndex))
+      expect(rows.map((r) => [r.selection, r.selectionStale, r.decision])).toEqual([
+        ['accepted', false, 'approved'],
+        ['not_accepted', false, 'approved'],
+        ['accepted', false, 'approved'],
+      ])
+      const run = (await m.db.select().from(nodeRuns).where(eq(nodeRuns.id, m.reviewRunId)))[0]!
+      expect(run.status).toBe('done')
+      expect(events.types.filter((t) => t === 'review.selection_changed').length).toBe(3)
+      expect(events.types.at(-1)).toBe('review.decision_made')
+    })
+
+    test('list<markdown>: the accepted bodies are joined in item order', async () => {
+      m = await buildMulti('list<markdown>')
+      const [a, b, c] = m.docs as [
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+      ]
+      await submitReviewDecision({
+        db: m.db,
+        appHome: m.appHome,
+        nodeRunId: m.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        selections: [
+          { docVersionId: c.id, selection: 'accepted' },
+          { docVersionId: a.id, selection: 'not_accepted' },
+          { docVersionId: b.id, selection: 'accepted' },
         ],
-      }),
-    )
-    expect(mixed.code).toBe('review-anchor-not-found')
-    expect(m.docs.map((d) => d.selection)).toEqual(['unselected', 'unselected', 'unselected'])
+      })
+      const outs = await m.db
+        .select()
+        .from(nodeRunOutputs)
+        .where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
+      const accepted = outs.find((o) => o.portName === 'accepted')!
+      expect(accepted.kind).toBe('list<markdown>')
+      expect(accepted.content).toBe(
+        joinMarkdownDocs([bodyFor('cases/b.md'), bodyFor('cases/c.md')]),
+      )
+      const meta = JSON.parse(outs.find((o) => o.portName === 'approval_meta')!.content) as {
+        acceptedItemIndices: number[]
+      }
+      expect(meta.acceptedItemIndices).toEqual([1, 2])
+    })
+
+    test('a stale inherited selection re-judged in the batch is no longer stale', async () => {
+      m = await buildMulti('list<path<md>>')
+      const [a, b, c] = m.docs as [
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+      ]
+      await m.db
+        .update(docVersions)
+        .set({ selection: 'accepted', selectionStale: true })
+        .where(eq(docVersions.id, a.id))
+      await submitReviewDecision({
+        db: m.db,
+        appHome: m.appHome,
+        nodeRunId: m.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        selections: [
+          { docVersionId: a.id, selection: 'accepted' },
+          { docVersionId: b.id, selection: 'not_accepted' },
+          { docVersionId: c.id, selection: 'not_accepted' },
+        ],
+      })
+      const rowA = (await m.db.select().from(docVersions).where(eq(docVersions.id, a.id)))[0]!
+      expect(rowA.selectionStale).toBe(false)
+      const accepted = (
+        await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
+      ).find((o) => o.portName === 'accepted')!
+      expect(accepted.content).toBe('cases/a.md')
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // AC-14 — every refusal is a 4xx with zero writes
+  // ---------------------------------------------------------------------------
+
+  describe('RFC-326 AC-14 — refusals write nothing (six surfaces + WS count)', () => {
+    let f: SingleFixture
+    let m: MultiFixture
+    let events: ReturnType<typeof countTaskEvents>
+    afterEach(() => {
+      events?.stop()
+      f?.cleanup()
+      m?.cleanup()
+    })
+
+    async function expectZeroWrites(
+      db: ProviderNeutralDatabase,
+      ev: ReturnType<typeof countTaskEvents>,
+      run: () => Promise<unknown>,
+    ): Promise<Refusal> {
+      const before = await snapshot(db)
+      const eventsBefore = ev.count()
+      const refusal = await refusalOf(run)
+      expect(await snapshot(db)).toEqual(before)
+      expect(ev.count()).toBe(eventsBefore)
+      return refusal
+    }
+
+    test('single-document: bad anchors, stale iteration, non-member, fence, terminal task', async () => {
+      f = await buildSingle()
+      events = countTaskEvents(f.taskId)
+      const base: SubmitReviewDecisionArgs = {
+        db: f.db,
+        appHome: f.appHome,
+        nodeRunId: f.reviewRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }
+      const run = (extra: Partial<SubmitReviewDecisionArgs>) => () =>
+        submitReviewDecision({ ...base, ...extra })
+
+      const notFound = await expectZeroWrites(
+        f.db,
+        events,
+        run({
+          comments: [
+            { commentText: 'ok', anchorRequest: { quote: 'export job' } },
+            { commentText: 'bad', anchorRequest: { quote: 'never in the document' } },
+          ],
+        }),
+      )
+      expect(notFound.status).toBe(422)
+      expect(notFound.code).toBe('review-anchor-not-found')
+      expect(notFound.message.startsWith('comments[1]: ')).toBe(true)
+      expect((notFound.details as { index: number }).index).toBe(1)
+
+      const ambiguous = await expectZeroWrites(
+        f.db,
+        events,
+        run({
+          comments: [{ commentText: 'x', anchorRequest: { quote: 'enum' } }],
+        }),
+      )
+      expect(ambiguous.code).toBe('review-anchor-ambiguous')
+      expect((ambiguous.details as { candidates: unknown[] }).candidates.length).toBe(2)
+
+      const both = await expectZeroWrites(
+        f.db,
+        events,
+        run({
+          comments: [
+            {
+              commentText: 'x',
+              anchor: webAnchor(SINGLE_BODY, 'enum'),
+              anchorRequest: { quote: 'enum' },
+            },
+          ],
+        }),
+      )
+      expect(both.code).toBe('review-comment-invalid')
+      expect(both.status).toBe(422)
+
+      const webMissing = await expectZeroWrites(
+        f.db,
+        events,
+        run({
+          comments: [
+            {
+              commentText: 'x',
+              anchor: { ...webAnchor(SINGLE_BODY, 'enum'), selectedText: 'nope-nope' },
+            },
+          ],
+        }),
+      )
+      expect(webMissing.code).toBe('anchor-selection-not-found')
+      expect(webMissing.status).toBe(422)
+
+      const selectionOnSingle = await expectZeroWrites(
+        f.db,
+        events,
+        run({
+          selections: [{ docVersionId: f.dvId, selection: 'accepted' }],
+        }),
+      )
+      expect(selectionOnSingle.code).toBe('review-not-multi-doc')
+      expect(selectionOnSingle.status).toBe(409)
+
+      const unknownTarget = await expectZeroWrites(
+        f.db,
+        events,
+        run({
+          selections: [{ docVersionId: 'nope', selection: 'accepted' }],
+        }),
+      )
+      expect(unknownTarget.code).toBe('doc-version-not-found')
+      expect(unknownTarget.status).toBe(404)
+
+      const stale = await expectZeroWrites(f.db, events, run({ expectedReviewIteration: 7 }))
+      expect(stale.code).toBe('review-iteration-mismatch')
+      expect(stale.status).toBe(409)
+
+      const stranger = await expectZeroWrites(f.db, events, run({ actor: actorFor(f.strangerId) }))
+      expect(stranger.code).toBe('not-task-member')
+      expect(stranger.status).toBe(403)
+
+      await f.db
+        .update(tasks)
+        .set({ sourceTerminationFence: 'closed' })
+        .where(eq(tasks.id, f.taskId))
+      const fenced = await expectZeroWrites(f.db, events, run({}))
+      expect(fenced.code).toBe('task-source-terminal-closed')
+      expect(fenced.status).toBe(409)
+      await f.db.update(tasks).set({ sourceTerminationFence: null }).where(eq(tasks.id, f.taskId))
+
+      await f.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, f.taskId))
+      const terminal = await expectZeroWrites(f.db, events, run({}))
+      expect(terminal.code).toBe('task-terminal')
+      expect(terminal.status).toBe(409)
+      await f.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, f.taskId))
+
+      // The fixture is still decidable afterwards — the refusals really were dry.
+      const ok = await submitReviewDecision({
+        ...base,
+        actor: actorFor(f.memberId),
+        comments: [{ commentText: 'fine', anchorRequest: { quote: 'export job' } }],
+      })
+      expect(ok.batch?.commentsAdded).toBe(1)
+    })
+
+    test('multi-document: unnamed document, foreign / decided target, incomplete approve', async () => {
+      m = await buildMulti('list<path<md>>')
+      events = countTaskEvents(m.taskId)
+      const [a, b, c] = m.docs as [
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+      ]
+      const base: SubmitReviewDecisionArgs = {
+        db: m.db,
+        appHome: m.appHome,
+        nodeRunId: m.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }
+      const run = (extra: Partial<SubmitReviewDecisionArgs>) => () =>
+        submitReviewDecision({ ...base, ...extra })
+
+      const unnamed = await expectZeroWrites(
+        m.db,
+        events,
+        run({
+          selections: [
+            { docVersionId: a.id, selection: 'accepted' },
+            { docVersionId: b.id, selection: 'accepted' },
+            { docVersionId: c.id, selection: 'accepted' },
+          ],
+          comments: [{ commentText: 'which doc?', anchorRequest: { quote: 'steps' } }],
+        }),
+      )
+      expect(unnamed.code).toBe('review-doc-version-required')
+      expect(unnamed.status).toBe(422)
+      expect((unnamed.details as { index: number }).index).toBe(0)
+
+      const incomplete = await expectZeroWrites(
+        m.db,
+        events,
+        run({
+          selections: [
+            { docVersionId: a.id, selection: 'accepted' },
+            { docVersionId: b.id, selection: 'not_accepted' },
+          ],
+        }),
+      )
+      expect(incomplete.code).toBe('review-selection-incomplete')
+      expect(incomplete.status).toBe(409)
+
+      const foreign = await expectZeroWrites(
+        m.db,
+        events,
+        run({
+          selections: [{ docVersionId: 'not-a-member', selection: 'accepted' }],
+        }),
+      )
+      expect(foreign.code).toBe('doc-version-not-found')
+
+      // A refusal AFTER a valid selection in the same batch still writes nothing.
+      const mixed = await expectZeroWrites(
+        m.db,
+        events,
+        run({
+          selections: [
+            { docVersionId: a.id, selection: 'accepted' },
+            { docVersionId: b.id, selection: 'accepted' },
+            { docVersionId: c.id, selection: 'accepted' },
+          ],
+          comments: [
+            { docVersionId: c.id, commentText: 'bad', anchorRequest: { quote: 'absent text' } },
+          ],
+        }),
+      )
+      expect(mixed.code).toBe('review-anchor-not-found')
+      expect(m.docs.map((d) => d.selection)).toEqual(['unselected', 'unselected', 'unselected'])
+    })
   })
 })
 
@@ -905,159 +941,170 @@ describe('RFC-326 AC-14 — refusals write nothing (six surfaces + WS count)', (
 // AC-14 over REST — the wire shape and the schema-level refusals
 // ---------------------------------------------------------------------------
 
-describe('RFC-326 AC-14 — POST /api/reviews/:id/decision with a batch', () => {
-  let m: MultiFixture
-  let f: SingleFixture
-  let events: ReturnType<typeof countTaskEvents>
-  let previousAppHome: string | undefined
-  beforeEach(() => {
-    previousAppHome = process.env.AGENT_WORKFLOW_HOME
-  })
-  afterEach(() => {
-    events?.stop()
-    m?.cleanup()
-    f?.cleanup()
-    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-  })
-
-  async function post(db: DbClient, path: string, body: unknown) {
-    const app = createApp({
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db,
+describeEachProviderHttpApplication(
+  'RFC-326 AC-14 — POST /api/reviews/:id/decision with a batch（双引擎）',
+  {
+    tempPrefix: 'aw-rfc326-batch-http-',
+    token: 'tok',
+    opencodeVersion: '1.14.99',
+    dbVersion: 1,
+  },
+  (scope) => {
+    let m: MultiFixture
+    let f: SingleFixture
+    let events: ReturnType<typeof countTaskEvents>
+    beforeEach(() => {
+      seedFixture(scope.harness)
     })
-    const res = await app.fetch(
-      new Request(`http://localhost${path}`, {
-        method: 'POST',
-        headers: HEADERS,
-        body: JSON.stringify(body),
-      }),
-    )
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
-  }
-
-  test('selections + comments land in one request; the response carries the counters', async () => {
-    // The HTTP route returns the durable continuation receipt; the scheduler
-    // wake itself remains outside this response contract.
-    m = await buildMulti('list<path<md>>', 'running')
-    process.env.AGENT_WORKFLOW_HOME = m.appHome
-    events = countTaskEvents(m.taskId)
-    const [a, b, c] = m.docs as [
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-      typeof docVersions.$inferSelect,
-    ]
-    const { status, json } = await post(m.db, `/api/reviews/${m.reviewRunId}/decision`, {
-      decision: 'approved',
-      reviewIteration: 0,
-      selections: [
-        { docVersionId: a.id, selection: 'accepted' },
-        { docVersionId: b.id, selection: 'not_accepted' },
-        { docVersionId: c.id, selection: 'not_accepted' },
-      ],
-      comments: [
-        { docVersionId: b.id, quote: 'steps for cases/b.md', commentText: 'why b is out' },
-        { docVersionId: b.id, quote: 'steps for cases/b.md', commentText: 'why b is out' },
-      ],
+    afterEach(() => {
+      events?.stop()
+      m?.cleanup()
+      f?.cleanup()
     })
-    expect(status).toBe(200)
-    expect(json).toMatchObject({
-      ok: true,
-      taskId: m.taskId,
-      reviewIteration: 0,
-      receipt: {
-        gate: { kind: 'review', ref: `review:${m.reviewRunId}` },
-        gateRevision: 2,
-        replayed: false,
-      },
-      commentsAdded: 1,
-      commentsSkippedAsDuplicate: 1,
-      selectionsApplied: 3,
-    })
-    expect(json.resume).toBeUndefined()
-    expect(json.resumeRequired).toBeUndefined()
-    const accepted = (
-      await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
-    ).find((o) => o.portName === 'accepted')!
-    expect(accepted.content).toBe('cases/a.md')
-    const rowB = (await m.db.select().from(docVersions).where(eq(docVersions.id, b.id)))[0]!
-    expect(
-      (JSON.parse(rowB.commentsJson) as Array<{ commentText: string }>).map((x) => x.commentText),
-    ).toEqual(['why b is out'])
-  })
 
-  test('schema refusals (duplicate docVersionId / oversized batch / both anchor forms) are 422 with zero writes', async () => {
-    m = await buildMulti('list<path<md>>', 'running')
-    process.env.AGENT_WORKFLOW_HOME = m.appHome
-    events = countTaskEvents(m.taskId)
-    const a = m.docs[0]!
-    const before = await snapshot(m.db)
-    const bodies: unknown[] = [
-      {
-        decision: 'approved',
+    async function post(app: Hono, path: string, body: unknown) {
+      const res = await app.fetch(
+        new Request(`http://localhost${path}`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify(body),
+        }),
+      )
+      return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    }
+
+    test('selections + comments land in one request; the response carries the counters', async () => {
+      // The HTTP route returns the durable continuation receipt; the scheduler
+      // wake itself remains outside this response contract.
+      const application = await scope.open()
+      m = await buildMulti('list<path<md>>', 'running', application.appHome)
+      events = countTaskEvents(m.taskId)
+      const [a, b, c] = m.docs as [
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+        typeof docVersions.$inferSelect,
+      ]
+      const { status, json } = await post(
+        application.app,
+        `/api/reviews/${m.reviewRunId}/decision`,
+        {
+          decision: 'approved',
+          reviewIteration: 0,
+          selections: [
+            { docVersionId: a.id, selection: 'accepted' },
+            { docVersionId: b.id, selection: 'not_accepted' },
+            { docVersionId: c.id, selection: 'not_accepted' },
+          ],
+          comments: [
+            { docVersionId: b.id, quote: 'steps for cases/b.md', commentText: 'why b is out' },
+            { docVersionId: b.id, quote: 'steps for cases/b.md', commentText: 'why b is out' },
+          ],
+        },
+      )
+      expect(status).toBe(200)
+      expect(json).toMatchObject({
+        ok: true,
+        taskId: m.taskId,
         reviewIteration: 0,
-        selections: [
-          { docVersionId: a.id, selection: 'accepted' },
-          { docVersionId: a.id, selection: 'not_accepted' },
-        ],
-      },
-      {
-        decision: 'approved',
-        reviewIteration: 0,
-        comments: Array.from({ length: 201 }, () => ({
-          docVersionId: a.id,
-          quote: 'steps',
-          commentText: 'x',
-        })),
-      },
-      {
-        decision: 'approved',
-        reviewIteration: 0,
-        selections: Array.from({ length: 501 }, () => ({
-          docVersionId: a.id,
-          selection: 'accepted',
-        })),
-      },
-      {
-        decision: 'iterated',
-        reviewIteration: 0,
-        comments: [
-          {
+        receipt: {
+          gate: { kind: 'review', ref: `review:${m.reviewRunId}` },
+          gateRevision: 2,
+          replayed: false,
+        },
+        commentsAdded: 1,
+        commentsSkippedAsDuplicate: 1,
+        selectionsApplied: 3,
+      })
+      expect(json.resume).toBeUndefined()
+      expect(json.resumeRequired).toBeUndefined()
+      const accepted = (
+        await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
+      ).find((o) => o.portName === 'accepted')!
+      expect(accepted.content).toBe('cases/a.md')
+      const rowB = (await m.db.select().from(docVersions).where(eq(docVersions.id, b.id)))[0]!
+      expect(
+        (JSON.parse(rowB.commentsJson) as Array<{ commentText: string }>).map((x) => x.commentText),
+      ).toEqual(['why b is out'])
+    })
+
+    test('schema refusals (duplicate docVersionId / oversized batch / both anchor forms) are 422 with zero writes', async () => {
+      const application = await scope.open()
+      m = await buildMulti('list<path<md>>', 'running', application.appHome)
+      events = countTaskEvents(m.taskId)
+      const a = m.docs[0]!
+      const before = await snapshot(m.db)
+      const bodies: unknown[] = [
+        {
+          decision: 'approved',
+          reviewIteration: 0,
+          selections: [
+            { docVersionId: a.id, selection: 'accepted' },
+            { docVersionId: a.id, selection: 'not_accepted' },
+          ],
+        },
+        {
+          decision: 'approved',
+          reviewIteration: 0,
+          comments: Array.from({ length: 201 }, () => ({
             docVersionId: a.id,
             quote: 'steps',
-            anchor: webAnchor(bodyFor('cases/a.md'), 'steps'),
-            commentText: 'both',
-          },
-        ],
-      },
-      { decision: 'rejected', reviewIteration: 0 },
-    ]
-    for (const body of bodies) {
-      const { status, json } = await post(m.db, `/api/reviews/${m.reviewRunId}/decision`, body)
-      expect(status).toBe(422)
-      expect(json.code).toBe('review-decision-invalid')
-    }
-    expect(await snapshot(m.db)).toEqual(before)
-    expect(events.count()).toBe(0)
-  })
-
-  test('service-level refusals surface with their own code over REST (single-document)', async () => {
-    f = await buildSingle('running')
-    process.env.AGENT_WORKFLOW_HOME = f.appHome
-    events = countTaskEvents(f.taskId)
-    const before = await snapshot(f.db)
-    const { status, json } = await post(f.db, `/api/reviews/${f.reviewRunId}/decision`, {
-      decision: 'iterated',
-      reviewIteration: 0,
-      comments: [{ quote: 'enum', commentText: 'ambiguous on purpose' }],
+            commentText: 'x',
+          })),
+        },
+        {
+          decision: 'approved',
+          reviewIteration: 0,
+          selections: Array.from({ length: 501 }, () => ({
+            docVersionId: a.id,
+            selection: 'accepted',
+          })),
+        },
+        {
+          decision: 'iterated',
+          reviewIteration: 0,
+          comments: [
+            {
+              docVersionId: a.id,
+              quote: 'steps',
+              anchor: webAnchor(bodyFor('cases/a.md'), 'steps'),
+              commentText: 'both',
+            },
+          ],
+        },
+        { decision: 'rejected', reviewIteration: 0 },
+      ]
+      for (const body of bodies) {
+        const { status, json } = await post(
+          application.app,
+          `/api/reviews/${m.reviewRunId}/decision`,
+          body,
+        )
+        expect(status).toBe(422)
+        expect(json.code).toBe('review-decision-invalid')
+      }
+      expect(await snapshot(m.db)).toEqual(before)
+      expect(events.count()).toBe(0)
     })
-    expect(status).toBe(422)
-    expect(json.code).toBe('review-anchor-ambiguous')
-    expect(String(json.message)).toContain('comments[0]:')
-    expect(await snapshot(f.db)).toEqual(before)
-    expect(events.count()).toBe(0)
-  })
-})
+
+    test('service-level refusals surface with their own code over REST (single-document)', async () => {
+      const application = await scope.open()
+      f = await buildSingle('running', application.appHome)
+      events = countTaskEvents(f.taskId)
+      const before = await snapshot(f.db)
+      const { status, json } = await post(
+        application.app,
+        `/api/reviews/${f.reviewRunId}/decision`,
+        {
+          decision: 'iterated',
+          reviewIteration: 0,
+          comments: [{ quote: 'enum', commentText: 'ambiguous on purpose' }],
+        },
+      )
+      expect(status).toBe(422)
+      expect(json.code).toBe('review-anchor-ambiguous')
+      expect(String(json.message)).toContain('comments[0]:')
+      expect(await snapshot(f.db)).toEqual(before)
+      expect(events.count()).toBe(0)
+    })
+  },
+)

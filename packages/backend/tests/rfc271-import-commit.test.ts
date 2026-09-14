@@ -15,17 +15,17 @@
 // 覆盖不变量：I6（CAS prepared→applying 之后、任何 commit 内核之前的二次校验 —— reuse 目标的 revalidateInTx）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
-import { describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { PACKAGE_SECRET_PLACEHOLDER } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { mcps, resourceBundleApplies, users, workgroups } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
@@ -33,10 +33,11 @@ import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePa
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { describeEachProvider } from './helpers/eachProvider'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
+let db: ProviderNeutralDatabase
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
 
 // 六类写权限齐全的普通用户。**默认给全**是因为绝大多数用例断言的不是权限，
@@ -245,702 +246,703 @@ danglingCallRefs: []
   ])
 
 const dirs: string[] = []
-function deps(db: DbClient) {
+function deps(db: ProviderNeutralDatabase) {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-commit-'))
   dirs.push(appHome)
   return { db, appHome, box }
 }
 
-const seedMcp = async (db: DbClient, owner: string, name: string): Promise<string> => {
+const seedMcp = async (
+  db: ProviderNeutralDatabase,
+  owner: string,
+  name: string,
+): Promise<string> => {
   const id = ulid()
-  await db
-    .insert(mcps)
-    .values({
-      id,
-      name,
-      description: 'local original',
-      type: 'remote',
-      config: JSON.stringify({ url: 'https://local.test/mcp' }),
-      enabled: true,
-      ownerUserId: owner,
-      visibility: 'public',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    .run()
+  await db.insert(mcps).values({
+    id,
+    name,
+    description: 'local original',
+    type: 'remote',
+    config: JSON.stringify({ url: 'https://local.test/mcp' }),
+    enabled: true,
+    ownerUserId: owner,
+    visibility: 'public',
+    createdAt: 1,
+    updatedAt: 1,
+  } as never)
   return id
 }
 
-const seedWorkgroup = async (db: DbClient, owner: string, name: string): Promise<string> => {
+const seedWorkgroup = async (
+  db: ProviderNeutralDatabase,
+  owner: string,
+  name: string,
+): Promise<string> => {
   const id = ulid()
-  await db
-    .insert(workgroups)
-    .values({
-      id,
-      name,
-      description: 'local original',
-      instructions: '',
-      mode: 'free_collab',
-      leaderMemberId: null,
-      shareOutputs: true,
-      directMessages: false,
-      blackboard: false,
-      maxRounds: 20,
-      completionGate: false,
-      clarifyBudget: 3,
-      fanOut: false,
-      ownerUserId: owner,
-      visibility: 'public',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    .run()
+  await db.insert(workgroups).values({
+    id,
+    name,
+    description: 'local original',
+    instructions: '',
+    mode: 'free_collab',
+    leaderMemberId: null,
+    shareOutputs: true,
+    directMessages: false,
+    blackboard: false,
+    maxRounds: 20,
+    completionGate: false,
+    clarifyBudget: 3,
+    fanOut: false,
+    ownerUserId: owner,
+    visibility: 'public',
+    createdAt: 1,
+    updatedAt: 1,
+  } as never)
   return id
 }
 
 const seedUser = async (
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   status: 'active' | 'disabled' | 'invited',
 ): Promise<void> => {
-  await db
-    .insert(users)
-    .values({
-      id,
-      username: id,
-      displayName: id,
-      role: 'user',
-      status,
-      passwordHash: 'x',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    .run()
+  await db.insert(users).values({
+    id,
+    username: id,
+    displayName: id,
+    role: 'user',
+    status,
+    passwordHash: 'x',
+    createdAt: 1,
+    updatedAt: 1,
+  } as never)
 }
 
-describe('基础：new 动作把包内资源建出来', () => {
-  test('本地无同名 ⇒ new，落库且归导入者', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
-    })
-    expect(receipt.applied).toHaveLength(1)
-    const row = db.select().from(mcps).get()
-    if (row === undefined) throw new Error('expected imported MCP row')
-    expect(row?.name).toBe('tools')
-    // 「谁导入的整体所有资源权限就归谁」。
-    expect(row?.ownerUserId).toBe('u1')
-    expect(row?.visibility).toBe('private')
-    expect(receipt.root).toEqual({
-      resourceType: 'mcp',
-      resourceId: row.id,
-      name: 'tools',
-      action: 'create',
-    })
-    // RFC-359 —— 两台 apply 引擎合一后，journal 里持久化的是引擎内部字段名 `operationId`；
-    // 用户看到的回执文档把它翻成 `opId`（`executionAdapter.ts` 的 `resourcePackageReceiptDocument`，
-    // 测试助手做同一次翻译）。所以这里比的是**同一份回执的两种命名**：把持久化那份翻一次再比，
-    // 断言仍然是「回给调用方的，与落进 journal 供重放的，是同一份」。
-    const persisted = JSON.parse(
-      db.select().from(resourceBundleApplies).get()!.receiptJson!,
-    ) as Record<string, unknown> & {
-      applied: (Record<string, unknown> & { operationId: string })[]
-    }
-    expect({
-      ...persisted,
-      applied: persisted.applied.map(({ operationId, ...rest }) => ({
-        opId: operationId,
-        ...rest,
-      })),
-    }).toEqual(receipt)
-  })
-})
-
-describe('① duplicate lookup **先于**过期检查', () => {
-  test('已 committed 的 importId 即使 token 早已过期，仍返回原 receipt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const importId = ulid()
-    // 造一个**已经过期**的 preview。
-    const preview = await buildPackagePreview(db, actor, pkg, {
-      box,
-      importId,
-      now: Date.now() - 60 * 60 * 1000,
-    })
-    // 先手工塞一条 committed journal，模拟「上次成功但响应丢了」。
-    const receiptValue = { journalId: 'J1', applied: [] }
-    db.insert(resourceBundleApplies)
-      .values({
-        id: 'J1',
-        scope: 'package',
-        key: importId,
-        actorUserId: 'u1',
-        state: 'committed',
-        receiptJson: JSON.stringify(receiptValue),
-        preparedArtifactsJson: '[]',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      .run()
-
-    const out = await commitResourcePackageForTest(deps(db), actorOf('u1', []), {
-      pkg,
-      previewToken: preview.previewToken,
-      // Replay is before mutable permissions and even decision completeness.
-      decisions: [],
-    })
-    // 过期检查若排在前面，这里会抛 package-preview-expired，用户看到错误而资源已存在。
-    expect(out).toEqual(receiptValue)
-  })
-
-  test('**首次** claim 且已过期 ⇒ 拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, {
-      box,
-      importId: ulid(),
-      now: Date.now() - 60 * 60 * 1000,
-    })
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-preview-expired')
-  })
-
-  test('相同 key 的其它 scope 不是 package 重放', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const importId = ulid()
-    const preview = await buildPackagePreview(db, actor, pkg, {
-      box,
-      importId,
-      now: Date.now() - 60 * 60 * 1000,
-    })
-    db.insert(resourceBundleApplies)
-      .values({
-        id: 'OTHER-SCOPE',
-        scope: 'intent',
-        key: importId,
-        actorUserId: 'u1',
-        state: 'committed',
-        receiptJson: JSON.stringify({ journalId: 'OTHER-SCOPE', applied: [] }),
-        preparedArtifactsJson: '[]',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      .run()
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-preview-expired')
-  })
-})
-
-describe('② / ③ 决策必须落在签名基线内，且服务端重算 allowedActions', () => {
-  test('伪造一个不在候选里的 targetId ⇒ 拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedMcp(db, 'u1', 'tools')
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: '01FORGED' }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-decision-unconfirmed')
-  })
-
-  test('**别人的资源没有 overwrite** —— 客户端硬提交也拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const foreign = await seedMcp(db, 'u-other', 'tools')
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    expect(preview.entries[0]?.allowedActions).not.toContain('overwrite')
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: foreign }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-decision-not-allowed')
-    // 别人那一行一个字节没变。
-    expect(db.select().from(mcps).where(eq(mcps.id, foreign)).get()?.description).toBe(
-      'local original',
-    )
-  })
-
-  test('缺决策的条目 ⇒ 拒绝（不静默跳过）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-decision-missing')
-  })
-
-  test('preview 后撤销资源写权限 ⇒ commit 按当前 actor 拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const previewActor = actorOf('u1')
-    const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
-
-    const err = await commitResourcePackageForTest(deps(db), actorOf('u1', []), {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string; details?: unknown },
-    )
-    expect(err).toMatchObject({
-      code: 'package-write-forbidden',
-      details: { missingPermissions: ['mcps:create'] },
-    })
-    expect(await db.select().from(resourceBundleApplies)).toHaveLength(0)
-  })
-
-  test('workflow author 权限在 preview 后被撤销 ⇒ commit 重新计算并拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(workflowPackageZip())
-    const previewActor = actorOf('u1', ['workflows:create', 'scripts:author'])
-    const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
-
-    const err = await commitResourcePackageForTest(deps(db), actorOf('u1', ['workflows:create']), {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'workflow-deploy', action: 'new' }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string; details?: unknown },
-    )
-    expect(err).toMatchObject({
-      code: 'package-write-forbidden',
-      details: { missingPermissions: ['scripts:author'] },
-    })
-  })
-})
-
-describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关', () => {
-  test('全 reuse 的包：目标在预检之后被改动 ⇒ 提交拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const target = await seedMcp(db, 'u1', 'tools')
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    // 预检之后、提交之前，目标被改了。
-    await db
-      .update(mcps)
-      .set({ config: JSON.stringify({ url: 'https://changed.test/mcp' }) })
-      .where(eq(mcps.id, target))
-      .run()
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    // `revalidateInTx` 留空的话，这个包一个 op 都没有 ⇒ 完全免检、静默通过。
-    expect(err?.code).toBe('package-selected-target-changed')
-  })
-
-  test('目标没变 ⇒ 全 reuse 的包正常通过（不误伤）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const target = await seedMcp(db, 'u1', 'tools')
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
-    })
-    // reuse 不产 op ⇒ receipt 为空，但**这一次导入确实发生过**（journal 落了 committed）。
-    expect(receipt.applied).toHaveLength(0)
-    expect(receipt.root).toEqual({
-      resourceType: 'mcp',
-      resourceId: target,
-      name: 'tools',
-      action: 'reuse',
-    })
-    expect(db.select().from(resourceBundleApplies).get()?.state).toBe('committed')
-    // 也没有多建一行。
-    expect(await db.select().from(mcps)).toHaveLength(1)
-  })
-
-  test('预检后目标变为不可见 ⇒ 与不存在一样拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const target = await seedMcp(db, 'u-other', 'tools')
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target)).run()
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-selected-target-gone')
-  })
-
-  test('root overwrite 改写为 external target，receipt 指向被更新行', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const target = await seedMcp(db, 'u1', 'tools')
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: target }],
-    })
-    expect(receipt.root).toEqual({
-      resourceType: 'mcp',
-      resourceId: target,
-      name: 'tools',
-      action: 'update',
-    })
-    expect(db.select().from(mcps).where(eq(mcps.id, target)).get()?.description).toBe(
-      'from package',
-    )
-  })
-})
-
-describe('external 引用不提供隐藏资源存在性预言机', () => {
-  test('不存在与存在但不可见返回同形拒绝', async () => {
-    const hiddenDb = createInMemoryDb(MIGRATIONS)
-    const target = await seedMcp(hiddenDb, 'u-other', 'private-tools')
-    await hiddenDb.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target)).run()
-    const zip = agentWithExternalMcpPackageZip(target)
-    const actor = actorOf('u1')
-
-    const hiddenPkg = await parseResourcePackage(zip)
-    const hiddenPreview = await buildPackagePreview(hiddenDb, actor, hiddenPkg, {
-      box,
-      importId: ulid(),
-    })
-    const hiddenError = await commitResourcePackageForTest(deps(hiddenDb), actor, {
-      pkg: hiddenPkg,
-      previewToken: hiddenPreview.previewToken,
-      decisions: [{ localSlug: 'agent-worker', action: 'new' }],
-    }).then(
-      () => null,
-      (error: unknown) => error as { code?: string; message?: string },
-    )
-
-    const absentDb = createInMemoryDb(MIGRATIONS)
-    const absentPkg = await parseResourcePackage(zip)
-    const absentPreview = await buildPackagePreview(absentDb, actor, absentPkg, {
-      box,
-      importId: ulid(),
-    })
-    const absentError = await commitResourcePackageForTest(deps(absentDb), actor, {
-      pkg: absentPkg,
-      previewToken: absentPreview.previewToken,
-      decisions: [{ localSlug: 'agent-worker', action: 'new' }],
-    }).then(
-      () => null,
-      (error: unknown) => error as { code?: string; message?: string },
-    )
-
-    expect(hiddenError).toEqual(absentError)
-    expect(hiddenError?.code).toBe('package-external-unresolved')
-  })
-})
-
-describe('⑤ human 映射只属于会落地的 workgroup', () => {
-  test('reuse 不要求映射，也不消费附带的重复/无效映射', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const target = await seedWorkgroup(db, 'u1', 'squad')
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'workgroup-squad', action: 'reuse', targetId: target }],
-      // 旧计划可能仍附带这些行。reuse 不写 roster，因此不查 user、不报 duplicate。
-      humanMemberMappings: [
-        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'missing-user' },
-        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'also-missing' },
-      ],
+// RFC-359 AC-6 —— 导入提交（preview 基线核对 / 重放 / reuse 复核 / human 映射 / 凭据投影）
+// 在 RFC-359 之后是「一份实现两个 provider 共用」：`commitResourcePackageForTest` 装的就是
+// 生产那条原子 apply。所以这一整组判据在两个引擎上各跑一遍。
+//
+// `databaseCount: 2` 只为「存在性预言机」那一条：它要的是**两个互相独立的库**——一个库里
+// 目标存在但不可见、另一个库里根本没有这一行——两边的拒绝必须逐字同形。harness 每个文件
+// 一个库、用例之间 TRUNCATE，单库拿不出「同一个 id 在另一个库里不存在」这个形状。
+describeEachProvider(
+  'RFC-271 导入提交（双引擎）',
+  (harness) => {
+    beforeEach(() => {
+      db = harness.db
     })
 
-    expect(receipt.applied).toHaveLength(0)
-    expect(await db.select().from(workgroups)).toHaveLength(1)
-  })
-
-  test('new 工作组缺少已确认的映射 ⇒ 拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-human-mapping-missing')
-  })
-
-  test('free_collab 的 null leader 经 lowering 归一后可成功新建', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedUser(db, 'active-user', 'active')
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
-      humanMemberMappings: [
-        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'active-user' },
-      ],
-    })
-
-    expect(receipt.root).toMatchObject({ resourceType: 'workgroup', action: 'create' })
-    expect(db.select().from(workgroups).get()?.leaderMemberId).toBeNull()
-  })
-
-  test('overwrite 工作组仍拒绝映射到非 active 用户', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const target = await seedWorkgroup(db, 'u1', 'squad')
-    await seedUser(db, 'disabled-user', 'disabled')
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'workgroup-squad', action: 'overwrite', targetId: target }],
-      humanMemberMappings: [
-        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'disabled-user' },
-      ],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-human-mapping-invalid')
-  })
-
-  test('基线外的映射即使没有任何 human 槽也不能凭空注入', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
-      humanMemberMappings: [{ workgroupSlug: 'workgroup-forged', username: 'alice', userId: null }],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-human-mapping-unconfirmed')
-  })
-
-  // 下面两条补的是 `resolveHumanMemberMappings` 里**只有拒绝分支、此前无用例**的两支。
-  // 仓规（RFC-224 事故沉淀）把「禁用 / 拒绝分支」与正向功能同等对待：一条没有测试的
-  // 拒绝分支，被改成 `continue` 也没人会发现。
-
-  test('同一席位给两条映射 ⇒ 拒绝（不能靠「后写覆盖」偷换目标）', async () => {
-    // 没有这道门时，`given.set(key, m)` 的后写覆盖语义会让客户端把同一席位提交两次、
-    // 由**最后一条**生效。UI 上只显示一次选择，用户以为自己绑的是第一条。
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedUser(db, 'u2', 'active')
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
-      humanMemberMappings: [
-        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'u1' },
-        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'u2' },
-      ],
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-human-mapping-duplicate')
-  })
-
-  test('正常路径不误伤：同工作组的**不同** username 各给一条映射 ⇒ 成功', async () => {
-    // 上一条的去重键必须是 `(workgroupSlug, username)` 而不是 `workgroupSlug`——
-    // 否则一个有两个人类席位的工作组永远导不进来。
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedUser(db, 'u2', 'active')
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const baseline = verifyPreviewToken(box, preview.previewToken).humanBaseline
-
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
-      humanMemberMappings: baseline.map((slot) => ({
-        workgroupSlug: slot.workgroupSlug,
-        username: slot.username,
-        userId: 'u2',
-      })),
-    })
-    expect(receipt.root).toMatchObject({ resourceType: 'workgroup', action: 'create' })
-  })
-
-  test('TTL 内旧 token 的 required 席位不能映射成 null（兼容分支也要有门）', async () => {
-    // 这一支**新 preview 已经产不出来**了（canonical schema 只允许 agent 当 leader，
-    // 于是不再产生 required human 槽），它保留是为了兼容「改判前签出、还在 TTL 内」
-    // 的 token。正因为正常路径打不到它，它更需要一条直接构造签名的测试——否则它被
-    // 删掉、或者条件写反，都要等到一个真实用户拿着旧 token 提交时才暴露。
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-    const verified = verifyPreviewToken(box, preview.previewToken)
-
-    // 复刻一个 required=true 的旧 token：其余字段逐字沿用，只把席位标成必填。
-    const legacyToken = signPreviewToken(box, {
-      importId: verified.importId,
-      actorUserId: verified.actorUserId,
-      packageDigest: verified.packageDigest,
-      expiresAt: verified.expiresAt,
-      baseline: verified.baseline,
-      humanBaseline: verified.humanBaseline.map((slot) => ({ ...slot, required: true })),
-    })
-
-    const err = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: legacyToken,
-      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
-      humanMemberMappings: verified.humanBaseline.map((slot) => ({
-        workgroupSlug: slot.workgroupSlug,
-        username: slot.username,
-        userId: null,
-      })),
-    }).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-human-mapping-required')
-  })
-})
-
-describe('⑥ secret inputs 只投影到会落地的资源', () => {
-  test('new 重命名后按 manifest 身份接收凭据，并写入实际目标', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(secretPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
-
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],
-      secretInputs: [
-        {
+    describe('基础：new 动作把包内资源建出来', () => {
+      test('本地无同名 ⇒ new，落库且归导入者', async () => {
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+        })
+        expect(receipt.applied).toHaveLength(1)
+        const row = await db.select().from(mcps).get()
+        if (row === undefined) throw new Error('expected imported MCP row')
+        expect(row?.name).toBe('tools')
+        // 「谁导入的整体所有资源权限就归谁」。
+        expect(row?.ownerUserId).toBe('u1')
+        expect(row?.visibility).toBe('private')
+        expect(receipt.root).toEqual({
           resourceType: 'mcp',
-          resourceName: 'tools',
-          field: 'config.env.TOKEN',
-          value: 'local-secret',
-        },
-      ],
+          resourceId: row.id,
+          name: 'tools',
+          action: 'create',
+        })
+        // RFC-359 —— 两台 apply 引擎合一后，journal 里持久化的是引擎内部字段名 `operationId`；
+        // 用户看到的回执文档把它翻成 `opId`（`executionAdapter.ts` 的 `resourcePackageReceiptDocument`，
+        // 测试助手做同一次翻译）。所以这里比的是**同一份回执的两种命名**：把持久化那份翻一次再比，
+        // 断言仍然是「回给调用方的，与落进 journal 供重放的，是同一份」。
+        const persisted = JSON.parse(
+          (await db.select().from(resourceBundleApplies).get())!.receiptJson!,
+        ) as Record<string, unknown> & {
+          applied: (Record<string, unknown> & { operationId: string })[]
+        }
+        expect({
+          ...persisted,
+          applied: persisted.applied.map(({ operationId, ...rest }) => ({
+            opId: operationId,
+            ...rest,
+          })),
+        }).toEqual(receipt)
+      })
     })
 
-    const row = db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
-    expect(JSON.parse(row?.config ?? '{}')).toMatchObject({ env: { TOKEN: 'local-secret' } })
-    expect(receipt.skippedSecrets).toBeUndefined()
-    expect(receipt.root?.name).toBe('tools-copy')
-  })
+    describe('① duplicate lookup **先于**过期检查', () => {
+      test('已 committed 的 importId 即使 token 早已过期，仍返回原 receipt', async () => {
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const importId = ulid()
+        // 造一个**已经过期**的 preview。
+        const preview = await buildPackagePreview(db, actor, pkg, {
+          box,
+          importId,
+          now: Date.now() - 60 * 60 * 1000,
+        })
+        // 先手工塞一条 committed journal，模拟「上次成功但响应丢了」。
+        const receiptValue = { journalId: 'J1', applied: [] }
+        await db.insert(resourceBundleApplies).values({
+          id: 'J1',
+          scope: 'package',
+          key: importId,
+          actorUserId: 'u1',
+          state: 'committed',
+          receiptJson: JSON.stringify(receiptValue),
+          preparedArtifactsJson: '[]',
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
 
-  test('optional credential left empty is omitted and recorded in the durable receipt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(secretPackageZip())
-    const actor = actorOf('u1')
-    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const out = await commitResourcePackageForTest(deps(db), actorOf('u1', []), {
+          pkg,
+          previewToken: preview.previewToken,
+          // Replay is before mutable permissions and even decision completeness.
+          decisions: [],
+        })
+        // 过期检查若排在前面，这里会抛 package-preview-expired，用户看到错误而资源已存在。
+        expect(out).toEqual(receiptValue)
+      })
 
-    const receipt = await commitResourcePackageForTest(deps(db), actor, {
-      pkg,
-      previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],
-      secretInputs: [
-        {
+      test('**首次** claim 且已过期 ⇒ 拒绝', async () => {
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, {
+          box,
+          importId: ulid(),
+          now: Date.now() - 60 * 60 * 1000,
+        })
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-preview-expired')
+      })
+
+      test('相同 key 的其它 scope 不是 package 重放', async () => {
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const importId = ulid()
+        const preview = await buildPackagePreview(db, actor, pkg, {
+          box,
+          importId,
+          now: Date.now() - 60 * 60 * 1000,
+        })
+        await db.insert(resourceBundleApplies).values({
+          id: 'OTHER-SCOPE',
+          scope: 'intent',
+          key: importId,
+          actorUserId: 'u1',
+          state: 'committed',
+          receiptJson: JSON.stringify({ journalId: 'OTHER-SCOPE', applied: [] }),
+          preparedArtifactsJson: '[]',
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-preview-expired')
+      })
+    })
+
+    describe('② / ③ 决策必须落在签名基线内，且服务端重算 allowedActions', () => {
+      test('伪造一个不在候选里的 targetId ⇒ 拒绝', async () => {
+        await seedMcp(db, 'u1', 'tools')
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: '01FORGED' }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-decision-unconfirmed')
+      })
+
+      test('**别人的资源没有 overwrite** —— 客户端硬提交也拒绝', async () => {
+        const foreign = await seedMcp(db, 'u-other', 'tools')
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        expect(preview.entries[0]?.allowedActions).not.toContain('overwrite')
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: foreign }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-decision-not-allowed')
+        // 别人那一行一个字节没变。
+        expect((await db.select().from(mcps).where(eq(mcps.id, foreign)).get())?.description).toBe(
+          'local original',
+        )
+      })
+
+      test('缺决策的条目 ⇒ 拒绝（不静默跳过）', async () => {
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-decision-missing')
+      })
+
+      test('preview 后撤销资源写权限 ⇒ commit 按当前 actor 拒绝', async () => {
+        const pkg = await parseResourcePackage(packageZip())
+        const previewActor = actorOf('u1')
+        const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
+
+        const err = await commitResourcePackageForTest(deps(db), actorOf('u1', []), {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string; details?: unknown },
+        )
+        expect(err).toMatchObject({
+          code: 'package-write-forbidden',
+          details: { missingPermissions: ['mcps:create'] },
+        })
+        expect(await db.select().from(resourceBundleApplies)).toHaveLength(0)
+      })
+
+      test('workflow author 权限在 preview 后被撤销 ⇒ commit 重新计算并拒绝', async () => {
+        const pkg = await parseResourcePackage(workflowPackageZip())
+        const previewActor = actorOf('u1', ['workflows:create', 'scripts:author'])
+        const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
+
+        const err = await commitResourcePackageForTest(
+          deps(db),
+          actorOf('u1', ['workflows:create']),
+          {
+            pkg,
+            previewToken: preview.previewToken,
+            decisions: [{ localSlug: 'workflow-deploy', action: 'new' }],
+          },
+        ).then(
+          () => null,
+          (e: unknown) => e as { code?: string; details?: unknown },
+        )
+        expect(err).toMatchObject({
+          code: 'package-write-forbidden',
+          details: { missingPermissions: ['scripts:author'] },
+        })
+      })
+    })
+
+    describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关', () => {
+      test('全 reuse 的包：目标在预检之后被改动 ⇒ 提交拒绝', async () => {
+        const target = await seedMcp(db, 'u1', 'tools')
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        // 预检之后、提交之前，目标被改了。
+        await db
+          .update(mcps)
+          .set({ config: JSON.stringify({ url: 'https://changed.test/mcp' }) })
+          .where(eq(mcps.id, target))
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        // `revalidateInTx` 留空的话，这个包一个 op 都没有 ⇒ 完全免检、静默通过。
+        expect(err?.code).toBe('package-selected-target-changed')
+      })
+
+      test('目标没变 ⇒ 全 reuse 的包正常通过（不误伤）', async () => {
+        const target = await seedMcp(db, 'u1', 'tools')
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
+        })
+        // reuse 不产 op ⇒ receipt 为空，但**这一次导入确实发生过**（journal 落了 committed）。
+        expect(receipt.applied).toHaveLength(0)
+        expect(receipt.root).toEqual({
           resourceType: 'mcp',
-          resourceName: 'tools',
-          field: 'config.env.TOKEN',
-          value: '',
-        },
-      ],
+          resourceId: target,
+          name: 'tools',
+          action: 'reuse',
+        })
+        expect((await db.select().from(resourceBundleApplies).get())?.state).toBe('committed')
+        // 也没有多建一行。
+        expect(await db.select().from(mcps)).toHaveLength(1)
+      })
+
+      test('预检后目标变为不可见 ⇒ 与不存在一样拒绝', async () => {
+        const target = await seedMcp(db, 'u-other', 'tools')
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target))
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-selected-target-gone')
+      })
+
+      test('root overwrite 改写为 external target，receipt 指向被更新行', async () => {
+        const target = await seedMcp(db, 'u1', 'tools')
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: target }],
+        })
+        expect(receipt.root).toEqual({
+          resourceType: 'mcp',
+          resourceId: target,
+          name: 'tools',
+          action: 'update',
+        })
+        expect((await db.select().from(mcps).where(eq(mcps.id, target)).get())?.description).toBe(
+          'from package',
+        )
+      })
     })
 
-    const row = db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
-    const stored = JSON.parse(row?.config ?? '{}') as { env?: Record<string, string> }
-    expect(stored.env?.TOKEN).toBeUndefined()
-    expect(JSON.stringify(stored)).not.toContain(PACKAGE_SECRET_PLACEHOLDER)
-    expect(receipt.skippedSecrets).toEqual([
-      { resourceType: 'mcp', resourceName: 'tools-copy', field: 'config.env.TOKEN' },
-    ])
-    const replayed = db
-      .select({ receiptJson: resourceBundleApplies.receiptJson })
-      .from(resourceBundleApplies)
-      .where(eq(resourceBundleApplies.id, receipt.journalId))
-      .get()
-    expect(JSON.parse(replayed?.receiptJson ?? '{}').skippedSecrets).toEqual(receipt.skippedSecrets)
-  })
-})
+    describe('external 引用不提供隐藏资源存在性预言机', () => {
+      test('不存在与存在但不可见返回同形拒绝', async () => {
+        // 两个**互相独立**的库：0 号里目标存在但不可见，1 号里这一行根本不存在。
+        // 同一个库做不出后者——判据要的正是「同一个 id，一边藏着、一边没有」。
+        const hiddenDb = harness.database(0).db
+        const absentDb = harness.database(1).db
+        const target = await seedMcp(hiddenDb, 'u-other', 'private-tools')
+        await hiddenDb.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target))
+        const zip = agentWithExternalMcpPackageZip(target)
+        const actor = actorOf('u1')
+
+        const hiddenPkg = await parseResourcePackage(zip)
+        const hiddenPreview = await buildPackagePreview(hiddenDb, actor, hiddenPkg, {
+          box,
+          importId: ulid(),
+        })
+        const hiddenError = await commitResourcePackageForTest(deps(hiddenDb), actor, {
+          pkg: hiddenPkg,
+          previewToken: hiddenPreview.previewToken,
+          decisions: [{ localSlug: 'agent-worker', action: 'new' }],
+        }).then(
+          () => null,
+          (error: unknown) => error as { code?: string; message?: string },
+        )
+
+        const absentPkg = await parseResourcePackage(zip)
+        const absentPreview = await buildPackagePreview(absentDb, actor, absentPkg, {
+          box,
+          importId: ulid(),
+        })
+        const absentError = await commitResourcePackageForTest(deps(absentDb), actor, {
+          pkg: absentPkg,
+          previewToken: absentPreview.previewToken,
+          decisions: [{ localSlug: 'agent-worker', action: 'new' }],
+        }).then(
+          () => null,
+          (error: unknown) => error as { code?: string; message?: string },
+        )
+
+        expect(hiddenError).toEqual(absentError)
+        expect(hiddenError?.code).toBe('package-external-unresolved')
+      })
+    })
+
+    describe('⑤ human 映射只属于会落地的 workgroup', () => {
+      test('reuse 不要求映射，也不消费附带的重复/无效映射', async () => {
+        const target = await seedWorkgroup(db, 'u1', 'squad')
+        const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'workgroup-squad', action: 'reuse', targetId: target }],
+          // 旧计划可能仍附带这些行。reuse 不写 roster，因此不查 user、不报 duplicate。
+          humanMemberMappings: [
+            { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'missing-user' },
+            { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'also-missing' },
+          ],
+        })
+
+        expect(receipt.applied).toHaveLength(0)
+        expect(await db.select().from(workgroups)).toHaveLength(1)
+      })
+
+      test('new 工作组缺少已确认的映射 ⇒ 拒绝', async () => {
+        const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-human-mapping-missing')
+      })
+
+      test('free_collab 的 null leader 经 lowering 归一后可成功新建', async () => {
+        await seedUser(db, 'active-user', 'active')
+        const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+          humanMemberMappings: [
+            { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'active-user' },
+          ],
+        })
+
+        expect(receipt.root).toMatchObject({ resourceType: 'workgroup', action: 'create' })
+        expect((await db.select().from(workgroups).get())?.leaderMemberId).toBeNull()
+      })
+
+      test('overwrite 工作组仍拒绝映射到非 active 用户', async () => {
+        const target = await seedWorkgroup(db, 'u1', 'squad')
+        await seedUser(db, 'disabled-user', 'disabled')
+        const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'workgroup-squad', action: 'overwrite', targetId: target }],
+          humanMemberMappings: [
+            { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'disabled-user' },
+          ],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-human-mapping-invalid')
+      })
+
+      test('基线外的映射即使没有任何 human 槽也不能凭空注入', async () => {
+        const pkg = await parseResourcePackage(packageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+          humanMemberMappings: [
+            { workgroupSlug: 'workgroup-forged', username: 'alice', userId: null },
+          ],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-human-mapping-unconfirmed')
+      })
+
+      // 下面两条补的是 `resolveHumanMemberMappings` 里**只有拒绝分支、此前无用例**的两支。
+      // 仓规（RFC-224 事故沉淀）把「禁用 / 拒绝分支」与正向功能同等对待：一条没有测试的
+      // 拒绝分支，被改成 `continue` 也没人会发现。
+
+      test('同一席位给两条映射 ⇒ 拒绝（不能靠「后写覆盖」偷换目标）', async () => {
+        // 没有这道门时，`given.set(key, m)` 的后写覆盖语义会让客户端把同一席位提交两次、
+        // 由**最后一条**生效。UI 上只显示一次选择，用户以为自己绑的是第一条。
+        await seedUser(db, 'u2', 'active')
+        const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+          humanMemberMappings: [
+            { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'u1' },
+            { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'u2' },
+          ],
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-human-mapping-duplicate')
+      })
+
+      test('正常路径不误伤：同工作组的**不同** username 各给一条映射 ⇒ 成功', async () => {
+        // 上一条的去重键必须是 `(workgroupSlug, username)` 而不是 `workgroupSlug`——
+        // 否则一个有两个人类席位的工作组永远导不进来。
+        await seedUser(db, 'u2', 'active')
+        const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const baseline = verifyPreviewToken(box, preview.previewToken).humanBaseline
+
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+          humanMemberMappings: baseline.map((slot) => ({
+            workgroupSlug: slot.workgroupSlug,
+            username: slot.username,
+            userId: 'u2',
+          })),
+        })
+        expect(receipt.root).toMatchObject({ resourceType: 'workgroup', action: 'create' })
+      })
+
+      test('TTL 内旧 token 的 required 席位不能映射成 null（兼容分支也要有门）', async () => {
+        // 这一支**新 preview 已经产不出来**了（canonical schema 只允许 agent 当 leader，
+        // 于是不再产生 required human 槽），它保留是为了兼容「改判前签出、还在 TTL 内」
+        // 的 token。正因为正常路径打不到它，它更需要一条直接构造签名的测试——否则它被
+        // 删掉、或者条件写反，都要等到一个真实用户拿着旧 token 提交时才暴露。
+        const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const verified = verifyPreviewToken(box, preview.previewToken)
+
+        // 复刻一个 required=true 的旧 token：其余字段逐字沿用，只把席位标成必填。
+        const legacyToken = signPreviewToken(box, {
+          importId: verified.importId,
+          actorUserId: verified.actorUserId,
+          packageDigest: verified.packageDigest,
+          expiresAt: verified.expiresAt,
+          baseline: verified.baseline,
+          humanBaseline: verified.humanBaseline.map((slot) => ({ ...slot, required: true })),
+        })
+
+        const err = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: legacyToken,
+          decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+          humanMemberMappings: verified.humanBaseline.map((slot) => ({
+            workgroupSlug: slot.workgroupSlug,
+            username: slot.username,
+            userId: null,
+          })),
+        }).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-human-mapping-required')
+      })
+    })
+
+    describe('⑥ secret inputs 只投影到会落地的资源', () => {
+      test('new 重命名后按 manifest 身份接收凭据，并写入实际目标', async () => {
+        const pkg = await parseResourcePackage(secretPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],
+          secretInputs: [
+            {
+              resourceType: 'mcp',
+              resourceName: 'tools',
+              field: 'config.env.TOKEN',
+              value: 'local-secret',
+            },
+          ],
+        })
+
+        const row = await db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
+        expect(JSON.parse(row?.config ?? '{}')).toMatchObject({ env: { TOKEN: 'local-secret' } })
+        expect(receipt.skippedSecrets).toBeUndefined()
+        expect(receipt.root?.name).toBe('tools-copy')
+      })
+
+      test('optional credential left empty is omitted and recorded in the durable receipt', async () => {
+        const pkg = await parseResourcePackage(secretPackageZip())
+        const actor = actorOf('u1')
+        const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+        const receipt = await commitResourcePackageForTest(deps(db), actor, {
+          pkg,
+          previewToken: preview.previewToken,
+          decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],
+          secretInputs: [
+            {
+              resourceType: 'mcp',
+              resourceName: 'tools',
+              field: 'config.env.TOKEN',
+              value: '',
+            },
+          ],
+        })
+
+        const row = await db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
+        // 这一行必须真的存在：`row` 为空时下面两条（TOKEN 缺席 / 不含占位符）会**空转变绿**，
+        // 正是 RFC-359 双引擎里「未 await 的 .get()」那种假绿。
+        expect(row).toBeDefined()
+        const stored = JSON.parse(row?.config ?? '{}') as { env?: Record<string, string> }
+        expect(stored.env?.TOKEN).toBeUndefined()
+        expect(JSON.stringify(stored)).not.toContain(PACKAGE_SECRET_PLACEHOLDER)
+        expect(receipt.skippedSecrets).toEqual([
+          { resourceType: 'mcp', resourceName: 'tools-copy', field: 'config.env.TOKEN' },
+        ])
+        const replayed = await db
+          .select({ receiptJson: resourceBundleApplies.receiptJson })
+          .from(resourceBundleApplies)
+          .where(eq(resourceBundleApplies.id, receipt.journalId))
+          .get()
+        expect(JSON.parse(replayed?.receiptJson ?? '{}').skippedSecrets).toEqual(
+          receipt.skippedSecrets,
+        )
+      })
+    })
+  },
+  { databaseCount: 2 },
+)
 
 describe('清理', () => {
   test('临时目录', () => {

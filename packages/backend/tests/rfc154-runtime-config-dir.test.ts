@@ -159,14 +159,14 @@ describeEachProvider('RFC-154 resolve — NULL → protocol default, overrides w
   test('create/update reject invalid values (service-level, not just the route)', async () => {
     const db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
-    expect(
+    await expect(
       createRuntime(runtimeRegistryPersistence(db), {
         name: 'bad1',
         protocol: 'opencode',
         configDirName: '../evil',
       }),
     ).rejects.toThrow()
-    expect(
+    await expect(
       createRuntime(runtimeRegistryPersistence(db), {
         name: 'bad2',
         protocol: 'opencode',
@@ -174,7 +174,7 @@ describeEachProvider('RFC-154 resolve — NULL → protocol default, overrides w
       }),
     ).rejects.toThrow()
     await createRuntime(runtimeRegistryPersistence(db), { name: 'ok', protocol: 'opencode' })
-    expect(
+    await expect(
       updateRuntime(runtimeRegistryPersistence(db), 'ok', {
         configDirEnv: 'OPENCODE_CONFIG_CONTENT',
       }),

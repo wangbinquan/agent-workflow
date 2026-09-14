@@ -733,7 +733,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).not.toContain('AppDeps')
     expect(route).toContain('directRequestAuthority(deps.directAuthority, actor)')
     expect(route).toContain('const receipt = await deps.intentApply.apply({')
-    expect(composition).toContain('createIntentApplyResourceSession(\n')
+    // RFC-359 AC-12：原判据写的是 `'createIntentApplyResourceSession(\n'`——它锁的其实是
+    // **prettier 的折行**，不是契约。标识符去掉 `Postgresql` 前缀后短了 10 个字符，整行放得下
+    // 100 列，prettier 就把参数收成一行，判据随之变红，而契约一个字没改。
+    // 改成剥掉空白后比对**实参表**：锁的是「三个实参、按这个顺序」，对折行免疫且比原判据更强。
+    expect(composition.replace(/\s+/g, '')).toContain(
+      'createIntentApplyResourceSession(options,input.aclIdentities,factory.create(options))',
+    )
   })
 
   test('T4c integration triggers consume five snapshots through exact direct and delegated pairs', () => {

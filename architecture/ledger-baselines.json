@@ -517,15 +517,15 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 358,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎"
+      "baseline": 351,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）"
     },
     {
       "id": "rfc359-w5-test-engine-open-migration-debt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "OPEN_MIGRATION_DEBT",
-      "baseline": 52,
-      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件。RFC-359 AC-6（plan §5ek）53 → 52：`workflows` 销账"
+      "baseline": 45,
+      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件。RFC-359 AC-6（plan §5ek）53 → 52：`workflows` 销账。RFC-359 AC-6（plan §5el）52 → 44：第四波再迁 7 个文件"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -886,7 +886,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:effff43065672967096a6e115ebfd31a49735d140f6ea61319708dfd4c0251bc",
+    "sourceDigest": "sha256:ca7060fb7df71e92d64135eae37c1853b1a1b5276510a03a76a38f1c6aedb15a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a6f9e9e89d995b05bd64011263f5b4ccaa267f29",
-    "contentDigest": "sha256:885ab684e781d8f64ffd415f3cc0eff9553e2d13a75a534f65a98deca37dac2d",
+    "currentSnapshotSha": "ba10f07205fca9caa73752fc648fe9e63fb38293",
+    "contentDigest": "sha256:2261124001170b86db5b178c4c1f760deabf0f9b3092725fcee1978bac4813c3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

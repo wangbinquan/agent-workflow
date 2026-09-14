@@ -384,6 +384,40 @@
 顺带：注入写要发在**被拦那次读所在的句柄**上，不然 PG 上两条连接互相看不见（还会撞
 SERIALIZABLE 冲突）。
 
+### 第四种（与引擎无关，但同一次排查里捞出来的）：`expect(promise).rejects` 忘了 `await`
+
+```ts
+expect(createRuntime(persistence, { configDirName: '../evil' })).rejects.toThrow()  // 永不执行
+await expect(...).rejects.toThrow()                                                // 正确
+```
+
+不 `await` 的 `.rejects` / `.resolves` 返回一个没人等的 promise，**断言根本不会跑**，
+`bun test` 连 `expect()` 计数都不会加一。症状是：用例名字写着「拒绝非法值」，实际一个字都没验。
+`rfc154-runtime-config-dir` 的 `create/update reject invalid values` 三条全是这样——
+补上 `await` 之后三条都过，说明生产行为一直是对的，**只是从来没被测到**。
+
+机械查法（跨多行的写法用逐行 grep 抓不到，要回溯到语句头）：
+
+```
+python3 - <<'EOF'
+import os, re
+for root,_,files in os.walk('tests'):
+    for fn in (f for f in files if f.endswith('.ts')):
+        p=os.path.join(root,fn); lines=open(p).read().split('\n')
+        for i,l in enumerate(lines):
+            if '.rejects' not in l and '.resolves' not in l: continue
+            j=i
+            while j>=0 and i-j<=12:
+                if re.match(r'^\s*(await\s+)?expect\(', lines[j]): break
+                j-=1
+            if j>=0 and lines[j].strip().startswith('expect('):
+                print(f'{p}:{j+1}')
+EOF
+```
+
+回溯是必须的：真正的写法常常是 `expect(` 单独一行、`).rejects.toThrow()` 在好几行之后，
+两者不在同一行上，单行 grep 一条都抓不到。
+
 ## 本地自查要跑**仓库自己的脚本**，别手搓文件清单（2026-09-14 连撞两次）
 
 两次主干红，同一个根因：自查命令**看上去绿，实际什么都没查**。

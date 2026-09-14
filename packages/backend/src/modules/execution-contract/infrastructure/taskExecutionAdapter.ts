@@ -1,3 +1,4 @@
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   WorkflowDefinitionSchema,
   migrateWorkflowDefinitionToLatest,
@@ -12,7 +13,6 @@ import { join, resolve, sep } from 'node:path'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 
-import type { DbClient } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { getAgentById } from '@/services/agent'
@@ -162,10 +162,10 @@ function createExecutionContractResourceAdapterFromLookup(
   }
 }
 
-/** SQLite compatibility adapter. The legacy service projection stays the
- * behavior oracle while PostgreSQL uses the same closed lookup contract. */
+/** RFC-359 AC-6：两个 provider 共用这一份。体内只调 `getAgentById` / `getWorkflow`，
+ * 两者早就是中立签名且都被 await——原来的 `DbClient` 标注纯粹是编译期的，没有运行期含义。 */
 export function createExecutionContractResourceAdapter(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   implicitAgentDeclarations: (input: {
     readonly frontmatterExtra: Readonly<Record<string, unknown>>
   }) => readonly { readonly contractId: string; readonly version: number }[] = () => [],

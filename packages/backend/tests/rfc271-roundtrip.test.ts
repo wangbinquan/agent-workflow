@@ -25,13 +25,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { stringify as stringifyYaml } from 'yaml'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
   mcps,
@@ -52,7 +51,6 @@ import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePa
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
 
 const WRITE_ALL = ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups'].flatMap(
@@ -88,8 +86,13 @@ async function createInstance<TDb extends ProviderNeutralDatabase>(
   return { db, appHome }
 }
 
-async function makeInstance(): Promise<{ db: DbClient; appHome: string }> {
-  return createInstance(() => createInMemoryDb(MIGRATIONS))
+/**
+ * 「再要一个实例」。每次调用取的是 harness 的**下一个独立真库**（`databaseCount` 个，用例
+ * 之间各自 TRUNCATE 回迁移后的快照），因此同一条用例里的 src / dst 仍然是两台互不可见的机器
+ * ——往返判据全靠这一点。beforeEach 现绑；在用例体外调用会显式报错而不是拿到半个库。
+ */
+let makeInstance: () => Promise<{ db: ProviderNeutralDatabase; appHome: string }> = () => {
+  throw new Error('makeInstance 只能在用例体内调用（describeEachProvider 的 beforeEach 之后）')
 }
 
 // 二进制辅助文件：utf-8 解码会破坏它，所以它同时锁住「字节原样」。
@@ -211,298 +214,303 @@ async function seedSource(
   return { skillId: skill.id, wg }
 }
 
-function registerProviderInstanceCase(
-  name: string,
-  databaseCount: number,
-  register: (makeInstance: () => Promise<{ db: ProviderNeutralDatabase; appHome: string }>) => void,
-): void {
-  describeEachProvider(
-    name,
-    (harness) => {
-      describe('instance lifetime', () => {
-        let nextDatabase = 0
-        const homes: string[] = []
-        beforeEach(() => {
-          nextDatabase = 0
-        })
-        afterEach(() => {
-          for (const home of homes.splice(0)) removeTempDirSync(home)
-        })
-        register(() =>
-          createInstance(
-            () => harness.database(nextDatabase++).db,
-            (home) => homes.push(home),
-          ),
+// RFC-359 AC-6 —— 整个往返（导出 / 解析 / 预检 / 提交）在 RFC-359 之后是「一份实现两个
+// provider 共用」，所以这一整组判据在两个引擎上各跑一遍。
+//
+// **一个注册面，不是六个**：`describeEachProvider` 每注册一次就要在 PostgreSQL 上现建一个库
+// 并跑一次完整迁移。此前这个文件靠一个 `registerProviderInstanceCase` 把五条用例各自注册成
+// 一个独立套件，代价是五份建库 + 迁移，而且同一个文件里出现六个同名层级。合并成一个块之后
+// 只剩一份。
+//
+// `databaseCount: 4` 取的是**单条用例里同时活着的实例数上限**：绝大多数用例是 src + dst 两台，
+// 「预检查询次数与 built-in 数量无关」那条要四台（两个源实例各出一个包、两个空目标实例各数
+// 一次查询）。`makeInstance()` 顺序取用，每条用例开头归零。
+describeEachProvider(
+  'RFC-271 资源包往返（双引擎）',
+  (harness) => {
+    let nextDatabase = 0
+    const homes: string[] = []
+    beforeEach(() => {
+      nextDatabase = 0
+      makeInstance = () =>
+        createInstance(
+          () => harness.database(nextDatabase++).db,
+          (home) => homes.push(home),
         )
-      })
-    },
-    { databaseCount },
-  )
-}
+    })
+    // 临时目录在**这里**兜底回收：用例体内的 finally 在断言先红时不一定跑得到，
+    // 而 `removeTempDirSync` 是幂等的（force + recursive），两处都删不会互相打架。
+    afterEach(() => {
+      for (const home of homes.splice(0)) removeTempDirSync(home)
+    })
 
-describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () => {
-  test('技能的文件树整棵过去了（含二进制，字节原样）', async () => {
-    const src = await makeInstance()
-    const { skillId } = await seedSource(src.db, src.appHome)
-    try {
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'skill', id: skillId },
-        { appHome: src.appHome },
-      )
+    describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () => {
+      test('技能的文件树整棵过去了（含二进制，字节原样）', async () => {
+        const src = await makeInstance()
+        const { skillId } = await seedSource(src.db, src.appHome)
+        try {
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'skill', id: skillId },
+            { appHome: src.appHome },
+          )
 
-      // ① zip 里真的有文件（P1-3 的直接反例：这里曾经只有三个固定条目）。
-      const entries = decodeZip(pkg.zip)
-      const paths = entries.map((e) => e.path).sort()
-      expect(paths).toContain('skills/skill-helper/files/ref.md')
-      expect(paths).toContain('skills/skill-helper/files/logo.png')
-      // SKILL.md 结构化进 payload，不重复打包一份。
-      expect(paths).not.toContain('skills/skill-helper/files/SKILL.md')
+          // ① zip 里真的有文件（P1-3 的直接反例：这里曾经只有三个固定条目）。
+          const entries = decodeZip(pkg.zip)
+          const paths = entries.map((e) => e.path).sort()
+          expect(paths).toContain('skills/skill-helper/files/ref.md')
+          expect(paths).toContain('skills/skill-helper/files/logo.png')
+          // SKILL.md 结构化进 payload，不重复打包一份。
+          expect(paths).not.toContain('skills/skill-helper/files/SKILL.md')
 
-      // ② 导入到**另一个实例**。
-      const dst = await makeInstance()
-      try {
-        const parsed = await parseResourcePackage(pkg.zip)
-        const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-          box,
-          importId: ulid(),
-        })
-        await commitResourcePackageForTest(
-          { db: dst.db, appHome: dst.appHome, box },
-          actorOf('u1'),
-          {
-            pkg: parsed,
-            previewToken: preview.previewToken,
-            decisions: preview.entries.map((e) => ({
-              localSlug: e.localSlug,
-              action: 'new' as const,
-              finalName: e.suggestedName,
-            })),
-          },
-        )
-
-        const landed = dst.db.select().from(skills).where(eq(skills.name, 'helper')).get()
-        expect(landed).toBeDefined()
-        const filesDir = join(dst.appHome, 'skills', landed!.id, 'files')
-
-        // ③ 正文与 frontmatter 过来了（曾经恒为空字符串）。
-        const skillMd = readFileSync(join(filesDir, 'SKILL.md'), 'utf-8')
-        expect(skillMd).toContain('body text')
-        expect(skillMd).toContain('allowed-tools')
-
-        // ④ 辅助文件逐字节相同 —— 二进制那条尤其重要：utf-8 往返会破坏它。
-        expect(readFileSync(join(filesDir, 'ref.md'), 'utf-8')).toBe('# aux\n')
-        expect(new Uint8Array(readFileSync(join(filesDir, 'logo.png')))).toEqual(BINARY)
-      } finally {
-        removeTempDirSync(dst.appHome)
-      }
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
-
-  test('工作组的开关与成员过去了，human 成员按用户选的映射落地', async () => {
-    const src = await makeInstance()
-    const { wg } = await seedSource(src.db, src.appHome)
-    try {
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workgroup', id: wg },
-        { appHome: src.appHome },
-      )
-
-      const dst = await makeInstance()
-      try {
-        const parsed = await parseResourcePackage(pkg.zip)
-        const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-          box,
-          importId: ulid(),
-        })
-
-        // human 成员必须被列成待映射的槽（P1-4 复现 B：它曾经原样透传 username）。
-        expect(preview.humanMembers.map((m) => m.username)).toEqual(['alice', 'alice'])
-        expect(preview.humanMembers.map((m) => m.displayName).sort()).toEqual([
-          'observer',
-          'reviewer',
-        ])
-        // 目标实例上恰好有同名用户 ⇒ 预填，但仍要用户拍板。
-        expect(preview.humanMembers[0]!.suggestedUserId).toBe('u1')
-        // 签名与提交按源用户 tuple 收口，不能因为两个 alias 要求/接受两条重复 mapping。
-        expect(verifyPreviewToken(box, preview.previewToken).humanBaseline).toEqual([
-          { workgroupSlug: 'workgroup-squad', username: 'alice', required: false },
-        ])
-
-        await commitResourcePackageForTest(
-          { db: dst.db, appHome: dst.appHome, box },
-          actorOf('u1'),
-          {
-            pkg: parsed,
-            previewToken: preview.previewToken,
-            decisions: preview.entries.map((e) => ({
-              localSlug: e.localSlug,
-              action: 'new' as const,
-              finalName: e.suggestedName,
-            })),
-            humanMemberMappings: [
+          // ② 导入到**另一个实例**。
+          const dst = await makeInstance()
+          try {
+            const parsed = await parseResourcePackage(pkg.zip)
+            const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+              box,
+              importId: ulid(),
+            })
+            await commitResourcePackageForTest(
+              { db: dst.db, appHome: dst.appHome, box },
+              actorOf('u1'),
               {
-                workgroupSlug: preview.humanMembers[0]!.workgroupSlug,
-                username: 'alice',
-                userId: 'u1',
+                pkg: parsed,
+                previewToken: preview.previewToken,
+                decisions: preview.entries.map((e) => ({
+                  localSlug: e.localSlug,
+                  action: 'new' as const,
+                  finalName: e.suggestedName,
+                })),
               },
-            ],
-          },
-        )
+            )
 
-        const landed = dst.db.select().from(workgroups).where(eq(workgroups.name, 'squad')).get()
-        expect(landed).toBeDefined()
-        // ⚠️ 逐个断言**非默认**值：曾经这些全部丢失，落地的是一组默认开关。
-        expect(landed!.shareOutputs).toBe(false)
-        expect(landed!.directMessages).toBe(true)
-        expect(landed!.blackboard).toBe(true)
-        expect(landed!.maxRounds).toBe(7)
-        expect(landed!.completionGate).toBe(true)
-        expect(landed!.outputContract).toBe('discussion')
-        expect(landed!.instructions).toBe('charter text')
+            const landed = await dst.db.select().from(skills).where(eq(skills.name, 'helper')).get()
+            expect(landed).toBeDefined()
+            const filesDir = join(dst.appHome, 'skills', landed!.id, 'files')
 
-        const members = dst.db
-          .select()
-          .from(workgroupMembers)
-          .where(eq(workgroupMembers.workgroupId, landed!.id))
-          .all()
-        expect(members.map((m) => m.displayName).sort()).toEqual(['lead', 'observer', 'reviewer'])
+            // ③ 正文与 frontmatter 过来了（曾经恒为空字符串）。
+            const skillMd = readFileSync(join(filesDir, 'SKILL.md'), 'utf-8')
+            expect(skillMd).toContain('body text')
+            expect(skillMd).toContain('allowed-tools')
 
-        const humans = members.filter((m) => m.memberType === 'human')
-        // username 换成了**本地** user id，而不是原样带着源实例的字符串。
-        expect(humans).toHaveLength(2)
-        expect(humans.every((m) => m.userId === 'u1')).toBe(true)
-
-        // leader 指向的仍是那个 agent 成员（leaderMemberId 是本地行 id，靠
-        // displayName 这个组内稳定键重新绑定）。
-        const leader = members.find((m) => m.id === landed!.leaderMemberId)
-        expect(leader?.displayName).toBe('lead')
-      } finally {
-        removeTempDirSync(dst.appHome)
-      }
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
-
-  test('MCP 的凭据没进包；留空后安全省略并进入导入报告', async () => {
-    const src = await makeInstance()
-    await seedSource(src.db, src.appHome)
-    const agentRow = src.db.select().from(agents).where(eq(agents.name, 'auditor')).get()
-    try {
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'agent', id: agentRow!.id },
-        { appHome: src.appHome },
-      )
-
-      // ① 原值一个字节都不在包里（P1-2：argv / env 曾经原样进包）。
-      const raw = new TextDecoder().decode(pkg.zip)
-      expect(raw).not.toContain('ghp_realsecretvalue123456')
-      expect(raw).not.toContain('ghp_anotherrealsecret9876')
-
-      const dst = await makeInstance()
-      try {
-        const parsed = await parseResourcePackage(pkg.zip)
-        const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-          box,
-          importId: ulid(),
-        })
-        const receipt = await commitResourcePackageForTest(
-          { db: dst.db, appHome: dst.appHome, box },
-          actorOf('u1'),
-          {
-            pkg: parsed,
-            previewToken: preview.previewToken,
-            decisions: preview.entries.map((e) => ({
-              localSlug: e.localSlug,
-              action: 'new' as const,
-              finalName: e.suggestedName,
-            })),
-          },
-        )
-
-        // ② 留空不是把占位符当真值落库：可选 argv/env 槽被删除，可执行档保持不变，
-        // 且回执逐字段报告，方便用户知道还要去哪里补。
-        const landed = dst.db.select().from(mcps).where(eq(mcps.name, 'gh')).get()
-        const config = JSON.parse(landed!.config) as {
-          command: string[]
-          env: Record<string, string>
+            // ④ 辅助文件逐字节相同 —— 二进制那条尤其重要：utf-8 往返会破坏它。
+            expect(readFileSync(join(filesDir, 'ref.md'), 'utf-8')).toBe('# aux\n')
+            expect(new Uint8Array(readFileSync(join(filesDir, 'logo.png')))).toEqual(BINARY)
+          } finally {
+            removeTempDirSync(dst.appHome)
+          }
+        } finally {
+          removeTempDirSync(src.appHome)
         }
-        expect(config.command).toHaveLength(2)
-        expect(config.command[0]).toBe('node')
-        expect(config.command[1]).toBe('srv.js')
-        expect(Object.keys(config.env)).toEqual([])
-        expect(receipt.skippedSecrets).toEqual(
-          expect.arrayContaining([
-            { resourceType: 'mcp', resourceName: 'gh', field: 'config.command[2]' },
-            { resourceType: 'mcp', resourceName: 'gh', field: 'config.env.GITHUB_TOKEN' },
-          ]),
-        )
-      } finally {
-        removeTempDirSync(dst.appHome)
-      }
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
-})
+      })
 
-describe('R0 · 写权限（用户规则：令牌有写权限才能导入，和界面操作一致）', () => {
-  test('没有 skills:create 的令牌导不进一个含技能的包', async () => {
-    const src = await makeInstance()
-    const { skillId } = await seedSource(src.db, src.appHome)
-    try {
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'skill', id: skillId },
-        { appHome: src.appHome },
-      )
-      const dst = await makeInstance()
-      try {
-        const parsed = await parseResourcePackage(pkg.zip)
-        // 预检仍完整返回，UI 才能逐条说明被什么权限挡住；真正 commit 仍服务端拒绝。
-        const preview = await buildPackagePreview(dst.db, actorOf('u1', []), parsed, {
-          box,
-          importId: ulid(),
-        })
-        expect(preview.entries[0]).toMatchObject({
-          allowedActions: [],
-          defaultAction: null,
-          missingPermissions: ['skills:create'],
-        })
-        await expect(
-          commitResourcePackageForTest(
-            { db: dst.db, appHome: dst.appHome, box },
-            actorOf('u1', []),
-            {
-              pkg: parsed,
-              previewToken: preview.previewToken,
-              decisions: [{ localSlug: preview.entries[0]!.localSlug, action: 'new' }],
-            },
-          ),
-        ).rejects.toThrow(/new/)
-      } finally {
-        removeTempDirSync(dst.appHome)
-      }
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
-})
+      test('工作组的开关与成员过去了，human 成员按用户选的映射落地', async () => {
+        const src = await makeInstance()
+        const { wg } = await seedSource(src.db, src.appHome)
+        try {
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workgroup', id: wg },
+            { appHome: src.appHome },
+          )
 
-describe('R0 · 导出产物与源系统 id 无关（导入后由新实例重建 id）', () => {
-  registerProviderInstanceCase(
-    '完整闭包导出：bundle.json 里既无 `external:` 也无任何源 ULID',
-    1,
-    (makeInstance) => {
+          const dst = await makeInstance()
+          try {
+            const parsed = await parseResourcePackage(pkg.zip)
+            const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+              box,
+              importId: ulid(),
+            })
+
+            // human 成员必须被列成待映射的槽（P1-4 复现 B：它曾经原样透传 username）。
+            expect(preview.humanMembers.map((m) => m.username)).toEqual(['alice', 'alice'])
+            expect(preview.humanMembers.map((m) => m.displayName).sort()).toEqual([
+              'observer',
+              'reviewer',
+            ])
+            // 目标实例上恰好有同名用户 ⇒ 预填，但仍要用户拍板。
+            expect(preview.humanMembers[0]!.suggestedUserId).toBe('u1')
+            // 签名与提交按源用户 tuple 收口，不能因为两个 alias 要求/接受两条重复 mapping。
+            expect(verifyPreviewToken(box, preview.previewToken).humanBaseline).toEqual([
+              { workgroupSlug: 'workgroup-squad', username: 'alice', required: false },
+            ])
+
+            await commitResourcePackageForTest(
+              { db: dst.db, appHome: dst.appHome, box },
+              actorOf('u1'),
+              {
+                pkg: parsed,
+                previewToken: preview.previewToken,
+                decisions: preview.entries.map((e) => ({
+                  localSlug: e.localSlug,
+                  action: 'new' as const,
+                  finalName: e.suggestedName,
+                })),
+                humanMemberMappings: [
+                  {
+                    workgroupSlug: preview.humanMembers[0]!.workgroupSlug,
+                    username: 'alice',
+                    userId: 'u1',
+                  },
+                ],
+              },
+            )
+
+            const landed = await dst.db
+              .select()
+              .from(workgroups)
+              .where(eq(workgroups.name, 'squad'))
+              .get()
+            expect(landed).toBeDefined()
+            // ⚠️ 逐个断言**非默认**值：曾经这些全部丢失，落地的是一组默认开关。
+            expect(landed!.shareOutputs).toBe(false)
+            expect(landed!.directMessages).toBe(true)
+            expect(landed!.blackboard).toBe(true)
+            expect(landed!.maxRounds).toBe(7)
+            expect(landed!.completionGate).toBe(true)
+            expect(landed!.outputContract).toBe('discussion')
+            expect(landed!.instructions).toBe('charter text')
+
+            const members = await dst.db
+              .select()
+              .from(workgroupMembers)
+              .where(eq(workgroupMembers.workgroupId, landed!.id))
+              .all()
+            expect(members.map((m) => m.displayName).sort()).toEqual([
+              'lead',
+              'observer',
+              'reviewer',
+            ])
+
+            const humans = members.filter((m) => m.memberType === 'human')
+            // username 换成了**本地** user id，而不是原样带着源实例的字符串。
+            expect(humans).toHaveLength(2)
+            expect(humans.every((m) => m.userId === 'u1')).toBe(true)
+
+            // leader 指向的仍是那个 agent 成员（leaderMemberId 是本地行 id，靠
+            // displayName 这个组内稳定键重新绑定）。
+            const leader = members.find((m) => m.id === landed!.leaderMemberId)
+            expect(leader?.displayName).toBe('lead')
+          } finally {
+            removeTempDirSync(dst.appHome)
+          }
+        } finally {
+          removeTempDirSync(src.appHome)
+        }
+      })
+
+      test('MCP 的凭据没进包；留空后安全省略并进入导入报告', async () => {
+        const src = await makeInstance()
+        await seedSource(src.db, src.appHome)
+        const agentRow = await src.db.select().from(agents).where(eq(agents.name, 'auditor')).get()
+        try {
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'agent', id: agentRow!.id },
+            { appHome: src.appHome },
+          )
+
+          // ① 原值一个字节都不在包里（P1-2：argv / env 曾经原样进包）。
+          const raw = new TextDecoder().decode(pkg.zip)
+          expect(raw).not.toContain('ghp_realsecretvalue123456')
+          expect(raw).not.toContain('ghp_anotherrealsecret9876')
+
+          const dst = await makeInstance()
+          try {
+            const parsed = await parseResourcePackage(pkg.zip)
+            const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+              box,
+              importId: ulid(),
+            })
+            const receipt = await commitResourcePackageForTest(
+              { db: dst.db, appHome: dst.appHome, box },
+              actorOf('u1'),
+              {
+                pkg: parsed,
+                previewToken: preview.previewToken,
+                decisions: preview.entries.map((e) => ({
+                  localSlug: e.localSlug,
+                  action: 'new' as const,
+                  finalName: e.suggestedName,
+                })),
+              },
+            )
+
+            // ② 留空不是把占位符当真值落库：可选 argv/env 槽被删除，可执行档保持不变，
+            // 且回执逐字段报告，方便用户知道还要去哪里补。
+            const landed = await dst.db.select().from(mcps).where(eq(mcps.name, 'gh')).get()
+            const config = JSON.parse(landed!.config) as {
+              command: string[]
+              env: Record<string, string>
+            }
+            expect(config.command).toHaveLength(2)
+            expect(config.command[0]).toBe('node')
+            expect(config.command[1]).toBe('srv.js')
+            expect(Object.keys(config.env)).toEqual([])
+            expect(receipt.skippedSecrets).toEqual(
+              expect.arrayContaining([
+                { resourceType: 'mcp', resourceName: 'gh', field: 'config.command[2]' },
+                { resourceType: 'mcp', resourceName: 'gh', field: 'config.env.GITHUB_TOKEN' },
+              ]),
+            )
+          } finally {
+            removeTempDirSync(dst.appHome)
+          }
+        } finally {
+          removeTempDirSync(src.appHome)
+        }
+      })
+    })
+
+    describe('R0 · 写权限（用户规则：令牌有写权限才能导入，和界面操作一致）', () => {
+      test('没有 skills:create 的令牌导不进一个含技能的包', async () => {
+        const src = await makeInstance()
+        const { skillId } = await seedSource(src.db, src.appHome)
+        try {
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'skill', id: skillId },
+            { appHome: src.appHome },
+          )
+          const dst = await makeInstance()
+          try {
+            const parsed = await parseResourcePackage(pkg.zip)
+            // 预检仍完整返回，UI 才能逐条说明被什么权限挡住；真正 commit 仍服务端拒绝。
+            const preview = await buildPackagePreview(dst.db, actorOf('u1', []), parsed, {
+              box,
+              importId: ulid(),
+            })
+            expect(preview.entries[0]).toMatchObject({
+              allowedActions: [],
+              defaultAction: null,
+              missingPermissions: ['skills:create'],
+            })
+            await expect(
+              commitResourcePackageForTest(
+                { db: dst.db, appHome: dst.appHome, box },
+                actorOf('u1', []),
+                {
+                  pkg: parsed,
+                  previewToken: preview.previewToken,
+                  decisions: [{ localSlug: preview.entries[0]!.localSlug, action: 'new' }],
+                },
+              ),
+            ).rejects.toThrow(/new/)
+          } finally {
+            removeTempDirSync(dst.appHome)
+          }
+        } finally {
+          removeTempDirSync(src.appHome)
+        }
+      })
+    })
+
+    describe('R0 · 导出产物与源系统 id 无关（导入后由新实例重建 id）', () => {
       test('完整闭包导出：bundle.json 里既无 `external:` 也无任何源 ULID', async () => {
         // 这是包能跨实例搬运的**前提**：包内身份只用 `local:<slug>`，源库的 ULID 在另一
         // 台机器上没有任何意义。
@@ -558,82 +566,76 @@ describe('R0 · 导出产物与源系统 id 无关（导入后由新实例重建
           removeTempDirSync(src.appHome)
         }
       })
-    },
-  )
-  test('dangling call 目标：manifest 的 `from` 写包内 slug，不泄漏源 ULID', async () => {
-    // 这是实现门实测到的泄漏点：`manifest.danglingCallRefs[].from` 直接写了
-    // `callRefs.fromId`（源库 ULID）。而上面那条守卫的第一版只扫 bundle.json，
-    // 完全看不到 manifest —— 所以这条用例必须**单独**造出 dangling ref。
-    const src = await makeInstance()
-    try {
-      await src.db.insert(workflows).values({
-        id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
-        name: 'caller',
-        description: '',
-        definition: JSON.stringify({
-          $schema_version: 4,
-          inputs: [],
-          edges: [],
-          nodes: [{ id: 'c1', kind: 'call-workflow', workflowName: 'does-not-exist' }],
-        }),
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
+      test('dangling call 目标：manifest 的 `from` 写包内 slug，不泄漏源 ULID', async () => {
+        // 这是实现门实测到的泄漏点：`manifest.danglingCallRefs[].from` 直接写了
+        // `callRefs.fromId`（源库 ULID）。而上面那条守卫的第一版只扫 bundle.json，
+        // 完全看不到 manifest —— 所以这条用例必须**单独**造出 dangling ref。
+        const src = await makeInstance()
+        try {
+          await src.db.insert(workflows).values({
+            id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+            name: 'caller',
+            description: '',
+            definition: JSON.stringify({
+              $schema_version: 4,
+              inputs: [],
+              edges: [],
+              nodes: [{ id: 'c1', kind: 'call-workflow', workflowName: 'does-not-exist' }],
+            }),
+            ownerUserId: 'u1',
+            visibility: 'private',
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
 
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
-        { appHome: src.appHome },
-      )
-      const manifest = new TextDecoder().decode(
-        decodeZip(pkg.zip)
-          .find((e) => e.path === 'manifest.yaml')!
-          .bytes(),
-      )
-      // dangling 条目确实产出了（否则这条用例什么都没测）。
-      expect(manifest).toContain('does-not-exist')
-      // 但源库 id 不得出现。
-      expect(manifest).not.toContain('01ARZ3NDEKTSV4RRFFQ69G5FAV')
-      // `from` 用的是包内 slug。
-      expect(manifest).toContain('workflow-caller')
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
-})
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workflow', id: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
+            { appHome: src.appHome },
+          )
+          const manifest = new TextDecoder().decode(
+            decodeZip(pkg.zip)
+              .find((e) => e.path === 'manifest.yaml')!
+              .bytes(),
+          )
+          // dangling 条目确实产出了（否则这条用例什么都没测）。
+          expect(manifest).toContain('does-not-exist')
+          // 但源库 id 不得出现。
+          expect(manifest).not.toContain('01ARZ3NDEKTSV4RRFFQ69G5FAV')
+          // `from` 用的是包内 slug。
+          expect(manifest).toContain('workflow-caller')
+        } finally {
+          removeTempDirSync(src.appHome)
+        }
+      })
+    })
 
-describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动忽略', () => {
-  // 用户拍板的语义。反面是**复制一份**：对端会多出一个 owner 是导入者、
-  // `builtin=false` 的同名副本，而真正的 built-in 仍在那儿 —— 两个同名资源共存，
-  // 正好撞上运行时「执行闭包内不得同名」那条约束。
-  const seedBuiltin = async (db: ProviderNeutralDatabase): Promise<void> => {
-    await db.insert(agents).values({
-      id: 'BUILTIN_AGENT',
-      name: '__skill_merger__',
-      description: '',
-      outputs: '[]',
-      permission: '{}',
-      skills: '[]',
-      dependsOn: '[]',
-      mcp: '[]',
-      plugins: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
-      ownerUserId: '__system__',
-      visibility: 'public',
-      builtin: true,
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-  }
+    describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动忽略', () => {
+      // 用户拍板的语义。反面是**复制一份**：对端会多出一个 owner 是导入者、
+      // `builtin=false` 的同名副本，而真正的 built-in 仍在那儿 —— 两个同名资源共存，
+      // 正好撞上运行时「执行闭包内不得同名」那条约束。
+      const seedBuiltin = async (db: ProviderNeutralDatabase): Promise<void> => {
+        await db.insert(agents).values({
+          id: 'BUILTIN_AGENT',
+          name: '__skill_merger__',
+          description: '',
+          outputs: '[]',
+          permission: '{}',
+          skills: '[]',
+          dependsOn: '[]',
+          mcp: '[]',
+          plugins: '[]',
+          frontmatterExtra: '{}',
+          bodyMd: '',
+          ownerUserId: '__system__',
+          visibility: 'public',
+          builtin: true,
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+      }
 
-  registerProviderInstanceCase(
-    '导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:',
-    1,
-    (makeInstance) => {
       test('导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:', async () => {
         const src = await makeInstance()
         await seedBuiltin(src.db)
@@ -684,285 +686,277 @@ describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动�
           removeTempDirSync(src.appHome)
         }
       })
-    },
-  )
 
-  test('导入：绑到对端自己 seed 的 built-in，不新建副本', async () => {
-    const src = await makeInstance()
-    await seedBuiltin(src.db)
-    await src.db.insert(workflows).values({
-      id: 'WF',
-      name: 'mine',
-      description: '',
-      definition: JSON.stringify({
-        $schema_version: 4,
-        inputs: [],
-        edges: [],
-        nodes: [{ id: 'n1', kind: 'agent-single', agentId: 'BUILTIN_AGENT' }],
-      }),
-      ownerUserId: 'u1',
-      visibility: 'private',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    try {
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: 'WF' },
-        { appHome: src.appHome },
-      )
-      const dst = await makeInstance()
-      // 对端有它**自己的** built-in，id 与源库完全不同。
-      await dst.db.insert(agents).values({
-        id: 'DST_BUILTIN',
-        name: '__skill_merger__',
-        description: '',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      try {
-        const parsed = await parseResourcePackage(pkg.zip)
-        const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-          box,
-          importId: ulid(),
-        })
-        // built-in 不产 op ⇒ 它根本不出现在需要用户决策的条目里（「自动忽略」）。
-        expect(preview.entries.map((e) => e.name)).not.toContain('__skill_merger__')
+      test('导入：绑到对端自己 seed 的 built-in，不新建副本', async () => {
+        const src = await makeInstance()
+        await seedBuiltin(src.db)
+        await src.db.insert(workflows).values({
+          id: 'WF',
+          name: 'mine',
+          description: '',
+          definition: JSON.stringify({
+            $schema_version: 4,
+            inputs: [],
+            edges: [],
+            nodes: [{ id: 'n1', kind: 'agent-single', agentId: 'BUILTIN_AGENT' }],
+          }),
+          ownerUserId: 'u1',
+          visibility: 'private',
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+        try {
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workflow', id: 'WF' },
+            { appHome: src.appHome },
+          )
+          const dst = await makeInstance()
+          // 对端有它**自己的** built-in，id 与源库完全不同。
+          await dst.db.insert(agents).values({
+            id: 'DST_BUILTIN',
+            name: '__skill_merger__',
+            description: '',
+            outputs: '[]',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '[]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: '__system__',
+            visibility: 'public',
+            builtin: true,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+          try {
+            const parsed = await parseResourcePackage(pkg.zip)
+            const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+              box,
+              importId: ulid(),
+            })
+            // built-in 不产 op ⇒ 它根本不出现在需要用户决策的条目里（「自动忽略」）。
+            expect(preview.entries.map((e) => e.name)).not.toContain('__skill_merger__')
 
-        await commitResourcePackageForTest(
-          { db: dst.db, appHome: dst.appHome, box },
-          actorOf('u1'),
-          {
-            pkg: parsed,
-            previewToken: preview.previewToken,
-            decisions: preview.entries.map((e) => ({
-              localSlug: e.localSlug,
-              action: 'new' as const,
-              finalName: e.suggestedName,
-            })),
-          },
-        )
+            await commitResourcePackageForTest(
+              { db: dst.db, appHome: dst.appHome, box },
+              actorOf('u1'),
+              {
+                pkg: parsed,
+                previewToken: preview.previewToken,
+                decisions: preview.entries.map((e) => ({
+                  localSlug: e.localSlug,
+                  action: 'new' as const,
+                  finalName: e.suggestedName,
+                })),
+              },
+            )
 
-        // 没有多出副本：仍然只有对端那一个 built-in。
-        const merged = dst.db.select().from(agents).all()
-        expect(merged).toHaveLength(1)
-        expect(merged[0]!.id).toBe('DST_BUILTIN')
-        // 工作流的节点绑到了**对端**的 id。
-        const wf = dst.db.select().from(workflows).where(eq(workflows.name, 'mine')).get()
-        expect(JSON.stringify(wf!.definition)).toContain('DST_BUILTIN')
-      } finally {
-        removeTempDirSync(dst.appHome)
-      }
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
-})
-
-describe('AC-9 · built-in 作**依赖**：完整链路 + 绑到对端自己的那一个', () => {
-  // 这一段的历史值得留着。`builtin:` 这第五种 wire 形态最初只加进了 `bundle/payload.ts`
-  // 的私有 regex，没进统一的 `ResourceRefAst` / 域 codec，于是 serializer 生成它、而
-  // `RootRefSchema` 与 `parse.ts` 不认它——导出一个 built-in 根，产物被**自己的 parser**
-  // 判 `package-invalid`。
-  //
-  // 我第一次"修好"它时只跑了 `export → parse` 就宣布通了。实现门随后指出：后面还有
-  // `preview` 只遍历 ops、`commit` 的 `translatedBundle`、`finalizeInTx` 三道 `local:`
-  // 硬门——**整条导入链根本走不通**。而我为那个修复写的"真实往返"用例，恰好也停在
-  // parse，盲区与缺陷完全重合。
-  //
-  // 教训比这条 AC 本身更通用：**一个只覆盖到你改动那一层的往返测试，不叫往返测试**。
-  // 同文件其他往返用例都跑到 commit，唯独那条没有。
-  //
-  // （built-in 作**根**的完整跨实例导入由 `rfc271-resource-package-hardening.test.ts`
-  // 覆盖——preview 空 entries、commit `action: 'reuse'` 绑对端真 built-in、重放幂等、
-  // 同名非-builtin 行 fail-closed。这里补的是它的另一半：built-in 作**依赖**。）
-
-  test('built-in 作为**依赖** ⇒ 完整走通 export → parse → preview → commit，并绑到对端自己的 built-in', async () => {
-    // 这条是上面那个教训的正面兑现：跑完**整条链**，而且用**两个实例**——目标实例的
-    // built-in 是另一个 id，只有按名字绑定才可能对上。只到 parse 为止的版本发现不了
-    // 「preview 零 entry」「commit 拒 local 根」这类下游断裂。
-    const src = await makeInstance()
-    const dst = await makeInstance()
-    try {
-      const srcBuiltin = ulid()
-      await src.db.insert(agents).values({
-        id: srcBuiltin,
-        name: 'aw-skill-merger',
-        description: '',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      const wfId = ulid()
-      await src.db.insert(workflows).values({
-        id: wfId,
-        name: 'uses-builtin',
-        description: '',
-        definition: JSON.stringify({
-          $schema_version: 4,
-          inputs: [],
-          edges: [],
-          nodes: [{ id: 'n1', kind: 'agent-single', agentId: srcBuiltin }],
-        }),
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: wfId },
-        { appHome: src.appHome },
-      )
-      const parsed = await parseResourcePackage(pkg.zip)
-
-      // built-in 不产 op、不入 resources，只留一条依赖声明。
-      expect(parsed.manifest.builtins).toEqual([{ type: 'agent', name: 'aw-skill-merger' }])
-      expect(parsed.manifest.resources.map((r) => r.type)).toEqual(['workflow'])
-      expect(parsed.bundle.rootRef).toBe(`local:${parsed.manifest.root.slug}`)
-
-      // 目标实例的同名 built-in 是**另一个 id**。
-      const dstBuiltin = ulid()
-      expect(dstBuiltin).not.toBe(srcBuiltin)
-      await dst.db.insert(agents).values({
-        id: dstBuiltin,
-        name: 'aw-skill-merger',
-        description: '',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-
-      const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-        box,
-        importId: ulid(),
+            // 没有多出副本：仍然只有对端那一个 built-in。
+            const merged = await dst.db.select().from(agents).all()
+            expect(merged).toHaveLength(1)
+            expect(merged[0]!.id).toBe('DST_BUILTIN')
+            // 工作流的节点绑到了**对端**的 id。
+            const wf = await dst.db.select().from(workflows).where(eq(workflows.name, 'mine')).get()
+            expect(JSON.stringify(wf!.definition)).toContain('DST_BUILTIN')
+          } finally {
+            removeTempDirSync(dst.appHome)
+          }
+        } finally {
+          removeTempDirSync(src.appHome)
+        }
       })
-      const receipt = await commitResourcePackageForTest(
-        { db: dst.db, appHome: dst.appHome, box },
-        actorOf('u1'),
-        {
-          pkg: parsed,
-          previewToken: preview.previewToken,
-          decisions: preview.entries.map((e) => ({
-            localSlug: e.localSlug,
-            action: 'new' as const,
-          })),
-        },
-      )
-      expect(receipt.root).toMatchObject({ resourceType: 'workflow', action: 'create' })
+    })
 
-      // 落地的 definition 必须指向**目标实例**的 built-in id，不是源实例那个。
-      const landed = dst.db
-        .select()
-        .from(workflows)
-        .all()
-        .find((r) => r.name === 'uses-builtin')
-      const def = JSON.parse(String(landed?.definition ?? '{}')) as {
-        nodes?: Array<{ agentId?: unknown }>
+    describe('AC-9 · built-in 作**依赖**：完整链路 + 绑到对端自己的那一个', () => {
+      // 这一段的历史值得留着。`builtin:` 这第五种 wire 形态最初只加进了 `bundle/payload.ts`
+      // 的私有 regex，没进统一的 `ResourceRefAst` / 域 codec，于是 serializer 生成它、而
+      // `RootRefSchema` 与 `parse.ts` 不认它——导出一个 built-in 根，产物被**自己的 parser**
+      // 判 `package-invalid`。
+      //
+      // 我第一次"修好"它时只跑了 `export → parse` 就宣布通了。实现门随后指出：后面还有
+      // `preview` 只遍历 ops、`commit` 的 `translatedBundle`、`finalizeInTx` 三道 `local:`
+      // 硬门——**整条导入链根本走不通**。而我为那个修复写的"真实往返"用例，恰好也停在
+      // parse，盲区与缺陷完全重合。
+      //
+      // 教训比这条 AC 本身更通用：**一个只覆盖到你改动那一层的往返测试，不叫往返测试**。
+      // 同文件其他往返用例都跑到 commit，唯独那条没有。
+      //
+      // （built-in 作**根**的完整跨实例导入由 `rfc271-resource-package-hardening.test.ts`
+      // 覆盖——preview 空 entries、commit `action: 'reuse'` 绑对端真 built-in、重放幂等、
+      // 同名非-builtin 行 fail-closed。这里补的是它的另一半：built-in 作**依赖**。）
+
+      test('built-in 作为**依赖** ⇒ 完整走通 export → parse → preview → commit，并绑到对端自己的 built-in', async () => {
+        // 这条是上面那个教训的正面兑现：跑完**整条链**，而且用**两个实例**——目标实例的
+        // built-in 是另一个 id，只有按名字绑定才可能对上。只到 parse 为止的版本发现不了
+        // 「preview 零 entry」「commit 拒 local 根」这类下游断裂。
+        const src = await makeInstance()
+        const dst = await makeInstance()
+        try {
+          const srcBuiltin = ulid()
+          await src.db.insert(agents).values({
+            id: srcBuiltin,
+            name: 'aw-skill-merger',
+            description: '',
+            outputs: '[]',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '[]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: '__system__',
+            visibility: 'public',
+            builtin: true,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+          const wfId = ulid()
+          await src.db.insert(workflows).values({
+            id: wfId,
+            name: 'uses-builtin',
+            description: '',
+            definition: JSON.stringify({
+              $schema_version: 4,
+              inputs: [],
+              edges: [],
+              nodes: [{ id: 'n1', kind: 'agent-single', agentId: srcBuiltin }],
+            }),
+            ownerUserId: 'u1',
+            visibility: 'private',
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workflow', id: wfId },
+            { appHome: src.appHome },
+          )
+          const parsed = await parseResourcePackage(pkg.zip)
+
+          // built-in 不产 op、不入 resources，只留一条依赖声明。
+          expect(parsed.manifest.builtins).toEqual([{ type: 'agent', name: 'aw-skill-merger' }])
+          expect(parsed.manifest.resources.map((r) => r.type)).toEqual(['workflow'])
+          expect(parsed.bundle.rootRef).toBe(`local:${parsed.manifest.root.slug}`)
+
+          // 目标实例的同名 built-in 是**另一个 id**。
+          const dstBuiltin = ulid()
+          expect(dstBuiltin).not.toBe(srcBuiltin)
+          await dst.db.insert(agents).values({
+            id: dstBuiltin,
+            name: 'aw-skill-merger',
+            description: '',
+            outputs: '[]',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '[]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: '__system__',
+            visibility: 'public',
+            builtin: true,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+
+          const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+            box,
+            importId: ulid(),
+          })
+          const receipt = await commitResourcePackageForTest(
+            { db: dst.db, appHome: dst.appHome, box },
+            actorOf('u1'),
+            {
+              pkg: parsed,
+              previewToken: preview.previewToken,
+              decisions: preview.entries.map((e) => ({
+                localSlug: e.localSlug,
+                action: 'new' as const,
+              })),
+            },
+          )
+          expect(receipt.root).toMatchObject({ resourceType: 'workflow', action: 'create' })
+
+          // 落地的 definition 必须指向**目标实例**的 built-in id，不是源实例那个。
+          const landed = (await dst.db.select().from(workflows).all()).find(
+            (r) => r.name === 'uses-builtin',
+          )
+          const def = JSON.parse(String(landed?.definition ?? '{}')) as {
+            nodes?: Array<{ agentId?: unknown }>
+          }
+          expect(def.nodes?.[0]?.agentId).toBe(dstBuiltin)
+          expect(def.nodes?.[0]?.agentId).not.toBe(srcBuiltin)
+        } finally {
+          removeTempDirSync(dst.appHome)
+          removeTempDirSync(src.appHome)
+        }
+      })
+    })
+
+    describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**就报错', () => {
+      // AC-9 原文要求「本地没有 → 预检页报错」。此前要到 commit 才由 `resolveIdentityRef`
+      // 抛 `bundle-builtin-missing`——用户已经逐条选完动作、填完凭据、点了提交，才被告知
+      // 这个包在本实例根本装不了。
+      //
+      // 这个区别不是「早点报错更友好」而已：built-in 缺失是**环境前提不满足**，用户能做的
+      // 只有升级/修复对端实例，在这个包里改什么都没用。所以它必须出现在「要不要导入」这个
+      // 决策之前，而不是决策之后。
+      const exportPkgUsingBuiltin = async (src: {
+        db: ProviderNeutralDatabase
+        appHome: string
+      }): Promise<Uint8Array> => {
+        const builtinId = ulid()
+        await src.db.insert(agents).values({
+          id: builtinId,
+          name: 'aw-skill-merger',
+          description: '',
+          outputs: '[]',
+          permission: '{}',
+          skills: '[]',
+          dependsOn: '[]',
+          mcp: '[]',
+          plugins: '[]',
+          frontmatterExtra: '{}',
+          bodyMd: '',
+          ownerUserId: '__system__',
+          visibility: 'public',
+          builtin: true,
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+        const wfId = ulid()
+        await src.db.insert(workflows).values({
+          id: wfId,
+          name: 'needs-builtin',
+          description: '',
+          definition: JSON.stringify({
+            $schema_version: 4,
+            inputs: [],
+            edges: [],
+            nodes: [{ id: 'n1', kind: 'agent-single', agentId: builtinId }],
+          }),
+          ownerUserId: 'u1',
+          visibility: 'private',
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+        const pkg = await exportResourcePackage(
+          src.db,
+          actorOf('u1'),
+          { type: 'workflow', id: wfId },
+          { appHome: src.appHome },
+        )
+        return pkg.zip
       }
-      expect(def.nodes?.[0]?.agentId).toBe(dstBuiltin)
-      expect(def.nodes?.[0]?.agentId).not.toBe(srcBuiltin)
-    } finally {
-      removeTempDirSync(dst.appHome)
-      removeTempDirSync(src.appHome)
-    }
-  })
-})
 
-describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**就报错', () => {
-  // AC-9 原文要求「本地没有 → 预检页报错」。此前要到 commit 才由 `resolveIdentityRef`
-  // 抛 `bundle-builtin-missing`——用户已经逐条选完动作、填完凭据、点了提交，才被告知
-  // 这个包在本实例根本装不了。
-  //
-  // 这个区别不是「早点报错更友好」而已：built-in 缺失是**环境前提不满足**，用户能做的
-  // 只有升级/修复对端实例，在这个包里改什么都没用。所以它必须出现在「要不要导入」这个
-  // 决策之前，而不是决策之后。
-  const exportPkgUsingBuiltin = async (src: {
-    db: ProviderNeutralDatabase
-    appHome: string
-  }): Promise<Uint8Array> => {
-    const builtinId = ulid()
-    await src.db.insert(agents).values({
-      id: builtinId,
-      name: 'aw-skill-merger',
-      description: '',
-      outputs: '[]',
-      permission: '{}',
-      skills: '[]',
-      dependsOn: '[]',
-      mcp: '[]',
-      plugins: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
-      ownerUserId: '__system__',
-      visibility: 'public',
-      builtin: true,
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    const wfId = ulid()
-    await src.db.insert(workflows).values({
-      id: wfId,
-      name: 'needs-builtin',
-      description: '',
-      definition: JSON.stringify({
-        $schema_version: 4,
-        inputs: [],
-        edges: [],
-        nodes: [{ id: 'n1', kind: 'agent-single', agentId: builtinId }],
-      }),
-      ownerUserId: 'u1',
-      visibility: 'private',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    const pkg = await exportResourcePackage(
-      src.db,
-      actorOf('u1'),
-      { type: 'workflow', id: wfId },
-      { appHome: src.appHome },
-    )
-    return pkg.zip
-  }
-
-  registerProviderInstanceCase(
-    '对端没有该 built-in ⇒ preview 即 422，并点名缺了哪一个',
-    2,
-    (makeInstance) => {
       test('对端没有该 built-in ⇒ preview 即 422，并点名缺了哪一个', async () => {
         const src = await makeInstance()
         const dst = await makeInstance() // 目标实例**没有** seed 任何 built-in
@@ -982,53 +976,47 @@ describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**�
           removeTempDirSync(src.appHome)
         }
       })
-    },
-  )
 
-  test('同名但 **builtin=false** 的用户自建资源不算数（否则等于把别人的资源当框架件）', async () => {
-    // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 + builtin=true。
-    // 只按名字查会绑到一行 owner 不是 __system__、builtin 为 false 的普通 agent 上。
-    const src = await makeInstance()
-    const dst = await makeInstance()
-    try {
-      await dst.db.insert(agents).values({
-        id: ulid(),
-        name: 'aw-skill-merger', // 同名
-        description: '',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: 'u1', // 但是用户自建的
-        visibility: 'public',
-        builtin: false,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
+      test('同名但 **builtin=false** 的用户自建资源不算数（否则等于把别人的资源当框架件）', async () => {
+        // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 + builtin=true。
+        // 只按名字查会绑到一行 owner 不是 __system__、builtin 为 false 的普通 agent 上。
+        const src = await makeInstance()
+        const dst = await makeInstance()
+        try {
+          await dst.db.insert(agents).values({
+            id: ulid(),
+            name: 'aw-skill-merger', // 同名
+            description: '',
+            outputs: '[]',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '[]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: 'u1', // 但是用户自建的
+            visibility: 'public',
+            builtin: false,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
 
-      const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
-      const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-        box,
-        importId: ulid(),
-      }).then(
-        () => null,
-        (e: unknown) => e as { code?: string },
-      )
-      expect(err?.code).toBe('package-builtin-missing')
-    } finally {
-      removeTempDirSync(dst.appHome)
-      removeTempDirSync(src.appHome)
-    }
-  })
+          const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
+          const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+            box,
+            importId: ulid(),
+          }).then(
+            () => null,
+            (e: unknown) => e as { code?: string },
+          )
+          expect(err?.code).toBe('package-builtin-missing')
+        } finally {
+          removeTempDirSync(dst.appHome)
+          removeTempDirSync(src.appHome)
+        }
+      })
 
-  registerProviderInstanceCase(
-    '对端有该 built-in ⇒ preview 正常通过（不误伤）',
-    2,
-    (makeInstance) => {
       test('对端有该 built-in ⇒ preview 正常通过（不误伤）', async () => {
         const src = await makeInstance()
         const dst = await makeInstance()
@@ -1063,156 +1051,148 @@ describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**�
           removeTempDirSync(src.appHome)
         }
       })
-    },
-  )
-})
+    })
 
-describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () => {
-  // 这条锁的是实现门第四轮的 P1-1，而它躲过了我此前两条测试——因为那两条各覆盖一半、
-  // **交集为空**：
-  //   · 一条用**无依赖**的 built-in 根；
-  //   · 一条用**非 built-in 根** + built-in 依赖。
-  // 只有「built-in 根 **且** 它自己还引用别的 built-in」才同时踩到两边：导出侧的
-  // `manifest.builtins` 按「闭包里所有 builtin 资源」列（根 + 依赖两项），而 parse 侧的
-  // 对账只扫 op 的**引用槽**——根不产 op、不在任何槽里，于是只收到依赖一项，两边不等。
-  //
-  // 真实后果：仓内真实的 `aw-skill-fusion`（builtin workflow → builtin agent
-  // `aw-skill-merger`）导出返回 200，产物却被**自己的 parser** 判 `package-invalid`。
-  //
-  // 「两条测试都绿、但它们的交集没人测」是这轮反复出现的形态（上一轮是「往返测试只走到
-  // parse」）。补测试时要问的不是「这个分支测了吗」，而是「**这些分支的组合**测了吗」。
-  test('导出 → 解析 → 预检 → 提交：全链走通，且两项 builtin 都在 manifest 里', async () => {
-    const src = await makeInstance()
-    const dst = await makeInstance()
-    try {
-      const srcAgent = ulid()
-      await src.db.insert(agents).values({
-        id: srcAgent,
-        name: 'aw-skill-merger',
-        description: '',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      const srcWf = ulid()
-      await src.db.insert(workflows).values({
-        id: srcWf,
-        name: 'aw-skill-fusion',
-        description: '',
-        definition: JSON.stringify({
-          $schema_version: 4,
-          inputs: [],
-          edges: [],
-          nodes: [{ id: 'n1', kind: 'agent-single', agentId: srcAgent }],
-        }),
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
+    describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () => {
+      // 这条锁的是实现门第四轮的 P1-1，而它躲过了我此前两条测试——因为那两条各覆盖一半、
+      // **交集为空**：
+      //   · 一条用**无依赖**的 built-in 根；
+      //   · 一条用**非 built-in 根** + built-in 依赖。
+      // 只有「built-in 根 **且** 它自己还引用别的 built-in」才同时踩到两边：导出侧的
+      // `manifest.builtins` 按「闭包里所有 builtin 资源」列（根 + 依赖两项），而 parse 侧的
+      // 对账只扫 op 的**引用槽**——根不产 op、不在任何槽里，于是只收到依赖一项，两边不等。
+      //
+      // 真实后果：仓内真实的 `aw-skill-fusion`（builtin workflow → builtin agent
+      // `aw-skill-merger`）导出返回 200，产物却被**自己的 parser** 判 `package-invalid`。
+      //
+      // 「两条测试都绿、但它们的交集没人测」是这轮反复出现的形态（上一轮是「往返测试只走到
+      // parse」）。补测试时要问的不是「这个分支测了吗」，而是「**这些分支的组合**测了吗」。
+      test('导出 → 解析 → 预检 → 提交：全链走通，且两项 builtin 都在 manifest 里', async () => {
+        const src = await makeInstance()
+        const dst = await makeInstance()
+        try {
+          const srcAgent = ulid()
+          await src.db.insert(agents).values({
+            id: srcAgent,
+            name: 'aw-skill-merger',
+            description: '',
+            outputs: '[]',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '[]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: '__system__',
+            visibility: 'public',
+            builtin: true,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+          const srcWf = ulid()
+          await src.db.insert(workflows).values({
+            id: srcWf,
+            name: 'aw-skill-fusion',
+            description: '',
+            definition: JSON.stringify({
+              $schema_version: 4,
+              inputs: [],
+              edges: [],
+              nodes: [{ id: 'n1', kind: 'agent-single', agentId: srcAgent }],
+            }),
+            ownerUserId: '__system__',
+            visibility: 'public',
+            builtin: true,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
 
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: srcWf },
-        { appHome: src.appHome },
-      )
-      // ① 产物必须能被**自己的 parser** 接受 —— 这正是 P1-1 当场失败的地方。
-      const parsed = await parseResourcePackage(pkg.zip)
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workflow', id: srcWf },
+            { appHome: src.appHome },
+          )
+          // ① 产物必须能被**自己的 parser** 接受 —— 这正是 P1-1 当场失败的地方。
+          const parsed = await parseResourcePackage(pkg.zip)
 
-      expect(parsed.bundle.rootRef).toBe('builtin:workflow/aw-skill-fusion')
-      expect(parsed.bundle.ops).toHaveLength(0)
-      expect(parsed.manifest.resources).toHaveLength(0)
-      // built-in 根的包只表达「绑你自己的那一个」——**只有根**在 builtins 里。
-      // 它内部还引用了别的 built-in 是对端自己的事：包里零 op、根的 definition 一个字节
-      // 都没带，无从担保那条依赖，也就不该替对端声明这个前提。
-      expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-skill-fusion' }])
+          expect(parsed.bundle.rootRef).toBe('builtin:workflow/aw-skill-fusion')
+          expect(parsed.bundle.ops).toHaveLength(0)
+          expect(parsed.manifest.resources).toHaveLength(0)
+          // built-in 根的包只表达「绑你自己的那一个」——**只有根**在 builtins 里。
+          // 它内部还引用了别的 built-in 是对端自己的事：包里零 op、根的 definition 一个字节
+          // 都没带，无从担保那条依赖，也就不该替对端声明这个前提。
+          expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-skill-fusion' }])
 
-      // ② 对端两项都有 ⇒ 预检通过、提交绑到对端自己那一个（不复制）。
-      for (const [name, table] of [
-        ['aw-skill-merger', agents],
-        ['aw-skill-fusion', workflows],
-      ] as const) {
-        const base = {
-          id: ulid(),
-          name,
-          description: '',
-          ownerUserId: '__system__',
-          visibility: 'public',
-          builtin: true,
-          createdAt: 1,
-          updatedAt: 1,
+          // ② 对端两项都有 ⇒ 预检通过、提交绑到对端自己那一个（不复制）。
+          for (const [name, table] of [
+            ['aw-skill-merger', agents],
+            ['aw-skill-fusion', workflows],
+          ] as const) {
+            const base = {
+              id: ulid(),
+              name,
+              description: '',
+              ownerUserId: '__system__',
+              visibility: 'public',
+              builtin: true,
+              createdAt: 1,
+              updatedAt: 1,
+            }
+            await dst.db.insert(table).values(
+              (table === agents
+                ? {
+                    ...base,
+                    outputs: '[]',
+                    permission: '{}',
+                    skills: '[]',
+                    dependsOn: '[]',
+                    mcp: '[]',
+                    plugins: '[]',
+                    frontmatterExtra: '{}',
+                    bodyMd: '',
+                  }
+                : {
+                    ...base,
+                    definition: JSON.stringify({
+                      $schema_version: 4,
+                      inputs: [],
+                      edges: [],
+                      nodes: [],
+                    }),
+                  }) as never,
+            )
+          }
+
+          const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+            box,
+            importId: ulid(),
+          })
+          expect(preview.entries).toEqual([])
+
+          const receipt = await commitResourcePackageForTest(
+            { db: dst.db, appHome: dst.appHome, box },
+            actorOf('u1'),
+            { pkg: parsed, previewToken: preview.previewToken, decisions: [] },
+          )
+          expect(receipt.root).toMatchObject({
+            resourceType: 'workflow',
+            name: 'aw-skill-fusion',
+            action: 'reuse',
+          })
+          // 没有复制出第二份。
+          expect(
+            (await dst.db.select().from(workflows).all()).filter(
+              (r) => r.name === 'aw-skill-fusion',
+            ),
+          ).toHaveLength(1)
+        } finally {
+          removeTempDirSync(dst.appHome)
+          removeTempDirSync(src.appHome)
         }
-        await dst.db.insert(table).values(
-          (table === agents
-            ? {
-                ...base,
-                outputs: '[]',
-                permission: '{}',
-                skills: '[]',
-                dependsOn: '[]',
-                mcp: '[]',
-                plugins: '[]',
-                frontmatterExtra: '{}',
-                bodyMd: '',
-              }
-            : {
-                ...base,
-                definition: JSON.stringify({
-                  $schema_version: 4,
-                  inputs: [],
-                  edges: [],
-                  nodes: [],
-                }),
-              }) as never,
-        )
-      }
-
-      const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-        box,
-        importId: ulid(),
       })
-      expect(preview.entries).toEqual([])
 
-      const receipt = await commitResourcePackageForTest(
-        { db: dst.db, appHome: dst.appHome, box },
-        actorOf('u1'),
-        { pkg: parsed, previewToken: preview.previewToken, decisions: [] },
-      )
-      expect(receipt.root).toMatchObject({
-        resourceType: 'workflow',
-        name: 'aw-skill-fusion',
-        action: 'reuse',
-      })
-      // 没有复制出第二份。
-      expect(
-        dst.db
-          .select()
-          .from(workflows)
-          .all()
-          .filter((r) => r.name === 'aw-skill-fusion'),
-      ).toHaveLength(1)
-    } finally {
-      removeTempDirSync(dst.appHome)
-      removeTempDirSync(src.appHome)
-    }
-  })
-
-  registerProviderInstanceCase(
-    '对端**缺少这个 built-in 根** ⇒ 预检即报错（rootRef 必须进 builtins 声明）',
-    2,
-    (makeInstance) => {
       test('对端**缺少这个 built-in 根** ⇒ 预检即报错（rootRef 必须进 builtins 声明）', async () => {
         // 这条锁的是 collector 里 `rootRef` 那一支的**真正价值**。
         //
@@ -1262,233 +1242,265 @@ describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () 
           removeTempDirSync(src.appHome)
         }
       })
-    },
-  )
-})
+    })
 
-describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮 P2-3：串行 N+1）', () => {
-  // 预检是**未认证内容驱动**的路径：请求体就是用户上传的包。第一版对每个 manifest
-  // built-in 串行执行一次查询，于是一个远低于上传上限的合法包（20000 个不同的
-  // `builtin:agent/bN` 引用）就能让服务端跑 20000 次串行 SQL，实测约 1547ms ——
-  // 「上传一个包」变成了一个廉价的放大器。
-  //
-  // ⚠️ 这条**不测毫秒数**。计时断言在满载 runner 上必然变 flaky（本仓已有多条同类
-  // 教训），而且它测的是机器而不是算法。测的是**查询次数与 built-in 数量无关**：
-  // 数量翻十倍，查询次数不变。
-  const countSelects = (
-    db: ProviderNeutralDatabase,
-    tables: readonly unknown[],
-  ): { db: ProviderNeutralDatabase; n: () => number } => {
-    let n = 0
-    const proxied = new Proxy(db as object, {
-      get(target, property, receiver) {
-        const original = Reflect.get(target, property, receiver)
-        if (property !== 'select' || typeof original !== 'function') {
-          return typeof original === 'function' ? original.bind(target) : original
-        }
-        return (...args: unknown[]) => {
-          const builder = original.apply(target, args)
-          return new Proxy(builder as object, {
-            get(qt, qp, qr) {
-              const m = Reflect.get(qt, qp, qr)
-              if (qp !== 'from' || typeof m !== 'function') {
-                return typeof m === 'function' ? m.bind(qt) : m
+    describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮 P2-3：串行 N+1）', () => {
+      // 预检是**未认证内容驱动**的路径：请求体就是用户上传的包。第一版对每个 manifest
+      // built-in 串行执行一次查询，于是一个远低于上传上限的合法包（20000 个不同的
+      // `builtin:agent/bN` 引用）就能让服务端跑 20000 次串行 SQL，实测约 1547ms ——
+      // 「上传一个包」变成了一个廉价的放大器。
+      //
+      // ⚠️ 这条**不测毫秒数**。计时断言在满载 runner 上必然变 flaky（本仓已有多条同类
+      // 教训），而且它测的是机器而不是算法。测的是**查询次数与 built-in 数量无关**：
+      // 数量翻十倍，查询次数不变。
+      /**
+       * 数一数「预检对某几张表发了多少条 select」。
+       *
+       * ⚠️ **必须连事务句柄一起代理**（RFC-359 双引擎）：预检读的是
+       * `createResourcePackageReadPort`，它的每次 `listByNames` 都包在
+       * `runResourceCatalogTransaction` = `databaseSessionFor(db).serializable(...)` 里。
+       * SQLite 的会话把事务句柄取成客户端自己（`const tx = db`，显式 BEGIN IMMEDIATE），代理
+       * 顺带就带进去了；PostgreSQL 上 `db.transaction(cb)` 交给回调的是**另一个对象**，不把它
+       * 一并代理，计数器在 PG 上一次都不会加——`expect(large).toBe(small)` 于是退化成
+       * `0 === 0`，一条什么都没测的绿。所以用例里先断言「确实数到了」。
+       */
+      const countSelects = (
+        db: ProviderNeutralDatabase,
+        tables: readonly unknown[],
+      ): { db: ProviderNeutralDatabase; n: () => number } => {
+        let n = 0
+        const wrapHandle = (handle: object): object =>
+          new Proxy(handle, {
+            get(target, property, receiver) {
+              const original = Reflect.get(target, property, receiver)
+              if (typeof original !== 'function') return original
+              if (property === 'transaction') {
+                return (body: (tx: object) => unknown, ...rest: unknown[]) =>
+                  (original as (...called: unknown[]) => unknown).call(
+                    target,
+                    (tx: object) => body(wrapHandle(tx)),
+                    ...rest,
+                  )
               }
-              return (t: unknown) => {
-                if (tables.includes(t)) n += 1
-                return m.call(qt, t)
+              if (property !== 'select') return original.bind(target)
+              return (...args: unknown[]) => {
+                const builder = (original as (...called: unknown[]) => unknown).apply(
+                  target,
+                  args,
+                ) as object
+                return new Proxy(builder, {
+                  get(qt, qp, qr) {
+                    const m = Reflect.get(qt, qp, qr)
+                    if (qp !== 'from' || typeof m !== 'function') {
+                      return typeof m === 'function' ? m.bind(qt) : m
+                    }
+                    return (t: unknown) => {
+                      if (tables.includes(t)) n += 1
+                      return (m as (...called: unknown[]) => unknown).call(qt, t)
+                    }
+                  },
+                })
               }
             },
           })
+        return {
+          db: wrapHandle(db as object) as unknown as ProviderNeutralDatabase,
+          n: () => n,
         }
-      },
-    }) as unknown as ProviderNeutralDatabase
-    return { db: proxied, n: () => n }
-  }
-
-  const packageWithBuiltinRefs = async (count: number): Promise<Uint8Array> => {
-    const src = await makeInstance()
-    try {
-      const ids: string[] = []
-      for (let i = 0; i < count; i += 1) {
-        const id = ulid()
-        ids.push(id)
-        await src.db.insert(agents).values({
-          id,
-          name: `aw-builtin-${i}`,
-          description: '',
-          outputs: '[]',
-          permission: '{}',
-          skills: '[]',
-          dependsOn: '[]',
-          mcp: '[]',
-          plugins: '[]',
-          frontmatterExtra: '{}',
-          bodyMd: '',
-          ownerUserId: '__system__',
-          visibility: 'public',
-          builtin: true,
-          createdAt: 1,
-          updatedAt: 1,
-        } as never)
       }
-      const wfId = ulid()
-      await src.db.insert(workflows).values({
-        id: wfId,
-        name: `uses-${count}`,
-        description: '',
-        definition: JSON.stringify({
-          $schema_version: 4,
-          inputs: [],
-          edges: [],
-          nodes: ids.map((id, i) => ({ id: `n${i}`, kind: 'agent-single', agentId: id })),
-        }),
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: wfId },
-        { appHome: src.appHome },
-      )
-      return pkg.zip
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  }
 
-  test('**声明数量有上限**：超限的包在解析期就被拒（不是等到预检去扛）', async () => {
-    // 第六轮 P2-5。上一版我只解决了「不 500」（把无界 `IN` 改成分块），但没解决根本问题：
-    // **`manifest.builtins` 的长度由上传者决定**，而它直接决定预检要做多少查询、在内存里
-    // 留多大中间结构。实测一个 7.8MiB 的合法包（远低于 64MiB 上传上限）声明 65536 个
-    // built-in：预检额外吃约 23MiB RSS、错误载荷 JSON 达 437 万字符。
-    //
-    // 把 zip 体积当唯一的资源上界是不够的——**压缩比让「合法包」与「服务端要做多少工作」
-    // 彻底脱钩**。所以在**解析期**就按条数拒绝：框架内置件实际是个位数，1000 已宽出两个
-    // 数量级。
-    // ⚠️ 夹具必须让 `manifest.builtins` 与 bundle 的引用**真的对得上**，否则包会因
-    // 「builtins 与 bundle 不匹配」被拒——那样测试是为**错误的理由**通过的（第一版正是
-    // 如此：去掉数量上限它照样绿）。所以 bundle 里要有一个真的引用了这 1001 个 built-in
-    // 的 workflow-create op。
-    const names = Array.from({ length: MAX_DECLARED_BUILTINS + 1 }, (_, i) => `b${i}`)
-    const manifest = {
-      formatVersion: 1,
-      exportedAt: 0,
-      root: { slug: 'wf-x', type: 'workflow', name: 'x' },
-      resources: [{ slug: 'wf-x', type: 'workflow', name: 'x' }],
-      requirements: {},
-      secrets: [],
-      builtins: names.map((name) => ({ type: 'agent', name })),
-    }
-    const bundle = {
-      bundleVersion: 1,
-      ops: [
-        {
-          opId: 'op-1',
-          kind: 'workflow-create',
-          slug: 'wf-x',
-          payload: {
-            name: 'x',
+      const packageWithBuiltinRefs = async (count: number): Promise<Uint8Array> => {
+        const src = await makeInstance()
+        try {
+          const ids: string[] = []
+          for (let i = 0; i < count; i += 1) {
+            const id = ulid()
+            ids.push(id)
+            await src.db.insert(agents).values({
+              id,
+              name: `aw-builtin-${i}`,
+              description: '',
+              outputs: '[]',
+              permission: '{}',
+              skills: '[]',
+              dependsOn: '[]',
+              mcp: '[]',
+              plugins: '[]',
+              frontmatterExtra: '{}',
+              bodyMd: '',
+              ownerUserId: '__system__',
+              visibility: 'public',
+              builtin: true,
+              createdAt: 1,
+              updatedAt: 1,
+            } as never)
+          }
+          const wfId = ulid()
+          await src.db.insert(workflows).values({
+            id: wfId,
+            name: `uses-${count}`,
             description: '',
-            definition: {
+            definition: JSON.stringify({
               $schema_version: 4,
               inputs: [],
               edges: [],
-              nodes: names.map((n, i) => ({
-                id: `n${i}`,
-                kind: 'agent-single',
-                agentRef: `builtin:agent/${n}`,
-              })),
-            },
-          },
-        },
-      ],
-      rootRef: 'local:wf-x',
-    }
-    const zip = encodeZip([
-      { path: 'manifest.yaml', bytes: new TextEncoder().encode(stringifyYaml(manifest)) },
-      { path: 'bundle.json', bytes: new TextEncoder().encode(JSON.stringify(bundle)) },
-    ])
-    const err = await parseResourcePackage(zip).then(
-      () => null,
-      (e: unknown) => e as { code?: string },
-    )
-    expect(err?.code).toBe('package-invalid')
-  })
-
-  test('缺失很多时，错误载荷**取样**而不是列全量', async () => {
-    // 上限挡住了极端情形，但错误路径本身也不该是放大器：把全部缺失项同时放进 message
-    // 和 details 时，`DomainError.toPayload()` 的 JSON 会随缺失数线性膨胀（65536 项实测
-    // 437 万字符——一个错误响应把请求体的放大又翻一倍）。
-    // 用户要的是「缺哪些」的**样例 + 总数**，不是一份上千行的清单。
-    const dst = await makeInstance()
-    try {
-      const declared = Array.from({ length: 200 }, (_, i) => ({
-        type: 'agent' as const,
-        name: `aw-missing-${i}`,
-      }))
-      const fake = {
-        manifest: {
-          builtins: declared,
-          resources: [],
-          root: { slug: 'x', type: 'agent', name: 'x' },
-        },
-        bundle: { bundleVersion: 1, ops: [] },
-        files: new Map<string, Uint8Array>(),
-        digest: 'd',
-      } as unknown as Parameters<typeof buildPackagePreview>[2]
-
-      const err = await buildPackagePreview(dst.db, actorOf('u1'), fake, {
-        box,
-        importId: ulid(),
-      }).then(
-        () => null,
-        (e: unknown) =>
-          e as {
-            code?: string
-            message?: string
-            details?: { missingBuiltins?: unknown[]; missingBuiltinCount?: number }
-          },
-      )
-      expect(err?.code).toBe('package-builtin-missing')
-      // 总数要如实报出来。
-      expect(err?.message ?? '').toContain('200 framework built-in(s)')
-      expect(err?.details?.missingBuiltinCount).toBe(200)
-      // 但清单是取样的：details 里远少于 200 条，message 里带「and N more」。
-      expect((err?.details?.missingBuiltins ?? []).length).toBeLessThan(200)
-      expect(err?.message ?? '').toContain('more)')
-    } finally {
-      removeTempDirSync(dst.appHome)
-    }
-  })
-
-  test('built-in 数量 ×10，预检对 agents 表的查询次数不变', async () => {
-    const small = await parseResourcePackage(await packageWithBuiltinRefs(3))
-    const large = await parseResourcePackage(await packageWithBuiltinRefs(30))
-    expect(small.manifest.builtins).toHaveLength(3)
-    expect(large.manifest.builtins).toHaveLength(30)
-
-    const counted = async (pkg: typeof small): Promise<number> => {
-      const dst = await makeInstance()
-      try {
-        const { db: proxied, n } = countSelects(dst.db, [agents])
-        // ⚠️ 只吞**预期的业务拒绝**，不要 `.catch(() => undefined)` 把任何异常都吞掉
-        // ——第五轮实测那种写法会掩盖「只查一次、但查询本身失败」这类新问题。
-        await buildPackagePreview(proxied, actorOf('u1'), pkg, { box, importId: ulid() }).catch(
-          (e: unknown) => {
-            const code = (e as { code?: string }).code
-            if (code !== 'package-builtin-missing') throw e
-          },
-        )
-        return n()
-      } finally {
-        removeTempDirSync(dst.appHome)
+              nodes: ids.map((id, i) => ({ id: `n${i}`, kind: 'agent-single', agentId: id })),
+            }),
+            ownerUserId: 'u1',
+            visibility: 'private',
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workflow', id: wfId },
+            { appHome: src.appHome },
+          )
+          return pkg.zip
+        } finally {
+          removeTempDirSync(src.appHome)
+        }
       }
-    }
 
-    expect(await counted(large)).toBe(await counted(small))
-  })
-})
+      test('**声明数量有上限**：超限的包在解析期就被拒（不是等到预检去扛）', async () => {
+        // 第六轮 P2-5。上一版我只解决了「不 500」（把无界 `IN` 改成分块），但没解决根本问题：
+        // **`manifest.builtins` 的长度由上传者决定**，而它直接决定预检要做多少查询、在内存里
+        // 留多大中间结构。实测一个 7.8MiB 的合法包（远低于 64MiB 上传上限）声明 65536 个
+        // built-in：预检额外吃约 23MiB RSS、错误载荷 JSON 达 437 万字符。
+        //
+        // 把 zip 体积当唯一的资源上界是不够的——**压缩比让「合法包」与「服务端要做多少工作」
+        // 彻底脱钩**。所以在**解析期**就按条数拒绝：框架内置件实际是个位数，1000 已宽出两个
+        // 数量级。
+        // ⚠️ 夹具必须让 `manifest.builtins` 与 bundle 的引用**真的对得上**，否则包会因
+        // 「builtins 与 bundle 不匹配」被拒——那样测试是为**错误的理由**通过的（第一版正是
+        // 如此：去掉数量上限它照样绿）。所以 bundle 里要有一个真的引用了这 1001 个 built-in
+        // 的 workflow-create op。
+        const names = Array.from({ length: MAX_DECLARED_BUILTINS + 1 }, (_, i) => `b${i}`)
+        const manifest = {
+          formatVersion: 1,
+          exportedAt: 0,
+          root: { slug: 'wf-x', type: 'workflow', name: 'x' },
+          resources: [{ slug: 'wf-x', type: 'workflow', name: 'x' }],
+          requirements: {},
+          secrets: [],
+          builtins: names.map((name) => ({ type: 'agent', name })),
+        }
+        const bundle = {
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'workflow-create',
+              slug: 'wf-x',
+              payload: {
+                name: 'x',
+                description: '',
+                definition: {
+                  $schema_version: 4,
+                  inputs: [],
+                  edges: [],
+                  nodes: names.map((n, i) => ({
+                    id: `n${i}`,
+                    kind: 'agent-single',
+                    agentRef: `builtin:agent/${n}`,
+                  })),
+                },
+              },
+            },
+          ],
+          rootRef: 'local:wf-x',
+        }
+        const zip = encodeZip([
+          { path: 'manifest.yaml', bytes: new TextEncoder().encode(stringifyYaml(manifest)) },
+          { path: 'bundle.json', bytes: new TextEncoder().encode(JSON.stringify(bundle)) },
+        ])
+        const err = await parseResourcePackage(zip).then(
+          () => null,
+          (e: unknown) => e as { code?: string },
+        )
+        expect(err?.code).toBe('package-invalid')
+      })
+
+      test('缺失很多时，错误载荷**取样**而不是列全量', async () => {
+        // 上限挡住了极端情形，但错误路径本身也不该是放大器：把全部缺失项同时放进 message
+        // 和 details 时，`DomainError.toPayload()` 的 JSON 会随缺失数线性膨胀（65536 项实测
+        // 437 万字符——一个错误响应把请求体的放大又翻一倍）。
+        // 用户要的是「缺哪些」的**样例 + 总数**，不是一份上千行的清单。
+        const dst = await makeInstance()
+        try {
+          const declared = Array.from({ length: 200 }, (_, i) => ({
+            type: 'agent' as const,
+            name: `aw-missing-${i}`,
+          }))
+          const fake = {
+            manifest: {
+              builtins: declared,
+              resources: [],
+              root: { slug: 'x', type: 'agent', name: 'x' },
+            },
+            bundle: { bundleVersion: 1, ops: [] },
+            files: new Map<string, Uint8Array>(),
+            digest: 'd',
+          } as unknown as Parameters<typeof buildPackagePreview>[2]
+
+          const err = await buildPackagePreview(dst.db, actorOf('u1'), fake, {
+            box,
+            importId: ulid(),
+          }).then(
+            () => null,
+            (e: unknown) =>
+              e as {
+                code?: string
+                message?: string
+                details?: { missingBuiltins?: unknown[]; missingBuiltinCount?: number }
+              },
+          )
+          expect(err?.code).toBe('package-builtin-missing')
+          // 总数要如实报出来。
+          expect(err?.message ?? '').toContain('200 framework built-in(s)')
+          expect(err?.details?.missingBuiltinCount).toBe(200)
+          // 但清单是取样的：details 里远少于 200 条，message 里带「and N more」。
+          expect((err?.details?.missingBuiltins ?? []).length).toBeLessThan(200)
+          expect(err?.message ?? '').toContain('more)')
+        } finally {
+          removeTempDirSync(dst.appHome)
+        }
+      })
+
+      test('built-in 数量 ×10，预检对 agents 表的查询次数不变', async () => {
+        const small = await parseResourcePackage(await packageWithBuiltinRefs(3))
+        const large = await parseResourcePackage(await packageWithBuiltinRefs(30))
+        expect(small.manifest.builtins).toHaveLength(3)
+        expect(large.manifest.builtins).toHaveLength(30)
+
+        const counted = async (pkg: typeof small): Promise<number> => {
+          const dst = await makeInstance()
+          try {
+            const { db: proxied, n } = countSelects(dst.db, [agents])
+            // ⚠️ 只吞**预期的业务拒绝**，不要 `.catch(() => undefined)` 把任何异常都吞掉
+            // ——第五轮实测那种写法会掩盖「只查一次、但查询本身失败」这类新问题。
+            await buildPackagePreview(proxied, actorOf('u1'), pkg, { box, importId: ulid() }).catch(
+              (e: unknown) => {
+                const code = (e as { code?: string }).code
+                if (code !== 'package-builtin-missing') throw e
+              },
+            )
+            return n()
+          } finally {
+            removeTempDirSync(dst.appHome)
+          }
+        }
+
+        const largeCount = await counted(large)
+        const smallCount = await counted(small)
+        // ⚠️ 先证明**这道计数 seam 真的数到了东西**。它数不到时（典型是 PG 上事务句柄没被
+        // 代理，见 `countSelects` 头注）两边都是 0，下面那条判据会以 `0 === 0` 安静变绿——
+        // 「seam 坏了」和「算法是对的」在绿里长得一模一样，而坏掉的方向正好是变绿的方向。
+        expect(smallCount).toBeGreaterThan(0)
+        expect(largeCount).toBe(smallCount)
+      })
+    })
+  },
+  { databaseCount: 4 },
+)
