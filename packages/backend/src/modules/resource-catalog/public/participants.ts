@@ -14,8 +14,6 @@ import type {
   skillCatalogBootParticipantBrand,
 } from '../domain/participantBrands'
 import type {
-  AgentPackageMutation,
-  CapabilityTemplatePackageMutation,
   CatalogSelectorKind,
   FrozenTaskExecutionResourceSnapshot,
   GetAgentResourceClosureStatusInput,
@@ -23,28 +21,14 @@ import type {
   McpAclIdentity,
   McpProbeRecord,
   McpProbeWrite,
-  McpPackageMutation,
   McpRuntimeTestLeaseInput,
   McpRuntimeTestLeaseToken,
-  PluginPackageMutation,
-  PreparedAgentPackageMutation,
-  PreparedCapabilityTemplatePackageMutation,
-  PreparedMcpPackageMutation,
-  PreparedPluginPackageMutation,
-  PreparedSkillPackageMutation,
-  PreparedWorkflowPackageMutation,
-  PreparedWorkgroupPackageMutation,
-  ResourcePackageApplyScenarioPlan,
-  ResourcePackageMutationReceipt,
-  SkillPackageMutation,
   ParseSkillZipCatalogInput,
   ParseSkillZipCatalogReceipt,
   CommitSkillZipCatalogInput,
   CommitSkillZipCatalogReceipt,
   TaskExecutionResourceRequest,
   VersionedIntentResourceChangesetPlan,
-  WorkflowPackageMutation,
-  WorkgroupPackageMutation,
 } from './types'
 
 /** Opaque request context minted by identity-access; never an Actor-shaped bag. */
@@ -151,17 +135,6 @@ export interface DemoResourceCatalogSeedParticipant {
 
 declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
 declare const intentApplyResourceParticipantInTxBrand: unique symbol
-declare const agentPackageMutationParticipantInTxBrand: unique symbol
-declare const skillPackageMutationParticipantInTxBrand: unique symbol
-declare const mcpPackageMutationParticipantInTxBrand: unique symbol
-declare const pluginPackageMutationParticipantInTxBrand: unique symbol
-declare const workflowPackageMutationParticipantInTxBrand: unique symbol
-declare const workgroupPackageMutationParticipantInTxBrand: unique symbol
-declare const capabilityTemplatePackageMutationParticipantInTxBrand: unique symbol
-declare const resourcePackageEventsInTxBrand: unique symbol
-declare const resourcePackageAuditInTxBrand: unique symbol
-declare const resourcePackageApplyScenarioTxBrand: unique symbol
-declare const resourcePackageApplyTxBrand: unique symbol
 declare const mcpAclIdentityParticipantBrand: unique symbol
 export interface IntentContextResourceReference {
   readonly resourceType: CatalogSelectorKind
@@ -258,109 +231,25 @@ export interface IntentApplyResourceParticipantInTx {
 // （`modules/memory/application/ports/resourceScopeAccess.ts`），resource-catalog 只在装配根上交出一份
 // 结构兼容的实现（`composition/resourceScopeAuthorization.ts`）。public 面不引 Actor，也不点名事务句柄。
 
-export interface AgentPackageMutationParticipant {
-  prepare(mutation: AgentPackageMutation): Promise<PreparedAgentPackageMutation>
-}
-export interface SkillPackageMutationParticipant {
-  prepare(mutation: SkillPackageMutation): Promise<PreparedSkillPackageMutation>
-}
-export interface McpPackageMutationParticipant {
-  prepare(mutation: McpPackageMutation): Promise<PreparedMcpPackageMutation>
-}
-export interface PluginPackageMutationParticipant {
-  prepare(mutation: PluginPackageMutation): Promise<PreparedPluginPackageMutation>
-}
-export interface WorkflowPackageMutationParticipant {
-  prepare(mutation: WorkflowPackageMutation): Promise<PreparedWorkflowPackageMutation>
-}
-export interface WorkgroupPackageMutationParticipant {
-  prepare(mutation: WorkgroupPackageMutation): Promise<PreparedWorkgroupPackageMutation>
-}
-export interface CapabilityTemplatePackageMutationParticipant {
-  prepare(
-    mutation: CapabilityTemplatePackageMutation,
-  ): Promise<PreparedCapabilityTemplatePackageMutation>
-}
+// RFC-359（apply 引擎合一，plan §5dy）—— 资源包的**整族参与者合同**随**通用 bundle 引擎**
+// 退役，公共面上不再留它们：
+//
+//   · 七条 `*PackageMutationParticipantInTx`（`commit(prepared)`）—— 那是同步事务链的形状
+//     「引擎开事务 → 把七个 tx-bound 参与者交给它 → 逐个 commit」；
+//   · 七条 `*PackageMutationParticipant`（`prepare(mutation)`）与它们的花名册
+//     `ResourcePackageMutationParticipants`；
+//   · `ResourcePackageEventsInTx` / `ResourcePackageAuditInTx` / `ResourcePackageApplyScenarioTx`。
+//
+// 统一 apply 引擎不跨这些合同：编排层自己持有事务，逐臂调用**模块内部**的
+// `PostgresqlResourcePackagePreparationParticipants` /
+// `PostgresqlResourcePackageTransactionParticipants`（七条臂的闭集判据钉在
+// `rfc345-resource-catalog-contracts` 上，名字换了、闭集逐字不变）。
+// 公共面不留没人跨的合同。
 
-export interface AgentPackageMutationParticipantInTx {
-  readonly [agentPackageMutationParticipantInTxBrand]: 'agent-package-mutation'
-  commit(prepared: PreparedAgentPackageMutation): Promise<ResourcePackageMutationReceipt<'agent'>>
-}
-export interface SkillPackageMutationParticipantInTx {
-  readonly [skillPackageMutationParticipantInTxBrand]: 'skill-package-mutation'
-  commit(prepared: PreparedSkillPackageMutation): Promise<ResourcePackageMutationReceipt<'skill'>>
-}
-export interface McpPackageMutationParticipantInTx {
-  readonly [mcpPackageMutationParticipantInTxBrand]: 'mcp-package-mutation'
-  commit(prepared: PreparedMcpPackageMutation): Promise<ResourcePackageMutationReceipt<'mcp'>>
-}
-export interface PluginPackageMutationParticipantInTx {
-  readonly [pluginPackageMutationParticipantInTxBrand]: 'plugin-package-mutation'
-  commit(prepared: PreparedPluginPackageMutation): Promise<ResourcePackageMutationReceipt<'plugin'>>
-}
-export interface WorkflowPackageMutationParticipantInTx {
-  readonly [workflowPackageMutationParticipantInTxBrand]: 'workflow-package-mutation'
-  commit(
-    prepared: PreparedWorkflowPackageMutation,
-  ): Promise<ResourcePackageMutationReceipt<'workflow'>>
-}
-export interface WorkgroupPackageMutationParticipantInTx {
-  readonly [workgroupPackageMutationParticipantInTxBrand]: 'workgroup-package-mutation'
-  commit(
-    prepared: PreparedWorkgroupPackageMutation,
-  ): Promise<ResourcePackageMutationReceipt<'workgroup'>>
-}
-export interface CapabilityTemplatePackageMutationParticipantInTx {
-  readonly [capabilityTemplatePackageMutationParticipantInTxBrand]: 'capability-template-package-mutation'
-  commit(
-    prepared: PreparedCapabilityTemplatePackageMutation,
-  ): Promise<ResourcePackageMutationReceipt<'capability_template'>>
-}
-
-export interface ResourcePackageMutationParticipants {
-  readonly agents: AgentPackageMutationParticipant
-  readonly skills: SkillPackageMutationParticipant
-  readonly mcps: McpPackageMutationParticipant
-  readonly plugins: PluginPackageMutationParticipant
-  readonly workflows: WorkflowPackageMutationParticipant
-  readonly workgroups: WorkgroupPackageMutationParticipant
-  readonly capabilityTemplates: CapabilityTemplatePackageMutationParticipant
-}
-
-export interface ResourcePackageEventsInTx {
-  readonly [resourcePackageEventsInTxBrand]: 'resource-package-events'
-  resourceApplied(receipt: ResourcePackageMutationReceipt): void
-}
-
-export interface ResourcePackageAuditInTx {
-  readonly [resourcePackageAuditInTxBrand]: 'resource-package-audit'
-  recordResourceApplied(receipt: ResourcePackageMutationReceipt): void
-}
-
-export interface ResourcePackageApplyScenarioTx {
-  readonly [resourcePackageApplyScenarioTxBrand]: 'resource-package-apply-scenario'
-  readonly currentAuthority: ResourceRequestContext
-}
-
-export interface ResourcePackageApplyTx extends ResourcePackageApplyScenarioTx {
-  readonly [resourcePackageApplyTxBrand]: 'resource-package-apply'
-  readonly agents: AgentPackageMutationParticipantInTx
-  readonly skills: SkillPackageMutationParticipantInTx
-  readonly mcps: McpPackageMutationParticipantInTx
-  readonly plugins: PluginPackageMutationParticipantInTx
-  readonly workflows: WorkflowPackageMutationParticipantInTx
-  readonly workgroups: WorkgroupPackageMutationParticipantInTx
-  readonly capabilityTemplates: CapabilityTemplatePackageMutationParticipantInTx
-  readonly events: ResourcePackageEventsInTx
-  readonly audit: ResourcePackageAuditInTx
-}
-
-/** Additive W4-C contract consumed by the current BundleApply adapter first. */
-export interface ResourcePackageApplyScenarioProvider {
-  readonly scenario: ResourcePackageApplyScenarioPlan
-  readonly participants: ResourcePackageMutationParticipants
-}
-
+// RFC-359（apply 引擎合一，plan §5dy）—— `ResourcePackageApplyTx` 与
+// `ResourcePackageApplyScenarioProvider` 两条公共合同随**通用 bundle 引擎**退役：
+// 它们描述的是那条同步事务链「把七条臂 + events + audit 打包交给引擎」的形状，
+// 统一 apply 引擎不走这个形状（编排层持有事务、逐臂调用）。公共面不留没人跨的合同。
 // ---------------------------------------------------------------------------
 // RFC-353 T6（RFC-294 W4-E3）—— resource-catalog offered 的**技能版本提交**面。
 //

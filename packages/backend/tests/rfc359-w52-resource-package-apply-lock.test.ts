@@ -1,4 +1,14 @@
 // RFC-359 W52: share the complete apply queue while retaining independent module lock domains.
+//
+// 覆盖验收条款：引擎承重不变量 I1（串行键与幂等 namespace 是两个概念）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+//
+// # 覆盖的不变量
+//
+// **I1**：串行键与幂等 namespace 是两个概念。统一 apply 引擎里串行键是
+// `${actor}:${previewToken}`（本文件测的这把锁），幂等键是 `('package', importId)`
+// （`rfc359-w14-unified-apply-journal-replay` 测的那条）。原锚点在
+// `rfc271-bundle-engine` 的源码断言上，随通用 bundle 引擎退役搬到这里（plan §5dy）。
 import { expect, test } from 'bun:test'
 
 import { createResourcePackageApplyLock } from '../src/platform/persistence/resourcePackageApplyLock'

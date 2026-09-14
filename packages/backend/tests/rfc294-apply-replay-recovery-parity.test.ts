@@ -7,12 +7,12 @@
 // committed receipt remains replayable after mutable surrounding state moves.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ResourceBundle } from '@agent-workflow/shared'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import { createInMemoryDb, type DbClient } from '@/db/client'
@@ -22,9 +22,13 @@ import {
   convergeIntentApplyJournal,
   type IntentApplyReceipt,
 } from '@/modules/intent/composition/apply'
-import { applyResourceBundle, convergeResourceBundleApplies } from '@/services/bundle/apply'
-import type { BundleApplyProvider, BundleReceipt } from '@/services/bundle/provider'
+import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { composeSqliteResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { parseResourcePackage } from '@/services/resourcePackage/parse'
+import { encodeZip } from '@/util/zip'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
+import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
+import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_ID = 'rfc294-apply-owner'
@@ -40,18 +44,95 @@ function actorOf(id: string): Actor {
   })
 }
 
-function emptyBundle(): ResourceBundle {
-  return { bundleVersion: 1, ops: [] }
+const box = createSecretBoxFromKey(randomBytes(32))
+const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
+
+/**
+ * RFC-359（plan §5dy）—— 资源包那一半改走**生产在用的统一 apply 引擎**。
+ *
+ * 通用 bundle 引擎（`services/bundle/apply.ts`）随合一退役，于是这份对拍里
+ * 「资源包侧」的三件事各换了执行者，**判据一条没改**：
+ *   · 收敛 → `composeSqliteResourcePackageApplyMaintenance(...).command.converge`
+ *     （中立的 converge 命令，两个 provider 共用）；
+ *   · 重放 → 真的走一次 apply：拿一个 `importId` 等于 journal `key` 的 preview token 提交，
+ *     引擎在 duplicate lookup 那一步就回放 / 拒绝，**根本走不到写；**
+ *   · journal 的 scope 固定是 `'package'`（统一引擎不再让调用方自选 scope）。
+ */
+const PACKAGE_SCOPE = 'package'
+
+/** 一个最小的、能被 parse 的空包：重放路径在 duplicate lookup 就返回，内容不重要。 */
+function minimalPackageZip(): Uint8Array {
+  return encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: agent-parity
+  type: agent
+  name: parity
+resources:
+  - slug: agent-parity
+    type: agent
+    name: parity
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'agent-create',
+              slug: 'agent-parity',
+              payload: {
+                name: 'parity',
+                description: '',
+                outputs: [],
+                syncOutputsOnIterate: true,
+                permission: {},
+                skills: [],
+                dependsOn: [],
+                mcp: [],
+                plugins: [],
+                frontmatterExtra: {},
+                bodyMd: '',
+              },
+            },
+          ],
+          rootRef: 'local:agent-parity',
+        }),
+      ),
+    },
+  ])
 }
 
-function provider(scope: string, key: string, actor: Actor = actorOf(OWNER_ID)) {
-  return {
-    idempotencyKey: { scope, key },
-    serializationKey: `serialization:${scope}:${key}`,
-    actor,
-    resolveExternal: async (ref: string) => ref,
-    readSkillFile: () => new Uint8Array(),
-  } satisfies BundleApplyProvider
+/** 用与 journal `key` 相同的 `importId` 提交一次——命中 duplicate lookup。 */
+async function replayPackageApply(importId: string): Promise<unknown> {
+  const pkg = await parseResourcePackage(minimalPackageZip())
+  const preview = await buildPackagePreview(db, actorOf(OWNER_ID), pkg, { box, importId })
+  return commitResourcePackageForTest({ db, appHome, box }, actorOf(OWNER_ID), {
+    pkg,
+    previewToken: preview.previewToken,
+    decisions: [{ localSlug: 'agent-parity', action: 'new' }],
+  })
+}
+
+function convergePackageApplies(): Promise<{ failed: number; rolledForward: number }> {
+  const maintenance = composeSqliteResourcePackageApplyMaintenance({
+    db,
+    appHome,
+    pluginsDir: join(appHome, 'plugins'),
+    activitySource: { activeApplyIds: () => [] },
+  })
+  return maintenance.command
+    .converge({ activeApplyIds: [] })
+    .then((receipt) => ({ failed: receipt.failed, rolledForward: receipt.rolledForward }))
 }
 
 beforeEach(async () => {
@@ -86,12 +167,12 @@ async function seedPair(
   suffix: string,
   state: 'prepared' | 'applying' | 'committed' | 'failed',
   updatedAt: number,
-  receipts?: { intent: IntentApplyReceipt; bundle: BundleReceipt },
+  receipts?: { intent: IntentApplyReceipt; bundle: Record<string, unknown> },
 ): Promise<PairIds> {
   const intentId = ulid()
   const intentKey = `intent-${suffix}`
   const bundleId = ulid()
-  const bundleScope = `package-${suffix}`
+  const bundleScope = PACKAGE_SCOPE
   const bundleKey = `bundle-${suffix}`
   await db.insert(intentApplyJournal).values({
     id: intentId,
@@ -137,7 +218,7 @@ describe('RFC-294 AtomicApply migration parity', () => {
       failed: 0,
       rolledForward: 0,
     })
-    expect(await convergeResourceBundleApplies(db, appHome)).toEqual({
+    expect(await convergePackageApplies()).toEqual({
       failed: 0,
       rolledForward: 0,
     })
@@ -158,7 +239,7 @@ describe('RFC-294 AtomicApply migration parity', () => {
       failed: 1,
       rolledForward: 0,
     })
-    expect(await convergeResourceBundleApplies(db, appHome)).toEqual({
+    expect(await convergePackageApplies()).toEqual({
       failed: 1,
       rolledForward: 0,
     })
@@ -182,15 +263,9 @@ describe('RFC-294 AtomicApply migration parity', () => {
         },
       ),
     ).rejects.toMatchObject({ code: 'intent-apply-failed-replay' })
-    await expect(
-      applyResourceBundle(
-        { db, appHome },
-        {
-          bundle: emptyBundle(),
-          provider: provider(pair.bundleScope, pair.bundleKey),
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'bundle-apply-failed-replay' })
+    await expect(replayPackageApply(pair.bundleKey)).rejects.toMatchObject({
+      code: 'bundle-apply-failed-replay',
+    })
 
     expect(await db.select().from(agents)).toEqual([])
     expect(await db.select().from(intentApplyJournal)).toHaveLength(1)
@@ -203,7 +278,9 @@ describe('RFC-294 AtomicApply migration parity', () => {
       commitSeq: 7,
       applied: [],
     }
-    const bundleReceipt: BundleReceipt = { journalId: 'bundle-receipt', applied: [] }
+    // 统一引擎的回执信封（`ReceiptSchema`，strict）：`applied[]` 逐条用 `operationId`。
+    // 空 applied 两种命名下同形，这里正好不用分心。
+    const bundleReceipt = { journalId: 'bundle-receipt', applied: [] }
     const pair = await seedPair('committed', 'committed', Date.now(), {
       intent: intentReceipt,
       bundle: bundleReceipt,
@@ -233,18 +310,7 @@ describe('RFC-294 AtomicApply migration parity', () => {
         decisions: [],
       },
     )
-    const bundleReplay = await applyResourceBundle(
-      { db, appHome },
-      {
-        bundle: emptyBundle(),
-        provider: {
-          ...provider(pair.bundleScope, pair.bundleKey),
-          claimInTx: () => {
-            throw new Error('mutable admission validation must not run on committed replay')
-          },
-        },
-      },
-    )
+    const bundleReplay = await replayPackageApply(pair.bundleKey)
 
     expect(intentReplay).toEqual(intentReceipt)
     expect(bundleReplay).toEqual(bundleReceipt)

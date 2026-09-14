@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 322,
-    "thinFacades": 69
+    "serviceFiles": 318,
+    "thinFacades": 67
   },
   "entries": [
     {
@@ -243,93 +243,6 @@
     },
     {
       "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/bundle/apply.ts",
-      "id": "facade:packages/backend/src/services/bundle/apply.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/bundle/apply.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:0804a3abe84b2cc37413",
-        "import:093080a2daeb1a74b961",
-        "import:0e66d8ff770d022bd9e9",
-        "import:212ccfcfa04e2c8d8bfa",
-        "import:26db5936327cfc9af907",
-        "import:271a0261d084cd666c0e",
-        "import:33eff8cfec108d848164",
-        "import:40076f6182533c783d59",
-        "import:41060d91bffa8837a495",
-        "import:447f34e4dc86f3ddcdf8",
-        "import:4649c3366d0f5388a247",
-        "import:48e723ec8cc4acff4479",
-        "import:49ac0e2e312a1ca89fc6",
-        "import:5405d9cb3dd23041b722",
-        "import:587d6d4843ecce787d4e",
-        "import:5de97804e2c907286986",
-        "import:6b434be1ed1d2b4e96e0",
-        "import:71a4c8d116d7f5e039fc",
-        "import:72b18025924c3cca2da0",
-        "import:750a212d3292d449e8b4",
-        "import:7c754dfc674d1eeeabc2",
-        "import:84faa1037b8a3d86e610",
-        "import:8a29ea79b7010d150725",
-        "import:8b5e5981d173917b6c29",
-        "import:8c19b80f9dfad59536c3",
-        "import:97d632754562e5827aa7",
-        "import:9d5fbf5a7a0d79b50de1",
-        "import:9de24ecdc08b7b4016c4",
-        "import:9ecf9b25dd7db9cea3e2",
-        "import:a2d4e2fe3bfd54f054fc",
-        "import:a339005879b1b7e9b8c8",
-        "import:b0598c6830353e8f98ea",
-        "import:b193f9ff9fe2f110e71c",
-        "import:b77e93e6f91645bba9e7",
-        "import:bef5e128011a82129940",
-        "import:c1bac57858550616606c",
-        "import:c9cd82dc4544711dce52",
-        "import:cd404da35308cb3d14cb",
-        "import:d1b35bad7c9d0cfddbde",
-        "import:d4667ecc2f38518bcef2",
-        "import:d80afd54be0efaba2392",
-        "import:d8c8de9313a8f07e26ca",
-        "import:db45583e50fd1e4c9aae",
-        "import:dc34854307f88c4c8125",
-        "import:de4a78ae72fffe3a5798",
-        "import:e87c7f707620aaf9d440",
-        "import:eaf87747b4e223ed3c69",
-        "import:f322b5459994f439169d",
-        "import:fa613f254ab3504679bc",
-        "import:fd1c761f10dbaf398cd6"
-      ],
-      "exportedSymbols": [
-        "legacyResourcePackageMutationDependencies",
-        "legacyResourcePackageMutationRuntimeFactory"
-      ],
-      "file": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "id": "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/bundle/lower.ts",
-      "id": "facade:packages/backend/src/services/bundle/lower.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/bundle/lower.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [],
       "exportedSymbols": [
         "BundleAppliedOp",
         "BundleApplyInput",
@@ -356,23 +269,6 @@
       "status": "legacy-implementation",
       "targetContext": "task-execution",
       "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [
-        "LocalRefTarget",
-        "RefResolveCtx",
-        "resolveAgentSkillRef",
-        "resolveCallRef",
-        "resolveIdentityRef"
-      ],
-      "file": "packages/backend/src/services/bundle/refs.ts",
-      "id": "facade:packages/backend/src/services/bundle/refs.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/bundle/refs.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
     },
     {
       "boundaryEdgeIds": [
@@ -6760,5 +6656,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d"
+  "sourceDigest": "sha256:61619c97c1eb50cb80a1ed893650d9ca500d8cc27e36c7aea08d6e45c90c276d"
 }

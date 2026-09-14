@@ -314,8 +314,6 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/backup.ts',
       'packages/backend/src/services/backupManifest.ts',
       'packages/backend/src/services/backupScheduler.ts',
-      'packages/backend/src/services/bundle/apply.ts',
-      'packages/backend/src/services/bundle/lower.ts',
       'packages/backend/src/services/clarify/autoDispatch.ts',
       'packages/backend/src/services/clarify/queue.ts',
       'packages/backend/src/services/clarify/rerunLedger.ts',

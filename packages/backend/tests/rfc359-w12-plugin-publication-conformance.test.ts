@@ -574,11 +574,13 @@ test('plugin mutation SQL has one insert and one shared publication algorithm', 
   })
 })
 
-test('legacy plugin publication awaits every database commit before returning', () => {
+test('intent apply 侧的插件发布在返回前 await 到每一次数据库落库', () => {
+  // RFC-359（plan §5dy）：**资源包那两份**（legacy 参与者 + 依赖表）随通用 bundle 引擎退役，
+  // 它们名下的 `commitPlugin*InTx` 调用点一并消失；资源包侧的「commit 必须 await」现在由
+  // `rfc359-w7-sync-transaction-cutover`（I14 源码兜底）与 `rfc359-w5-unattended-void-promise` 盯着。
+  // 留下的是 **intent apply 那两份**——它们仍是 legacy 同步形态，这条判据对它们照旧成立。
   const paths = [
-    'modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
     'modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts',
-    'services/bundle/legacyResourcePackageMutationDependencies.ts',
     'modules/resource-catalog/composition/legacyIntentApplyResourceDependencies.ts',
   ]
   const results = paths.map((path) => {
@@ -610,8 +612,6 @@ test('legacy plugin publication awaits every database commit before returning', 
   })
   expect(results).toEqual([
     { calls: ['commitPluginCreateInTx', 'commitPluginPublishInTx'], unawaited: [] },
-    { calls: ['commitPluginCreateInTx', 'commitPluginPublishInTx'], unawaited: [] },
-    { calls: ['commitLegacyPluginCreateInTx', 'commitLegacyPluginPublishInTx'], unawaited: [] },
     { calls: ['commitLegacyPluginCreateInTx', 'commitLegacyPluginPublishInTx'], unawaited: [] },
   ])
 })

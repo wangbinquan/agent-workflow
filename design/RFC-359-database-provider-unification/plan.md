@@ -9615,3 +9615,121 @@ rfc349-* + rfc359-w1*`）会稳定出 8 条红，全在 `rfc310-pr9-cutover` / `
 判据也是那里写的定式：「新用例本文件绿、全量红，且红的是你没碰过的文件」。CI 分片（ubuntu 12 / macOS 6）
 不会产生这个组合，历史上也一直绿。**记在这里是为了不把它当成「重跑就过了」**——它没被修，
 只是被归类；哪天要真查，从「哪个更早的文件污染了全局 registry」入手。
+
+
+## 5dy. 通用 bundle 引擎整条退役——**AC-1 的最后一对合一完工**
+
+§5dx 把它锁的判据逐条对到统一引擎上并补齐了两条缺口。这一批把代码删掉。
+
+### 删了什么（生产侧 0 调用方）
+
+| 文件 | 行数量级 | 它是什么 |
+| --- | --- | --- |
+| `services/bundle/apply.ts` + `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts` | ~650 | 通用 bundle apply 引擎（journal / claim / 补偿 / 收敛） |
+| `services/bundle/lower.ts` + `…/legacyResourcePackageBundleLower.ts` | ~330 | 把 `local:` / `external:` / `builtin:` 引用降解成 id 的那一层 |
+| `services/bundle/refs.ts` | ~200 | 上面那层用的引用解析原语 |
+| `aggregateAdapters/legacyResourcePackageMutationParticipants.ts` | ~1275 | 七条臂的**同步事务**参与者 |
+| `services/bundle/legacyResourcePackageMutationDependencies.ts` | ~220 | 上面那份的依赖表 |
+| `application/participants/resourcePackageCapabilities.ts` 的后半 | ~120 | `*InTx` 参与者构造器 + `createResourcePackageApplyTx` |
+| `code-capability/infrastructure` 的 `createSqliteCapabilityTemplatePackageCommitSync` | ~20 | 同步事务里的 SQLite 专属能力模板提交臂 |
+
+**公共面**跟着清了一大块（AC-12）：七条 `*PackageMutationParticipantInTx`、七条
+`*PackageMutationParticipant`、花名册 `ResourcePackageMutationParticipants`、
+`ResourcePackageEventsInTx` / `ResourcePackageAuditInTx` / `ResourcePackageApplyScenarioTx` /
+`ResourcePackageApplyTx` / `ResourcePackageApplyScenarioProvider` /
+`ResourcePackageApplyScenarioPlan`——统一引擎一条都不跨（编排层自己持有事务，逐臂调用模块内部合同）。
+**公共面不留没人跨的合同**；七条臂的闭集判据改钉在生产在用的
+`PostgresqlResourcePackageTransactionParticipants` 上，名字换了、闭集逐字不变。
+
+### 判据怎么处置的（一条都没有「就这么删了」）
+
+- **退役**：`rfc271-bundle-engine`（461 行）/ `rfc271-bundle-recovery-hardening`（322 行）——
+  它们测的是被删的引擎，八条不变量的落点逐条列在 §5dx 的表里。
+- **改指统一引擎**：
+  - `rfc294-apply-replay-recovery-parity` 的资源包那一半——收敛改走中立的 converge 命令、
+    重放改**真的走一次 apply**（`importId` 等于 journal `key`，命中 duplicate lookup）；
+  - `rfc359-w7-sync-transaction-cutover` 只留 I14 那条源码兜底，改指生产在用的参与者文件
+    （其余三条在 w11 / w14 / maintenance 上各有落点）。**先红后绿实测**：把生产那三处
+    `await …recordArtifact(...)` 改成 `void`，守卫当场红；
+  - `rfc304-capability-package-roundtrip` 的 lowering 那条——从「lower 出来的 payload」
+    改成**落库那一行**（真导一次包，断言 `agentBySlot` 解析成目的端 agent 的 id）。更强，
+    而且走的是用户真会走的路；
+  - `rfc345-resource-catalog-contracts` 的两条闭集断言改钉生产那一份。
+- **重新表达**：`rfc271-builtin-resolve` 里依赖 `refs.ts` 的两组单测（9 条）——新写
+  `rfc359-w14-package-reference-fail-closed.test.ts`，**双引擎**、走完整用户路径
+  （parse → preview → commit），四例各断言错误码 + 零副作用。
+
+### 这次重新表达顺手照出一件事：活着那条路**拦得比退役那层更早**
+
+旧单测直接喂 `resolveIdentityRef`，看到的是 apply 期的码（`bundle-builtin-missing` /
+`bundle-ref-invalid`）。走完整路径之后实测：
+
+- 缺 built-in ⇒ **preview 期**就报 `package-builtin-missing`，连 apply 都进不去；
+- `agent.skills` 里塞 `builtin:`、`local:` 指错类型 ⇒ **parse 期**的 bundle schema 直接拒
+  （`package-invalid`），根本到不了引用解析层。
+
+不变量不但还在，而且前移了一道门。新判据因此锁「**被哪一道门拦下**」这件事本身，
+而不是锁某一层的内部码——后者会把「拦得更早」误判成回归。
+
+### 落盘工件那张矩阵的形状也变了
+
+`rfc359-w5-artifact-format-portability` 原本是「两个写出点 × 3 kind × 两个读回侧」的 12 格。
+写出点现在**只剩一个**（另一个随引擎退役），于是：
+
+- `WRITERS` 收成一条，锚点断言改问「唯一那个写出点还在写 `preparedArtifactsJson` 吗」；
+- 12 格矩阵**留着**——`sqlite` 那一族样本现在代表的是「**合一之前留在盘上的存量工件**」，
+  读回侧仍然必须认得；
+- **新增一条**：`composeResourcePackageApplyArtifactRecoveryChain`（§5dw 加的回落链）
+  必须把两种格式都读回来。那六格 `rejects` 的正解就是它，现在有判据钉着了。
+
+### 账本
+
+| 账本 | 变动 |
+| --- | --- |
+| `DECLARED_CROSS_DIRECTORY_PAIRS` | 1 → **0**（唯一那一对合一完工；表与判据留着给下一条跨目录对） |
+| `rfc349-provider-specific-business-dependencies` | 27 → 25 |
+| `rfc359-w5-test-engine-hardcoding` | 400 → **398** |
+| `rfc359-w5-test-engine-open-migration-debt` | 94 → **92** |
+| `rfc359-w8-unnormalized-unique-insert` | 18 → 17 |
+| provider 适配器语料下限 | 131 → 130 |
+| `rfc294-facades` thin-facade 名单 | 少两条（`services/bundle/apply.ts` / `lower.ts`） |
+| `preparedPackageMutation` 白名单 | 两个消费者 → 一个（`forkedFrom` 保留两条历史路径） |
+
+### 删掉两份判据文件之后，「验收条款覆盖棘轮」把账算了出来
+
+`rfc271-ac-coverage` 要求文档里每条 AC 与每条引擎不变量都在某个测试文件里**被点名**
+（它只保证可追溯，不保证断言质量——所以锚点必须落在真的测了那件事的文件上）。
+退役那两份文件让 **6 条 AC + 6 条不变量**失去锚点。逐条重新锚：
+
+| 编号 | 新锚点 | 说明 |
+| --- | --- | --- |
+| AC-24f / AC-20 / AC-20b、I2 / I3 / I7 / I8 / I13 | `rfc359-w14-unified-apply-journal-replay` | 三态重放 / 失败终态 / 提交前不可见 / post-commit 不补偿 |
+| AC-15b | `rfc359-w14-package-reference-fail-closed` | 「服务端重算，客户端传来的只是意向」——四例都是客户端塞进一个解析不出来的引用 |
+| I1 | `rfc359-w52-resource-package-apply-lock` | 串行键（`actor:previewToken`）与幂等 namespace（`('package', importId)`）是两个概念 |
+| AC-B4b | `rfc345-resource-catalog-contracts` | 写入会话的事务钩子——统一引擎里是 `prestage` / `bindTransaction` / `rollForward` / `afterCommitted` / `compensate`，取代了 `claimInTx` / `revalidateInTx` / `finalizeInTx` |
+
+（棘轮的语料判据是**文件名带 `rfc271`** 或**文件头写了 `覆盖验收条款：`**，所以 `rfc359-*` 的文件
+必须显式加那一行锚点，不能只在正文里提编号。）
+
+### `rfc271-impl-gate-fixes` 的四条源码锁一并改指
+
+P1-5（收敛器真的前滚，不是只 +1）/ P1-6（补偿没做干净不许终态化 failed；技能版本工件记全代际）
+/ P2-3（每个引用槽都被解析）/ 裸控制字符清单——全部从被删的文件改指统一那条链。
+P1-5 那条**改了判据本体**：PG 侧的恢复没有 `publishStagedVersion` 这个名字（那是 SQLite 侧的），
+它把发布内联在 `rollForwardSkillArtifact` 里，所以锚点改成「候选目录改名成版本目录 + 暂存换进 live +
+逐字节校验哈希」这三句——它们才是「真的前滚」与「只记个数」的分界。
+
+### 还有三条「按文件路径写死」的源码锁跟着改指
+
+`rfc359-w12-mcp-mutation-conformance` / `rfc359-w12-plugin-publication-conformance` 里那条
+「四份 legacy 文件的 commit 调用都必须 await」——其中**资源包那两份**（legacy 参与者 + 依赖表）
+随引擎退役，它们名下的调用点一并消失，判据收成 intent apply 那两份（它们仍是 legacy 同步形态）。
+资源包侧的同一条不变量现在由 `rfc359-w7-sync-transaction-cutover` 的 I14 源码兜底与
+`rfc359-w5-unattended-void-promise` 一起盯着。
+`rfc271-capability-removal` 的 C5（覆盖判据是 owner，不是 exact-id、也不是角色）改指生产在用的臂。
+
+顺带一条账本：`rfc359-w5-t19d` 的覆盖对等里 `ResourcePackageMaintenance` 从 `postgresql 3/3`
+变成 `4/3`——那是 P1-5 源码锁改指统一恢复链带来的。**倒挂没有加深**：弱侧 sqlite 那 3/2 现在是
+「合一前存量格式的读回侧」，由那条 12 格矩阵与新增的回落链判据一起盯着，注释里写清了这一点。
+
+架构守卫 **691 全绿**；typecheck / lint / prettier 干净。

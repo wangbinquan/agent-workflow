@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 30,
-    "transactionCallbacks": 270
+    "coLocatedCandidates": 28,
+    "transactionCallbacks": 264
   },
   "entries": [
     {
@@ -1952,18 +1952,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#transaction:1265",
-      "line": 1265,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#rollForwardSkillTails",
-      "status": "clear",
-      "symbol": "rollForwardSkillTails",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#transaction:452",
@@ -3171,71 +3159,6 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#transaction:182",
-      "line": 182,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyInner",
-      "status": "co-located-risk",
-      "symbol": "applyInner",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#transaction:218",
-      "line": 218,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyInner",
-      "status": "clear",
-      "symbol": "applyInner",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#transaction:226",
-      "line": 226,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyInner",
-      "status": "clear",
-      "symbol": "applyInner",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "provider",
-        "push"
-      ],
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#transaction:344",
-      "line": 344,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyInner",
-      "status": "co-located-risk",
-      "symbol": "applyInner",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#transaction:618",
-      "line": 618,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#convergeResourceBundleApplies",
-      "status": "clear",
-      "symbol": "convergeResourceBundleApplies",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "no-external-effect-observed",
@@ -3311,7 +3234,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d",
+  "sourceDigest": "sha256:61619c97c1eb50cb80a1ed893650d9ca500d8cc27e36c7aea08d6e45c90c276d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

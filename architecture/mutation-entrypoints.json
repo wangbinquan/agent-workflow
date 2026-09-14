@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1725,
+    "entries": 1709,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -2364,29 +2364,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePackageCommit.ts#createPostgresqlCapabilityTemplatePackageCommit",
       "symbol": "createPostgresqlCapabilityTemplatePackageCommit",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePackageCommit.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePackageCommit.ts#createSqliteCapabilityTemplatePackageCommitSync",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePackageCommit.ts#createSqliteCapabilityTemplatePackageCommitSync",
-      "symbol": "createSqliteCapabilityTemplatePackageCommitSync",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -14144,105 +14121,6 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createAgentPackageMutationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createAgentPackageMutationParticipantInTx",
-      "symbol": "createAgentPackageMutationParticipantInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createCapabilityTemplatePackageMutationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createCapabilityTemplatePackageMutationParticipantInTx",
-      "symbol": "createCapabilityTemplatePackageMutationParticipantInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createMcpPackageMutationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createMcpPackageMutationParticipantInTx",
-      "symbol": "createMcpPackageMutationParticipantInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createPluginPackageMutationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createPluginPackageMutationParticipantInTx",
-      "symbol": "createPluginPackageMutationParticipantInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createPreparedAgentPackageMutation",
       "missingControls": [
         "audit",
@@ -14403,177 +14281,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createPreparedWorkgroupPackageMutation",
       "symbol": "createPreparedWorkgroupPackageMutation",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyScenarioTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyScenarioTx",
-      "symbol": "createResourcePackageApplyScenarioTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyTx",
-      "missingControls": [
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyTx",
-      "symbol": "createResourcePackageApplyTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageAuditInTx",
-      "missingControls": [
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageAuditInTx",
-      "symbol": "createResourcePackageAuditInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageEventsInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageEventsInTx",
-      "symbol": "createResourcePackageEventsInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createSkillPackageMutationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createSkillPackageMutationParticipantInTx",
-      "symbol": "createSkillPackageMutationParticipantInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkflowPackageMutationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkflowPackageMutationParticipantInTx",
-      "symbol": "createWorkflowPackageMutationParticipantInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkgroupPackageMutationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkgroupPackageMutationParticipantInTx",
-      "symbol": "createWorkgroupPackageMutationParticipantInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -16712,24 +16419,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#UpdatePlanOf",
       "symbol": "UpdatePlanOf",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts",
-      "finalCriterion": "controls-complete",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#createLegacyResourcePackageMutationAdapter",
-      "missingControls": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#createLegacyResourcePackageMutationAdapter",
-      "symbol": "createLegacyResourcePackageMutationAdapter",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -31087,51 +30776,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyInner",
-      "missingControls": [
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyInner",
-      "symbol": "applyInner",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyResourceBundle",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#applyResourceBundle",
-      "symbol": "applyResourceBundle",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
@@ -33744,30 +33388,6 @@
       "ownerEntryId": "owner:packages/backend/src/services/autoRepair.ts#startAutoRepairLoop",
       "symbol": "startAutoRepairLoop",
       "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#createLegacyResourcePackageMutationRuntime",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#createLegacyResourcePackageMutationRuntime",
-      "symbol": "createLegacyResourcePackageMutationRuntime",
-      "targetContext": "runtime-management",
       "targetLayer": "application"
     },
     {
@@ -41212,7 +40832,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d",
+  "sourceDigest": "sha256:61619c97c1eb50cb80a1ed893650d9ca500d8cc27e36c7aea08d6e45c90c276d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

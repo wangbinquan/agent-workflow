@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 855,
+    "consumers": 849,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1063,
+    "methods": 1042,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20485,
-    "symbols": 982
+    "recursiveFields": 20307,
+    "symbols": 961
   },
   "entries": [
     {
@@ -50206,8 +50206,6 @@
         "public:memory:operations:MemoryOperations",
         "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
         "public:resource-catalog:participants:IntentContextResourceAuthorizationSession",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
         "public:resource-catalog:participants:ResourceRequestContext",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
         "public:resource-catalog:queries:ResourceCatalogQuery",
@@ -98338,272 +98336,6 @@
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:AgentPackageMutationParticipant",
-      "members": [
-        "prepare"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:6e005ff0e963172644b7badcc608432cb89366a060f5a282391bcb798bf52110"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#AgentPackageMutationParticipant",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:db62819a915b475e6f93b2ab66439a85e70f02dd61e4fc693394d0c581b898c3",
-      "status": "target-context-current-surface",
-      "symbol": "AgentPackageMutationParticipant",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:AgentPackageMutationParticipantInTx",
-      "members": [
-        "[agentPackageMutationParticipantInTxBrand]",
-        "commit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "commit",
-          "signatureDigest": "sha256:f5c8688553a9175a693a641b5569e1aa081d8f91de8e47856e7cba38f1fcda53"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#AgentPackageMutationParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:649ed4446d49ed08b935aa4cb931912d3fcf367282967ee2f0e468be6c60f185",
-      "status": "target-context-current-surface",
-      "symbol": "AgentPackageMutationParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipant",
-      "members": [
-        "prepare"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:1d338716692e28dda8d6f9388f20834f183ddc9f5dc4ec84568c313accf9a680"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#CapabilityTemplatePackageMutationParticipant",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:2d0194db615f0e23cd93949d9d6a5a1ff8675d286e5da556528028a04c1b7b49",
-      "status": "target-context-current-surface",
-      "symbol": "CapabilityTemplatePackageMutationParticipant",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipantInTx",
-      "members": [
-        "[capabilityTemplatePackageMutationParticipantInTxBrand]",
-        "commit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "commit",
-          "signatureDigest": "sha256:5cf6eebad37edc0982d86de4c79948ff1b4a94abfe239a0f18b349084b7c8871"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#CapabilityTemplatePackageMutationParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:1f7c3f9a122e5ba289409acb03816c757ddba0dd249cd813fd6a76e178b0b41c",
-      "status": "target-context-current-surface",
-      "symbol": "CapabilityTemplatePackageMutationParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
           "fieldPath": "bodyMd",
           "type": "string"
         },
@@ -99564,139 +99296,6 @@
       "unresolvedTypeRefs": [
         "Extract",
         "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:McpPackageMutationParticipant",
-      "members": [
-        "prepare"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:18afdb76a271a48a1c29c6ecac3ac8e4e12a442341c6b4c842e0b93b85008caf"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpPackageMutationParticipant",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:08426ac0f1b81c0cbb9fc4bff2671daeda4938e009dc49d658f5148b936470f0",
-      "status": "target-context-current-surface",
-      "symbol": "McpPackageMutationParticipant",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:McpPackageMutationParticipantInTx",
-      "members": [
-        "[mcpPackageMutationParticipantInTxBrand]",
-        "commit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "commit",
-          "signatureDigest": "sha256:fe005a76e7abc06cc4d22c5582a8c71c5ac99dfb3f5b44f344a8438622c952de"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpPackageMutationParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:2b4c55a77c47ea28161a6e33e1d373fd2f33777c0be5df9add1f6fb3f634edf9",
-      "status": "target-context-current-surface",
-      "symbol": "McpPackageMutationParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
       ],
       "version": 1
     },
@@ -100826,1095 +100425,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:PluginPackageMutationParticipant",
-      "members": [
-        "prepare"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:c8adb5f7849bcb83f8d228295cae2d5e4184b4398f64661fe233e0fd026fa03e"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#PluginPackageMutationParticipant",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:48a2aa21b89fbd5171d7ddd0651c7cedccd33ab92220bf017b19738ae1dd3dfb",
-      "status": "target-context-current-surface",
-      "symbol": "PluginPackageMutationParticipant",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:PluginPackageMutationParticipantInTx",
-      "members": [
-        "[pluginPackageMutationParticipantInTxBrand]",
-        "commit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "commit",
-          "signatureDigest": "sha256:b2000960c7b1481c4817be22fe5d43e8fbb848e19f33c4214869e4aa6d1157ec"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#PluginPackageMutationParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:2e04245151fae7dd40b509db494cc91818de515f9392ab11f60fe536c97bbeb8",
-      "status": "target-context-current-surface",
-      "symbol": "PluginPackageMutationParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:38db352c9567160febd6"
-      ],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "participants.agents.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "participants.agents.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "participants.capabilityTemplates.$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "participants.capabilityTemplates.$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "participants.mcps.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "participants.mcps.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "participants.plugins.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "participants.plugins.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "participants.skills.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "participants.skills.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "participants.workflows.$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "participants.workflows.$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "participants.workgroups.$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "participants.workgroups.$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "scenario.idempotencyKey.key",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "scenario.idempotencyKey.scope",
-          "type": "'package'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "scenario.operations",
-          "type": "readonly BundleOp[]"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "scenario.scenarioId",
-          "type": "'resource-package'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "fieldPath": "scenario.serializationKey",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-      "members": [
-        "participants",
-        "scenario"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:38db352c9567160febd6"
-          ],
-          "name": "prepare",
-          "signatureDigest": "sha256:1d338716692e28dda8d6f9388f20834f183ddc9f5dc4ec84568c313accf9a680"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourcePackageApplyScenarioProvider",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:38db352c9567160febd6",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:0888dcbd23125ea8df6dcfa65f26c94b7b84993a17dddf1d7998a44f56e1037d",
-      "status": "target-context-current-surface",
-      "symbol": "ResourcePackageApplyScenarioProvider",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
-      "members": [
-        "[resourcePackageApplyScenarioTxBrand]",
-        "currentAuthority"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourcePackageApplyScenarioTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:f30682e9a849f63187cafaba5fc1dac132b5f6c3459dbc50c8df34d086fb6a04",
-      "status": "target-context-current-surface",
-      "symbol": "ResourcePackageApplyScenarioTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 63,
-        "maxUnionVariants": 18
-      },
-      "consumerEdgeIds": [
-        "import:86fcd27f407b262374e2"
-      ],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "agents.$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "agents.$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "agents.$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "agents.$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "agents.$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "agents.$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "agents.$method:commit.$return.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "audit.$method:recordResourceApplied.$parameter:receipt.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "audit.$method:recordResourceApplied.$parameter:receipt.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "audit.$method:recordResourceApplied.$parameter:receipt.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "audit.$method:recordResourceApplied.$parameter:receipt.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "audit.$method:recordResourceApplied.$parameter:receipt.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "audit.$method:recordResourceApplied.$parameter:receipt.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "audit.$method:recordResourceApplied.$return",
-          "type": "void"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "capabilityTemplates.$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "capabilityTemplates.$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "capabilityTemplates.$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "capabilityTemplates.$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "capabilityTemplates.$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "capabilityTemplates.$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "capabilityTemplates.$method:commit.$return.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "events.$method:resourceApplied.$parameter:receipt.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "events.$method:resourceApplied.$parameter:receipt.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "events.$method:resourceApplied.$parameter:receipt.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "events.$method:resourceApplied.$parameter:receipt.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "events.$method:resourceApplied.$parameter:receipt.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "events.$method:resourceApplied.$parameter:receipt.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "events.$method:resourceApplied.$return",
-          "type": "void"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "mcps.$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "mcps.$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "mcps.$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "mcps.$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "mcps.$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "mcps.$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "mcps.$method:commit.$return.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "plugins.$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "plugins.$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "plugins.$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "plugins.$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "plugins.$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "plugins.$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "plugins.$method:commit.$return.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "skills.$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "skills.$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "skills.$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "skills.$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "skills.$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "skills.$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "skills.$method:commit.$return.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workflows.$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workflows.$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workflows.$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workflows.$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workflows.$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workflows.$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workflows.$method:commit.$return.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workgroups.$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workgroups.$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workgroups.$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workgroups.$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workgroups.$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workgroups.$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "fieldPath": "workgroups.$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourcePackageApplyTx",
-      "members": [
-        "[resourcePackageApplyTxBrand]",
-        "agents",
-        "audit",
-        "capabilityTemplates",
-        "events",
-        "mcps",
-        "plugins",
-        "skills",
-        "workflows",
-        "workgroups"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "name": "commit",
-          "signatureDigest": "sha256:5cf6eebad37edc0982d86de4c79948ff1b4a94abfe239a0f18b349084b7c8871"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "name": "recordResourceApplied",
-          "signatureDigest": "sha256:3a5026a6f6dfa37a80b59c8375d444033145fb696db0c2a4c36df1e5f749e759"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:86fcd27f407b262374e2"
-          ],
-          "name": "resourceApplied",
-          "signatureDigest": "sha256:cd3e24d5a7869e0c89d97d6199ed347f55a40935dd71b222034cf44a839e8808"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourcePackageApplyTx",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:86fcd27f407b262374e2",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:7a16bd86f28c46ebd8e2ed667c63236bf94fcf14b22a4102822ac53ac73f698c",
-      "status": "target-context-current-surface",
-      "symbol": "ResourcePackageApplyTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:recordResourceApplied.$parameter:receipt.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:recordResourceApplied.$parameter:receipt.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:recordResourceApplied.$parameter:receipt.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:recordResourceApplied.$parameter:receipt.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:recordResourceApplied.$parameter:receipt.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:recordResourceApplied.$parameter:receipt.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:recordResourceApplied.$return",
-          "type": "void"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourcePackageAuditInTx",
-      "members": [
-        "[resourcePackageAuditInTxBrand]",
-        "recordResourceApplied"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "recordResourceApplied",
-          "signatureDigest": "sha256:3a5026a6f6dfa37a80b59c8375d444033145fb696db0c2a4c36df1e5f749e759"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourcePackageAuditInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:2ce50a46295f5bd970ddc353fe947e5ecc450e0a4ad63f13e0e80fe9f12b0150",
-      "status": "target-context-current-surface",
-      "symbol": "ResourcePackageAuditInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:resourceApplied.$parameter:receipt.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:resourceApplied.$parameter:receipt.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:resourceApplied.$parameter:receipt.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:resourceApplied.$parameter:receipt.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:resourceApplied.$parameter:receipt.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:resourceApplied.$parameter:receipt.resourceType",
-          "type": "K"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:resourceApplied.$return",
-          "type": "void"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourcePackageEventsInTx",
-      "members": [
-        "[resourcePackageEventsInTxBrand]",
-        "resourceApplied"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "resourceApplied",
-          "signatureDigest": "sha256:cd3e24d5a7869e0c89d97d6199ed347f55a40935dd71b222034cf44a839e8808"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourcePackageEventsInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:923eb3f01f2ec53c872092831b8156038ad4a017018c2231bc65efabe5f95201",
-      "status": "target-context-current-surface",
-      "symbol": "ResourcePackageEventsInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "agents.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "agents.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "capabilityTemplates.$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "capabilityTemplates.$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "mcps.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "mcps.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "plugins.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "plugins.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "skills.$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "skills.$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workflows.$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workflows.$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workgroups.$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "workgroups.$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourcePackageMutationParticipants",
-      "members": [
-        "agents",
-        "capabilityTemplates",
-        "mcps",
-        "plugins",
-        "skills",
-        "workflows",
-        "workgroups"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:1d338716692e28dda8d6f9388f20834f183ddc9f5dc4ec84568c313accf9a680"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourcePackageMutationParticipants",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:b5045de801108e310db41e9dd6237b69c3153acd171a2145b225433e96bee0e4",
-      "status": "target-context-current-surface",
-      "symbol": "ResourcePackageMutationParticipants",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [
         "import:086cdcbd73a537b38be1",
         "import:2437b8bc2b130eb18ddc",
@@ -101925,8 +100435,7 @@
         "import:b1e3426a3850d35d6f34",
         "import:c44892f461465161319e",
         "import:cf05431d12871ab59909",
-        "import:ec4db4214639dda6fcb0",
-        "import:f20112713e321f0ec848"
+        "import:ec4db4214639dda6fcb0"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -101998,20 +100507,12 @@
           "edgeId": "import:ec4db4214639dda6fcb0",
           "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:f20112713e321f0ec848",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
         "public:intent:operations:IntentApplyOperations",
         "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
         "public:resource-catalog:participants:IntentContextResourceAuthorizationSession",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
         "public:task-execution:commands:TaskExecutionResourceAuthority"
       ],
@@ -102424,139 +100925,6 @@
       "unresolvedTypeRefs": [
         "Extract",
         "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$parameter:mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$return.mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:SkillPackageMutationParticipant",
-      "members": [
-        "prepare"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:8f2187786b38456ce62323049dfa37dadcdad9ff801aeee24a7d721e4831cdcd"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillPackageMutationParticipant",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:84e57dd88251c49e07b21f0f84c56d72711673f5f8f132191082788efd19f6b2",
-      "status": "target-context-current-surface",
-      "symbol": "SkillPackageMutationParticipant",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:SkillPackageMutationParticipantInTx",
-      "members": [
-        "[skillPackageMutationParticipantInTxBrand]",
-        "commit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "commit",
-          "signatureDigest": "sha256:01131e57e951461c304a125a8812dbf50fb8296e8efe60eb2dc25d4d8f62b296"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillPackageMutationParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:667fd95bf2f79974f968b95acd515cf02a10d16f968a247d696a360f88b11abf",
-      "status": "target-context-current-surface",
-      "symbol": "SkillPackageMutationParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
       ],
       "version": 1
     },
@@ -103565,139 +101933,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:WorkflowPackageMutationParticipant",
-      "members": [
-        "prepare"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:56d2400ed5fe53bfbc49ba607c41c7f8f54a247f34958d1ff099b116ffe4bbc3"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkflowPackageMutationParticipant",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:d1fbd22fe6e1b6fc10e191f6afaaa084b0a2d2cf682fcc60b59541c6a223d6ed",
-      "status": "target-context-current-surface",
-      "symbol": "WorkflowPackageMutationParticipant",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:WorkflowPackageMutationParticipantInTx",
-      "members": [
-        "[workflowPackageMutationParticipantInTxBrand]",
-        "commit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "commit",
-          "signatureDigest": "sha256:8336509ce7472484b007f3024bfef711ba8d702e9ef19d9aabcdd06450f509dc"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkflowPackageMutationParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:6143983a64a5474eebf8f1df5330ea936fa73058249a348fa7d104eefff6b08d",
-      "status": "target-context-current-surface",
-      "symbol": "WorkflowPackageMutationParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [
         "import:7a7e2b81ac628339b1e9",
         "import:d151626aa84f8678f6ca"
@@ -103831,139 +102066,6 @@
       "unresolvedTypeRefs": [
         "Extract",
         "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$parameter:mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:prepare.$return.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:WorkgroupPackageMutationParticipant",
-      "members": [
-        "prepare"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "prepare",
-          "signatureDigest": "sha256:34fec07ae2716a978f46354cdf95b367642d43e29538c90a6fd56810270dbae0"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkgroupPackageMutationParticipant",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:39b3b6b35548235fae24dd8dd011bda2db84f29a6c6a7bd453954939c169def4",
-      "status": "target-context-current-surface",
-      "symbol": "WorkgroupPackageMutationParticipant",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$parameter:prepared.mutation",
-          "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:0",
-          "type": "'create'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.action.$variant:1",
-          "type": "'update'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.operationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:commit.$return.resourceType",
-          "type": "K"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:WorkgroupPackageMutationParticipantInTx",
-      "members": [
-        "[workgroupPackageMutationParticipantInTxBrand]",
-        "commit"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "commit",
-          "signatureDigest": "sha256:b17f01a87b10c772a7922330a59bb2850f2947b88fec74c4ef6ecff9a7a1580b"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkgroupPackageMutationParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:56e39361a4c131367012fcce17cf9458539e09818bbf26b9e2ade189b2f3e95e",
-      "status": "target-context-current-surface",
-      "symbol": "WorkgroupPackageMutationParticipantInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract"
       ],
       "version": 1
     },
@@ -109107,11 +107209,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#AgentPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:AgentPackageMutationParticipant",
-        "public:resource-catalog:participants:AgentPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedAgentPackageMutation",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
@@ -109436,11 +107533,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#CapabilityTemplatePackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipant",
-        "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedCapabilityTemplatePackageMutation",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
@@ -112822,11 +110914,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:McpPackageMutationParticipant",
-        "public:resource-catalog:participants:McpPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedMcpPackageMutation",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
@@ -113813,11 +111900,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PluginPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:PluginPackageMutationParticipant",
-        "public:resource-catalog:participants:PluginPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedPackageMutation",
         "public:resource-catalog:types:PreparedPluginPackageMutation"
       ],
@@ -113862,11 +111944,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedAgentPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:AgentPackageMutationParticipant",
-        "public:resource-catalog:participants:AgentPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
       "removeAfterWave": null,
@@ -113910,11 +111987,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedCapabilityTemplatePackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipant",
-        "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
       "removeAfterWave": null,
@@ -113958,11 +112030,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedMcpPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:McpPackageMutationParticipant",
-        "public:resource-catalog:participants:McpPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
       "removeAfterWave": null,
@@ -113985,8 +112052,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:5ed6e2f10e267fccae96",
-        "import:e1bf9c6f2389170987e8"
+        "import:5ed6e2f10e267fccae96"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -114004,12 +112070,6 @@
           "edgeId": "import:5ed6e2f10e267fccae96",
           "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:e1bf9c6f2389170987e8",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -114031,7 +112091,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:d6469bbd2b25e4669c03",
         "import:fbf043eda9cd49d38e81"
       ],
       "context": "resource-catalog",
@@ -114041,7 +112100,6 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:d6469bbd2b25e4669c03",
             "import:fbf043eda9cd49d38e81"
           ],
           "fieldPath": "$variant:0.mutation",
@@ -114049,7 +112107,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d6469bbd2b25e4669c03",
             "import:fbf043eda9cd49d38e81"
           ],
           "fieldPath": "$variant:1.mutation",
@@ -114057,7 +112114,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d6469bbd2b25e4669c03",
             "import:fbf043eda9cd49d38e81"
           ],
           "fieldPath": "$variant:2.mutation",
@@ -114065,7 +112121,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d6469bbd2b25e4669c03",
             "import:fbf043eda9cd49d38e81"
           ],
           "fieldPath": "$variant:3.mutation",
@@ -114073,7 +112128,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d6469bbd2b25e4669c03",
             "import:fbf043eda9cd49d38e81"
           ],
           "fieldPath": "$variant:4.mutation",
@@ -114081,7 +112135,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d6469bbd2b25e4669c03",
             "import:fbf043eda9cd49d38e81"
           ],
           "fieldPath": "$variant:5.mutation",
@@ -114089,7 +112142,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d6469bbd2b25e4669c03",
             "import:fbf043eda9cd49d38e81"
           ],
           "fieldPath": "$variant:6.mutation",
@@ -114102,12 +112154,6 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPackageMutation",
       "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:d6469bbd2b25e4669c03",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        },
         {
           "context": "legacy",
           "edgeId": "import:fbf043eda9cd49d38e81",
@@ -114157,11 +112203,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPluginPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:PluginPackageMutationParticipant",
-        "public:resource-catalog:participants:PluginPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
       "removeAfterWave": null,
@@ -114205,11 +112246,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedSkillPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
-        "public:resource-catalog:participants:SkillPackageMutationParticipant",
-        "public:resource-catalog:participants:SkillPackageMutationParticipantInTx",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
       "removeAfterWave": null,
@@ -114253,11 +112289,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkflowPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
-        "public:resource-catalog:participants:WorkflowPackageMutationParticipant",
-        "public:resource-catalog:participants:WorkflowPackageMutationParticipantInTx",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
       "removeAfterWave": null,
@@ -114301,11 +112332,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkgroupPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
-        "public:resource-catalog:participants:WorkgroupPackageMutationParticipant",
-        "public:resource-catalog:participants:WorkgroupPackageMutationParticipantInTx",
         "public:resource-catalog:types:PreparedPackageMutation"
       ],
       "removeAfterWave": null,
@@ -114890,88 +112916,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:9e0ae8210c414e3b9161"
-      ],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [
-            "import:9e0ae8210c414e3b9161"
-          ],
-          "fieldPath": "idempotencyKey.key",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:9e0ae8210c414e3b9161"
-          ],
-          "fieldPath": "idempotencyKey.scope",
-          "type": "'package'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:9e0ae8210c414e3b9161"
-          ],
-          "fieldPath": "operations",
-          "type": "readonly BundleOp[]"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:9e0ae8210c414e3b9161"
-          ],
-          "fieldPath": "scenarioId",
-          "type": "'resource-package'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:9e0ae8210c414e3b9161"
-          ],
-          "fieldPath": "serializationKey",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "public:resource-catalog:types:ResourcePackageApplyScenarioPlan",
-      "members": [
-        "idempotencyKey",
-        "operations",
-        "scenarioId",
-        "serializationKey"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#ResourcePackageApplyScenarioPlan",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:9e0ae8210c414e3b9161",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:f556d56cce11f68f7a652960560762f630880d5250234ef27c31d1f11836dffc",
-      "status": "target-context-current-surface",
-      "symbol": "ResourcePackageApplyScenarioPlan",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
         "import:b3d1d3094a9ee06386cf"
       ],
       "context": "resource-catalog",
@@ -115037,18 +112981,7 @@
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:AgentPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipantInTx",
-        "public:resource-catalog:participants:McpPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:PluginPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageAuditInTx",
-        "public:resource-catalog:participants:ResourcePackageEventsInTx",
-        "public:resource-catalog:participants:SkillPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:WorkflowPackageMutationParticipantInTx",
-        "public:resource-catalog:participants:WorkgroupPackageMutationParticipantInTx"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:9ae9f7afab8ebf1b63b9dc004bdc1be0b35d3f66eeb019d7efcbd465d133d3f3",
@@ -116095,11 +114028,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#SkillPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
-        "public:resource-catalog:participants:SkillPackageMutationParticipant",
-        "public:resource-catalog:participants:SkillPackageMutationParticipantInTx",
         "public:resource-catalog:types:PreparedPackageMutation",
         "public:resource-catalog:types:PreparedSkillPackageMutation"
       ],
@@ -117753,11 +115681,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
-        "public:resource-catalog:participants:WorkflowPackageMutationParticipant",
-        "public:resource-catalog:participants:WorkflowPackageMutationParticipantInTx",
         "public:resource-catalog:types:PreparedPackageMutation",
         "public:resource-catalog:types:PreparedWorkflowPackageMutation"
       ],
@@ -118186,11 +116109,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkgroupPackageMutation",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourcePackageMutationParticipants",
-        "public:resource-catalog:participants:WorkgroupPackageMutationParticipant",
-        "public:resource-catalog:participants:WorkgroupPackageMutationParticipantInTx",
         "public:resource-catalog:types:PreparedPackageMutation",
         "public:resource-catalog:types:PreparedWorkgroupPackageMutation"
       ],
@@ -161962,7 +159880,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d",
+  "sourceDigest": "sha256:61619c97c1eb50cb80a1ed893650d9ca500d8cc27e36c7aea08d6e45c90c276d",
   "targetContexts": [
     "collaboration",
     "development-automation",

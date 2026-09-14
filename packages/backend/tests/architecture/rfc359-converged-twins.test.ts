@@ -169,13 +169,15 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     ],
   },
   {
+    // RFC-359 §5dy：两台 apply 引擎合一之后只剩一个消费者——legacy 那台整条退役了。
+    // 条目留着不是摆设：它锁的是「这七个类型谓词只有一处定义」，而那正是当初两台引擎
+    // 各揣一份时出问题的地方；再冒出第二处定义，这条照样红。
     what: '「这条已准备好的包变更属于哪类资源」的七个类型谓词（两个应用引擎曾各揣整族一份）',
     fn: 'preparedPackageMutation',
     definedIn: `${B}modules/resource-catalog/public/types.ts`,
-    consumers: [
-      `${B}platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`,
-      `${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`,
-    ],
+    consumers: [`${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`],
+    // `forkedFrom` 是**历史**：当初分叉的两处。其中 legacy 那一处已随合一删除，
+    // 判据只要求「两处、且至少一处仍存在」，所以这里照旧记两条。
     forkedFrom: [
       `${B}platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`,
       `${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`,

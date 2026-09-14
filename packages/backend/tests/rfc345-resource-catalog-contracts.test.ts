@@ -1,4 +1,8 @@
 // RFC-345 — executable drift locks for canonical rosters, exact public
+// 覆盖验收条款：AC-B4b（写入会话带事务钩子——统一 apply 引擎里是
+//   `prestage` / `bindTransaction` / `rollForward` / `afterCommitted` / `compensate`，
+//   取代了通用 bundle 引擎那组 `claimInTx` / `revalidateInTx` / `finalizeInTx`）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 // contracts, production descriptor bindings, and purpose-specific participants.
 
 import { describe, expect, test } from 'bun:test'
@@ -68,9 +72,6 @@ import type {
 import type {
   IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
-  ResourcePackageApplyScenarioProvider,
-  ResourcePackageApplyTx,
-  ResourcePackageMutationParticipants,
   SkillZipImportParticipant,
   TaskExecutionResourceSnapshotInTx,
 } from '../src/modules/resource-catalog/public/participants'
@@ -91,7 +92,7 @@ import type {
   WorkgroupCatalogModule,
   WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
-import type { LegacyResourcePackageMutationParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'
+import type { PostgresqlResourcePackageTransactionParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 
 type Equal<Left, Right> =
   (<T>() => T extends Left ? 1 : 2) extends <T>() => T extends Right ? 1 : 2
@@ -153,28 +154,11 @@ assertType<
     | 'capability-template-update'
   >
 >(true)
-assertType<
-  Equal<
-    keyof ResourcePackageMutationParticipants,
-    'agents' | 'skills' | 'mcps' | 'plugins' | 'workflows' | 'workgroups' | 'capabilityTemplates'
-  >
->(true)
-assertType<
-  Equal<
-    Extract<keyof ResourcePackageApplyTx, string>,
-    | 'currentAuthority'
-    | 'agents'
-    | 'skills'
-    | 'mcps'
-    | 'plugins'
-    | 'workflows'
-    | 'workgroups'
-    | 'capabilityTemplates'
-    | 'events'
-    | 'audit'
-  >
->(true)
-assertType<Equal<keyof ResourcePackageApplyScenarioProvider, 'scenario' | 'participants'>>(true)
+// RFC-359（apply 引擎合一，plan §5dy）—— 资源包的整族**公共**参与者合同随通用 bundle 引擎
+// 退役（`*ParticipantInTx` / `*Participant` / `ResourcePackageMutationParticipants` /
+// `ResourcePackageApplyTx` / `ResourcePackageApplyScenarioProvider`）。它们锁的「七条臂」闭集
+// 现在钉在生产在用的那一份上——见本文件下方的
+// `PostgresqlResourcePackageTransactionParticipants` 断言，闭集逐字不变。
 assertType<
   Equal<
     Extract<keyof ResourcePackageOperationDescriptors, string>,
@@ -182,9 +166,11 @@ assertType<
   >
 >(true)
 assertType<Equal<Extract<keyof ResourcePackageCatalogModule, string>, 'operations'>>(true)
+// RFC-359（apply 引擎合一，plan §5dy）：legacy 那份参与者随通用 bundle 引擎一起退役，
+// 七条臂的闭集判据改钉在**生产在用的那一份**上——名字变了，闭集本身逐字不变。
 assertType<
   Equal<
-    keyof LegacyResourcePackageMutationParticipants,
+    keyof PostgresqlResourcePackageTransactionParticipants,
     'agents' | 'skills' | 'mcps' | 'plugins' | 'workflows' | 'workgroups' | 'capabilityTemplates'
   >
 >(true)
@@ -1682,16 +1668,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(operations).toContain('workflow-catalog.copy-workflow.v1')
   })
 
-  test('BundleApply keeps lifecycle ownership while seven writer arms stay in infrastructure', () => {
+  test('统一 apply 引擎持有生命周期，七条写入臂留在 infrastructure', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const compatibilityFacade = readFileSync(
-      resolve(sourceRoot, 'services/bundle/apply.ts'),
-      'utf8',
-    )
-    const sqliteEngine = readFileSync(
-      resolve(sourceRoot, 'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts'),
-      'utf8',
-    )
+    // RFC-359（plan §5dy）：通用 bundle 引擎整条退役，这条判据只剩**一台**引擎要问。
     const postgresqlEngine = readFileSync(
       resolve(sourceRoot, 'platform/persistence/postgresqlResourcePackageAtomicApply.ts'),
       'utf8',
@@ -1699,12 +1678,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const adapter = readFileSync(
       resolve(
         sourceRoot,
-        'modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
+        'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
       ),
-      'utf8',
-    )
-    const dependencies = readFileSync(
-      resolve(sourceRoot, 'services/bundle/legacyResourcePackageMutationDependencies.ts'),
       'utf8',
     )
     const application = readFileSync(
@@ -1721,22 +1696,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     const route = readFileSync(resolve(sourceRoot, 'routes/resourcePackages.ts'), 'utf8')
     const cli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
-
-    expect(compatibilityFacade).toContain(
-      "export * from '@/platform/persistence/sqlite/legacyResourcePackageBundleApply'",
-    )
-    expect(compatibilityFacade).not.toContain("from '@/db/")
-    expect(sqliteEngine).not.toContain('createLegacyResourcePackageMutationAdapter')
-    expect(sqliteEngine).toContain('resourceBundleApplies')
-    expect(sqliteEngine).toContain("state: 'applying'")
-    // RFC-359 W4-D23b：大事务改走中立会话后，仍是同步面的 provider 钩子经具名适配器
-    // `sqliteMembers(tx)` 拿到同一个句柄（SQLite 上就是 DbClient 本身），位置与次序不变。
-    expect(sqliteEngine).toContain('provider.revalidateInTx?.(sqliteMembers(tx))')
-    expect(sqliteEngine).toContain('provider.finalizeInTx?.(sqliteMembers(tx), receiptValue)')
-    expect(sqliteEngine).toContain('ACTIVE_BUNDLE_APPLIES')
-    expect(sqliteEngine).toContain('convergeResourceBundleApplies')
-    expect(sqliteEngine).toContain('deps.resourcePackageMutations ??')
-    expect(sqliteEngine).toContain('.create({')
 
     expect(postgresqlEngine).toContain('resourceBundleApplies')
     expect(postgresqlEngine).toContain('input.mutationSessionFactory.create({')
@@ -1760,6 +1719,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     expect(postgresqlEngine).toContain('activeApplyIds()')
 
+    // 「七条臂不得绕回 legacy 写服务」这条判据只剩两个被问对象（引擎 + 参与者）。
     for (const legacyWriter of [
       "@/services/agent'",
       "@/services/skill'",
@@ -1769,18 +1729,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       "@/services/workflow'",
       "@/services/workgroups'",
     ]) {
-      expect(sqliteEngine).not.toContain(legacyWriter)
       expect(postgresqlEngine).not.toContain(legacyWriter)
       expect(adapter).not.toContain(legacyWriter)
-      expect(dependencies).not.toContain(legacyWriter)
     }
-    expect(dependencies).toContain("from '@/services/pluginInstaller'")
-    expect(dependencies).toContain("from '@/services/capabilityTemplates'")
     expect(adapter).not.toContain("from '@/services/")
-    expect(sqliteEngine).toContain('compensateLegacyResourcePackageArtifact(')
-    expect(sqliteEngine).toContain('rollForwardLegacyResourcePackageArtifacts(')
-    expect(sqliteEngine).toContain('legacyResourcePackageMutationDependencies')
-    expect(dependencies).toContain('createLegacyResourcePackageMutationAdapter')
 
     for (const participant of [
       'agents',
@@ -1792,8 +1744,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'capabilityTemplates',
     ]) {
       expect(adapter).toContain(`${participant}:`)
-      expect(sqliteEngine).toContain(`provider.participants.${participant}.prepare`)
-      expect(sqliteEngine).toContain(`applyTx.${participant}.commit`)
       expect(postgresqlEngine).toContain(
         `session.participants.${participant}.prepareOpaque(operation)`,
       )

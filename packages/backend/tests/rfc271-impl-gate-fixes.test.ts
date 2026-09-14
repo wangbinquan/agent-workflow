@@ -118,14 +118,22 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
   test('committed 分支重放幂等尾，不是只 +1', () => {
     // 一次「DB 已提交、publish 前 SIGKILL」的 run 会留下已入库但**内容未发布**的技能
     // 版本。只 `rolledForward += 1` 等于宣称处理过而实际什么都没做。
-    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts')
-    const adapter = read(
-      'src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
+    //
+    // RFC-359（plan §5dy）：通用 bundle 引擎退役，这条判据改指统一那条恢复链——
+    // 收敛命令的 `rollForward` 真的把工件前滚（而不是只记个数），前滚体在两个 provider
+    // 的工件恢复实现里。行为面另有 `rfc359-w9-resource-package-skill-recovery-conformance`
+    // 的四例（含「账面更新后陈旧代际不得被换回去」）。
+    const command = read('src/modules/resource-catalog/application/resourcePackageMaintenance.ts')
+    const recovery = read(
+      'src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
     )
-    const committedBranch = src.slice(src.indexOf("if (row.state === 'committed')"))
-    expect(committedBranch.slice(0, 1800)).toContain('rollForwardLegacyResourcePackageArtifacts(')
-    expect(adapter).toContain('rollForwardSkillTails(')
-    expect(adapter).toContain('dependencies.publishStagedSkillVersion(')
+    expect(command).toContain('artifacts.rollForward(')
+    expect(recovery).toContain('rollForwardSkillArtifact(')
+    // 「真的前滚」= 把候选目录改名成版本目录、再把暂存内容换进 live，并逐字节校验哈希。
+    // 只 +1 的实现里这三句一句都不会有。
+    expect(recovery).toContain('renameSync(candidateDirectory, versionDirectory)')
+    expect(recovery).toContain('swapInStaged(liveDirectory, input.artifact.operationId)')
+    expect(recovery).toContain("throw new Error('resource-package-skill-live-hash-mismatch')")
   })
 })
 
@@ -134,19 +142,31 @@ describe('P1-6 · 补偿没做干净就不许终态化 failed', () => {
     // 补偿抛错（EBUSY 等）却照样标 failed ⇒ 收敛器显式跳过 failed 行 ⇒ 那次残留再也
     // 不会被重试，而粗粒度 GC 又被任一非终态 run 挡住 ⇒ 永久残留，且 journal 反过来
     // 宣称「这次什么都没留下」。
-    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts')
-    expect(src).toContain('if (compensated) {')
-    expect(src).toContain("log.warn('bundle-left-retryable'")
+    // RFC-359（plan §5dy）：统一引擎里同一条对称性写成「补偿抛错 ⇒ 走 keepRetryable，
+    // **不** settleFailed」，journal 因此停在非终态、下一轮收敛还会再试。
+    const src = read('src/platform/persistence/postgresqlResourcePackageAtomicApply.ts')
+    expect(src).toContain('await session.compensate({ artifacts, databaseCommitted: false })')
+    expect(src).toContain('await settleFailed(error)')
+    expect(src).toContain('await keepRetryable(error, cleanupError)')
+    expect(src).toContain("log.warn('resource-package-left-retryable'")
   })
 
   test('技能版本 artifact 落的是完整 staged 结构（够 publish 重放，不只够 abort）', () => {
-    const src = read(
-      'src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
-    )
-    expect(src).toContain("recordArtifact({ kind: 'skill-version-stage', staged })")
-    // 旧写法现编一个假的 StagedSkillVersion（newVersion: 0 / newHash: ''），
-    // abort 恰好用不到才没出事——那是运气不是设计。
-    expect(src).not.toContain("skillName: '',")
+    // RFC-359（plan §5dy）：统一引擎的技能版本工件把 publish 重放需要的每一项都记全——
+    // 代际（`publishId` / `version`）与两个目录（暂存 / 版本）。少任何一项，崩溃后的前滚
+    // 就只够 abort、不够 publish，而那正是这条判据当初抓到的形态。
+    const src = read('src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts')
+    const artifact = src.slice(src.indexOf("kind: 'skill-version-stage'"))
+    for (const field of [
+      'operationId',
+      'skillId',
+      'publishId',
+      'version',
+      'stagingDirectory',
+      'versionDirectory',
+    ]) {
+      expect(artifact.slice(0, 600)).toContain(field)
+    }
   })
 })
 
@@ -156,12 +176,20 @@ describe('P2-3 · lower 必须预载 payload 内 external 目标的名字', () =
     // 变成 `external:W`、child 的 create op 被删除。只扫 update target 的话 `nameOfId`
     // 里没有 W 的名字，call 槽拿不到权威名字 ⇒ 整包死在
     // `bundle-ref-invalid ... name is unknown`（一个纯 reuse 的包必然踩中）。
-    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleLower.ts')
-    expect(src).toContain('collectExternalRefs(op.payload')
-    for (const slot of ['payload.skills', 'payload.dependsOn', 'payload.mcp', 'payload.plugins']) {
-      expect(src).toContain(slot)
-    }
-    for (const slot of ['node.agentRef', 'node.workflowRef', 'node.workgroupRef']) {
+    // RFC-359（plan §5dy）：lowering 那一层随通用 bundle 引擎退役，「每个引用槽都要被解析」
+    // 这条判据改指统一引擎的各臂——它们逐槽解析，而不是先收集再回填。槽位清单不变。
+    const src = read(
+      'src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
+    )
+    for (const slot of [
+      'payload.skills',
+      'payload.dependsOn',
+      'payload.mcp',
+      'payload.plugins',
+      'node.agentRef',
+      'node.workflowRef',
+      'node.workgroupRef',
+    ]) {
       expect(src).toContain(slot)
     }
   })
@@ -316,8 +344,6 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
     for (const rel of [
       'src/services/resourcePackage/commit.ts',
       'src/services/resourcePackage/preview.ts',
-      'src/services/bundle/lower.ts',
-      'src/platform/persistence/sqlite/legacyResourcePackageBundleLower.ts',
       'src/services/workflow.validator.ts',
     ]) {
       expect({ rel, hit: hasControlChar(read(rel)) }).toEqual({ rel, hit: false })

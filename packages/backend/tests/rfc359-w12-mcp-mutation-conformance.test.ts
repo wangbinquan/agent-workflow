@@ -794,11 +794,15 @@ test('MCP create and update have one SQL atom and retain separate rename', () =>
   })
 })
 
-test('all four legacy MCP commits and all four delegates await database completion', () => {
+test('intent apply 侧的 legacy MCP 提交与其代理都 await 到数据库落库', () => {
+  // RFC-359（plan §5dy）：**资源包那两份**（legacy 参与者 + 依赖表）随通用 bundle 引擎退役，
+  // 它们名下的 `commitMcpCreateInTx` / `commitMcpUpdateInTx` 调用点一并消失；资源包侧的
+  // 「commit 必须 await」现在由 `rfc359-w7-sync-transaction-cutover`（I14 源码兜底，指生产参与者）
+  // 与 `rfc359-w5-unattended-void-promise` 一起盯着。
+  //
+  // 留下的是 **intent apply 那两份**——它们仍是 legacy 同步形态，这条判据对它们照旧成立。
   const paths = [
-    'modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
     'modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts',
-    'services/bundle/legacyResourcePackageMutationDependencies.ts',
     'modules/resource-catalog/composition/legacyIntentApplyResourceDependencies.ts',
   ]
   const results = paths.map((path) => {
@@ -830,8 +834,6 @@ test('all four legacy MCP commits and all four delegates await database completi
   })
   expect(results).toEqual([
     { calls: ['commitMcpCreateInTx', 'commitMcpUpdateInTx'], unawaited: [] },
-    { calls: ['commitMcpCreateInTx', 'commitMcpUpdateInTx'], unawaited: [] },
-    { calls: ['commitLegacyMcpCreateInTx', 'commitLegacyMcpUpdateInTx'], unawaited: [] },
     { calls: ['commitLegacyMcpCreateInTx', 'commitLegacyMcpUpdateInTx'], unawaited: [] },
   ])
 })

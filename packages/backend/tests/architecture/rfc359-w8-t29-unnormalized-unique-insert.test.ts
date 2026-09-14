@@ -558,7 +558,6 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // 的对应写法本来就在 SERIALIZABLE 里读改写，不落进本账本。
   'modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1',
   'platform/events/committed/appendProgram.ts: 2',
-  'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 1',
   'services/task.ts: 1',
 ]
 

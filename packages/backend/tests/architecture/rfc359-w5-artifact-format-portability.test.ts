@@ -82,6 +82,7 @@ import type {
 } from '../../src/modules/resource-catalog/application/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
 import { createSqliteResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
+import { composeResourcePackageApplyArtifactRecoveryChain } from '../../src/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { opStagedDir } from '../../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 import {
   skillFilesAbs,
@@ -122,8 +123,15 @@ export const ARTIFACT_FORMAT_PORTABILITY: readonly string[] = [
 ]
 
 /** 落盘工件写出点：`preparedArtifactsJson` 的两个来源，按引擎。 */
-const WRITERS: Readonly<Record<Engine, string>> = {
-  sqlite: 'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts',
+/**
+ * 落盘工件的**写出点**。
+ *
+ * RFC-359 §5dv/§5dy：两台 apply 引擎合一之后**只剩一个写出点**——SQLite 那台
+ * （`legacyResourcePackageBundleApply.ts`）随通用 bundle 引擎退役。`sqlite` 那一族样本
+ * 因此不再有活着的生产者：它代表的是**合一之前留在盘上的存量工件**，读回侧仍然必须认得
+ * （`composeResourcePackageApplyArtifactRecoveryChain` 就是为它存在的），所以样本与矩阵都留着。
+ */
+const WRITERS: Readonly<Partial<Record<Engine, string>>> = {
   postgresql: 'platform/persistence/postgresqlResourcePackageAtomicApply.ts',
 }
 
@@ -316,15 +324,35 @@ describe('RFC-359 W5 —— 落盘恢复工件的跨引擎可读性', () => {
     expect(typeof createPostgresqlResourcePackageApplyArtifactRecovery).toBe('function')
   })
 
-  test('锚点：两个写出点仍在写 `preparedArtifactsJson`（探的是活着的那一列）', () => {
-    for (const engine of ENGINES) {
-      const path = join(SRC, WRITERS[engine])
-      expect(existsSync(path), `${WRITERS[engine]} 不在了——写出点被挪走，账本失去归属`).toBe(true)
+  test('锚点：唯一那个写出点仍在写 `preparedArtifactsJson`（探的是活着的那一列）', () => {
+    const entries = Object.entries(WRITERS)
+    expect(entries.length, '写出点清单空了——本守卫此刻零预言力').toBeGreaterThanOrEqual(1)
+    for (const [, relative] of entries) {
+      const path = join(SRC, relative)
+      expect(existsSync(path), `${relative} 不在了——写出点被挪走，账本失去归属`).toBe(true)
       expect(
         readFileSync(path, 'utf8'),
-        `${WRITERS[engine]} 不再写 preparedArtifactsJson——写出侧变了，本守卫此刻零预言力`,
+        `${relative} 不再写 preparedArtifactsJson——写出侧变了，本守卫此刻零预言力`,
       ).toContain('preparedArtifactsJson: JSON.stringify(')
     }
+  })
+
+  test('回落链把两种格式都读得回来（矩阵里那六格 rejects 的正解就是它）', async () => {
+    await withScratch(async (appHome, pluginsDir) => {
+      const chain = composeResourcePackageApplyArtifactRecoveryChain(
+        recoveryOf('postgresql', appHome, pluginsDir),
+        recoveryOf('sqlite', appHome, pluginsDir),
+      )
+      for (const engine of ENGINES) {
+        for (const artifact of samplesOf(engine, appHome, pluginsDir)) {
+          expect(
+            { engine, kind: artifact.kind, verdict: await verdict(chain, [artifact]) },
+            '回落链必须同时认得**统一格式**与**合一前留在盘上的存量格式**——' +
+              '少认一种，那一边的 journal 行会永久卡住、半成品目录永远收不掉',
+          ).toEqual({ engine, kind: artifact.kind, verdict: 'accepts' })
+        }
+      }
+    })
   })
 
   test('锚点：两侧解码器都以 ZodError 拒绝未知 kind（`rejects` 的判据成立的前提）', async () => {

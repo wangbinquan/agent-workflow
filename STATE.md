@@ -2,6 +2,32 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 16，**通用 bundle 引擎整条退役——AC-1 最后一对合一完工**）
+>
+> 落档 plan §5dy。`37cb443a4` 的 CI **全绿**（backend + e2e；上一段那条 `workgroup-matrix`
+> 已知 flake 没有复现）。
+>
+> **删掉约 2800 行生产零调用方的代码**：通用 bundle apply 引擎 + lowering 层 + 引用解析原语 +
+> 七条臂的同步事务参与者 + 依赖表 + `*InTx` 构造器 + 那个同步的能力模板提交臂。
+> **公共面跟着清一大块**（AC-12）：七条 `*ParticipantInTx`、七条 `*Participant`、花名册、
+> `ResourcePackageEventsInTx` / `AuditInTx` / `ApplyScenarioTx` / `ApplyTx` /
+> `ApplyScenarioProvider` / `ApplyScenarioPlan`——统一引擎一条都不跨。
+>
+> **判据一条都没有「就这么删了」**：两份测被删的引擎的文件退役（八条不变量的落点在 §5dx 的表里）；
+> 四份改指统一引擎（parity 的资源包半边、w7 的 I14 源码兜底、rfc304 的 lowering 断言改成落库那一行、
+> rfc345 的两条闭集）；`refs.ts` 那 9 条单测**重新表达**成
+> `rfc359-w14-package-reference-fail-closed`（双引擎、走完整 parse → preview → commit 路径）。
+>
+> **重新表达顺手照出一件事**：活着那条路**拦得比退役那层更早**——缺 built-in 在 preview 期就报
+> `package-builtin-missing`，`agent.skills` 塞 `builtin:` / `local:` 指错类型在 parse 期就被
+> bundle schema 拒。判据因此锁「被哪一道门拦下」，而不是锁某一层的内部码。
+>
+> **落盘工件矩阵**：写出点从两个变成一个，12 格矩阵留着（`sqlite` 那族现在代表「合一前留在盘上的
+> 存量工件」），**新增一条**判据钉住 §5dw 那条回落链必须两种格式都读得回来。
+>
+> 账本：跨目录对 1 → **0**（AC-1 最后一对完工）、AC-6 总账 400 → **398** / open 94 → **92**、
+> provider 专属业务依赖 27 → 25、thin-facade 少两条。架构守卫 **691 全绿**。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 15，退役通用 bundle 引擎的**前置对账**：补上 I5 / I8 两条）
 >
 > 落档 plan §5dx。`e37de7f7b` 的 CI：**backend 四分片全绿**（续 14 那两条账本 / 源码锁修对了），

@@ -81,7 +81,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-359 W9：两侧各 +1 ref / +1 drive —— `rfc359-w9-resource-package-skill-recovery-conformance.test.ts`
   // 同时驱动两侧的恢复端口（判据缺口 13b 的对拍）。两侧同步上涨，倒挂没有加深。
   // W12：journal 合一后 oracle 改 import 中立文件，剩余 artifact 两侧各少一条直接引用。
-  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 3/2, postgresql 3/3',
+  // RFC-359（plan §5dy）3/3 → 4/3：`rfc271-impl-gate-fixes` 的 P1-5 源码锁改指统一那条恢复链
+  // （原来指着随通用 bundle 引擎退役的 legacy 引擎）。**倒挂没有加深**——弱侧 sqlite 那一份
+  // 现在是「合一前存量格式的读回侧」，它的 3/2 由 `rfc359-w5-artifact-format-portability`
+  // 的 12 格矩阵与回落链判据一起盯着。
+  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 3/2, postgresql 4/3',
   // RFC-359 W8：两侧各 +1 ref —— `rfc359-w8-runtime-participants-conformance.test.ts` 的
   // 不合一判定用源码文本钉住了「drive 里两侧各挂一台子任务启动引擎」这条锚点。
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite 6/2, postgresql 8/1',

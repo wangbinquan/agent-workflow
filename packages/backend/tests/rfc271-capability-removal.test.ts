@@ -149,7 +149,8 @@ describe('C4/C5/C6 · 导出与覆盖侧的三条收缩仍然生效', () => {
         'resource-catalog',
         'infrastructure',
         'aggregateAdapters',
-        'legacyResourcePackageMutationParticipants.ts',
+        // RFC-359（plan §5dy）：legacy 那份随通用 bundle 引擎退役，判据改指生产在用的臂。
+        'postgresqlResourcePackageMutationArms.ts',
       ),
     )
     expect(adapter).toContain('bundle-overwrite-not-owned')

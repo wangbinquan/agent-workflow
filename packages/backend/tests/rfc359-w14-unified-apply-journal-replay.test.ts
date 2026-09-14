@@ -18,6 +18,24 @@
 //
 // 外加失败侧的两条：pre-commit 抛错 ⇒ **零资源可见** 且 journal 终态化为 `failed` 并带原因。
 //
+// 覆盖验收条款：AC-24f / AC-20 / AC-20b / AC-B4（引擎承重不变量 I2 / I3 / I7 / I8 / I13）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+//
+// # 覆盖的验收条款 / 不变量
+//
+// 这些编号原本锚在 `rfc271-bundle-engine.test.ts` 上；那份随被测的通用 bundle 引擎退役
+// （plan §5dy），判据搬到这里，锚点跟着搬——锚在真的测了那件事的文件上。
+//
+//   · **AC-24f** 重复提交按**三态**处理（`committed` → 原 receipt；`failed` → 409；未结 → 409）；
+//   · **AC-20** 导入可收敛：任一步失败或 SIGKILL 后，启动收敛能**证明**该前滚还是回滚
+//     （这里锁失败侧的终态化，收敛本身在 `rfc349-resource-package-maintenance`）；
+//   · **AC-20b** 正式资源行在 journal 到达 `committed` 前对读路径不可见（⑤：提交事务中途失败 ⇒ 零资源）；
+//   · **I2**（claim 同生共死）/ **I3**（三态重放）/ **I8**（post-commit 绝不补偿）；
+//   · **I13** 的一半（commit 内核 / receipt / journal 同一笔大事务）——完整那条在
+//     `rfc359-w11-atomic-apply-neutral-transaction-conformance`；
+//   · **I7** 的后继形态：统一引擎没有 `finalizeInTx` 这个钩子，回执与资源写、journal committed
+//     落在同一笔事务里（⑤ 与 w11 一起钉）。
+//
 // # 怎么在两个引擎上都造出「提交事务中途失败」
 //
 // 用 `helpers/faultTrigger` 在 `agents` 上挂一条 BEFORE INSERT 的 ABORT 触发器：两个引擎

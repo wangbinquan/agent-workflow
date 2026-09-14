@@ -26,11 +26,15 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { agents, capabilityTemplates, users } from '../src/db/schema'
-import { lowerBundlePayloads } from '../src/services/bundle/lower'
-import { opSlug, resourceTypeOfOp, type BundleApplyProvider } from '../src/services/bundle/provider'
+import { opSlug, resourceTypeOfOp } from '../src/services/bundle/provider'
 import { translateDecisions } from '../src/services/resourcePackage/commit'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
+import { randomBytes } from 'node:crypto'
+import { buildActor } from '../src/auth/actor'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
+import { buildPackagePreview } from './helpers/resourcePackageProvider'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '../src/db/query'
@@ -259,7 +263,20 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
           reviewer: `external:${destinationAgentId}`,
         })
 
+        // ② 落地：真的把包导进去。RFC-359（plan §5dy）——通用 bundle 引擎那一层
+        //    `lowerBundlePayloads` 随合一退役，`external:<id>` → 原始 id 的解析现在由统一
+        //    apply 引擎的 capability-template 臂自己做。判据因此从「lower 出来的 payload」
+        //    改成**落库那一行**：更强，而且走的是用户真会走的那条路。
         const destination = freshDb()
+        await destination.insert(users).values({
+          id: 'u1',
+          username: 'u1',
+          displayName: 'U1',
+          role: 'admin',
+          status: 'active',
+          createdAt: 1,
+          updatedAt: 1,
+        } as typeof users.$inferInsert)
         await destination.insert(agents).values({
           id: destinationAgentId,
           name: 'department-reviewer',
@@ -271,20 +288,34 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
           createdAt: 1,
           updatedAt: 1,
         } as typeof agents.$inferInsert)
-        const provider: BundleApplyProvider = {
-          idempotencyKey: { scope: 'test', key: ulid() },
-          serializationKey: ulid(),
-          actor: ACTOR,
-          resolveExternal: async (ref, type) => {
-            expect(ref).toBe(`external:${destinationAgentId}`)
-            expect(type).toBe('agent')
-            return destinationAgentId
-          },
-          readSkillFile: () => new Uint8Array(),
-        }
-        const lowered = await lowerBundlePayloads(destination, translated.ops, provider)
-        const loweredTemplate = lowered.find((op) => op.resourceType === 'capability_template')
-        expect(loweredTemplate?.payload.agentBySlot).toEqual({ reviewer: destinationAgentId })
+
+        const appHome = freshHome()
+        const box = createSecretBoxFromKey(randomBytes(32))
+        const importActor = buildActor({
+          user: { id: 'u1', username: 'u1', displayName: 'U1', role: 'admin', status: 'active' },
+          source: 'daemon',
+        })
+        const preview = await buildPackagePreview(destination, importActor, parsed, {
+          box,
+          importId: ulid(),
+        })
+        await commitResourcePackageForTest({ db: destination, appHome, box }, importActor, {
+          pkg: parsed,
+          previewToken: preview.previewToken,
+          decisions: [
+            { localSlug: templateSlug!, action: 'new', finalName: 'imported ci-fix' },
+            { localSlug: agentSlug!, action: 'reuse', targetId: destinationAgentId },
+          ],
+        })
+
+        const landed = await destination
+          .select()
+          .from(capabilityTemplates)
+          .where(eq(capabilityTemplates.name, 'imported ci-fix'))
+        expect(landed).toHaveLength(1)
+        expect(JSON.parse(landed[0]?.agentBySlotJson ?? '{}')).toEqual({
+          reviewer: destinationAgentId,
+        })
       })
     },
   )

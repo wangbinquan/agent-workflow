@@ -178,20 +178,19 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
  * 密钥 / 人员映射 / 重放 / 围栏的全部判据——**只跑 SQLite 那台机器**。PG 那台上这些路径的行为
  * 今天没有任何断言，正是本 RFC 反复照出的「合一那一刻才第一次看见差异」的形状。
  */
-export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = [
-  {
-    key: 'platform/persistence/ResourcePackageApplyEngine',
-    // RFC-359 §5dv/§5dw —— **生产侧已合一**：两个 provider 装的都是 PostgreSQL 那一侧那台
-    // 原子 apply 引擎；`legacyResourcePackageCommit.ts` 里的中立助手搬进
-    // `services/resourcePackage/commit.ts` 后整个文件已删。这里还剩一条是因为
-    // `legacyResourcePackageBundleApply.ts` **仍有测试消费者**（通用 bundle 引擎的那两份判据），
-    // 生产零调用方。它删掉的那天，这一对整条从登记表里消失——那才是合一完工的样子。
-    sqlite: ['platform/persistence/sqlite/legacyResourcePackageBundleApply.ts'],
-    postgresql: ['platform/persistence/postgresqlResourcePackageAtomicApply.ts'],
-    sqlitePrefixes: ['legacySqlite'],
-    postgresqlPrefixes: ['postgresql'],
-  },
-]
+/**
+ * RFC-359 §5dv/§5dw/§5dy —— **这张表已经空了，那正是合一完工的样子。**
+ *
+ * 它曾经只有一条：资源包 apply 引擎（SQLite 侧 `legacyResourcePackageCommit.ts` +
+ * `legacyResourcePackageBundleApply.ts` 约 1448 行 / PG 侧 `postgresqlResourcePackageAtomicApply.ts`
+ * 约 976 行）。它不在同目录同名的机械检出里（判据是「同目录 + 去掉引擎前缀后同名」，
+ * 而这一对是**跨目录 + 改了名**），所以靠手工登记。
+ *
+ * 收掉的过程记在 plan §5dv（生产切换）→ §5dw（`legacyResourcePackageCommit` 退役）
+ * → §5dy（通用 bundle 引擎整条退役）。表留在这里是因为**下一个跨目录的对仍然只能靠手工登记**：
+ * 机械判据看不见「跨目录 + 改名」这种形状，谁发现了就往这里加一条。
+ */
+export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
 export const PROVIDER_PAIR_COUNT = 10
@@ -460,9 +459,8 @@ describe('RFC-359 W5 —— 成对 provider 适配器：合一进度 + 对拍覆
 
   test('手工登记的每一对吃同一套状态位判据（登记 ≠ 免责）', () => {
     // 判据与机械那批逐字相同：`witnessesPair`（跑双引擎 harness + 两侧各有一条**值** import）。
-    // 今天这一对是 `unverified`：唯一驱动两条 apply 路径的
-    // `rfc359-w12-mcp-mutation-conformance.test.ts` 只 import 了 PG 那侧的 src 文件，
-    // SQLite 那侧是经测试助手进去的。这与头注释的「宁可低估，不要抹平」一致。
+    // RFC-359 §5dy：登记表现在是空的（唯一那一对已合一），所以这里也是空表。
+    // 判据本身留着——下一条跨目录 / 改名的对进来时，它照样吃这套状态位。
     const rows = DECLARED_CROSS_DIRECTORY_PAIRS.map((pair) => {
       const witnesses = TEST_UNITS.filter((unit) => witnessesPair(unit, pair))
         .map((unit) => unit.path)
@@ -474,9 +472,7 @@ describe('RFC-359 W5 —— 成对 provider 适配器：合一进度 + 对拍覆
       rows,
       '手工登记的对的状态位变了。**变成 verified 是好事**——把这一行改过来；' +
         '**从 verified 退回 unverified** 说明对拍被删了或改成了单引擎，那是回退。',
-    ).toEqual([
-      'platform/persistence/ResourcePackageApplyEngine: legacySqlite + postgresql — unverified',
-    ])
+    ).toEqual([])
   })
 
   test('账本按 pair 路径字典序、无重复，且两个计数常量与账本自洽（清点稳定的前提）', () => {

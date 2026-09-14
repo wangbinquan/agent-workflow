@@ -10,12 +10,8 @@ import { createCapabilityTemplatePersistence } from '../infrastructure/capabilit
 export const createSqliteCapabilityTemplatePersistence = createCapabilityTemplatePersistence
 export const createPostgresqlCapabilityTemplatePersistence = createCapabilityTemplatePersistence
 
-export {
-  createPostgresqlCapabilityTemplatePackageCommit,
-  createSqliteCapabilityTemplatePackageCommitSync,
-} from '../infrastructure/capabilityTemplatePackageCommit'
+export { createPostgresqlCapabilityTemplatePackageCommit } from '../infrastructure/capabilityTemplatePackageCommit'
 export { createPostgresqlCapabilityTemplatePackageMutationOwner } from '../infrastructure/postgresqlCapabilityTemplatePackageMutationOwner'
-export type { SqliteCapabilityTemplatePackageCommitSync } from '../infrastructure/capabilityTemplatePackageCommit'
 export type {
   CapabilityTemplatePackageCommit,
   PreparedCapabilityTemplateWrite,

@@ -976,12 +976,11 @@ export interface ResourcePackageMutationReceipt<
   readonly name: string
 }
 
-export interface ResourcePackageApplyScenarioPlan {
-  readonly scenarioId: 'resource-package'
-  readonly idempotencyKey: Readonly<{ scope: 'package'; key: string }>
-  readonly serializationKey: string
-  readonly operations: readonly BundleOp[]
-}
+// RFC-359（apply 引擎合一，plan §5dy）—— `ResourcePackageApplyScenarioPlan` 随
+// `ResourcePackageApplyScenarioProvider` 一起退役：它描述的是**通用 bundle 引擎**
+// 「把一份 scenario（幂等键 + 串行键 + op 列表）交给引擎」的形状。统一 apply 引擎里
+// 幂等键固定是 `('package', importId)`、串行键由 `resourcePackageApplyLock` 自己管，
+// op 列表直接由编排层持有，没有一个中间的 plan 对象要跨公共面。
 
 /**
  * T6 package transport contract. Multipart files, ZIP bytes, filesystem paths

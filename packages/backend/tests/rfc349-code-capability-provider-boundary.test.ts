@@ -115,7 +115,12 @@ describe('RFC-349 code-capability provider boundary', () => {
       join(MODULE, 'infrastructure', 'capabilityTemplatePackageCommit.ts'),
       'utf8',
     )
-    expect(source).toContain('createSqliteCapabilityTemplatePackageCommitSync')
+    // RFC-359（apply 引擎合一，plan §5dy）：同步那一臂
+    // （`createSqliteCapabilityTemplatePackageCommitSync`）随通用 bundle 引擎退役——
+    // 它零生产消费者。两个 provider 现在都走这一个异步参与者，所以判据改成反向断言。
+    // 断言的是**声明**不在了，不是「这个名字一个字都不许出现」——文件里那段说明它为什么
+    // 被删的注释正好含这个名字，裸 `not.toContain` 会被自己的注释绊倒。
+    expect(source).not.toContain('export function createSqliteCapabilityTemplatePackageCommitSync')
     expect(source).toContain('createPostgresqlCapabilityTemplatePackageCommit')
     expect(source).toContain('tx.insert(capabilityTemplates)')
     expect(source).toContain('await tx')

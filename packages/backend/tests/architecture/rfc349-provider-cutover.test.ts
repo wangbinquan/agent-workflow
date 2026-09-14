@@ -30,8 +30,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // VACUUM INTO 挪出主线程，校验留在了上面，一次大迁移因此把 daemon 冻住 18.1 秒）。
   // 债的形状不变——还是这一个 worker 入口依赖同一个 provider 机制模块，只是多一个符号。
   'packages/backend/src/services/backupVacuumWorker.ts -> @/platform/persistence/sqlite/systemBackupVacuum :: quickCheckSqlite,vacuumSqliteInto',
-  'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/code-capability/infrastructure/capabilityTemplatePackageCommit :: createSqliteCapabilityTemplatePackageCommitSync',
-  'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: getAclResourceOwnerInTx',
   'packages/backend/src/services/limits.ts -> @/modules/system-operations/composition/resourceLimits :: composeLegacySqliteResourceLimitOperations',
   'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,createLegacySqliteNodeRunOperations',
   'packages/backend/src/services/pendingRestore.ts -> @/platform/persistence/sqlite/systemProviderRestore :: SqlitePostRestoreRecovery',
