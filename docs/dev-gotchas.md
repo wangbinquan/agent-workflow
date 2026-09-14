@@ -6994,3 +6994,32 @@ generic plan 就少了一半信息。真正的运行时入参照旧走占位符�
 **别用「P95 of 20」当判据去找这类问题**：`rounds: 20` 的 P95 等于**第 20 名样本、也就是最大值**。
 同一份代码两次 CI 的 P95 差可以到 3.7ms，而真实的台阶是看**中位数**才认得出来
 （PG 中位数 2.68 → 24.78）。定位这类回归看**按测量顺序排列的原始样本**，不看 P95。
+
+## 给 PostgreSQL 灌完语料只 `ANALYZE` 不 `VACUUM`，量到的是**生产从不持续停留**的那个状态（2026-09-15 实测 3.0×）
+
+**现象**：`/api/overview` 的计数在 CI 上**连续 5 个 run** 都是 PG 慢（中位数 6.0ms vs SQLite 3.2ms），
+稳态、无台阶、无尖峰——不是噪声也不是计划切换，就是一直慢。
+
+**根因不在 SQL 里**：PostgreSQL 的 **index-only scan 要成立，得靠 visibility map** 证明
+「这一页全部可见」，而 VM 只由 **VACUUM** 维护。刚批量灌完的表 VM 是空的，index-only scan
+不成立，planner 退回 `Bitmap Heap Scan`：
+
+```
+只 ANALYZE  : Bitmap Heap Scan     1.682ms   Heap Blocks: exact=345
+VACUUM 之后 : Index Only Scan      0.557ms   Heap Fetches: 0     ← 3.0×
+```
+
+生产里 autovacuum 一直在跑、VM 常态是新的。**只 `ANALYZE` 等于拿 PG 一个它从不持续停留的瞬时
+状态去比**——而对手 SQLite 没有 MVCC 可见性这回事，本来就拿得到最好的计划，于是被罚的只有 PG。
+
+**规矩**：任何要给 PostgreSQL 灌语料再计时/再看计划的地方（基准、计划审计、容量实验），
+装载后都必须 `VACUUM ANALYZE`，不是只 `ANALYZE`。
+
+**但不要「为了公平」给 SQLite 也加 `VACUUM`**——判准是「**生产里这个引擎实际有什么**」，
+不是「两边跑同样的命令」。SQLite 没有后台 vacuum、绝大多数部署也从不手工 `VACUUM`，
+只 `ANALYZE` 本来就是它的生产状态。给它加上实测能再快约 8%，但那是**生产拿不到的收益**；
+而且 `VACUUM` 在 SQLite 上要**整文件重写、另需约一倍空闲盘**，全量语料（1000 万行事件）
+上很容易把盘掐着给的 CI job 撑爆。
+
+**判据别用耗时**：要锁这件事就断言 `Heap Fetches: 0`（可见性本身，与机器负载无关），
+不要断言毫秒数——同 `rfc359-w6-t26-postgresql-plan-audit` 其余判据的原则。
