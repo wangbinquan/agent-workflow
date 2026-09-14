@@ -268,7 +268,7 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
     return { kind: 'agent', operationId: 'op-1', resourceId: 'r', action: 'create', revision: {} }
   }
 
-  if (harness.capabilities.provider === 'postgresql') {
+  {
     const session = {
       preflight,
       prepare,
@@ -709,113 +709,128 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
 // B. 实测分叉：合一会抹掉的东西
 // ─────────────────────────────────────────────────────────────────────────────
 
-describeEachProvider('RFC-359 W7 Intent apply 编排 · 实测分叉', (harness) => {
-  beforeEach(async () => {
-    const now = Date.now()
-    await harness.db.insert(users).values({
-      id: OWNER,
-      username: 'w7-owner',
-      displayName: 'W7 owner',
-      role: 'user',
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    } as typeof users.$inferInsert)
-  })
-
-  test('分叉①：journal 的工件信封 —— SQLite 带版本号，PG 是裸数组', async () => {
-    const fixture = await seedSession(harness, 'w7-envelope')
-    const port = applyPortFor(harness, { artifact: AGENT_ARTIFACT })
-    const receipt = await port.apply(command(fixture))
-    const stored: unknown = JSON.parse(
-      (await journalRow(harness, receipt.journalId))?.preparedArtifactsJson ?? 'null',
-    )
-
-    if (harness.capabilities.provider === 'postgresql') {
-      // 同一列、同一个恢复凭据，两侧写的是不同的容器：PG 从不写版本号。
-      expect(stored).toEqual([AGENT_ARTIFACT])
-      return
-    }
-    expect(stored).toEqual({ version: 1, artifacts: [AGENT_ARTIFACT] })
-  })
-
-  // 原「分叉②：提交后前滚未完成」已于 RFC-359 W7 抬齐（SQLite 接住返回值并写回同一条说明），
-  // 用例搬进 A 段「提交后前滚未完成 ⇒ 行留 committed，当场写回 retryable 说明」。
-
-  test('分叉③：资源会话的中止 / 提交后尾巴 —— 只有 PG 有', async () => {
-    const fixture = await seedSession(harness, 'w7-abort')
-    const failing = applyPortFor(harness, {
-      faults: {
-        beforeTx() {
-          throw new Error('boom')
-        },
-      },
+describeEachProvider(
+  'RFC-359 W7 Intent apply 编排 · 此前的实测分叉（合一后逐条同解）',
+  (harness) => {
+    beforeEach(async () => {
+      const now = Date.now()
+      await harness.db.insert(users).values({
+        id: OWNER,
+        username: 'w7-owner',
+        displayName: 'W7 owner',
+        role: 'user',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      } as typeof users.$inferInsert)
     })
-    await expect(failing.apply(command(fixture))).rejects.toThrow('boom')
 
-    const happy = applyPortFor(harness)
-    const second = await seedSession(harness, 'w7-abort-ok')
-    await happy.apply(command(second))
+    test('①（已合一）journal 的工件信封两侧同形：裸数组', async () => {
+      // RFC-359 §5dz：合一之前 SQLite 那台写的是带版本号的信封
+      // （`{ version: 1, artifacts: [...] }`），PG 写裸数组。现在只剩一台引擎，两侧同形。
+      const fixture = await seedSession(harness, 'w7-envelope')
+      const port = applyPortFor(harness, { artifact: AGENT_ARTIFACT })
+      const receipt = await port.apply(command(fixture))
+      const stored: unknown = JSON.parse(
+        (await journalRow(harness, receipt.journalId))?.preparedArtifactsJson ?? 'null',
+      )
+      expect(stored).toEqual([AGENT_ARTIFACT])
+    })
 
-    if (harness.capabilities.provider === 'postgresql') {
+    test('①b 合一**之前**写下的带版本号信封仍然读得回来（否则那些行永不终态化）', async () => {
+      // 这是合一必须带的兼容面：一台在合一之前起过的 daemon 留下的未结 journal 行，
+      // 其 `prepared_artifacts_json` 是 `{ version: 1, artifacts: [...] }`。收敛器只认裸数组的话，
+      // 那些行每小时被判一次 `intent-journal-artifact-corrupt`、**永不终态化**，
+      // 行与半成品一起永久卡住。
+      const fixture = await seedSession(harness, 'w7-legacy-envelope')
+      const compensated: unknown[] = []
+      const port = applyPortFor(harness, {
+        compensate: async (artifact) => {
+          compensated.push(artifact)
+        },
+      })
+      const journalId = await seedJournal(harness, fixture, {
+        state: 'prepared',
+        preparedArtifactsJson: JSON.stringify({ version: 1, artifacts: [AGENT_ARTIFACT] }),
+      })
+
+      const recorder = recordingLog()
+      const result = await port.converge(recorder.log)
+
+      expect(result).toEqual({ failed: 1, rolledForward: 0 })
+      expect(compensated).toEqual([AGENT_ARTIFACT])
+      expect(recorder.warnings()).not.toContain('intent-journal-artifact-corrupt')
+      expect((await journalRow(harness, journalId))?.state).toBe('failed')
+    })
+
+    // 原「分叉②：提交后前滚未完成」已于 RFC-359 W7 抬齐（SQLite 接住返回值并写回同一条说明），
+    // 用例搬进 A 段「提交后前滚未完成 ⇒ 行留 committed，当场写回 retryable 说明」。
+
+    test('③（已合一）资源会话的中止 / 提交后尾巴两侧都有', async () => {
+      const fixture = await seedSession(harness, 'w7-abort')
+      const failing = applyPortFor(harness, {
+        faults: {
+          beforeTx() {
+            throw new Error('boom')
+          },
+        },
+      })
+      await expect(failing.apply(command(fixture))).rejects.toThrow('boom')
+
+      const happy = applyPortFor(harness)
+      const second = await seedSession(harness, 'w7-abort-ok')
+      await happy.apply(command(second))
+
+      // RFC-359 §5dz：合一之前 SQLite 那台的 `IntentApplyResourceSession` **根本没有**这两个
+      // 方法——资源侧的补偿全压在 journal 工件上，没有「资源会话自己的中止」这一档。
+      // 合一把强侧的行为给了两边。
       expect(failing.calls.abortPrepared).toEqual([{ databaseCommitted: false }])
       expect(happy.calls.rollForwardCommitted).toBe(1)
-      return
-    }
-    // SQLite 的 `IntentApplyResourceSession` 根本没有这两个方法：资源侧的补偿全部
-    // 压在 journal 工件上，没有「资源会话自己的中止」这一档。
-    expect(failing.calls.abortPrepared).toEqual([])
-    expect(happy.calls.rollForwardCommitted).toBe(0)
-  })
-
-  test('分叉④：收敛的解码宽严不同 —— 同一行，SQLite 判损坏，PG 照常补偿', async () => {
-    const fixture = await seedSession(harness, 'w7-decode')
-    const compensated: unknown[] = []
-    const port = applyPortFor(harness, {
-      compensate: async (artifact) => {
-        compensated.push(artifact)
-      },
     })
-    // SQLite 形状的 skill-version-stage：PG 的解码器只看 `kind` 白名单，照收；
-    // SQLite 的解码器明确拒收这一形状（不足以安全收敛）。
-    const legacyShape = JSON.stringify([
-      {
-        kind: 'skill-version-stage',
-        staged: {
-          skillId: 'skill-1',
-          skillName: 'skill-one',
-          opId: 'op-1',
-          publishId: 'publish-1',
-          newVersion: 2,
-          newHash: 'sha256:fixture',
-          filesDir: '/tmp/skill-1/files',
-          versionDir: '/tmp/skill-1/versions/v2',
-          stagingDir: '/tmp/skill-1/.staged-publish-1',
-          noop: null,
+
+    test('④（已合一）收敛的解码宽严两侧同解：按 `kind` 白名单收下并照常补偿', async () => {
+      const fixture = await seedSession(harness, 'w7-decode')
+      const compensated: unknown[] = []
+      const port = applyPortFor(harness, {
+        compensate: async (artifact) => {
+          compensated.push(artifact)
         },
-      },
-    ])
-    const journalId = await seedJournal(harness, fixture, {
-      state: 'prepared',
-      preparedArtifactsJson: legacyShape,
-    })
+      })
+      // 一条 SQLite 形状的 skill-version-stage。合一之前两个解码器宽严不同：PG 只看 `kind`
+      // 白名单、照收；SQLite 明确拒收这一形状（判它不足以安全收敛）。现在只剩一台引擎、一套宽严。
+      const legacyShape = JSON.stringify([
+        {
+          kind: 'skill-version-stage',
+          staged: {
+            skillId: 'skill-1',
+            skillName: 'skill-one',
+            opId: 'op-1',
+            publishId: 'publish-1',
+            newVersion: 2,
+            newHash: 'sha256:fixture',
+            filesDir: '/tmp/skill-1/files',
+            versionDir: '/tmp/skill-1/versions/v2',
+            stagingDir: '/tmp/skill-1/.staged-publish-1',
+            noop: null,
+          },
+        },
+      ])
+      const journalId = await seedJournal(harness, fixture, {
+        state: 'prepared',
+        preparedArtifactsJson: legacyShape,
+      })
 
-    const recorder = recordingLog()
-    const result = await port.converge(recorder.log)
-    const row = await journalRow(harness, journalId)
+      const recorder = recordingLog()
+      const result = await port.converge(recorder.log)
+      const row = await journalRow(harness, journalId)
 
-    if (harness.capabilities.provider === 'postgresql') {
       expect(result).toEqual({ failed: 1, rolledForward: 0 })
       expect(compensated).toHaveLength(1)
       expect(row?.state).toBe('failed')
-      return
-    }
-    expect(result).toEqual({ failed: 0, rolledForward: 0 })
-    expect(compensated).toEqual([])
-    expect(recorder.warnings()).toContain('intent-journal-artifact-corrupt')
-    expect(row?.state).toBe('prepared')
-  })
+      expect(recorder.warnings()).not.toContain('intent-journal-artifact-corrupt')
+    })
 
-  // 原「分叉⑤：apply 留下 retryable 时的诊断词」已于 RFC-359 W7 抬齐（PG 也记
-  // `intent-left-retryable`），判据并进 A 段「补偿本身失败 ⇒ … 并记同一组诊断词」。
-})
+    // 原「分叉⑤：apply 留下 retryable 时的诊断词」已于 RFC-359 W7 抬齐（PG 也记
+    // `intent-left-retryable`），判据并进 A 段「补偿本身失败 ⇒ … 并记同一组诊断词」。
+  },
+)

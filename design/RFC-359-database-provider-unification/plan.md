@@ -9733,3 +9733,57 @@ P1-5 那条**改了判据本体**：PG 侧的恢复没有 `publishStagedVersion`
 「合一前存量格式的读回侧」，由那条 12 格矩阵与新增的回落链判据一起盯着，注释里写清了这一点。
 
 架构守卫 **691 全绿**；typecheck / lint / prettier 干净。
+
+
+## 5dz. 下一对：intent apply 引擎——**先证可移植，再改判据，最后才切生产**
+
+§5dy 收完资源包那一对之后，`PROVIDER_PAIR_CONFORMANCE_LEDGER` 里还剩 10 对同目录共存。
+逐对量一下两侧行数，**只有一对是两侧都厚的真重复**：
+
+| 对 | SQLite | PostgreSQL | 形状 |
+| --- | --- | --- | --- |
+| `IntentApplyOperations` | 762 | 587 | **两侧都厚——真重复** |
+| `IntentApplyArtifactLifecycle` | 178 | 443 | 同上那一对的工件侧 |
+| `TaskRouteOperations` | 276 | 2563 | SQLite 侧薄，已是转交形态 |
+| `TaskRouteLaunchOperations` | 92 | 1339 | 同上 |
+| `ChildExecutionLaunchOperations` | 94 | 739 | 同上 |
+| 其余五对 | — | — | 已在账本里逐条**判不合**（迁移器 / 落盘格式 / 运行时引擎 / journal 事务包装） |
+
+也就是说 AC-1 的剩余面基本收敛到 **intent apply 这一对**——它正是资源包那一对的姐妹
+（`rfc294-apply-replay-recovery-parity` 的存在理由就是「Intent Apply 与 BundleApply 仍是两台引擎」）。
+
+### 这一批只做前三步（不切生产）
+
+**① 证可移植**：PG 那台引擎全文只有**一处** `PostgresqlDatabaseClient`（`db` 形参）。
+改成 `ProviderNeutralDatabase` 后 `tsc` 零报错；再把 `rfc359-w7-intent-apply-operations-conformance`
+的 SQLite 泳道指向 PG 那台——**14 格共同子集一格没改就全绿**。与资源包那次同一个结论：
+这一对也不是「两台机器」，是一台中立引擎加一条 SQLite 专属老路。
+
+**② 补上合一必须带的兼容面**：收敛期的 `decodeRecoveryArtifacts` 只认裸数组，而**合一之前**
+SQLite 那台写下的行是带版本号的信封 `{ version: 1, artifacts: [...] }`。只认裸数组的话，
+一台在合一之前起过的 daemon 留下的未结 journal 行会被判成 `intent-journal-artifact-corrupt`
+而**永不终态化**——收敛器每小时看它一次、每次都拒绝，行与半成品一起永久卡住。
+加一次回落（工件生命周期那一侧本来就这么做，`postgresqlIntentApplyArtifactLifecycle.ts:95`，
+收敛这一侧此前漏了）。新判据 ①b 直接喂一条带版本号的行，断言它被正常补偿、落 `failed`，
+且**不**记 `intent-journal-artifact-corrupt`。
+
+**③ 三条「实测分叉」逐条同解**（原文件里那一段的标题就叫「实测分叉」，现在改名为
+「此前的实测分叉（合一后逐条同解）」）：
+
+| 原分叉 | 合一前 | 合一后 |
+| --- | --- | --- |
+| ① journal 工件信封 | SQLite 带版本号 / PG 裸数组 | 两侧裸数组，**且**旧信封仍读得回来（①b） |
+| ③ 资源会话的中止 / 提交后尾巴 | **只有 PG 有** | 两侧都有——强侧的行为给了两边 |
+| ④ 收敛的解码宽严 | SQLite 判损坏、PG 照常补偿 | 两侧同解：按 `kind` 白名单收下并补偿 |
+
+32 格全绿（两个引擎各 16）。
+
+### 为什么**没有**接着切生产
+
+切生产要先收 intent 的**资源绑定**那一对（`legacyIntentApplyResourceParticipants` vs
+`postgresqlIntentApplyResourceParticipants`）——PG 那台引擎要的 `resources` /`artifacts` 两件依赖
+今天各有 SQLite / PG 两份装配。那是下一批，形状与 §5dv 完全一样：
+先把两份装配收成一份，再删 `provider === 'sqlite' ? …` 的三元，最后退役 SQLite 那台引擎
+（`sqliteIntentApplyOperations.ts` 762 行 + `sqliteIntentApplyArtifactLifecycle.ts` 178 行）。
+
+这一批停在「判据已经证明可移植、兼容面已经补好」这条边界上，是为了让那一步的 diff 只剩装配。

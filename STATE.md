@@ -2,6 +2,29 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 17，下一对：intent apply 引擎——先证可移植 + 补兼容面）
+>
+> 落档 plan §5dz。资源包那一对收完之后逐对量了剩下的 10 对：**只有 intent apply 那一对是两侧
+> 都厚的真重复**（SQLite 762 / PG 587）；`TaskRoute*` / `ChildExecutionLaunch` 三对的 SQLite 侧
+> 已是薄转交（92～276 行 vs 739～2563），其余五对早就在账本里逐条**判不合**（迁移器 / 落盘格式 /
+> 运行时引擎 / journal 事务包装）。也就是说 **AC-1 的剩余面基本收敛到 intent apply 这一对**。
+>
+> **① 证可移植**：PG 那台引擎全文只有一处 `PostgresqlDatabaseClient`（`db` 形参）；改中立后
+> `tsc` 零报错，再把 `rfc359-w7-intent-apply-operations-conformance` 的 SQLite 泳道指向它——
+> **14 格共同子集一格没改就全绿**。与资源包那次同一个结论。
+>
+> **② 补兼容面（合一必须带的）**：收敛期的 `decodeRecoveryArtifacts` 只认裸数组，而合一之前
+> SQLite 写下的是 `{ version: 1, artifacts: [...] }`。不回落的话，合一前留下的未结 journal 行
+> 会被判 `intent-journal-artifact-corrupt` 而**永不终态化**——每小时看一次、每次都拒。
+> 加回落 + 新判据 ①b（喂一条旧信封，断言正常补偿落 `failed` 且不记那条诊断词）。
+>
+> **③ 三条「实测分叉」逐条同解**：工件信封（两侧裸数组 + 旧信封仍读得回）、资源会话的中止 /
+> 提交后尾巴（**此前只有 PG 有**，现在两侧都有）、收敛解码宽严（两侧同解）。32 格全绿。
+>
+> **没接着切生产**是有意的：切之前要先收 intent 的**资源绑定**那一对，PG 引擎要的
+> `resources` / `artifacts` 今天各有两份装配。下一批做，形状与 §5dv 完全一样。
+> 这一批停在「已证可移植 + 兼容面已补」这条边界上，让那一步的 diff 只剩装配。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 16，**通用 bundle 引擎整条退役——AC-1 最后一对合一完工**）
 >
 > 落档 plan §5dy。`37cb443a4` 的 CI **全绿**（backend + e2e；上一段那条 `workgroup-matrix`
