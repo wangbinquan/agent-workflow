@@ -10,15 +10,16 @@
 // （回收阈值、收敛的幂等性、失败重放的语义）。任何一条红都说明合一动了不该动的东西。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import { createInMemoryDb, type DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, intentApplyJournal, intentSessions, resourceBundleApplies } from '@/db/schema'
 import {
   applyIntentChangeset,
@@ -33,10 +34,9 @@ import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_ID = 'rfc294-apply-owner'
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 let sessionId: string
 
@@ -138,8 +138,8 @@ function convergePackageApplies(): Promise<{ failed: number; rolledForward: numb
     .then((receipt) => ({ failed: receipt.failed, rolledForward: receipt.rolledForward }))
 }
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
   appHome = mkdtempSync(join(tmpdir(), 'aw-rfc294-apply-parity-'))
   sessionId = ulid()
   const now = Date.now()
@@ -151,10 +151,9 @@ beforeEach(async () => {
     createdAt: now,
     updatedAt: now,
   })
-})
+}
 
 afterEach(() => {
-  db.$client.close()
   rmSync(appHome, { recursive: true, force: true })
 })
 
@@ -213,44 +212,99 @@ async function bundleState(id: string) {
   return db.select().from(resourceBundleApplies).where(eq(resourceBundleApplies.id, id)).get()
 }
 
-describe('RFC-294 AtomicApply migration parity', () => {
-  test('fresh work survives a sweep; after restart-age it converges failed and replay stays side-effect free', async () => {
-    const pair = await seedPair('crash', 'applying', Date.now())
+// RFC-359（AC-6）—— 改成双引擎。此前钉死在 `createInMemoryDb` 上不是因为判据与引擎有关，
+// 而是因为两条 apply 路径的生产签名当时都只收 `DbClient`；§5dy / §5ea 合一之后限制没了。
+describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
+  })
 
-    expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
-      failed: 0,
-      rolledForward: 0,
-    })
-    expect(await convergePackageApplies()).toEqual({
-      failed: 0,
-      rolledForward: 0,
-    })
-    expect((await intentState(pair.intentId))?.state).toBe('applying')
-    expect((await bundleState(pair.bundleId))?.state).toBe('applying')
+  describe('RFC-294 AtomicApply migration parity', () => {
+    test('fresh work survives a sweep; after restart-age it converges failed and replay stays side-effect free', async () => {
+      const pair = await seedPair('crash', 'applying', Date.now())
 
-    const stale = Date.now() - 11 * 60 * 1000
-    await db
-      .update(intentApplyJournal)
-      .set({ updatedAt: stale })
-      .where(eq(intentApplyJournal.id, pair.intentId))
-    await db
-      .update(resourceBundleApplies)
-      .set({ updatedAt: stale })
-      .where(eq(resourceBundleApplies.id, pair.bundleId))
+      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+        failed: 0,
+        rolledForward: 0,
+      })
+      expect(await convergePackageApplies()).toEqual({
+        failed: 0,
+        rolledForward: 0,
+      })
+      expect((await intentState(pair.intentId))?.state).toBe('applying')
+      expect((await bundleState(pair.bundleId))?.state).toBe('applying')
 
-    expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
-      failed: 1,
-      rolledForward: 0,
-    })
-    expect(await convergePackageApplies()).toEqual({
-      failed: 1,
-      rolledForward: 0,
-    })
-    expect((await intentState(pair.intentId))?.state).toBe('failed')
-    expect((await bundleState(pair.bundleId))?.state).toBe('failed')
+      const stale = Date.now() - 11 * 60 * 1000
+      await db
+        .update(intentApplyJournal)
+        .set({ updatedAt: stale })
+        .where(eq(intentApplyJournal.id, pair.intentId))
+      await db
+        .update(resourceBundleApplies)
+        .set({ updatedAt: stale })
+        .where(eq(resourceBundleApplies.id, pair.bundleId))
 
-    await expect(
-      applyIntentChangeset(
+      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+        failed: 1,
+        rolledForward: 0,
+      })
+      expect(await convergePackageApplies()).toEqual({
+        failed: 1,
+        rolledForward: 0,
+      })
+      expect((await intentState(pair.intentId))?.state).toBe('failed')
+      expect((await bundleState(pair.bundleId))?.state).toBe('failed')
+
+      await expect(
+        applyIntentChangeset(
+          {
+            db,
+            appHome,
+            actor: actorOf(OWNER_ID),
+            ...intentApplyResourceBinding(db, actorOf(OWNER_ID)),
+          },
+          {
+            sessionId,
+            clientMutationId: pair.intentKey,
+            draftRevision: 1,
+            draftHash: 'sha256:crash',
+            decisions: [],
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'intent-apply-failed-replay' })
+      await expect(replayPackageApply(pair.bundleKey)).rejects.toMatchObject({
+        code: 'bundle-apply-failed-replay',
+      })
+
+      expect(await db.select().from(agents)).toEqual([])
+      expect(await db.select().from(intentApplyJournal)).toHaveLength(1)
+      expect(await db.select().from(resourceBundleApplies)).toHaveLength(1)
+    })
+
+    test('committed receipts replay exactly even after mutable admission state changes', async () => {
+      const intentReceipt: IntentApplyReceipt = {
+        journalId: 'intent-receipt',
+        commitSeq: 7,
+        applied: [],
+      }
+      // 统一引擎的回执信封（`ReceiptSchema`，strict）：`applied[]` 逐条用 `operationId`。
+      // 空 applied 两种命名下同形，这里正好不用分心。
+      const bundleReceipt = { journalId: 'bundle-receipt', applied: [] }
+      const pair = await seedPair('committed', 'committed', Date.now(), {
+        intent: intentReceipt,
+        bundle: bundleReceipt,
+      })
+
+      // A byte-identical successful request may be retried after the UI archived
+      // its Intent session or after a package preview expired. Duplicate lookup
+      // must win over those mutable validations; actor/request mismatches are a
+      // separate P0/W6 blocker and are deliberately not characterized as green.
+      await db
+        .update(intentSessions)
+        .set({ status: 'archived', inFlightTurnId: ulid() })
+        .where(eq(intentSessions.id, sessionId))
+
+      const intentReplay = await applyIntentChangeset(
         {
           db,
           appHome,
@@ -261,94 +315,47 @@ describe('RFC-294 AtomicApply migration parity', () => {
           sessionId,
           clientMutationId: pair.intentKey,
           draftRevision: 1,
-          draftHash: 'sha256:crash',
+          draftHash: 'sha256:committed',
           decisions: [],
         },
-      ),
-    ).rejects.toMatchObject({ code: 'intent-apply-failed-replay' })
-    await expect(replayPackageApply(pair.bundleKey)).rejects.toMatchObject({
-      code: 'bundle-apply-failed-replay',
+      )
+      const bundleReplay = await replayPackageApply(pair.bundleKey)
+
+      expect(intentReplay).toEqual(intentReceipt)
+      expect(bundleReplay).toEqual(bundleReceipt)
+      expect((await intentState(pair.intentId))?.state).toBe('committed')
+      expect((await bundleState(pair.bundleId))?.state).toBe('committed')
     })
 
-    expect(await db.select().from(agents)).toEqual([])
-    expect(await db.select().from(intentApplyJournal)).toHaveLength(1)
-    expect(await db.select().from(resourceBundleApplies)).toHaveLength(1)
-  })
+    test('Intent replay remains owner-scoped and does not reveal another user receipt', async () => {
+      const intentReceipt: IntentApplyReceipt = {
+        journalId: 'private-intent-receipt',
+        commitSeq: 1,
+        applied: [],
+      }
+      const pair = await seedPair('private', 'committed', Date.now(), {
+        intent: intentReceipt,
+        bundle: { journalId: 'unused-bundle-receipt', applied: [] },
+      })
 
-  test('committed receipts replay exactly even after mutable admission state changes', async () => {
-    const intentReceipt: IntentApplyReceipt = {
-      journalId: 'intent-receipt',
-      commitSeq: 7,
-      applied: [],
-    }
-    // 统一引擎的回执信封（`ReceiptSchema`，strict）：`applied[]` 逐条用 `operationId`。
-    // 空 applied 两种命名下同形，这里正好不用分心。
-    const bundleReceipt = { journalId: 'bundle-receipt', applied: [] }
-    const pair = await seedPair('committed', 'committed', Date.now(), {
-      intent: intentReceipt,
-      bundle: bundleReceipt,
+      await expect(
+        applyIntentChangeset(
+          {
+            db,
+            appHome,
+            actor: actorOf('rfc294-other-user'),
+            ...intentApplyResourceBinding(db, actorOf('rfc294-other-user')),
+          },
+          {
+            sessionId,
+            clientMutationId: pair.intentKey,
+            draftRevision: 1,
+            draftHash: 'sha256:private',
+            decisions: [],
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'intent-session-not-found' })
+      expect((await intentState(pair.intentId))?.receiptJson).toBe(JSON.stringify(intentReceipt))
     })
-
-    // A byte-identical successful request may be retried after the UI archived
-    // its Intent session or after a package preview expired. Duplicate lookup
-    // must win over those mutable validations; actor/request mismatches are a
-    // separate P0/W6 blocker and are deliberately not characterized as green.
-    await db
-      .update(intentSessions)
-      .set({ status: 'archived', inFlightTurnId: ulid() })
-      .where(eq(intentSessions.id, sessionId))
-
-    const intentReplay = await applyIntentChangeset(
-      {
-        db,
-        appHome,
-        actor: actorOf(OWNER_ID),
-        ...intentApplyResourceBinding(db, actorOf(OWNER_ID)),
-      },
-      {
-        sessionId,
-        clientMutationId: pair.intentKey,
-        draftRevision: 1,
-        draftHash: 'sha256:committed',
-        decisions: [],
-      },
-    )
-    const bundleReplay = await replayPackageApply(pair.bundleKey)
-
-    expect(intentReplay).toEqual(intentReceipt)
-    expect(bundleReplay).toEqual(bundleReceipt)
-    expect((await intentState(pair.intentId))?.state).toBe('committed')
-    expect((await bundleState(pair.bundleId))?.state).toBe('committed')
-  })
-
-  test('Intent replay remains owner-scoped and does not reveal another user receipt', async () => {
-    const intentReceipt: IntentApplyReceipt = {
-      journalId: 'private-intent-receipt',
-      commitSeq: 1,
-      applied: [],
-    }
-    const pair = await seedPair('private', 'committed', Date.now(), {
-      intent: intentReceipt,
-      bundle: { journalId: 'unused-bundle-receipt', applied: [] },
-    })
-
-    await expect(
-      applyIntentChangeset(
-        {
-          db,
-          appHome,
-          actor: actorOf('rfc294-other-user'),
-          ...intentApplyResourceBinding(db, actorOf('rfc294-other-user')),
-        },
-        {
-          sessionId,
-          clientMutationId: pair.intentKey,
-          draftRevision: 1,
-          draftHash: 'sha256:private',
-          decisions: [],
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'intent-session-not-found' })
-    expect((await intentState(pair.intentId))?.receiptJson).toBe(JSON.stringify(intentReceipt))
   })
 })

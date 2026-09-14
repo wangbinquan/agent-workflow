@@ -4287,24 +4287,31 @@ tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新�
 
 判据：上面五条的用例名 + `declared operation has no mounted binding`。
 
-## 全量 backend 同进程跑时稳定红 10 条，两簇、两个签名（2026-09-14 两轮逐条相同）
+## 全量 backend 同进程跑时稳定红 13 条，两个签名（2026-09-14，三轮）
 
-与上面两条同族的第三次记录。整棵 `tests/` 交给同一个 bun 进程（~1960 文件）跑，**两轮
-逐条相同的 10 条**——不是抖动，是确定性的进程级状态累积：
+与上面两条同族的第三次记录。整棵 `tests/` 交给同一个 bun 进程（~1960 文件）跑，**三轮都出现、
+且用例名逐条相同**的 13 条——不是抖动，是确定性的进程级状态累积：
 
-- **簇 A（4 条）** `rfc349-digital-employee-platform-tools-wiring`：
-  `resource-catalog.export-agent-package.v1: declared operation has no mounted binding`
-  （`platform/operations/catalog.ts:719`）。与上一条「283 个文件」那簇**同一个签名、不同的
-  操作 id**——操作目录是进程级注册表，声明累积、绑定没跟上。
-- **簇 B（6 条）** `lifecycle-repair-U1`：一条 **insert** 报
-  `SQLiteError: near "from": syntax error`。这是**方言 shim 被进程级切到 PostgreSQL**、
-  而客户端还是 bun:sqlite 的典型形态（`db/providerSchema.ts` 的全局 schema provider 选择，
+- **签名 A（7 条，操作目录没装满）** `platform/operations/catalog.ts:719` 抛
+  `declared operation has no mounted binding`，与上一条「283 个文件」那簇同一个签名、不同的
+  操作 id：`rfc349-digital-employee-platform-tools-wiring` 4 条报
+  `resource-catalog.export-agent-package.v1`，`rfc338-maintenance-status` 2 条报同一个 id，
+  `rfc305-architecture-lock` 1 条报 `system-operations.get-database-runtime.v1`。
+  操作目录是进程级注册表：声明累积、绑定没跟上。
+- **签名 B（6 条，方言被进程级切走）** `lifecycle-repair-U1` 的一条 **insert** 报
+  `SQLiteError: near "from": syntax error`。这是方言 shim 被切到 PostgreSQL、客户端还是
+  bun:sqlite 的典型形态（`db/providerSchema.ts` 的全局 schema provider 选择，
   `describeEachProvider` 的 PG 腿会切它）。
 
-**归属排除做到这一步**：两簇单跑全绿；两两组合绿；按全量日志里**紧邻的前两个文件**组成三元组
+**归属排除做到这一步**：13 条单跑全绿；两两组合绿；按全量日志里**紧邻的前两个文件**组成三元组
 （`rfc244-task-operations-benchmark` + `rfc349-digital-employee-platform-tools-wiring` +
-`lifecycle-repair-U1`）也绿——说明不是某一对在串味，是**几百个文件累积**之后才越过边界。
+`lifecycle-repair-U1`）也绿——不是某一对在串味，是**几百个文件累积**之后才越过边界。
 CI 把 backend 分成四片、跑在干净 checkout 上，所以这个顺序在 CI 上不出现；**分片一变就会暴露**。
+
+**⚠️ 同一次全量里还会看到另一批 5000ms 以上的红**（multipart / startTask URL / 各类 HTTP 用例）
+——那些**不是**本条，是**机器被自己压满**造成的超时：同时跑着第二个全量 bun 进程 / 并行的定向
+套件时必然出现。数这条账之前先确认机器上只有一个 `bun test` 在跑，并且只数**百毫秒以内**就失败的
+那些；把超时的一起数进来会把这条记录变成噪音（2026-09-14 实撞，本条第一版就多算了 14 条）。
 
 **下一步要拿的证据**（不要在拿到之前改代码）：给这两个进程级状态各加一次「谁把它改了」的记录
 ——`providerSchema` 的 setter 与操作目录的 declare/mount 两侧各打一条带调用栈的 debug 日志，

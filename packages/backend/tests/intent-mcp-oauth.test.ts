@@ -6,6 +6,7 @@
 // overwrote every explicit edit).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,7 +15,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { canonicalIntentJson, INTENT_REDACTED, parseIntentChangeset } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
@@ -35,10 +36,9 @@ import type { IntentPersistence } from '../src/modules/intent/application/ports/
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { getMcpFixtureById } from './helpers/mcpServiceBinding'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_oauth_0000000000'
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 let persistence: IntentPersistence
 
@@ -48,8 +48,8 @@ const actor: Actor = {
   permissions: new Set(['resource-acl:private']),
 }
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
   persistence = composeIntentPersistence({
     db,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
@@ -65,37 +65,39 @@ beforeEach(async () => {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   } as typeof users.$inferInsert)
-})
+}
 afterEach(() => {
   rmSync(appHome, { recursive: true, force: true })
 })
 
-function installDraft(
+// RFC-359（AC-6）—— 两句写从 `.run()` 改成 `await`。`.run()` 是 bun:sqlite 的同步执行面；
+// 在 PostgreSQL 上它交出的是一个**没人 await 的 Promise**，于是草稿行在 `applyIntentChangeset`
+// 读它的时候还没落库，整批用例以 `intent-draft-superseded` 收场。drizzle 的查询构建器是惰性的
+// `QueryPromise`，两个引擎上都只有 `.run()` 或 `await` 才会真的执行。
+async function installDraft(
   sessionId: string,
   changeset: unknown,
   manifest: IntentContextManifest,
-): { draftRevision: number; draftHash: string } {
+): Promise<{ draftRevision: number; draftHash: string }> {
   const parsed = parseIntentChangeset(JSON.stringify(changeset))
   if (!parsed.ok) throw new Error(parsed.errors.join('; '))
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  db.insert(intentDrafts)
-    .values({
-      id: draftId,
-      sessionId,
-      revision: 1,
-      changesetJson: canonical,
-      validationJson: '{"errors":[],"credentialFindings":[]}',
-      draftHash,
-      contextRevision: 0,
-      createdAt: Date.now(),
-    })
-    .run()
-  db.update(intentSessions)
+  await db.insert(intentDrafts).values({
+    id: draftId,
+    sessionId,
+    revision: 1,
+    changesetJson: canonical,
+    validationJson: '{"errors":[],"credentialFindings":[]}',
+    draftHash,
+    contextRevision: 0,
+    createdAt: Date.now(),
+  })
+  await db
+    .update(intentSessions)
     .set({ currentDraftId: draftId, contextManifestJson: JSON.stringify(manifest) })
     .where(eq(intentSessions.id, sessionId))
-    .run()
   return { draftRevision: 1, draftHash }
 }
 
@@ -156,7 +158,7 @@ async function createRemote(
   name = 'remote-svc',
 ): Promise<string> {
   const { session } = await createSession('add a remote mcp')
-  const draft = installDraft(session.id, remoteCreate(config, name), [])
+  const draft = await installDraft(session.id, remoteCreate(config, name), [])
   const receipt = await applyIntentChangeset(deps(), {
     sessionId: session.id,
     clientMutationId: ulid(),
@@ -204,7 +206,7 @@ async function updateRemote(
       },
     ],
   }
-  const draft = installDraft(session.id, changeset, manifest)
+  const draft = await installDraft(session.id, changeset, manifest)
   await applyIntentChangeset(deps(), {
     sessionId: session.id,
     clientMutationId: ulid(),
@@ -219,71 +221,79 @@ const storedConfig = async (id: string): Promise<Record<string, unknown>> => {
   return row.config as Record<string, unknown>
 }
 
-describe('RFC-348 — remote MCP oauth through the intent seams', () => {
-  test('a sentinel clientSecret becomes a confirm-time slot; a literal is rejected at draft time', () => {
-    const ok = parseIntentChangeset(
-      JSON.stringify(remoteCreate({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } })),
-    )
-    if (!ok.ok) throw new Error(ok.errors.join('; '))
-    const { slots } = deriveIntentSlots([], ok.changeset)
-    expect(slots.map((s) => s.slotId)).toContain('secret:op-1:/config/oauth/clientSecret')
-
-    const bad = parseIntentChangeset(
-      JSON.stringify(remoteCreate({ oauth: { clientId: 'cid', clientSecret: 'hunter2' } })),
-    )
-    if (!bad.ok) throw new Error(bad.errors.join('; '))
-    const report = validateDraftChangeset([], bad.changeset)
-    expect(report.errors.join('\n')).toContain('intent-secret-value-forbidden')
-    expect(report.errors.join('\n')).toContain('/payload/config/oauth/clientSecret')
+// RFC-359（AC-6）—— 改成双引擎。此前钉死在 `createInMemoryDb` 上不是因为判据与引擎有关，
+// 而是因为 intent apply 的生产签名当时只收 `DbClient`；§5ea 两台引擎合一之后限制没了。
+describeEachProvider('RFC-348 远端 MCP oauth 经 intent 各接缝（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
   })
 
-  test('create stores the slot value; `oauth:false` is stored as false', async () => {
-    const id = await createRemote({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } }, [
-      { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'real-client-secret' },
-    ])
-    expect(await storedConfig(id)).toMatchObject({
-      url: 'https://mcp.example.com/sse',
-      oauth: { clientId: 'cid', clientSecret: 'real-client-secret' },
-    })
-    const disabled = await createRemote({ oauth: false }, [], 'remote-off')
-    expect((await storedConfig(disabled)).oauth).toBe(false)
-  })
+  describe('RFC-348 — remote MCP oauth through the intent seams', () => {
+    test('a sentinel clientSecret becomes a confirm-time slot; a literal is rejected at draft time', () => {
+      const ok = parseIntentChangeset(
+        JSON.stringify(remoteCreate({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } })),
+      )
+      if (!ok.ok) throw new Error(ok.errors.join('; '))
+      const { slots } = deriveIntentSlots([], ok.changeset)
+      expect(slots.map((s) => s.slotId)).toContain('secret:op-1:/config/oauth/clientSecret')
 
-  test('update omitting oauth keeps the stored block; an explicit false / object replaces it', async () => {
-    const id = await createRemote({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } }, [
-      { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'real-client-secret' },
-    ])
-    await updateRemote(id, {})
-    expect(await storedConfig(id)).toMatchObject({
-      oauth: { clientId: 'cid', clientSecret: 'real-client-secret' },
+      const bad = parseIntentChangeset(
+        JSON.stringify(remoteCreate({ oauth: { clientId: 'cid', clientSecret: 'hunter2' } })),
+      )
+      if (!bad.ok) throw new Error(bad.errors.join('; '))
+      const report = validateDraftChangeset([], bad.changeset)
+      expect(report.errors.join('\n')).toContain('intent-secret-value-forbidden')
+      expect(report.errors.join('\n')).toContain('/payload/config/oauth/clientSecret')
     })
-    await updateRemote(id, { oauth: false })
-    expect((await storedConfig(id)).oauth).toBe(false)
-    await updateRemote(id, { oauth: { clientId: 'cid-2', clientSecret: '‹secret›' } }, [
-      { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'rotated-secret' },
-    ])
-    expect(await storedConfig(id)).toMatchObject({
-      oauth: { clientId: 'cid-2', clientSecret: 'rotated-secret' },
-    })
-  })
 
-  test('the dump redacts only clientSecret', async () => {
-    const id = await createRemote({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } }, [
-      { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'real-client-secret' },
-    ])
-    const dump = await buildIntentDump({
-      db,
-      actor,
-      appHome,
-      mounts: [{ resourceType: 'mcp', resourceId: id }],
-      ...dumpAuxiliary,
+    test('create stores the slot value; `oauth:false` is stored as false', async () => {
+      const id = await createRemote({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } }, [
+        { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'real-client-secret' },
+      ])
+      expect(await storedConfig(id)).toMatchObject({
+        url: 'https://mcp.example.com/sse',
+        oauth: { clientId: 'cid', clientSecret: 'real-client-secret' },
+      })
+      const disabled = await createRemote({ oauth: false }, [], 'remote-off')
+      expect((await storedConfig(disabled)).oauth).toBe(false)
     })
-    const text = dump.seedFiles
-      .filter((f) => f.path.startsWith('mounted/'))
-      .map((f) => f.content)
-      .join('\n')
-    expect(text).toContain('cid')
-    expect(text).toContain(INTENT_REDACTED)
-    expect(text).not.toContain('real-client-secret')
+
+    test('update omitting oauth keeps the stored block; an explicit false / object replaces it', async () => {
+      const id = await createRemote({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } }, [
+        { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'real-client-secret' },
+      ])
+      await updateRemote(id, {})
+      expect(await storedConfig(id)).toMatchObject({
+        oauth: { clientId: 'cid', clientSecret: 'real-client-secret' },
+      })
+      await updateRemote(id, { oauth: false })
+      expect((await storedConfig(id)).oauth).toBe(false)
+      await updateRemote(id, { oauth: { clientId: 'cid-2', clientSecret: '‹secret›' } }, [
+        { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'rotated-secret' },
+      ])
+      expect(await storedConfig(id)).toMatchObject({
+        oauth: { clientId: 'cid-2', clientSecret: 'rotated-secret' },
+      })
+    })
+
+    test('the dump redacts only clientSecret', async () => {
+      const id = await createRemote({ oauth: { clientId: 'cid', clientSecret: '‹secret›' } }, [
+        { slotId: 'secret:op-1:/config/oauth/clientSecret', value: 'real-client-secret' },
+      ])
+      const dump = await buildIntentDump({
+        db,
+        actor,
+        appHome,
+        mounts: [{ resourceType: 'mcp', resourceId: id }],
+        ...dumpAuxiliary,
+      })
+      const text = dump.seedFiles
+        .filter((f) => f.path.startsWith('mounted/'))
+        .map((f) => f.content)
+        .join('\n')
+      expect(text).toContain('cid')
+      expect(text).toContain(INTENT_REDACTED)
+      expect(text).not.toContain('real-client-secret')
+    })
   })
 })

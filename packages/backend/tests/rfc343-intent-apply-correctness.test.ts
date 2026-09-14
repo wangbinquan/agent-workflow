@@ -1,17 +1,27 @@
 // RFC-343 / RFC-294 P0-B — Intent apply must not be weaker than BundleApply:
 // bounded lock cardinality, durable/retryable compensation, a versioned and
 // complete artifact oracle, corruption fail-closed, and committed roll-forward.
+//
+// RFC-359（AC-6）—— **改成双引擎**。这个文件此前钉死在 `createInMemoryDb` 上，不是因为它测的
+// 东西与引擎有关，而是因为**生产签名当时只收 `DbClient`**：apply 引擎、工件生命周期、收敛器
+// 三件都只有 SQLite 那一份。§5ea 把那三件合成一份中立实现之后这条限制没了——
+// 同一份 body 现在在两个引擎上各跑一遍，其中「已提交的技能版本尾巴」那一格是真正吃库的：
+// 它跨三次收敛读写 `intent_apply_journal` / `skill_operations` 与盘上的版本目录。
+//
+// 会话串行锁那两格是**进程内**的（模块级 Map），与库无关；留在双引擎里跑两遍无害，
+// 而且顺带证明了锁的计数不会被并发的另一条引擎腿污染。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { intentApplyJournal, intentSessions, skillOperations, users } from '../src/db/schema'
 import {
   __intentApplyLockCountForTests,
@@ -30,10 +40,9 @@ import {
   type StagedSkillVersion,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_ID = 'rfc343-intent-owner'
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 let sessionId: string
 
@@ -48,8 +57,8 @@ const actor = buildActor({
   source: 'daemon',
 })
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
   appHome = mkdtempSync(join(tmpdir(), 'aw-rfc343-intent-'))
   sessionId = ulid()
   const now = Date.now()
@@ -70,10 +79,9 @@ beforeEach(async () => {
     createdAt: now,
     updatedAt: now,
   })
-})
+}
 
 afterEach(() => {
-  db.$client.close()
   rmSync(appHome, { recursive: true, force: true })
 })
 
@@ -122,209 +130,215 @@ async function seedJournal(
   return id
 }
 
-describe('session apply lock identity', () => {
-  test('the last derived chain deletes the key while an earlier waiter cannot', async () => {
-    const firstGate = deferred()
-    const secondGate = deferred()
-    const first = __withSessionApplyLockForTests('same-session', () => firstGate.promise)
-    await Promise.resolve()
-    const second = __withSessionApplyLockForTests('same-session', () => secondGate.promise)
-    await Promise.resolve()
-    expect(__intentApplyLockCountForTests()).toBe(1)
-
-    firstGate.resolve()
-    await first
-    expect(__intentApplyLockCountForTests()).toBe(1)
-
-    secondGate.resolve()
-    await second
-    expect(__intentApplyLockCountForTests()).toBe(0)
+describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
   })
 
-  test('high-cardinality completed sessions leave no process-local keys behind', async () => {
-    await Promise.all(
-      Array.from({ length: 128 }, (_, index) =>
-        __withSessionApplyLockForTests(`session-${index}`, async () => {}),
-      ),
-    )
-    expect(__intentApplyLockCountForTests()).toBe(0)
-  })
-})
+  describe('session apply lock identity', () => {
+    test('the last derived chain deletes the key while an earlier waiter cannot', async () => {
+      const firstGate = deferred()
+      const secondGate = deferred()
+      const first = __withSessionApplyLockForTests('same-session', () => firstGate.promise)
+      await Promise.resolve()
+      const second = __withSessionApplyLockForTests('same-session', () => secondGate.promise)
+      await Promise.resolve()
+      expect(__intentApplyLockCountForTests()).toBe(1)
 
-describe('versioned journal artifact codec', () => {
-  test('round-trips the complete skill-version publish oracle', async () => {
-    const artifacts: IntentJournalArtifactV1[] = [
-      { kind: 'skill-version-stage', staged: stagedFixture() },
-    ]
-    const encoded = encodeIntentJournalArtifacts(artifacts)
-    expect(JSON.parse(encoded)).toMatchObject({ version: 1 })
-    expect(decodeIntentJournalArtifacts(encoded)).toEqual(artifacts)
-  })
+      firstGate.resolve()
+      await first
+      expect(__intentApplyLockCountForTests()).toBe(1)
 
-  test('rejects malformed envelopes and the lossy legacy skill-version shape', async () => {
-    expect(() => decodeIntentJournalArtifacts('{not-json')).toThrow(/not valid JSON/)
-    expect(() =>
-      decodeIntentJournalArtifacts(
-        JSON.stringify({ version: 2, artifacts: [{ kind: 'skill-version-stage' }] }),
-      ),
-    ).toThrow(/envelope is invalid/)
-    expect(() =>
-      decodeIntentJournalArtifacts(
-        JSON.stringify([
-          {
-            kind: 'skill-version-stage',
-            skillId: 'skill-1',
-            opId: 'op-1',
-            stagingDir: '/tmp/incomplete',
-          },
-        ]),
-      ),
-    ).toThrow(/legacy skill-version-stage artifact is incomplete/)
-  })
-
-  test('rejects a V1 artifact when any required publish-oracle field is removed', async () => {
-    const envelope = JSON.parse(
-      encodeIntentJournalArtifacts([{ kind: 'skill-version-stage', staged: stagedFixture() }]),
-    ) as { artifacts: Array<{ staged: Record<string, unknown> }> }
-    delete envelope.artifacts[0]!.staged.newHash
-    expect(() => decodeIntentJournalArtifacts(JSON.stringify(envelope))).toThrow(
-      /envelope is invalid/,
-    )
-  })
-
-  test('keeps pre-generation legacy plugin rows readable without inventing a path', async () => {
-    expect(
-      decodeIntentJournalArtifacts(JSON.stringify([{ kind: 'plugin-install', pluginId: 'p1' }])),
-    ).toEqual([{ kind: 'legacy-plugin-install-untracked', pluginId: 'p1' }])
-  })
-
-  test('corrupt prepared and committed rows remain truthful and are not counted as converged', async () => {
-    const preparedId = await seedJournal('prepared', '{broken')
-    const committedId = await seedJournal(
-      'committed',
-      JSON.stringify({ version: 1, artifacts: [{ kind: 'unknown' }] }),
-    )
-
-    expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
-      failed: 0,
-      rolledForward: 0,
+      secondGate.resolve()
+      await second
+      expect(__intentApplyLockCountForTests()).toBe(0)
     })
-    const prepared = await db
-      .select()
-      .from(intentApplyJournal)
-      .where(eq(intentApplyJournal.id, preparedId))
-      .get()
-    const committed = await db
-      .select()
-      .from(intentApplyJournal)
-      .where(eq(intentApplyJournal.id, committedId))
-      .get()
-    expect(prepared?.state).toBe('prepared')
-    expect(prepared?.error).toContain('artifact decode failed')
-    expect(committed?.state).toBe('committed')
-    expect(committed?.error).toContain('artifact decode failed')
-  })
-})
 
-describe('committed skill-version convergence', () => {
-  test('a persisted complete artifact publishes the exact unfinished version tail once', async () => {
-    const skill = await createManagedSkillWithFiles(
-      db,
-      { appHome },
-      { name: 'intent-tail', description: 'v1', ownerUserId: OWNER_ID, actor },
-      (filesDir) => {
-        writeFileSync(
-          join(filesDir, 'SKILL.md'),
-          '---\nname: intent-tail\ndescription: v1\n---\n\nbody v1\n',
-        )
-      },
-    )
-    const staged = await stageSkillVersion(
-      db,
-      { appHome },
-      skill.id,
-      (stagingDir) => {
-        writeFileSync(
-          join(stagingDir, 'SKILL.md'),
-          '---\nname: intent-tail\ndescription: v2\n---\n\nbody v2\n',
-        )
-      },
-      {
-        source: 'editor',
-        authorUserId: OWNER_ID,
-        expectedVersion: skill.contentVersion,
-        expectedOwnerUserId: OWNER_ID,
-      },
-    )
-    await databaseSessionFor(db).transaction(
-      async (tx) =>
-        await commitSkillVersionInTx(tx, staged, {
+    test('high-cardinality completed sessions leave no process-local keys behind', async () => {
+      await Promise.all(
+        Array.from({ length: 128 }, (_, index) =>
+          __withSessionApplyLockForTests(`session-${index}`, async () => {}),
+        ),
+      )
+      expect(__intentApplyLockCountForTests()).toBe(0)
+    })
+  })
+
+  describe('versioned journal artifact codec', () => {
+    test('round-trips the complete skill-version publish oracle', async () => {
+      const artifacts: IntentJournalArtifactV1[] = [
+        { kind: 'skill-version-stage', staged: stagedFixture() },
+      ]
+      const encoded = encodeIntentJournalArtifacts(artifacts)
+      expect(JSON.parse(encoded)).toMatchObject({ version: 1 })
+      expect(decodeIntentJournalArtifacts(encoded)).toEqual(artifacts)
+    })
+
+    test('rejects malformed envelopes and the lossy legacy skill-version shape', async () => {
+      expect(() => decodeIntentJournalArtifacts('{not-json')).toThrow(/not valid JSON/)
+      expect(() =>
+        decodeIntentJournalArtifacts(
+          JSON.stringify({ version: 2, artifacts: [{ kind: 'skill-version-stage' }] }),
+        ),
+      ).toThrow(/envelope is invalid/)
+      expect(() =>
+        decodeIntentJournalArtifacts(
+          JSON.stringify([
+            {
+              kind: 'skill-version-stage',
+              skillId: 'skill-1',
+              opId: 'op-1',
+              stagingDir: '/tmp/incomplete',
+            },
+          ]),
+        ),
+      ).toThrow(/legacy skill-version-stage artifact is incomplete/)
+    })
+
+    test('rejects a V1 artifact when any required publish-oracle field is removed', async () => {
+      const envelope = JSON.parse(
+        encodeIntentJournalArtifacts([{ kind: 'skill-version-stage', staged: stagedFixture() }]),
+      ) as { artifacts: Array<{ staged: Record<string, unknown> }> }
+      delete envelope.artifacts[0]!.staged.newHash
+      expect(() => decodeIntentJournalArtifacts(JSON.stringify(envelope))).toThrow(
+        /envelope is invalid/,
+      )
+    })
+
+    test('keeps pre-generation legacy plugin rows readable without inventing a path', async () => {
+      expect(
+        decodeIntentJournalArtifacts(JSON.stringify([{ kind: 'plugin-install', pluginId: 'p1' }])),
+      ).toEqual([{ kind: 'legacy-plugin-install-untracked', pluginId: 'p1' }])
+    })
+
+    test('corrupt prepared and committed rows remain truthful and are not counted as converged', async () => {
+      const preparedId = await seedJournal('prepared', '{broken')
+      const committedId = await seedJournal(
+        'committed',
+        JSON.stringify({ version: 1, artifacts: [{ kind: 'unknown' }] }),
+      )
+
+      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+        failed: 0,
+        rolledForward: 0,
+      })
+      const prepared = await db
+        .select()
+        .from(intentApplyJournal)
+        .where(eq(intentApplyJournal.id, preparedId))
+        .get()
+      const committed = await db
+        .select()
+        .from(intentApplyJournal)
+        .where(eq(intentApplyJournal.id, committedId))
+        .get()
+      expect(prepared?.state).toBe('prepared')
+      expect(prepared?.error).toContain('artifact decode failed')
+      expect(committed?.state).toBe('committed')
+      expect(committed?.error).toContain('artifact decode failed')
+    })
+  })
+
+  describe('committed skill-version convergence', () => {
+    test('a persisted complete artifact publishes the exact unfinished version tail once', async () => {
+      const skill = await createManagedSkillWithFiles(
+        db,
+        { appHome },
+        { name: 'intent-tail', description: 'v1', ownerUserId: OWNER_ID, actor },
+        (filesDir) => {
+          writeFileSync(
+            join(filesDir, 'SKILL.md'),
+            '---\nname: intent-tail\ndescription: v1\n---\n\nbody v1\n',
+          )
+        },
+      )
+      const staged = await stageSkillVersion(
+        db,
+        { appHome },
+        skill.id,
+        (stagingDir) => {
+          writeFileSync(
+            join(stagingDir, 'SKILL.md'),
+            '---\nname: intent-tail\ndescription: v2\n---\n\nbody v2\n',
+          )
+        },
+        {
           source: 'editor',
           authorUserId: OWNER_ID,
           expectedVersion: skill.contentVersion,
           expectedOwnerUserId: OWNER_ID,
-        }),
-    )
-    const journalId = await seedJournal(
-      'committed',
-      encodeIntentJournalArtifacts([{ kind: 'skill-version-stage', staged }]),
-    )
+        },
+      )
+      await databaseSessionFor(db).transaction(
+        async (tx) =>
+          await commitSkillVersionInTx(tx, staged, {
+            source: 'editor',
+            authorUserId: OWNER_ID,
+            expectedVersion: skill.contentVersion,
+            expectedOwnerUserId: OWNER_ID,
+          }),
+      )
+      const journalId = await seedJournal(
+        'committed',
+        encodeIntentJournalArtifacts([{ kind: 'skill-version-stage', staged }]),
+      )
 
-    expect(readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8')).toContain(
-      'body v1',
-    )
-    rmSync(staged.stagingDir, { recursive: true, force: true })
-    expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
-      failed: 0,
-      rolledForward: 0,
-    })
-    expect(
-      await db
-        .select({ error: intentApplyJournal.error })
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.id, journalId))
-        .get(),
-    ).toEqual({
-      error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
-    })
-    expect(
-      await db
-        .select({ active: skillOperations.active })
+      expect(
+        readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8'),
+      ).toContain('body v1')
+      rmSync(staged.stagingDir, { recursive: true, force: true })
+      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+        failed: 0,
+        rolledForward: 0,
+      })
+      expect(
+        await db
+          .select({ error: intentApplyJournal.error })
+          .from(intentApplyJournal)
+          .where(eq(intentApplyJournal.id, journalId))
+          .get(),
+      ).toEqual({
+        error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
+      })
+      expect(
+        await db
+          .select({ active: skillOperations.active })
+          .from(skillOperations)
+          .where(eq(skillOperations.opId, staged.opId!))
+          .get(),
+      ).toEqual({ active: 1 })
+
+      cpSync(staged.versionDir, staged.stagingDir, { recursive: true })
+      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+        failed: 0,
+        rolledForward: 1,
+      })
+      expect(
+        await db
+          .select({ error: intentApplyJournal.error })
+          .from(intentApplyJournal)
+          .where(eq(intentApplyJournal.id, journalId))
+          .get(),
+      ).toEqual({ error: null })
+      expect(
+        readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8'),
+      ).toContain('body v2')
+      const operation = await db
+        .select()
         .from(skillOperations)
         .where(eq(skillOperations.opId, staged.opId!))
-        .get(),
-    ).toEqual({ active: 1 })
+        .get()
+      expect(operation).toMatchObject({ phase: 'done', active: 0 })
 
-    cpSync(staged.versionDir, staged.stagingDir, { recursive: true })
-    expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
-      failed: 0,
-      rolledForward: 1,
+      // The retained audit row is seen again, but the completed exact op is not
+      // republished or unmarked as if it were still pending.
+      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+        failed: 0,
+        rolledForward: 1,
+      })
+      expect(
+        readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8'),
+      ).toContain('body v2')
     })
-    expect(
-      await db
-        .select({ error: intentApplyJournal.error })
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.id, journalId))
-        .get(),
-    ).toEqual({ error: null })
-    expect(readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8')).toContain(
-      'body v2',
-    )
-    const operation = await db
-      .select()
-      .from(skillOperations)
-      .where(eq(skillOperations.opId, staged.opId!))
-      .get()
-    expect(operation).toMatchObject({ phase: 'done', active: 0 })
-
-    // The retained audit row is seen again, but the completed exact op is not
-    // republished or unmarked as if it were still pending.
-    expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
-      failed: 0,
-      rolledForward: 1,
-    })
-    expect(readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8')).toContain(
-      'body v2',
-    )
   })
 })

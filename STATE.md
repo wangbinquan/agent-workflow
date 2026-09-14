@@ -2,6 +2,21 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 续 19，AC-6 第一批**因合一而解锁**的迁移）
+>
+> 落档 plan §5eb。`9c205c44c`（续 18 的合一）CI **全绿**。AC-6 的账本此前卡在「8 个文件卡在
+> SQLite-only 的生产签名上」，而 plan §5do 早已判明「继续压这个数字的正解不是转换测试，是
+> 逐对收生产侧的引擎——每收一对，下游那一串测试自然跟着能迁」。intent apply 那台收完，
+> 下游这批立刻能迁：`rfc343-intent-apply-correctness`(8→16 格) /
+> `rfc294-apply-replay-recovery-parity`(3→6) / `intent-agent-branch-ports`(5→10) /
+> `intent-mcp-oauth`(4→8)，全部在真 PostgreSQL 上实跑通过。
+> 账本 `TEST_ENGINE_HARDCODING_DEBT` 398 → **394**、`OPEN_MIGRATION_DEBT` 92 → **88**。
+>
+> **迁移当场照出一个只在 PostgreSQL 上会坏的测试助手**：两个 intent 文件的 `installDraft` 用
+> `.run()`（bun:sqlite 的同步执行面），在 PG 上它交出一个没人 await 的 Promise，草稿行在
+> `applyIntentChangeset` 读它时还没落库，整批用例以 `intent-draft-superseded` 收场。这正是
+> AC-6 存在的理由的活样本：一个看上去与引擎无关的助手，实际只在一个引擎上成立。
+>
 > ## 📌 RFC-359 最新一段（2026-09-14 续 18，**intent apply 引擎整条退役——两台 apply 引擎全部合一**）
 >
 > 落档 plan §5ea。§5dz 停在「已证可移植 + 兼容面已补」，这一批把剩下三步一次做完：收资源绑定、

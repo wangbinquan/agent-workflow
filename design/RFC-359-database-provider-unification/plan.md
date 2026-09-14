@@ -9927,3 +9927,34 @@ SQLite 那台是模块级。生产上各只装配一次，差别看不见。合�
 
 **先红后绿已实测**：把两处修复逐条回退，① 与 ② 当场红、①b 照旧绿（证明修复没有放宽可见性判据）；
 恢复后 SQLite 3/3、真 PostgreSQL 3/3。
+
+## 5eb. AC-6 的第一批**因合一而解锁**的迁移：四个 intent 用例转双引擎
+
+§5ea 之后立刻做的事。AC-6 的账本此前卡在一个明确的理由上（plan §5do）：
+「剩下的 95 个文件里……**8 个卡在 SQLite-only 的生产签名上**（intent apply / 资源包 apply /
+资源上限 / 几个 `composeSqlite*` 参与者）。**继续压这个数字的正解不再是转换测试，而是逐对收
+生产侧的引擎（AC-1）**——每收一对，下游那一串测试自然跟着能迁。」
+
+intent apply 那台收完，它下游这批就能迁了。本批迁四个：
+
+| 文件 | 行数 | 迁后 |
+| --- | ---: | --- |
+| `rfc343-intent-apply-correctness` | 330 | 8 → **16** 格（两引擎各 8） |
+| `rfc294-apply-replay-recovery-parity` | 354 | 3 → **6** 格 |
+| `intent-agent-branch-ports` | 327 | 5 → **10** 格 |
+| `intent-mcp-oauth` | 289 | 4 → **8** 格 |
+
+全部在真 PostgreSQL 上实跑通过。账本：`TEST_ENGINE_HARDCODING_DEBT` 398 → **394**、
+`OPEN_MIGRATION_DEBT` 92 → **88**。
+
+### 迁移当场照出一个**只在 PostgreSQL 上会坏**的测试助手
+
+`intent-agent-branch-ports` / `intent-mcp-oauth` 的 `installDraft` 用的是 `.run()`——
+bun:sqlite 的同步执行面。在 PostgreSQL 上 `.run()` 交出的是一个**没人 await 的 Promise**，
+于是草稿行在 `applyIntentChangeset` 读它的时候还没落库，整批用例以 `intent-draft-superseded`
+收场。改成 `await` 两句写之后两个引擎各自全绿。
+
+这正是 AC-6 存在的理由的活样本：一个**看上去与引擎无关**的助手，实际只在一个引擎上成立；
+不把它喂到另一个引擎上，这件事永远不会被发现。drizzle 的查询构建器是惰性 `QueryPromise`，
+两个引擎上都只有 `.run()` 或 `await` 才真的执行——本仓的既有教训（`docs/dev-gotchas.md`）在
+生产代码里记过，测试助手这一侧是第一次撞到。
