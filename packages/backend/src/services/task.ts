@@ -232,7 +232,7 @@ import {
   defaultTaskAuthorizationRef,
   taskOwnershipScopeCondition,
 } from '@/services/taskAuthorization'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
 import {
   deriveTaskLaunchOrigin,
   taskLaunchAdmissionIssue,
@@ -4104,7 +4104,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
 // pending/running-only gate predated the awaiting statuses.
 
 export async function cancelTask(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   id: string,
   opts: {
     /**
@@ -4130,15 +4130,19 @@ export async function cancelTask(
     beforeStatusCas?: () => void | Promise<void>
   } = {},
 ): Promise<Task> {
-  // Bun SQLite can do this preflight synchronously, preserving the legacy
-  // rejected-Promise API while allowing the no-controller path to register
-  // its FIFO mutation slot before this function first yields.
-  const initial = db
-    .select({ status: tasks.status })
-    .from(tasks)
-    .where(eq(tasks.id, id))
-    .limit(1)
-    .all()[0]
+  // RFC-359 —— 先**同步取号**，再做前置读。
+  //
+  // 原来这条预检是同步读（`.all()[0]`），理由是「在第一次 yield 之前抢到 FIFO 变更槽」。
+  // 那个理由是真的（`review-cancel-concurrency` 的三条 `cancel first …` 就锁它），
+  // 但它把顺序的正确性**挂在了 bun:sqlite 同步读上**——PostgreSQL 没有同步读，
+  // 于是同一段代码在一个引擎上对、另一个上错，正是 RFC-359 要消灭的形态。
+  //
+  // 取号与入队解耦之后（`reserveTaskReviewMutationSlot`），排队位置在**函数入口**就定死了，
+  // 之后这条预检 await 多久都不影响顺序；两个引擎走同一条规则。
+  const acquireMutationSlot = reserveTaskReviewMutationSlot(id)
+  const initial = (
+    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, id)).limit(1)
+  )[0]
   if (initial === undefined) {
     throw new NotFoundError('task-not-found', `task '${id}' not found`)
   }
@@ -4151,7 +4155,7 @@ export async function cancelTask(
 
   let stopTicket: TaskDriverStopTicket | null = null
   const deferredStatusEventRefs: CommittedEventRef[] = []
-  const committed = await withTaskReviewMutationLock(id, async () => {
+  const committed = await acquireMutationSlot(async () => {
     // Re-read only after acquiring the linearization point. A decision,
     // dispatch, scheduler cancel or competing terminal writer may have won
     // while the controller was settling; never overwrite that winner.

@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2552,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24738
+    "symbolsIncludingFileRoots": 24740
   },
   "entries": [
     {
@@ -175446,6 +175446,18 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/reviewMutationCoordinator.ts",
+      "id": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#claimTaskQueueSlot",
+      "removeAfterWave": "W4",
+      "status": "legacy-target",
+      "symbol": "claimTaskQueueSlot",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/reviewMutationCoordinator.ts",
       "id": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#enterTaskQueue",
       "removeAfterWave": "W4",
       "status": "legacy-target",
@@ -175462,6 +175474,18 @@
       "removeAfterWave": "W4",
       "status": "legacy-target",
       "symbol": "inflightScopeLookups",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/reviewMutationCoordinator.ts",
+      "id": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#reserveTaskReviewMutationSlot",
+      "removeAfterWave": "W4",
+      "status": "legacy-target",
+      "symbol": "reserveTaskReviewMutationSlot",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -297533,5 +297557,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4aca27e2062501abbad1f16847d84e850d2ef2ee7da79eb8bdbf1b807a1c0af6"
+  "sourceDigest": "sha256:c5c438ec053f5ea3fbb03bb902ffcfc92cf32f796ba85518a3acbc975e0ef9df"
 }

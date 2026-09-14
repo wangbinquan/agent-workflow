@@ -10528,3 +10528,56 @@ FIFO 变更槽。改成 `await` 就改变了「函数何时第一次让出」，
 
 探测改动已全部原样还原（`git checkout -- src/services/task.ts`），
 相关五个套件复跑 **123 格全绿**。
+
+## §5ep —— 那道阻塞**不是方向决策**：取号与入队解耦，`cancelTask` 转中立句柄
+
+§5eo 结尾我写「需要重新设计线性化点……语义方向由用户定」。**那个框定是错的。**
+被保留的语义（「先发出者先入队」）**一个字都不用改**——要改的只是「顺序信息从哪里取」。
+
+### 原来的机制为什么只在 SQLite 上对
+
+两条入口本来就不对称：
+
+· **评审侧**（`withReviewNodeMutationLock`）**同步登记**自己的位置——
+  `inflightScopeLookups.add(tracked)` 发生在 `lookup` 之前，与它随后 await 多久无关；
+· **取消侧**（`withTaskReviewMutationLock`）没有等价物，它的顺序**只能靠调用方
+  在到达本函数之前一次都不让出**来保证——而那恰恰**只有 bun:sqlite 同步读做得到**。
+
+所以 `cancelTask` 的同步预检不是「取消自己的优化」，是**整条排队规则的隐式前提**。
+这正是 RFC-359 要消灭的形态：同一段代码在一个引擎上对、另一个上错。
+
+### 改法：把「取号」从「入队」里拆出来
+
+`reserveTaskReviewMutationSlot(taskId)` 在**调用的那一刻**同步定下排队位置，返回「轮到我时跑 fn」：
+
+| 取号时的事实（**同步可判**） | 处置 |
+| --- | --- |
+| 没有在途的评审作用域解析 | 我是当前最先发出者 ⇒ `claimTaskQueueSlot` **同步占住队尾**，后来者都排我后面 |
+| 有在途解析 | 那些评审**比我先发出** ⇒ 等它们落队，我再登记 |
+
+`claimTaskQueueSlot` 是原 `enterTaskQueue` 的**同一份**逻辑，只把「登记队尾」与「等前一位」拆成两步；
+`enterTaskQueue` 现在就是「登记后立刻等」，同步调用方的行为逐字不变。
+
+`cancelTask` 于是变成：**先取号 → 再 await 前置读 → 用号入队**，签名放宽到中立句柄。
+
+### 两次「先红后绿」
+
+① **改之前**（只把预检 await、不拆取号）：`review-cancel-concurrency` 三条 `cancel first …` 全红——
+   这就是 §5eo 记的那份红，证明顺序契约是真的。拆出取号之后 **20 格全绿**。
+
+② **改之后的变异验证**：把 `cancelTask` 的那个 `await` 去掉、**保留**取号，
+   `rfc207` 的 PG 道立刻红（`accumulated running time over maxDurationMs makes enforceLimits cancel`），
+   SQLite 道照绿——正是「在 SQLite 上绿、在 PG 上什么都没测」的签名。说明新判据确实咬住了这个缺陷。
+
+### 顺带销掉的真缺陷
+
+`enforceLimits` 的取消分支就是 `cancelTask`。在这一刀之前，**PostgreSQL 上的资源限额取消是坏的**：
+同步 `.all()[0]` 在 PG 上返回 Promise ⇒ `[0]` 恒 undefined ⇒ 每次取消都抛 `task-not-found` 被分类吞掉，
+`r.canceled` 永远是空的。没有任何判据能看见它，因为那一段是 SQLite 单引擎。
+现在 `rfc207` 的端到端段双跑，这条缺陷被钉死。账本 336 → 335 / 30 → 29。
+
+### 留下的（真的还没做）
+
+`resumeTask` / `retryNode` 仍钉在 `DbClient` 上——**不是标注问题**，是传递闭包：
+`resumeKick` / `assertChildTaskDrivable` 仍要同步句柄（§5en 说它们「零同步点」是按函数体数的，说小了）。
+`startTaskImpl` 的 17 个同步点是最后的硬骨头。

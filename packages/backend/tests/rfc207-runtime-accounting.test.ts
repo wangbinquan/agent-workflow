@@ -25,16 +25,12 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { tasks, workflows } from '../src/db/schema'
 import { setTaskStatus } from '../src/services/lifecycle'
 import { enforceLimits } from '../src/services/limits'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let db: ProviderNeutralDatabase
 let workflowId: string
@@ -252,12 +248,18 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
   })
 })
 
-describe('RFC-207 accounting drives the limit (end-to-end)', () => {
-  // SQLite 单引擎（见文件头注）：`enforceLimits` 的裸 db 入口钉在 `DbClient` 上。
-  let legacyDb: DbClient
+// RFC-359 —— 这一段原本单引擎，卡的是 `enforceLimits` 的裸 db 入口经
+// `composeLegacySqliteResourceLimitOperations(db: DbClient)` 取到
+// `cancelTask(db: LegacySqliteTaskDatabase)`。两处都已放宽到中立句柄，于是本段转双引擎。
+//
+// **它同时是 `cancelTask` 在 PostgreSQL 上真的能取消的证据**：`enforceLimits` 的取消分支
+// 就是 `cancelTask`，而 `cancelTask` 的前置读此前是同步 `.all()[0]`——在 PG 上返回 Promise、
+// `[0]` 恒 undefined，于是**每一次取消都报 `task-not-found`**，`r.canceled` 就会是空的。
+describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (harness: ProviderHarness) => {
+  let legacyDb: ProviderNeutralDatabase
 
   beforeEach(async () => {
-    legacyDb = createInMemoryDb(MIGRATIONS)
+    legacyDb = harness.db
     await seedFixture(legacyDb, false)
   })
 
