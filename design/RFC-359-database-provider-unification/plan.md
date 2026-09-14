@@ -10413,3 +10413,79 @@ git / 文件系统操作期间自己 settle 完了。可靠探针是去掉断言
 **`src/services/task.ts`——7696 行、45 个导出函数、34 个 bun:sqlite 同步执行点**。
 这不是前面几刀那种「一行标注放宽」，是一次真的 sync → async 迁移，会动任务生命周期的时序，
 **应当单独立一刀**，不在本波顺手做。
+
+## §5en —— AC-6 第六～八波；以及最后那道阻塞的**真实尺寸**
+
+### 第六～八波结果
+
+| 波次 | 文件 | 结果 |
+| --- | --- | --- |
+| 六 | `rfc310-digital-employee-authoring`(3400 行) | 25 → 50 格 |
+| 六 | `rfc310-digital-employee-system-mock-e2e`(2485 行) | 1 → 2 格 |
+| 七 | `rfc210-commitpush-{subrepo,nested-precommitted,untouched-subrepo}` | 各转双引擎 |
+| 七 | `rfc310-pr6-pipeline-adapter` / `skills-import-zip-http` | 转双引擎 |
+| 七 | `rfc338-maintenance-status` | 2 → 4 格（注入口经作用域补上） |
+| 七 | `rfc323-platform-pipeline-collection` | 18 格（**一个字没改**，见下） |
+| 八 | `rfc321-repository-publication-system-mock-e2e` | 1 → 2 格 |
+| 八 | `rfc349-digital-employee-platform-tools-wiring` | 判不适用（被测物是 SQLite 根的可选注入点本身） |
+
+账本 346 → **336** / open 40 → **30**。
+
+### 一次**错误归因**的完整复盘（值得记，因为它骗过了我）
+
+`rfc323` 与 `rfc338` 都报了一格 `(unnamed)` 的
+`PostgresError: Connection closed`。我据此做了一次「三步隔离、每步只改一个变量」，得出
+「覆盖 `provider.telemetry` 会泄连接」的结论，写进了 `docs/audit-backlog.md` 并推了上去。
+
+**结论是错的**。真相是 `aw-rfc359-pg` 容器**磁盘写满**、正在 PANIC 重启：
+
+```
+ERROR:  could not extend file "base/…": No space left on device
+   STATEMENT: truncate table "agent_workflow"…   ← harness 的 beforeEach
+PANIC:  could not write to file "pg_logical/replorigin_checkpoint.tmp"
+LOG:  checkpointer process was terminated by signal 6: Aborted
+```
+
+服务器恢复后把**一模一样**的改动再跑一遍：全绿、零 `(unnamed)`。`rfc323` 则是**本来就对的**，
+我白白把一个健康文件隔离了。
+
+**为什么隔离法会骗人**：它的前提是混杂因素**恒定**，而当时的混杂因素（服务器反复崩溃重启）
+是**非平稳**的，于是不同变体之间的差异全是噪声，被读成了因果。
+**定式：动手隔离之前先确认环境健康，隔离之后再把基线复测一遍。**
+
+**低成本判别**：单跑 PG 道（`AW_TEST_PROVIDERS=postgresql`）。得到 `0 pass / 1 fail` ⇒
+一个用例体都没跑 ⇒ 只可能是 `beforeAll` 失败 ⇒ 环境问题。真是「漏了 await、promise 在池关掉后
+reject」的话，前面的用例会正常跑过、计数不会是 0。这两条都已落 `docs/audit-backlog.md`。
+
+### 最后那道阻塞：`LegacySqliteTaskDatabase`，尺寸比我先前说的小得多，但**不是**机械改动
+
+我先前把它描述成「`src/services/task.ts` 7696 行 / 34 个同步点」——**那个框定太悲观**。
+按函数归位之后：
+
+| 同步点 | 函数 |
+| --- | --- |
+| 17 | `startTaskImpl`（启动路径，真正的硬骨头） |
+| 5 | `runDeferredRepoPreparation` |
+| 2 | `cancelTask`（其中一处**本来就 await 了**，实际只有 1） |
+| 0 | `resumeTask` / `retryNode`（**纯标注阻塞**） |
+
+`enforceLimits` 根本不在 `task.ts`（在 `services/limits.ts`，且该文件**零** `DbClient`）；
+`startTaskDeps.ts` 同步点也是零。
+
+**实测探了一刀**：把 `cancelTask` / `resumeTask` / `retryNode` 三个签名放宽，`tsc` 只报 6 条，
+其中 3 条只是名字没对上——该文件早就 import 了 `LegacyProviderNeutralDatabase`（它就是
+`ProviderNeutralDatabase` 的别名再导出，`getTask` 已经在用）。换成这个名字后 `src` 全清。
+
+**而这恰恰是陷阱**。`cancelTask` 剩的那处同步读是 `.all()[0]`，在中立句柄上**照样编译通过**、
+在 PG 上返回 Promise ⇒ `[0]` 是 undefined ⇒ 任何取消都报 `task-not-found`。正是模式①。
+更关键的是它旁边的注释写明了那是**故意的**：
+
+> Bun SQLite can do this preflight synchronously, preserving the legacy rejected-Promise API
+> while allowing the no-controller path to register its FIFO mutation slot before this function
+> first yields.
+
+同步预检是**承重**的：它让 `cancelTask` 在第一次 yield 之前就同步拒绝，并让无控制器路径抢到
+FIFO 变更槽。改成 `await` 就改变了「函数何时第一次让出」，也就改了那条排序契约。
+
+**所以这一刀已探明但没有做**：它不是放宽一行标注，是要先把 FIFO 排序契约弄清楚再动——
+应当单独立一刀、带自己的并发判据。探测改动已原样还原。
