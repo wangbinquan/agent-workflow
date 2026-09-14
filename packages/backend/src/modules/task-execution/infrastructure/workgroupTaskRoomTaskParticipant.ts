@@ -91,11 +91,31 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
     })
   }
 
+  /**
+   * 空工作组的短路探针：没有任何工作组任务时，不去扫 `tasks`。
+   *
+   * RFC-359 AC-11 —— **这条谓词必须是常量，不能带绑定参数**。原本写的是
+   * `workgroup_id >= ${''}`，drizzle 把那个空串编译成 `$1`；于是 PostgreSQL 的
+   * 前 5 次执行用 custom plan（知道实参，走 `Index Only Scan`），第 6 次起换 generic
+   * plan（不知道实参，`>= $1` 按默认选择率估成命中很多行，又有 `LIMIT 1`，于是判定
+   * 「顺序扫一下马上就能凑够一行」）——可实际每一行的 `workgroup_id` 都是 NULL，
+   * 谁都不匹配，那一趟就成了**把整张表读完**的 `Seq Scan`。
+   *
+   * 实测（真 PG，10 万行语料，全 NULL）：custom plan `Index Only Scan` 0.03ms，
+   * generic plan `Seq Scan` + `Rows Removed by Filter: 100000` 4.49ms。CI 上
+   * `/api/workgroup-tasks/pending-count` 因此从第 5 个请求起 2.5ms → 24.8ms 并**再不回落**
+   * （run `34836852462`，20 个样本的后 16 个全在 23ms 以上）。
+   *
+   * `IS NOT NULL` 表达的是同一件事（text 列里任何非 NULL 值都 `>= ''`），但它是常量谓词，
+   * 两种计划都走 `Index Only Scan`；SQLite 侧 `EXPLAIN QUERY PLAN` 与原写法逐字相同
+   * （都是 `SEARCH tasks USING COVERING INDEX idx_tasks_workgroup`）。
+   * 改回带参数的写法会让这个悬崖原样复发——判据见 `rfc359-ac11-generic-plan-probe`。
+   */
   async function listActive(): Promise<readonly WorkgroupTaskRoomTaskSnapshot[]> {
     const rows = await tx
       .select(taskProjection)
       .from(
-        sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} >= ${''} LIMIT 1) AS nonempty_workgroup_scan`,
+        sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} IS NOT NULL LIMIT 1) AS nonempty_workgroup_scan`,
       )
       .crossJoin(tasks)
       .where(

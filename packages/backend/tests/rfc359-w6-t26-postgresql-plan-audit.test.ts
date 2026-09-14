@@ -67,6 +67,7 @@ import {
   listMissionSummariesPage,
   listMissionTerminalOutcomeGroups,
 } from '@/modules/development-automation/infrastructure/missionReadModels'
+import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { RFC349_ARCHIVE_THEN_OMIT_TABLES } from '@/platform/persistence/schemaContract'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -80,6 +81,7 @@ import { listCachedReposPage } from '@/services/gitRepoCache'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'
+import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const T0 = 1_700_000_000_000
@@ -339,6 +341,18 @@ const AUDITED: readonly AuditedPath[] = [
     run: (db) => runProductionOverview(db, actorOf('admin')),
   },
   {
+    // 这条路径是 generic-plan 退化的实撞现场（见 `GENERIC_PLAN_GAPS` 上方）。
+    // 语料里没有任何工作组任务，正是让探针的顺序扫「一行都凑不到、只能读到底」的条件。
+    name: '/api/workgroup-tasks/pending-count — 空工作组短路探针',
+    run: (db) =>
+      composeTestWorkgroupTaskRoom(db).queries.pendingCount(
+        Object.freeze({
+          ...actorOf('admin'),
+          userId: 'admin',
+        }) as unknown as WorkgroupOperationContext,
+      ),
+  },
+  {
     name: '事件归档器（小时级 sweep）',
     run: async (db) => {
       const logsDir = mkdtempSync(join(tmpdir(), 'aw-t26-logs-'))
@@ -422,6 +436,113 @@ export function observePlanDefects(plan: string, corpusRows: number): PlanObserv
   }
   return out
 }
+
+// ---------------------------------------------------------------------------
+// generic plan：production 真正跑的那份计划
+// ---------------------------------------------------------------------------
+
+/**
+ * RFC-359 AC-11 —— 上面那本账审的是 **custom plan**，而生产跑的往往是 **generic plan**。
+ *
+ * # 这个盲点让一次 10 倍回归整整穿过了守卫
+ *
+ * PostgreSQL 对一条 prepared statement 的前 5 次执行用 custom plan（知道实参，按真实选择率
+ * 规划），第 6 次起才可能换成 generic plan（不知道实参，按默认选择率规划）。上面的审计每条
+ * 语句只 `EXPLAIN` **一次**、而且**带着实参**——量到的永远是 custom plan，也就是生产只在
+ * 头 5 次请求里用的那份。
+ *
+ * 实撞（2026-09-14）：`/api/workgroup-tasks/pending-count` 的空工作组探针原本写成
+ * `WHERE workgroup_id >= ${''}`，drizzle 把空串编成 `$1`。custom plan 走
+ * `Index Only Scan`（0.03ms）；generic plan 不知道 `$1` 是什么，把 `>= $1` 按默认选择率
+ * 估成命中很多行、又看见 `LIMIT 1`，于是判定「顺序扫一下马上凑够一行」——可语料里每行的
+ * `workgroup_id` 都是 NULL，谁都不匹配，那一趟成了读完整表的 `Seq Scan`（4.49ms）。
+ * 托管 CI 上这条端点因此**从第 5 个请求起** 2.5ms → 24.8ms 并再不回落（run `34836852462`，
+ * 20 个样本的后 16 个全在 23ms 以上），而本文件当时一条红都没报。
+ *
+ * # 判据：差分，不是绝对形状
+ *
+ * 「有没有 `Seq Scan`」当不了判据——小表顺序扫是对的。这里判的是**同一条语句的两份计划之差**：
+ * 某个关系在 custom plan 里走索引、在 generic plan 里退化成顺序扫，就是「参数一旦不可见
+ * 计划就塌」的签名，也正是生产第 6 次请求起会踩的那一脚。这个判据自带标定，不需要谁去
+ * 逐表裁定多大算大。
+ *
+ * `EXPLAIN (GENERIC_PLAN)` 是 PostgreSQL 16+ 的能力：**只规划不执行**，所以它不吃语料规模、
+ * 不吃机器负载，与本文件「不用墙钟毫秒」的原则一致。
+ *
+ * # 还要再过一道「PostgreSQL 真的会换吗」
+ *
+ * 只判形状会**过度报警**：generic plan 更差、但 PostgreSQL 自己算出来更贵时，它压根不会换
+ * （`plan_cache_mode=auto` 的规则是 generic 估算代价**不高于** custom 的平均值才采纳）。
+ * 实测 `/api/overview` 的计数就是这种：generic 估 458.58、custom 估 8.62，差 53 倍，
+ * 于是 PostgreSQL 一直用 custom plan——形状是退化的，但生产永远吃不到。
+ *
+ * 真正危险的是**两条同时成立**：generic plan 把索引扫换成顺序扫，**而且**它自己估得更便宜。
+ * 那正是「估错了所以才被采纳」——workgroup 探针的 generic plan 估 8.47、custom 估 12.63，
+ * 于是被采纳；而那 8.47 建立在「`LIMIT 1` 扫几行就能凑够」的假设上，实际一行都凑不到、
+ * 把整张表读完。判据因此取这两条的**合取**：每一条报出来的都是 PostgreSQL 会真的换过去、
+ * 且换过去更糟的。
+ */
+const RELATION_SCAN =
+  /\b(Parallel Seq Scan|Seq Scan|Index Only Scan Backward|Index Scan Backward|Index Only Scan|Index Scan|Bitmap Heap Scan) (?:using \S+ )?on ([a-z0-9_]+)/g
+
+/** 计划文本里每个关系被用过哪些扫描节点（别名与 schema 前缀都不进键）。 */
+export function relationScans(plan: string): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const matched of plan.matchAll(RELATION_SCAN)) {
+    const kind = matched[1]
+    const relation = matched[2]
+    if (kind === undefined || relation === undefined) continue
+    const kinds = out.get(relation)
+    if (kinds === undefined) out.set(relation, new Set([kind]))
+    else kinds.add(kind)
+  }
+  return out
+}
+
+/** 计划根节点的估算总代价（`(cost=启动..总计 rows=…)` 里的第二个数）。取不到返回 `null`。 */
+export function planTotalCost(plan: string): number | null {
+  const matched = /\(cost=[\d.]+\.\.([\d.]+) rows=/.exec(plan)
+  return matched === undefined || matched === null ? null : Number(matched[1])
+}
+
+/**
+ * custom plan 里走索引、generic plan 里退化成顺序扫的关系名。
+ *
+ * 只报**退化**：两份计划都顺序扫的关系不报（那是稳定选择，与参数可见性无关），
+ * 只在 generic plan 里出现的关系也不报（计划形状本来就不同，谈不上退化）。
+ */
+export function genericPlanRegressions(custom: string, generic: string): string[] {
+  const before = relationScans(custom)
+  const out: string[] = []
+  for (const [relation, kinds] of relationScans(generic)) {
+    if (![...kinds].some((kind) => kind.endsWith('Seq Scan'))) continue
+    const customKinds = before.get(relation)
+    if (customKinds === undefined) continue
+    if ([...customKinds].some((kind) => kind.endsWith('Seq Scan'))) continue
+    out.push(relation)
+  }
+  return [...new Set(out)].sort()
+}
+
+interface GenericPlanGap {
+  /** 稳定标识。 */
+  readonly id: string
+  /** 哪条热路径。 */
+  readonly path: string
+  /** 在 generic plan 下塌成顺序扫的关系。 */
+  readonly relation: string
+  /** 哪个参数让计划塌的，以及为什么暂时留着。 */
+  readonly why: string
+}
+
+/**
+ * **账本为空**：本仓当前没有已知的 generic-plan 退化。
+ *
+ * 记账规则同 `PLAN_GAPS`：新观察到的连同「哪个参数」一起登记；改掉之后必须删行，
+ * 否则下面第②条断言判红。修法通常是**把那个常量从绑定参数变回常量谓词**——
+ * 见 `workgroupTaskRoomTaskParticipant.ts` 的 `listActive`（`>= $1` → `IS NOT NULL`）。
+ */
+const GENERIC_PLAN_GAPS: readonly GenericPlanGap[] = []
 
 // ---------------------------------------------------------------------------
 // 账本自证（两个引擎都跑，不需要真库）
@@ -514,6 +635,48 @@ describe('RFC-359 W6-T26 —— 缺口账本自身的形状', () => {
         'Index Only Scan using idx_task_repos_cached_repo_task on task_repos task_repos_1  (cost=0.29..8.31 rows=1 width=0) (never executed)',
       ),
     ).toBe('Index Only Scan using idx_task_repos_cached_repo_task on task_repos')
+  })
+
+  // generic-plan 差分判据的自证。账本为空时下面那条真库断言一次也不报，所以判据本身必须
+  // 对着捏造的两份计划证明它还在判——否则守卫静默，和「没有退化」看起来一模一样。
+  test('generic plan 差分认得出「参数一没了就塌成顺序扫」，也不误报稳定的顺序扫', () => {
+    const indexed =
+      'Nested Loop\n' +
+      '  ->  Limit\n' +
+      '        ->  Index Only Scan using idx_tasks_workgroup on tasks tasks_1\n' +
+      "              Index Cond: (workgroup_id >= ''::text)\n" +
+      '  ->  Seq Scan on workgroup_task_state\n'
+    const collapsed =
+      'Nested Loop\n' +
+      '  ->  Limit\n' +
+      '        ->  Seq Scan on tasks tasks_1\n' +
+      '              Filter: (workgroup_id >= $1)\n' +
+      '  ->  Seq Scan on workgroup_task_state\n'
+
+    // ① 退化被抓到：`tasks` 从索引扫塌成顺序扫。
+    expect(genericPlanRegressions(indexed, collapsed)).toEqual(['tasks'])
+    // ② 两份计划都顺序扫 `workgroup_task_state`，那是稳定选择，不报。
+    expect(genericPlanRegressions(indexed, collapsed)).not.toContain('workgroup_task_state')
+    // ③ 计划没变就一条都不报。
+    expect(genericPlanRegressions(indexed, indexed)).toEqual([])
+    // ④ 方向是单向的：generic 反而变好不算退化。
+    expect(genericPlanRegressions(collapsed, indexed)).toEqual([])
+    // ⑤ 别名与扫描种类都解析得对。
+    expect(relationScans(indexed).get('tasks')).toEqual(new Set(['Index Only Scan']))
+    expect(relationScans(collapsed).get('tasks')).toEqual(new Set(['Seq Scan']))
+  })
+
+  // 采纳判据（generic 估得不比 custom 贵）的自证：取的必须是**根节点**的总计代价。
+  test('计划总代价取的是根节点的 cost 上界', () => {
+    expect(
+      planTotalCost(
+        'Nested Loop  (cost=0.29..8.47 rows=1 width=4)\n' +
+          '  ->  Seq Scan on tasks  (cost=0.00..470.00 rows=3333 width=4)\n',
+      ),
+      // 根是 8.47；子节点那个 470.00 更大，取错就会把「更便宜所以会被采纳」判反。
+    ).toBe(8.47)
+    expect(planTotalCost('Aggregate  (cost=458.57..458.58 rows=1 width=8)')).toBe(458.58)
+    expect(planTotalCost('Seq Scan on tasks')).toBeNull()
   })
 })
 
@@ -797,6 +960,88 @@ if (!postgresqlSelected) {
             '这条只报告不断言（见 PlanGap.defect）。',
         )
       }
+    }, 600_000)
+
+    test('参数化热查询的 generic plan 不得比 custom plan 更差（与账本逐条对齐）', async () => {
+      const observed = new Map<
+        string,
+        { path: string; relation: string; sql: string; custom: string; generic: string }
+      >()
+      let planned = 0
+      const report: string[] = []
+
+      for (const path of AUDITED) {
+        recorded.length = 0
+        recording = true
+        try {
+          await path.run(client!)
+        } finally {
+          recording = false
+        }
+        const seen = new Set<string>()
+        for (const statement of recorded) {
+          if (!/^\s*(select|with)/i.test(statement.sql)) continue
+          // 没有绑定参数的语句只有一份计划，generic / custom 之分不存在。
+          if (statement.params.length === 0) continue
+          const key = statement.sql.replace(/\s+/g, ' ')
+          if (seen.has(key)) continue
+          seen.add(key)
+          let custom: string
+          let generic: string
+          try {
+            const customRows = await raw!(`EXPLAIN ${statement.sql}`, statement.params)
+            custom = customRows.map((row) => String(row['QUERY PLAN'])).join('\n')
+            // GENERIC_PLAN 只规划不执行，且**不许带实参**——正是「参数不可见」那份计划。
+            const genericRows = await raw!(`EXPLAIN (GENERIC_PLAN) ${statement.sql}`)
+            generic = genericRows.map((row) => String(row['QUERY PLAN'])).join('\n')
+          } catch {
+            // 解释不了的（临时构造、类型推不出来的参数）跳过，不假装审计过。
+            continue
+          }
+          planned += 1
+          // PostgreSQL 只在 generic 估算代价不高于 custom 时才换过去；估得更贵的那些
+          // 形状退化生产永远吃不到，报出来只会逼人往账本里塞无害条目。
+          const customCost = planTotalCost(custom)
+          const genericCost = planTotalCost(generic)
+          if (customCost === null || genericCost === null || genericCost > customCost) continue
+          for (const relation of genericPlanRegressions(custom, generic)) {
+            const id = `${path.name}::${relation}`
+            if (!observed.has(id))
+              observed.set(id, { path: path.name, relation, sql: statement.sql, custom, generic })
+          }
+        }
+        report.push(`${path.name}: ${seen.size} 条带参数的读语句`)
+      }
+
+      // 失败关闭：审不到语句时「没发现退化」与「没审计」同形。
+      expect(planned, `实际两份计划都取到的语句：\n${report.join('\n')}`).toBeGreaterThanOrEqual(8)
+
+      const ledger = new Map(GENERIC_PLAN_GAPS.map((gap) => [`${gap.path}::${gap.relation}`, gap]))
+
+      // ① 新退化：观察到的必须已在账上。
+      const unlisted = [...observed.entries()].filter(([id]) => !ledger.has(id))
+      expect(
+        unlisted.map(([id]) => id),
+        '这些热查询的 generic plan 比 custom plan 差：某个关系在 custom plan 里走索引，\n' +
+          '在 generic plan 里塌成顺序扫。生产从这条语句的**第 6 次执行**起就吃这份计划。\n' +
+          "修法通常是把那个常量从绑定参数变回常量谓词（`>= ${''}` → `IS NOT NULL`）；\n" +
+          '确实要留就连同「哪个参数」一起登记进 GENERIC_PLAN_GAPS：' +
+          unlisted
+            .map(
+              ([id, item]) =>
+                `\n\n### ${id}\n${item.sql}\n\n--- custom plan（生产头 5 次）---\n${item.custom}` +
+                `\n--- generic plan（第 6 次起）---\n${item.generic}`,
+            )
+            .join(''),
+      ).toEqual([])
+
+      // ② 已销的账必须删掉——留着烂账就判红（方向与 PLAN_GAPS 一致）。
+      const stale = GENERIC_PLAN_GAPS.filter((gap) => !observed.has(`${gap.path}::${gap.relation}`))
+      expect(
+        stale.map((gap) => gap.id),
+        '这些 generic-plan 退化已经观察不到了，把对应条目从 GENERIC_PLAN_GAPS 里删掉：\n' +
+          stale.map((gap) => `  ${gap.id} — ${gap.path} / ${gap.relation}`).join('\n'),
+      ).toEqual([])
     }, 600_000)
   })
 }

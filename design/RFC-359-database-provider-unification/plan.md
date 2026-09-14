@@ -10828,3 +10828,113 @@ WS 发帧那条**同步**围栏，请求路径每次重读，于是「改权限�
 也可能不够——要知道只有一条路：真去实现，然后在 CI 上量。那一步涉及模块边界归属
 （谁拥有那条查询），按 RFC-294 该走 `public/queries` 的显式合同，属于需要拍板的设计动作；
 但它是**工程上可能成立的选项**，不该像我上一版那样被算掉。
+
+## §5eu —— AC-11 的真因找到了：不是往返次数，是 **generic plan 把一条探针变成了全表扫**
+
+§5et 收在「融合认证读**可能**关得上那 0.055ms，要知道只有实现了去 CI 上量」。
+往那个方向走之前我先回头看了一眼**原始样本**，于是这件事整个翻过来了。
+
+### 先说方法上的错：我一直在读 P95，而 P95 在这里几乎没有信息
+
+`scripts/perf-run.ts` 是 `rounds: 20`。**20 个样本的 P95 就是第 20 名，也就是最大值**。
+拿两次**同 SHA**的 run（`34827977388` / `34831180498`，代码逐字相同）当对照，
+每端点 gap 的摆动是 0.2–3.7ms：
+
+| 端点 | 同 SHA run A | 同 SHA run B | 摆动 |
+| --- | --- | --- | --- |
+| tasks-second | +1.978 | +5.504 | 3.526 |
+| repos-first | +2.134 | +4.235 | 2.101 |
+| overview | +2.368 | +1.038 | 1.330 |
+
+我此前反复推敲的 0.055 / 0.397 / 0.885 / 0.972ms，**全部落在这个摆动之内**。
+围绕它们做的所有算术（含 §5et 那版）都是在给噪声建模。
+
+### 再说一条我漏报的事实
+
+§5et 说 run `34836852462` 之后「四个剩余的红都在亚毫秒级」。**那是错的**：
+该 run 的 `comparison.json` 里 `postgresqlNoSlower: false` 的是 **6 个**端点，
+而且其中 `workgroup-pending` 是 **29.35ms vs 4.86ms**，同时把 `max < 10ms` 的原始预算
+也撑爆了（`postgresqlPassed: false`）。我当时只盯着自己改过的那几条，没通读那份对照。
+
+### 真因：按测量顺序排开的样本里有一个**台阶**
+
+```
+workgroup-pending / PostgreSQL（按测量顺序）
+2.66  2.16  2.29  2.50 | 24.86  26.81  29.35  24.32  23.86  23.94 …
+```
+
+前 4 个正常，**从第 5 个起全部 23ms 以上并再不回落**。这不是噪声、不是离群点，
+是状态变了：1 次 warmup + 4 个采样 = 5 次执行，第 5 个采样正好是**第 6 次执行**——
+PostgreSQL 从第 6 次起才可能把 custom plan 换成 generic plan。
+
+在真库上复现（10 万行、`workgroup_id` 全 NULL，与语料同形）：
+
+```
+执行 1..5 : 0.79 / 0.27 / 0.26 / 0.16 / 0.23 ms     custom plan
+执行 6..8 : 6.02 / 4.55 / 4.33 ms                   generic plan
+```
+
+两份计划：
+
+```
+custom : Limit → Index Only Scan using idx_tasks_workgroup   Index Cond: workgroup_id >= ''
+generic: Limit → Seq Scan on tasks                            Filter: workgroup_id >= $1
+                                                              Rows Removed by Filter: 100000
+```
+
+肇事的是 `workgroupTaskRoomTaskParticipant.ts` 的空工作组探针
+`WHERE ${tasks.workgroupId} >= ${''} LIMIT 1`——那个 `''` 是**源码常量**，drizzle 把它编成 `$1`。
+generic plan 看不见它，按默认选择率估成命中很多行、又有 `LIMIT 1`，于是判定
+「顺序扫一下马上凑够一行」；实际一行都凑不到，把整张表读完。
+
+**改法**：`>= ${''}` → `IS NOT NULL`。语义等价（text 列里任何非 NULL 值都 `>= ''`），
+但它是常量谓词，两份计划都回到 `Index Only Scan`；SQLite 侧 `EXPLAIN QUERY PLAN` 逐字不变
+（都是 `SEARCH tasks USING COVERING INDEX idx_tasks_workgroup`）。
+
+**这条探针是 `072c8f575` 为 AC-11 加的优化**（「没有工作组就别扫 tasks」）。方向没错，
+代价是它引入了一个绑定参数——于是优化本身成了回归的载体。
+
+### 守卫：把「generic plan」补进计划审计
+
+`rfc359-w6-t26-postgresql-plan-audit` 本该抓到它，没抓到，原因是**结构性的**：
+它对每条语句 `EXPLAIN (ANALYZE, BUFFERS)` 一次、而且**带着实参**——量到的永远是 custom plan。
+带实参的 `EXPLAIN` 在结构上就看不见这类缺陷。
+
+补上的判据用 `EXPLAIN (GENERIC_PLAN)`（PG 16+，只规划不执行，不吃语料规模也不吃机器负载，
+与该文件「不用墙钟毫秒」的原则一致），并且**不只看形状**：
+
+> generic plan 把某个关系的索引扫换成顺序扫，**且** generic 自己的估算代价不高于 custom。
+
+第二条是 PostgreSQL 自己的采纳规则（`plan_cache_mode=auto`）。少了它会过度报警——实测
+`/api/overview` 的计数就是 generic 形状更差（Seq Scan）但估算 458.58 vs custom 8.62，
+**PG 根本不会换**，报出来只会逼人往账本里塞无害条目。而 workgroup 探针是 generic 估 **8.47**、
+custom 估 12.63 —— 估得更便宜所以被采纳，而那 8.47 建立在「`LIMIT 1` 扫几行就够」的错误假设上。
+**「估错了所以才被采纳」正是危险的定义**，判据取两条的合取就只报这一类。
+
+账本 `GENERIC_PLAN_GAPS` 建成即空。红→绿实证：把探针改回 `>= ${''}` 这条判据立刻报
+`/api/workgroup-tasks/pending-count — 空工作组短路探针::tasks`，改回 `IS NOT NULL` 转绿。
+
+### 其余端点：独立扫过，没有第二处
+
+另起一个 agent 用同样方法（含一条正向对照：workgroup 探针 0.018ms → 19.557ms，约 1086×，
+`pg_prepared_statements` 从 `generic=0/custom=1` 走到 `generic=1/custom=5`）把
+`repos-first` / `repos-referenced` / `reviews-pending` / `clarify-pending` / `overview`
+的 12 条语句逐条过了 `PREPARE` → 5×`EXECUTE` → 第 6 次 `EXPLAIN (ANALYZE)`，外加
+`force_generic_plan` 一组：**五个端点一条悬崖都没有**，计划在阈值两侧逐节点相同。
+
+它同时从 CI 原始样本独立印证了同一件事：只有 `workgroup-pending` 有台阶；另外几个的 P95
+要么是 warmup（`reviews-pending` 单调下降，P95 就是第 1 个样本），要么是孤立尖峰
+（`repos-first` 的 10.36 落在第 9 个样本，左右邻居 3.20 / 3.00）。
+
+### 于是 AC-11 的账重新算
+
+- **真缺陷 1 个**，已修、已带守卫：workgroup 探针的 generic plan 全表扫。
+- **其余 gap 不是计划问题，是每语句一次往返的固定成本**：`clarify-pending` 两个引擎跑的是
+  **同样 3 条语句**，PG 的语句时间 1.98ms、SQLite 0.13ms——PG 出进程走 TCP，SQLite 在进程内，
+  每条语句几百微秒的 parse/bind/execute 差是结构性的，覆盖得住 0.06–5.7ms 的全部残余。
+- `/api/overview` 的常量绑参（`catalog_visibility = $1`、`status in ($2,$3)`）我一度改成了
+  字面量，**又改回去了**：实测 PG 不会采纳那份 generic plan（估算差 53 倍），
+  改动无法用数据支持，留着就是一处未经测量的「优化」。
+
+**还没做的**：这一刀之后的 CI 复测（已按 HEAD 派发 `postgresql-evidence` 的
+`http-performance`）。在拿到新的 `comparison.json` 之前，不宣称任何端点因此转绿。

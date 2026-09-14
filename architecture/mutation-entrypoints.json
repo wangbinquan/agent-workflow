@@ -40595,7 +40595,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:90c0c22cf48d464180ba7e6b3bed6e62051f40dd107d94bda2578a4e384fd0e5",
+  "sourceDigest": "sha256:c7ea86ecf126c3c5d488b0832dbf5d63fd3bb08a9cb53209761520cdcadedae2",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42801,8 +42801,8 @@
         "controlSubtype": "membership-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#164:tasks",
-        "line": 164,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#184:tasks",
+        "line": 184,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42817,8 +42817,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#237:tasks",
-        "line": 237,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#257:tasks",
+        "line": 257,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42833,8 +42833,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#315:tasks",
-        "line": 315,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#335:tasks",
+        "line": 335,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

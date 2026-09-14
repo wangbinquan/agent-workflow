@@ -2,6 +2,38 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 26，**AC-11 真因**：generic plan 把一条探针变成全表扫）
+>
+> 落档 plan §5eu；通用坑落 `docs/dev-gotchas.md`（generic plan 那条）。
+>
+> **先撤回两件我说错的事**：① §5et 的「四个剩余的红都在亚毫秒级」——实际是 **6 个**端点
+> `postgresqlNoSlower: false`，其中 `workgroup-pending` 是 29.35 vs 4.86ms 并撑爆了 `max<10ms`
+> 的原始预算，我当时只看了自己改过的那几条；② 此前围绕 0.055 / 0.397 / 0.885ms 做的全部算术
+> 都是在**给噪声建模**——`rounds: 20` 的 P95 就是最大值，两次**同 SHA** run 的 gap 摆动到 3.7ms。
+>
+> **真因**：按测量顺序排开的样本里有个台阶——`2.66 2.16 2.29 2.50 | 24.86 26.81 29.35 …`，
+> 从第 5 个采样起再不回落。1 warmup + 4 采样 = 5 次执行，第 5 个采样正好是**第 6 次执行**，
+> 而 PostgreSQL 从第 6 次起才把 custom plan 换成 generic plan。肇事的是空工作组探针
+> `WHERE ${tasks.workgroupId} >= ${''} LIMIT 1`——`''` 是**源码常量**却被 drizzle 编成 `$1`，
+> generic plan 看不见它，按默认选择率 + `LIMIT 1` 判定「扫几行就够」，实际一行都凑不到，
+> 把 10 万行读完。改成 `IS NOT NULL`（语义等价、常量谓词），两份计划都回到 `Index Only Scan`，
+> SQLite 侧 `EXPLAIN QUERY PLAN` 逐字不变。真库实证：执行 1–5 约 0.2ms、6–8 跳到 4.3–6.0ms。
+>
+> **守卫**：`rfc359-w6-t26-postgresql-plan-audit` 本该抓到却抓不到——它每条语句只
+> `EXPLAIN` 一次**且带实参**，量到的永远是 custom plan。补上 `EXPLAIN (GENERIC_PLAN)` 一维，
+> 判据取**两条的合取**：generic 把索引扫换成顺序扫 **且** generic 估算代价不高于 custom
+> （后者是 PG 自己的采纳规则；少了它 `/api/overview` 会被误报——它 generic 估 458.58 / custom 8.62，
+> PG 根本不会换）。workgroup 探针则是 generic 估 8.47 / custom 12.63，**估错了所以被采纳**。
+> 账本 `GENERIC_PLAN_GAPS` 建成即空；把探针改回旧写法判据立刻转红，实证过。
+>
+> **其余端点独立扫过没有第二处**（另一个 agent，带 1086× 的正向对照）：残余 gap 是
+> **每语句一次往返的固定成本**——`clarify-pending` 两引擎跑同样 3 条语句，PG 语句时间 1.98ms、
+> SQLite 0.13ms，出进程 TCP vs 进程内，足以覆盖全部残余。`/api/overview` 的常量绑参我改过又
+> **改回去了**：实测 PG 不采纳那份 generic plan，改动没有数据支持。
+>
+> **未完**：CI 复测已按 HEAD 派发（`postgresql-evidence` / `http-performance`），
+> 拿到新 `comparison.json` 前不宣称任何端点转绿。
+
 > ## 📌 RFC-359 最新一段（2026-09-14 续 25，**AC-11 两刀**：每请求两笔认证写 → PG p95 −73%；AC-6 四波再迁 31 个文件）
 >
 > 落档 plan §5ej / §5ek / §5el / §5em。

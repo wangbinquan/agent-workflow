@@ -6941,3 +6941,56 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
   被测的短路发生在 `existsSync('.gitmodules')` 上、根本走不到 git，所以**一个空目录就够了**——
   去掉那段准备之后它从 30 秒级变成毫秒级，而且断得**更强**（连仓都不存在照样返回 false，
   证明短路确实在任何 git 调用之前）。
+
+## PostgreSQL 的 **generic plan** 会把「源码常量绑成参数」变成一次 10 倍回归，而所有 `EXPLAIN` 都看不见它（2026-09-14 实撞，CI 上 2.5ms → 24.8ms）
+
+**现象**：`/api/workgroup-tasks/pending-count` 的 20 个采样里，前 4 个 2.2–2.7ms，**从第 5 个起
+全部 23–29ms 并再不回落**：
+
+```
+2.66  2.16  2.29  2.50 | 24.86  26.81  29.35  24.32  23.86 … （run 34836852462）
+```
+
+**机制**：PostgreSQL 对一条 prepared statement 的**前 5 次**执行用 custom plan（知道实参、按真实
+选择率规划），第 6 次起才可能换 generic plan（不知道实参、按默认选择率规划）。1 次 warmup + 4 个
+采样 = 5 次执行，第 5 个采样正好是第 6 次执行——**那个台阶就是计划切换本身**。
+
+**根因**是一行看着人畜无害的 drizzle：
+
+```ts
+sql`(SELECT 1 FROM ${tasks} WHERE ${tasks.workgroupId} >= ${''} LIMIT 1)`   // 空串被编成 $1
+```
+
+那个 `''` 是**源码常量**，但 drizzle 把它编成绑定参数。generic plan 看不见它，于是把
+`>= $1` 按默认选择率估成「命中很多行」，又看见 `LIMIT 1`，判定「顺序扫一下马上就能凑够一行」。
+实际每行的 `workgroup_id` 都是 NULL，一行都凑不到，那一趟成了**读完整表**的 `Seq Scan`。
+改成常量谓词 `IS NOT NULL` 即可（语义等价：text 列里任何非 NULL 值都 `>= ''`），
+两份计划都回到 `Index Only Scan`；SQLite 侧 `EXPLAIN QUERY PLAN` 逐字不变。
+
+**为什么此前的守卫一条都没报**：本仓的 `rfc359-w6-t26-postgresql-plan-audit` 对每条语句
+`EXPLAIN (ANALYZE, BUFFERS)` **一次、而且带着实参**——量到的永远是 custom plan，也就是生产
+只在头 5 次请求里用的那份。**带实参的 `EXPLAIN` 在结构上就看不见这个缺陷。**
+
+**怎么量**：`EXPLAIN (GENERIC_PLAN) <带 $n 的 SQL>`（PostgreSQL 16+，**不许带实参**）。
+只规划不执行，所以不吃语料规模、不吃机器负载。psql 里的等价做法是
+`PREPARE` + 连跑 6 次 `EXECUTE`，第 6 次开始看到的就是 generic plan。
+
+**判据不能只看形状**——会过度报警。PostgreSQL 只在 **generic 估算代价不高于 custom** 时才真的
+换过去（`plan_cache_mode=auto`）。实测对照：
+
+| 语句 | custom 估算 | generic 估算 | PG 会换吗 | 真实后果 |
+| --- | --- | --- | --- | --- |
+| workgroup 探针 | 12.63 | **8.47** | 会 | 全表扫，10 倍回归 |
+| `/api/overview` 计数 | 8.62 | 458.58 | 不会 | 无（形状退化但吃不到） |
+
+所以判据是**两条的合取**：generic plan 把索引扫换成顺序扫，**且**它自己估得不更贵。
+这正是「估错了所以才被采纳」——只有这种才会真的伤到生产。守卫落在
+`rfc359-w6-t26-postgresql-plan-audit.test.ts` 的「generic plan 不得比 custom plan 更差」。
+
+**推论（写查询时记住）**：源码里的常量就写成 SQL 常量。`eq(col, '字面量')` /
+`inArray(col, ['字面量', …])` 这类**看起来是数据、实际是代码**的值一旦被绑成参数，
+generic plan 就少了一半信息。真正的运行时入参照旧走占位符——它们本来就该是参数。
+
+**别用「P95 of 20」当判据去找这类问题**：`rounds: 20` 的 P95 等于**第 20 名样本、也就是最大值**。
+同一份代码两次 CI 的 P95 差可以到 3.7ms，而真实的台阶是看**中位数**才认得出来
+（PG 中位数 2.68 → 24.78）。定位这类回归看**按测量顺序排列的原始样本**，不看 P95。
