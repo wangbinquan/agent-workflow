@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:555",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:547",
       "kind": "register-call",
-      "line": 555,
+      "line": 547,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -12822,5 +12822,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e"
+  "sourceDigest": "sha256:d645fca9ce14fabce3e4980dff3a54995783e74af82930ee5f670b12f994f881"
 }

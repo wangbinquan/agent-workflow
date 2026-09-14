@@ -21389,23 +21389,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:453ed448e59d71b04650",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composePostgresqlIntentApplyResourceBinding",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "composePostgresqlIntentApplyResourceBinding",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts",
       "fromSymbol": "$file",
@@ -24156,23 +24139,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentMrClaims",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4f5fe74e6328ee488cdc",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "createPostgresqlIntentSkillArtifactLifecycle",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -36225,23 +36191,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#SystemOperationsModule",
       "toPath": "packages/backend/src/modules/system-operations/composition.ts",
       "toSymbol": "SystemOperationsModule",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:77b61cb718d342465361",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composePostgresqlSkillArtifactCompensation",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "composePostgresqlSkillArtifactCompensation",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -49184,23 +49133,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a30bd5b87f3ecf4c85fe",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "createPostgresqlIntentPluginArtifactLifecycle",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -52597,23 +52529,6 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:af2d0737abe54d47cc0d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E4a",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations",
-      "toPath": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "toSymbol": "createPostgresqlIntentApplyOperations",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -62559,23 +62474,6 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ce54eac2206f1bb2edbb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E4a",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyArtifactLifecycle",
-      "toPath": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts",
-      "toSymbol": "createPostgresqlIntentApplyArtifactLifecycle",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -78406,9 +78304,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4612,
+    "architectureExceptions": 4606,
     "implementationSccs": 0,
-    "observedEdges": 5125,
+    "observedEdges": 5119,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -100578,22 +100476,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:453ed448e59d71b04650",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlIntentApplyResourceBinding",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composePostgresqlIntentApplyResourceBinding"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#$file",
@@ -103487,22 +103369,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#FrozenIntegrationTriggerResourceSnapshot"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:4f5fe74e6328ee488cdc",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlIntentSkillArtifactLifecycle",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -116335,22 +116201,6 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#SystemOperationsModule"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:77b61cb718d342465361",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlSkillArtifactCompensation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composePostgresqlSkillArtifactCompensation"
     },
     {
       "edgeKind": "type",
@@ -129859,22 +129709,6 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:a30bd5b87f3ecf4c85fe",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlIntentPluginArtifactLifecycle",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "id": "import:a314a47b04388953c681",
@@ -133519,22 +133353,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:af2d0737abe54d47cc0d",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E4a",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/intent/infrastructure/postgresqlIntentApplyOperations",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlIntentApplyOperations",
-      "toContext": "intent",
-      "toFile": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations"
     },
     {
       "edgeKind": "type",
@@ -143839,22 +143657,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:ce54eac2206f1bb2edbb",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E4a",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlIntentApplyArtifactLifecycle",
-      "toContext": "intent",
-      "toFile": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyArtifactLifecycle"
     },
     {
       "edgeKind": "value",
@@ -160954,7 +160756,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e",
+  "sourceDigest": "sha256:d645fca9ce14fabce3e4980dff3a54995783e74af82930ee5f670b12f994f881",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

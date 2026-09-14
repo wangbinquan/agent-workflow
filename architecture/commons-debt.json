@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 260,
+    "inboundEdges": 258,
     "outboundEdges": 33,
     "registeredFindings": 79,
     "recordedAtShaNote": "RFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged."
@@ -155,48 +155,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#composeIntentResourceCatalogFor"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "to": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle",
-      "specifier": "@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:ce54eac2206f1bb2edbb"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyArtifactLifecycle"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "to": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations",
-      "specifier": "@/modules/intent/infrastructure/postgresqlIntentApplyOperations",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:af2d0737abe54d47cc0d"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations"
       ],
       "canonicalFacadeIds": []
     },
@@ -8052,15 +8010,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a95d4a451194d3f92ef35e28043a926b6c19176eedc280974e7718e3a263600e",
+    "sourceDigest": "sha256:d645fca9ce14fabce3e4980dff3a54995783e74af82930ee5f670b12f994f881",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "9c205c44c628c5121210cd0037ad19200d132533",
-    "contentDigest": "sha256:5f8eab4cb2dca4e6874e8d8af3e7aaf2163c9c0ac37e95a050d2a03b475b962d",
+    "currentSnapshotSha": "4293917661f246d7366262fa5d7c6c0cb2166a8f",
+    "contentDigest": "sha256:12084d2eb2c6dc62e9e091817cc2ee77e268c888491f1524ed934e251873705d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
