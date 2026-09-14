@@ -10643,3 +10643,60 @@ PG 守护进程走的是 `composePostgresqlResourceLimitOperations`
 `taskLifecycleRepair` 调用，不存在线上 PG 缺陷（这次先核实了再写）。
 
 相关套件在两个引擎上复跑 **316 格全绿**。
+
+## §5eq —— 「`startTaskImpl` 17 个同步点」这堵墙**不存在**；真正的边界是 `StartTaskDeps` 本来就属于 SQLite 那一侧
+
+我在 §5en / §5eo / §5ep 里反复说「最后卡在 `startTaskImpl` 的 17 个同步点」。
+**那个数字是错的，那堵墙也不是那个形状。**
+
+### 17 是怎么数出来的（三重高估）
+
+按正则数 `.run()|.all()|.get()` 得 17，其中：
+
+· **4 条是注释**——RFC-359 W10 自己留的那段说明里就写着 `.run()` 三个字；
+· **绝大多数是已经 `await` 了的链**，比如 `await tx.insert(tasks).values({…}).run()`
+  ——那条链从 3506 行一直写到 3630 行、横跨 **125 行**，正则只看见结尾的 `.run()`；
+· 按缩进回溯到语句头再判，`startTaskImpl` 体内**真正没 await 的同步点是 0 个**。
+
+根因是 **W10 早就把这里的事务边界换成中立的 `withTaskExecutionWrite`**
+（`databaseSessionFor(db).transaction`），它的注释还特意写明「体内每一条语句都必须 await」。
+**这件事早就做完了，是我没去读。**
+
+### 那么真正拦住的是什么
+
+把 `StartTaskDeps.db` 放宽，编译器给出的是一条**完全不同**的清单——同步读全在
+`deps.db` 的那几个 helper 里，不在 `startTaskImpl`：
+
+| helper | 实况 |
+| --- | --- |
+| `assertLaunchSourceSchemeSync` | 名字里的 `Sync` 指**请求的同步段**（必须在 201 之前拒），不是同步读；函数本来就是 `async`，2 处读可以直接 await |
+| `createPersistedRepositoryPreparationStep` | 2 处读，都在 `async read()` 里 |
+| `loadFrozenSpaceLayout` | 端口签名本来就是 `=> Promise<…>`，两个调用点也早包在 `async` 里，实现改 async 与契约相容 |
+| `reclaimStalePrepArtifacts` | 1 处读 |
+
+**这些我全部改通了**，`src` 侧一路推到只剩一条错——然后撞上真正的边界：
+
+```
+taskDriverLifecycle.ts:123  persistence: createSqliteTaskExecutionPersistence(db)
+```
+
+`src/modules/task-execution/infrastructure/` 下**同时存在** `taskDriverLifecycle.ts` 与
+`postgresqlTaskDriverLifecycle.ts`，而 PG 守护进程用的是自己那套
+（`cli/postgresqlDaemonApplication.ts:119 / :853` —— `createPostgresqlTaskDriverLifecyclePort`
++ `createPostgresqlTaskExecutionPersistence`）。
+
+**结论：`StartTaskDeps` 是一对已登记的机制分叉里 SQLite 那一侧的依赖包，不是「还没迁的债」。**
+把它放宽在架构上就是错的——那等于让 SQLite 的启动装配去喂 PG 的句柄，而 PG 有自己完整的启动路径。
+
+### 对账本的影响（需要裁决，不自行改）
+
+卡在 `StartTaskDeps` / `buildStartTaskDeps` 上的那几个文件（`start-task-deps`、
+`rfc097-task-status-cas` 经 `retryNode`、`rfc268-webhook-scratch-launch`、
+`rfc269-webhook-code-host-context-e2e` …）测的是**SQLite 启动路径**，而它有 PG 对应物。
+按 AC-1 修订后的口径，这与 `rfc349-websocket-provider` 属于**同一类**——
+「被测物就是某一侧的适配器」，应当判**不适用**，而不是挂在 `OPEN_MIGRATION_DEBT` 上当待办。
+
+**没有自行改账本**：这会让 open 债从 28 掉到 ~22，是一次**分类裁决**而不是迁移，
+按 §5eg 立下的规矩（「放松判据的方向恰好是让数字变好看的方向」）应当由用户拍板。
+探测改动已全部还原（`git checkout -- task.ts taskDriverLifecycle.ts`），
+`rfc287-t13-deferred-prep` + `rfc097-cancel-wins` 复跑 62 格全绿。
