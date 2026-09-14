@@ -21,14 +21,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { sql } from 'drizzle-orm'
-import { createInMemoryDb } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const created: string[] = []
 let prevGitGlobal: string | undefined
 const gitCfgDir = mkdtempSync(join(tmpdir(), 'aw-rfc210-cpu-cfg-'))
@@ -98,19 +98,42 @@ async function fixture(subPushable: boolean): Promise<{ parent: string; sub: str
   return { parent, sub }
 }
 
-async function db(repo: string) {
-  const client = createInMemoryDb(MIGRATIONS)
-  await client.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
-  await client.run(sql`
-    INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-      base_branch, branch, status, inputs, started_at, schema_version)
-    VALUES ('t1', 'cp', 'wf', '{}', ${repo}, ${repo}, 'main', 'agent-workflow/t1', 'running', '{}', 1, 1)
-  `)
-  await client.run(sql`
-    INSERT INTO node_runs (id, task_id, node_id, status, retry_index, iteration, started_at)
-    VALUES ('parent-run', 't1', 'writer', 'done', 0, 0, 1)
-  `)
-  return client
+/**
+ * RFC-359 AC-6: the same explicit columns, but through the neutral query builder —
+ * the raw `INSERT INTO …` text only parsed against the bun:sqlite dialect.
+ */
+async function seedTask(db: ProviderNeutralDatabase, repo: string): Promise<void> {
+  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
+  await db.insert(tasks).values({
+    id: 't1',
+    name: 'cp',
+    workflowId: 'wf',
+    workflowSnapshot: '{}',
+    repoPath: repo,
+    worktreePath: repo,
+    baseBranch: 'main',
+    branch: 'agent-workflow/t1',
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+    schemaVersion: 1,
+    // The SQLite-only `rfc328_tasks_lineage_after_insert` trigger has no PostgreSQL
+    // counterpart by design, so a direct fixture INSERT writes both causal columns
+    // itself (root task ⇒ lineage id = own id, single `task-root` frame).
+    executionLineageId: 't1',
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
+    ]),
+  })
+  await db.insert(nodeRuns).values({
+    id: 'parent-run',
+    taskId: 't1',
+    nodeId: 'writer',
+    status: 'done',
+    retryIndex: 0,
+    iteration: 0,
+    startedAt: 1,
+  })
 }
 
 const baseParams = {
@@ -128,87 +151,94 @@ const baseParams = {
   generateRepair: async () => ({ message: null }),
 }
 
-describe('RFC-210 — untouched submodules are left alone', () => {
-  test('an unpushable vendored submodule does not withhold the parent', async () => {
-    const { parent } = await fixture(false)
-    // The agent edits ONLY a parent file. `vendor` is clean and its HEAD equals
-    // the recorded gitlink — nothing to contribute.
-    writeFileSync(join(parent, 'README.md'), 'parent edited by agent\n')
+// RFC-359 AC-6：同一段判据在两个引擎上各跑一遍。每个用例的 git 夹具都是现建的
+// `mkdtemp` 目录，两个引擎因此各拿一份全新的仓库，不会相互继承提交。
+describeEachProvider('RFC-210 未触碰子仓的提交推送（双引擎）', (harness) => {
+  describe('RFC-210 — untouched submodules are left alone', () => {
+    test('an unpushable vendored submodule does not withhold the parent', async () => {
+      const { parent } = await fixture(false)
+      // The agent edits ONLY a parent file. `vendor` is clean and its HEAD equals
+      // the recorded gitlink — nothing to contribute.
+      writeFileSync(join(parent, 'README.md'), 'parent edited by agent\n')
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
+      await seedTask(harness.db, parent)
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(harness.db),
+      )
 
-    // Before the fix: `commit-local-subrepo-failed`, commitSha null, parent
-    // neither committed nor pushed — because a read-only third-party submodule
-    // failed a push nobody asked for.
-    expect(res.meta.pushOutcome).toBe('pushed')
-    expect(res.meta.subrepos ?? []).toHaveLength(0)
-    const parentHead = await runGit(parent, ['log', '-1', '--format=%s'])
-    expect(parentHead.stdout.trim()).not.toBe('add submodule')
-  }, 120_000)
+      // Before the fix: `commit-local-subrepo-failed`, commitSha null, parent
+      // neither committed nor pushed — because a read-only third-party submodule
+      // failed a push nobody asked for.
+      expect(res.meta.pushOutcome).toBe('pushed')
+      expect(res.meta.subrepos ?? []).toHaveLength(0)
+      const parentHead = await runGit(parent, ['log', '-1', '--format=%s'])
+      expect(parentHead.stdout.trim()).not.toBe('add submodule')
+    }, 120_000)
 
-  test('no branch ref is written into an untouched submodule remote', async () => {
-    const { parent, sub } = await fixture(true)
-    writeFileSync(join(parent, 'README.md'), 'parent only\n')
+    test('no branch ref is written into an untouched submodule remote', async () => {
+      const { parent, sub } = await fixture(true)
+      writeFileSync(join(parent, 'README.md'), 'parent only\n')
 
-    await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
+      await seedTask(harness.db, parent)
+      await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(harness.db),
+      )
 
-    // `git submodule add <path>` makes that path the submodule's origin, so a
-    // push from inside the submodule would land here.
-    const ref = await runGit(sub, ['rev-parse', '--verify', 'refs/heads/agent-workflow/t1'])
-    expect(ref.exitCode).not.toBe(0)
-    // And the platform never moved it onto its own branch. (Whatever the
-    // submodule was checked out on stays — the point is that `checkout -B
-    // agent-workflow/t1` did not run here.)
-    const branch = await runGit(join(parent, 'vendor'), ['rev-parse', '--abbrev-ref', 'HEAD'])
-    expect(branch.stdout.trim()).not.toBe('agent-workflow/t1')
-  }, 120_000)
-})
+      // `git submodule add <path>` makes that path the submodule's origin, so a
+      // push from inside the submodule would land here.
+      const ref = await runGit(sub, ['rev-parse', '--verify', 'refs/heads/agent-workflow/t1'])
+      expect(ref.exitCode).not.toBe(0)
+      // And the platform never moved it onto its own branch. (Whatever the
+      // submodule was checked out on stays — the point is that `checkout -B
+      // agent-workflow/t1` did not run here.)
+      const branch = await runGit(join(parent, 'vendor'), ['rev-parse', '--abbrev-ref', 'HEAD'])
+      expect(branch.stdout.trim()).not.toBe('agent-workflow/t1')
+    }, 120_000)
+  })
 
-describe('RFC-210 — a submodule pin is never fast-forwarded to upstream', () => {
-  test('non-fast-forward reports instead of merging upstream in', async () => {
-    const { parent, sub } = await fixture(true)
-    // Upstream has moved on: the branch the runner will push to already exists
-    // in the submodule's origin, pointing at work we did not make.
-    await runGit(sub, ['checkout', '-q', '-b', 'agent-workflow/t1'])
-    writeFileSync(join(sub, 'upstream.txt'), 'moved on without us\n')
-    await runGit(sub, ['add', '.'])
-    await runGit(sub, ['commit', '-q', '-m', 'upstream advances'])
-    const upstreamTip = (await runGit(sub, ['rev-parse', 'HEAD'])).stdout.trim()
-    await runGit(sub, ['checkout', '-q', 'main'])
+  describe('RFC-210 — a submodule pin is never fast-forwarded to upstream', () => {
+    test('non-fast-forward reports instead of merging upstream in', async () => {
+      const { parent, sub } = await fixture(true)
+      // Upstream has moved on: the branch the runner will push to already exists
+      // in the submodule's origin, pointing at work we did not make.
+      await runGit(sub, ['checkout', '-q', '-b', 'agent-workflow/t1'])
+      writeFileSync(join(sub, 'upstream.txt'), 'moved on without us\n')
+      await runGit(sub, ['add', '.'])
+      await runGit(sub, ['commit', '-q', '-m', 'upstream advances'])
+      const upstreamTip = (await runGit(sub, ['rev-parse', 'HEAD'])).stdout.trim()
+      await runGit(sub, ['checkout', '-q', 'main'])
 
-    // The agent genuinely edits the submodule, so it IS ours to push.
-    writeFileSync(join(parent, 'vendor', 'a.txt'), 'edited-by-agent\n')
-    const pinned = (await runGit(join(parent, 'vendor'), ['rev-parse', 'HEAD'])).stdout.trim()
+      // The agent genuinely edits the submodule, so it IS ours to push.
+      writeFileSync(join(parent, 'vendor', 'a.txt'), 'edited-by-agent\n')
+      const pinned = (await runGit(join(parent, 'vendor'), ['rev-parse', 'HEAD'])).stdout.trim()
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
+      await seedTask(harness.db, parent)
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(harness.db),
+      )
 
-    // The push is refused, and that is reported — not "repaired".
-    expect(res.meta.subrepos?.[0]?.pushed).toBe(false)
-    expect(res.meta.subrepos?.[0]?.error ?? '').not.toBe('')
-    expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
+      // The push is refused, and that is reported — not "repaired".
+      expect(res.meta.subrepos?.[0]?.pushed).toBe(false)
+      expect(res.meta.subrepos?.[0]?.error ?? '').not.toBe('')
+      expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
 
-    // THE regression: `merge FETCH_HEAD` used to fast-forward the submodule onto
-    // the upstream tip and publish it, destroying the pin. Our commit must sit
-    // on top of the PINNED commit, with upstream's work nowhere in its history.
-    const subHead = (await runGit(join(parent, 'vendor'), ['rev-parse', 'HEAD'])).stdout.trim()
-    expect(subHead).not.toBe(upstreamTip)
-    const parentOf = await runGit(join(parent, 'vendor'), ['rev-parse', 'HEAD^'])
-    expect(parentOf.stdout.trim()).toBe(pinned)
-    const containsUpstream = await runGit(join(parent, 'vendor'), [
-      'merge-base',
-      '--is-ancestor',
-      upstreamTip,
-      'HEAD',
-    ])
-    expect(containsUpstream.exitCode).not.toBe(0)
-  }, 120_000)
+      // THE regression: `merge FETCH_HEAD` used to fast-forward the submodule onto
+      // the upstream tip and publish it, destroying the pin. Our commit must sit
+      // on top of the PINNED commit, with upstream's work nowhere in its history.
+      const subHead = (await runGit(join(parent, 'vendor'), ['rev-parse', 'HEAD'])).stdout.trim()
+      expect(subHead).not.toBe(upstreamTip)
+      const parentOf = await runGit(join(parent, 'vendor'), ['rev-parse', 'HEAD^'])
+      expect(parentOf.stdout.trim()).toBe(pinned)
+      const containsUpstream = await runGit(join(parent, 'vendor'), [
+        'merge-base',
+        '--is-ancestor',
+        upstreamTip,
+        'HEAD',
+      ])
+      expect(containsUpstream.exitCode).not.toBe(0)
+    }, 120_000)
+  })
 })

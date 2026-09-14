@@ -16,20 +16,21 @@
 // bump gitlink 并推。任一子仓推不上去就**扣住父仓**——宁可少推一次，也不让远端
 // 出现无法解析的 gitlink。
 
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { sql } from 'drizzle-orm'
-import { resolve } from 'node:path'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const created: string[] = []
+let db: ProviderNeutralDatabase
 let prevGitGlobal: string | undefined
 const gitCfgDir = mkdtempSync(join(tmpdir(), 'aw-rfc210-cp-cfg-'))
 
@@ -111,22 +112,44 @@ async function fixture(subPushable: boolean): Promise<{ parent: string; subOrigi
   return { parent, subOrigin: sub }
 }
 
-/** Same raw-SQL seeding as commit-push-runner.test.ts (explicit columns). */
-async function db(repo: string) {
-  const client = createInMemoryDb(MIGRATIONS)
-  await client.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
-  await client.run(sql`
-    INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-      base_branch, branch, status, inputs, started_at, schema_version)
-    VALUES ('t1', 'cp', 'wf', '{}', ${repo}, ${repo}, 'main', 'agent-workflow/t1', 'running', '{}', 1, 1)
-  `)
+/**
+ * The same explicit-column seeding as commit-push-runner.test.ts, expressed on the
+ * provider-neutral client so both engines run it. `execution_lineage_id` /
+ * `lineage_slot_path_json` are written out: the SQLite-only trigger
+ * `rfc328_tasks_lineage_after_insert` has no PostgreSQL counterpart by design.
+ */
+async function seedTask(repo: string): Promise<ProviderNeutralDatabase> {
+  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
+  await db.insert(tasks).values({
+    id: 't1',
+    name: 'cp',
+    workflowId: 'wf',
+    workflowSnapshot: '{}',
+    repoPath: repo,
+    worktreePath: repo,
+    baseBranch: 'main',
+    branch: 'agent-workflow/t1',
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+    schemaVersion: 1,
+    executionLineageId: 't1',
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
+    ]),
+  })
   // The mint factory enforces "born-running ⟹ child row", so provide the
   // triggering agent run exactly as production does.
-  await client.run(sql`
-    INSERT INTO node_runs (id, task_id, node_id, status, retry_index, iteration, started_at)
-    VALUES ('parent-run', 't1', 'writer', 'done', 0, 0, 1)
-  `)
-  return client
+  await db.insert(nodeRuns).values({
+    id: 'parent-run',
+    taskId: 't1',
+    nodeId: 'writer',
+    status: 'done',
+    retryIndex: 0,
+    iteration: 0,
+    startedAt: 1,
+  })
+  return db
 }
 
 const baseParams = {
@@ -144,228 +167,237 @@ const baseParams = {
   generateRepair: async () => ({ message: null }),
 }
 
-describe('RFC-210 recursive commit & push', () => {
-  test('RFC-321 opens a separate owner-bound publication session for each remote', async () => {
-    const { parent } = await fixture(true)
-    writeFileSync(join(parent, 'vendor', 'a.txt'), 'separate-remote-credential\n')
-    const opens: Array<{
-      subject: { readonly kind: 'user'; readonly userId: string } | { readonly kind: 'system' }
-      remoteUrl: string
-    }> = []
-    let closes = 0
-    const publicationTransport: RepositoryPublicationTransport = {
-      async open(input) {
-        opens.push(input)
-        return {
-          ok: true,
-          session: {
-            endpointUrl: input.remoteUrl,
-            receipt: {
-              credentialSource: 'legacy',
-              credentialRevision: null,
-              endpointSource: 'local-fixture',
-              endpointBindingDigest: null,
+describeEachProvider('RFC-210 子仓递归 commit-push（双引擎）', (harness: ProviderHarness) => {
+  beforeEach(() => {
+    db = harness.db
+  })
+
+  describe('RFC-210 recursive commit & push', () => {
+    test('RFC-321 opens a separate owner-bound publication session for each remote', async () => {
+      const { parent } = await fixture(true)
+      writeFileSync(join(parent, 'vendor', 'a.txt'), 'separate-remote-credential\n')
+      const opens: Array<{
+        subject: { readonly kind: 'user'; readonly userId: string } | { readonly kind: 'system' }
+        remoteUrl: string
+      }> = []
+      let closes = 0
+      const publicationTransport: RepositoryPublicationTransport = {
+        async open(input) {
+          opens.push(input)
+          return {
+            ok: true,
+            session: {
+              endpointUrl: input.remoteUrl,
+              receipt: {
+                credentialSource: 'legacy',
+                credentialRevision: null,
+                endpointSource: 'local-fixture',
+                endpointBindingDigest: null,
+              },
+              runNetwork(repoPath, args, options) {
+                return runGit(repoPath, [...args], options)
+              },
+              close() {
+                closes += 1
+              },
             },
-            runNetwork(repoPath, args, options) {
-              return runGit(repoPath, [...args], options)
+          }
+        },
+      }
+
+      const result = await runCommitPush(
+        { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
+        composeSqliteCommitPushDeps(await seedTask(parent), { publicationTransport }),
+      )
+
+      expect(result.meta.pushOutcome).toBe('pushed')
+      expect(opens).toHaveLength(2)
+      expect(opens[0]?.remoteUrl).not.toBe(opens[1]?.remoteUrl)
+      expect(opens.map((opened) => opened.subject)).toEqual([
+        { kind: 'user', userId: 'submodule-owner' },
+        { kind: 'user', userId: 'submodule-owner' },
+      ])
+      expect(closes).toBe(2)
+    }, 120_000)
+
+    test('RFC-321 submodule authentication failure is stable and never reaches the parent remote', async () => {
+      const { parent } = await fixture(true)
+      writeFileSync(join(parent, 'vendor', 'a.txt'), 'rejected-submodule-credential\n')
+      let openings = 0
+      let closes = 0
+      const publicationTransport: RepositoryPublicationTransport = {
+        async open(input) {
+          openings += 1
+          return {
+            ok: true,
+            session: {
+              endpointUrl: input.remoteUrl,
+              receipt: {
+                credentialSource: 'personal',
+                credentialRevision: 3,
+                endpointSource: 'admin-mapping',
+                endpointBindingDigest: 'a'.repeat(64),
+              },
+              runNetwork(repoPath, args, options) {
+                return args.includes('push')
+                  ? Promise.resolve({
+                      stdout: '',
+                      stderr: 'remote: Write access to repository not granted',
+                      exitCode: 1,
+                    })
+                  : runGit(repoPath, [...args], options)
+              },
+              close() {
+                closes += 1
+              },
             },
-            close() {
-              closes += 1
-            },
-          },
-        }
-      },
-    }
+          }
+        },
+      }
 
-    const result = await runCommitPush(
-      { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
-      composeSqliteCommitPushDeps(await db(parent), { publicationTransport }),
-    )
+      const result = await runCommitPush(
+        { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
+        composeSqliteCommitPushDeps(await seedTask(parent), { publicationTransport }),
+      )
 
-    expect(result.meta.pushOutcome).toBe('pushed')
-    expect(opens).toHaveLength(2)
-    expect(opens[0]?.remoteUrl).not.toBe(opens[1]?.remoteUrl)
-    expect(opens.map((opened) => opened.subject)).toEqual([
-      { kind: 'user', userId: 'submodule-owner' },
-      { kind: 'user', userId: 'submodule-owner' },
-    ])
-    expect(closes).toBe(2)
-  }, 120_000)
+      expect(result.meta.pushOutcome).toBe('commit-local-subrepo-failed')
+      expect(result.meta.subrepos?.[0]?.error).toBe('repository-push-authorization-failed')
+      expect(result.meta.pushError).toContain('repository-push-authorization-failed')
+      expect(openings).toBe(1)
+      expect(closes).toBe(1)
+    }, 120_000)
 
-  test('RFC-321 submodule authentication failure is stable and never reaches the parent remote', async () => {
-    const { parent } = await fixture(true)
-    writeFileSync(join(parent, 'vendor', 'a.txt'), 'rejected-submodule-credential\n')
-    let openings = 0
-    let closes = 0
-    const publicationTransport: RepositoryPublicationTransport = {
-      async open(input) {
-        openings += 1
-        return {
-          ok: true,
-          session: {
-            endpointUrl: input.remoteUrl,
-            receipt: {
-              credentialSource: 'personal',
-              credentialRevision: 3,
-              endpointSource: 'admin-mapping',
-              endpointBindingDigest: 'a'.repeat(64),
-            },
-            runNetwork(repoPath, args, options) {
-              return args.includes('push')
-                ? Promise.resolve({
-                    stdout: '',
-                    stderr: 'remote: Write access to repository not granted',
-                    exitCode: 1,
-                  })
-                : runGit(repoPath, [...args], options)
-            },
-            close() {
-              closes += 1
-            },
-          },
-        }
-      },
-    }
+    test('dirty submodule content is committed through — no longer skipped-empty', async () => {
+      const { parent } = await fixture(true)
+      // Agent edits INSIDE the submodule and leaves it uncommitted. The parent's
+      // `diff --cached` sees nothing, which used to end the run as skipped-empty.
+      writeFileSync(join(parent, 'vendor', 'a.txt'), 'edited-by-agent\n')
 
-    const result = await runCommitPush(
-      { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
-      composeSqliteCommitPushDeps(await db(parent), { publicationTransport }),
-    )
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(await seedTask(parent)),
+      )
+      expect(res.meta.pushOutcome).not.toBe('skipped-empty')
+      expect(res.meta.subrepos).toHaveLength(1)
+      expect(res.meta.subrepos?.[0]?.committed).toBe(true)
+      expect(res.meta.subrepos?.[0]?.pushed).toBe(true)
+      // The submodule is on a real branch now, not a detached HEAD.
+      const branch = await runGit(join(parent, 'vendor'), ['rev-parse', '--abbrev-ref', 'HEAD'])
+      expect(branch.stdout.trim()).toBe('agent-workflow/t1')
+    }, 120_000)
 
-    expect(result.meta.pushOutcome).toBe('commit-local-subrepo-failed')
-    expect(result.meta.subrepos?.[0]?.error).toBe('repository-push-authorization-failed')
-    expect(result.meta.pushError).toContain('repository-push-authorization-failed')
-    expect(openings).toBe(1)
-    expect(closes).toBe(1)
-  }, 120_000)
+    test('the submodule content actually reaches its remote', async () => {
+      const { parent, subOrigin } = await fixture(true)
+      writeFileSync(join(parent, 'vendor', 'a.txt'), 'published\n')
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(await seedTask(parent)),
+      )
+      const sha = res.meta.subrepos?.[0]?.toSha ?? ''
+      expect(sha).toMatch(/^[a-f0-9]{40}$/)
+      // A gitlink is only meaningful if the remote can resolve it — assert the
+      // branch the runner pushed points at exactly the commit it reported.
+      const onRemote = await runGit(subOrigin, ['rev-parse', 'refs/heads/agent-workflow/t1'])
+      expect(onRemote.exitCode).toBe(0)
+      expect(onRemote.stdout.trim()).toBe(sha)
+    }, 120_000)
 
-  test('dirty submodule content is committed through — no longer skipped-empty', async () => {
-    const { parent } = await fixture(true)
-    // Agent edits INSIDE the submodule and leaves it uncommitted. The parent's
-    // `diff --cached` sees nothing, which used to end the run as skipped-empty.
-    writeFileSync(join(parent, 'vendor', 'a.txt'), 'edited-by-agent\n')
+    test('RFC-308 parent mount exclusion skips the whole dirty submodule tree', async () => {
+      const { parent, subOrigin } = await fixture(true)
+      writeFileSync(join(parent, 'vendor', 'a.txt'), 'must stay local\n')
+      const before = (await runGit(subOrigin, ['rev-parse', 'refs/heads/main'])).stdout.trim()
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
-    expect(res.meta.pushOutcome).not.toBe('skipped-empty')
-    expect(res.meta.subrepos).toHaveLength(1)
-    expect(res.meta.subrepos?.[0]?.committed).toBe(true)
-    expect(res.meta.subrepos?.[0]?.pushed).toBe(true)
-    // The submodule is on a real branch now, not a detached HEAD.
-    const branch = await runGit(join(parent, 'vendor'), ['rev-parse', '--abbrev-ref', 'HEAD'])
-    expect(branch.stdout.trim()).toBe('agent-workflow/t1')
-  }, 120_000)
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent, excludePatterns: ['/vendor/'] },
+        composeSqliteCommitPushDeps(await seedTask(parent)),
+      )
+      expect(res.meta.pushOutcome).toBe('skipped-excluded')
+      expect(res.meta.exclusions?.paths).toEqual(['vendor'])
+      expect((await runGit(subOrigin, ['rev-parse', 'refs/heads/main'])).stdout.trim()).toBe(before)
+      expect(
+        (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1']))
+          .exitCode,
+      ).not.toBe(0)
+    }, 120_000)
 
-  test('the submodule content actually reaches its remote', async () => {
-    const { parent, subOrigin } = await fixture(true)
-    writeFileSync(join(parent, 'vendor', 'a.txt'), 'published\n')
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
-    const sha = res.meta.subrepos?.[0]?.toSha ?? ''
-    expect(sha).toMatch(/^[a-f0-9]{40}$/)
-    // A gitlink is only meaningful if the remote can resolve it — assert the
-    // branch the runner pushed points at exactly the commit it reported.
-    const onRemote = await runGit(subOrigin, ['rev-parse', 'refs/heads/agent-workflow/t1'])
-    expect(onRemote.exitCode).toBe(0)
-    expect(onRemote.stdout.trim()).toBe(sha)
-  }, 120_000)
+    test('RFC-308 child-root rules exclude submodule files before commit', async () => {
+      const { parent, subOrigin } = await fixture(true)
+      writeFileSync(join(parent, 'vendor', 'secret.tmp'), 'must stay local\n')
 
-  test('RFC-308 parent mount exclusion skips the whole dirty submodule tree', async () => {
-    const { parent, subOrigin } = await fixture(true)
-    writeFileSync(join(parent, 'vendor', 'a.txt'), 'must stay local\n')
-    const before = (await runGit(subOrigin, ['rev-parse', 'refs/heads/main'])).stdout.trim()
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent, excludePatterns: ['*.tmp'] },
+        composeSqliteCommitPushDeps(await seedTask(parent)),
+      )
+      expect(res.meta.pushOutcome).toBe('skipped-excluded')
+      expect(res.meta.exclusions?.paths).toEqual(['vendor/secret.tmp'])
+      expect(
+        (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1']))
+          .exitCode,
+      ).not.toBe(0)
+    }, 120_000)
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent, excludePatterns: ['/vendor/'] },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
-    expect(res.meta.pushOutcome).toBe('skipped-excluded')
-    expect(res.meta.exclusions?.paths).toEqual(['vendor'])
-    expect((await runGit(subOrigin, ['rev-parse', 'refs/heads/main'])).stdout.trim()).toBe(before)
-    expect(
-      (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1'])).exitCode,
-    ).not.toBe(0)
-  }, 120_000)
+    test('RFC-308 excluded pre-committed submodule history is visible and withheld', async () => {
+      const { parent, subOrigin } = await fixture(true)
+      const sub = join(parent, 'vendor')
+      writeFileSync(join(sub, 'leak.trace'), 'already committed by agent\n')
+      await runGit(sub, ['add', '-A'])
+      await runGit(sub, ['commit', '-q', '-m', 'agent leak'])
 
-  test('RFC-308 child-root rules exclude submodule files before commit', async () => {
-    const { parent, subOrigin } = await fixture(true)
-    writeFileSync(join(parent, 'vendor', 'secret.tmp'), 'must stay local\n')
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent, excludePatterns: ['*.trace'] },
+        composeSqliteCommitPushDeps(await seedTask(parent)),
+      )
+      expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
+      expect(res.meta.exclusions).toMatchObject({
+        paths: ['vendor/leak.trace'],
+        historyBlocked: true,
+      })
+      expect(
+        (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1']))
+          .exitCode,
+      ).not.toBe(0)
+    }, 120_000)
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent, excludePatterns: ['*.tmp'] },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
-    expect(res.meta.pushOutcome).toBe('skipped-excluded')
-    expect(res.meta.exclusions?.paths).toEqual(['vendor/secret.tmp'])
-    expect(
-      (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1'])).exitCode,
-    ).not.toBe(0)
-  }, 120_000)
+    test('a submodule that cannot be pushed WITHHOLDS the parent (no dangling gitlink)', async () => {
+      const { parent } = await fixture(false)
+      writeFileSync(join(parent, 'vendor', 'a.txt'), 'cannot-publish\n')
+      const parentHeadBefore = (await runGit(parent, ['rev-parse', 'HEAD'])).stdout.trim()
 
-  test('RFC-308 excluded pre-committed submodule history is visible and withheld', async () => {
-    const { parent, subOrigin } = await fixture(true)
-    const sub = join(parent, 'vendor')
-    writeFileSync(join(sub, 'leak.trace'), 'already committed by agent\n')
-    await runGit(sub, ['add', '-A'])
-    await runGit(sub, ['commit', '-q', '-m', 'agent leak'])
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(await seedTask(parent)),
+      )
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent, excludePatterns: ['*.trace'] },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
-    expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
-    expect(res.meta.exclusions).toMatchObject({
-      paths: ['vendor/leak.trace'],
-      historyBlocked: true,
-    })
-    expect(
-      (await runGit(subOrigin, ['show-ref', '--verify', 'refs/heads/agent-workflow/t1'])).exitCode,
-    ).not.toBe(0)
-  }, 120_000)
+      expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
+      expect(res.meta.subrepos?.[0]?.pushed).toBe(false)
+      expect(res.meta.subrepos?.[0]?.error).not.toBeNull()
+      // The parent must NOT have committed: pushing its gitlink bump would point
+      // the remote at a submodule commit nobody can fetch.
+      expect((await runGit(parent, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(parentHeadBefore)
+      expect(res.meta.commitSha).toBeNull()
+      // The submodule work is still committed LOCALLY — the user can retry.
+      expect(res.meta.subrepos?.[0]?.committed).toBe(true)
+      expect(readFileSync(join(parent, 'vendor', 'a.txt'), 'utf8')).toBe('cannot-publish\n')
+    }, 120_000)
 
-  test('a submodule that cannot be pushed WITHHOLDS the parent (no dangling gitlink)', async () => {
-    const { parent } = await fixture(false)
-    writeFileSync(join(parent, 'vendor', 'a.txt'), 'cannot-publish\n')
-    const parentHeadBefore = (await runGit(parent, ['rev-parse', 'HEAD'])).stdout.trim()
+    test('a repo with no submodules behaves exactly as before', async () => {
+      const plain = tmp('aw-rfc210-cp-plain-')
+      await initRepo(plain, 'f.txt', 'v1\n')
+      const remote = join(tmp('aw-rfc210-cp-plainrem-'), 'r.git')
+      await runGit(tmp('aw-rfc210-cp-z-'), ['init', '-q', '--bare', remote])
+      await runGit(plain, ['remote', 'add', 'origin', remote])
+      await runGit(plain, ['push', '-q', 'origin', 'main'])
+      await runGit(plain, ['checkout', '-q', '-b', 'agent-workflow/t1'])
+      writeFileSync(join(plain, 'f.txt'), 'v2\n')
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
-
-    expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
-    expect(res.meta.subrepos?.[0]?.pushed).toBe(false)
-    expect(res.meta.subrepos?.[0]?.error).not.toBeNull()
-    // The parent must NOT have committed: pushing its gitlink bump would point
-    // the remote at a submodule commit nobody can fetch.
-    expect((await runGit(parent, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(parentHeadBefore)
-    expect(res.meta.commitSha).toBeNull()
-    // The submodule work is still committed LOCALLY — the user can retry.
-    expect(res.meta.subrepos?.[0]?.committed).toBe(true)
-    expect(readFileSync(join(parent, 'vendor', 'a.txt'), 'utf8')).toBe('cannot-publish\n')
-  }, 120_000)
-
-  test('a repo with no submodules behaves exactly as before', async () => {
-    const plain = tmp('aw-rfc210-cp-plain-')
-    await initRepo(plain, 'f.txt', 'v1\n')
-    const remote = join(tmp('aw-rfc210-cp-plainrem-'), 'r.git')
-    await runGit(tmp('aw-rfc210-cp-z-'), ['init', '-q', '--bare', remote])
-    await runGit(plain, ['remote', 'add', 'origin', remote])
-    await runGit(plain, ['push', '-q', 'origin', 'main'])
-    await runGit(plain, ['checkout', '-q', '-b', 'agent-workflow/t1'])
-    writeFileSync(join(plain, 'f.txt'), 'v2\n')
-
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: plain },
-      composeSqliteCommitPushDeps(await db(plain)),
-    )
-    expect(res.meta.pushOutcome).toBe('pushed')
-    // No submodules ⟹ the field is omitted entirely, keeping these rows
-    // byte-identical to pre-RFC-210.
-    expect(res.meta.subrepos).toBeUndefined()
-  }, 120_000)
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: plain },
+        composeSqliteCommitPushDeps(await seedTask(plain)),
+      )
+      expect(res.meta.pushOutcome).toBe('pushed')
+      // No submodules ⟹ the field is omitted entirely, keeping these rows
+      // byte-identical to pre-RFC-210.
+      expect(res.meta.subrepos).toBeUndefined()
+    }, 120_000)
+  })
 })

@@ -16,14 +16,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { sql } from 'drizzle-orm'
-import { createInMemoryDb } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const created: string[] = []
 let prevGitGlobal: string | undefined
 const gitCfgDir = mkdtempSync(join(tmpdir(), 'aw-rfc210-cpn-cfg-'))
@@ -99,20 +99,43 @@ async function fixture(): Promise<{ parent: string; vendorSrc: string; innerSrc:
   return { parent, vendorSrc, innerSrc }
 }
 
-/** Same raw-SQL seeding as the sibling commit-push suites (explicit columns). */
-async function db(repo: string) {
-  const client = createInMemoryDb(MIGRATIONS)
-  await client.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
-  await client.run(sql`
-    INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-      base_branch, branch, status, inputs, started_at, schema_version)
-    VALUES ('t1', 'cp', 'wf', '{}', ${repo}, ${repo}, 'main', 'agent-workflow/t1', 'running', '{}', 1, 1)
-  `)
-  await client.run(sql`
-    INSERT INTO node_runs (id, task_id, node_id, status, retry_index, iteration, started_at)
-    VALUES ('parent-run', 't1', 'writer', 'done', 0, 0, 1)
-  `)
-  return client
+/**
+ * RFC-359 AC-6: the same explicit columns the sibling commit-push suites seed, but
+ * through the neutral query builder instead of `INSERT INTO …` text — the raw
+ * statements only parsed against the bun:sqlite dialect.
+ */
+async function seedTask(db: ProviderNeutralDatabase, repo: string): Promise<void> {
+  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
+  await db.insert(tasks).values({
+    id: 't1',
+    name: 'cp',
+    workflowId: 'wf',
+    workflowSnapshot: '{}',
+    repoPath: repo,
+    worktreePath: repo,
+    baseBranch: 'main',
+    branch: 'agent-workflow/t1',
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+    schemaVersion: 1,
+    // The SQLite-only `rfc328_tasks_lineage_after_insert` trigger has no PostgreSQL
+    // counterpart by design, so a direct fixture INSERT writes both causal columns
+    // itself (root task ⇒ lineage id = own id, single `task-root` frame).
+    executionLineageId: 't1',
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
+    ]),
+  })
+  await db.insert(nodeRuns).values({
+    id: 'parent-run',
+    taskId: 't1',
+    nodeId: 'writer',
+    status: 'done',
+    retryIndex: 0,
+    iteration: 0,
+    startedAt: 1,
+  })
 }
 
 const baseParams = {
@@ -130,78 +153,84 @@ const baseParams = {
   generateRepair: async () => ({ message: null }),
 }
 
-describe('RFC-210 — nested pre-committed submodule push', () => {
-  test('a clean-but-ahead vendor/inner is pushed before its parents publish gitlinks', async () => {
-    const { parent, vendorSrc, innerSrc } = await fixture()
-    // The agent commits INSIDE inner itself — inner ends up CLEAN but ahead of
-    // the gitlink vendor records. This is the exact shape the superproject-level
-    // `rev-parse HEAD:vendor/inner` probe could not see.
-    const inner = join(parent, 'vendor', 'inner')
-    writeFileSync(join(inner, 'i.txt'), 'agent-work\n')
-    await runGit(inner, ['add', '-A'])
-    await runGit(inner, [
-      '-c',
-      'user.email=t@e.com',
-      '-c',
-      'user.name=T',
-      'commit',
-      '-q',
-      '-m',
-      'agent commit in inner',
-    ])
-    const innerSha = (await runGit(inner, ['rev-parse', 'HEAD'])).stdout.trim()
+// RFC-359 AC-6：同一段判据在两个引擎上各跑一遍。每个用例的 git 夹具都是现建的
+// `mkdtemp` 目录，两个引擎因此各拿一份全新的仓库，不会相互继承提交。
+describeEachProvider('RFC-210 嵌套子仓预提交推送（双引擎）', (harness) => {
+  describe('RFC-210 — nested pre-committed submodule push', () => {
+    test('a clean-but-ahead vendor/inner is pushed before its parents publish gitlinks', async () => {
+      const { parent, vendorSrc, innerSrc } = await fixture()
+      // The agent commits INSIDE inner itself — inner ends up CLEAN but ahead of
+      // the gitlink vendor records. This is the exact shape the superproject-level
+      // `rev-parse HEAD:vendor/inner` probe could not see.
+      const inner = join(parent, 'vendor', 'inner')
+      writeFileSync(join(inner, 'i.txt'), 'agent-work\n')
+      await runGit(inner, ['add', '-A'])
+      await runGit(inner, [
+        '-c',
+        'user.email=t@e.com',
+        '-c',
+        'user.name=T',
+        'commit',
+        '-q',
+        '-m',
+        'agent commit in inner',
+      ])
+      const innerSha = (await runGit(inner, ['rev-parse', 'HEAD'])).stdout.trim()
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
+      await seedTask(harness.db, parent)
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(harness.db),
+      )
 
-    expect(res.meta.pushOutcome).toBe('pushed')
-    const paths = (res.meta.subrepos ?? []).map((s) => s.path)
-    expect(paths).toContain('vendor/inner')
-    expect(paths).toContain('vendor')
-    // Bottom-up: inner settles before vendor stages its gitlink.
-    expect(paths.indexOf('vendor/inner')).toBeLessThan(paths.indexOf('vendor'))
+      expect(res.meta.pushOutcome).toBe('pushed')
+      const paths = (res.meta.subrepos ?? []).map((s) => s.path)
+      expect(paths).toContain('vendor/inner')
+      expect(paths).toContain('vendor')
+      // Bottom-up: inner settles before vendor stages its gitlink.
+      expect(paths.indexOf('vendor/inner')).toBeLessThan(paths.indexOf('vendor'))
 
-    // inner's remote actually has the agent commit — the dangling-gitlink hole.
-    const onInnerRemote = await runGit(innerSrc, ['rev-parse', 'refs/heads/agent-workflow/t1'])
-    expect(onInnerRemote.exitCode).toBe(0)
-    expect(onInnerRemote.stdout.trim()).toBe(innerSha)
+      // inner's remote actually has the agent commit — the dangling-gitlink hole.
+      const onInnerRemote = await runGit(innerSrc, ['rev-parse', 'refs/heads/agent-workflow/t1'])
+      expect(onInnerRemote.exitCode).toBe(0)
+      expect(onInnerRemote.stdout.trim()).toBe(innerSha)
 
-    // vendor's pushed branch records exactly that inner sha…
-    const vendorRecorded = await runGit(vendorSrc, [
-      'rev-parse',
-      'refs/heads/agent-workflow/t1:inner',
-    ])
-    expect(vendorRecorded.exitCode).toBe(0)
-    expect(vendorRecorded.stdout.trim()).toBe(innerSha)
+      // vendor's pushed branch records exactly that inner sha…
+      const vendorRecorded = await runGit(vendorSrc, [
+        'rev-parse',
+        'refs/heads/agent-workflow/t1:inner',
+      ])
+      expect(vendorRecorded.exitCode).toBe(0)
+      expect(vendorRecorded.stdout.trim()).toBe(innerSha)
 
-    // …and the superproject's pushed branch records vendor's pushed commit —
-    // every layer of the chain is resolvable by a fresh clone.
-    const vendorPushed = await runGit(vendorSrc, ['rev-parse', 'refs/heads/agent-workflow/t1'])
-    const superRecorded = await runGit(parent, [
-      'rev-parse',
-      `refs/remotes/origin/agent-workflow/t1:vendor`,
-    ])
-    expect(superRecorded.stdout.trim()).toBe(vendorPushed.stdout.trim())
-  }, 120_000)
+      // …and the superproject's pushed branch records vendor's pushed commit —
+      // every layer of the chain is resolvable by a fresh clone.
+      const vendorPushed = await runGit(vendorSrc, ['rev-parse', 'refs/heads/agent-workflow/t1'])
+      const superRecorded = await runGit(parent, [
+        'rev-parse',
+        `refs/remotes/origin/agent-workflow/t1:vendor`,
+      ])
+      expect(superRecorded.stdout.trim()).toBe(vendorPushed.stdout.trim())
+    }, 120_000)
 
-  test('untouched nested submodules still get no branch refs at all (A8 preserved)', async () => {
-    const { parent, vendorSrc, innerSrc } = await fixture()
-    // Only a PARENT-level change; vendor and inner are untouched.
-    writeFileSync(join(parent, 'README.md'), 'root v2\n')
+    test('untouched nested submodules still get no branch refs at all (A8 preserved)', async () => {
+      const { parent, vendorSrc, innerSrc } = await fixture()
+      // Only a PARENT-level change; vendor and inner are untouched.
+      writeFileSync(join(parent, 'README.md'), 'root v2\n')
 
-    const res = await runCommitPush(
-      { ...baseParams, worktreePath: parent },
-      composeSqliteCommitPushDeps(await db(parent)),
-    )
-    expect(res.meta.pushOutcome).toBe('pushed')
-    expect(res.meta.subrepos).toBeUndefined()
-    // The fixed recorded-sha resolution must not misread "untouched" as
-    // "moved": no working branch may appear in either submodule origin.
-    for (const src of [vendorSrc, innerSrc]) {
-      const ref = await runGit(src, ['rev-parse', '--verify', 'refs/heads/agent-workflow/t1'])
-      expect(ref.exitCode).not.toBe(0)
-    }
-  }, 120_000)
+      await seedTask(harness.db, parent)
+      const res = await runCommitPush(
+        { ...baseParams, worktreePath: parent },
+        composeSqliteCommitPushDeps(harness.db),
+      )
+      expect(res.meta.pushOutcome).toBe('pushed')
+      expect(res.meta.subrepos).toBeUndefined()
+      // The fixed recorded-sha resolution must not misread "untouched" as
+      // "moved": no working branch may appear in either submodule origin.
+      for (const src of [vendorSrc, innerSrc]) {
+        const ref = await runGit(src, ['rev-parse', '--verify', 'refs/heads/agent-workflow/t1'])
+        expect(ref.exitCode).not.toBe(0)
+      }
+    }, 120_000)
+  })
 })

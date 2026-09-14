@@ -172,7 +172,19 @@ describe('RFC-349 resource-limit provider seam', () => {
     ).toBe(true)
     // One process-wide live-write marker plus a generation fence per write.
     expect(statements.filter((query) => query.includes('database_generations'))).toHaveLength(3)
-    expect(fixture.releases).toBe(2)
+    // RFC-359 AC-11：这里原本是 `toBe(2)`——两笔写各 reserve 一条连接。现在只剩 1，
+    // 因为**单行 INSERT 的围栏被折进语句自己**（`postgresqlDatabaseClient.ts` 的
+    // `foldGenerationFenceIntoInsert`），那一笔写不再开 `BEGIN`/`COMMIT`、也就不必 reserve；
+    // UPDATE 不在可折范围内，照旧走四往返路径，贡献这仅有的 1 次。
+    expect(fixture.releases).toBe(1)
+    // 只锁次数会让「把折叠改回去」悄悄变绿（次数会涨回 2，但没人会注意到那是回归）。
+    // 所以同时锁形状：那笔 INSERT 必须**自带**围栏谓词，UPDATE 必须**不**自带。
+    const insert = statements.find((query) =>
+      query.includes('insert into "agent_workflow"."recovery_events"'),
+    )
+    const update = statements.find((query) => query.includes('update "agent_workflow"."tasks"'))
+    expect(insert).toContain('database_generations')
+    expect(update).not.toContain('database_generations')
   })
 
   test('service and the shared adapter prohibit direct DB facade casts and SQLite fallback', () => {

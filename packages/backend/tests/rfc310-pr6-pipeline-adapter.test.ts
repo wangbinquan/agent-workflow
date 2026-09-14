@@ -12,17 +12,26 @@
 // CLI 子进程连 startPipelineProviderMock 的形态与 PR-3 requirement CLI E2E
 // 同款（本机与 CI 均实测可达；主 session 踩的坑仅限 suite gateway 形态）。
 
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import {
   startPipelineProviderMock,
   type StartedPipelineProviderMock,
 } from '@agent-workflow/system-mocks'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
@@ -34,7 +43,6 @@ import type { DevelopmentAdapterOperation } from '../src/modules/integration/dom
 
 setDefaultTimeout(120_000)
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const PIPELINE_CLI = Bun.resolveSync(
   '@agent-workflow/system-mocks/development/pipeline-adapter-cli',
   import.meta.dir,
@@ -44,7 +52,7 @@ const HEAD = 'a1'.repeat(20)
 const TARGET = 'b2'.repeat(20)
 
 let provider: StartedPipelineProviderMock
-let db: DbClient
+let db: ProviderNeutralDatabase
 
 async function publishAdapter(input: {
   readonly name: string
@@ -96,226 +104,236 @@ function runner(): ReturnType<typeof createPipelineEvidenceAdapter> {
 
 beforeAll(async () => {
   provider = await startPipelineProviderMock()
-  db = createInMemoryDb(MIGRATIONS)
 })
 
 afterAll(async () => {
   await provider.close()
-  db.$client.close()
 })
 
-describe('rfc310 pr6 T63 — pipeline adapter execution chain', () => {
-  test('collect stages logs into the sink and reports head-bound complete gates', async () => {
-    provider.mock.seed({
-      headSha: HEAD,
-      targetSha: TARGET,
-      gates: [
-        {
-          gateKey: 'unit',
-          required: true,
-          status: 'fail',
-          runRef: 'run-1',
-          attempt: 1,
-          retryability: 'safe',
-          failureCategories: ['unit-test'],
-          logs: [{ logId: 'l1', bytes: 5_000 }],
-        },
-      ],
-    })
-    const binding = await publishAdapter({
-      name: 'pg-full',
-      purpose: 'pipeline-gate',
-      operations: ['collect', 'trigger', 'rerun'],
-    })
-    const sink = mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-'))
-    const out = await runner().collect({
-      adapterBindingRef: binding,
-      headSha: HEAD,
-      targetSha: TARGET,
-      gateKeys: ['unit'],
-      sinkPath: sink,
-    })
-    expect(out.ok).toBe(true)
-    if (!out.ok) return
-    expect(out.envelope.completeness).toBe('complete')
-    expect(out.envelope.providerHeadSha).toBe(HEAD)
-    expect(out.envelope.gates[0]).toMatchObject({
-      gateKey: 'unit',
-      status: 'fail',
-      failureCategories: ['unit-test'],
-    })
-    const logFile = join(sink, 'logs', 'unit', 'l1.log')
-    expect(existsSync(logFile)).toBe(true)
-    expect(readFileSync(logFile, 'utf8').length).toBe(5_000)
-    expect(out.outputBudget).toMatchObject({ maxFiles: 64 })
-
-    // trigger：新建 run；同 key 二次 adopt。
-    const t1 = await runner().trigger({
-      adapterBindingRef: binding,
-      headSha: HEAD,
-      gateKeys: ['deploy-check'],
-      idempotencyKey: 'trig-a',
-      sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
-    })
-    expect(t1.ok).toBe(true)
-    if (!t1.ok) return
-    expect(t1.envelope.adopted).toBe(false)
-    const t2 = await runner().trigger({
-      adapterBindingRef: binding,
-      headSha: HEAD,
-      gateKeys: ['deploy-check'],
-      idempotencyKey: 'trig-a',
-      sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
-    })
-    expect(t2.ok).toBe(true)
-    if (!t2.ok) return
-    expect(t2.envelope.adopted).toBe(true)
-    expect(t2.envelope.runRef).toBe(t1.envelope.runRef)
-
-    // rerun：attempt 递增，receipt 绑定 exact head。
-    const r1 = await runner().rerun({
-      adapterBindingRef: binding,
-      runRef: 'run-1',
-      gateKey: 'unit',
-      headSha: HEAD,
-      idempotencyKey: 'rerun-a',
-      sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
-    })
-    expect(r1.ok).toBe(true)
-    if (!r1.ok) return
-    expect(r1.envelope.attempt).toBe(2)
-    expect(r1.envelope.headSha).toBe(HEAD)
+describeEachProvider('RFC-310 PR-6 流水线 adapter（双引擎）', (harness: ProviderHarness) => {
+  beforeEach(() => {
+    db = harness.db
+    // The provider mock lives OUT of the database, so the harness's per-test
+    // TRUNCATE does not reach it: its idempotency tables (`trig-a` / `rerun-a`)
+    // would otherwise survive into the second engine's pass and turn the
+    // first-trigger `adopted: false` assertion into `true`. One database reset
+    // per test ⟹ one mock reset per test.
+    provider.mock.reset()
   })
 
-  test('partial provider (no head binding) yields completeness=partial with null head', async () => {
-    const head = 'c3'.repeat(20)
-    provider.mock.seed({
-      headSha: head,
-      targetSha: TARGET,
-      gates: [
-        {
-          gateKey: 'unit',
-          required: true,
-          status: 'pass',
-          runRef: 'p-run',
-          attempt: 1,
-          retryability: 'safe',
-          failureCategories: [],
-          logs: [],
-        },
-      ],
-      partial: true,
-    })
-    const binding = await publishAdapter({
-      name: 'pg-partial',
-      purpose: 'pipeline-gate',
-      operations: ['collect'],
-    })
-    const out = await runner().collect({
-      adapterBindingRef: binding,
-      headSha: head,
-      targetSha: TARGET,
-      gateKeys: ['unit'],
-      sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
-    })
-    expect(out.ok).toBe(true)
-    if (!out.ok) return
-    expect(out.envelope.completeness).toBe('partial')
-    expect(out.envelope.providerHeadSha).toBeNull()
-  })
+  describe('rfc310 pr6 T63 — pipeline adapter execution chain', () => {
+    test('collect stages logs into the sink and reports head-bound complete gates', async () => {
+      provider.mock.seed({
+        headSha: HEAD,
+        targetSha: TARGET,
+        gates: [
+          {
+            gateKey: 'unit',
+            required: true,
+            status: 'fail',
+            runRef: 'run-1',
+            attempt: 1,
+            retryability: 'safe',
+            failureCategories: ['unit-test'],
+            logs: [{ logId: 'l1', bytes: 5_000 }],
+          },
+        ],
+      })
+      const binding = await publishAdapter({
+        name: 'pg-full',
+        purpose: 'pipeline-gate',
+        operations: ['collect', 'trigger', 'rerun'],
+      })
+      const sink = mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-'))
+      const out = await runner().collect({
+        adapterBindingRef: binding,
+        headSha: HEAD,
+        targetSha: TARGET,
+        gateKeys: ['unit'],
+        sinkPath: sink,
+      })
+      expect(out.ok).toBe(true)
+      if (!out.ok) return
+      expect(out.envelope.completeness).toBe('complete')
+      expect(out.envelope.providerHeadSha).toBe(HEAD)
+      expect(out.envelope.gates[0]).toMatchObject({
+        gateKey: 'unit',
+        status: 'fail',
+        failureCategories: ['unit-test'],
+      })
+      const logFile = join(sink, 'logs', 'unit', 'l1.log')
+      expect(existsSync(logFile)).toBe(true)
+      expect(readFileSync(logFile, 'utf8').length).toBe(5_000)
+      expect(out.outputBudget).toMatchObject({ maxFiles: 64 })
 
-  test('paired-constraint runtime half: undeclared operation and wrong purpose are refused', async () => {
-    const collectOnly = await publishAdapter({
-      name: 'pg-collect-only',
-      purpose: 'pipeline-gate',
-      operations: ['collect'],
-    })
-    const trigger = await runner().trigger({
-      adapterBindingRef: collectOnly,
-      headSha: HEAD,
-      gateKeys: ['unit'],
-      idempotencyKey: 'nope',
-      sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
-    })
-    expect(trigger.ok).toBe(false)
-    if (trigger.ok) return
-    expect(trigger.failure.code).toBe('operation-not-declared')
+      // trigger：新建 run；同 key 二次 adopt。
+      const t1 = await runner().trigger({
+        adapterBindingRef: binding,
+        headSha: HEAD,
+        gateKeys: ['deploy-check'],
+        idempotencyKey: 'trig-a',
+        sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+      })
+      expect(t1.ok).toBe(true)
+      if (!t1.ok) return
+      expect(t1.envelope.adopted).toBe(false)
+      const t2 = await runner().trigger({
+        adapterBindingRef: binding,
+        headSha: HEAD,
+        gateKeys: ['deploy-check'],
+        idempotencyKey: 'trig-a',
+        sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+      })
+      expect(t2.ok).toBe(true)
+      if (!t2.ok) return
+      expect(t2.envelope.adopted).toBe(true)
+      expect(t2.envelope.runRef).toBe(t1.envelope.runRef)
 
-    const wrongPurpose = await publishAdapter({
-      name: 'req-as-pipeline',
-      purpose: 'requirement-source',
-      operations: ['acquire'],
+      // rerun：attempt 递增，receipt 绑定 exact head。
+      const r1 = await runner().rerun({
+        adapterBindingRef: binding,
+        runRef: 'run-1',
+        gateKey: 'unit',
+        headSha: HEAD,
+        idempotencyKey: 'rerun-a',
+        sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+      })
+      expect(r1.ok).toBe(true)
+      if (!r1.ok) return
+      expect(r1.envelope.attempt).toBe(2)
+      expect(r1.envelope.headSha).toBe(HEAD)
     })
-    const out = await runner().collect({
-      adapterBindingRef: wrongPurpose,
-      headSha: HEAD,
-      targetSha: TARGET,
-      gateKeys: ['unit'],
-      sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
-    })
-    expect(out.ok).toBe(false)
-    if (out.ok) return
-    expect(out.failure.code).toBe('adapter-purpose-mismatch')
 
-    const missing = await runner().collect({
-      adapterBindingRef: '01UNKNOWN@1',
-      headSha: HEAD,
-      targetSha: TARGET,
-      gateKeys: ['unit'],
-      sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+    test('partial provider (no head binding) yields completeness=partial with null head', async () => {
+      const head = 'c3'.repeat(20)
+      provider.mock.seed({
+        headSha: head,
+        targetSha: TARGET,
+        gates: [
+          {
+            gateKey: 'unit',
+            required: true,
+            status: 'pass',
+            runRef: 'p-run',
+            attempt: 1,
+            retryability: 'safe',
+            failureCategories: [],
+            logs: [],
+          },
+        ],
+        partial: true,
+      })
+      const binding = await publishAdapter({
+        name: 'pg-partial',
+        purpose: 'pipeline-gate',
+        operations: ['collect'],
+      })
+      const out = await runner().collect({
+        adapterBindingRef: binding,
+        headSha: head,
+        targetSha: TARGET,
+        gateKeys: ['unit'],
+        sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+      })
+      expect(out.ok).toBe(true)
+      if (!out.ok) return
+      expect(out.envelope.completeness).toBe('partial')
+      expect(out.envelope.providerHeadSha).toBeNull()
     })
-    expect(missing.ok).toBe(false)
-    if (missing.ok) return
-    expect(missing.failure.code).toBe('adapter-binding-unresolved')
-  })
 
-  test('fixture backdoor: same envelope contract without any network', async () => {
-    const fixturePath = join(mkdtempSync(join(tmpdir(), 'rfc310-pr6-fixture-')), 'pipeline.json')
-    writeFileSync(
-      fixturePath,
-      JSON.stringify({
-        pipeline: {
-          headSha: HEAD,
-          targetSha: TARGET,
-          gates: [
-            {
-              gateKey: 'unit',
-              required: true,
-              status: 'fail',
-              runRef: 'fx-run',
-              attempt: 3,
-              retryability: 'unsafe',
-              failureCategories: ['compile'],
-              logs: [{ logId: 'fx', bytes: 11 }],
-            },
-          ],
-        },
-        logFiles: { 'logs/unit/fx.log': 'hello logs\n' },
-      }),
-    )
-    const store = createDevelopmentAdapterStore(db)
-    const adapter = createPipelineEvidenceAdapter({
-      resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
-        store.getRevision(id, revision),
-      ),
-      extraEnv: { AW_PIPELINE_FIXTURE_JSON: fixturePath },
+    test('paired-constraint runtime half: undeclared operation and wrong purpose are refused', async () => {
+      const collectOnly = await publishAdapter({
+        name: 'pg-collect-only',
+        purpose: 'pipeline-gate',
+        operations: ['collect'],
+      })
+      const trigger = await runner().trigger({
+        adapterBindingRef: collectOnly,
+        headSha: HEAD,
+        gateKeys: ['unit'],
+        idempotencyKey: 'nope',
+        sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+      })
+      expect(trigger.ok).toBe(false)
+      if (trigger.ok) return
+      expect(trigger.failure.code).toBe('operation-not-declared')
+
+      const wrongPurpose = await publishAdapter({
+        name: 'req-as-pipeline',
+        purpose: 'requirement-source',
+        operations: ['acquire'],
+      })
+      const out = await runner().collect({
+        adapterBindingRef: wrongPurpose,
+        headSha: HEAD,
+        targetSha: TARGET,
+        gateKeys: ['unit'],
+        sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+      })
+      expect(out.ok).toBe(false)
+      if (out.ok) return
+      expect(out.failure.code).toBe('adapter-purpose-mismatch')
+
+      const missing = await runner().collect({
+        adapterBindingRef: '01UNKNOWN@1',
+        headSha: HEAD,
+        targetSha: TARGET,
+        gateKeys: ['unit'],
+        sinkPath: mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-')),
+      })
+      expect(missing.ok).toBe(false)
+      if (missing.ok) return
+      expect(missing.failure.code).toBe('adapter-binding-unresolved')
     })
-    const binding = await publishAdapter({
-      name: 'pg-fixture',
-      purpose: 'pipeline-gate',
-      operations: ['collect'],
+
+    test('fixture backdoor: same envelope contract without any network', async () => {
+      const fixturePath = join(mkdtempSync(join(tmpdir(), 'rfc310-pr6-fixture-')), 'pipeline.json')
+      writeFileSync(
+        fixturePath,
+        JSON.stringify({
+          pipeline: {
+            headSha: HEAD,
+            targetSha: TARGET,
+            gates: [
+              {
+                gateKey: 'unit',
+                required: true,
+                status: 'fail',
+                runRef: 'fx-run',
+                attempt: 3,
+                retryability: 'unsafe',
+                failureCategories: ['compile'],
+                logs: [{ logId: 'fx', bytes: 11 }],
+              },
+            ],
+          },
+          logFiles: { 'logs/unit/fx.log': 'hello logs\n' },
+        }),
+      )
+      const store = createDevelopmentAdapterStore(db)
+      const adapter = createPipelineEvidenceAdapter({
+        resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
+          store.getRevision(id, revision),
+        ),
+        extraEnv: { AW_PIPELINE_FIXTURE_JSON: fixturePath },
+      })
+      const binding = await publishAdapter({
+        name: 'pg-fixture',
+        purpose: 'pipeline-gate',
+        operations: ['collect'],
+      })
+      const sink = mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-'))
+      const out = await adapter.collect({
+        adapterBindingRef: binding,
+        headSha: HEAD,
+        targetSha: TARGET,
+        gateKeys: ['unit'],
+        sinkPath: sink,
+      })
+      expect(out.ok).toBe(true)
+      if (!out.ok) return
+      expect(out.envelope.gates[0]).toMatchObject({ attempt: 3, retryability: 'unsafe' })
+      expect(readFileSync(join(sink, 'logs', 'unit', 'fx.log'), 'utf8')).toBe('hello logs\n')
     })
-    const sink = mkdtempSync(join(tmpdir(), 'rfc310-pr6-sink-'))
-    const out = await adapter.collect({
-      adapterBindingRef: binding,
-      headSha: HEAD,
-      targetSha: TARGET,
-      gateKeys: ['unit'],
-      sinkPath: sink,
-    })
-    expect(out.ok).toBe(true)
-    if (!out.ok) return
-    expect(out.envelope.gates[0]).toMatchObject({ attempt: 3, retryability: 'unsafe' })
-    expect(readFileSync(join(sink, 'logs', 'unit', 'fx.log'), 'utf8')).toBe('hello logs\n')
   })
 })

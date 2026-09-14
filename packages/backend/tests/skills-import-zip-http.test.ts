@@ -7,9 +7,7 @@ import { zipSync, type Zippable } from 'fflate'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import { join } from 'node:path'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -18,9 +16,8 @@ import {
 } from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-interface H<TDb extends ProviderNeutralDatabase = DbClient, TApp = Hono> {
+interface H<TDb extends ProviderNeutralDatabase, TApp = Hono> {
   db: TDb
   app: TApp
   appHome: string
@@ -63,13 +60,6 @@ function buildWithPorts<TDb extends ProviderNeutralDatabase, TApp>(
       else process.env.AGENT_WORKFLOW_HOME = prev
     },
   }
-}
-
-function build(): H {
-  return buildWithPorts(
-    () => createInMemoryDb(MIGRATIONS),
-    (input) => createApp(input),
-  )
 }
 
 function registerProviderApplication(
@@ -177,14 +167,6 @@ registerProviderApplication('POST /api/skills/import-zip/parse', (useApplication
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('zip-file-missing')
   })
-})
-
-describe('POST /api/skills/import-zip/parse (native slice 2)', () => {
-  let h: H
-  beforeEach(() => {
-    h = build()
-  })
-  afterEach(() => h.cleanup())
 
   test('zip-traversal payload → 422 zip-traversal', async () => {
     const zip = zipSync({ '../escape.md': new TextEncoder().encode('x') })
@@ -312,14 +294,6 @@ registerProviderApplication('POST /api/skills/import-zip/commit', (useApplicatio
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('zip-decisions-invalid')
   })
-})
-
-describe('POST /api/skills/import-zip/commit (native slice 2)', () => {
-  let h: H
-  beforeEach(() => {
-    h = build()
-  })
-  afterEach(() => h.cleanup())
 
   test('legacy name-only overwrite decision is rejected fail-closed', async () => {
     const zip = makeZip({ 'skill-a/SKILL.md': skillMd('skill-a') })
