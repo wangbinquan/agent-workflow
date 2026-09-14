@@ -5225,3 +5225,42 @@ packages/backend/tests/rfc311-repos-page.test.ts`。
    provider 走同一条」：**同一条操作在一个 provider 上有、另一个上没有，本身就是分叉**。
 
 倾向 ②（它同时销掉一条 provider 分叉），但先记在这里，不在别人的 RFC 里顺手改。
+
+## 覆盖 PG 侧 `provider.telemetry` 会泄一条连接（2026-09-14 实测，未修）
+
+**现象**：把测试作用域的 `provider.telemetry` 从 `binding.runtime.telemetry` 换成一份自造的
+遥测函数之后，PostgreSQL 道多出一格 **`(unnamed)` 失败**：
+
+```
+PostgresError: Connection closed
+ code: "ERR_POSTGRES_CONNECTION_CLOSED"
+      at wrapPostgresError (internal:sql/postgres:171:10)
+      at #onClose (internal:sql/postgres:347:30)
+```
+
+不是断言失败——是一条**没人接的 promise 在连接池关掉之后才 reject**，于是挂在文件级、
+被记成一格匿名失败。九条真判据全过。
+
+**隔离过程**（三步，每步只改一个变量）：
+
+| 改动 | PG 结果 |
+| --- | --- |
+| 只把 `maintenanceStatus` 从作用域喂进去 | 无泄漏 |
+| 只把 `databaseTelemetry` 并进 `ProviderHttpApplicationInput` 的 Pick（经 `...input` 展开） | 无泄漏（PG 侧忽略它，见下） |
+| 额外把 `provider.telemetry` 覆盖成自造函数 | **泄漏复现** |
+
+所以根因是覆盖 `provider.telemetry` 本身，不是多喂了一个 key。
+`binding.runtime.telemetry` 是 `postgresqlRuntime.ts:431` 的 `poolWaitTelemetry.snapshot`，
+与连接池的等待采样绑在一起；换掉它之后池的收尾路径就留了尾巴。
+**它不只是个只读快照函数**——这一点与直觉相反，值得记下来。
+
+**连带的事实**：`cli/postgresqlDaemonApplication.ts:1929` 把路由的
+`databaseTelemetry` 硬接成 `input.provider.telemetry`，所以从 `AppDeps` 喂进去的
+`databaseTelemetry` 在 PG 侧**被静默忽略**（SQLite 侧则正常生效）。这就是
+`rfc338-maintenance-status` 那条「注入一份伪造投影、断言路由原样回显」的用例至今只能单引擎的
+原因——不是测试写法问题。
+
+**处置**（需要 `src/` 改动，单独立一刀）：让 PG 根的 `databaseTelemetry` 可被入参覆盖而
+**不去动 `provider.telemetry`**，例如 `databaseTelemetry: input.databaseTelemetry ?? input.provider.telemetry`。
+两处各一行，之后那条用例并进双引擎块、判据一个字不用改。本次没做——它是生产改动，
+且「覆盖 telemetry 会泄连接」这件事本身也该先弄清楚是不是该修。
