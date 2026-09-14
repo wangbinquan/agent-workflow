@@ -5186,3 +5186,42 @@ ubuntu 分片 2/12，`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer`，已�
 
 **剩下的活**：其余 ~30 处逐条核实并在调用点补 `.catch`（内部已 try/catch 的补一条永不触发的也无害，
 反而把「这里为什么安全」搬进代码），账本随之降到 0。
+
+## 操作目录的「声明」是进程全局的，「挂载」是单个 app 的——两个 provider 根一起进同一个进程就炸（2026-09-14 实测，未修）
+
+**复现（两个文件，缺一不可，顺序无关）：**
+
+```
+cd packages/backend
+AW_TEST_PROVIDERS=sqlite bun test tests/rfc305-architecture-lock.test.ts tests/rfc311-repos-page.test.ts
+# error: system-operations.get-database-runtime.v1: declared operation has no mounted binding
+```
+
+两个文件**各自单跑都绿**。换成别的建 app 的测试（`rfc311-task-page-fastpath` /
+`rfc310-pr9-cutover` / `rfc257-webhook-ingress`）都不复现——只有这一对。
+
+**机制**：`platform/operations/catalog.ts:719` 遍历 `snapshot.declarations`，要求每条声明都有
+挂载的路由。而声明集是**进程全局**、靠模块 import 副作用累积的；挂载集属于**某一个 app**。
+`rfc311-repos-page` 经 `tests/helpers/providerHttpApplication.ts` 的
+`createProviderHttpApplication` 把 **PostgreSQL 组合根**也加载进同一个进程，于是
+`system-operations.get-database-runtime.v1`（`modules/system-operations/public/operations.ts:291`，
+数据库迁移那族，只在 PG 侧组合）进了全局声明集；随后 `rfc305-architecture-lock` 里的
+`createApp(...)`（SQLite 侧）挂的路由里没有它，闭合检查就抛。
+
+**为什么 CI 一直没红**：后端测试是分片跑的，这两个文件落在不同分片里。这不是「不会发生」，
+是「还没撞上」——分片一变就会红，而且红的原因与改动者本次工作毫无关系（同
+§「本地门禁看到的是别人写入的中间态」那条的归因困境）。
+
+**不是本次改动引入的**：`rfc311-repos-page` 在 `a6f9e9e89` 里的改动只是去掉六处
+`.run()`（且原本都已 `await`）与扩写注释，见 `git diff f03eee666 a6f9e9e89 --
+packages/backend/tests/rfc311-repos-page.test.ts`。
+
+**两条候选处置，选哪条带设计分量，需要单独裁决：**
+
+1. **声明集按 app 限定**——闭合检查只看「这个 app 应当声明的那些」，而不是「进程里恰好被
+   import 过的那些」。治本，但要给声明集引入作用域概念。
+2. **把 `get-database-runtime` 在两个 provider 上都挂上**——它读的是「当前库的 provider 与
+   generation」，SQLite 侧同样答得出来。顺带对齐 RFC-359 AC-2「boot 序列只有一份，两个
+   provider 走同一条」：**同一条操作在一个 provider 上有、另一个上没有，本身就是分叉**。
+
+倾向 ②（它同时销掉一条 provider 分叉），但先记在这里，不在别人的 RFC 里顺手改。
