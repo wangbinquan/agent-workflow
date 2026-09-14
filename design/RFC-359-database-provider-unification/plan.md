@@ -10929,12 +10929,19 @@ custom 估 12.63 —— 估得更便宜所以被采纳，而那 8.47 建立在�
 ### 于是 AC-11 的账重新算
 
 - **真缺陷 1 个**，已修、已带守卫：workgroup 探针的 generic plan 全表扫。
-- **其余 gap 不是计划问题，是每语句一次往返的固定成本**：`clarify-pending` 两个引擎跑的是
-  **同样 3 条语句**，PG 出进程走 TCP、SQLite 在进程内，每条语句的 parse/bind/execute 差是
-  结构性的。**量级按 CI 自己的数算**：那条端点在 CI 上 3 条读的总差是 0.055ms，即约
-  **0.018ms/语句**。（协作 agent 在本机 Docker PG 上量到的是 1.98ms vs 0.13ms，约 0.62ms/语句——
-  **那是本机数，不能外推到 CI**，两者差约 30 倍。§5et 已经为同一件事记过一次教训，这里不再犯：
-  凡涉及 CI 上的量级，只引 CI 自己的 artifact。）
+- **其余 gap 有一部分是每语句一次往返的固定成本**：PG 出进程走 TCP、SQLite 在进程内，
+  每条语句的 parse/bind/execute 差是结构性的。
+
+  **更正一处数**：我此前照抄协作 agent 的说法写成「`clarify-pending` 两个引擎跑同样 **3** 条
+  语句」。查 `*-query-profile.json` 实际是 **4 条**（PAT 查询 / users+grants 查询 / 端点自己的
+  body 查询 / `token_audit` 写），两个引擎都是 4 条。`overview` 更是**两边各 13 条**，不是 5 条。
+
+  **量级只按 CI 自己的数算**：`clarify-pending` 的中位数差 +0.385ms ÷ 4 条 ≈ **0.096ms/语句**。
+  （协作 agent 在本机 Docker PG 上量到约 0.62ms/语句——**本机数不能外推到 CI**，差约 6 倍。
+  §5et 已经为同一件事记过一次教训，这里不再犯：凡涉及 CI 上的量级，只引 CI artifact。）
+
+  按这个单价，`overview` 的 13 条语句里 body 占 10 条，往返最多解释约 1ms，
+  而它的中位数差是 +2.5ms——**剩下的是查询本身的代价**，也就是下面这一节要处理的。
 - `/api/overview` 的常量绑参（`catalog_visibility = $1`、`status in ($2,$3)`）我一度改成了
   字面量，**又改回去了**：实测 PG 不会采纳那份 generic plan（估算差 53 倍），
   改动无法用数据支持，留着就是一处未经测量的「优化」。
@@ -10959,8 +10966,36 @@ custom 估 12.63 —— 估得更便宜所以被采纳，而那 8.47 建立在�
 
 （`.` 通过，`X` 未通过 `postgresqlNoSlower`，`B` 连 `max<10ms` 的原始绝对预算也撑爆。）
 
-**翻的那几个就是噪声**——同一份代码两次 run 就能翻号。**次次红的只有两个**，而且它们不是尖峰、
-不是台阶，是**稳态就慢**：
+**这张表我一开始读错了一半，先更正。** 翻来翻去的是 **P95 的判定**（20 个样本的 P95 就是最大值，
+一个离群点就能定生死），**不是底下的差本身**。把同样 6 个 run 换成**中位数**看，结论完全变样：
+
+| 端点 | 948d9b5f | 602264d5 | 602264d5 | dfb49eb8 | 56713f37 | 7f51454f2 |
+| --- | --- | --- | --- | --- | --- | --- |
+| tasks-first | −70.3 | −71.9 | −69.3 | −75.5 | −66.0 | −75.9 |
+| tasks-second | −2.8 | −2.9 | −3.7 | −4.3 | −4.6 | −4.9 |
+| tasks-running | −40.8 | −44.1 | −40.0 | −46.2 | −28.6 | −42.1 |
+| repos-first | +2.1 | +2.7 | +2.9 | +0.7 | +1.4 | +0.9 |
+| repos-referenced | +2.3 | +1.9 | +2.3 | +0.7 | +1.1 | +1.4 |
+| reviews-pending | +1.7 | +1.6 | +2.0 | +0.4 | +0.5 | +0.6 |
+| clarify-pending | +1.3 | +1.2 | +1.1 | +0.3 | +0.8 | +0.4 |
+| workgroup-pending | +2.5 | +1.7 | +1.5 | **+23.8** | **+24.9** | **+1.2** |
+| overview | +2.9 | +2.0 | +1.6 | +2.1 | +2.9 | +2.5 |
+
+（中位数差，PG − SQLite，毫秒；负 = PG 更快。）
+
+中位数几乎不抖，于是两件事一眼可见：
+
+1. **`workgroup-pending` 的修复被证实**：+23.8 / +24.9 → **+1.2**，回到它出 bug 之前
+   （1.5–2.5）那条带上。台阶也确实没了——按测量顺序是
+   `2.89 2.68 2.63 2.61 2.64 2.49 … 2.24 2.45 2.39`，平的，绝对预算一并转绿。
+2. **「翻的那几个是噪声」这句我说错了。** 六个轻端点的**中位数差在每一个 run 上都是正的**
+   （+0.3 ~ +2.9ms）——PG 在轻端点上**系统性地慢**，这是真的、不是噪声。噪声只决定
+   「这一次 P95 抓不抓得到它」。三个重端点则是 PG 稳定大胜（−2.8 ~ −76ms）。
+
+顺带也看得出 §5ej / §5ek 那两刀（PAT 写节流 + 世代围栏内联）**确实有效**：
+`repos-first` 2.9 → 0.7、`reviews-pending` 2.0 → 0.4，都发生在 602264d5 → dfb49eb8 之间。
+
+下面这一节讲的是其中**最大也最稳**的那条（`overview`，每个 run 都 +1.6~+2.9）：
 
 ```
 overview      PG 中位数 5.4–6.5ms   vs  SQLite 3.0–3.3ms      （4 个 run 都这样）
@@ -10968,7 +11003,14 @@ repos-first   PG 中位数 4.4ms       vs  SQLite 2.9ms
 PG raw: 6.48 6.17 6.02 5.85 6.46 5.50 5.77 …   ← 平的，没有台阶也没有尖峰
 ```
 
-### 根因：`scripts/perf-run.ts` 只 `ANALYZE`，从不 `VACUUM`
+### 根因（**`overview` 已实证；`repos-first` 只是同因推测，未验**）：`scripts/perf-run.ts` 只 `ANALYZE`，从不 `VACUUM`
+
+先划清证据边界，免得把推测读成结论：下面这组 1.682ms → 0.557ms 是对着
+**`/api/overview` 那条计数的形状**量的。`repos-first` 的重语句（`tasks` 按 `cached_repo_id`
+分组计数 + `NOT IN` 子查询）**我没能在本机验到**——plan-audit 的语料与 RFC-311 性能语料的
+`cached_repo_id` 取值不同源，本机跑那条语句 `actual rows=0`，量不出东西来。
+把它和 `overview` 归成同一个因，理由只是「同样是 `tasks` 上的分组计数、同样吃 index-only scan」，
+**这是推测**。它到底是不是同一个因，以 CI 复测为准。
 
 PostgreSQL 的 **index-only scan 要成立，得靠 visibility map** 证明「这一页全部可见」，
 而 VM 只由 VACUUM 维护。刚批量灌完的表 VM 是空的，于是 index-only scan 不成立，planner 退回
@@ -11004,6 +11046,22 @@ VACUUM 之后 : Index Only Scan, Heap Fetches: 0    0.557ms   ← 3.0×
 **可见性本身**（`Heap Fetches: 0`）而不是耗时——与机器负载无关，和该文件其余判据同一原则。
 红→绿实证：把 `vacuum analyze` 改回 `analyze`，它立刻报
 `Bitmap Heap Scan on tasks … Heap Blocks: exact=345`（1.206ms / 349 buffers）。
+
+### 顺手排除掉的一条歧路：`IN ($1…$50)` 的规划开销
+
+`repos-first` 的重语句带 **50 个绑定参数**（`cached_repo_id IN ($1…$50)`），实测它的
+`Planning Time` 是 **0.681ms**，而 `Execution Time` 只有 0.042ms——规划比执行贵 16 倍。
+换成 `= ANY($1::text[])`（**1 个参数**）后规划掉到 **0.056ms，12×**，计划形状逐字不变
+（都是 `Index Only Scan using idx_tasks_cached_repo`）。看上去是个现成的大杠杆。
+
+**但它不成立**，因为那笔开销不是每请求都付。查 `pg_prepared_statements`：跑 8 次之后是
+`custom_plans=5 / generic_plans=3`——PostgreSQL 在第 6 次执行**换到了 generic plan**，
+此后不再重新规划。基准是 1 warmup + 20 采样 = 21 次执行，所以规划开销只落在**前 4 个采样**上，
+稳态（第 5–20 个采样）一分钱不付。而 `repos-first` 慢的恰恰是稳态。
+
+排除掉它还省了一件事：drizzle 的 `inArray()` 生成的就是 `IN ($1…$n)`，要改成 `= ANY(array)`
+得走 PG 专属语法（SQLite 不认），按 AC-10 只能经 `EngineCapabilities` 表达——为一个**不影响
+稳态**的开销去新增一条引擎能力分叉，不划算。
 
 ### 还没证的事
 

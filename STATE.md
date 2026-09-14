@@ -4,11 +4,20 @@
 
 > ## 📌 RFC-359 最新一段（2026-09-15 续 27，**AC-11 第二刀**：基准语料装载后没 VACUUM，PG 被罚 3 倍）
 >
-> 落档 plan §5ev。把 5 个 run 的 `comparison.json` 按端点拉平后才看清：**翻来翻去的那几个是噪声**
-> （同一份代码两次 run 就能翻号），**次次红的只有 `repos-first` 与 `overview`**，而且它们
-> 不是尖峰不是台阶，是**稳态就慢**（overview PG 中位数 5.4–6.5ms vs SQLite 3.0–3.3ms，4 个 run 都这样）。
+> 落档 plan §5ev。**先更正我自己上一段说错的一句**：我说「翻来翻去的那几个是噪声」——
+> 翻的是 **P95 的判定**（20 样本的 P95 就是最大值，一个离群点定生死），**不是底下的差**。
+> 换成中位数看 6 个 run：**六个轻端点的中位数差每一个 run 都是正的**（+0.3~+2.9ms），
+> PG 在轻端点上**系统性地慢**，是真的；三个重端点则 PG 稳定大胜（−2.8~−76ms）。
 >
-> 根因不在 SQL 里：`scripts/perf-run.ts` 只 `ANALYZE`、从不 `VACUUM`。PG 的 index-only scan
+> **workgroup 修复已被 CI 证实**：中位数差 +24.9 → **+1.2**，回到出 bug 前那条带，
+> 台阶消失（`2.89 2.68 2.63 2.61 2.64 … 2.39` 全平），绝对预算一并转绿。
+> （但 p95 仍判红——最后一个样本一个 5.59 的尖峰就把 p95 定死了，中位数才 2.39。）
+>
+> 剩下最大也最稳的是 `overview`（每个 run 都 +1.6~+2.9ms）：
+>
+> 根因不在 SQL 里（**`overview` 已实证，`repos-first` 同因是推测、未验**——本机语料的
+> `cached_repo_id` 与性能语料不同源，那条重语句跑出来 `actual rows=0`，量不出东西）：
+> `scripts/perf-run.ts` 只 `ANALYZE`、从不 `VACUUM`。PG 的 index-only scan
 > 要靠 **visibility map** 成立，而 VM 只由 VACUUM 维护；刚灌完的表 VM 是空的，planner 退回
 > `Bitmap Heap Scan`。实测 10 万行：1.682ms → **0.557ms（3.0×）**。生产有 autovacuum、
 > VM 常态是新的——**只 ANALYZE 等于拿 PG 一个它从不持续停留的瞬时状态去比 SQLite 的稳态**。
@@ -48,9 +57,10 @@
 > 账本 `GENERIC_PLAN_GAPS` 建成即空；把探针改回旧写法判据立刻转红，实证过。
 >
 > **其余端点独立扫过没有第二处**（另一个 agent，带 1086× 的正向对照）：残余 gap 是
-> **每语句一次往返的固定成本**——`clarify-pending` 两引擎跑同样 3 条语句，出进程 TCP vs 进程内。
-> 量级只按 CI 自己的数算：CI 上 3 条读总差 0.055ms，约 **0.018ms/语句**（协作 agent 的本机
-> Docker 数是 0.62ms/语句，差 30 倍，**不可外推**——§5et 已为同一件事记过一次教训）。`/api/overview` 的常量绑参我改过又
+> **每语句一次往返的固定成本**——出进程 TCP vs 进程内。（**更正**：此前照抄协作 agent 写成
+> 「同样 3 条语句」，查 query-profile 实际是**两边各 4 条**，`overview` 是**两边各 13 条**。）
+> 量级只按 CI 自己的数算：`clarify-pending` 中位数差 +0.385ms ÷ 4 条 ≈ **0.096ms/语句**
+> （本机 Docker 数 0.62ms/语句差 6 倍，**不可外推**——§5et 已为同一件事记过一次教训）。`/api/overview` 的常量绑参我改过又
 > **改回去了**：实测 PG 不采纳那份 generic plan，改动没有数据支持。
 >
 > **未完**：CI 复测已按 HEAD 派发（`postgresql-evidence` / `http-performance`），

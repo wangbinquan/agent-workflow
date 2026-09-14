@@ -30,17 +30,25 @@ const SOURCE_PATH = resolve(
 )
 const PROBE_FROM = [
   '      .from(',
-  "        sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} >= ${''} LIMIT 1) AS nonempty_workgroup_scan`,",
+  '        sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} IS NOT NULL LIMIT 1) AS nonempty_workgroup_scan`,',
   '      )',
   '      .crossJoin(tasks)',
 ].join('\n')
+
+/**
+ * 探针上方那段说明为什么它必须是**常量谓词**的注释（RFC-359 AC-11）。它和 `PROBE_FROM`
+ * 一样属于「探针带来的偏离」，所以下面的原文比对要连它一起剥掉——本判据钉的是
+ * **除探针之外的参与者逐字未变**，注释不是行为。
+ */
+const PROBE_DOC_START = '  /**\n   * 空工作组的短路探针'
+const PROBE_DOC_END = '   */\n'
 
 function originalCompiledSql(value: string): string {
   if (!value.includes('nonempty_workgroup_scan')) return value
   const from = value.indexOf(' from ')
   if (from < 0) throw new Error('missing actual outer FROM')
   const probe =
-    / from \(SELECT 1 AS workgroup_present FROM ((?:"[^"]+"\.)?"tasks") WHERE \1\."workgroup_id" >= (?:\?|\$\d+) LIMIT 1\) AS nonempty_workgroup_scan cross join \1/.exec(
+    / from \(SELECT 1 AS workgroup_present FROM ((?:"[^"]+"\.)?"tasks") WHERE \1\."workgroup_id" IS NOT NULL LIMIT 1\) AS nonempty_workgroup_scan cross join \1/.exec(
       value.slice(from),
     )
   const table = probe?.[1]
@@ -48,7 +56,10 @@ function originalCompiledSql(value: string): string {
   const projection = value.slice(0, from).replaceAll(`${table}.`, '').replaceAll('"tasks".', '')
   const tail = value.slice(from).replace(probe[0], () => ` from ${table}`)
   if (tail.includes('nonempty_workgroup_scan')) throw new Error('unrecognized actual probe SQL')
-  return (projection + tail).replace(/\$(\d+)/g, (_, ordinal: string) => `$${Number(ordinal) - 1}`)
+  // RFC-359 AC-11 —— 探针改成常量谓词之后**一个占位符都不占**，所以这里不再需要把后面的
+  // 序号整体前移一位。（旧写法 `>= ${''}` 会吃掉 `$1`，剥掉它就必须给 `$2..$n` 重新编号；
+  // 那个 `- 1` 现在留着反而会把 `$1` 写成 `$0`。）
+  return projection + tail
 }
 
 function taskSnapshot(
@@ -190,13 +201,9 @@ async function compareInTransaction(harness: ProviderHarness, tx: TaskExecutionT
   expect(after).toEqual(before)
   expect(JSON.stringify(after)).toBe(JSON.stringify(before))
   expect(originalCompiledSql(actual.statement.sql)).toBe(original.statement.sql)
-  if (actual.statement.sql.includes('nonempty_workgroup_scan')) {
-    expect(actual.statement.values[0]).toBe('')
-    const retained: readonly unknown[] = actual.statement.values.slice(1)
-    expect(retained).toEqual(original.statement.values)
-  } else {
-    expect(actual.statement.values).toEqual(original.statement.values)
-  }
+  // RFC-359 AC-11 —— 探针是常量谓词，**一个绑定值都不占**（旧写法 `>= ${''}` 会占掉第一个）。
+  // 于是不论探针在不在，绑定值都必须与原始查询**逐字相同**；这比原先「切掉第一个再比」更强。
+  expect(actual.statement.values).toEqual(original.statement.values)
   return { original, actual }
 }
 
@@ -359,7 +366,13 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
 
 test('the original complete participant is retained outside its listActive FROM expression', () => {
   const source = readFileSync(SOURCE_PATH, 'utf8')
+  const docStart = source.indexOf(PROBE_DOC_START)
+  if (docStart < 0) throw new Error('missing the probe explanation comment')
+  const docEnd = source.indexOf(PROBE_DOC_END, docStart)
+  if (docEnd < 0) throw new Error('unterminated probe explanation comment')
   const original = source
+    .slice(0, docStart)
+    .concat(source.slice(docEnd + PROBE_DOC_END.length))
     .replace(PROBE_FROM, '      .from(tasks)')
     .replace(
       "import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'",
@@ -418,7 +431,8 @@ test('the actual PostgreSQL client preserves original SQL and every original bin
     expect(actual.sql).toContain('nonempty_workgroup_scan')
     expect(originalCompiledSql(actual.sql)).toBe(original.sql)
     expect(original.values).toEqual([...CANCELABLE_TASK_STATUSES])
-    expect(actual.values).toEqual(['', ...CANCELABLE_TASK_STATUSES])
+    // 探针不再绑定任何值，所以 actual 与 original 的绑定逐字相同。
+    expect(actual.values).toEqual([...CANCELABLE_TASK_STATUSES])
   } finally {
     restore()
     await runtime.close()
