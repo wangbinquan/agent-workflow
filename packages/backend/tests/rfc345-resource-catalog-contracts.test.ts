@@ -16,7 +16,6 @@ import {
   type Workgroup,
 } from '@agent-workflow/shared'
 import {
-  asPackageResourceKind,
   type AgentCatalogResource,
   type AgentPackageMutation,
   type CapabilityTemplatePackageMutation,
@@ -348,8 +347,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
   test('cross-roster conversion only happens through named narrowings', () => {
     expect(asAclCatalogKind('scheduled_task')).toBeNull()
     expect(asAclCatalogKind('employee_tool')).toBe('employee_tool')
-    expect(asPackageResourceKind('capability_template')).toBe('capability_template')
-    expect(asPackageResourceKind('employee_definition')).toBeNull()
+    // RFC-359（apply 引擎合一，plan §5dw）：`asPackageResourceKind` 这个**公共面**窄化点的
+    // 唯一生产消费者是 legacy 提交路径（`legacyResourcePackageCommit.ts`），随合一退役后
+    // 它零消费者。公共面不留没人跨的窄化点——同名的内部版本仍在
+    // `domain/resourceKinds.ts`，需要时由模块内自己用。
     expect(asCatalogSelectorKind('workgroup')).toBe('workgroup')
     expect(asCatalogSelectorKind('capability_template')).toBeNull()
     expect(resourceRef('scheduled_task', 'schedule-1')).toEqual({

@@ -27,6 +27,7 @@ import {
   swapInStaged,
 } from './legacy/skillFsPublish'
 import { hashRegularFileTree } from './legacy/skillHash'
+import { markSkillBootVerified, unmarkSkillBootVerified } from './legacy/skillBootVerify'
 import {
   skillFilesAbs,
   skillFilesRel,
@@ -172,6 +173,19 @@ function finalizeSkillPlan(state: SkillPlanState): void {
     throw new Error('resource-package-skill-live-hash-mismatch')
   }
   cleanupOpDirs(state.liveDirectory, state.artifact.operationId)
+  // RFC-170 §invariant④ —— 刚刚**在本进程里**把内容发布到位并逐字节校验过的快照，就是
+  // 「这一 boot 验过」的定义（`markSkillBootVerified` 的文档原话：a just-written /
+  // freshly-verified managed snapshot is available immediately）。不打这个标记，行虽然
+  // 落库了，但每一个读面（列表 / 详情 / 运行时注入）都会把它当成「本 boot 未复核」而
+  // 隐藏，直到下次重启——用户看到的是「导入成功了，但技能不见了」。
+  //
+  // RFC-359（两台 apply 引擎合一）实测出来的缺陷：legacy SQLite 那条路径经
+  // `commitSkillVersion` 顺带打了标记（`legacy/skillVersion.ts:269`），这台引擎自己写
+  // 版本行、于是一直漏打。也就是说**PostgreSQL 部署上导入的技能一直到重启才可见**，
+  // 而那一侧没有任何 e2e 打到过。合一把这条路径搬到 SQLite 上，`config-package-import`
+  // 的 e2e 当场把它照出来。恢复路径上的同一标记早就在（`postgresqlResourcePackageMaintenance.ts`
+  // 与 `sqliteResourcePackageMaintenance.ts` 的 roll-forward 各一处）。
+  markSkillBootVerified(state.artifact.skillId)
   state.finalized = true
 }
 
@@ -303,6 +317,10 @@ export function createPostgresqlResourcePackageSkillArtifactOwner(input: {
       restoreFromBackup(state.liveDirectory, request.artifact.operationId)
       cleanupOpDirs(state.liveDirectory, request.artifact.operationId)
       rmSync(state.candidateDirectory, { recursive: true, force: true })
+      // 补偿把 live 目录换回了提交前的内容：这一 boot 的「已复核」判定必须跟着回退，
+      // 否则一个内容已经被换掉的技能会继续被当成验过的（legacy 那条路径的同一条：
+      // `legacyResourcePackageMutationParticipants.ts` 的补偿段）。
+      unmarkSkillBootVerified(request.artifact.skillId)
       plans.get(context)?.delete(request.artifact.operationId)
     },
     async rollForward(context, request) {

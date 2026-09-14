@@ -2,6 +2,33 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 14，合一照出一条 **PostgreSQL 上一直存在**的用户可见缺陷）
+>
+> 落档 plan §5dw。`eb88d590e` 推上去后 CI 红：4 个 backend 分片 + 3 个 e2e 分片。
+>
+> **e2e 那条是真缺陷，而且不是合一引入的**：`config-package-import` 的「两项都选新建」红了——
+> 回执说技能建好了、新代理也指向它、库里那一行逐字健在、盘上文件也在，但 `GET /api/skills`
+> **一条都不返回**。根因是 RFC-170 的启动复核门 `isSkillAvailableThisBoot`：只放行**这一 boot
+> 验过**的技能，而统一 apply 引擎的技能工件 owner **一直漏打** `markSkillBootVerified`
+> （legacy SQLite 那条经 `commitSkillVersion` 顺带打了）。也就是说
+> **PostgreSQL 部署上，导入包建出来的技能一直到重启才可见**——回执说成功、列表里没有。
+> 合一只是把这条只在 PG 上跑过的代码搬到了有 e2e 的那台机器上，缺陷第一次被真实用户动作打到。
+>
+> 修在 `finalizeSkillPlan`（换好 live 目录并校验哈希之后打标记）+ 补偿路径对称地取消标记；
+> 判据 `rfc359-w14-imported-skill-boot-visibility`（双引擎，**把门打开**问）先红后绿实测。
+> 本地重跑 e2e 三条全绿。
+>
+> **前面几批照出的是「PG 侧零行为覆盖」；这一批反过来——SQLite 侧那台有 e2e、PG 侧那台没有，
+> 于是缺陷长在 PG 那一份上。方向不同，结论同一个。**
+>
+> **另外两条 CI 红**都属于「账本 / 源码锁没跟着改」：`rfc349-provider-completeness` 的 `main.ts`
+> 分叉计数（与 `PROVIDER_BRANCH_DEBT` 是两份独立登记，上一批只改了一份）、
+> `rfc345-resource-acl-facade-retirement` 里那句随退役一起消失的源码锁。
+>
+> **顺带退役 `legacyResourcePackageCommit.ts`**：七个中立助手搬进 `services/resourcePackage/commit.ts`
+> （那个门面从此是真模块），原文件与它唯一的消费者 `sqlitePackageResourceRows.ts` 一起删；
+> 零消费者的公共面窄化点 `asPackageResourceKind` 一并删掉。
+>
 > ## 📌 RFC-359 最新一段（2026-09-15 续 13，**两台 apply 引擎合一**：生产侧不再有 SQLite 专属的资源包写入路径）
 >
 > 落档 plan §5dv。§5dp 找到的那处**本仓最大的重复**（SQLite 侧约 1448 行 / PG 侧约 976 行）收掉了。

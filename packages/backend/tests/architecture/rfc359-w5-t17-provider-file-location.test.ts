@@ -100,8 +100,8 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │       `composition/resourcePackageProvider.ts`，两个 provider 共用一个工厂；
   // │       `composePostgresqlResourcePackageCatalog` 仍对中立 operations 纯转发。
   // │       只有第四个字段 `mutationSessionFactory` 属于上面的①，不因读装配合一销账。
-  // │     · `sqlitePackageResourceRows.ts` 的两个 async（`getSqlitePackageResourceRow` /
-  // │       `findSqliteBuiltinResource`）是中立 drizzle，换 PG 照跑；只有两个 `*InTx` 是真机制。
+  // │     · `sqlitePackageResourceRows.ts` **已销账**（RFC-359 §5dw）：它的两个 `*InTx` 只服务
+  // │       legacy 提交路径，随 apply 引擎合一一起退役，整个文件删掉。
   // │     · `sqliteResourceGrantRepository.ts` 的 `listWritableGrantedResourceIds` 早就吃
   // │       `ProviderNeutralDatabase`。
   // │     **改名不在本刀**：会牵动 5–7 份 architecture ledger，波尾单独一刀做。
@@ -132,7 +132,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
   'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
   'modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts',
-  'modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts',
   'modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts',
   'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts',
   'modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts',

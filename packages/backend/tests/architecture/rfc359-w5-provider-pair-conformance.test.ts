@@ -181,10 +181,12 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
 export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = [
   {
     key: 'platform/persistence/ResourcePackageApplyEngine',
-    sqlite: [
-      'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts',
-      'platform/persistence/sqlite/legacyResourcePackageCommit.ts',
-    ],
+    // RFC-359 §5dv/§5dw —— **生产侧已合一**：两个 provider 装的都是 PostgreSQL 那一侧那台
+    // 原子 apply 引擎；`legacyResourcePackageCommit.ts` 里的中立助手搬进
+    // `services/resourcePackage/commit.ts` 后整个文件已删。这里还剩一条是因为
+    // `legacyResourcePackageBundleApply.ts` **仍有测试消费者**（通用 bundle 引擎的那两份判据），
+    // 生产零调用方。它删掉的那天，这一对整条从登记表里消失——那才是合一完工的样子。
+    sqlite: ['platform/persistence/sqlite/legacyResourcePackageBundleApply.ts'],
     postgresql: ['platform/persistence/postgresqlResourcePackageAtomicApply.ts'],
     sqlitePrefixes: ['legacySqlite'],
     postgresqlPrefixes: ['postgresql'],

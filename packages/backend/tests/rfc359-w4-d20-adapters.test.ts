@@ -172,10 +172,8 @@ test('源码锁：两对适配器没有 provider 命名的孪生，SQLite 命名
       .join('\n')
     expect(source, neutral).not.toMatch(/PostgresqlDatabaseClient|createSqlite|createPostgresql/)
   }
-  // 同步助手仍在，但只服务 legacy 提交路径；两个零消费导出已删。
-  const legacyRows = readFileSync(join(root, 'infrastructure/sqlitePackageResourceRows.ts'), 'utf8')
-  expect(legacyRows).toContain('getSqlitePackageResourceRowInTx')
-  expect(legacyRows).not.toMatch(
-    /listSqlitePackageResourceRowsByIds|listSqlitePackageResourceRowsByNames|createSqliteResourcePackageReadPort|createSqliteResourcePackageOwnedResourceLookup/,
-  )
+  // RFC-359（apply 引擎合一，plan §5dv）：那批同步 `*InTx` 助手只服务 legacy 提交路径，
+  // 随 `legacyResourcePackageCommit.ts` 一起退役，`sqlitePackageResourceRows.ts` 整个文件删掉。
+  // 判据从「文件里只剩那一个导出」改成**文件不存在**——这是它该走到的终点。
+  expect(existsSync(join(root, 'infrastructure/sqlitePackageResourceRows.ts'))).toBe(false)
 })

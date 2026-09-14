@@ -9505,3 +9505,65 @@ PG 侧今天正是从那个门面 import 它们的）。
 
 **判据先行，实现随后**——这一批的顺序是：先让 22 格对拍在两台机器上跑同一条引擎（§5dp + 上一批），
 再把生产切过去。切之前那 22 格在两台机器上各绿一次，切之后再绿一次；这就是「用实测差异代替纸面对账」。
+
+
+## 5dw. 合一照出一条**PostgreSQL 上一直存在**的用户可见缺陷：导入的技能要等重启才可见
+
+§5dv 把资源包 apply 切到统一引擎之后，`e2e/config-package-import.spec.ts` 的
+「两项都选新建」当场红——而它此前一直是绿的。这不是合一引入的回归，是合一**把一条只在
+PostgreSQL 上跑过的代码搬到了有 e2e 的那台机器上**，于是那条路径第一次被真实用户动作打到。
+
+### 症状与定位
+
+回执说技能建好了、新代理也确实指向那个新技能 id、库里那一行逐字健在（`reservation_state=ready`、
+`version_state=snapshot-authoritative`、owner 与可见性都对、盘上 `skills/<id>/files/SKILL.md` 也在），
+但 `GET /api/skills` **一条都不返回**、`GET /api/skills/:id` 回 404。
+
+根因是 RFC-170 §invariant④ 的启动复核门：`isSkillAvailableThisBoot` 只放行**这一 boot 验过**的技能
+（`bootVerifiedSet`）。一个刚在本进程里把内容发布到位并逐字节校验过的快照按定义就是验过的，
+所以发布方必须打 `markSkillBootVerified`。legacy SQLite 那条路径经 `commitSkillVersion`
+顺带打了（`legacy/skillVersion.ts:269`）；统一引擎自己写版本行，**一直漏打**。
+
+也就是说：**PostgreSQL 部署上，导入包建出来的技能一直到 daemon 重启才可见**——
+回执说成功、列表里没有。恢复路径上的同一标记倒是早就在（`postgresqlResourcePackageMaintenance.ts`
+与 `sqliteResourcePackageMaintenance.ts` 的 roll-forward 各一处），偏偏正常提交路径上没有。
+
+### 处置
+
+`resourcePackageArtifacts.ts` 的技能工件 owner：`finalizeSkillPlan` 在 live 目录换好并校验过哈希之后
+`markSkillBootVerified(skillId)`；补偿路径（未提交、live 目录已换回提交前内容）对称地
+`unmarkSkillBootVerified(skillId)`——legacy 那条路径的补偿段本来就这么做。
+
+### 判据
+
+`rfc359-w14-imported-skill-boot-visibility.test.ts`（双引擎）：**把门打开**问
+（`activateBootReverifyForTest`；门关着时判据恒真、零预言力），导出一个真技能再导入，断言
+①`isSkillBootVerified(新 id)` 为真、②`listSkills` 当场列出两条、③`getSkillById` 非空。
+先红后绿实测：去掉那一行 `markSkillBootVerified`，两个引擎同时红。
+
+**这条缺陷本身就是 RFC-359 的论据**：一份实现只有一台机器跑得到用户面，另一台就会悄悄比它弱，
+而弱在哪要等到合一那一刻才看得见。前面几批照出的是「PG 侧零行为覆盖」；这一批反过来——
+**SQLite 侧那台有 e2e，PG 侧那台没有**，于是缺陷长在 PG 那一份上。方向不同，结论同一个。
+
+### 同批修掉的两条 CI 红（都属于「账本 / 源码锁没跟着改」）
+
+- `rfc349-provider-completeness` 的 `main.ts` 分叉计数 4 → 3（与 `PROVIDER_BRANCH_DEBT` 是**两份**
+  独立登记，§5dv 只改了其中一份）；
+- `rfc345-resource-acl-facade-retirement` 的源码锁里 `return composeResourcePackageProvider(deps)`
+  ——那句随 `composeSqliteResourcePackageProvider` 一起退役，判据改成反向断言「不得再出现」。
+
+### 顺带：`legacyResourcePackageCommit.ts` 退役
+
+`commitResourcePackage` 的调用方在 §5dv 清零之后，这个文件里只剩**七个中立助手**还有人用
+（统一引擎从 `services/resourcePackage/commit.ts` 那个门面 import 它们）。把它们搬进那个门面、
+让它从此是真模块而不是转发（`rfc294-facades` 的 thin-facade 名单少一条），原文件与它唯一的消费者
+`sqlitePackageResourceRows.ts`（四个同步 `*InTx` 只服务 legacy 提交路径）一起删掉。
+`PROVIDER_NAMED_FILE_DEBT` 48 → 47；`asPackageResourceKind` 这个**公共面**窄化点随之零消费者，
+一并删掉（同名的内部版本仍在 `domain/resourceKinds.ts`）——公共面不留没人跨的窄化点。
+
+**还没删的**：`legacyResourcePackageBundleApply` / `-BundleLower` / `legacyResourcePackageMutationParticipants`
+/ `legacyResourcePackageMutationDependencies`（约 2500 行）。它们生产零调用方，但仍被
+`rfc271-bundle-engine` / `rfc271-bundle-recovery-hardening` / `rfc294-apply-replay-recovery-parity`
+/ `rfc359-w7-sync-transaction-cutover` 当作**通用 bundle 引擎**在测。删它们之前要逐条确认那些判据
+在统一引擎上还在——§5dv 后已补了 `rfc359-w14-unified-apply-journal-replay`（journal 三态重放 + 失败终态），
+剩下的（收敛 CAS、record-before-act、插件补偿 oracle、技能版本前滚幂等）要同样对账。

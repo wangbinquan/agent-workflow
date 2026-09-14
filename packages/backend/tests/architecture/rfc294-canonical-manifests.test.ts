@@ -357,7 +357,6 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/maintenanceState.ts',
       'packages/backend/src/services/protocol.ts',
       'packages/backend/src/services/questionDispatchComposition.ts',
-      'packages/backend/src/services/resourcePackage/commit.ts',
       'packages/backend/src/services/resourceRefs.ts',
       'packages/backend/src/services/restore.ts',
       'packages/backend/src/services/review.ts',

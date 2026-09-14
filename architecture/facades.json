@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 322,
-    "thinFacades": 70
+    "thinFacades": 69
   },
   "entries": [
     {
@@ -3537,12 +3537,24 @@
     },
     {
       "boundaryEdgeIds": [],
-      "exportedSymbols": [],
+      "exportedSymbols": [
+        "CommitPackageInput",
+        "HumanMemberMapping",
+        "ImportDecision",
+        "PACKAGE_IDEMPOTENCY_SCOPE",
+        "assertActionsAllowed",
+        "humanMemberKey",
+        "materializedSecretProjections",
+        "materializedWorkgroupSlugs",
+        "translateDecisions",
+        "translatedBundle",
+        "typeOfSlug"
+      ],
       "file": "packages/backend/src/services/resourcePackage/commit.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/commit.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/commit.ts#$file",
       "removeAfterWave": "W5",
-      "status": "thin-facade",
+      "status": "legacy-implementation",
       "targetContext": "source-control",
       "targetLayer": "application"
     },
@@ -6748,5 +6760,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5"
+  "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d"
 }

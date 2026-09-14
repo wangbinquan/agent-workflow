@@ -5,7 +5,6 @@
 // 因此由 owner（resource-catalog）在 public 面给出唯一出口。
 export { hasResourceAclBypass } from '../domain/resourceAccess'
 
-import { asBundleResourceType } from '@agent-workflow/shared'
 import type {
   Agent,
   BundleResourceType,
@@ -60,9 +59,6 @@ import type {
 /** Closed public kind rosters alias the shared wire contracts directly. */
 export type CatalogSelectorKind = IntentResourceType
 export type PackageResourceKind = BundleResourceType
-
-/** Named public narrowing point; persistence-specific kind helpers stay internal. */
-export const asPackageResourceKind = asBundleResourceType
 
 /** Closed identity-only references owned by the Resource Catalog public surface. */
 export interface ResourceRef<K extends GrantResourceType = GrantResourceType> {

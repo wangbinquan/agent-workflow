@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 856,
+    "consumers": 855,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20485,
-    "symbols": 983
+    "symbols": 982
   },
   "entries": [
     {
@@ -109417,45 +109417,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:1b84317daed9e8b0e94b"
-      ],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "public:resource-catalog:types:asPackageResourceKind",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#asPackageResourceKind",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:1b84317daed9e8b0e94b",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:c4d1c3bc1bc8655e41bc2ff5e29ed1d99e127ab43cb6b6c533ac87716df4ffc5",
-      "status": "target-context-current-surface",
-      "symbol": "asPackageResourceKind",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -162001,7 +161962,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5",
+  "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d",
   "targetContexts": [
     "collaboration",
     "development-automation",

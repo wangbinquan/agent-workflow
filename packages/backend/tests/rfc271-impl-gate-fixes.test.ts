@@ -288,11 +288,18 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
     // 解析端与 provider 端各拼一次 `${slug} ${username}`，其中一侧的「空格」实际敲成
     // 了 U+0000（编辑器不显示）⇒ 查表永远落空 ⇒ human 成员被当成「用户选了不加入」
     // 整条剔除，全程零报错。
-    const commit = read('src/platform/persistence/sqlite/legacyResourcePackageCommit.ts')
+    // RFC-359（apply 引擎合一，plan §5dv）：这几个中立判据搬到了
+    // `services/resourcePackage/commit.ts`——原文件是 SQLite 专属编排，随合一退役。
+    const commit = read('src/services/resourcePackage/commit.ts')
     expect(commit).toContain('export function humanMemberKey(')
-    expect(commit).toContain('humanMemberKey(workgroupSlug, username)')
     // 分隔符必须是可见字符。
     expect(commit).toContain('`${workgroupSlug}#${username}`')
+    // RFC-359（apply 引擎合一，plan §5dv）：「两端」的 provider 端换成了统一 apply 引擎。
+    // 判据仍是同一条——那一端**调这个函数**，不是自己再拼一遍键。
+    const engine = read('src/platform/persistence/postgresqlResourcePackageAtomicApply.ts')
+    expect(engine).toContain('humanMemberKey(slot.workgroupSlug, slot.username)')
+    expect(engine).toContain('humanMemberKey(mapping.workgroupSlug, mapping.username)')
+    expect(engine).not.toMatch(/`\$\{[A-Za-z.]*workgroupSlug\}[^`]*\$\{[A-Za-z.]*username\}`/)
   })
 
   test('源码里没有裸控制字符', () => {
@@ -311,7 +318,6 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
       'src/services/resourcePackage/preview.ts',
       'src/services/bundle/lower.ts',
       'src/platform/persistence/sqlite/legacyResourcePackageBundleLower.ts',
-      'src/platform/persistence/sqlite/legacyResourcePackageCommit.ts',
       'src/services/workflow.validator.ts',
     ]) {
       expect({ rel, hit: hasControlChar(read(rel)) }).toEqual({ rel, hit: false })
@@ -361,7 +367,6 @@ describe('P1-1 · 写权限点表两头受检', () => {
       'src/services/resourcePackage/preview.ts',
       'src/services/resourcePackage/commit.ts',
       'src/services/resourcePackage/importPermissions.ts',
-      'src/platform/persistence/sqlite/legacyResourcePackageCommit.ts',
     ]
       .map((p) => {
         try {

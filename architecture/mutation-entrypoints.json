@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1727,
+    "entries": 1725,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -31139,79 +31139,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts#CommitPackageDeps",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts#CommitPackageDeps",
-      "symbol": "CommitPackageDeps",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts#CommitPackageInput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts#CommitPackageInput",
-      "symbol": "CommitPackageInput",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts#commitResourcePackage",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageCommit.ts#commitResourcePackage",
-      "symbol": "commitResourcePackage",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#openReadonlySqliteDatabase",
@@ -36364,6 +36291,30 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/resourcePackage/commit.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/resourcePackage/commit.ts#CommitPackageInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/commit.ts#CommitPackageInput",
+      "symbol": "CommitPackageInput",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -41261,7 +41212,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5",
+  "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -96,7 +96,9 @@ const PROVIDER_FORK_LEDGER = {
   // 运行时收窄走 platform/persistence 的 requireDatabaseProviderRuntime。
   'db/providerSchema.ts': { forks: 1, fence: 'projection-fenced' },
   // RFC-359 W4-D8 / D9：identity-access 与 auth 运行时的装配入口收中立句柄，main.ts 少了三个 provider 三元分支。
-  'main.ts': { forks: 4, fence: 'fenced-dispatch' },
+  // RFC-359（apply 引擎合一，plan §5dv）4 → 3：`package` 子命令的资源包装配此前是一个
+  // `provider === 'sqlite' ? … : …`，现在两个 provider 装同一条组合根。
+  'main.ts': { forks: 3, fence: 'fenced-dispatch' },
   'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },
   // RFC-354 T4: the frame backfill picks its store by the provider-keyed
   // `FrameBackfillDatabase` union — a third provider cannot be passed in

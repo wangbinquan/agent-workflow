@@ -447,8 +447,8 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 48,
-      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。 RFC-359：`sqliteNodeRunMintParticipant.ts` 退役——它只是 `nodeRunMintProgram` 的同步解释器，src 侧唯一的到达路径是 `mintLegacySqliteNodeRunInTx` → `services/nodeRunMint.ts#mintNodeRunTx`，而后者生产零调用方；事务内铸行的调用方本来就走中立的 `createNodeRunMintParticipantInTx`，50 → 49。。RFC-359（2026-09-13）49 → 48：同上，那条死门面连同它的三处账本条目一起删"
+      "baseline": 47,
+      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。 RFC-359：`sqliteNodeRunMintParticipant.ts` 退役——它只是 `nodeRunMintProgram` 的同步解释器，src 侧唯一的到达路径是 `mintLegacySqliteNodeRunInTx` → `services/nodeRunMint.ts#mintNodeRunTx`，而后者生产零调用方；事务内铸行的调用方本来就走中立的 `createNodeRunMintParticipantInTx`，50 → 49。。RFC-359（2026-09-13）49 → 48：同上，那条死门面连同它的三处账本条目一起删。RFC-359（2026-09-13，apply 引擎合一 §5dw）48 → 47：`modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts` 退役——它的四个同步 `*InTx` 只服务 legacy 提交路径，随 `legacyResourcePackageCommit.ts` 一起删；两个 async 读早就由中立的 `packageResourceRows.ts` 提供"
     },
     {
       "id": "rfc359-w5-provider-pair-conformance",
@@ -790,7 +790,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1727,
+      "baseline": 1725,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -825,7 +825,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5248,
+      "baseline": 5238,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -846,7 +846,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4713,
+      "baseline": 4704,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -860,7 +860,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 983,
+      "baseline": 982,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -881,12 +881,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24915,
+      "baseline": 24901,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b95048207a6c0fda247ef3df268ba91b2a1fed5af8f215ff05c6aecf952fbcf5",
+    "sourceDigest": "sha256:bf27629cc45378920cebe9acf94d02de83545ccc6abc23429182e5cd6858c38d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "eb88d590e60afb77afa86efebeab3315622516e7",
-    "contentDigest": "sha256:03201a0bc662c3e0eba0efc7e8abb6f18233505f14dbb301547eecb8fdff6291",
+    "currentSnapshotSha": "98dc1d40bcd340a59913e5eed50bc1553fe8a84d",
+    "contentDigest": "sha256:8b571d370b7db2e22330633b6570ef6a9608bf2e02a11fd9ad24e7b15a764fff",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
