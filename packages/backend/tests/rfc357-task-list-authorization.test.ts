@@ -12,12 +12,11 @@
 // PostgreSQL 侧 `/api/tasks` 用的是等价的 `IS DISTINCT FROM`。三态各来一行，
 // 任何一侧改写成裸 `ne(...)` 都会在这里红。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { and, type SQL } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskCollaborators, tasks, users, workflows } from '@/db/schema'
 import {
   defaultTaskListRowRef,
@@ -25,10 +24,9 @@ import {
   taskListViewerOf,
   taskListVisibilityCondition,
 } from '@/modules/task-execution/infrastructure/taskListPage/authorization'
+import { describeEachProvider } from '../tests/helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -100,9 +98,13 @@ async function idsWhere(db: Db, condition: SQL<unknown> | undefined): Promise<st
   return rows.map((row) => row.id).sort()
 }
 
-describe('RFC-357 task list authorization covers all three owner states', () => {
+// RFC-359 AC-6：这两个谓词构造器在搬家时已放宽成 provider 中立，而本文件锁的正是
+// SQL 三值逻辑那个坑——`ne(owner_user_id, me)` 在 NULL 上是 NULL 不是真。两个引擎对
+// NULL 比较的渲染不同（PG 侧等价写法是 `IS DISTINCT FROM`），所以这条判据尤其该双跑：
+// 任何一侧退化成裸 `ne(...)` 都必须在这里红。
+describeEachProvider('RFC-357 列表页授权的三态语义（双引擎）', (harness) => {
   test('visibility: an admin sees everything, a regular user sees owned plus collaborating', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
 
     const admin = await idsWhere(
@@ -131,7 +133,7 @@ describe('RFC-357 task list authorization covers all three owner states', () => 
   })
 
   test('scope=shared keeps the ownerless row — the three-valued-logic trap', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
 
     const shared = await idsWhere(
@@ -145,7 +147,7 @@ describe('RFC-357 task list authorization covers all three owner states', () => 
   })
 
   test('scope=mine is owned-or-collaborating, scope=all is unconditional', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
 
     const mine = await idsWhere(
@@ -170,7 +172,7 @@ describe('RFC-357 task list authorization covers all three owner states', () => 
   })
 
   test('the two predicates compose the way the page uses them', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db)
     const alice = actor('alice')
     const composed = await idsWhere(

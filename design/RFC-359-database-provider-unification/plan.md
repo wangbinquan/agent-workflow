@@ -10734,3 +10734,36 @@ cancel 的前置读**之后**才发出的，于是 cancel 靠发出顺序侥幸�
 **结论**：PG 侧的契约目前由**一条**用例承重，不是 11 条。要把评审键那几条也在 PG 上锁死，
 得让竞争者的作用域查询强制排在 cancel 的前置读之前——那是另一件事，本刀没做。
 记在这里，免得下一个人从「11 条双跑」推出「11 条都在 PG 上有预言力」。
+
+## §5es —— AC-6 的机械面到此为止：剩下 27 行**逐行核过**，没有一行是「还能迁但没迁」
+
+`rfc357-task-list-authorization` 转双引擎（4 → 8 格，SQLite 侧 4 格 / 9 断言逐字不变）。
+它的被测物是列表页那两个谓词构造器，搬家时已放宽成 provider 中立；而它锁的正是
+**SQL 三值逻辑那个坑**——`ne(owner_user_id, me)` 在 `owner_user_id IS NULL` 上是 NULL 不是真，
+无主但共享给我的任务会静默消失。两个引擎对 NULL 比较的渲染本就不同
+（PG 侧等价写法是 `IS DISTINCT FROM`），所以这条判据**尤其**该双跑。账本 334 → 333 / 28 → 27。
+
+### 剩下 27 行的逐行分类
+
+| 类别 | 数 | 说明 |
+| --- | --- | --- |
+| 已双跑，只剩一个**有据**的单引擎块 | 10 | `execution-contract-platform` / `rfc189-wg-round` / `rfc221-login-policy-routes` / `rfc257-webhook-error-codes` / `rfc291-unavailable-mount` / `rfc291-closure-call-edges` / `rfc310-pr7b-handover` / `rfc311-repos-page` / `rfc311-task-page-fastpath` / `rfc359-w7-catalog-composition-roots` |
+| 卡生产签名 | 5 | 全部经 `StartTaskDeps` / `freezeCallClosure` / `createSqliteTaskExecutionPersistence` |
+| 被测物就是某一侧的适配器 | 7 | `rfc349-*` 那一族（websocket / execution-peripheral / daemon-provider-core / dual-provider-oracle / 两个 `*-postgresql-adapter` / platform-tools-wiring） |
+| 架构守卫 / helper / 迁移链 | 5 | `architecture/rfc329-mcp-surface-guard`、`rfc305-architecture-lock`、`helpers/rfc310Pr3Fixture.ts`、两个 `rfc359-t19h-*` |
+
+**没有一行属于「机械上能迁、只是还没动」。** AC-6 的机械面到此为止。
+
+### 为什么这 27 不该靠「重新分类」变小
+
+后三类里有 12 行，按裁决本该判「不适用」。**但不能把它们挪进 `SANCTIONED_SINGLE_ENGINE`**：
+那张表的五个类目（`migration-chain` / `sqlite-execution-engine` / `real-file-database` /
+`sync-engine-capability` / `sqlite-only-primitive`）**全部是机械可判的**，而
+「被测物就是某一侧的适配器」是一句关于「这条判据在测什么」的**判断**，机械判不出来。
+
+本文件自己的话：`OPEN_MIGRATION_DEBT` 是「**没有任何机械理由**留在单引擎上的文件」。
+§5eg 也已经两次拒绝过为好看而加类目：「**放松判据的方向恰好是让数字变好看的方向**」。
+
+**所以 27 这个数偏大是设计使然，不是账没销干净**——账本宁可多记，也不让一句判断悄悄把数字抹小。
+我先前把「28 → ~22 的重新分类」写成一个待用户拍板的选项，**那个框定也是错的**：
+按账本自己的规矩，这件事的答案是**不做**。
