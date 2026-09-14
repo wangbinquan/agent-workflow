@@ -1,26 +1,24 @@
 // P-4-04: per-task duration + token limit enforcement.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { enforceLimits } from '../src/services/limits'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(db: ProviderNeutralDatabase): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-limits-'))
-  const db = createInMemoryDb(MIGRATIONS)
   return {
     db,
     appHome,
@@ -29,7 +27,7 @@ function buildHarness(): Harness {
 }
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   overrides: Partial<typeof tasks.$inferInsert>,
 ): Promise<string> {
   const workflowId = ulid()
@@ -54,15 +52,21 @@ async function seedTask(
     status: 'running',
     inputs: '{}',
     startedAt: Date.now() - 1000,
+    // RFC-328：SQLite 的 `rfc328_tasks_lineage_after_insert` 触发器按设计没有 PG 对应物，
+    // 直接写 `tasks` 的夹具必须自己把这两列填上，两个引擎才从同一个起点出发。
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([{ kind: 'task-root', taskId }]),
     ...overrides,
   })
   return taskId
 }
 
-describe('enforceLimits', () => {
+// RFC-359 AC-6（plan §5ep）：`enforceLimits` 的裸 db 入口经
+// `composeLegacySqliteResourceLimitOperations` 取 `cancelTask`，两处都已放宽到中立句柄，本文件转双引擎。
+describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) => {
   let h: Harness
   beforeEach(() => {
-    h = buildHarness()
+    h = buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

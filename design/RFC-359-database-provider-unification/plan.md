@@ -10581,3 +10581,28 @@ FIFO 变更槽。改成 `await` 就改变了「函数何时第一次让出」，
 `resumeTask` / `retryNode` 仍钉在 `DbClient` 上——**不是标注问题**，是传递闭包：
 `resumeKick` / `assertChildTaskDrivable` 仍要同步句柄（§5en 说它们「零同步点」是按函数体数的，说小了）。
 `startTaskImpl` 的 17 个同步点是最后的硬骨头。
+
+### §5ep 续 —— `limits` 随同一刀销账，以及 `resumeTask` / `retryNode` 闭包的实测尺寸
+
+`enforceLimits` 的入口放宽之后，`limits.test.ts` 只需要它一个，于是直接转双引擎（5 → 10 格）。
+账本 335 → 334 / 29 → 28。
+
+**下一刀的尺寸（用编译器量的，不是估的）**：把 `resumeTask` / `retryNode` 及其直接被调方
+一起放宽，`tsc` 报 **12 条**，全部在 `services/task.ts` 内：
+
+| 被调方 | 自身同步点 |
+| --- | --- |
+| `rollbackNodeRunForResume` | **0** |
+| `retryRepoPreparation` | **0** |
+| `reapHeldRuntimeSessionOwnersForTask` | 3 |
+| `reapRunBeforeWorktreeReset` | 3 |
+
+11 条是这四个 helper 的签名，第 12 条是 `retryNode` 里的
+`deps: { ...opts.deps, db }`（`task.ts:6433`）——它撞的是 `StartTaskDeps['db']`，
+也就是**启动路径**那堵墙（`startTaskImpl` 17 个同步点）。
+
+所以：**`resumeTask` 这一支是够得着的**（6 个同步点，全在两个 `reap*` 里）；
+**`retryNode` 够不着**，它经 `createTaskDriveCoordinator` 连上 `StartTaskDeps`。
+而 `rfc097-task-status-cas` 三个都要，所以它要等启动路径那一刀。
+
+探测改动已原样还原。

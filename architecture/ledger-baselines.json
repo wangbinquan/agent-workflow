@@ -517,14 +517,14 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 335,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎"
+      "baseline": 334,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎。RFC-359 AC-6（plan §5ep）335 → 334：`limits` 随同一刀销账（它只需要 `enforceLimits`）"
     },
     {
       "id": "rfc359-w5-test-engine-open-migration-debt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "OPEN_MIGRATION_DEBT",
-      "baseline": 29,
+      "baseline": 28,
       "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件。RFC-359 AC-6（plan §5ek）53 → 52：`workflows` 销账。RFC-359 AC-6（plan §5el）52 → 44：第四波再迁 7 个文件"
     },
     {
@@ -791,10 +791,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1699,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-6（plan §5ep）：`reviewMutationCoordinator` 拆出 `reserveTaskReviewMutationSlot` 与 `claimTaskQueueSlot`，`cancelTask` 因此可以**先同步取号、再 await 前置读**——排队顺序不再依赖 bun:sqlite 的同步读，两个引擎同一条规则。涨的是这两个私有符号，换掉的是「取消在 PostgreSQL 上恒报 task-not-found」这条静默缺陷（变异验证：去掉那个 await，PG 道 `rfc207` 立刻红而 SQLite 道照绿）。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -885,10 +882,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24740,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-6（plan §5ep）：`reviewMutationCoordinator` 拆出 `reserveTaskReviewMutationSlot` 与 `claimTaskQueueSlot`，`cancelTask` 因此可以**先同步取号、再 await 前置读**——排队顺序不再依赖 bun:sqlite 的同步读，两个引擎同一条规则。涨的是这两个私有符号，换掉的是「取消在 PostgreSQL 上恒报 task-not-found」这条静默缺陷（变异验证：去掉那个 await，PG 道 `rfc207` 立刻红而 SQLite 道照绿）。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -905,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "fe08f8fb87b8b7534f6158bece47c5ea7bd4840f",
-    "contentDigest": "sha256:72fa544740c93e8c8e873c3dee4aaaa08cdf8484f859ac7515f1f32d08522113",
+    "currentSnapshotSha": "6df2e8b6b62cc3c2865e86088ab3d93ea50cf939",
+    "contentDigest": "sha256:cdc16f6d9bbfa82923e118d47a4be754e64d372379db9fa74f0e8ccf09b749fb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
