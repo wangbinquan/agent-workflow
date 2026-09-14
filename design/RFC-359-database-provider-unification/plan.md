@@ -33,7 +33,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。**2026-09-13 逮到一条用户可见的分叉并修掉**：数字员工「计划人审闸门」在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、PG 显示「规划中」）——成因是端口**同步且可选**，PG 侧的 composition 实现不了、少实现也没有任何地方会红。判定已收成一份 async 中立实现、两侧都装，并加了**装配锁**（删掉 PG 侧那个方法当场红 4 格，§5dm）。同批做了一次**全类扫查**：端口/参与者接口上的可选方法全仓只有 9 个，其余 8 个都是按功能可选（工作组宿主能力 / 连接目录 / 契约投影），不是按引擎——这一类已经清干净。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | **2026-09-13 连续 exact-SHA 全绿**：`63030aaea` / `b41a8cab2` / `55864e0c8` / `51aeda3f3` / `5b706bca8` / `7482255fc` 六笔各自的 push CI run 终态 success（十二个 ubuntu 后端分片带真 postgres:17、macOS 六分片、lint/format/depcheck、单二进制 build smoke、Playwright e2e）。同期修掉两次自己推出的红并各带回归用例：①`void <promise>` 没接 rejection（PG 上 `0 fail` 却退 1 的形态，§5dk）；②铸行 id 非单调（macOS 分片随机红，§5dl）。**仍待办**：RFC 收口后需要在最终 SHA 上再取一次终态取证。 | 进行中 |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                                                                                                                         | ✅     |
-| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新已核仍是 W52 full `34427756137` 的 360 样本 / 18 组：两项绝对失败——SQLite `tasks-first` p95 150.616ms 未低于 150ms 预算、PG `workgroup-pending` **max** 11.571ms 未低于 10ms 预算；其余 16 项通过。**闭合条件是明确的**：在当前 SHA 上跑一次 `scale=full`（`scripts/perf-run.ts`，100k tasks / 10M events，判据见 `scripts/perf-compare.ts` 的 `PERF_HTTP_SCENARIOS`）。本轮**没有**动性能代码——本仓规矩是「数字都是跑出来的，不是估的」，没有 full 实测就不做盲优化；`workgroup-pending` 那一格若复现，第一嫌疑是 `pendingRows` 里跟着可见任务数走的两条 `inArray(...)`（`workgroupTaskRoomQueries.ts`）。 | 进行中 |
+| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新已核仍是 W52 full `34427756137` 的 360 样本 / 18 组：两项绝对失败——SQLite `tasks-first` p95 150.616ms 未低于 150ms 预算、PG `workgroup-pending` **max** 11.571ms 未低于 10ms 预算；其余 16 项通过。**2026-09-14（§5ee）已在 `948d9b5fb` 上跑过一次 `scale=full`**（run `34816698143`）：W52 那两条绝对失败都已清，只剩 `overview` 在 PG 上 11.003ms > 10ms 一条；EXPLAIN 实测根因是**语句条数**（22 条，九端点最多）而非查询代价（四条任务计数走 Index Only Scan，库内合计 < 1.6ms）。**闭合条件**：收掉 overview 的冗余语句后在新 SHA 上再跑一次 `scale=full`（`scripts/perf-run.ts`，100k tasks / 10M events，判据见 `scripts/perf-compare.ts` 的 `PERF_HTTP_SCENARIOS`）。本轮**没有**动性能代码——本仓规矩是「数字都是跑出来的，不是估的」，没有 full 实测就不做盲优化；`workgroup-pending` 那一格若复现，第一嫌疑是 `pendingRows` 里跟着可见任务数走的两条 `inArray(...)`（`workgroupTaskRoomQueries.ts`）。 | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。**2026-09-14（§5ea）**：intent apply 合一带走九个 provider 命名的装配 / 工厂（`compose{Sqlite,Postgresql}IntentApplyOperations` / `compose|createSqliteIntentApplyArtifactLifecycle` / `compose{Sqlite,Postgresql}IntentMaintenance{CommandsForAppHome,SnapshotQueries}` / `composePostgresqlIntentApplyConvergence` / `composeSqliteSkillArtifactCompensation` / `createLegacyIntentApplyResourceSession`），换成不带引擎前缀的 `composeIntentApply*` / `composeIntentMaintenance*`。provider 命名文件 47 → **44**、适配器语料 130 → **120**、组合根 57 → **48**。                                                                                    | 进行中 |
 
 ### AC-9 取证（2026-09-10，exact `03b34a783`）
@@ -10009,3 +10009,62 @@ dangle 容忍写反」，`intent-privileged-node-capability` 的 boundary / norm
   `tsc` 一声不吭，运行时那句写**根本没发生**。§5eb / §5ec / 本批连撞三次，全是这一种。
 
 ⇒ 迁移时的顺序应当是：先全文搜 `.run()`（编译器帮不上忙的那一类），再让 `tsc` 去扫其余两种。
+
+## 5ee. AC-11：在 `948d9b5fb` 上跑了一次 `scale=full`，两条老红已清，只剩 `overview` 一条
+
+`gh workflow run postgresql-evidence.yml -f scale=full -f evidence_suite=http-performance`
+（run `34816698143`，exact `948d9b5fb`）。九个端点的实测：
+
+| 端点 | SQLite p95 | PG p95 | PG 不劣于 | 绝对预算 | PG 在预算内 |
+| --- | ---: | ---: | :---: | ---: | :---: |
+| tasks-first | 137.533 | 74.761 | ✅ | 150 | ✅ |
+| tasks-second | 52.688 | 49.217 | ✅ | 150 | ✅ |
+| tasks-running | 86.458 | 46.823 | ✅ | 150 | ✅ |
+| repos-first | 4.486 | 7.707 | ❌ | 100 | ✅ |
+| repos-referenced | 8.127 | 7.394 | ✅ | 100 | ✅ |
+| reviews-pending | 1.697 | 7.101 | ❌ | 10 | ✅ |
+| clarify-pending | 1.503 | 2.946 | ❌ | 10 | ✅ |
+| workgroup-pending | 5.488 | 4.957 | ✅ | 10 | ✅ |
+| **overview** | 6.012 | **11.003** | ❌ | 10 | **❌** |
+
+**W52 记的两条绝对失败都已清**：SQLite `tasks-first` 150.616 → **137.533**（预算 150）；
+PG `workgroup-pending` 此前 max 11.571 超 10，本轮 p95 **4.957**、`pgOK` 为真。
+⇒ plan 里「第一嫌疑是 `pendingRows` 的两条 `inArray`」那条**已经不成立**，那一格现在是绿的。
+
+**只剩一条绝对失败：`overview` 在 PG 上 11.003ms > 10ms 预算**（另外三条 `repos-first` /
+`reviews-pending` / `clarify-pending` 只是没过「PG 不得慢于 SQLite」这条**相对**判据，
+三者的绝对预算都还有很大余量）。
+
+### 根因不是查询代价，是**语句条数**（EXPLAIN 实测，不是猜）
+
+`postgresql-query-profile.json` 里 `overview` 的四条任务计数**全部走
+`Index Only Scan / idx_tasks_overview_counts`**，`Actual Total Time` 分别是
+**0.014 / 0.017 / 0.025 / 1.571 ms**——库里真正干的活合计不到 1.6ms。而同样这四条语句的
+`wallMs` 是 **7.0–7.6ms**。差出来的约 6ms/条是**客户端侧**：连接获取、编译绑定、往返、解码。
+
+再看横向对比：`overview` 是九个端点里**语句最多的一个（22 条）**，也是唯一一个绝对预算失败的。
+
+| 端点 | 语句数 | wall |
+| --- | ---: | ---: |
+| overview | **22** | 15.463ms |
+| tasks-first | 21 | 118.781ms |
+| tasks-running | 20 | 86.124ms |
+| repos-first | 13 | 20.009ms |
+| reviews-pending | 8 | 8.299ms |
+
+（`tasks-*` 语句也多但预算宽 15 倍，所以不失败。）
+
+### 因此下一步的方向是**减少语句条数**，不是优化 SQL
+
+两处可收，都在共享实现里、两个 provider 同时受益：
+
+1. **四条任务计数收成一条**（`taskOverviewQuery.ts`）。四条的 where 只差状态谓词，共享
+   `visibility AND parent_task_id IS NULL AND catalog_visibility='public'`。
+   用 `sum(case when … then 1 else 0 end)` 的条件聚合（`FILTER` 是 PG 语法，SQLite 3.30+
+   才有，条件求和两边都稳）一次扫完 ⇒ **-3 条**。
+2. **六张资源表的可见计数**（`resourceCatalogOverview.ts` 的 `countVisible` 逐类调用）
+   可以收成一条 `UNION ALL` ⇒ **-5 条**。
+
+22 → 约 14。**但这必须实测验证**：本仓规矩是「数字都是跑出来的，不是估的」，而上面这段本身
+就是一次「先猜错、再被 EXPLAIN 纠正」的记录——我最初的假设是「PG 上 count 慢」，plan 数据
+证明恰恰相反。改完要在新 SHA 上再跑一次 `scale=full` 才算数。
