@@ -129,7 +129,10 @@ describe('RFC359 W40 resource-package skill document', () => {
     }
   })
 
-  test('both actual artifact writers consume the shared serializer at the original sites', () => {
+  test('唯一那个工件写出点消费共享序列化器（不得复辟一份私有实现）', () => {
+    // RFC-359（apply 引擎合一，plan §5dy）：**写出点从两个变成一个**——legacy 那份
+    // （`legacyResourcePackageMutationParticipants.ts` 的 `writeSkillTree`）随通用 bundle 引擎退役。
+    // 判据因此从「两侧都消费同一份序列化器」收成「唯一那一侧消费它，且本文件没有私有副本」。
     const pgSource = readFileSync(
       new URL(
         '../src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts',
@@ -137,17 +140,7 @@ describe('RFC359 W40 resource-package skill document', () => {
       ),
       'utf8',
     )
-    const sqliteSource = readFileSync(
-      new URL(
-        '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
-        import.meta.url,
-      ),
-      'utf8',
-    )
-    const parse = (source: string) =>
-      ts.createSourceFile('owner.ts', source, ts.ScriptTarget.Latest, true)
-    const pg = parse(pgSource)
-    const sqlite = parse(sqliteSource)
+    const pg = ts.createSourceFile('owner.ts', pgSource, ts.ScriptTarget.Latest, true)
     const bindings = (source: ts.SourceFile) =>
       source.statements.flatMap((node) => {
         if (
@@ -166,27 +159,11 @@ describe('RFC359 W40 resource-package skill document', () => {
     expect(bindings(pg)).toEqual([
       { local: 'skillMarkdown', module: "'./resourcePackageSkillDocument'" },
     ])
-    expect(bindings(sqlite)).toEqual([
-      { local: 'renderResourcePackageSkillMarkdown', module: "'../resourcePackageSkillDocument'" },
-    ])
+    // 「复辟一份私有实现」的反向锁：本文件里不得再出现同名的本地函数声明。
     expect(
       pg.statements.some(
         (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'skillMarkdown',
       ),
     ).toBe(false)
-    const writer = sqlite.statements.find(
-      (node): node is ts.FunctionDeclaration =>
-        ts.isFunctionDeclaration(node) && node.name?.text === 'writeSkillTree',
-    )
-    if (writer?.body === undefined) throw new Error('Actual legacy writer missing')
-    const initializers = writer.body.statements
-      .flatMap((node) =>
-        ts.isVariableStatement(node) ? [...node.declarationList.declarations] : [],
-      )
-      .filter((node) => ts.isIdentifier(node.name) && node.name.text === 'skillMd')
-    expect(initializers.length).toBe(1)
-    expect(initializers[0]?.initializer?.getText(sqlite)).toBe(
-      'renderResourcePackageSkillMarkdown(payload)',
-    )
   })
 })

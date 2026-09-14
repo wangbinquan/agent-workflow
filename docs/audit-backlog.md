@@ -4319,6 +4319,25 @@ tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新�
 另外加一条：**把 Playwright 的 retry 关掉再看**——若关掉 retry 后第一次就是 9，那「重试在脏状态上
 跑」这一支就被排除掉了。在拿到证据之前**不动这条断言**（放宽它会让真的多轮回归从此看不见）。
 
+## `rfc253-script-node` 的把手命中在 e2e 上偶发落到画布 pane 上（2026-09-13 一次）
+
+`e2e/rfc253-script-node.spec.ts:256` 的「拖两个脚本节点连线」在 `13a72be52` 的 ubuntu e2e
+分片 2/3 上红，两次尝试同形，报的是那条**命中探针**自己的话：
+
+> producer 右把手的中心点没命中把手本身，实际命中：`div.react-flow__pane draggable`
+
+这正是 `docs/dev-gotchas.md` §画布命中 记的那一族的**第一种形状**（节点被打回未测量态），
+不是第二种（浮层拦截）——拦截者是 pane 本身，说明那一帧把手根本不在稳定器算出来的坐标上。
+探针把拦截者报了出来，所以不用翻 trace 就能分辨，这一条正是那份 gotchas 想要的效果。
+
+**与当次改动无机制关联**：`13a72be52` 是后端删除（资源包 apply 的通用 bundle 引擎退役），
+`packages/frontend` / `e2e` 一个文件都没碰。
+
+**下次再红时要抓的**：①`stableCenter` 判定稳定的那一帧，把手与它所在节点的
+`getBoundingClientRect()` 与计算样式各打一份；②同一时刻 `react-flow` 的 viewport transform
+（相机还在动的话坐标会整体漂）。在拿到证据之前不动稳定器的阈值——调大它只会把偶发变成更慢的偶发。
+判据：`rfc253-script-node.spec.ts:256` + 「实际命中：div.react-flow__pane」。
+
 ## O(k²) 守卫用**墙钟毫秒**当判据，在共享 runner 上会假红（2026-09-06 实撞）
 
 `rfc349-target-coverage-linear-grouping.test.ts` 断言「1 万个分片的分组 < 150ms」，用来防

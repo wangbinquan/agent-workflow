@@ -18,8 +18,6 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const src = (rel: string): string =>
-  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', rel), 'utf8')
 const moduleSrc = (rel: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', 'modules', rel), 'utf8')
 const legacyResourceSrc = (rel: string): string =>
@@ -43,14 +41,23 @@ describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
     expect((skill.match(/initialPrivateResourceAcl\(ownerUserId\)/g) ?? []).length).toBe(2)
   })
 
-  test('③ bundle apply 的 plugin 铸造经 initialPrivateResourceAcl（RFC-284 T11）', () => {
-    const adapter = moduleSrc(
-      'resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
+  test('③ 资源包 apply 的每条铸造都落 owner + private（RFC-284 T11）', () => {
+    // RFC-359（apply 引擎合一，plan §5dy）：legacy 那条链（`legacyResourcePackageMutationParticipants`
+    // + 它的依赖表）随通用 bundle 引擎退役，判据改指生产在用的七条臂。
+    //
+    // 判据形状也跟着变：legacy 那条是「调 `dependencies.initialPrivateResourceAcl(...)`」，
+    // 统一那条把同一件事写成逐臂的字面量（`ownerUserId` + `visibility: 'private'` + `aclRevision: 0`）。
+    // 锁的东西不变——**每一条铸造都归导入者、都是 private，且没有任何一处写 public**。
+    const arms = moduleSrc(
+      'resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
     )
-    const dependencies = src('bundle/legacyResourcePackageMutationDependencies.ts')
-    expect(adapter).toContain('dependencies.initialPrivateResourceAcl(actor.user.id)')
-    expect(dependencies).toContain('initialPrivateResourceAcl,')
-    expect(adapter.includes("visibility: 'public'")).toBe(false)
-    expect(dependencies.includes("visibility: 'public'")).toBe(false)
+    const privateMints = (arms.match(/visibility: 'private',/g) ?? []).length
+    expect(privateMints, '铸造点一处都没扫到 ⇒ 判据此刻零预言力').toBeGreaterThanOrEqual(4)
+    // 归属那一半比可见性那一半多（更新路径也写 owner），所以是 `>=` 不是 `===`：
+    // 判据要的是「凡铸造必带 owner」，不是两个计数相等。
+    expect(
+      (arms.match(/ownerUserId: input\.context\.actor\.user\.id,/g) ?? []).length,
+    ).toBeGreaterThanOrEqual(privateMints)
+    expect(arms.includes("visibility: 'public'")).toBe(false)
   })
 })
