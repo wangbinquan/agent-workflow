@@ -13,8 +13,11 @@
 > `Bitmap Heap Scan`。实测 10 万行：1.682ms → **0.557ms（3.0×）**。生产有 autovacuum、
 > VM 常态是新的——**只 ANALYZE 等于拿 PG 一个它从不持续停留的瞬时状态去比 SQLite 的稳态**。
 >
-> 两个引擎都补上各自需要的装载后维护（SQLite 也加 VACUUM，实测快 8%）——不是放水，两侧都加、
-> 两侧都受益，差别只在被罚的本来就只有 PG。plan-audit 的语料同步改成 `vacuum analyze`，
+> 判准是「**生产里这个引擎实际有什么**」：PG 默认开 autovacuum → 补 `VACUUM ANALYZE`；
+> SQLite 没有后台 vacuum、生产也基本不手工 VACUUM → **维持 `ANALYZE`**（一度也给它加了、
+> 实测快 8%，又去掉：那是生产拿不到的收益，且 1000 万行语料整文件重写要另占约一倍盘，
+> 这个 job 的盘掐着 25 GiB 还要装两套语料）。不是放水，两边各自对齐**自己的**生产稳态。
+> plan-audit 的语料同步改成 `vacuum analyze`，
 > 审计与基准必须看同一个库状态。判据取**可见性本身**（`Heap Fetches: 0`）不取耗时；
 > 改回 `analyze` 立刻报 `Bitmap Heap Scan … Heap Blocks: exact=345`，红→绿实证过。
 >

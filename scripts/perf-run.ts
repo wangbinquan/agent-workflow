@@ -213,10 +213,14 @@ async function seedSqlite(input: RunInput): Promise<void> {
       const receipt = await readPerformanceCorpusReceipt(db, dimensions)
       json(join(input.output, 'sqlite-seed.json'), receipt)
       if (!receipt.matchesExpected) throw new Error('SQLite differs from original RFC-311 corpus')
-      // RFC-359 AC-11 —— 两个引擎都做**各自需要的**装载后维护，然后才计时。
-      // 见下面 PostgreSQL 侧同位置的长注释：不做的话量到的是「刚灌完数据」这个生产不会持续
-      // 停留的瞬时状态，而它对两个引擎的惩罚**不对称**。SQLite 侧实测 p50 0.4336 → 0.3979ms。
-      db.$client.exec('VACUUM')
+      // RFC-359 AC-11 —— 装载后维护的判准是「**生产里这个引擎实际有什么**」，不是「两边跑
+      // 同样的命令」。SQLite 没有后台 vacuum，绝大多数部署也从不手工 `VACUUM`，所以这里
+      // **只 `ANALYZE`**——那正是它生产中的状态。（实测 `VACUUM` 能再快约 8%：p50
+      // 0.4336 → 0.3979ms，但那是生产拿不到的收益；而且全量语料是 1000 万行事件，
+      // SQLite 的 `VACUUM` 要整文件重写、另需约一倍空闲盘，这个 job 的盘本来就是掐着给的。）
+      //
+      // PostgreSQL 侧相反，必须 `VACUUM ANALYZE`——理由见 `seedPostgresql` 里同位置的注释：
+      // 它的 index-only scan **依赖** visibility map，而生产有 autovacuum 一直在维护它。
       db.$client.exec('ANALYZE')
     },
     () => {
@@ -284,10 +288,12 @@ async function seedPostgresql(input: RunInput): Promise<void> {
       //   只 ANALYZE : Bitmap Heap Scan                    1.682ms
       //   VACUUM 之后: Index Only Scan, Heap Fetches: 0    0.557ms   ← 3.0×
       //
-      // 这不是给 PG 放水——SQLite 侧同样加了 VACUUM（实测也快 ~8%）。差别在于 SQLite 没有 MVCC
-      // 可见性这回事，本来就拿得到最好的计划；缺了这一步只有 PG 被罚，正是 RFC-359 要消灭的
-      // 「同一件事两个引擎一个好一个不好」。判据见 `rfc359-w6-t26-postgresql-plan-audit`
-      // 的「装载后维护到位：热计数走 index-only scan 且 Heap Fetches 为 0」。
+      // 这不是给 PG 放水。判准是「**生产里这个引擎实际有什么**」：PostgreSQL 默认开着
+      // autovacuum、VM 常态是新的；SQLite 没有后台 vacuum、生产也基本不手工 `VACUUM`，
+      // 所以那边只 `ANALYZE`（见 `seedSqlite`）。两边各自对齐自己的生产稳态，而不是对齐
+      // 彼此的命令行。缺了这一步被罚的只有 PG，正是 RFC-359 要消灭的「同一件事两个引擎
+      // 一个好一个不好」。判据见 `rfc359-w6-t26-postgresql-plan-audit` 的
+      // 「装载后维护到位：热计数走 index-only scan 且 Heap Fetches 为 0」。
       await runtime.providerPool().unsafe('VACUUM ANALYZE')
     },
     () => {

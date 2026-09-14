@@ -10983,14 +10983,20 @@ VACUUM 之后 : Index Only Scan, Heap Fetches: 0    0.557ms   ← 3.0×
 瞬时状态，去和 SQLite 的稳态比**——而 SQLite 没有 MVCC 可见性这回事，本来就拿得到最好的计划。
 缺这一步只有 PG 被罚，这正是本 RFC 要消灭的「同一件事两个引擎一个好一个不好」。
 
-### 处置：两个引擎都补上**各自需要的**装载后维护
+### 处置：判准是「**生产里这个引擎实际有什么**」，不是「两边跑同样的命令」
 
-- PostgreSQL：`ANALYZE` → `VACUUM ANALYZE`
-- SQLite：`ANALYZE` → `VACUUM` + `ANALYZE`（实测也快：p50 0.4336 → 0.3979ms，约 8%）
+- PostgreSQL：`ANALYZE` → **`VACUUM ANALYZE`**。它默认开着 autovacuum，VM 常态是新的。
+- SQLite：**维持 `ANALYZE`**。它没有后台 vacuum，绝大多数部署也从不手工 `VACUUM`——
+  那本来就是它的生产状态。
 
-**这不是给 PG 放水**：两侧都加了，两侧都受益；差别只在 PG 的收益大得多，因为被罚的本来就只有它。
-`rfc359-w6-t26-postgresql-plan-audit` 的语料装载也同步改成 `vacuum analyze`——审计与基准必须看
-同一个库状态，否则这里判绿的计划在那边量出来是另一个。
+**一度我给 SQLite 也加了 `VACUUM`**（实测确实再快约 8%：p50 0.4336 → 0.3979ms），
+**又去掉了**，两个理由：① 那是生产拿不到的收益，加上去就不是在量生产；② 全量语料是
+1000 万行事件，SQLite 的 `VACUUM` 要整文件重写、另需约一倍空闲盘，而这个 job 的盘是掐着
+25 GiB 给的、还要同时装下两套语料——很可能把 CI 撑爆。
+
+**这不是给 PG 放水**：两边各自对齐**自己的**生产稳态。缺这一步被罚的只有 PG，
+因为只有它的 index-only scan 依赖 VM。`rfc359-w6-t26-postgresql-plan-audit` 的语料装载
+同步改成 `vacuum analyze`——审计与基准必须看同一个库状态，否则这里判绿的计划在那边量出来是另一个。
 
 ### 判据
 
