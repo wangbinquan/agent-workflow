@@ -27,8 +27,9 @@
 > 账本 `GENERIC_PLAN_GAPS` 建成即空；把探针改回旧写法判据立刻转红，实证过。
 >
 > **其余端点独立扫过没有第二处**（另一个 agent，带 1086× 的正向对照）：残余 gap 是
-> **每语句一次往返的固定成本**——`clarify-pending` 两引擎跑同样 3 条语句，PG 语句时间 1.98ms、
-> SQLite 0.13ms，出进程 TCP vs 进程内，足以覆盖全部残余。`/api/overview` 的常量绑参我改过又
+> **每语句一次往返的固定成本**——`clarify-pending` 两引擎跑同样 3 条语句，出进程 TCP vs 进程内。
+> 量级只按 CI 自己的数算：CI 上 3 条读总差 0.055ms，约 **0.018ms/语句**（协作 agent 的本机
+> Docker 数是 0.62ms/语句，差 30 倍，**不可外推**——§5et 已为同一件事记过一次教训）。`/api/overview` 的常量绑参我改过又
 > **改回去了**：实测 PG 不采纳那份 generic plan，改动没有数据支持。
 >
 > **未完**：CI 复测已按 HEAD 派发（`postgresql-evidence` / `http-performance`），

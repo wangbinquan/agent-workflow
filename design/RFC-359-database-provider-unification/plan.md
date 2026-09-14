@@ -10930,8 +10930,11 @@ custom 估 12.63 —— 估得更便宜所以被采纳，而那 8.47 建立在�
 
 - **真缺陷 1 个**，已修、已带守卫：workgroup 探针的 generic plan 全表扫。
 - **其余 gap 不是计划问题，是每语句一次往返的固定成本**：`clarify-pending` 两个引擎跑的是
-  **同样 3 条语句**，PG 的语句时间 1.98ms、SQLite 0.13ms——PG 出进程走 TCP，SQLite 在进程内，
-  每条语句几百微秒的 parse/bind/execute 差是结构性的，覆盖得住 0.06–5.7ms 的全部残余。
+  **同样 3 条语句**，PG 出进程走 TCP、SQLite 在进程内，每条语句的 parse/bind/execute 差是
+  结构性的。**量级按 CI 自己的数算**：那条端点在 CI 上 3 条读的总差是 0.055ms，即约
+  **0.018ms/语句**。（协作 agent 在本机 Docker PG 上量到的是 1.98ms vs 0.13ms，约 0.62ms/语句——
+  **那是本机数，不能外推到 CI**，两者差约 30 倍。§5et 已经为同一件事记过一次教训，这里不再犯：
+  凡涉及 CI 上的量级，只引 CI 自己的 artifact。）
 - `/api/overview` 的常量绑参（`catalog_visibility = $1`、`status in ($2,$3)`）我一度改成了
   字面量，**又改回去了**：实测 PG 不会采纳那份 generic plan（估算差 53 倍），
   改动无法用数据支持，留着就是一处未经测量的「优化」。
