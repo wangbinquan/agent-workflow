@@ -45,6 +45,8 @@ export type ProviderHttpApplicationInput = Pick<
   | 'mcpRuntimeTestDependencies'
   // 同上：意图回合的 system-agent 运行接缝。
   | 'intentTestDependencies'
+  | 'maintenanceStatus'
+  | 'databaseTelemetry'
 > & {
   readonly appHome: string
   /**
@@ -263,7 +265,10 @@ export async function createProviderHttpApplication(
       const postgresqlApplication = await composePostgresqlUnstartedApplication({
         ...input,
         db: binding.db,
-        provider: { runtime: binding.runtime, telemetry: binding.runtime.telemetry },
+        provider: {
+          runtime: binding.runtime,
+          telemetry: input.databaseTelemetry ?? binding.runtime.telemetry,
+        },
         config: selectedConfig,
         secretBox,
         databaseMigration,

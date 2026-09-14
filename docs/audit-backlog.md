@@ -5226,41 +5226,57 @@ packages/backend/tests/rfc311-repos-page.test.ts`。
 
 倾向 ②（它同时销掉一条 provider 分叉），但先记在这里，不在别人的 RFC 里顺手改。
 
-## 覆盖 PG 侧 `provider.telemetry` 会泄一条连接（2026-09-14 实测，未修）
+## ~~覆盖 PG 侧 `provider.telemetry` 会泄一条连接~~ —— **该结论是错的，已撤回（2026-09-14 当天证伪）**
 
-**现象**：把测试作用域的 `provider.telemetry` 从 `binding.runtime.telemetry` 换成一份自造的
-遥测函数之后，PostgreSQL 道多出一格 **`(unnamed)` 失败**：
+上一版在这里断言「覆盖 `provider.telemetry` 会让 PostgreSQL 泄一条连接」，并附了一张三步隔离表。
+**那个结论是错的**，撤回。真相是：当时 `aw-rfc359-pg` 容器因**磁盘写满**正在崩溃重启，
+`(unnamed) ERR_POSTGRES_CONNECTION_CLOSED` 是服务器没了，与被测代码无关。
+在恢复后的服务器上把**一模一样**的改动再跑一遍：4 格全绿、零 `(unnamed)`，两个引擎都跑。
+
+保留这一条不是为了记那个错误结论，是为了记**两件有用的事**：
+
+**① 这个症状长得像测试缺陷，其实是环境死了。** 判别方法是**单跑 PG 道**：
 
 ```
-PostgresError: Connection closed
- code: "ERR_POSTGRES_CONNECTION_CLOSED"
-      at wrapPostgresError (internal:sql/postgres:171:10)
-      at #onClose (internal:sql/postgres:347:30)
+AW_TEST_PROVIDERS=postgresql bun test tests/<file>
 ```
 
-不是断言失败——是一条**没人接的 promise 在连接池关掉之后才 reject**，于是挂在文件级、
-被记成一格匿名失败。九条真判据全过。
+得到 `0 pass / 1 fail` ⇒ **一个用例体都没跑**，那只可能是 `beforeAll` 失败，也就是环境问题；
+bun 把失败的 `beforeAll` 记成 `(unnamed)`（`tests/helpers/eachProvider.ts:1263-1267` 自己写着）。
+若真是「某个用例漏了 await、promise 在池关掉后才 reject」，前面的用例会**正常跑过**，
+计数不会是 0。双引擎那一格 `9 pass / 1 fail` 也要这么拆：9 格全是 SQLite 的，PG 道颗粒无收。
 
-**隔离过程**（三步，每步只改一个变量）：
+另一条佐证成本极低：**换一个已知绿的文件跑一遍**。同样的 `(unnamed)` 在一个刚验过绿的文件上
+复现，就说明不是那个文件的问题。
 
-| 改动 | PG 结果 |
-| --- | --- |
-| 只把 `maintenanceStatus` 从作用域喂进去 | 无泄漏 |
-| 只把 `databaseTelemetry` 并进 `ProviderHttpApplicationInput` 的 Pick（经 `...input` 展开） | 无泄漏（PG 侧忽略它，见下） |
-| 额外把 `provider.telemetry` 覆盖成自造函数 | **泄漏复现** |
+**② 我自己踩的方法论坑**：我做了一次「三步隔离、每步只改一个变量」，得出了上面那个错误结论。
+隔离法的前提是**混杂因素恒定**，而当时的混杂因素（服务器正在反复崩溃重启）是**非平稳**的，
+于是不同变体之间的差异全是噪声，被我读成了因果。
+**定式：动手隔离之前先确认环境健康，隔离之后再把基线复测一遍**——两头都对得上，中间的差异才是真的。
 
-所以根因是覆盖 `provider.telemetry` 本身，不是多喂了一个 key。
-`binding.runtime.telemetry` 是 `postgresqlRuntime.ts:431` 的 `poolWaitTelemetry.snapshot`，
-与连接池的等待采样绑在一起；换掉它之后池的收尾路径就留了尾巴。
-**它不只是个只读快照函数**——这一点与直觉相反，值得记下来。
+**仍然成立的那半个事实**（与上面的错误结论无关，是读源码得到的）：
+`cli/postgresqlDaemonApplication.ts:1929` 把路由的 `databaseTelemetry` 硬接成
+`input.provider.telemetry`，所以从 `AppDeps` 喂进去的 `databaseTelemetry` 在 PG 侧会被忽略。
+测试作用域要让那条「注入伪造投影、断言路由原样回显」的用例在两个引擎上都跑，就得在
+`tests/helpers/providerHttpApplication.ts` 的 PG 分支上传
+`telemetry: input.databaseTelemetry ?? binding.runtime.telemetry`——这条**已经做了**，用例已并入双引擎块。
 
-**连带的事实**：`cli/postgresqlDaemonApplication.ts:1929` 把路由的
-`databaseTelemetry` 硬接成 `input.provider.telemetry`，所以从 `AppDeps` 喂进去的
-`databaseTelemetry` 在 PG 侧**被静默忽略**（SQLite 侧则正常生效）。这就是
-`rfc338-maintenance-status` 那条「注入一份伪造投影、断言路由原样回显」的用例至今只能单引擎的
-原因——不是测试写法问题。
+## 共享 Docker VM 磁盘写满会把 PG 测试全线打成随机 `(unnamed)` 失败（2026-09-14，未处置）
 
-**处置**（需要 `src/` 改动，单独立一刀）：让 PG 根的 `databaseTelemetry` 可被入参覆盖而
-**不去动 `provider.telemetry`**，例如 `databaseTelemetry: input.databaseTelemetry ?? input.provider.telemetry`。
-两处各一行，之后那条用例并进双引擎块、判据一个字不用改。本次没做——它是生产改动，
-且「覆盖 telemetry 会泄连接」这件事本身也该先弄清楚是不是该修。
+`docker exec aw-rfc359-pg df -h /var/lib/postgresql/data` ⇒ **118G 用了 110G，剩 1.1G**。
+写满时 PG 直接 PANIC 重启：
+
+```
+ERROR:  could not extend file "base/…": No space left on device
+   STATEMENT: truncate table "agent_workflow"…restart identity cascade   ← harness 的 beforeEach
+PANIC:  could not write to file "pg_logical/replorigin_checkpoint.tmp": No space left on device
+LOG:  checkpointer process was terminated by signal 6: Aborted
+```
+
+**不是本仓造成的**：这个容器里所有库加起来只有 46MB（harness 的 `aw_t_*` 库 17MB）。
+占掉 110G 的是这台共享 VM 上的其他 Docker 内容——`docker system df` 报 34.65GB 镜像 /
+41.3GB 卷 / 8.27GB 构建缓存可回收。**没有动它**：那是用户环境里别的东西，清理是用户的决定，
+不该由跑测试的人顺手 prune 掉。
+
+在腾出空间之前，任何足够大的 PG 测试都可能再把它写满、再崩一次，而症状每次都会伪装成
+「某个测试文件有 teardown 竞态」。备用端点：`aw-pg-w57`，`postgres://postgres:postgres@127.0.0.1:55460/awtest`。
