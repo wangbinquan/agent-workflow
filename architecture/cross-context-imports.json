@@ -16595,23 +16595,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:359e9ae123751326b17f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/worktree-files.ts#$file",
       "fromPath": "packages/backend/src/routes/worktree-files.ts",
       "fromSymbol": "$file",
@@ -78304,9 +78287,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4606,
+    "architectureExceptions": 4605,
     "implementationSccs": 0,
-    "observedEdges": 5119,
+    "observedEdges": 5118,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -95465,22 +95448,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/task.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#$file",
-      "id": "import:359e9ae123751326b17f",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "type",
@@ -160756,7 +160723,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a702772b64054d7a60f4db87f743f14e752c5d4aed3cc4bef66a4fcb05fc77ef",
+  "sourceDigest": "sha256:effff43065672967096a6e115ebfd31a49735d140f6ea61319708dfd4c0251bc",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

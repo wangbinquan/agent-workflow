@@ -102,7 +102,6 @@ import type {
   WorkflowValidationCandidateOverlays,
 } from '../../public/types'
 import { asc, inArray } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   mcps as mcpsTable,
@@ -428,7 +427,7 @@ async function loadCallWorkflowClosure(
 export const buildWorkflowValidationContext = loadWorkflowValidationContext
 
 export async function validateWorkflowById(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
 ): Promise<WorkflowValidationResult> {
   const wf = await getWorkflow(db, id)

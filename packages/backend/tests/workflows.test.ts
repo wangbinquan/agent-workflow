@@ -12,9 +12,7 @@ import type {
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import {
   createWorkflow,
@@ -31,7 +29,6 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM_PRINCIPAL = { kind: 'system', reason: 'workflow-service-test' } as const
 
 async function buildHarness(
@@ -91,12 +88,6 @@ function deleteInput(workflow: Pick<WorkflowDetail, 'version' | 'name'>): Delete
 }
 
 describe('workflow service', () => {
-  let db: DbClient
-
-  function setupNativeServiceDb() {
-    db = createInMemoryDb(MIGRATIONS)
-  }
-
   describeEachProvider('CRUD', (harness) => {
     let db: ProviderDatabaseHarness['db']
 
@@ -233,16 +224,15 @@ describe('workflow service', () => {
     })
   })
 
-  // RFC-359 AC-6: single-engine ON PURPOSE. `validateWorkflowById` still takes
-  // the bun:sqlite-only client —
-  // `src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts:430-433`
-  // (`db: DbClient`) — so the provider-neutral handle the harness hands out does
-  // not type-check through it. Everything it calls underneath
-  // (`getWorkflow`, `loadWorkflowValidationContext`) is already neutral, so this
-  // block goes dual as soon as that one parameter does; routing around the
-  // entry point instead would stop pinning the wiring these two cases exist for.
-  describe('SQLite validation compatibility', () => {
-    beforeEach(setupNativeServiceDb)
+  // RFC-359 AC-6（plan §5ek）：这一块原本单引擎，卡的是 `validateWorkflowById(db: DbClient)`
+  // 那一行标注——它底下调的 `getWorkflow` / `loadWorkflowValidationContext` 早就是中立签名，
+  // 整个阻塞就是入口的参数类型。参数放宽到 `ProviderNeutralDatabase` 后本块转双引擎。
+  describeEachProvider('validation 服务装配（双引擎）', (harness) => {
+    let db: ProviderDatabaseHarness['db']
+
+    beforeEach(() => {
+      db = harness.db
+    })
 
     test('validate on empty workflow definition returns ok', async () => {
       // Rule coverage lives in workflow-validator.test.ts; this test pins down

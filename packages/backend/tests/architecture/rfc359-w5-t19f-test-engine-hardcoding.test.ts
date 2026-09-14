@@ -419,7 +419,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'task-start-pre-worktree.test.ts: 1',
   'task-start-working-branch.test.ts: 1',
   'upgrade-rolling.test.ts: 7',
-  'workflows.test.ts: 1',
 ]
 
 /**
@@ -712,7 +711,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'skill-identity-migration.test.ts',
   'skills-import-zip-http.test.ts',
   'start-task-deps.test.ts',
-  'workflows.test.ts',
 ]
 
 describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降不升）', () => {
