@@ -102,7 +102,9 @@ describe('RFC-338 maintenance architecture', () => {
     expect(worker).toContain('poolMax: Math.min(2, parsed.database.poolMax)')
     expect(worker).toContain('createMaintenanceRunStore(')
     expect(worker).toContain('composeWorkspaceMaintenanceCommand({')
-    expect(worker).toContain('composePostgresqlIntentMaintenanceCommandsForAppHome({')
+    // RFC-359（§5ea）—— intent 维护装配两个 provider 合成一份，名字不再带引擎前缀。
+    // 锁的东西没变：Worker 是**唯一**装配维护命令的地方。
+    expect(worker).toContain('composeIntentMaintenanceCommandsForDatabase({')
     expect(worker).toContain('composePostgresqlResourcePackageApplyMaintenance({')
     expect(worker).not.toContain('postgresql-maintenance-owner-command-unavailable')
     expect(supervisor).not.toContain('runMaintenanceJob(')

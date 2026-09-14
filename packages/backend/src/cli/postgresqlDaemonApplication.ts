@@ -212,13 +212,6 @@ import {
   composeIntentApplyOperations,
   createIntentSessionWsPublisher,
 } from '@/modules/intent/composition/apply'
-import { createPostgresqlIntentApplyOperations } from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
-import { createPostgresqlIntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
-import {
-  createPostgresqlIntentPluginArtifactLifecycle,
-  createPostgresqlIntentSkillArtifactLifecycle,
-} from '@/modules/resource-catalog/composition/intentApply'
-import { composePostgresqlIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import { composePostgresqlFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
@@ -304,7 +297,6 @@ import { createDevelopmentDeliveryProvider } from '@/modules/development-automat
 import { composePostgresqlPipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
-import { composePostgresqlSkillArtifactCompensation } from '@/modules/resource-catalog/composition/intentApply'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import {
   mcpOperationCoordinator,
