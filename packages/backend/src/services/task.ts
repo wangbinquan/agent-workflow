@@ -3892,7 +3892,7 @@ async function startTaskImpl(
  * the old comment here misdescribed).
  */
 async function rollbackNodeRunForResume(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   task: Task,
   run: { id: string; preSnapshot: string | null; preSnapshotReposJson: string | null },
   log: ReturnType<typeof createLogger>,
@@ -3927,7 +3927,7 @@ async function rollbackNodeRunForResume(
  * Returns `never`; throws ConflictError after the CAS.
  */
 async function escalateSnapshotLost(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   recovery: TaskRecoveryOperations,
   taskId: string,
   run: { id: string; nodeId: string },
@@ -3976,7 +3976,7 @@ async function escalateSnapshotLost(
  * Mirrors escalateSnapshotLost's contract. Returns `never`.
  */
 async function escalateLiveChildSurvived(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   recovery: TaskRecoveryOperations,
   taskId: string,
   run: { id: string; nodeId: string; pid: number | null },
@@ -4011,7 +4011,7 @@ async function escalateLiveChildSurvived(
 }
 
 async function reapRunBeforeWorktreeReset(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   taskId: string,
   run: {
     id: string
@@ -4025,7 +4025,7 @@ async function reapRunBeforeWorktreeReset(
   deps: StartTaskDeps,
   log: Logger,
 ): Promise<void> {
-  const heldNativeLease = db
+  const heldNativeLease = await db
     .select({ sessionId: runtimeSessionLeases.sessionId })
     .from(runtimeSessionLeases)
     .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id))
@@ -4060,7 +4060,7 @@ async function reapRunBeforeWorktreeReset(
 }
 
 async function reapHeldRuntimeSessionOwnersForTask(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   taskId: string,
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
   deps: StartTaskDeps,
@@ -4068,21 +4068,21 @@ async function reapHeldRuntimeSessionOwnersForTask(
 ): Promise<void> {
   const ownerIds = [
     ...new Set(
-      db
-        .select({ nodeRunId: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(
-          and(
-            eq(runtimeSessionLeases.taskId, taskId),
-            isNotNull(runtimeSessionLeases.leaseNodeRunId),
-          ),
-        )
-        .all()
-        .flatMap((row) => (row.nodeRunId === null ? [] : [row.nodeRunId])),
+      (
+        await db
+          .select({ nodeRunId: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(
+            and(
+              eq(runtimeSessionLeases.taskId, taskId),
+              isNotNull(runtimeSessionLeases.leaseNodeRunId),
+            ),
+          )
+      ).flatMap((row) => (row.nodeRunId === null ? [] : [row.nodeRunId])),
     ),
   ]
   for (const nodeRunId of ownerIds) {
-    const run = db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const run = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
     if (run === undefined) {
       await escalateLiveChildSurvived(
         db,
@@ -4364,7 +4364,7 @@ export async function cancelTask(
  * rollback targets (failed/interrupted) as before.
  */
 export async function resumeTask(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   id: string,
   deps: StartTaskDeps,
 ): Promise<Task> {
@@ -4587,7 +4587,7 @@ export async function resumeDynamicWorkflowExecution(
  * intent; only its durable owner claim authorizes subsequent execution effects.
  */
 async function resumeKick(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   id: string,
   deps: StartTaskDeps,
   opts: {
@@ -5222,7 +5222,7 @@ export async function computeWorkflowSyncPreview(
  * call row (dirty data) fails open to the pre-RFC-243 behavior.
  */
 async function assertChildTaskDrivable(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   task: { id: string; parentTaskId?: string | null; parentNodeRunId?: string | null },
   verb: string,
 ): Promise<void> {

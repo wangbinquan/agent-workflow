@@ -10569,12 +10569,23 @@ FIFO 变更槽。改成 `await` 就改变了「函数何时第一次让出」，
    `rfc207` 的 PG 道立刻红（`accumulated running time over maxDurationMs makes enforceLimits cancel`），
    SQLite 道照绿——正是「在 SQLite 上绿、在 PG 上什么都没测」的签名。说明新判据确实咬住了这个缺陷。
 
-### 顺带销掉的真缺陷
+### ~~顺带销掉的真缺陷~~ —— **这句我写错了，撤回（当天核实）**
 
-`enforceLimits` 的取消分支就是 `cancelTask`。在这一刀之前，**PostgreSQL 上的资源限额取消是坏的**：
-同步 `.all()[0]` 在 PG 上返回 Promise ⇒ `[0]` 恒 undefined ⇒ 每次取消都抛 `task-not-found` 被分类吞掉，
-`r.canceled` 永远是空的。没有任何判据能看见它，因为那一段是 SQLite 单引擎。
-现在 `rfc207` 的端到端段双跑，这条缺陷被钉死。账本 336 → 335 / 30 → 29。
+上一版在这里写「在这一刀之前 **PostgreSQL 上的资源限额取消是坏的**」。**不成立。**
+PG 守护进程走的是 `composePostgresqlResourceLimitOperations`
+（`cli/postgresqlDaemonApplication.ts:2324`，它有自己的取消实现），**从不经过**
+`composeLegacySqliteResourceLimitOperations` → `cancelTask`；后者的调用点
+`cli/start.ts:2784` 旁边就写着「this is the SQLite side of that symmetry」。
+而 `cancelTask` 当时的签名是 `DbClient`，按类型也不可能拿到 PG 句柄。**所以没有线上缺陷。**
+
+**真正成立的是**：那处同步 `.all()[0]` 使 `cancelTask` **无法**被放宽到中立句柄——
+一放宽就会在 PG 上恒报 `task-not-found`，而且照样编译通过。变异验证（去掉 await ⇒
+`rfc207` 的 PG 道红、SQLite 道绿）证明的是**新判据咬得住这个陷阱**，
+不是「修好了一条线上故障」。这一刀的价值是**拆掉阻塞、让 `cancelTask` 真正成为引擎中立的**，
+账本 336 → 335 / 30 → 29。
+
+（记这一条是因为它是同一个毛病第四次：**先下结论、后核实**。核实成本极低——
+`grep enforceLimits src/` 两行就看得出 PG 走的是另一条组合根。）
 
 ### 留下的（真的还没做）
 
@@ -10606,3 +10617,29 @@ FIFO 变更槽。改成 `await` 就改变了「函数何时第一次让出」，
 而 `rfc097-task-status-cas` 三个都要，所以它要等启动路径那一刀。
 
 探测改动已原样还原。
+
+### §5ep 续二 —— `resumeTask` 整条闭包转中立句柄
+
+按 §5ep 量出的尺寸做完了 `resumeTask` 这一支。闭包比第一次估的深一层，逐层由编译器指出：
+
+`resumeTask` → `resumeKick` → `rollbackNodeRunForResume` / `reapRunBeforeWorktreeReset` /
+`reapHeldRuntimeSessionOwnersForTask` / `assertChildTaskDrivable` →
+`escalateLiveChildSurvived` / `escalateSnapshotLost`
+
+共 7 个签名放宽 + **3 处同步读改 await**（`runtimeSessionLeases` 的租约读、
+`leaseNodeRunId` 的 `.all().flatMap`、`nodeRuns` 的逐项读）。
+
+**这三处与 `cancelTask` 那处的区别**（这是本刀唯一需要判断的地方）：它们都是**普通读**，
+没有注释声明任何排序契约，其中一处的结果在下一行才被 `await` 掉的调用消费——
+改成 await 不改变任何可观察顺序。`cancelTask` 那处则相反，注释写明了 FIFO 前提，
+所以那一刀必须先拆取号。**看同步的理由，不是看同步的个数。**
+
+`retryRepoPreparation` 探到一半退回去了：它只被 `retryNode` 调用（`task.ts:6093`），
+不在 `resumeTask` 路径上，widen 了反而会把 `StartTaskDeps` 的墙提前拖进来。
+
+**没有销账**：`rfc097-task-status-cas` 三个入口都要，`retryNode` 仍卡
+`deps: { ...opts.deps, db }` → `StartTaskDeps['db']` → `startTaskImpl` 的 17 个同步点。
+所以这一刀**只拆阻塞、不动账本数字**——`resumeTask` 在生产里目前也只被 SQLite 侧的
+`taskLifecycleRepair` 调用，不存在线上 PG 缺陷（这次先核实了再写）。
+
+相关套件在两个引擎上复跑 **316 格全绿**。
