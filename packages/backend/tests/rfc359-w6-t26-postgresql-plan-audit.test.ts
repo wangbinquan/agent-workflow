@@ -772,9 +772,18 @@ if (!postgresqlSelected) {
         providerPool: () => recordingPool,
       } as unknown as PostgresqlDatabaseRuntime) as unknown as ProviderNeutralDatabase
       await seedAuditCorpus(client, AUDIT_ROWS)
-      // 没有统计信息时 PostgreSQL 用默认估算，选出的计划反映的是「不知道表有多大」而不是
-      // 「缺索引」。审计前必须先 ANALYZE，否则量到的东西没有意义。
-      await raw('analyze')
+      // 装载后维护：**两件事都要做，缺一件量到的都不是生产里的形状**。
+      //
+      // · `ANALYZE` —— 没有统计信息时 PostgreSQL 用默认估算，选出的计划反映的是「不知道表
+      //   有多大」而不是「缺索引」。
+      // · `VACUUM` —— index-only scan 要成立得靠 **visibility map** 证明「这一页全可见」，
+      //   而 VM 只由 VACUUM 维护。刚批量灌完的表 VM 是空的，planner 于是改选
+      //   `Bitmap Heap Scan`。生产有 autovacuum 在跑、VM 常态是新的，所以不 VACUUM 就是
+      //   拿 PG 一个**它从不持续停留**的瞬时状态在审计。实测 10 万行上 1.682ms → 0.557ms。
+      //
+      // 与 `scripts/perf-run.ts` 的装载后维护保持同一形状——审计与基准必须看同一个库状态，
+      // 否则这里判绿的计划在那边量出来是另一个。
+      await raw('vacuum analyze')
     }, 600_000)
 
     afterAll(async () => {
@@ -855,6 +864,39 @@ if (!postgresqlSelected) {
           '它多半退回了「物化全部 root 再排序」，也就是 RFC-311 立项要消灭的那个形状。\n' +
           `完整计划：\n${plan}`,
       ).toContain('Index Scan Backward using idx_tasks_branch_started_id')
+    }, 120_000)
+
+    test('装载后维护到位：热计数走 index-only scan 且 Heap Fetches 为 0', async () => {
+      // RFC-359 AC-11 —— 这条锁的是**库的状态**，不是某条查询的写法。
+      //
+      // `/api/overview` 的计数在 CI 上连续 5 个 run 都是 PG 慢（中位数 6.0ms vs SQLite 3.2ms，
+      // 稳态、无台阶、无尖峰）。原因不在 SQL 里：语料只 `ANALYZE` 过、没 `VACUUM` 过，
+      // visibility map 是空的，于是 PostgreSQL 拿不到 index-only scan、退回 `Bitmap Heap Scan`。
+      // 那是「刚灌完数据」的瞬时状态，生产有 autovacuum、从不持续停留在那里。
+      //
+      // 判据取**可见性**本身（`Heap Fetches: 0`）而不是耗时：它与机器负载无关，
+      // 和这个文件其余判据同一原则。装载后维护一旦被谁删掉，这条立刻红。
+      const plan = (
+        await raw!(
+          'EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, TIMING OFF) ' +
+            'select count(*) from "agent_workflow"."tasks" ' +
+            'where parent_task_id is null and catalog_visibility = $1 and status = $2',
+          ['public', 'running'],
+        )
+      )
+        .map((row) => String(row['QUERY PLAN']))
+        .join('\n')
+      expect(
+        plan,
+        'PostgreSQL 没有对这条热计数用 index-only scan。最可能的原因是语料装载后没 VACUUM——\n' +
+          'visibility map 空着，index-only scan 就不成立，planner 退回 Bitmap Heap Scan。\n' +
+          `完整计划：\n${plan}`,
+      ).toContain('Index Only Scan')
+      expect(
+        plan,
+        '走了 index-only scan 但仍在回堆取可见性（Heap Fetches > 0），等于没省下什么。\n' +
+          `完整计划：\n${plan}`,
+      ).toContain('Heap Fetches: 0')
     }, 120_000)
 
     test('热路径的执行计划缺陷与账本逐条对齐（只降不升）', async () => {

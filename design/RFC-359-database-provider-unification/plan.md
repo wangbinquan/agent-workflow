@@ -10941,3 +10941,66 @@ custom 估 12.63 —— 估得更便宜所以被采纳，而那 8.47 建立在�
 
 **还没做的**：这一刀之后的 CI 复测（已按 HEAD 派发 `postgresql-evidence` 的
 `http-performance`）。在拿到新的 `comparison.json` 之前，不宣称任何端点因此转绿。
+
+## §5ev —— 剩下的 PG 慢不是查询写法，是**语料装载后没 VACUUM**：基准在拿 PG 的瞬时状态比 SQLite 的稳态
+
+§5eu 修掉 workgroup 探针之后，我把手上 5 个 run 的 `comparison.json` 按端点拉平，问一个此前没问过的
+问题：**哪些端点是次次红、哪些是来回翻**。
+
+| 端点 | 948d9b5f | 602264d5 | 602264d5 | dfb49eb8 | 56713f37 | 判定 |
+| --- | --- | --- | --- | --- | --- | --- |
+| tasks-first / tasks-running | . | . | . | . | . | 次次绿（PG 快一半以上） |
+| tasks-second | . | X | X | . | . | 翻（2/5 红） |
+| reviews-pending | X | X | X | X | . | 翻（4/5 红） |
+| clarify-pending | X | X | X | X | . | 翻（4/5 红） |
+| workgroup-pending | . | X | X | **B** | **B** | §5eu 那条，已修 |
+| **repos-first** | X | X | X | X | X | **次次红** |
+| **overview** | **B** | X | X | X | X | **次次红** |
+
+（`.` 通过，`X` 未通过 `postgresqlNoSlower`，`B` 连 `max<10ms` 的原始绝对预算也撑爆。）
+
+**翻的那几个就是噪声**——同一份代码两次 run 就能翻号。**次次红的只有两个**，而且它们不是尖峰、
+不是台阶，是**稳态就慢**：
+
+```
+overview      PG 中位数 5.4–6.5ms   vs  SQLite 3.0–3.3ms      （4 个 run 都这样）
+repos-first   PG 中位数 4.4ms       vs  SQLite 2.9ms
+PG raw: 6.48 6.17 6.02 5.85 6.46 5.50 5.77 …   ← 平的，没有台阶也没有尖峰
+```
+
+### 根因：`scripts/perf-run.ts` 只 `ANALYZE`，从不 `VACUUM`
+
+PostgreSQL 的 **index-only scan 要成立，得靠 visibility map** 证明「这一页全部可见」，
+而 VM 只由 VACUUM 维护。刚批量灌完的表 VM 是空的，于是 index-only scan 不成立，planner 退回
+`Bitmap Heap Scan`。实测（10 万行，`/api/overview` 那条计数）：
+
+```
+只 ANALYZE  : Bitmap Heap Scan                    1.682ms   Heap Blocks: exact=345
+VACUUM 之后 : Index Only Scan, Heap Fetches: 0    0.557ms   ← 3.0×
+```
+
+生产里 autovacuum 一直在跑、VM 常态是新的。**只 `ANALYZE` 等于拿 PG 一个它从不持续停留的
+瞬时状态，去和 SQLite 的稳态比**——而 SQLite 没有 MVCC 可见性这回事，本来就拿得到最好的计划。
+缺这一步只有 PG 被罚，这正是本 RFC 要消灭的「同一件事两个引擎一个好一个不好」。
+
+### 处置：两个引擎都补上**各自需要的**装载后维护
+
+- PostgreSQL：`ANALYZE` → `VACUUM ANALYZE`
+- SQLite：`ANALYZE` → `VACUUM` + `ANALYZE`（实测也快：p50 0.4336 → 0.3979ms，约 8%）
+
+**这不是给 PG 放水**：两侧都加了，两侧都受益；差别只在 PG 的收益大得多，因为被罚的本来就只有它。
+`rfc359-w6-t26-postgresql-plan-audit` 的语料装载也同步改成 `vacuum analyze`——审计与基准必须看
+同一个库状态，否则这里判绿的计划在那边量出来是另一个。
+
+### 判据
+
+新增「装载后维护到位：热计数走 index-only scan 且 Heap Fetches 为 0」。判据取的是
+**可见性本身**（`Heap Fetches: 0`）而不是耗时——与机器负载无关，和该文件其余判据同一原则。
+红→绿实证：把 `vacuum analyze` 改回 `analyze`，它立刻报
+`Bitmap Heap Scan on tasks … Heap Blocks: exact=345`（1.206ms / 349 buffers）。
+
+### 还没证的事
+
+这一刀之后 `overview` / `repos-first` 会不会真的转绿，**要等 CI 复测**。本机 10 万行上的 3.0×
+不能外推到 CI（§5et 的教训），只能说方向和量级都对得上那 2.85ms 的稳态差。
+在拿到新的 `comparison.json` 之前不宣称任何端点转绿。

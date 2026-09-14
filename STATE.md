@@ -2,6 +2,24 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 27，**AC-11 第二刀**：基准语料装载后没 VACUUM，PG 被罚 3 倍）
+>
+> 落档 plan §5ev。把 5 个 run 的 `comparison.json` 按端点拉平后才看清：**翻来翻去的那几个是噪声**
+> （同一份代码两次 run 就能翻号），**次次红的只有 `repos-first` 与 `overview`**，而且它们
+> 不是尖峰不是台阶，是**稳态就慢**（overview PG 中位数 5.4–6.5ms vs SQLite 3.0–3.3ms，4 个 run 都这样）。
+>
+> 根因不在 SQL 里：`scripts/perf-run.ts` 只 `ANALYZE`、从不 `VACUUM`。PG 的 index-only scan
+> 要靠 **visibility map** 成立，而 VM 只由 VACUUM 维护；刚灌完的表 VM 是空的，planner 退回
+> `Bitmap Heap Scan`。实测 10 万行：1.682ms → **0.557ms（3.0×）**。生产有 autovacuum、
+> VM 常态是新的——**只 ANALYZE 等于拿 PG 一个它从不持续停留的瞬时状态去比 SQLite 的稳态**。
+>
+> 两个引擎都补上各自需要的装载后维护（SQLite 也加 VACUUM，实测快 8%）——不是放水，两侧都加、
+> 两侧都受益，差别只在被罚的本来就只有 PG。plan-audit 的语料同步改成 `vacuum analyze`，
+> 审计与基准必须看同一个库状态。判据取**可见性本身**（`Heap Fetches: 0`）不取耗时；
+> 改回 `analyze` 立刻报 `Bitmap Heap Scan … Heap Blocks: exact=345`，红→绿实证过。
+>
+> **未证**：转绿与否要等 CI 复测，本机 3.0× 不可外推。
+
 > ## 📌 RFC-359 最新一段（2026-09-15 续 26，**AC-11 真因**：generic plan 把一条探针变成全表扫）
 >
 > 落档 plan §5eu；通用坑落 `docs/dev-gotchas.md`（generic plan 那条）。
