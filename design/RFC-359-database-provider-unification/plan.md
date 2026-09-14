@@ -11129,3 +11129,125 @@ autovacuum 还没来得及跑。拿那个状态去推断 CI，正是 §5et 记�
 
 +24.914 → **+1.243 / +1.345 / +1.015**，三个独立 run 一致，回到出 bug 之前那条带，
 绝对预算也一并转绿。§5eu 站得住。
+
+## §5ex —— `overview` 的归因拿到了：**六个轻端点分成两类，只有一类还有工程余地**
+
+§5ew 把 `overview` 记成「没有归因」。拿 query-profile 里**每条语句的计划执行时间**（不是
+wallMs——那是单次冷请求，含首次解析/规划，不能用）逐条摊开之后，归因出来了，而且六个轻端点
+干净地分成两类。
+
+### A 类：PG 在「数很多行」上结构性地慢
+
+`overview` 的 10 条语句里，**一条占了 88%**：
+
+```
+count(*) from tasks where catalog_visibility='public' and status='running'
+  PG    : Index Only Scan  idx_tasks_overview_counts  rows=12856  扫 0.93ms / 合计 1.507ms
+  SQLite: SEARCH tasks USING COVERING INDEX idx_tasks_overview_counts (status=? AND parent_task_id=? AND catalog_visibility=?)
+          整条语句 wallMs ≈ 0.04ms
+```
+
+**两个引擎走的是同一条索引、数的是同一批 12856 行。** 差别纯粹是每行的代价：
+PG 约 72ns/行（可见性检查 + tuple deform + 聚合 transition），SQLite 的覆盖索引计数是一段
+紧凑字节码循环，约 3ns/行。这不是我们代码的缺陷，是引擎特性。
+
+同类还有两条：
+
+| 端点 | 最重语句 | 扫描行数 | PG 计划耗时 |
+| --- | --- | --- | --- |
+| `overview` | `count(*) … status='running'` | 12 856 | 1.507ms |
+| `repos-referenced` | `tasks GROUP BY cached_repo_id` | 10 000 | 2.044ms |
+| `repos-first` | 五子查询 facet 面板 | — | 3.844ms |
+
+**这一类没有查询改写的余地**：同索引、同行数、结果必须精确。要更快只能改**产品**
+（维护计数器 / 近似计数 / 给计数设上限），而语料是 RFC-311 原版、AC-11 明写不许动。
+
+### B 类：查询本身几乎不花时间，差的全是**每条语句一次往返**
+
+| 端点 | PG 全部语句的计划执行时间合计 | 端点中位数差 |
+| --- | --- | --- |
+| `reviews-pending` | **0.032ms** | +0.33 ~ +0.55ms |
+| `clarify-pending` | **0.033ms** | +0.39 ~ +0.79ms |
+| `workgroup-pending` | **0.054ms** | +1.02 ~ +1.35ms |
+
+PG 真正在数据库里干的活是 **0.03~0.05ms**，而端点差是它的 **10~25 倍**。
+也就是说这三个端点的差**几乎全部**不是查询，是出进程往返 + 协议开销。每个请求 4 条语句
+（PAT 查询 / users+grants 查询 / body 查询 / `token_audit` 写），摊下来约 **0.1~0.35ms/语句**。
+
+**这一类唯一的杠杆是「少发几条语句」**，而且确实有两条可减：
+
+1. **两笔认证读可以合一**。第 0 条已经是 `user_pats ⋈ users`，第 1 条是
+   `users ⋈ user_permission_grants`——它们在 `users` 上重叠，合成一条
+   `user_pats ⋈ users ⋈ user_permission_grants` 是可行的。**但它跨模块**：PAT 查询归 auth，
+   grants 归 identity-access，按 RFC-294 得走显式 `public/queries` 合同。
+2. **`token_audit` 写可以离开请求路径**（目前 `void` 派发但仍占一条语句/一次往返）。
+   代价是改变审计记录的落库时机。
+
+按 0.1~0.35ms/语句估，4 条减到 2 条能砍掉约一半的 B 类差距；`clarify-pending`（+0.39~0.79）
+有希望真的抹平，`workgroup-pending`（+1.02~1.35）未必够。**这是估算，不是结论**——
+真要知道只能实现了去 CI 上量。
+
+### 于是 AC-11 的收口是一道**判据问题**，不是实现问题
+
+- **B 类**：有明确的工程路径（减往返），但第 1 条要新增跨模块合同，属于设计决策。
+- **A 类**：在 AC-11 自己的约束内（语料不变、结果精确）**没有工程解**。
+  PG 在 10k~13k 行的精确计数上就是比进程内的 SQLite 慢，与我们怎么写 SQL 无关。
+
+呈用户裁决。在拿到裁决前不动 A 类，也不擅自新增跨模块合同。
+
+## §5ey —— AC-11 收口：判据从「P95 不慢于 SQLite」换成「中位数差不超过登记值」
+
+用户 2026-09-15 裁决：**A 类承认为引擎特性并改判据；B 类两条减往返都不做**。
+据此把 AC-11 的第二款落成可执行的判据（`proposal.md` 的修订块是权威文本，这里记实现与验证）。
+
+### 换了什么
+
+`scripts/perf-compare.ts`：
+
+- 每个场景新增 `medianAllowanceMs`（exact 清单，三个重端点为 **0**，六个轻端点按实测加余量）；
+- 报告新增 `sqliteP50Ms` / `postgresqlP50Ms` / `medianGapMs` / `medianAllowanceMs` /
+  `postgresqlWithinAllowance`；
+- **闸门**：`acceptancePassed = fullAcceptance && every(postgresqlWithinAllowance)`。
+
+`postgresqlNoSlower`、两个 P95、以及 RFC-311 的原始绝对预算**继续逐条记录**，只是不再是闸门。
+
+### 为什么这不是放水——拿历史 run 回放验证
+
+把八个真实 run 的原始样本按新判据重算：
+
+| run | sha | 新判据 |
+| --- | --- | --- |
+| 34816698143 | 948d9b5f | FAIL（repos-first +2.13 / repos-referenced +2.25 / reviews +1.68 / workgroup +2.47） |
+| 34827977388 | 602264d5 | FAIL（repos-first +2.73 / reviews +1.59） |
+| 34831180498 | 602264d5 | FAIL（repos-first +2.95 / repos-referenced +2.29 / reviews +2.08） |
+| 34836852462 | dfb49eb8 | **FAIL —— 只红在 `workgroup-pending` +23.87** |
+| 34883382647 | 56713f37 | **FAIL —— 只红在 `workgroup-pending` +24.93** |
+| 34886209256 | 7f51454f2 | **PASS** |
+| 34887363759 | 6b964e174 | **PASS** |
+| 34887767993 | 4099bb1e0 | **PASS** |
+
+两件事同时成立：
+
+1. **真回归被单独抓住**。§5eu 那个 generic-plan 全表扫在新判据下**单独**红在
+   `workgroup-pending` 上——而它当时在 P95 判据下淹在 4~6 个翻号的假红里，没人看得出哪个是真的。
+2. **修复后三个 run 全绿**，且前四个更早的 run 该红照红（那时 §5ej / §5ek 还没落地，
+   `repos-first` / `reviews-pending` 确实更慢）。判据是一条**「不许比今天更差」的棘轮**，
+   不是一条永远为真的空判据。
+
+### 判据自身的判据
+
+`rfc359-w12-performance-comparison.test.ts` 加四条（共 36 格全绿）：
+
+- 中位数差超过登记值即红，且**红的就是超出的那一个**；
+- 差在登记值以内是绿的（闸门卡在登记值上，不是卡在零）；
+- **只把第 20 个样本推到 1000ms**：`postgresqlNoSlower` 全线翻红、中位数差全为 0、闸门仍绿
+  ——这正是换判据的理由，也是实撞过的形态（`workgroup-pending` 修好后中位数 2.39ms，
+  却被一个 5.59ms 的尾样本判红）；
+- 登记值是 **exact 清单**（逐条钉死，改一个数就红）。
+
+### 留在账上的事实
+
+- **A 类没有工程解**（语料不变 + 结果精确）：PG 在 1 万~1.3 万行的精确计数上就是慢于进程内的
+  SQLite。要更快只能改产品（维护计数器 / 近似计数），不在本 RFC 范围。
+- **B 类有工程解但本轮不做**：4 条语句减到 2 条（合并两笔认证读、审计写离开请求路径），
+  按实测单价估能砍掉约一半差距。登记值因此按**今天的**实测设，将来真去减往返时应当**下调**它。

@@ -151,22 +151,31 @@ describe('RFC-359 AC11 original HTTP performance comparison', () => {
     expect(() => performanceStats([Number.NaN])).toThrow()
   })
 
-  test('equal P95 passes AC11 while keeping original absolute budgets independently visible', () => {
+  test('identical reports pass, and both P95 evidence and absolute budgets stay visible', () => {
     const result = comparePerformanceReports(report('sqlite'), report('postgresql'))
     expect(result.acceptancePassed).toBe(true)
     expect(result.endpoints).toHaveLength(9)
+    // 绝对预算继续逐条记录（这一条在语料里本来就不过），但它**不是**闸门。
     expect(
       result.endpoints.find((endpoint) => endpoint.id === 'overview')?.originalBudget
         .postgresqlPassed,
     ).toBe(false)
+    // P95 的对比照旧出现在报告里，作为证据。
+    expect(result.endpoints.every((endpoint) => endpoint.postgresqlNoSlower)).toBe(true)
   })
 
-  test('one endpoint slower by 0.001ms stays red even if every other PG endpoint is faster', () => {
+  // RFC-359 AC-11 修订（2026-09-15）——闸门从「P95 不慢于 SQLite」换成「中位数差不超过登记值」。
+  // 下面四条锁住这次换判据**换对了**：该红的红、该绿的绿、登记值是 exact 的、P95 不再当闸门。
+  test('中位数差超过登记值即红，且红的就是超出的那一个', () => {
     const pg = report('postgresql')
+    const overview = PERF_HTTP_SCENARIOS[8]!
     const result = comparePerformanceReports(report('sqlite'), {
       ...pg,
       scenarios: pg.scenarios.map((scenario, i) => {
-        const samples = scenario.samples.map((sample) => (i === 8 ? sample + 0.001 : sample / 2))
+        // 只把 overview 整体推慢「登记值 + 0.001ms」，其余端点全部快一倍。
+        const samples = scenario.samples.map((sample) =>
+          i === 8 ? sample + overview.medianAllowanceMs + 0.001 : sample / 2,
+        )
         return { ...scenario, samples, ...performanceStats(samples) }
       }),
     })
@@ -174,9 +183,70 @@ describe('RFC-359 AC11 original HTTP performance comparison', () => {
     expect(result.acceptancePassed).toBe(false)
     expect(
       result.endpoints
-        .filter((endpoint) => !endpoint.postgresqlNoSlower)
+        .filter((endpoint) => !endpoint.postgresqlWithinAllowance)
         .map((endpoint) => endpoint.id),
     ).toEqual(['overview'])
+  })
+
+  test('差到登记值以内是绿的——闸门卡在登记值上，不是卡在零', () => {
+    const pg = report('postgresql')
+    const result = comparePerformanceReports(report('sqlite'), {
+      ...pg,
+      scenarios: pg.scenarios.map((scenario, i) => {
+        // 每个端点都推慢到「比登记值少 0.1ms」。零容忍的三个（登记值 0）推 0，仍然是持平。
+        const allowance = PERF_HTTP_SCENARIOS[i]!.medianAllowanceMs
+        const shift = allowance === 0 ? 0 : allowance - 0.1
+        const samples = scenario.samples.map((sample) => sample + shift)
+        return { ...scenario, samples, ...performanceStats(samples) }
+      }),
+    })
+    for (const [i, endpoint] of result.endpoints.entries()) {
+      const allowance = PERF_HTTP_SCENARIOS[i]!.medianAllowanceMs
+      expect(endpoint.medianGapMs).toBeCloseTo(allowance === 0 ? 0 : allowance - 0.1, 9)
+      expect(endpoint.postgresqlWithinAllowance).toBe(true)
+    }
+    expect(result.acceptancePassed).toBe(true)
+    // 判据只按**中位数**：这次每个端点的 P95 也都被推高了，但它不参与闸门。
+    expect(result.endpoints.every((endpoint) => endpoint.postgresqlNoSlower)).toBe(false)
+  })
+
+  test('P95 被单个离群样本翻号时不再影响闸门——这正是换判据的理由', () => {
+    const pg = report('postgresql')
+    const result = comparePerformanceReports(report('sqlite'), {
+      ...pg,
+      scenarios: pg.scenarios.map((scenario) => {
+        // 只把**最后一个**样本推到 1000ms：20 个样本的 P95 等于最大值，于是 P95 判定必红，
+        // 而中位数纹丝不动。实测就撞见过这种（`workgroup-pending` 修好后中位数 2.39ms、
+        // 却因最后一个 5.59ms 的尖峰把 p95 判红）。
+        const samples = scenario.samples.map((sample, j) =>
+          j === scenario.samples.length - 1 ? 1000 : sample,
+        )
+        return { ...scenario, samples, ...performanceStats(samples) }
+      }),
+    })
+    expect(result.endpoints.every((endpoint) => endpoint.postgresqlNoSlower)).toBe(false)
+    expect(result.endpoints.every((endpoint) => endpoint.medianGapMs === 0)).toBe(true)
+    expect(result.acceptancePassed).toBe(true)
+  })
+
+  test('登记的允许差是 exact 清单：三个重端点必须零容忍，六个轻端点逐条登记', () => {
+    expect(
+      Object.fromEntries(
+        PERF_HTTP_SCENARIOS.map((scenario) => [scenario.id, scenario.medianAllowanceMs]),
+      ),
+    ).toEqual({
+      // PG 在这三个上稳定大胜（−2.8 ~ −87ms），不给任何余量。
+      'tasks-first': 0,
+      'tasks-second': 0,
+      'tasks-running': 0,
+      // 实测中位数差（4 个 run）+ 余量；来源与逐条理由见 plan §5ex / §5ey。
+      'repos-first': 2,
+      'repos-referenced': 2,
+      'reviews-pending': 1.2,
+      'clarify-pending': 1.4,
+      'workgroup-pending': 2,
+      overview: 3.5,
+    })
   })
 
   const invalid: [string, (input: PerfHttpReport) => PerfHttpReport][] = [

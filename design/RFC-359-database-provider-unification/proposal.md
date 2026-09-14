@@ -145,6 +145,44 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
   表达，矩阵每项在两个真引擎上各有一次执行断言。
 - **AC-11**（G7）RFC-311 基准库在两个引擎上各取一套 P95 基线；**PostgreSQL 各端点 P95 不劣于
   SQLite**；5 个性能守卫改为双引擎，一侧变慢即红。
+
+  **修订（2026-09-15，用户裁决）**：第二款「PostgreSQL 各端点 P95 不劣于 SQLite」按字面
+  **既不可靠也不可达**，逐条实测如下（证据：run `34816698143` / `34827977388` / `34831180498` /
+  `34836852462` / `34883382647` / `34886209256` / `34887363759` / `34887767993`）。
+
+  **①「P95」这个量在 n=20 上不可靠。** `rounds: 20` 的 P95 **等于最大值**，一个离群样本就定生死。
+  同一份代码两次 run 的 P95 差摆动到 3.7ms，`reviews-pending` / `clarify-pending` / `tasks-second`
+  在 6 个 run 里红红绿绿地翻号。**中位数几乎不动**——同样 6 个 run，各端点中位数差的抖动在 0.5ms 内。
+  实撞过最刺眼的一例：`workgroup-pending` 修好之后中位数 2.39ms，却因为**第 20 个样本**一个
+  5.59ms 的尖峰被判红。
+
+  **②「PG 不劣于 SQLite」对一类端点不可达。** 六个轻端点逐条量下来分成两类（plan §5ex）：
+
+  - **A 类**（`overview` / `repos-referenced` / `repos-first`）：两个引擎走**同一条索引**、数
+    **同一批** 1 万~1.3 万行。`overview` 里一条 `count(*) … status='running'`（12 856 行，
+    `idx_tasks_overview_counts`）就占了它库内耗时的 **88%**：PG 约 72ns/行，SQLite 的覆盖索引
+    计数约 3ns/行。**语料不变（AC-11 自己要求）+ 结果必须精确**的前提下没有查询改写的余地——
+    这是引擎特性，不是缺陷。
+  - **B 类**（`reviews-pending` / `clarify-pending` / `workgroup-pending`）：PG **全部**语句的
+    计划执行时间合计只有 0.03~0.05ms，而端点差是它的 10~25 倍——差的几乎全是**每条语句一次
+    往返**（每请求 4 条）。减往返（合并两笔认证读 / 审计写离开请求路径）有工程解，
+    **用户 2026-09-15 裁决本轮不做**。
+
+  **修订后的第二款**：闸门改为**中位数差不超过逐条登记的允许值**
+  （`PERF_HTTP_SCENARIOS[].medianAllowanceMs`，见 `scripts/perf-compare.ts`）：
+
+  - 三个重端点 `tasks-first` / `tasks-second` / `tasks-running` 登记 **0**——PG 在它们上稳定
+    大胜（−2.8 ~ −87ms），不给任何余量；
+  - 六个轻端点按实测中位数差加余量逐条登记（0.7~3.5ms 区间），**超出即红**。
+
+  **这不是放水，是把闸门挪到看得见的地方**：`workgroup-pending` 的 generic-plan 全表扫回归
+  （中位数差 **+24.9ms**）在新判据下会立刻红（登记值 2.0），而它当时恰恰淹在 P95 的假红堆里
+  没被看见。用四个历史 run 回放验证过：**修复前的两个 run 单独红在 `workgroup-pending` 上，
+  修复后的三个 run 全绿**。
+
+  P95 的两个数、`postgresqlNoSlower`、以及 RFC-311 的原始绝对预算**继续逐条记录在
+  `comparison.json` 里**作为证据，只是不再充当闸门。第一款（两套 P95 基线）与第三款
+  （5 个性能守卫双引擎）不变。
 - **AC-12**（G5）组合根全量：`cli/` 与 `*/composition*` 下 `*-not-bound` 形状为零；启动序列恰有
   一个调用方；provider 命名文件在 `platform/persistence/` 之外为零。
 
