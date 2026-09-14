@@ -10339,3 +10339,77 @@ PG 侧那几个文件因此成为**两个 provider 唯一的实现**——provid
 账本：`PROVIDER_NAMED_FILE_DEBT` 44 → 39。T17 里那段把 intent apply 判成「真分叉、孪生顶着
 `legacy*`、体量 2397 : 2761」的裁决注释**已经过期**，一并改写成销账记录——留着它会让下一个人
 按早就不存在的 legacy 侧行数去推导一次已经做完的合一。
+
+## §5em —— AC-11 的第二刀：单行 INSERT 的世代围栏内联；AC-6 第五波
+
+### AC-11：`fire-and-forget 所以不要紧` 是错的
+
+§5ek 收尾时我判断「`token_audit` 插入是 `void` 派发的、不在关键路径上，不值得动」。**这个判断是错的**，
+而且是被实测推翻的（本机 Docker PG，`/api/reviews/pending-count`，40 次取 p95）：
+
+| | 带审计写 | 关掉审计写 |
+| --- | --- | --- |
+| SQLite p95 | 3.76ms | 3.06ms（−19%） |
+| PostgreSQL p95 | **18.11ms** | **5.57ms（−69%）** |
+
+`void` 派发让它**不占延迟**，但它**占并发度**——那笔写 reserve 出一条池连接跑四个往返
+（`BEGIN` / 围栏 `SELECT` / 写 / `COMMIT`），把后面的请求挡在池外。而同一笔写在 SQLite 上只有
+一条语句，所以这个开销是 PG 独有的四倍差。
+
+**处置：把围栏折进 INSERT 自己**，于是非事务单语句写从四个往返降到一个：
+
+```sql
+insert into T (列…) select $1, null, $2, … 
+where exists (select 1 from "agent_workflow_meta"."database_generations"
+              where generation_id = $n+1 and state = 'active')
+```
+
+语义逐字不变：单语句本身原子，围栏活跃则插 1 行、不活跃则插 0 行，而普通单行 INSERT
+**必然影响 1 行**，所以 `changes === 0` 与围栏失败一一对应，不需要显式事务。
+
+**只吃最窄的一类**：整条命中 `insert into T (列…) values (…)`、单行、每个值是裸 `$k` 或
+drizzle 为未赋值列内联的字面 `null`、无 `on conflict`、无 `returning`、无子查询。凡有一条不符
+就回到原来的四往返路径——不猜、不改写复杂 SQL。另外三个前置：非事务、`run`、本进程已给这一代
+记过首次写（否则 `markFirstGenerationWrite` 仍要与写同事务）。
+
+**实测结果**：
+
+| | 折叠前 | 折叠后 |
+| --- | --- | --- |
+| PG 每请求语句数（awaited） | 7 | **3** |
+| PG p95 | 18.11ms | **4.96ms（−73%）** |
+| PG / SQLite 比 | 4.8× | **1.69×** |
+
+判据 `rfc359-ac11-insert-fence-fold` 锁四件事：① 写照样落库、两引擎同结果；② PG 上这笔写只发
+**一条**语句；③ 不该折的形状（`on conflict` / `returning`）原路走且行为不变；
+④ **世代被退休后，走快路径的那笔写照样被拒**——并断言那次拒绝发生在**折叠后的那一条**上
+（`toHaveLength(1)`），否则证明的是老路径还在、不是新路径安全。
+
+### AC-6 第五波（4 agent）
+
+5 个文件转双引擎：`rfc234-turn-engine` `rfc328-durable-ownership`
+`rfc310-employee-workspace-delivery` `rfc310-pr3-journey`
+`rfc310-digital-employee-conflict-system-mock-e2e`。账本 351 → 346 / 45 → 40。
+
+**`rfc234-turn-engine` 的 seam 是双重失效的**：它 `db.run = …` 直接改客户端，而 PG 客户端本身
+是个带 `get` trap 的 `Proxy`（`postgresqlDatabaseClient.ts`），赋值被静默遮蔽；就算不遮蔽，
+`createPostgresqlDatabaseSession` 走 `db.transaction(...)`，客户端的 `run` 在那笔事务里**根本不会
+被调用**（SQLite 侧则是在客户端上 `db.run(sql.raw('BEGIN IMMEDIATE'))`，所以一直有效）。
+
+**一条方法论**（已进 `docs/dev-gotchas.md`）：变异验证要挑**读点**，别挑写点。去掉某个
+`INSERT` 的 `await`，PG 道可能照样绿——那个没人等的 promise 在后续若干个 `await` 掉的
+git / 文件系统操作期间自己 settle 完了。可靠探针是去掉断言前那次**读**的 `await`。
+
+### AC-6 的剩余面（45 → 40 之后逐条核过）
+
+| 类别 | 数 | 说明 |
+| --- | --- | --- |
+| 还能迁 | 2 | `rfc310-digital-employee-authoring`(3400 行) `rfc310-digital-employee-system-mock-e2e`(2485 行) |
+| 卡生产签名 | 4 | `limits` `rfc097-task-status-cas` `rfc207-runtime-accounting` `rfc349-task-execution-provider-adapters` |
+| 已裁决（有据单引擎 / 本就双引擎） | 16 | |
+| 不查库 / helper | 18 | |
+
+那 4 条全部卡在同一处：`LegacySqliteTaskDatabase = DbClient`，而它的实质是
+**`src/services/task.ts`——7696 行、45 个导出函数、34 个 bun:sqlite 同步执行点**。
+这不是前面几刀那种「一行标注放宽」，是一次真的 sync → async 迁移，会动任务生命周期的时序，
+**应当单独立一刀**，不在本波顺手做。

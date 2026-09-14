@@ -2,13 +2,14 @@
 // through fresh-scene rollback, ChangeCandidate, platform commit/CAS push and MR ensure.
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
-import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   cachedRepos,
   employeeCaseWorkspaces,
@@ -33,10 +34,22 @@ import { staticCachedRepositoryPreparation } from './helpers/staticCachedReposit
 
 setDefaultTimeout(120_000)
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const root = mkdtempSync(join(tmpdir(), 'rfc310-os-delivery-'))
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+let db: ProviderNeutralDatabase
+/**
+ * 每个用例自己的文件系统场景根。**双引擎下必须逐例新开**：同一段 body 在 sqlite / postgresql
+ * 上各跑一遍，而 baseline / remote 仓、appHome 下的 Case 工作区都是按固定名落在盘上的——共用
+ * 一个 root 时第二遍会撞上第一遍留下的、已经带着提交与检查点的目录。
+ */
+let scene: string
+
+function seedFixture(harness: ProviderHarness): void {
+  db = harness.db
+  scene = mkdtempSync(join(root, 'scene-'))
+}
 
 function git(cwd: string, ...args: string[]): string {
   const process = Bun.spawnSync({ cmd: ['git', ...args], cwd })
@@ -95,10 +108,14 @@ function plan(input: {
   }
 }
 
-describe('RFC-310 Digital Employee OS shared workspace and platform delivery', () => {
+describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双引擎）', (harness) => {
+  beforeEach(() => {
+    seedFixture(harness)
+  })
+
   test('explicit employee source branches reuse an exact remote head or start from target head', async () => {
-    const baselineRepo = join(root, 'rfc336-branch-baseline')
-    const remoteRepo = join(root, 'rfc336-branch-remote.git')
+    const baselineRepo = join(scene, 'rfc336-branch-baseline')
+    const remoteRepo = join(scene, 'rfc336-branch-remote.git')
     mkdirSync(baselineRepo, { recursive: true })
     git(baselineRepo, 'init', '-q', '-b', 'main')
     writeFileSync(join(baselineRepo, 'README.md'), '# main\n')
@@ -164,10 +181,9 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
   })
 
   test('upload target and Agent edits survive the Case, fresh retry restores the round scene, and only platform code publishes MR', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const baselineRepo = join(root, 'baseline')
-    const remoteRepo = join(root, 'remote.git')
-    const appHome = join(root, 'home')
+    const baselineRepo = join(scene, 'baseline')
+    const remoteRepo = join(scene, 'remote.git')
+    const appHome = join(scene, 'home')
     mkdirSync(baselineRepo, { recursive: true })
     git(baselineRepo, 'init', '-q', '-b', 'main')
     writeFileSync(join(baselineRepo, 'README.md'), '# baseline\n')
@@ -190,7 +206,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     const baselineSha = git(baselineRepo, 'rev-parse', 'HEAD')
     mkdirSync(remoteRepo, { recursive: true })
     git(remoteRepo, 'init', '-q', '--bare')
-    db.insert(cachedRepos)
+    await db
+      .insert(cachedRepos)
       .values({
         id: 'repo-1',
         urlHash: 'deadbeef',
@@ -202,7 +219,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         createdAt: 1,
       })
       .run()
-    db.insert(employeeCases)
+    await db
+      .insert(employeeCases)
       .values({
         id: 'case-1',
         employeeId: 'employee-1',
@@ -227,16 +245,16 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     const artifactStore = createEmployeeInputArtifactStore(
       join(appHome, 'artifacts', 'employee-inputs'),
     )
-    const uploadSource = join(root, 'requirement.md')
+    const uploadSource = join(scene, 'requirement.md')
     writeFileSync(uploadSource, '# Required acceptance\n')
     const artifact = await artifactStore.putFile(uploadSource)
-    const replacementSource = join(root, 'replacement.txt')
+    const replacementSource = join(scene, 'replacement.txt')
     writeFileSync(replacementSource, 'replacement value\n')
     const replacementArtifact = await artifactStore.putFile(replacementSource)
-    const alreadySource = join(root, 'already.txt')
+    const alreadySource = join(scene, 'already.txt')
     writeFileSync(alreadySource, 'already supplied\n')
     const alreadyArtifact = await artifactStore.putFile(alreadySource)
-    const editableSameSource = join(root, 'editable-same.txt')
+    const editableSameSource = join(scene, 'editable-same.txt')
     writeFileSync(editableSameSource, 'same upload baseline\n')
     const editableSameArtifact = await artifactStore.putFile(editableSameSource)
     const issueState = {
@@ -297,7 +315,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       contexts: [issueContext],
       workspacePolicy: writePolicy,
     })
-    db.insert(employeeReactionRounds)
+    await db
+      .insert(employeeReactionRounds)
       .values({
         id: 'round-analyze',
         caseId: 'case-1',
@@ -407,7 +426,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       contexts: [inheritedIssueContext],
       workspacePolicy: writePolicy,
     })
-    db.update(employeeReactionRounds)
+    await db
+      .update(employeeReactionRounds)
       .set({ planJson: JSON.stringify(inheritedAnalyzePlan), updatedAt: 11 })
       .where(eq(employeeReactionRounds.id, 'round-analyze'))
       .run()
@@ -460,7 +480,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       join(fresh.workspacePath, inheritedMaterialRef),
       '# Inherited issue 8 acceptance\n',
     )
-    db.update(employeeReactionRounds)
+    await db
+      .update(employeeReactionRounds)
       .set({
         state: 'completed',
         outputJson: JSON.stringify({ status: 'ok', summary: 'Implement feature' }),
@@ -481,7 +502,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       contexts: [inheritedIssueContext],
       workspacePolicy: writePolicy,
     })
-    db.insert(employeeReactionRounds)
+    await db
+      .insert(employeeReactionRounds)
       .values({
         id: 'round-analyze-recovery',
         caseId: 'case-1',
@@ -524,7 +546,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       errorClass: 'semantic',
       errorCode: 'workspace-semantic-outcome-workspace-mismatch',
     })
-    db.update(employeeReactionRounds)
+    await db
+      .update(employeeReactionRounds)
       .set({ state: 'failed', settledAt: 22, updatedAt: 22 })
       .where(eq(employeeReactionRounds.id, 'round-analyze-recovery'))
       .run()
@@ -533,12 +556,13 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       ...recoveryPlan,
       roundRef: 'round-analyze-recovery-exact',
     }
-    const failedRecoveryRound = db
+    const failedRecoveryRound = (await db
       .select()
       .from(employeeReactionRounds)
       .where(eq(employeeReactionRounds.id, 'round-analyze-recovery'))
-      .get()!
-    db.insert(employeeReactionRounds)
+      .get())!
+    await db
+      .insert(employeeReactionRounds)
       .values({
         ...failedRecoveryRound,
         id: exactRecoveryPlan.roundRef,
@@ -566,11 +590,11 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     ).toEqual({ ok: true })
     expect(
       JSON.parse(
-        db
+        (await db
           .select({ validationJson: employeeRoundWorkspaceStates.validationJson })
           .from(employeeRoundWorkspaceStates)
           .where(eq(employeeRoundWorkspaceStates.roundId, exactRecoveryPlan.roundRef))
-          .get()!.validationJson!,
+          .get())!.validationJson!,
       ),
     ).toEqual({
       ok: true,
@@ -578,7 +602,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       changedPaths: ['config/editable-same.txt', 'src/feature.ts'],
       postBusinessDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
     })
-    db.update(employeeReactionRounds)
+    await db
+      .update(employeeReactionRounds)
       .set({
         state: 'completed',
         outputJson: JSON.stringify({ status: 'ok', summary: 'Carry validated feature change' }),
@@ -608,7 +633,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       contexts: [deliveryIssueContext],
       allowedEffectKinds: ['source-control.candidate'],
     })
-    db.insert(employeeReactionRounds)
+    await db
+      .insert(employeeReactionRounds)
       .values({
         id: 'round-prepare',
         caseId: 'case-1',
@@ -891,10 +917,10 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     )
     expect(candidateState.changedPaths).not.toContain('config/already.txt')
     const candidateReceipt = JSON.parse(
-      db
+      (await db
         .select({ receiptJson: employeeChangeCandidates.receiptJson })
         .from(employeeChangeCandidates)
-        .get()!.receiptJson,
+        .get())!.receiptJson,
     ) as {
       uploadPlan: {
         entries: Array<{ targetPath: string; disposition: string; fileMode: string }>
@@ -922,7 +948,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         fileMode: 'regular',
       }),
     ])
-    db.update(employeeReactionRounds).set({ state: 'completed', settledAt: 34 }).run()
+    await db.update(employeeReactionRounds).set({ state: 'completed', settledAt: 34 }).run()
 
     const candidateContext = {
       id: 'candidate-context',
@@ -941,7 +967,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         'code-host.merge-request.ensure',
       ],
     })
-    db.insert(employeeReactionRounds)
+    await db
+      .insert(employeeReactionRounds)
       .values({
         id: 'round-publish',
         caseId: 'case-1',
@@ -972,7 +999,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       contextPatches: Array<{ contextTypeId: string; stateJson: string }>
     }
     expect(published.status).toBe('ok')
-    db.update(employeeReactionRounds)
+    await db
+      .update(employeeReactionRounds)
       .set({ state: 'completed', settledAt: 45 })
       .where(eq(employeeReactionRounds.id, 'round-publish'))
       .run()
@@ -1361,7 +1389,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       contexts: [deliveryIssueContext, conflictMrContext],
       workspacePolicy: writePolicy,
     })
-    db.insert(employeeReactionRounds)
+    await db
+      .insert(employeeReactionRounds)
       .values({
         id: 'round-repair-conflict',
         caseId: 'case-1',
@@ -1486,7 +1515,8 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         outputJson: JSON.stringify({ status: 'ok' }),
       }),
     ).toEqual({ ok: true })
-    db.update(employeeReactionRounds)
+    await db
+      .update(employeeReactionRounds)
       .set({ state: 'completed', settledAt: 60 })
       .where(eq(employeeReactionRounds.id, 'round-repair-conflict'))
       .run()
@@ -1670,7 +1700,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     expect(existsSync(join(caseWorkspace, 'src', 'stale-local.ts'))).toBe(false)
     expect(readFileSync(retainedEvidence, 'utf8')).toBe('keep this platform evidence\n')
     expect(
-      db
+      await db
         .select({
           baselineSha: employeeCaseWorkspaces.baselineSha,
           remoteHeadSha: employeeCaseWorkspaces.remoteHeadSha,

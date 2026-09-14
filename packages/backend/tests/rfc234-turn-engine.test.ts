@@ -19,7 +19,7 @@ import {
   canonicalIntentJson,
   parseIntentChangeset,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { createRuntime, setRuntimeEnabled } from '../src/services/runtimeRegistry'
@@ -52,13 +52,13 @@ import {
   runIntentTurnForTest as runIntentTurn,
 } from './helpers/intentResourceCatalogBinding'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import type { IntentResolvedRuntime } from '../src/modules/intent/application/ports/intentAuxiliaryQueries'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_intent_000000000'
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let appHome: string
 let persistence: IntentPersistence
 
@@ -176,6 +176,76 @@ const MINIMAL_CHANGESET = JSON.stringify({
   ],
 })
 
+/**
+ * 终态写的故障注入缝。**一次性**：armed 之后的第一条写语句抛出 `message`，随即自动解除。
+ *
+ * RFC-359 AC-6 —— 「第一条写语句落在哪个句柄上」两个引擎并不相同，只钩一处必然在另一侧空转：
+ *  · SQLite 的中立事务是显式 `BEGIN IMMEDIATE` / `COMMIT`，事务句柄**就是客户端本身**
+ *    （`createSqliteDatabaseSession` 里 `const tx = db`），所以客户端上的第一条 `run`
+ *    就是 BEGIN，注入的错误落在「终态写」那一笔里；
+ *  · PostgreSQL 走驱动自带的 `db.transaction(async tx => …)`，`tx` 是**另一个对象**，
+ *    客户端上的 `run` 在那一笔里一次都不会被调用；而且 PG 客户端是带 `get` 陷阱的 Proxy，
+ *    `db.run = …` 这类赋值会被陷阱整个盖掉。所以钩子只能做成外层 Proxy，并且必须
+ *    **连 `transaction` 交出来的句柄一起重新包**——那上面的第一条 `run` 才是 UPDATE 本身。
+ *
+ * `fired()` 是判据的一部分：缝一旦没被触发，用例必须红，而不是悄悄退化成一条
+ * 「什么都没注入」的绿。
+ */
+interface FirstWriteFaultSeam {
+  /** 交给被测代码的库句柄（原句柄的透明代理）。 */
+  readonly db: ProviderNeutralDatabase
+  arm(): void
+  disarm(): void
+  fired(): number
+}
+
+function firstWriteFaultSeam(
+  target: ProviderNeutralDatabase,
+  message: string,
+): FirstWriteFaultSeam {
+  let armed = false
+  let fired = 0
+  const trip = (): void => {
+    if (!armed) return
+    armed = false
+    fired += 1
+    throw new Error(message)
+  }
+  const wrap = <T extends object>(handle: T): T =>
+    new Proxy(handle, {
+      get(base, property, receiver) {
+        if (property === 'run') {
+          const original = Reflect.get(base, property, receiver) as (
+            ...args: readonly unknown[]
+          ) => unknown
+          return (...args: readonly unknown[]) => {
+            trip()
+            return original.call(base, ...args)
+          }
+        }
+        if (property === 'transaction') {
+          const original = Reflect.get(base, property, receiver) as (
+            body: (tx: object) => unknown,
+            ...rest: readonly unknown[]
+          ) => unknown
+          return (body: (tx: object) => unknown, ...rest: readonly unknown[]) =>
+            original.call(base, (tx: object) => body(wrap(tx)), ...rest)
+        }
+        return Reflect.get(base, property, receiver)
+      },
+    })
+  return {
+    db: wrap(target),
+    arm: () => {
+      armed = true
+    },
+    disarm: () => {
+      armed = false
+    },
+    fired: () => fired,
+  }
+}
+
 /** runFn that reads the persisted nonce off its prompt's protocol block. */
 function scriptedRun(
   script: (
@@ -189,8 +259,8 @@ function scriptedRun(
   }
 }
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+async function seedFixture(harness: ProviderHarness): Promise<void> {
+  db = harness.db
   persistence = intentPersistenceForTest(db)
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-engine-'))
   await db.insert(users).values({
@@ -202,825 +272,813 @@ beforeEach(async () => {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   } as typeof users.$inferInsert)
-})
-afterEach(() => {
-  rmSync(appHome, { recursive: true, force: true })
-})
+}
 
-describe('runIntentTurn', () => {
-  test('a runtime-config start failure settles the exact reserved row and clears in-flight', async () => {
-    const { session, reservation } = await createIntentSessionAndReserveTurn(db, actor, {
-      message: 'build with unavailable runtime',
-    })
-    expect(
-      await settleReservedIntentTurnStartFailure(persistence, {
-        sessionId: session.id,
-        actor,
-        reservation,
+describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
+  beforeEach(async () => {
+    await seedFixture(harness)
+  })
+  afterEach(() => {
+    rmSync(appHome, { recursive: true, force: true })
+  })
+
+  describe('runIntentTurn', () => {
+    test('a runtime-config start failure settles the exact reserved row and clears in-flight', async () => {
+      const { session, reservation } = await createIntentSessionAndReserveTurn(db, actor, {
+        message: 'build with unavailable runtime',
+      })
+      expect(
+        await settleReservedIntentTurnStartFailure(persistence, {
+          sessionId: session.id,
+          actor,
+          reservation,
+          detail: 'runtime profile could not be resolved',
+        }),
+      ).toBe(true)
+
+      const fresh = (
+        await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+      )[0]
+      const turn = (
+        await db.select().from(intentTurns).where(eq(intentTurns.id, reservation.turnId))
+      )[0]
+      expect(fresh?.inFlightTurnId).toBeNull()
+      expect(turn?.kind).toBe('error')
+      expect(turn?.captureState).toBe('complete')
+      expect(JSON.parse(turn?.contentJson ?? '{}')).toEqual({
+        code: 'intent-runtime-config-unavailable',
         detail: 'runtime profile could not be resolved',
-      }),
-    ).toBe(true)
-
-    const fresh = (
-      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
-    )[0]
-    const turn = (
-      await db.select().from(intentTurns).where(eq(intentTurns.id, reservation.turnId))
-    )[0]
-    expect(fresh?.inFlightTurnId).toBeNull()
-    expect(turn?.kind).toBe('error')
-    expect(turn?.captureState).toBe('complete')
-    expect(JSON.parse(turn?.contentJson ?? '{}')).toEqual({
-      code: 'intent-runtime-config-unavailable',
-      detail: 'runtime profile could not be resolved',
-    })
-    expect(
-      await settleReservedIntentTurnStartFailure(persistence, {
-        sessionId: session.id,
-        actor,
-        reservation,
-        detail: 'late duplicate',
-      }),
-    ).toBe(false)
-  })
-
-  test('cancel settles a reserved row before the runtime controller exists', async () => {
-    const { session, reservation } = await createIntentSessionAndReserveTurn(db, actor, {
-      message: 'cancel before runtime resolution',
-    })
-    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
-
-    const fresh = (
-      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
-    )[0]
-    const turn = (
-      await db.select().from(intentTurns).where(eq(intentTurns.id, reservation.turnId))
-    )[0]
-    expect(fresh?.inFlightTurnId).toBeNull()
-    expect(turn?.kind).toBe('error')
-    expect(turn?.captureState).toBe('complete')
-    expect(JSON.parse(turn?.contentJson ?? '{}')).toEqual({ code: 'intent-run-aborted' })
-    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(false)
-  })
-
-  test('happy changeset: immutable draft + hash + budget + nonce persisted', async () => {
-    const { session } = await createIntentSession(db, actor, { message: '给我一个审计流水线' })
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((_o, nonce) =>
-          okResult(envelope(nonce, { summary: 'built one agent', changeset: MINIMAL_CHANGESET })),
-        ),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(outcome.kind).toBe('changeset')
-    expect(outcome.draftRevision).toBe(1)
-
-    const fresh = (
-      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
-    )[0]
-    expect(fresh?.inFlightTurnId).toBeNull()
-    expect(fresh?.currentDraftId).not.toBeNull()
-    expect(JSON.parse(fresh?.budgetJson ?? '{}')).toEqual({ generateRounds: 1, questionRounds: 0 })
-
-    const draft = (
-      await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
-    )[0]
-    expect(draft?.revision).toBe(1)
-    expect(draft?.draftHash).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(JSON.parse(draft?.validationJson ?? '{}').errors).toEqual([])
-
-    const agentTurn = (
-      await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId))
-    )[0]
-    expect(agentTurn?.kind).toBe('changeset')
-    expect(agentTurn?.envelopeNonce).toMatch(/^[0-9a-f]{16}$/)
-    expect(JSON.parse(agentTurn?.contentJson ?? '{}').summary).toBe('built one agent')
-  })
-
-  test('live GLM missing final-op brace is recovered into a schema-valid draft', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'build a workflow' })
-    const workflow = JSON.stringify({
-      $schema_version: 1,
-      ops: [
-        {
-          opId: 'op-1',
-          action: 'create',
-          resourceType: 'workflow',
-          tempRef: '$new:flow',
-          payload: {
-            name: 'flow',
-            description: '',
-            definition: {
-              $schema_version: WORKFLOW_SCHEMA_VERSION,
-              inputs: [{ kind: 'text', key: 'goal', label: 'Goal', required: true }],
-              nodes: [
-                { id: 'input', kind: 'input', inputKey: 'goal' },
-                { id: 'agent', kind: 'agent-single', agentRef: 'res#agent#1' },
-                { id: 'output', kind: 'output' },
-              ],
-              edges: [],
-            },
-          },
-        },
-      ],
-    })
-    const malformed = workflow.replace(/}}}]}$/, '}}]}')
-    expect(malformed).not.toBe(workflow)
-
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((_o, nonce) =>
-          okResult(envelope(nonce, { summary: 'workflow', changeset: malformed })),
-        ),
-      },
-      { sessionId: session.id, actor },
-    )
-
-    expect(outcome.kind).toBe('changeset')
-    const draft = (
-      await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
-    )[0]
-    const persisted = JSON.parse(draft?.changesetJson ?? '{}') as {
-      ops: Array<{ payload: { definition: { nodes: Array<Record<string, unknown>> } } }>
-    }
-    const persistedNodes = persisted.ops[0]!.payload.definition.nodes
-    expect(persistedNodes.map((node) => node.id)).toEqual(['input', 'agent', 'output'])
-    expect(persistedNodes.every((node) => node.position !== undefined)).toBe(true)
-    const positions = persistedNodes.map((node) => node.position as { x: number; y: number })
-    expect(Math.min(...positions.map((position) => position.x))).toBe(80)
-    expect(Math.min(...positions.map((position) => position.y))).toBe(80)
-    expect(persistedNodes[1]).toMatchObject({ agentRef: 'res#agent#1' })
-    expect(persistedNodes[1]).not.toHaveProperty('agentId')
-    expect(draft?.draftHash).toBe(`sha256:${sha256Hex(canonicalIntentJson(persisted))}`)
-    const validationErrors = JSON.parse(draft?.validationJson ?? '{}').errors as string[]
-    expect(validationErrors).toEqual([
-      'op-1: definition.agentRef[0] references unknown handle res#agent#1 (intent-ref-unknown)',
-    ])
-    expect(validationErrors.some((error) => error.includes('intent-secret-value-forbidden'))).toBe(
-      false,
-    )
-    const agentTurn = (
-      await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId))
-    )[0]
-    expect(JSON.parse(agentTurn?.contentJson ?? '{}').jsonRepair).toEqual({
-      kind: 'missing-final-op-object-close',
-      offset: malformed.length - 2,
-    })
-  })
-
-  test('RFC-302 malformed layout input mints a review-blocked draft instead of crashing', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'build malformed graph' })
-    const definition = {
-      $schema_version: WORKFLOW_SCHEMA_VERSION,
-      inputs: [],
-      nodes: [
-        { id: 'duplicate', kind: 'input' },
-        { id: 'duplicate', kind: 'output' },
-      ],
-      edges: [],
-    }
-    const cs = JSON.stringify({
-      $schema_version: 1,
-      ops: [
-        {
-          opId: 'op-1',
-          action: 'create',
-          resourceType: 'workflow',
-          tempRef: '$new:bad-flow',
-          payload: { name: 'Bad flow', description: '', definition },
-        },
-      ],
-    })
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((_opts, nonce) =>
-          okResult(envelope(nonce, { summary: 'bad graph', changeset: cs })),
-        ),
-      },
-      { sessionId: session.id, actor },
-    )
-
-    expect(outcome.kind).toBe('changeset')
-    const draft = db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id)).get()
-    const report = JSON.parse(draft?.validationJson ?? '{}') as { errors: string[] }
-    expect(report.errors[0]).toBe(
-      'op-1: workflow definition cannot be auto-laid out (duplicate node id duplicate) (intent-workflow-layout-input-invalid)',
-    )
-    const turn = db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)).get()
-    expect(JSON.parse(turn?.contentJson ?? '{}').blockingErrors).toBeGreaterThan(0)
-  })
-
-  test('RFC-302 post-layout byte gate accepts exact limit, then retains evidence at limit + 1', async () => {
-    const agentOps = Array.from({ length: 8 }, (_, index) => ({
-      opId: `op-${index + 1}`,
-      action: 'create',
-      resourceType: 'agent',
-      tempRef: `$new:padding-${index}`,
-      payload: {
-        name: `padding-${index}`,
-        description: '',
-        outputs: [],
-        skills: [],
-        dependsOn: [],
-        mcp: [],
-        plugins: [],
-        bodyMd: index < 7 ? 'x'.repeat(262_000) : '',
-      },
-    }))
-    const large = {
-      $schema_version: 1,
-      ops: [
-        ...agentOps,
-        {
-          opId: 'op-9',
-          action: 'create',
-          resourceType: 'workflow',
-          tempRef: '$new:large-flow',
-          payload: {
-            name: 'Large flow',
-            description: '',
-            definition: {
-              $schema_version: WORKFLOW_SCHEMA_VERSION,
-              inputs: [],
-              nodes: Array.from({ length: 256 }, (_, index) => ({
-                id: `node-${index}`,
-                kind: 'input',
-              })),
-              edges: [],
-            },
-          },
-        },
-      ],
-    }
-    const base = parseIntentChangeset(JSON.stringify(large))
-    if (!base.ok) throw new Error(base.errors.join('\n'))
-    const targetBytes = INTENT_LIMITS.maxChangesetBytes - 16
-    const paddingBytes = targetBytes - base.bytes
-    expect(paddingBytes).toBeGreaterThan(0)
-    expect(paddingBytes).toBeLessThanOrEqual(INTENT_LIMITS.maxBodyMdBytes)
-    agentOps[7]!.payload.bodyMd = 'y'.repeat(paddingBytes)
-    const nearLimit = parseIntentChangeset(JSON.stringify(large))
-    if (!nearLimit.ok) throw new Error(nearLimit.errors.join('\n'))
-    expect(nearLimit.bytes).toBe(targetBytes)
-    const nearLimitNormalized = normalizeIntentWorkflowCreateLayouts(nearLimit.changeset)
-    expect(nearLimitNormalized.errors).toEqual([])
-    const nearLimitNormalizedBytes = Buffer.byteLength(
-      canonicalIntentJson(nearLimitNormalized.changeset),
-      'utf8',
-    )
-    const overflowBytes = nearLimitNormalizedBytes - INTENT_LIMITS.maxChangesetBytes
-    expect(overflowBytes).toBeGreaterThan(0)
-    expect(overflowBytes).toBeLessThan(paddingBytes)
-
-    const exactPaddingBytes = paddingBytes - overflowBytes
-    agentOps[7]!.payload.bodyMd = 'y'.repeat(exactPaddingBytes)
-    const exactLimit = parseIntentChangeset(JSON.stringify(large))
-    if (!exactLimit.ok) throw new Error(exactLimit.errors.join('\n'))
-    const exactNormalized = normalizeIntentWorkflowCreateLayouts(exactLimit.changeset)
-    expect(exactNormalized.errors).toEqual([])
-    expect(Buffer.byteLength(canonicalIntentJson(exactNormalized.changeset), 'utf8')).toBe(
-      INTENT_LIMITS.maxChangesetBytes,
-    )
-
-    const { session: exactSession } = await createIntentSession(db, actor, {
-      message: 'build a graph at the exact canonical limit',
-    })
-    const exactOutcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((_opts, nonce) =>
-          okResult(
-            envelope(nonce, {
-              summary: 'exact-limit graph',
-              changeset: exactLimit.canonicalJson,
-            }),
-          ),
-        ),
-      },
-      { sessionId: exactSession.id, actor },
-    )
-    expect(exactOutcome.kind).toBe('changeset')
-    const exactDraft = db
-      .select()
-      .from(intentDrafts)
-      .where(eq(intentDrafts.sessionId, exactSession.id))
-      .get()
-    expect(Buffer.byteLength(exactDraft?.changesetJson ?? '', 'utf8')).toBe(
-      INTENT_LIMITS.maxChangesetBytes,
-    )
-
-    agentOps[7]!.payload.bodyMd = 'y'.repeat(exactPaddingBytes + 1)
-    const overflow = parseIntentChangeset(JSON.stringify(large))
-    if (!overflow.ok) throw new Error(overflow.errors.join('\n'))
-    expect(overflow.bytes).toBeLessThan(INTENT_LIMITS.maxChangesetBytes)
-    const overflowNormalized = normalizeIntentWorkflowCreateLayouts(overflow.changeset)
-    expect(Buffer.byteLength(canonicalIntentJson(overflowNormalized.changeset), 'utf8')).toBe(
-      INTENT_LIMITS.maxChangesetBytes + 1,
-    )
-
-    const { session: overflowSession } = await createIntentSession(db, actor, {
-      message: 'build a graph one byte over the canonical limit',
-    })
-
-    let scratchDir = ''
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          scratchDir = join(opts.scratchParent!, opts.scratchName!)
-          mkdirSync(scratchDir, { recursive: true })
-          return {
-            ...okResult(
-              envelope(nonce, {
-                summary: 'large graph',
-                changeset: overflow.canonicalJson,
-              }),
-            ),
-            scratchDir,
-            scratchRetained: true,
-          }
+      })
+      expect(
+        await settleReservedIntentTurnStartFailure(persistence, {
+          sessionId: session.id,
+          actor,
+          reservation,
+          detail: 'late duplicate',
         }),
-      },
-      { sessionId: overflowSession.id, actor },
-    )
-
-    expect(outcome.kind).toBe('error')
-    expect(
-      (await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, overflowSession.id)))
-        .length,
-    ).toBe(0)
-    const turn = db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)).get()
-    expect(turn?.scratchRetained).toBe(true)
-    expect(existsSync(scratchDir)).toBe(true)
-    const content = JSON.parse(turn?.contentJson ?? '{}') as { code: string; errors: string[] }
-    expect(content.code).toBe('intent-changeset-invalid')
-    expect(content.errors[0]).toContain('changeset-too-large:')
-    expect(content.errors[0]).toContain('after workflow auto-layout')
-  })
-
-  test('questions turn + answers reach the next INTENT.md', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'build something' })
-    const questions = JSON.stringify([
-      {
-        id: 'q1',
-        question: 'which sharding?',
-        options: ['per-file', 'per-dir'],
-        multiSelect: false,
-      },
-    ])
-    const first = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((_o, nonce) =>
-          okResult(envelope(nonce, { summary: 'need info', questions })),
-        ),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(first.kind).toBe('questions')
-    expect(
-      JSON.parse(
-        (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
-          ?.budgetJson ?? '{}',
-      ).questionRounds,
-    ).toBe(1)
-
-    await insertUserTurn(persistence, actor, session.id, 'answers', {
-      answers: [{ id: 'q1', picked: ['per-file'] }],
+      ).toBe(false)
     })
 
-    let seenDoc = ''
-    const second = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
-          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(second.kind).toBe('changeset')
-    expect(seenDoc).toContain('per-file')
-    expect(seenDoc).toContain('Pending questions you asked')
-    expect(seenDoc).toContain('which sharding?')
-  })
+    test('cancel settles a reserved row before the runtime controller exists', async () => {
+      const { session, reservation } = await createIntentSessionAndReserveTurn(db, actor, {
+        message: 'cancel before runtime resolution',
+      })
+      expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
 
-  test('missing envelope / both ports / invalid changeset settle as retryable errors', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const cases: Array<[string, (nonce: string) => string]> = [
-      ['intent-envelope-missing', () => 'no envelope here'],
-      ['intent-ports-exclusive', (n) => envelope(n, { summary: 's' })],
-      [
-        'intent-ports-exclusive',
-        (n) => envelope(n, { summary: 's', changeset: MINIMAL_CHANGESET, questions: '[]' }),
-      ],
-      ['intent-changeset-invalid', (n) => envelope(n, { summary: 's', changeset: '{not json' })],
-    ]
-    for (const [code, make] of cases) {
+      const fresh = (
+        await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+      )[0]
+      const turn = (
+        await db.select().from(intentTurns).where(eq(intentTurns.id, reservation.turnId))
+      )[0]
+      expect(fresh?.inFlightTurnId).toBeNull()
+      expect(turn?.kind).toBe('error')
+      expect(turn?.captureState).toBe('complete')
+      expect(JSON.parse(turn?.contentJson ?? '{}')).toEqual({ code: 'intent-run-aborted' })
+      expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(false)
+    })
+
+    test('happy changeset: immutable draft + hash + budget + nonce persisted', async () => {
+      const { session } = await createIntentSession(db, actor, { message: '给我一个审计流水线' })
       const outcome = await runIntentTurn(
-        { db, appHome, config: config(), runFn: scriptedRun((_o, nonce) => okResult(make(nonce))) },
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((_o, nonce) =>
+            okResult(envelope(nonce, { summary: 'built one agent', changeset: MINIMAL_CHANGESET })),
+          ),
+        },
         { sessionId: session.id, actor },
       )
-      expect(outcome.kind).toBe('error')
-      expect(outcome.errorCode).toBe(code)
+      expect(outcome.kind).toBe('changeset')
+      expect(outcome.draftRevision).toBe(1)
+
       const fresh = (
         await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
       )[0]
       expect(fresh?.inFlightTurnId).toBeNull()
-      expect(fresh?.currentDraftId).toBeNull()
-    }
-    const turns = await db
-      .select()
-      .from(intentTurns)
-      .where(eq(intentTurns.sessionId, session.id))
-      .orderBy(intentTurns.seq)
-    const malformedJsonContent = JSON.parse(turns.at(-1)?.contentJson ?? '{}') as {
-      errors?: string[]
-    }
-    expect(malformedJsonContent.errors).toContain(
-      'hint: verify every JSON object/array delimiter; if the response was truncated, emit fewer or smaller ops this turn',
-    )
-    expect(malformedJsonContent.errors?.join('\n')).not.toContain('usually means')
-  })
+      expect(fresh?.currentDraftId).not.toBeNull()
+      expect(JSON.parse(fresh?.budgetJson ?? '{}')).toEqual({
+        generateRounds: 1,
+        questionRounds: 0,
+      })
 
-  test('protocol failure retains scratch and evidence; a valid changeset releases the same owned shape', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    let failedScratch = ''
-    const failed = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config({ scratchRetentionHours: 12 }),
-        runFn: scriptedRun((opts) => {
-          expect(opts.retainScratchOnSuccess).toBe(true)
-          failedScratch = join(opts.scratchParent, opts.scratchName ?? 'missing')
-          mkdirSync(failedScratch, { recursive: true })
-          return {
-            ...okResult('read inventory, then stopped'),
-            scratchDir: failedScratch,
-            scratchRetained: true,
-            outputEvidence: {
-              ...emptySystemAgentOutputEvidence(),
-              assistantTextSeen: true,
-              observedAssistantTextBytes: 28,
-              retainedAssistantTextBytes: 28,
-              lastNormalizedEventKind: 'text',
-              lastRuntimeEventType: 'assistant',
-            },
-          }
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    const failedTurn = (
-      await db.select().from(intentTurns).where(eq(intentTurns.id, failed.turnId))
-    )[0]
-    expect(JSON.parse(failedTurn?.contentJson ?? '{}')).toEqual({
-      code: 'intent-envelope-missing',
-      reason: 'assistant-stopped-without-envelope',
+      const draft = (
+        await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
+      )[0]
+      expect(draft?.revision).toBe(1)
+      expect(draft?.draftHash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(JSON.parse(draft?.validationJson ?? '{}').errors).toEqual([])
+
+      const agentTurn = (
+        await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId))
+      )[0]
+      expect(agentTurn?.kind).toBe('changeset')
+      expect(agentTurn?.envelopeNonce).toMatch(/^[0-9a-f]{16}$/)
+      expect(JSON.parse(agentTurn?.contentJson ?? '{}').summary).toBe('built one agent')
     })
-    expect(JSON.parse(failedTurn?.runMetaJson ?? '{}')).toMatchObject({
-      scratchRetentionHours: 12,
-      outputEvidence: {
-        assistantTextSeen: true,
-        lastRuntimeEventType: 'assistant',
-      },
-    })
-    expect(failedTurn?.scratchRetained).toBe(true)
-    expect(existsSync(failedScratch)).toBe(true)
 
-    const second = await createIntentSession(db, actor, { message: 'valid' })
-    let validScratch = ''
-    const valid = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          validScratch = join(opts.scratchParent, opts.scratchName ?? 'missing')
-          mkdirSync(validScratch, { recursive: true })
-          return {
-            ...okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET })),
-            scratchDir: validScratch,
-            scratchRetained: true,
-          }
-        }),
-      },
-      { sessionId: second.session.id, actor },
-    )
-    const validTurn = (
-      await db.select().from(intentTurns).where(eq(intentTurns.id, valid.turnId))
-    )[0]
-    expect(valid.kind).toBe('changeset')
-    expect(validTurn?.scratchRetained).toBe(false)
-    expect(existsSync(validScratch)).toBe(false)
-  })
-
-  test('unknown handle mints the draft WITH blocking errors (agent-fixable loop)', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const cs = JSON.stringify({
-      $schema_version: 1,
-      ops: [
-        {
-          opId: 'op-1',
-          action: 'update',
-          resourceType: 'workflow',
-          target: 'res#workflow#9',
-          payload: {
-            name: 'f',
-            description: '',
-            definition: {
-              $schema_version: WORKFLOW_SCHEMA_VERSION,
-              inputs: [],
-              nodes: [],
-              edges: [],
+    test('live GLM missing final-op brace is recovered into a schema-valid draft', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'build a workflow' })
+      const workflow = JSON.stringify({
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:flow',
+            payload: {
+              name: 'flow',
+              description: '',
+              definition: {
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
+                inputs: [{ kind: 'text', key: 'goal', label: 'Goal', required: true }],
+                nodes: [
+                  { id: 'input', kind: 'input', inputKey: 'goal' },
+                  { id: 'agent', kind: 'agent-single', agentRef: 'res#agent#1' },
+                  { id: 'output', kind: 'output' },
+                ],
+                edges: [],
+              },
             },
           },
+        ],
+      })
+      const malformed = workflow.replace(/}}}]}$/, '}}]}')
+      expect(malformed).not.toBe(workflow)
+
+      const outcome = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((_o, nonce) =>
+            okResult(envelope(nonce, { summary: 'workflow', changeset: malformed })),
+          ),
         },
-      ],
-    })
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((_o, nonce) =>
-          okResult(envelope(nonce, { summary: 's', changeset: cs })),
-        ),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(outcome.kind).toBe('changeset')
-    const draft = (
-      await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
-    )[0]
-    const report = JSON.parse(draft?.validationJson ?? '{}') as { errors: string[] }
-    expect(report.errors.length).toBeGreaterThan(0)
-    expect(report.errors[0]).toContain('unknown target handle')
-  })
+        { sessionId: session.id, actor },
+      )
 
-  test('single-flight: user turns 409 while a generation runs; cancel settles aborted', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    let releaseRun: () => void = () => {}
-    const gate = new Promise<void>((r) => {
-      releaseRun = r
+      expect(outcome.kind).toBe('changeset')
+      const draft = (
+        await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
+      )[0]
+      const persisted = JSON.parse(draft?.changesetJson ?? '{}') as {
+        ops: Array<{ payload: { definition: { nodes: Array<Record<string, unknown>> } } }>
+      }
+      const persistedNodes = persisted.ops[0]!.payload.definition.nodes
+      expect(persistedNodes.map((node) => node.id)).toEqual(['input', 'agent', 'output'])
+      expect(persistedNodes.every((node) => node.position !== undefined)).toBe(true)
+      const positions = persistedNodes.map((node) => node.position as { x: number; y: number })
+      expect(Math.min(...positions.map((position) => position.x))).toBe(80)
+      expect(Math.min(...positions.map((position) => position.y))).toBe(80)
+      expect(persistedNodes[1]).toMatchObject({ agentRef: 'res#agent#1' })
+      expect(persistedNodes[1]).not.toHaveProperty('agentId')
+      expect(draft?.draftHash).toBe(`sha256:${sha256Hex(canonicalIntentJson(persisted))}`)
+      const validationErrors = JSON.parse(draft?.validationJson ?? '{}').errors as string[]
+      expect(validationErrors).toEqual([
+        'op-1: definition.agentRef[0] references unknown handle res#agent#1 (intent-ref-unknown)',
+      ])
+      expect(
+        validationErrors.some((error) => error.includes('intent-secret-value-forbidden')),
+      ).toBe(false)
+      const agentTurn = (
+        await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId))
+      )[0]
+      expect(JSON.parse(agentTurn?.contentJson ?? '{}').jsonRepair).toEqual({
+        kind: 'missing-final-op-object-close',
+        offset: malformed.length - 2,
+      })
     })
-    const running = runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: async (opts) => {
-          await gate
-          if (opts.abortSignal?.aborted) {
-            return { ...okResult(''), status: 'aborted' }
-          }
-          return okResult('')
+
+    test('RFC-302 malformed layout input mints a review-blocked draft instead of crashing', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'build malformed graph' })
+      const definition = {
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
+        inputs: [],
+        nodes: [
+          { id: 'duplicate', kind: 'input' },
+          { id: 'duplicate', kind: 'output' },
+        ],
+        edges: [],
+      }
+      const cs = JSON.stringify({
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:bad-flow',
+            payload: { name: 'Bad flow', description: '', definition },
+          },
+        ],
+      })
+      const outcome = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((_opts, nonce) =>
+            okResult(envelope(nonce, { summary: 'bad graph', changeset: cs })),
+          ),
         },
-      },
-      { sessionId: session.id, actor },
-    )
-    // Wait until the in-flight slot is visibly taken.
-    for (let i = 0; i < 100; i++) {
-      const row = (
-        await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
-      )[0]
-      if (row?.inFlightTurnId !== null) break
-      await new Promise((r) => setTimeout(r, 10))
-    }
-    await expect(
-      insertUserTurn(persistence, actor, session.id, 'message', { message: 'more' }),
-    ).rejects.toThrow(/intent-turn-in-flight|generation turn is already running/)
-    expect(abortIntentTurn(session.id)).toBe(true)
-    releaseRun()
-    const outcome = await running
-    expect(outcome.kind).toBe('error')
-    expect(outcome.errorCode).toBe('intent-run-aborted')
-    const fresh = (
-      await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
-    )[0]
-    expect(fresh?.inFlightTurnId).toBeNull()
-  })
+        { sessionId: session.id, actor },
+      )
 
-  test('context-epoch CAS: a mid-run epoch bump archives the result, no draft installs', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    let releaseRun: () => void = () => {}
-    const gate = new Promise<void>((r) => {
-      releaseRun = r
+      expect(outcome.kind).toBe('changeset')
+      const draft = await db
+        .select()
+        .from(intentDrafts)
+        .where(eq(intentDrafts.sessionId, session.id))
+        .get()
+      const report = JSON.parse(draft?.validationJson ?? '{}') as { errors: string[] }
+      expect(report.errors[0]).toBe(
+        'op-1: workflow definition cannot be auto-laid out (duplicate node id duplicate) (intent-workflow-layout-input-invalid)',
+      )
+      const turn = await db
+        .select()
+        .from(intentTurns)
+        .where(eq(intentTurns.id, outcome.turnId))
+        .get()
+      expect(JSON.parse(turn?.contentJson ?? '{}').blockingErrors).toBeGreaterThan(0)
     })
-    const running = runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun(async (_o, nonce) => {
-          await gate
-          return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    for (let i = 0; i < 100; i++) {
-      const row = (
-        await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
-      )[0]
-      if (row?.inFlightTurnId !== null) break
-      await new Promise((r) => setTimeout(r, 10))
-    }
-    // Simulate a future epoch mover racing the run.
-    await db
-      .update(intentSessions)
-      .set({ contextRevision: 99 })
-      .where(eq(intentSessions.id, session.id))
-    releaseRun()
-    const outcome = await running
-    expect(outcome.kind).toBe('error')
-    expect(outcome.errorCode).toBe('intent-context-superseded')
-    const drafts = await db
-      .select()
-      .from(intentDrafts)
-      .where(eq(intentDrafts.sessionId, session.id))
-    expect(drafts.length).toBe(0)
-  })
 
-  test('budget exhaustion is a 409 before any spawn', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const deps = {
-      db,
-      appHome,
-      config: config({ maxGenerateRounds: 1 }),
-      runFn: scriptedRun((_o, nonce) =>
-        okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET })),
-      ),
-    }
-    await runIntentTurn(deps, { sessionId: session.id, actor })
-    await expect(runIntentTurn(deps, { sessionId: session.id, actor })).rejects.toThrow(
-      /intent-budget-exhausted|generation budget/,
-    )
-  })
+    test('RFC-302 post-layout byte gate accepts exact limit, then retains evidence at limit + 1', async () => {
+      const agentOps = Array.from({ length: 8 }, (_, index) => ({
+        opId: `op-${index + 1}`,
+        action: 'create',
+        resourceType: 'agent',
+        tempRef: `$new:padding-${index}`,
+        payload: {
+          name: `padding-${index}`,
+          description: '',
+          outputs: [],
+          skills: [],
+          dependsOn: [],
+          mcp: [],
+          plugins: [],
+          bodyMd: index < 7 ? 'x'.repeat(262_000) : '',
+        },
+      }))
+      const large = {
+        $schema_version: 1,
+        ops: [
+          ...agentOps,
+          {
+            opId: 'op-9',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:large-flow',
+            payload: {
+              name: 'Large flow',
+              description: '',
+              definition: {
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
+                inputs: [],
+                nodes: Array.from({ length: 256 }, (_, index) => ({
+                  id: `node-${index}`,
+                  kind: 'input',
+                })),
+                edges: [],
+              },
+            },
+          },
+        ],
+      }
+      const base = parseIntentChangeset(JSON.stringify(large))
+      if (!base.ok) throw new Error(base.errors.join('\n'))
+      const targetBytes = INTENT_LIMITS.maxChangesetBytes - 16
+      const paddingBytes = targetBytes - base.bytes
+      expect(paddingBytes).toBeGreaterThan(0)
+      expect(paddingBytes).toBeLessThanOrEqual(INTENT_LIMITS.maxBodyMdBytes)
+      agentOps[7]!.payload.bodyMd = 'y'.repeat(paddingBytes)
+      const nearLimit = parseIntentChangeset(JSON.stringify(large))
+      if (!nearLimit.ok) throw new Error(nearLimit.errors.join('\n'))
+      expect(nearLimit.bytes).toBe(targetBytes)
+      const nearLimitNormalized = normalizeIntentWorkflowCreateLayouts(nearLimit.changeset)
+      expect(nearLimitNormalized.errors).toEqual([])
+      const nearLimitNormalizedBytes = Buffer.byteLength(
+        canonicalIntentJson(nearLimitNormalized.changeset),
+        'utf8',
+      )
+      const overflowBytes = nearLimitNormalizedBytes - INTENT_LIMITS.maxChangesetBytes
+      expect(overflowBytes).toBeGreaterThan(0)
+      expect(overflowBytes).toBeLessThan(paddingBytes)
 
-  test('a failed incomplete write cannot be repainted complete by the outer retry', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    // RFC-359 W7：Intent 的事务不再走驱动的 `db.transaction`（合一后是中立原语的显式
-    // BEGIN IMMEDIATE / COMMIT），故障注入点随之落到 `db.run` 上——中立事务的第一条语句
-    // 就是它，注入的错误因此仍旧在「终态写」的那一笔里抛出。断言的东西一个字没变。
-    const originalRun = db.run.bind(db)
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun(async (opts, nonce) => {
-          let failOnce = true
-          db.run = ((...args: Parameters<DbClient['run']>) => {
-            if (failOnce) {
-              failOnce = false
-              throw new Error('transient sqlite failure')
+      const exactPaddingBytes = paddingBytes - overflowBytes
+      agentOps[7]!.payload.bodyMd = 'y'.repeat(exactPaddingBytes)
+      const exactLimit = parseIntentChangeset(JSON.stringify(large))
+      if (!exactLimit.ok) throw new Error(exactLimit.errors.join('\n'))
+      const exactNormalized = normalizeIntentWorkflowCreateLayouts(exactLimit.changeset)
+      expect(exactNormalized.errors).toEqual([])
+      expect(Buffer.byteLength(canonicalIntentJson(exactNormalized.changeset), 'utf8')).toBe(
+        INTENT_LIMITS.maxChangesetBytes,
+      )
+
+      const { session: exactSession } = await createIntentSession(db, actor, {
+        message: 'build a graph at the exact canonical limit',
+      })
+      const exactOutcome = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((_opts, nonce) =>
+            okResult(
+              envelope(nonce, {
+                summary: 'exact-limit graph',
+                changeset: exactLimit.canonicalJson,
+              }),
+            ),
+          ),
+        },
+        { sessionId: exactSession.id, actor },
+      )
+      expect(exactOutcome.kind).toBe('changeset')
+      const exactDraft = await db
+        .select()
+        .from(intentDrafts)
+        .where(eq(intentDrafts.sessionId, exactSession.id))
+        .get()
+      expect(Buffer.byteLength(exactDraft?.changesetJson ?? '', 'utf8')).toBe(
+        INTENT_LIMITS.maxChangesetBytes,
+      )
+
+      agentOps[7]!.payload.bodyMd = 'y'.repeat(exactPaddingBytes + 1)
+      const overflow = parseIntentChangeset(JSON.stringify(large))
+      if (!overflow.ok) throw new Error(overflow.errors.join('\n'))
+      expect(overflow.bytes).toBeLessThan(INTENT_LIMITS.maxChangesetBytes)
+      const overflowNormalized = normalizeIntentWorkflowCreateLayouts(overflow.changeset)
+      expect(Buffer.byteLength(canonicalIntentJson(overflowNormalized.changeset), 'utf8')).toBe(
+        INTENT_LIMITS.maxChangesetBytes + 1,
+      )
+
+      const { session: overflowSession } = await createIntentSession(db, actor, {
+        message: 'build a graph one byte over the canonical limit',
+      })
+
+      let scratchDir = ''
+      const outcome = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            scratchDir = join(opts.scratchParent!, opts.scratchName!)
+            mkdirSync(scratchDir, { recursive: true })
+            return {
+              ...okResult(
+                envelope(nonce, {
+                  summary: 'large graph',
+                  changeset: overflow.canonicalJson,
+                }),
+              ),
+              scratchDir,
+              scratchRetained: true,
             }
-            return originalRun(...args)
-          }) as DbClient['run']
-          try {
-            await expect(
-              opts.eventSink?.markTerminal('incomplete', 'stream-persist-failed'),
-            ).rejects.toThrow('transient sqlite failure')
-          } finally {
-            db.run = originalRun
-          }
-          return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
+          }),
+        },
+        { sessionId: overflowSession.id, actor },
+      )
 
-    const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)))[0]
-    expect(outcome.kind).toBe('changeset')
-    expect(turn?.captureState).toBe('incomplete')
-    expect(turn?.captureIncompleteReason).toBe('stream-persist-failed')
-  })
+      expect(outcome.kind).toBe('error')
+      expect(
+        (await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, overflowSession.id)))
+          .length,
+      ).toBe(0)
+      const turn = await db
+        .select()
+        .from(intentTurns)
+        .where(eq(intentTurns.id, outcome.turnId))
+        .get()
+      expect(turn?.scratchRetained).toBe(true)
+      expect(existsSync(scratchDir)).toBe(true)
+      const content = JSON.parse(turn?.contentJson ?? '{}') as { code: string; errors: string[] }
+      expect(content.code).toBe('intent-changeset-invalid')
+      expect(content.errors[0]).toContain('changeset-too-large:')
+      expect(content.errors[0]).toContain('after workflow auto-layout')
+    })
 
-  // Live-run regression (deepseek, 2026-07-28): the shared protocol block fed
-  // with all four ports rendered a combined example → models emitted changeset
-  // AND questions together → every turn errored intent-ports-exclusive. Lock
-  // the prompt tail: mainline example lists summary+changeset ONLY, and the
-  // exclusivity rule + alternative forms are stated explicitly.
-  test('prompt tail: mainline example is summary+changeset with explicit exclusivity', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    let seenPrompt = ''
-    await runIntentTurn(
-      {
+    test('questions turn + answers reach the next INTENT.md', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'build something' })
+      const questions = JSON.stringify([
+        {
+          id: 'q1',
+          question: 'which sharding?',
+          options: ['per-file', 'per-dir'],
+          multiSelect: false,
+        },
+      ])
+      const first = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((_o, nonce) =>
+            okResult(envelope(nonce, { summary: 'need info', questions })),
+          ),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(first.kind).toBe('questions')
+      expect(
+        JSON.parse(
+          (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
+            ?.budgetJson ?? '{}',
+        ).questionRounds,
+      ).toBe(1)
+
+      await insertUserTurn(persistence, actor, session.id, 'answers', {
+        answers: [{ id: 'q1', picked: ['per-file'] }],
+      })
+
+      let seenDoc = ''
+      const second = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+            return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(second.kind).toBe('changeset')
+      expect(seenDoc).toContain('per-file')
+      expect(seenDoc).toContain('Pending questions you asked')
+      expect(seenDoc).toContain('which sharding?')
+    })
+
+    test('missing envelope / both ports / invalid changeset settle as retryable errors', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      const cases: Array<[string, (nonce: string) => string]> = [
+        ['intent-envelope-missing', () => 'no envelope here'],
+        ['intent-ports-exclusive', (n) => envelope(n, { summary: 's' })],
+        [
+          'intent-ports-exclusive',
+          (n) => envelope(n, { summary: 's', changeset: MINIMAL_CHANGESET, questions: '[]' }),
+        ],
+        ['intent-changeset-invalid', (n) => envelope(n, { summary: 's', changeset: '{not json' })],
+      ]
+      for (const [code, make] of cases) {
+        const outcome = await runIntentTurn(
+          {
+            db,
+            appHome,
+            config: config(),
+            runFn: scriptedRun((_o, nonce) => okResult(make(nonce))),
+          },
+          { sessionId: session.id, actor },
+        )
+        expect(outcome.kind).toBe('error')
+        expect(outcome.errorCode).toBe(code)
+        const fresh = (
+          await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+        )[0]
+        expect(fresh?.inFlightTurnId).toBeNull()
+        expect(fresh?.currentDraftId).toBeNull()
+      }
+      const turns = await db
+        .select()
+        .from(intentTurns)
+        .where(eq(intentTurns.sessionId, session.id))
+        .orderBy(intentTurns.seq)
+      const malformedJsonContent = JSON.parse(turns.at(-1)?.contentJson ?? '{}') as {
+        errors?: string[]
+      }
+      expect(malformedJsonContent.errors).toContain(
+        'hint: verify every JSON object/array delimiter; if the response was truncated, emit fewer or smaller ops this turn',
+      )
+      expect(malformedJsonContent.errors?.join('\n')).not.toContain('usually means')
+    })
+
+    test('protocol failure retains scratch and evidence; a valid changeset releases the same owned shape', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      let failedScratch = ''
+      const failed = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config({ scratchRetentionHours: 12 }),
+          runFn: scriptedRun((opts) => {
+            expect(opts.retainScratchOnSuccess).toBe(true)
+            failedScratch = join(opts.scratchParent, opts.scratchName ?? 'missing')
+            mkdirSync(failedScratch, { recursive: true })
+            return {
+              ...okResult('read inventory, then stopped'),
+              scratchDir: failedScratch,
+              scratchRetained: true,
+              outputEvidence: {
+                ...emptySystemAgentOutputEvidence(),
+                assistantTextSeen: true,
+                observedAssistantTextBytes: 28,
+                retainedAssistantTextBytes: 28,
+                lastNormalizedEventKind: 'text',
+                lastRuntimeEventType: 'assistant',
+              },
+            }
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      const failedTurn = (
+        await db.select().from(intentTurns).where(eq(intentTurns.id, failed.turnId))
+      )[0]
+      expect(JSON.parse(failedTurn?.contentJson ?? '{}')).toEqual({
+        code: 'intent-envelope-missing',
+        reason: 'assistant-stopped-without-envelope',
+      })
+      expect(JSON.parse(failedTurn?.runMetaJson ?? '{}')).toMatchObject({
+        scratchRetentionHours: 12,
+        outputEvidence: {
+          assistantTextSeen: true,
+          lastRuntimeEventType: 'assistant',
+        },
+      })
+      expect(failedTurn?.scratchRetained).toBe(true)
+      expect(existsSync(failedScratch)).toBe(true)
+
+      const second = await createIntentSession(db, actor, { message: 'valid' })
+      let validScratch = ''
+      const valid = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            validScratch = join(opts.scratchParent, opts.scratchName ?? 'missing')
+            mkdirSync(validScratch, { recursive: true })
+            return {
+              ...okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET })),
+              scratchDir: validScratch,
+              scratchRetained: true,
+            }
+          }),
+        },
+        { sessionId: second.session.id, actor },
+      )
+      const validTurn = (
+        await db.select().from(intentTurns).where(eq(intentTurns.id, valid.turnId))
+      )[0]
+      expect(valid.kind).toBe('changeset')
+      expect(validTurn?.scratchRetained).toBe(false)
+      expect(existsSync(validScratch)).toBe(false)
+    })
+
+    test('unknown handle mints the draft WITH blocking errors (agent-fixable loop)', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      const cs = JSON.stringify({
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'update',
+            resourceType: 'workflow',
+            target: 'res#workflow#9',
+            payload: {
+              name: 'f',
+              description: '',
+              definition: {
+                $schema_version: WORKFLOW_SCHEMA_VERSION,
+                inputs: [],
+                nodes: [],
+                edges: [],
+              },
+            },
+          },
+        ],
+      })
+      const outcome = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((_o, nonce) =>
+            okResult(envelope(nonce, { summary: 's', changeset: cs })),
+          ),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(outcome.kind).toBe('changeset')
+      const draft = (
+        await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
+      )[0]
+      const report = JSON.parse(draft?.validationJson ?? '{}') as { errors: string[] }
+      expect(report.errors.length).toBeGreaterThan(0)
+      expect(report.errors[0]).toContain('unknown target handle')
+    })
+
+    test('single-flight: user turns 409 while a generation runs; cancel settles aborted', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      let releaseRun: () => void = () => {}
+      const gate = new Promise<void>((r) => {
+        releaseRun = r
+      })
+      const running = runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: async (opts) => {
+            await gate
+            if (opts.abortSignal?.aborted) {
+              return { ...okResult(''), status: 'aborted' }
+            }
+            return okResult('')
+          },
+        },
+        { sessionId: session.id, actor },
+      )
+      // Wait until the in-flight slot is visibly taken.
+      for (let i = 0; i < 100; i++) {
+        const row = (
+          await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+        )[0]
+        if (row?.inFlightTurnId !== null) break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      await expect(
+        insertUserTurn(persistence, actor, session.id, 'message', { message: 'more' }),
+      ).rejects.toThrow(/intent-turn-in-flight|generation turn is already running/)
+      expect(abortIntentTurn(session.id)).toBe(true)
+      releaseRun()
+      const outcome = await running
+      expect(outcome.kind).toBe('error')
+      expect(outcome.errorCode).toBe('intent-run-aborted')
+      const fresh = (
+        await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+      )[0]
+      expect(fresh?.inFlightTurnId).toBeNull()
+    })
+
+    test('context-epoch CAS: a mid-run epoch bump archives the result, no draft installs', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      let releaseRun: () => void = () => {}
+      const gate = new Promise<void>((r) => {
+        releaseRun = r
+      })
+      const running = runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun(async (_o, nonce) => {
+            await gate
+            return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      for (let i = 0; i < 100; i++) {
+        const row = (
+          await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
+        )[0]
+        if (row?.inFlightTurnId !== null) break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      // Simulate a future epoch mover racing the run.
+      await db
+        .update(intentSessions)
+        .set({ contextRevision: 99 })
+        .where(eq(intentSessions.id, session.id))
+      releaseRun()
+      const outcome = await running
+      expect(outcome.kind).toBe('error')
+      expect(outcome.errorCode).toBe('intent-context-superseded')
+      const drafts = await db
+        .select()
+        .from(intentDrafts)
+        .where(eq(intentDrafts.sessionId, session.id))
+      expect(drafts.length).toBe(0)
+    })
+
+    test('budget exhaustion is a 409 before any spawn', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      const deps = {
         db,
         appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          seenPrompt = opts.prompt
-          return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(seenPrompt).toContain('EXCLUSIVITY RULE')
-    expect(seenPrompt).toContain('EXACTLY ONE of `changeset` or `questions`')
-    // The block's own example must NOT pre-render a questions/requests port —
-    // they appear only inside the alternative-form instructions.
-    const exampleEnd = seenPrompt.indexOf('EXCLUSIVITY RULE')
-    const mainBlock = seenPrompt.slice(0, exampleEnd)
-    expect(mainBlock).toContain('<port name="summary">')
-    expect(mainBlock).toContain('<port name="changeset">')
-    expect(mainBlock).not.toContain('<port name="questions">')
-    expect(mainBlock).not.toContain('<port name="requests">')
-  })
-
-  // Design-gate P2-2 injection drill: an envelope `requests` port (e.g. the
-  // dump content coaxed the model into "please mount X") must land as
-  // SUGGESTIONS on the turn row only — the session manifest gains NOTHING
-  // until the user explicitly approves (D19: nothing auto-mounts).
-  test('requests port records suggestions without touching the manifest', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const requests = JSON.stringify([
-      { resourceType: 'agent', name: 'someone-elses-agent', reason: 'need it' },
-    ])
-    const turn = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
+        config: config({ maxGenerateRounds: 1 }),
         runFn: scriptedRun((_o, nonce) =>
-          okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET, requests })),
+          okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET })),
         ),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(turn.kind).toBe('changeset')
-    const turnRow = (
-      await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))
-    ).find((t) => t.kind === 'changeset')
-    expect(JSON.parse(turnRow?.contentJson ?? '{}').mountRequests).toEqual([
-      { resourceType: 'agent', name: 'someone-elses-agent', reason: 'need it' },
-    ])
-    const manifest = JSON.parse(
-      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
-        ?.contextManifestJson ?? '[]',
-    ) as unknown[]
-    expect(manifest).toEqual([])
+      }
+      await runIntentTurn(deps, { sessionId: session.id, actor })
+      await expect(runIntentTurn(deps, { sessionId: session.id, actor })).rejects.toThrow(
+        /intent-budget-exhausted|generation budget/,
+      )
+    })
+
+    test('a failed incomplete write cannot be repainted complete by the outer retry', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      // RFC-359 W7：Intent 的事务不再走驱动的 `db.transaction`（合一后是中立原语的显式
+      // BEGIN IMMEDIATE / COMMIT），故障注入点随之落到「终态写那一笔的第一条语句」上。
+      // 两个引擎上那条语句挂在不同的句柄（见 `firstWriteFaultSeam` 头注释），所以缝把
+      // 客户端与事务句柄一起钩住；`fired()` 保证缝真的触发过。断言的东西一个字没变。
+      const seam = firstWriteFaultSeam(db, 'transient sqlite failure')
+      const outcome = await runIntentTurn(
+        {
+          db: seam.db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun(async (opts, nonce) => {
+            seam.arm()
+            try {
+              await expect(
+                opts.eventSink?.markTerminal('incomplete', 'stream-persist-failed'),
+              ).rejects.toThrow('transient sqlite failure')
+            } finally {
+              seam.disarm()
+            }
+            return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+
+      expect(seam.fired()).toBe(1)
+      const turn = (
+        await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId))
+      )[0]
+      expect(outcome.kind).toBe('changeset')
+      expect(turn?.captureState).toBe('incomplete')
+      expect(turn?.captureIncompleteReason).toBe('stream-persist-failed')
+    })
+
+    // Live-run regression (deepseek, 2026-07-28): the shared protocol block fed
+    // with all four ports rendered a combined example → models emitted changeset
+    // AND questions together → every turn errored intent-ports-exclusive. Lock
+    // the prompt tail: mainline example lists summary+changeset ONLY, and the
+    // exclusivity rule + alternative forms are stated explicitly.
+    test('prompt tail: mainline example is summary+changeset with explicit exclusivity', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      let seenPrompt = ''
+      await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            seenPrompt = opts.prompt
+            return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(seenPrompt).toContain('EXCLUSIVITY RULE')
+      expect(seenPrompt).toContain('EXACTLY ONE of `changeset` or `questions`')
+      // The block's own example must NOT pre-render a questions/requests port —
+      // they appear only inside the alternative-form instructions.
+      const exampleEnd = seenPrompt.indexOf('EXCLUSIVITY RULE')
+      const mainBlock = seenPrompt.slice(0, exampleEnd)
+      expect(mainBlock).toContain('<port name="summary">')
+      expect(mainBlock).toContain('<port name="changeset">')
+      expect(mainBlock).not.toContain('<port name="questions">')
+      expect(mainBlock).not.toContain('<port name="requests">')
+    })
+
+    // Design-gate P2-2 injection drill: an envelope `requests` port (e.g. the
+    // dump content coaxed the model into "please mount X") must land as
+    // SUGGESTIONS on the turn row only — the session manifest gains NOTHING
+    // until the user explicitly approves (D19: nothing auto-mounts).
+    test('requests port records suggestions without touching the manifest', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      const requests = JSON.stringify([
+        { resourceType: 'agent', name: 'someone-elses-agent', reason: 'need it' },
+      ])
+      const turn = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((_o, nonce) =>
+            okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET, requests })),
+          ),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(turn.kind).toBe('changeset')
+      const turnRow = (
+        await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))
+      ).find((t) => t.kind === 'changeset')
+      expect(JSON.parse(turnRow?.contentJson ?? '{}').mountRequests).toEqual([
+        { resourceType: 'agent', name: 'someone-elses-agent', reason: 'need it' },
+      ])
+      const manifest = JSON.parse(
+        (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
+          ?.contextManifestJson ?? '[]',
+      ) as unknown[]
+      expect(manifest).toEqual([])
+    })
   })
-})
 
-describe('maintenance', () => {
-  test('boot recovery settles orphaned in-flight turns', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const turnId = ulid()
-    await db.insert(intentTurns).values({
-      id: turnId,
-      sessionId: session.id,
-      seq: 2,
-      role: 'agent',
-      kind: 'running',
-      contentJson: '{}',
-      contextRevision: 0,
-      captureState: 'live',
-      createdAt: Date.now(),
-    } as typeof intentTurns.$inferInsert)
-    await db
-      .update(intentSessions)
-      .set({ inFlightTurnId: turnId, turnSeq: 2 })
-      .where(eq(intentSessions.id, session.id))
-
-    expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
-    const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
-    expect(turn?.kind).toBe('error')
-    expect(JSON.parse(turn?.contentJson ?? '{}').code).toBe('intent-run-daemon-restart')
-    expect(turn?.captureState).toBe('incomplete')
-    expect(turn?.captureIncompleteReason).toBe('post-exit-flush-timeout')
-    expect(
-      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
-        ?.inFlightTurnId,
-    ).toBeNull()
-  })
-
-  test('boot recovery snapshot never settles a turn admitted by the new daemon', async () => {
-    const reserveRunningTurn = async (
-      message: string,
-    ): Promise<{ sessionId: string; turnId: string }> => {
-      const { session } = await createIntentSession(db, actor, { message })
+  describe('maintenance', () => {
+    test('boot recovery settles orphaned in-flight turns', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
       const turnId = ulid()
       await db.insert(intentTurns).values({
         id: turnId,
@@ -1037,379 +1095,414 @@ describe('maintenance', () => {
         .update(intentSessions)
         .set({ inFlightTurnId: turnId, turnSeq: 2 })
         .where(eq(intentSessions.id, session.id))
-      return { sessionId: session.id, turnId }
-    }
 
-    const orphaned = await reserveRunningTurn('previous generation')
-    const bootSnapshot = await listIntentTurnIdsForBootRecovery(persistence)
-    const current = await reserveRunningTurn('current generation')
-
-    expect(await recoverIntentTurnsOnBoot(persistence, undefined, bootSnapshot)).toBe(1)
-    expect(
-      (await db.select().from(intentTurns).where(eq(intentTurns.id, orphaned.turnId)))[0]?.kind,
-    ).toBe('error')
-    expect(
-      (await db.select().from(intentTurns).where(eq(intentTurns.id, current.turnId)))[0]?.kind,
-    ).toBe('running')
-    expect(
-      (await db.select().from(intentSessions).where(eq(intentSessions.id, current.sessionId)))[0]
-        ?.inFlightTurnId,
-    ).toBe(current.turnId)
-  })
-
-  test('boot recovery preserves an already-settled capture state', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const turnId = ulid()
-    await db.insert(intentTurns).values({
-      id: turnId,
-      sessionId: session.id,
-      seq: 2,
-      role: 'agent',
-      kind: 'running',
-      contentJson: '{}',
-      contextRevision: 0,
-      captureState: 'truncated',
-      createdAt: Date.now(),
+      expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
+      const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
+      expect(turn?.kind).toBe('error')
+      expect(JSON.parse(turn?.contentJson ?? '{}').code).toBe('intent-run-daemon-restart')
+      expect(turn?.captureState).toBe('incomplete')
+      expect(turn?.captureIncompleteReason).toBe('post-exit-flush-timeout')
+      expect(
+        (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
+          ?.inFlightTurnId,
+      ).toBeNull()
     })
-    await db
-      .update(intentSessions)
-      .set({ inFlightTurnId: turnId, turnSeq: 2 })
-      .where(eq(intentSessions.id, session.id))
 
-    expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
-    const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
-    expect(turn?.kind).toBe('error')
-    expect(turn?.captureState).toBe('truncated')
-    expect(turn?.captureIncompleteReason).toBeNull()
-  })
-
-  test('scratch GC: terminal+old removed, running kept, fresh kept', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const scratchRoot = join(appHome, 'intent-scratch')
-    const mk = (name: string, old: boolean): string => {
-      const dir = join(scratchRoot, name)
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'marker'), 'x')
-      if (old) {
-        const past = (Date.now() - 48 * 3600_000) / 1000
-        utimesSync(dir, past, past)
+    test('boot recovery snapshot never settles a turn admitted by the new daemon', async () => {
+      const reserveRunningTurn = async (
+        message: string,
+      ): Promise<{ sessionId: string; turnId: string }> => {
+        const { session } = await createIntentSession(db, actor, { message })
+        const turnId = ulid()
+        await db.insert(intentTurns).values({
+          id: turnId,
+          sessionId: session.id,
+          seq: 2,
+          role: 'agent',
+          kind: 'running',
+          contentJson: '{}',
+          contextRevision: 0,
+          captureState: 'live',
+          createdAt: Date.now(),
+        } as typeof intentTurns.$inferInsert)
+        await db
+          .update(intentSessions)
+          .set({ inFlightTurnId: turnId, turnSeq: 2 })
+          .where(eq(intentSessions.id, session.id))
+        return { sessionId: session.id, turnId }
       }
-      return dir
-    }
-    const terminalTurn = ulid()
-    const runningTurn = ulid()
-    await db.insert(intentTurns).values([
-      {
-        id: terminalTurn,
+
+      const orphaned = await reserveRunningTurn('previous generation')
+      const bootSnapshot = await listIntentTurnIdsForBootRecovery(persistence)
+      const current = await reserveRunningTurn('current generation')
+
+      expect(await recoverIntentTurnsOnBoot(persistence, undefined, bootSnapshot)).toBe(1)
+      expect(
+        (await db.select().from(intentTurns).where(eq(intentTurns.id, orphaned.turnId)))[0]?.kind,
+      ).toBe('error')
+      expect(
+        (await db.select().from(intentTurns).where(eq(intentTurns.id, current.turnId)))[0]?.kind,
+      ).toBe('running')
+      expect(
+        (await db.select().from(intentSessions).where(eq(intentSessions.id, current.sessionId)))[0]
+          ?.inFlightTurnId,
+      ).toBe(current.turnId)
+    })
+
+    test('boot recovery preserves an already-settled capture state', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      const turnId = ulid()
+      await db.insert(intentTurns).values({
+        id: turnId,
         sessionId: session.id,
         seq: 2,
-        role: 'agent',
-        kind: 'error',
-        contentJson: '{}',
-        contextRevision: 0,
-        createdAt: Date.now(),
-      },
-      {
-        id: runningTurn,
-        sessionId: session.id,
-        seq: 3,
         role: 'agent',
         kind: 'running',
         contentJson: '{}',
         contextRevision: 0,
+        captureState: 'truncated',
         createdAt: Date.now(),
-      },
-    ] as Array<typeof intentTurns.$inferInsert>)
-    mk(terminalTurn, true)
-    mk(runningTurn, true)
-    mk('orphan-unknown', true)
-    mk('fresh-terminal', false)
+      })
+      await db
+        .update(intentSessions)
+        .set({ inFlightTurnId: turnId, turnSeq: 2 })
+        .where(eq(intentSessions.id, session.id))
 
-    const removed = await sweepIntentScratch(persistence, appHome, 24)
-    expect(removed).toBe(2) // terminal-old + unknown-old
-    const left = new Set((await import('node:fs')).readdirSync(scratchRoot))
-    expect(left.has(runningTurn)).toBe(true)
-    expect(left.has('fresh-terminal')).toBe(true)
-    expect(left.has(terminalTurn)).toBe(false)
-    expect(left.has('orphan-unknown')).toBe(false)
-  })
-})
-
-// RFC-276 — the engine admits a claude-code runtime naturally and threads only
-// protocol/runtime/configDir into the system-agent run. No platform permission
-// profile is manufactured; the changeset settle path stays protocol-blind.
-describe('RFC-237 claude-code intent turn', () => {
-  test('claude runtime: turn settles a changeset; run opts carry configDir and IS_SANDBOX toggle without a permission profile', async () => {
-    const claudeRuntime = {
-      name: 'claude-code',
-      protocol: 'claude-code',
-      binaryPath: canonicalBinaryPath('claude'),
-      model: 'anthropic/claude-sonnet-5',
-      variant: null,
-      temperature: null,
-      steps: null,
-      maxSteps: null,
-      isSandbox: true,
-      configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
-      extraArgs: null,
-    } satisfies IntentResolvedRuntime
-    const { session } = await createIntentSession(db, actor, { message: '构建一个审计 agent' })
-    let seen: SystemAgentRunOptions | undefined
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config({ runtime: claudeRuntime }),
-        runFn: scriptedRun((opts, nonce) => {
-          seen = opts
-          return okResult(
-            envelope(nonce, { summary: 'built one agent', changeset: MINIMAL_CHANGESET }),
-          )
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(outcome.kind).toBe('changeset')
-    expect(seen?.protocol).toBe('claude-code')
-    expect(seen?.runtimeBinary).toBe(canonicalBinaryPath('claude'))
-    expect(seen).not.toHaveProperty('systemPermissionProfile')
-    expect(seen?.configDirEnv).toBe('CLAUDE_CONFIG_DIR')
-    expect(seen?.configDirName).toBe('.claude')
-    expect(seen?.isSandbox).toBe(true)
-    const drafts = await db.select().from(intentDrafts)
-    expect(drafts.length).toBe(1)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// The privileged-node forms in INTENT.md must follow the REQUESTING ACTOR.
-//
-// intentDoc.test.ts proves the doc renders both ways; this proves the engine
-// actually asks. A hardcoded `privileges: {all true}` here would keep every
-// doc-level test green while teaching a session without the grants to emit
-// script / code-host-call nodes that apply then refuses as a whole — the exact
-// wasted-turn this split exists to prevent.
-// ---------------------------------------------------------------------------
-describe('INTENT.md privileged node forms track the actor’s permissions', () => {
-  async function docFor(seedActor: Actor): Promise<string> {
-    const { session } = await createIntentSession(db, seedActor, { message: 'build something' })
-    let seenDoc = ''
-    const outcome = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
-          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor: seedActor },
-    )
-    expect(outcome.kind).toBe('changeset')
-    return seenDoc
-  }
-
-  test('a plain user is taught neither form and told which permission is missing', async () => {
-    const doc = await docFor(actor)
-    expect(doc).not.toContain("{id,kind:'script'")
-    expect(doc).not.toContain("{id,kind:'code-host-call'")
-    expect(doc).toContain('Capability limits (hard)')
-    expect(doc).toContain('scripts:author')
-    expect(doc).toContain('code-host-calls:author')
-  })
-
-  test('an author-permitted actor is taught both, with no capability-limits section', async () => {
-    const doc = await docFor({
-      ...actor,
-      permissions: new Set(['scripts:author', 'code-host-calls:author'] as const),
+      expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
+      const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
+      expect(turn?.kind).toBe('error')
+      expect(turn?.captureState).toBe('truncated')
+      expect(turn?.captureIncompleteReason).toBeNull()
     })
-    expect(doc).toContain("{id,kind:'script'")
-    expect(doc).toContain("{id,kind:'code-host-call'")
-    expect(doc).toContain('`comment.reply-thread`') // the derived action catalog rides along
-    expect(doc).not.toContain('Capability limits (hard)')
-  })
 
-  test('the two permissions are independent end-to-end', async () => {
-    const doc = await docFor({
-      ...actor,
-      permissions: new Set(['scripts:author'] as const),
+    test('scratch GC: terminal+old removed, running kept, fresh kept', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      const scratchRoot = join(appHome, 'intent-scratch')
+      const mk = (name: string, old: boolean): string => {
+        const dir = join(scratchRoot, name)
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(join(dir, 'marker'), 'x')
+        if (old) {
+          const past = (Date.now() - 48 * 3600_000) / 1000
+          utimesSync(dir, past, past)
+        }
+        return dir
+      }
+      const terminalTurn = ulid()
+      const runningTurn = ulid()
+      await db.insert(intentTurns).values([
+        {
+          id: terminalTurn,
+          sessionId: session.id,
+          seq: 2,
+          role: 'agent',
+          kind: 'error',
+          contentJson: '{}',
+          contextRevision: 0,
+          createdAt: Date.now(),
+        },
+        {
+          id: runningTurn,
+          sessionId: session.id,
+          seq: 3,
+          role: 'agent',
+          kind: 'running',
+          contentJson: '{}',
+          contextRevision: 0,
+          createdAt: Date.now(),
+        },
+      ] as Array<typeof intentTurns.$inferInsert>)
+      mk(terminalTurn, true)
+      mk(runningTurn, true)
+      mk('orphan-unknown', true)
+      mk('fresh-terminal', false)
+
+      const removed = await sweepIntentScratch(persistence, appHome, 24)
+      expect(removed).toBe(2) // terminal-old + unknown-old
+      const left = new Set((await import('node:fs')).readdirSync(scratchRoot))
+      expect(left.has(runningTurn)).toBe(true)
+      expect(left.has('fresh-terminal')).toBe(true)
+      expect(left.has(terminalTurn)).toBe(false)
+      expect(left.has('orphan-unknown')).toBe(false)
     })
-    expect(doc).toContain("{id,kind:'script'")
-    expect(doc).not.toContain("{id,kind:'code-host-call'")
-    expect(doc).toContain('code-host-calls:author')
   })
-})
 
-// The same wire-through, but driven by REAL role permission sets rather than
-// hand-written ones. This is the test that actually answers "can an ordinary
-// user get these node forms": if ROLE_PERMISSIONS.user ever gained
-// scripts:author, the hand-written variants above would keep passing while the
-// product silently changed.
-describe('privileged node forms follow real ROLE_PERMISSIONS', () => {
-  async function docForRole(role: 'user' | 'manager' | 'admin'): Promise<string> {
-    const roleActor: Actor = {
-      user: { id: OWNER, username: 'owner', displayName: 'Owner', role, status: 'active' },
-      source: 'session',
-      permissions: new Set(ROLE_PERMISSIONS[role]),
+  // RFC-276 — the engine admits a claude-code runtime naturally and threads only
+  // protocol/runtime/configDir into the system-agent run. No platform permission
+  // profile is manufactured; the changeset settle path stays protocol-blind.
+  describe('RFC-237 claude-code intent turn', () => {
+    test('claude runtime: turn settles a changeset; run opts carry configDir and IS_SANDBOX toggle without a permission profile', async () => {
+      const claudeRuntime = {
+        name: 'claude-code',
+        protocol: 'claude-code',
+        binaryPath: canonicalBinaryPath('claude'),
+        model: 'anthropic/claude-sonnet-5',
+        variant: null,
+        temperature: null,
+        steps: null,
+        maxSteps: null,
+        isSandbox: true,
+        configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
+        extraArgs: null,
+      } satisfies IntentResolvedRuntime
+      const { session } = await createIntentSession(db, actor, { message: '构建一个审计 agent' })
+      let seen: SystemAgentRunOptions | undefined
+      const outcome = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config({ runtime: claudeRuntime }),
+          runFn: scriptedRun((opts, nonce) => {
+            seen = opts
+            return okResult(
+              envelope(nonce, { summary: 'built one agent', changeset: MINIMAL_CHANGESET }),
+            )
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(outcome.kind).toBe('changeset')
+      expect(seen?.protocol).toBe('claude-code')
+      expect(seen?.runtimeBinary).toBe(canonicalBinaryPath('claude'))
+      expect(seen).not.toHaveProperty('systemPermissionProfile')
+      expect(seen?.configDirEnv).toBe('CLAUDE_CONFIG_DIR')
+      expect(seen?.configDirName).toBe('.claude')
+      expect(seen?.isSandbox).toBe(true)
+      const drafts = await db.select().from(intentDrafts)
+      expect(drafts.length).toBe(1)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // The privileged-node forms in INTENT.md must follow the REQUESTING ACTOR.
+  //
+  // intentDoc.test.ts proves the doc renders both ways; this proves the engine
+  // actually asks. A hardcoded `privileges: {all true}` here would keep every
+  // doc-level test green while teaching a session without the grants to emit
+  // script / code-host-call nodes that apply then refuses as a whole — the exact
+  // wasted-turn this split exists to prevent.
+  // ---------------------------------------------------------------------------
+  describe('INTENT.md privileged node forms track the actor’s permissions', () => {
+    async function docFor(seedActor: Actor): Promise<string> {
+      const { session } = await createIntentSession(db, seedActor, { message: 'build something' })
+      let seenDoc = ''
+      const outcome = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+            return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor: seedActor },
+      )
+      expect(outcome.kind).toBe('changeset')
+      return seenDoc
     }
-    const { session } = await createIntentSession(db, roleActor, { message: 'build' })
-    let seenDoc = ''
-    await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
-          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor: roleActor },
-    )
-    return seenDoc
-  }
 
-  test("role 'user' is taught neither privileged form", async () => {
-    const doc = await docForRole('user')
-    expect(doc).not.toContain("{id,kind:'script'")
-    expect(doc).not.toContain("{id,kind:'code-host-call'")
-    expect(doc).toContain('Capability limits (hard)')
-  })
+    test('a plain user is taught neither form and told which permission is missing', async () => {
+      const doc = await docFor(actor)
+      expect(doc).not.toContain("{id,kind:'script'")
+      expect(doc).not.toContain("{id,kind:'code-host-call'")
+      expect(doc).toContain('Capability limits (hard)')
+      expect(doc).toContain('scripts:author')
+      expect(doc).toContain('code-host-calls:author')
+    })
 
-  for (const role of ['manager', 'admin'] as const) {
-    test(`role '${role}' is taught both`, async () => {
-      const doc = await docForRole(role)
+    test('an author-permitted actor is taught both, with no capability-limits section', async () => {
+      const doc = await docFor({
+        ...actor,
+        permissions: new Set(['scripts:author', 'code-host-calls:author'] as const),
+      })
       expect(doc).toContain("{id,kind:'script'")
       expect(doc).toContain("{id,kind:'code-host-call'")
+      expect(doc).toContain('`comment.reply-thread`') // the derived action catalog rides along
       expect(doc).not.toContain('Capability limits (hard)')
     })
-  }
-})
 
-// ---------------------------------------------------------------------------
-// RFC-348 — hint → "Requested artifact type", runtimes inventory, agent ports.
-// ---------------------------------------------------------------------------
-describe('RFC-348 — requested artifact type and inventory additions', () => {
-  test('requestedArtifactTypeOf parses the first user turn against the roster', () => {
-    const turn = (hint: unknown) => ({
-      role: 'user',
-      kind: 'message',
-      contentJson: JSON.stringify({ message: 'x', ...(hint === undefined ? {} : { hint }) }),
+    test('the two permissions are independent end-to-end', async () => {
+      const doc = await docFor({
+        ...actor,
+        permissions: new Set(['scripts:author'] as const),
+      })
+      expect(doc).toContain("{id,kind:'script'")
+      expect(doc).not.toContain("{id,kind:'code-host-call'")
+      expect(doc).toContain('code-host-calls:author')
     })
-    expect(requestedArtifactTypeOf([turn('workflow')])).toBe('workflow')
-    expect(requestedArtifactTypeOf([turn('foo')])).toBeNull()
-    expect(requestedArtifactTypeOf([turn(undefined)])).toBeNull()
-    expect(requestedArtifactTypeOf([])).toBeNull()
-    expect(
-      requestedArtifactTypeOf([{ role: 'user', kind: 'message', contentJson: '{oops' }]),
-    ).toBeNull()
   })
 
-  test('a UI-picked hint reaches INTENT.md on the first AND the second turn', async () => {
-    const { session } = await createIntentSession(db, actor, {
-      message: 'build a pipeline',
-      hint: 'workflow',
-    })
-    let seenDoc = ''
-    const first = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
-          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(first.kind).toBe('changeset')
-    expect(seenDoc).toContain('## Requested artifact type')
-    expect(seenDoc).toContain('The user pre-selected **workflow** in the composer.')
+  // The same wire-through, but driven by REAL role permission sets rather than
+  // hand-written ones. This is the test that actually answers "can an ordinary
+  // user get these node forms": if ROLE_PERMISSIONS.user ever gained
+  // scripts:author, the hand-written variants above would keep passing while the
+  // product silently changed.
+  describe('privileged node forms follow real ROLE_PERMISSIONS', () => {
+    async function docForRole(role: 'user' | 'manager' | 'admin'): Promise<string> {
+      const roleActor: Actor = {
+        user: { id: OWNER, username: 'owner', displayName: 'Owner', role, status: 'active' },
+        source: 'session',
+        permissions: new Set(ROLE_PERMISSIONS[role]),
+      }
+      const { session } = await createIntentSession(db, roleActor, { message: 'build' })
+      let seenDoc = ''
+      await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+            return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor: roleActor },
+      )
+      return seenDoc
+    }
 
-    await insertUserTurn(persistence, actor, session.id, 'message', {
-      message: 'also add a review step',
+    test("role 'user' is taught neither privileged form", async () => {
+      const doc = await docForRole('user')
+      expect(doc).not.toContain("{id,kind:'script'")
+      expect(doc).not.toContain("{id,kind:'code-host-call'")
+      expect(doc).toContain('Capability limits (hard)')
     })
-    seenDoc = ''
-    await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        runFn: scriptedRun((opts, nonce) => {
-          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
-          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(seenDoc).toContain('The user pre-selected **workflow** in the composer.')
-  })
 
-  test('inventory/runtimes.md: design §4 format — protocol, ≥2 profiles, disabled, default without a row, rule sentence', async () => {
-    const runtimeStore = runtimeRegistryPersistence(db)
-    await createRuntime(runtimeStore, { name: 'custom-oc', protocol: 'opencode' })
-    await createRuntime(runtimeStore, { name: 'custom-cc', protocol: 'claude-code' })
-    await setRuntimeEnabled(runtimeStore, 'custom-cc', false, null)
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    let files: Array<{ path: string; content: string }> = []
-    await runIntentTurn(
-      {
-        db,
-        appHome,
-        // The Intent Builder itself runs on `runtime` (opencode); agents inherit claude-code.
-        config: config({
-          effectiveDefaultRuntime: { name: 'claude-code', protocol: 'claude-code' },
-        }),
-        runFn: scriptedRun((opts, nonce) => {
-          files = (opts.seedFiles ?? []).map((f) => ({ path: f.path, content: f.content }))
-          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    const runtimes = files.find((f) => f.path === 'inventory/runtimes.md')?.content ?? ''
-    expect(runtimes).toContain('# runtimes (2)')
-    expect(runtimes).toContain('Effective default: claude-code (claude-code)')
-    expect(runtimes).toContain(RUNTIME_INVENTORY_RULE)
-    expect(runtimes).toContain('- custom-oc — protocol opencode')
-    expect(runtimes).toContain('- custom-cc — protocol claude-code (disabled)')
-    expect(runtimes).toContain(
-      '- claude-code — protocol claude-code (built-in, no profile row) (default)',
-    )
-    expect(runtimes.match(/\(default\)/g)?.length).toBe(1)
-    expect(runtimes).not.toContain('binaryPath')
-    for (const type of ['capability_template', 'employee_tool']) {
-      expect(files.some((f) => f.path === `inventory/platform/${type}.md`)).toBe(true)
+    for (const role of ['manager', 'admin'] as const) {
+      test(`role '${role}' is taught both`, async () => {
+        const doc = await docForRole(role)
+        expect(doc).toContain("{id,kind:'script'")
+        expect(doc).toContain("{id,kind:'code-host-call'")
+        expect(doc).not.toContain('Capability limits (hard)')
+      })
     }
   })
 
-  test('a platform-only loader failure settles the turn as a durable error, never a partial map', async () => {
-    const { session } = await createIntentSession(db, actor, { message: 'x' })
-    let ran = false
-    const result = await runIntentTurn(
-      {
-        db,
-        appHome,
-        config: config(),
-        platformInventory: {
-          listRows: async () => {
-            throw new Error('platform inventory boom')
-          },
+  // ---------------------------------------------------------------------------
+  // RFC-348 — hint → "Requested artifact type", runtimes inventory, agent ports.
+  // ---------------------------------------------------------------------------
+  describe('RFC-348 — requested artifact type and inventory additions', () => {
+    test('requestedArtifactTypeOf parses the first user turn against the roster', () => {
+      const turn = (hint: unknown) => ({
+        role: 'user',
+        kind: 'message',
+        contentJson: JSON.stringify({ message: 'x', ...(hint === undefined ? {} : { hint }) }),
+      })
+      expect(requestedArtifactTypeOf([turn('workflow')])).toBe('workflow')
+      expect(requestedArtifactTypeOf([turn('foo')])).toBeNull()
+      expect(requestedArtifactTypeOf([turn(undefined)])).toBeNull()
+      expect(requestedArtifactTypeOf([])).toBeNull()
+      expect(
+        requestedArtifactTypeOf([{ role: 'user', kind: 'message', contentJson: '{oops' }]),
+      ).toBeNull()
+    })
+
+    test('a UI-picked hint reaches INTENT.md on the first AND the second turn', async () => {
+      const { session } = await createIntentSession(db, actor, {
+        message: 'build a pipeline',
+        hint: 'workflow',
+      })
+      let seenDoc = ''
+      const first = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+            return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+          }),
         },
-        runFn: scriptedRun((_opts, nonce) => {
-          ran = true
-          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
-        }),
-      },
-      { sessionId: session.id, actor },
-    )
-    expect(ran).toBe(false)
-    expect(result.kind).toBe('error')
-    const turns = await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))
-    const errorTurn = turns.find((t) => t.kind === 'error')
-    expect(errorTurn).toBeDefined()
-    expect(JSON.parse(errorTurn?.contentJson ?? '{}').code).toBe('intent-turn-crashed')
+        { sessionId: session.id, actor },
+      )
+      expect(first.kind).toBe('changeset')
+      expect(seenDoc).toContain('## Requested artifact type')
+      expect(seenDoc).toContain('The user pre-selected **workflow** in the composer.')
+
+      await insertUserTurn(persistence, actor, session.id, 'message', {
+        message: 'also add a review step',
+      })
+      seenDoc = ''
+      await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          runFn: scriptedRun((opts, nonce) => {
+            seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+            return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(seenDoc).toContain('The user pre-selected **workflow** in the composer.')
+    })
+
+    test('inventory/runtimes.md: design §4 format — protocol, ≥2 profiles, disabled, default without a row, rule sentence', async () => {
+      const runtimeStore = runtimeRegistryPersistence(db)
+      await createRuntime(runtimeStore, { name: 'custom-oc', protocol: 'opencode' })
+      await createRuntime(runtimeStore, { name: 'custom-cc', protocol: 'claude-code' })
+      await setRuntimeEnabled(runtimeStore, 'custom-cc', false, null)
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      let files: Array<{ path: string; content: string }> = []
+      await runIntentTurn(
+        {
+          db,
+          appHome,
+          // The Intent Builder itself runs on `runtime` (opencode); agents inherit claude-code.
+          config: config({
+            effectiveDefaultRuntime: { name: 'claude-code', protocol: 'claude-code' },
+          }),
+          runFn: scriptedRun((opts, nonce) => {
+            files = (opts.seedFiles ?? []).map((f) => ({ path: f.path, content: f.content }))
+            return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      const runtimes = files.find((f) => f.path === 'inventory/runtimes.md')?.content ?? ''
+      expect(runtimes).toContain('# runtimes (2)')
+      expect(runtimes).toContain('Effective default: claude-code (claude-code)')
+      expect(runtimes).toContain(RUNTIME_INVENTORY_RULE)
+      expect(runtimes).toContain('- custom-oc — protocol opencode')
+      expect(runtimes).toContain('- custom-cc — protocol claude-code (disabled)')
+      expect(runtimes).toContain(
+        '- claude-code — protocol claude-code (built-in, no profile row) (default)',
+      )
+      expect(runtimes.match(/\(default\)/g)?.length).toBe(1)
+      expect(runtimes).not.toContain('binaryPath')
+      for (const type of ['capability_template', 'employee_tool']) {
+        expect(files.some((f) => f.path === `inventory/platform/${type}.md`)).toBe(true)
+      }
+    })
+
+    test('a platform-only loader failure settles the turn as a durable error, never a partial map', async () => {
+      const { session } = await createIntentSession(db, actor, { message: 'x' })
+      let ran = false
+      const result = await runIntentTurn(
+        {
+          db,
+          appHome,
+          config: config(),
+          platformInventory: {
+            listRows: async () => {
+              throw new Error('platform inventory boom')
+            },
+          },
+          runFn: scriptedRun((_opts, nonce) => {
+            ran = true
+            return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+          }),
+        },
+        { sessionId: session.id, actor },
+      )
+      expect(ran).toBe(false)
+      expect(result.kind).toBe('error')
+      const turns = await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))
+      const errorTurn = turns.find((t) => t.kind === 'error')
+      expect(errorTurn).toBeDefined()
+      expect(JSON.parse(errorTurn?.contentJson ?? '{}').code).toBe('intent-turn-crashed')
+    })
   })
 })

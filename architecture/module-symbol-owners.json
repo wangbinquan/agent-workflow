@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2552,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24736
+    "symbolsIncludingFileRoots": 24738
   },
   "entries": [
     {
@@ -143550,6 +143550,18 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#foldGenerationFenceIntoInsert",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "foldGenerationFenceIntoInsert",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "id": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#markedGenerations",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -143650,6 +143662,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "rollback",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#SINGLE_ROW_INSERT",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "SINGLE_ROW_INSERT",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -297509,5 +297533,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ca7060fb7df71e92d64135eae37c1853b1a1b5276510a03a76a38f1c6aedb15a"
+  "sourceDigest": "sha256:4aca27e2062501abbad1f16847d84e850d2ef2ee7da79eb8bdbf1b807a1c0af6"
 }

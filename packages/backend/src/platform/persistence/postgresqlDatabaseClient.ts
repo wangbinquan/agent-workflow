@@ -125,6 +125,58 @@ async function markFirstGenerationWrite(
   if (rows.length === 1) markedGenerations.add(runtime)
 }
 
+/**
+ * RFC-359 AC-11 —— 把世代围栏折进 INSERT 自己，于是这笔写只要**一个往返**。
+ *
+ * # 为什么值得
+ *
+ * 非事务单语句写原本要四个往返：`BEGIN` / 围栏 `SELECT` / 写 / `COMMIT`（见下面的
+ * `withWriteFence`）。每个认证请求固定带一笔这样的写（PAT 调用审计），它虽然是
+ * `void` 派发、不挡响应，但**占着一条 reserve 出来的池连接四个往返**，于是挡住后面的请求。
+ * 实测（本机 Docker PG，`/api/reviews/pending-count`，40 次）：
+ * 关掉这笔审计写，p95 从 **18.11ms 掉到 5.57ms**（−69%），而 SQLite 侧只从 3.76 掉到 3.06。
+ * 「fire-and-forget 所以不要紧」是错的——它不占延迟，占的是并发度。
+ *
+ * # 语义逐字不变
+ *
+ * 围栏要的是「世代不活跃就不许写」，且判定与写必须原子。
+ * `INSERT … SELECT … WHERE EXISTS (世代活跃)` 单语句本身就是原子的：活跃则插 1 行、
+ * 不活跃则插 0 行，`changes === 0` 与围栏失败**一一对应**（普通 `VALUES` 插入必然影响 1 行，
+ * 不存在「合法地插了 0 行」这种情况）。因此这里不需要显式事务。
+ *
+ * # 只吃最窄的那一类，其余原路走
+ *
+ * 必须整条命中 `insert into T (列…) values ($1…$n)`：单行、每个值都是裸占位符、
+ * 没有 `on conflict`、没有 `returning`、没有子查询。凡有一条不符就返回 `null`，
+ * 调用方回到原来的四往返路径——**不猜、不改写复杂 SQL**。
+ */
+const SINGLE_ROW_INSERT = /^insert into ((?:"[^"]+"\.)?"[^"]+") \(([^()]+)\) values \(([^()]+)\)$/i
+
+function foldGenerationFenceIntoInsert(sql: string, parameterCount: number): string | null {
+  const matched = SINGLE_ROW_INSERT.exec(sql.trim())
+  if (matched === null) return null
+  const [, table, columns, values] = matched
+  if (table === undefined || columns === undefined || values === undefined) return null
+  // 每个值只允许两种写法：裸占位符 `$k`，或 drizzle 为未赋值列内联的字面 `null`。
+  // `default` / 表达式 / 函数调用 / 子查询一律不折——它们的求值时机与类型推导都另说。
+  const placeholders = values.split(',').map((part) => part.trim())
+  let seen = 0
+  for (const part of placeholders) {
+    if (part.toLowerCase() === 'null') continue
+    seen += 1
+    if (part !== `$${String(seen)}`) return null
+  }
+  // 占位符必须恰好覆盖全部实参，且按 `$1..$n` 顺序出现；数量对不上说明这条 SQL 不是
+  // 我们以为的形状（例如参数被复用），一律不折。
+  if (seen !== parameterCount) return null
+  const fence = `$${String(parameterCount + 1)}`
+  return (
+    `insert into ${table} (${columns}) select ${placeholders.join(', ')} ` +
+    `where exists (select 1 from "agent_workflow_meta"."database_generations" ` +
+    `where generation_id = ${fence} and state = 'active')`
+  )
+}
+
 async function rollback(connection: PostgresqlReservedConnection): Promise<void> {
   try {
     await connection.unsafe('ROLLBACK')
@@ -172,6 +224,27 @@ async function executeArrays(
   method: 'run' | 'all' | 'values' | 'get',
 ): Promise<{ rows: unknown[]; changes?: number }> {
   const compiled = compilePostgresqlSql(sql)
+  // RFC-359 AC-11 —— 围栏内联的快路径。四个前置条件缺一不可：
+  // ① 非事务（事务里本就不额外开 BEGIN/COMMIT，折了也省不下）；
+  // ② `run`（只要 `changes`；带 `returning` 的形状根本进不了 `foldGenerationFenceIntoInsert`）；
+  // ③ 本进程已经给这一代记过首次写——否则 `markFirstGenerationWrite` 还得与写同事务，省不掉；
+  // ④ SQL 命中最窄的单行 INSERT。
+  if (!transactional && method === 'run' && markedGenerations.has(runtime)) {
+    if (assertPostgresqlBusinessStatement(compiled) === 'write') {
+      const folded = foldGenerationFenceIntoInsert(compiled, parameters.length)
+      if (folded !== null) {
+        const result = await client.unsafe(folded, [...parameters, runtime.generationId])
+        const changes = mutationCount(result)
+        // 普通单行 INSERT 必然影响 1 行，所以 0 行只可能是 `WHERE EXISTS` 那一支没过。
+        if (changes === 0) {
+          throw new PostgresqlGenerationFenceError(
+            'PostgreSQL business write rejected by the active database generation fence',
+          )
+        }
+        return { rows: [], changes }
+      }
+    }
+  }
   return await withWriteFence({
     runtime,
     client,
