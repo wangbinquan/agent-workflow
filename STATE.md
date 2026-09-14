@@ -2,6 +2,59 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-14 续 25，**AC-11 两刀**：每请求两笔认证写 → PG p95 −73%；AC-6 四波再迁 31 个文件）
+>
+> 落档 plan §5ej / §5ek / §5el / §5em。
+>
+> **AC-11 的根因不在 SQL 里**。按端点数语句后发现 PG 在**每个**端点上恒定比 SQLite 多 6 条：
+> `withWriteFence` 给每笔非事务写都要 `BEGIN` + 世代围栏 `SELECT` + 写 + `COMMIT` 四个往返，
+> 而每个认证请求固定带两笔这样的写。`reviews-pending` 这种只读端点 11 条语句里 8 条是认证记账。
+>
+> · **第一刀**：`d275618a5` 给**会话**加了 `last_used_at` 写节流，那一刀**只改了会话**——
+>   同一个文件里的 `resolvePatByHash` 至今每请求无条件写，而性能语料正是用 PAT 认证的。
+>   纳入同一条窗口（常量改名 `AUTH_LAST_USED_WRITE_INTERVAL_MS`），两引擎同时受益。
+>   **坑**：PAT 的 `last_used_at` 可空而会话侧不可空，照抄会得到 `NaN >= 1000` 恒假，
+>   从未使用过的 PAT 将**永远记不下首次使用**；空值必须单独放行。
+> · **第二刀**（推翻我自己前一刀的判断）：我判过「`token_audit` 插入是 `void` 派发的、不在关键
+>   路径上，不值得动」——**实测推翻**。关掉它 PG p95 18.11ms → 5.57ms（−69%），SQLite 只 −19%：
+>   `void` 派发不占**延迟**，占**并发度**（reserve 一条池连接跑四个往返，把后面的请求挡在池外）。
+>   处置是把世代围栏折进 INSERT 自己（`insert … select … where exists (世代活跃)`），
+>   单语句本身原子，`changes === 0` 与围栏失败一一对应。**只吃最窄的一类**，其余原路走。
+>   结果：PG 每请求 awaited 语句数 7 → **3**，p95 18.11 → **4.96ms（−73%）**，PG/SQLite 4.8× → **1.69×**。
+>
+> **AC-11 验收现状（未闭）**：`scale=full` 同 SHA 跑两遍，**红的是同一组六个端点**——绝对值在两遍
+> 之间能摆动 3×（p95 取 n=20 的第 19 个样本，是最差离群值统计），但**方向稳定**：PG 在 <2ms 的
+> 微端点上一致地慢于进程内 SQLite，在三个重端点上一致地**快约一倍**（`tasks-first` 139→81ms）。
+> 这不是噪声问题，是进程外引擎的往返成本。新 SHA 的实测在跑。
+>
+> **AC-6 第二～五波**（每波 4 个并行 agent，文件集互不重叠）：账本 378 → **346** / open 72 → **40**。
+> 顺带清掉三条**一行标注**的假阻塞（`validateWorkflowById` / `createExecutionContractResourceAdapter`
+> / 测试 helper），它们底下调的全是中立签名。
+>
+> **抓到四种假绿**（全部进了 `docs/dev-gotchas.md`）：①`.run()`；②没 await 的 `.get()`/`.all()`；
+> ③**套在 `db` 上的故障注入 Proxy 在 PG 上进不了事务**——`rfc271-*` 族三个文件全中，
+> `rfc271-roundtrip` 的 N+1 计数围栏实际是 `0 === 0`；`rfc234-turn-engine` 更是双重失效
+> （PG 客户端本身是带 `get` trap 的 Proxy，`db.run = …` 被静默遮蔽）；④`expect(p).rejects` 忘了
+> `await`（`rfc154` 三条「拒绝非法值」从来没验过，补上后都过——生产行为一直对）。
+> **方法论**：变异验证要挑**读点**，挑写点会假阴性（没人等的 promise 在中间的 await 期间自己 settle 完）。
+>
+> **AC-12**：intent apply 合一后 legacy 孪生已整条退役，PG 侧那五个文件成了两个 provider 唯一的
+> 实现，provider 前缀名不副实——改名 51 文件 / 278 处标识符，`PROVIDER_NAMED_FILE_DEBT` 44 → 39。
+> **这一刀把主干推红过一格**：`rfc345` 有条 `toContain('createIntentApplyResourceSession(\n')`
+> 锁的其实是 **prettier 的折行**，标识符短了 10 个字符就收成一行。教训：宽改名之后要跑**所有**
+> 被改到的文件，不能只跑「看起来相关」的。已修并绿。
+>
+> **AC-6 剩余面**（逐条核过）：还能迁 2（两个 3400 / 2485 行的 rfc310 巨型文件，在跑）；
+> 卡生产签名 4，**全部卡在同一处**——`LegacySqliteTaskDatabase` 的实质是
+> `src/services/task.ts`：**7696 行、45 个导出函数、34 个 bun:sqlite 同步执行点**，
+> 是一次真的 sync → async 迁移、会动任务生命周期时序，**应当单独立一刀**；
+> 已裁决 16；不查库 / helper 18。
+>
+> 另记一条**与本 RFC 无关但同进程即炸**的存量缺陷（已落 `docs/audit-backlog.md`）：
+> 操作目录的**声明集是进程全局**（靠 import 副作用累积）、**挂载集属于单个 app**，
+> 两个 provider 根一起进同一个进程就抛 `get-database-runtime.v1: declared operation has no
+> mounted binding`。CI 分片跑才一直没红，分片一变就会红。
+
 > ## 📌 RFC-359 最新一段（2026-09-14 续 24，**四路并行**迁移 13 个文件 + 两条账本校准）
 >
 > 落档 plan §5ei / §5eg / §5eh。用四个并行 agent 按互不重叠的文件集推 AC-6：账本
