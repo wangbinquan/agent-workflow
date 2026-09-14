@@ -10489,3 +10489,42 @@ FIFO 变更槽。改成 `await` 就改变了「函数何时第一次让出」，
 
 **所以这一刀已探明但没有做**：它不是放宽一行标注，是要先把 FIFO 排序契约弄清楚再动——
 应当单独立一刀、带自己的并发判据。探测改动已原样还原。
+
+## §5eo —— 最后那道阻塞：**实测证伪了我自己的两次判断**，现在有确切的红
+
+§5en 里我写「`cancelTask` 的同步预检承重，应当单独立一刀」。随后我又反过来怀疑那条注释**已经过期**，
+理由看起来很硬：RFC-359 自己把 `reviewMutationCoordinator` 统一成了两个引擎同一条**异步**入队路径，
+它的注释白纸黑字写着「此前 SQLite 有一条同步 `findTaskIdSync` 入队捷径，PostgreSQL 从来没有」；
+而「cancel 赢」的合同（`rfc097-cancel-wins` 合同 1）明写是靠 **CAS 的 from-集互斥 + 调度器的
+`signal?.aborted` 终检**，不是靠入队顺序。
+
+**照这个推理改了，然后被测试打脸。** 把预检改成 `await` 之后：
+
+```
+(fail) review mutation vs task cancellation linearization
+       > cancel first makes a queued comment update leave comment rows untouched
+       > cancel first makes a queued comment delete leave comment rows untouched
+       > cancel first makes a queued selection leave both selection fields untouched
+8 fail
+```
+
+**为什么我错了**：CAS 互斥管的是 **cancel vs done**；`review-cancel-concurrency` 锁的是
+**cancel vs 评审变更**——那一组的「谁先」**只能**由入队顺序决定。而
+`withTaskReviewMutationLock` 开头那句 `if (inflightScopeLookups.size > 0) await …`
+恰恰在「有评审请求正在异步解析作用域」时为真，也就是这组用例的场景：
+此刻 cancel 能不能抢在前面，取决于它到 `enterTaskQueue` 之前**有没有让出**。
+同步预检就是让它不让出的那一步。注释是准的，过期的是我的推理。
+
+**另一处我也说小了**：§5en 说 `resumeTask` / `retryNode` 是「纯标注阻塞、零同步点」。
+那是**按函数体**数的，**传递闭包不是**——`resumeTask` 转手 `resumeKick(db, …)`、
+`retryNode` 转手 `assertChildTaskDrivable(db, …)`，两者仍要 `DbClient`。放宽签名后 `tsc` 立刻指出这两处。
+
+### 结论（现在有实证，不再是判断）
+
+这道阻塞**不是**放宽一行标注，是要**重新设计 cancel 与评审变更的线性化点**，让
+「先发出者先入队」不依赖调用方同步。按本仓 T28 的纪律，这一刀必须
+**先写双引擎并发用例把错的结果演出来（红）、再改（绿）**——上面那三条红正好就是那份红，
+现成的，`tests/review-cancel-concurrency.test.ts` 里。
+
+探测改动已全部原样还原（`git checkout -- src/services/task.ts`），
+相关五个套件复跑 **123 格全绿**。
