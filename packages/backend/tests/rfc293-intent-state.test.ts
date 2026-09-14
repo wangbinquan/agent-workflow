@@ -55,7 +55,6 @@ import {
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-
 let db: ProviderNeutralDatabase
 let actor: Actor
 let persistence: IntentPersistence

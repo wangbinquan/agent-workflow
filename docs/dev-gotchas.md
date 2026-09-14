@@ -340,6 +340,28 @@
 
 - **给共享 harness 加东西，别让不需要它的用例陪着付钱**（同日，自伤后自修）。我给一张 8 类资源的 ACL 矩阵加了第五个用户，只有其中 1 类用得上，但它建在 `beforeEach` 里——`createUser` 会**故意慢速**哈希密码，于是另外 7 类 × 33 条用例全在为一条用例付这笔钱。高负载下随即出现一次与本改动无关的用例超时红。**没拿「重跑九次都绿」当通过依据**（含三次 `--isolate --randomize`）：能消掉的时序面就消掉。**定式**：往共享 fixture 里加**慢**操作（密码哈希、子进程、文件系统、网络桩）时按需构造，别无条件建。
 
+## 本地自查要跑**仓库自己的脚本**，别手搓文件清单（2026-09-14 连撞两次）
+
+两次主干红，同一个根因：自查命令**看上去绿，实际什么都没查**。
+
+1. **lint**：`git status --porcelain | awk '{print $NF}' | xargs eslint` 只覆盖**当前未提交**的
+   文件。上一笔已经提交的文件从此永远不在清单里——退役后忘删的 import 就是这么活到 CI 的。
+2. **format**：同一个清单，但命令是在 `packages/backend` 下跑的，于是
+   `packages/backend/tests/x.ts` 被解析成 `packages/backend/packages/backend/tests/x.ts`。
+   prettier 对不存在的路径报一行 `[error] No files matching the pattern`，**然后照样打印
+   `All matched files use Prettier code style!`**——那句话说的是「匹配到的零个文件都合格」。
+
+**改法**：一律跑仓库自己的脚本，它们和 CI 用的是同一份清单与同一个 cwd 语义：
+
+```
+bun run format:check                       # 全仓 prettier
+bunx eslint src/ tests/ --max-warnings 0   # 在 packages/backend 下，整棵树
+bunx tsc --noEmit -p tsconfig.json
+```
+
+**判据**：任何自查命令输出「全绿」之前，先确认它**真的读到了文件**——prettier 会告诉你匹配了
+多少个，eslint 静默通过时可以故意改坏一个文件验一次。零文件的绿是最危险的绿。
+
 ## 慢查询日志会把「进程被冻住」栽赃给一条无辜 SQL（RFC-322 实测，2026-08-24）
 
 生产报「每隔一段时间全站冻结约 30 秒、随后自行恢复」，现场证据是：
