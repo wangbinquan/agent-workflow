@@ -7012,8 +7012,18 @@ VACUUM 之后 : Index Only Scan      0.557ms   Heap Fetches: 0     ← 3.0×
 生产里 autovacuum 一直在跑、VM 常态是新的。**只 `ANALYZE` 等于拿 PG 一个它从不持续停留的瞬时
 状态去比**——而对手 SQLite 没有 MVCC 可见性这回事，本来就拿得到最好的计划，于是被罚的只有 PG。
 
+**⚠️ 先查 `Heap Fetches` 再下结论（2026-09-15 补，我自己就栽在这）**：上面这组数是**本机**
+建完表**立刻**查出来的——autovacuum 还没来得及跑。**跑着 autovacuum 的真实部署（含 CI 的
+`postgres:17` 服务容器）上，这个坑很可能根本不存在**：本仓 RFC-359 的性能语料实测就是
+「加 VACUUM 之前**本来就**是 `Index Only Scan` + `Heap Fetches: 0`」，加了之后逐节点一模一样、
+端点耗时一毫秒没动。我拿本机那 3.0× 去推断 CI，判错了一次根因（详见 plan §5ew 的撤回）。
+
+所以顺序是：**先 `EXPLAIN (ANALYZE, BUFFERS)` 看 `Heap Fetches` 是不是已经是 0**，
+是就别动；不是才轮到下面这条规矩。**本机构造出来的「状态」和本机测出来的「数字」一样不能外推。**
+
 **规矩**：任何要给 PostgreSQL 灌语料再计时/再看计划的地方（基准、计划审计、容量实验），
-装载后都必须 `VACUUM ANALYZE`，不是只 `ANALYZE`。
+装载后做一次 `VACUUM ANALYZE` 仍然值得——**但理由是「让被测状态由代码决定、不靠 autovacuum
+的时序碰运气」，不是「它能修掉某个慢」**。
 
 **但不要「为了公平」给 SQLite 也加 `VACUUM`**——判准是「**生产里这个引擎实际有什么**」，
 不是「两边跑同样的命令」。SQLite 没有后台 vacuum、绝大多数部署也从不手工 `VACUUM`，

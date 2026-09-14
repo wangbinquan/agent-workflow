@@ -276,24 +276,27 @@ async function seedPostgresql(input: RunInput): Promise<void> {
       json(join(input.output, 'postgresql-seed.json'), seeded)
       if (!seeded.matchesExpected)
         throw new Error('PostgreSQL differs from original RFC-311 corpus')
-      // RFC-359 AC-11 —— **必须是 `VACUUM ANALYZE`，不能只 `ANALYZE`**。
+      // RFC-359 AC-11 —— 装载后做一次 `VACUUM ANALYZE`，让「被测库处于什么状态」**由这里决定**，
+      // 而不是由 autovacuum 恰好跑没跑决定。
       //
-      // PostgreSQL 的 index-only scan 要成立，得靠 **visibility map** 证明「这一页全可见」，
-      // 而 VM 只由 VACUUM 维护。刚批量灌完的表 VM 是空的，于是每个 index-only scan 都要回堆
-      // 取可见性，planner 索性改选 `Bitmap Heap Scan`——量到的就不是生产里的形状。
-      // 生产有 autovacuum 在跑，VM 常态是新的；只 `ANALYZE` 等于拿 PG 一个**它从不持续停留**
-      // 的瞬时状态去和 SQLite 的稳态比。
+      // **先写清楚它没干什么**：我最初加这一行是判定它能修掉 `/api/overview` 的稳态慢
+      // （理由是 index-only scan 依赖 visibility map、而 VM 只由 VACUUM 维护，本机 10 万行上
+      // 实测 `Bitmap Heap Scan` 1.682ms → `Index Only Scan` 0.557ms，3.0×）。
+      // **CI 上实测推翻了这个判断**：加之前的 run（`56713f37`）里，`/api/overview` 的四条
+      // 任务计数**本来就**是 `Index Only Scan` + `Heap Fetches: 0`，加之后逐节点一模一样；
+      // 四个 run 的中位数差 +2.850 / +2.498（前） → +2.580 / +2.300（后），没有变化。
       //
-      // 实测（10 万行、`/api/overview` 那条计数）：
-      //   只 ANALYZE : Bitmap Heap Scan                    1.682ms
-      //   VACUUM 之后: Index Only Scan, Heap Fetches: 0    0.557ms   ← 3.0×
+      // 原因是我的本机复现不成立：我建完表立刻查，autovacuum 还没来得及跑；而 CI 的
+      // PostgreSQL 服务容器默认开着 autovacuum，灌完到开测之间它已经把 VM 建好了。
       //
-      // 这不是给 PG 放水。判准是「**生产里这个引擎实际有什么**」：PostgreSQL 默认开着
-      // autovacuum、VM 常态是新的；SQLite 没有后台 vacuum、生产也基本不手工 `VACUUM`，
-      // 所以那边只 `ANALYZE`（见 `seedSqlite`）。两边各自对齐自己的生产稳态，而不是对齐
-      // 彼此的命令行。缺了这一步被罚的只有 PG，正是 RFC-359 要消灭的「同一件事两个引擎
-      // 一个好一个不好」。判据见 `rfc359-w6-t26-postgresql-plan-audit` 的
-      // 「装载后维护到位：热计数走 index-only scan 且 Heap Fetches 为 0」。
+      // 那为什么还留着？因为「VM 是新的」这件事**不该靠 autovacuum 的时序碰运气**——留着它，
+      // 被测状态是确定的；去掉它，就得祈祷每次 CI 的时序都和这次一样。代价有界（一次全库
+      // VACUUM），收益是判据可复现。判据见 `rfc359-w6-t26-postgresql-plan-audit` 的
+      // 「装载后维护到位：热计数走 index-only scan 且 Heap Fetches 为 0」——那条守卫**不是**
+      // 摆设：正是它让我能证明「这个状态本来就对」，而不是继续假设它不对。
+      //
+      // SQLite 侧只 `ANALYZE`（见 `seedSqlite`）：它没有 MVCC 可见性这回事，
+      // 生产也基本不手工 `VACUUM`，那本来就是它的生产状态。
       await runtime.providerPool().unsafe('VACUUM ANALYZE')
     },
     () => {

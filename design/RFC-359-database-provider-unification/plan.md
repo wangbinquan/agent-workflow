@@ -11068,3 +11068,64 @@ VACUUM 之后 : Index Only Scan, Heap Fetches: 0    0.557ms   ← 3.0×
 这一刀之后 `overview` / `repos-first` 会不会真的转绿，**要等 CI 复测**。本机 10 万行上的 3.0×
 不能外推到 CI（§5et 的教训），只能说方向和量级都对得上那 2.85ms 的稳态差。
 在拿到新的 `comparison.json` 之前不宣称任何端点转绿。
+
+## §5ew —— **撤回 §5ev 的根因判定**：VACUUM 不是 `overview` 慢的原因，CI 的语料本来就是好的
+
+§5ev 给自己设了一条可证伪的预期：「如果 VACUUM 是对的，`overview` 应该从 +2.5ms 掉到 +1ms 上下」。
+CI 复测回来了，**掉不下去**。
+
+### 实测（四个 run 的中位数差，PG − SQLite，毫秒）
+
+| 端点 | 56713f37 | 7f51454f2 | 6b964e174 | 4099bb1e0 |
+| --- | --- | --- | --- | --- |
+| | 无 VACUUM | 无 VACUUM | **PG+SQLite VACUUM** | **仅 PG VACUUM** |
+| repos-first | +1.435 | +0.931 | +1.033 | +1.021 |
+| repos-referenced | +1.147 | +1.398 | +1.395 | +1.386 |
+| reviews-pending | +0.499 | +0.551 | +0.326 | +0.539 |
+| clarify-pending | +0.786 | +0.385 | +0.418 | +0.585 |
+| **overview** | **+2.850** | **+2.498** | **+2.580** | **+2.300** |
+| workgroup-pending | +24.914 | **+1.243** | **+1.345** | **+1.015** |
+
+**加 VACUUM 前后没有任何变化。**
+
+### 为什么错了：CI 的 PostgreSQL 开着 autovacuum，我的本机复现不成立
+
+直接查 `*-query-profile.json` 的计划节点，**加 VACUUM 之前**：
+
+```
+select count(*) from tasks where …   Index Only Scan  rel=tasks  Heap Fetches=0   t=0.020ms
+select count(*) from tasks where …   Index Only Scan  rel=tasks  Heap Fetches=0   t=1.086ms
+select count(*) from tasks where …   Index Only Scan  rel=tasks  Heap Fetches=0   t=0.018ms
+select count(*) from tasks where …   Index Only Scan  rel=tasks  Heap Fetches=0   t=0.019ms
+```
+
+**本来就是 index-only scan、本来就 `Heap Fetches: 0`**；加 VACUUM 之后逐节点一模一样。
+也就是说 visibility map 从来没有缺过——CI 的 PostgreSQL 服务容器默认开着 autovacuum，
+灌完语料到开测之间它已经把 VM 建好了。
+
+我本机那组 1.682ms → 0.557ms（3.0×）是**真的**，但它复现的不是 CI 的状态：我建完表**立刻**查，
+autovacuum 还没来得及跑。拿那个状态去推断 CI，正是 §5et 记过的同一个错——**本机数不能外推**——
+我这次犯的是它的变体：**本机构造的「状态」也不能外推**。
+
+### 保留与不保留
+
+- **`VACUUM ANALYZE` 保留**，但理由换掉：不是「修掉 3 倍惩罚」，而是**让被测状态由代码决定、
+  不靠 autovacuum 的时序碰运气**。CI 上的实测效果：**没有**。代价有界，收益是可复现。
+- **判据保留，而且它恰恰证明了自己有用**：「热计数走 index-only scan 且 `Heap Fetches` 为 0」
+  正是靠它我才能证明「这个状态本来就对」，而不是继续假设它不对。
+- **`docs/dev-gotchas.md` 那条同步更正**：机制本身没写错（没 VACUUM 又没 autovacuum 就会退回
+  `Bitmap Heap Scan`），但必须补上「**先查 `Heap Fetches` 再下结论**——跑着 autovacuum 的真实
+  部署上，这个坑很可能根本不存在」。
+
+### 结论：`overview` 的 +2.5ms 目前**没有归因**
+
+四个 run 稳定在 +2.3 ~ +2.9ms，不是噪声、不是计划问题、不是 visibility map。
+`overview` 两个引擎各跑 **13 条语句**，按 `clarify-pending` 推出的往返单价（≈0.096ms/语句）
+最多解释约 1ms，剩下约 1.5ms 没有着落。**不再猜**——下一步要么拿到每条语句的稳态耗时
+（现有 query-profile 是单次冷请求，PG 侧 36.8ms vs SQLite 1.4ms，全是首次解析/规划开销，
+不能用来归因稳态），要么就把它如实记为未决。
+
+### 同时被证实的：workgroup 那一刀是对的
+
++24.914 → **+1.243 / +1.345 / +1.015**，三个独立 run 一致，回到出 bug 之前那条带，
+绝对预算也一并转绿。§5eu 站得住。
