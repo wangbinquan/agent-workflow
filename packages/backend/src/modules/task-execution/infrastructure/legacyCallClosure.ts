@@ -14,7 +14,7 @@
 // names are display data the launcher may not be entitled to echo).
 import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { workflows, workgroups as workgroupsTable } from '@/db/schema'
 import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
@@ -265,7 +265,11 @@ export function childClosureSubset(
  *     lists resource-id paths only).
  */
 export async function freezeCallClosure(
-  db: DbClient,
+  // RFC-359 AC-6：形参放宽到中立客户端。函数体本来就是中立的——全模块零 `.get()` / `.run()` /
+  // `dbTxSync`，`DbClient` 只出现在这一处标注上，是个残留的品牌。放宽向后兼容
+  // （`DbClient` 是它的子类型），代价为零，换来的是 `rfc291-closure-call-edges` 的
+  // freeze/dump 同解两条用例能上双引擎——此前它们只能留在单引擎块里，正是被这个标注钉住的。
+  db: ProviderNeutralDatabase,
   root: { id: string; definition: WorkflowDefinition },
   /**
    * 实现门 P0-1 —— the LAUNCH actor. Resolution is id-cache-first (the node's

@@ -282,7 +282,10 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc282-d2-granted-ids-single-source.test.ts: 1',
   'rfc284-batchc-resource-dedup.test.ts: 5',
   'rfc287-t13-deferred-prep.test.ts: 27',
-  'rfc291-closure-call-edges.test.ts: 1',
+  // RFC-359 AC-6 销账：`rfc291-closure-call-edges.test.ts` 的最后一处 `createInMemoryDb` 随
+  // `registerNativeCases` 一起删除——freeze/dump 同解两条上了双引擎（被
+  // `freezeCallClosure(db: DbClient)` 那个残留品牌标注钉住，形参放宽即解），
+  // 剩下的「复杂度与收口」是纯源码文本断言、一行库都不读。9 例 → 17 例（8×2 + 1）。
   'rfc291-unavailable-mount.test.ts: 1',
   'rfc294-task-execution-compat-oracles.test.ts: 1',
   'rfc295-downgrade-audit.test.ts: 2',
@@ -643,7 +646,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc257-webhook-error-codes.test.ts',
   'rfc268-webhook-scratch-launch.test.ts',
   'rfc269-webhook-code-host-context-e2e.test.ts',
-  'rfc291-closure-call-edges.test.ts',
   'rfc291-unavailable-mount.test.ts',
   'rfc305-architecture-lock.test.ts',
   'rfc310-pr7b-handover.test.ts',

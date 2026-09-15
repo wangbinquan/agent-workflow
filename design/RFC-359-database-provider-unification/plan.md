@@ -12060,3 +12060,40 @@ CAS 事务之前——**正是「SELECT 与 UPDATE 之间」**，而且**被 awa
 执行模型？」——依赖同步落库、依赖 `.get()` 立即返回、依赖代理拦同步调用的，都不能直接换 harness，
 要先找到一个**两个引擎都被 await 的注入点**；找不到就得先在生产侧开一个（像这次补 `beforeCas`
 声明那样），而不是把判据降级。
+
+
+## §5fl —— AC-6 第二条：卡住它的是一个**残留的品牌标注**，删掉即解（27 → 25）
+
+`rfc291-closure-call-edges.test.ts` 此前是**半迁**状态：文件里已经有 `describeEachProvider`，
+八条用例跑双引擎，但「freeze / dump 同解」两条被留在一个手写的 `registerNativeCases` 单引擎块里。
+
+查下去发现，钉住它们的不是并发语义、也不是假池，而是一个**标注**：
+
+```
+export async function freezeCallClosure(db: DbClient, …)
+```
+
+而这个模块里 `DbClient` 只出现两次——`import` 和这一处形参标注；全模块**零** `.get()` /
+`.run()` / `dbTxSync`。也就是说**函数体本来就是中立的**，`DbClient` 是个残留品牌。
+形参放宽到 `ProviderNeutralDatabase` 之后 typecheck 直接过，**零生产调用点需要改**
+（`DbClient` 是它的子类型，放宽向后兼容）。
+
+两条用例随即移进 `registerProviderCases`，判据一条没改（freeze 侧与 dump 侧必须选出同一行）。
+`registerNativeCases` 连同它那组模块级可变夹具槽成了死代码，一起删除——最后那个「复杂度与收口」
+块是纯源码文本断言、一行库都不读，此前挂在 native 上是在**白建一个内存库**。
+
+实测 **9 例 → 17 例**（8 条 × 2 引擎 + 1 条源码文本断言只跑一次），17 pass / 0 fail。
+
+### 这条与 §5fk 合起来给出 AC-6 的两种阻塞形态
+
+| 形态 | 例子 | 处置 |
+| --- | --- | --- |
+| **判据依赖某引擎的执行模型** | §5fk 的 CAS 竞态（靠 bun:sqlite 同步落库） | 找一个**两个引擎都被 await** 的注入点；没有就去生产侧开一个；**必须变异验证** |
+| **生产签名上的残留品牌标注** | 本条 `freezeCallClosure(db: DbClient)` | 确认函数体中立（零 `.get()`/`.run()`/`dbTxSync`）后**直接放宽**，向后兼容、零调用点改动 |
+
+第二种是**便宜的**——先扫一遍剩下 25 条里有多少属于它，能一次收掉一批。
+判据：`grep -c "DbClient" <生产文件>` 若只等于「import + 形参」两处，且模块内零同步游标，基本就是它。
+
+### 账本
+
+`TEST_ENGINE_HARDCODING_DEBT` 332 → **331**；`OPEN_MIGRATION_DEBT` 26 → **25**。

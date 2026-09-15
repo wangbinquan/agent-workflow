@@ -16,7 +16,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users, workflows, workgroups, workgroupMembers } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
@@ -24,7 +23,6 @@ import { freezeCallClosure, parseCallClosure } from '../src/services/execution/c
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291d_000000'
 
 const actor: Actor = {
@@ -145,31 +143,9 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
 
 type Fixture<TDb extends ProviderNeutralDatabase> = Awaited<ReturnType<typeof createFixture<TDb>>>
 
-let db: Fixture<DbClient>['db']
-let appHome: Fixture<DbClient>['appHome']
-let seedWorkflow: Fixture<DbClient>['seedWorkflow']
-let dumpMounting: Fixture<DbClient>['dumpMounting']
-
-function registerNativeCases(name: string, register: () => void): void {
-  describe(name, () => {
-    beforeEach(async () => {
-      const fixture = await createFixture(
-        () => {
-          db = createInMemoryDb(MIGRATIONS)
-          return db
-        },
-        (home) => {
-          appHome = home
-        },
-      )
-      ;({ db, appHome, seedWorkflow, dumpMounting } = fixture)
-    })
-    afterEach(() => {
-      rmSync(appHome, { recursive: true, force: true })
-    })
-    register()
-  })
-}
+// RFC-359 AC-6：`registerNativeCases` 与它那组模块级可变夹具槽随本波删除——最后两个用户
+// （freeze / dump 同解）已上双引擎，剩下的「复杂度与收口」是纯源码文本断言、一行库都不读。
+// 于是本文件再无 `createInMemoryDb`，`OPEN_MIGRATION_DEBT` 的这一行退役。
 
 function registerProviderCases(
   name: string,
@@ -269,8 +245,12 @@ registerProviderCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-
 // bun:sqlite 的同步客户端上——它就是 RFC-349 留下的 legacy SQLite 特征行走本身。
 // 换成中立的 `createTaskExecutionResourceBinding(...).freezeCallClosure` 等于换掉被测函数，
 // 那不是迁移而是改判据，所以这里照旧只在 SQLite 上对拍。
-registerNativeCases('freeze / dump 同解（AC-14，同一份 DB 夹具对拍）', () => {
+// RFC-359 AC-6：这一组此前只能留在单引擎块里，被 `freezeCallClosure(db: DbClient)` 那个
+// **残留的品牌标注**钉住（全模块零 `.get()` / `.run()` / `dbTxSync`，函数体本来就是中立的）。
+// 形参放宽之后它上了双引擎——判据一条没改：freeze 侧与 dump 侧必须选出同一行。
+registerProviderCases('freeze / dump 同解（AC-14，同一份 DB 夹具对拍）', (useFixture) => {
   test('同名两行 + id 缓存指向较新那个 → 两侧选出同一行', async () => {
+    const { db, seedWorkflow, dumpMounting } = useFixture()
     // 名字不唯一是合法状态；缓存记录了用户在下拉里的选择。
     // 较老的那行只需存在（制造同名歧义），测试断言的是「没被选中」
     await seedWorkflow('build', defOf([]), '01AAAAAAAAAAAAAAAAAAAAAAAA')
@@ -299,6 +279,7 @@ registerNativeCases('freeze / dump 同解（AC-14，同一份 DB 夹具对拍）
   })
 
   test('无 id 缓存的同名两行 → 两侧都取最老 ULID', async () => {
+    const { db, seedWorkflow, dumpMounting } = useFixture()
     const older = await seedWorkflow('build', defOf([]), '01AAAAAAAAAAAAAAAAAAAAAAAA')
     await seedWorkflow('build', defOf([]), '01ZZZZZZZZZZZZZZZZZZZZZZZZ')
     const parentDef = defOf([callWorkflowNode('c1', 'build')])

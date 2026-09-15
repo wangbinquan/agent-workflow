@@ -16168,23 +16168,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:341ed9c696aade7112a3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventResponseRuleStore.ts#$file",
@@ -65179,6 +65162,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d60fedee32ece5dbf08e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
@@ -94983,22 +94983,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpCatalogResource"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#$file",
-      "id": "import:341ed9c696aade7112a3",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -146489,6 +146473,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#$file",
+      "id": "import:d60fedee32ece5dbf08e",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
@@ -160690,7 +160690,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7caf61fcff7f526fb2b6fecf49a8acf9efe577c594e5705b92d12fc725b0bd6b",
+  "sourceDigest": "sha256:187e561d7e645d15e692508ae1449c7a19cfdd79aa9e1e4bc1cd43c29c38fc9f",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

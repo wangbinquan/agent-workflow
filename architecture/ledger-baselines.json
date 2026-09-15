@@ -517,15 +517,15 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 332,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎。RFC-359 AC-6（plan §5ep）335 → 334：`limits` 随同一刀销账（它只需要 `enforceLimits`）。RFC-359 AC-6（plan §5es）334 → 333：`rfc357` 的三态授权谓词转双引擎——它锁的正是 NULL 比较那个坑，两个引擎渲染不同，尤其该双跑 RFC-359 AC-6（2026-09-15）333 → 332：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，唯一那处 `createInMemoryDb` 消失。"
+      "baseline": 331,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎。RFC-359 AC-6（plan §5ep）335 → 334：`limits` 随同一刀销账（它只需要 `enforceLimits`）。RFC-359 AC-6（plan §5es）334 → 333：`rfc357` 的三态授权谓词转双引擎——它锁的正是 NULL 比较那个坑，两个引擎渲染不同，尤其该双跑 RFC-359 AC-6（2026-09-15）333 → 332：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，唯一那处 `createInMemoryDb` 消失。 同日 332 → 331：`rfc291-closure-call-edges.test.ts` 的最后一处随死脚手架删除。"
     },
     {
       "id": "rfc359-w5-test-engine-open-migration-debt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "OPEN_MIGRATION_DEBT",
-      "baseline": 26,
-      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件。RFC-359 AC-6（plan §5ek）53 → 52：`workflows` 销账。RFC-359 AC-6（plan §5el）52 → 44：第四波再迁 7 个文件 RFC-359 AC-6（2026-09-15）27 → 26：`rfc097-task-status-cas.test.ts` 真迁完成。迁移里唯一要重新设计的是 CAS 竞态怎么造——原来代理 `db.run`/`db.transaction` 同步插竞争写者，依赖 bun:sqlite 同步落库，PG 上会静默退化成「没有并发」；改用 helper 自己的 `beforeCas` 注入点（SELECT 与 CAS 之间、被 await、两引擎都成立）。变异验证：删掉生产里那句 `await args.beforeCas?.()` ⇒ 两个引擎的竞态用例共 4 格红。"
+      "baseline": 25,
+      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件。RFC-359 AC-6（plan §5ek）53 → 52：`workflows` 销账。RFC-359 AC-6（plan §5el）52 → 44：第四波再迁 7 个文件 RFC-359 AC-6（2026-09-15）27 → 26：`rfc097-task-status-cas.test.ts` 真迁完成。迁移里唯一要重新设计的是 CAS 竞态怎么造——原来代理 `db.run`/`db.transaction` 同步插竞争写者，依赖 bun:sqlite 同步落库，PG 上会静默退化成「没有并发」；改用 helper 自己的 `beforeCas` 注入点（SELECT 与 CAS 之间、被 await、两引擎都成立）。变异验证：删掉生产里那句 `await args.beforeCas?.()` ⇒ 两个引擎的竞态用例共 4 格红。 同日 26 → 25：`rfc291-closure-call-edges.test.ts` 真迁完成——卡住它的是 `freezeCallClosure(db: DbClient)` 这个**残留品牌标注**（全模块零 `.get()`/`.run()`/`dbTxSync`，函数体本来就中立），形参放宽到 `ProviderNeutralDatabase` 即解，零生产调用点需要改。9 例 → 17 例。"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -886,7 +886,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7caf61fcff7f526fb2b6fecf49a8acf9efe577c594e5705b92d12fc725b0bd6b",
+    "sourceDigest": "sha256:187e561d7e645d15e692508ae1449c7a19cfdd79aa9e1e4bc1cd43c29c38fc9f",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ab70634e41b1bfdc9d6c891274b6b11b54293e58",
-    "contentDigest": "sha256:28d5851843496c9412dccc47cca98ef13f69831f8bd6148c73c1809ce51e4a5a",
+    "currentSnapshotSha": "d9256e6e0103e41bc1735e33e700fc3b77d6de56",
+    "contentDigest": "sha256:47bedac1348f04ef984ef79d611b1b24d5e63a92f5a1669ca3bd46f72d99829d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
