@@ -403,62 +403,76 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
     })
   })
 
+  /**
+   * 限流用例要打满窗口：302 次串行 HTTP POST，每次都真写库。SQLite 上是本地同步写、很快；
+   * **PostgreSQL 上每次都是一次网络往返**，CI 受压 runner 上实测 **5119ms**，刚好越过 bun 的
+   * 5000ms 缺省而假红（2026-09-15，`efa86e79d` 的 ubuntu shard 10/12）。
+   *
+   * 300 这个数不能改——它就是被测的每端点限额。所以给显式预算，留约 6× 余量：
+   * 受压 runner 不假红，真跑飞（例如限流器退化成每次都查库）也藏不住。
+   */
+  const RATE_LIMIT_WINDOW_TIMEOUT_MS = 30_000
+
   describe('RFC-257 T5 · 限流（fake clock）与装配自我跳过', () => {
-    test('per-endpoint 300/min：超限 429，时间前进后恢复', async () => {
-      let now = 1_000_000
-      const limiters = createWebhookRateLimiters(() => now)
-      await db.insert(webhookEndpoints).values({
-        id: 'ep-1',
-        name: 'gitlab',
-        provider: 'gitlab',
-        urlToken: 'aw_whk_tok1',
-        secretEnc: box.seal(SECRET),
-        enabled: true,
-      })
-      // 直接用路由模块 + 自建 app 注入 fake clock 限流器
-      const fake = fakeDispatcher()
-      const app = new Hono()
-      mountWebhookIngressRoutes(
-        app,
-        {
-          webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
-          secretBox: box,
-          webhookDispatcher: fake.dispatcher,
-          digitalEmployeeEventCenter: {
-            commands: {
-              observe() {
-                return {
-                  eventId: 'limiter-event',
-                  duplicate: false,
-                  deliveryCount: 0,
-                  deliveryIds: [],
-                }
+    test(
+      'per-endpoint 300/min：超限 429，时间前进后恢复',
+      async () => {
+        let now = 1_000_000
+        const limiters = createWebhookRateLimiters(() => now)
+        await db.insert(webhookEndpoints).values({
+          id: 'ep-1',
+          name: 'gitlab',
+          provider: 'gitlab',
+          urlToken: 'aw_whk_tok1',
+          secretEnc: box.seal(SECRET),
+          enabled: true,
+        })
+        // 直接用路由模块 + 自建 app 注入 fake clock 限流器
+        const fake = fakeDispatcher()
+        const app = new Hono()
+        mountWebhookIngressRoutes(
+          app,
+          {
+            webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+            secretBox: box,
+            webhookDispatcher: fake.dispatcher,
+            digitalEmployeeEventCenter: {
+              commands: {
+                observe() {
+                  return {
+                    eventId: 'limiter-event',
+                    duplicate: false,
+                    deliveryCount: 0,
+                    deliveryIds: [],
+                  }
+                },
               },
-            },
-            worker: {
-              async runOneNotification() {
-                return 'idle' as const
+              worker: {
+                async runOneNotification() {
+                  return 'idle' as const
+                },
               },
-            },
-            observerControl: {
-              nudgeSource() {
-                return false
+              observerControl: {
+                nudgeSource() {
+                  return false
+                },
               },
-            },
-          } as unknown as EventCenterModule,
-        },
-        { limiters },
-      )
-      for (let i = 0; i < 300; i++) {
-        const res = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
-        expect(res.status).toBe(200)
-      }
-      const blocked = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
-      expect(blocked.status).toBe(429)
-      now += 61_000 // fake clock 前进一个窗口
-      const recovered = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
-      expect(recovered.status).toBe(200)
-    })
+            } as unknown as EventCenterModule,
+          },
+          { limiters },
+        )
+        for (let i = 0; i < 300; i++) {
+          const res = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
+          expect(res.status).toBe(200)
+        }
+        const blocked = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
+        expect(blocked.status).toBe(429)
+        now += 61_000 // fake clock 前进一个窗口
+        const recovered = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
+        expect(recovered.status).toBe(200)
+      },
+      RATE_LIMIT_WINDOW_TIMEOUT_MS,
+    )
 
     test('装配缺 dispatcher → 路由不挂载（部分装配不暴露必 500 公开路由）', async () => {
       const { app } = await harness({ omitDispatcher: true })

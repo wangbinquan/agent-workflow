@@ -12149,3 +12149,68 @@ export async function freezeCallClosure(db: DbClient, …)
 25 条里真正「换个 harness 就行」的**已经没有了**——§5fk / §5fl 收的正是最后两条那类。
 剩下的分别卡在：**判据缺口**（甲类里有意单引擎的几条）、**AC-1 的生产侧收敛**（乙类）、
 **重写假池**（丙类）。三者都不是「再努力一点」能解决的，各自需要一次单独的决定或一次大改。
+
+
+## §5fn —— **`PROVIDER_PAIR_COUNT` 有结构性盲区：只看得见「文件级」的对，同文件内的对一个都数不到**
+
+这是 §5fm 往下追 AC-6 丙类时撞出来的，直接关系到 §5fh 那个「完工线」裁决——
+**那个被争论的数字本身不完整。**
+
+### 判据只认文件名
+
+`providerPairs()` 的 `classify(path)` 取的是**文件名 stem**：
+
+```
+const PROVIDER_PREFIX = /^(legacySqlite|legacyPostgresql|sqlite|postgresql)(?=[A-Z])/
+… const stem = base.slice(0, -'.ts'.length); const matched = PROVIDER_PREFIX.exec(stem)
+```
+
+所以「一对」的定义是**两个文件**：同目录下的 `sqliteX.ts` + `postgresqlX.ts`。
+两份实现若写在**同一个文件里**（文件名不带 provider 前缀），`classify` 直接返回 `null`，
+**连被考虑的机会都没有**。
+
+### 实测：同文件对有 25 处（24 个文件），账面是 8
+
+按「同一文件里同时存在 `create|compose Sqlite<X>` 与 `create|compose Postgresql<X>`」扫描，
+得 **25 处 / 24 个文件**。逐条判性质（**不是 25 处都该合**）：
+
+- **多数是合法的组合根选择**：`composeSqlite/PostgresqlAppDeps`（`server.ts`）、
+  `compose…ProviderSession`（`cli/start.ts`）、以及 `platform/persistence/` 白名单层里的
+  `createSqlite/PostgresqlDatabaseSession`、`…Capabilities`、`…DatabaseOperationalAdapter` 等。
+  这些是「装配期选一次」，与 AC-10 第十波收的 `LOCAL_SYSTEM_OPERATIONS_COMPOSERS` 同类。
+- **但有 3 处落在 `infrastructure/` 里**，也就是账本本来在数的那个**存储适配器**类别：
+  `modules/integration/infrastructure/developmentToolConnectionStore.ts :: DevelopmentToolConnectionStore`
+  `modules/integration/infrastructure/webhookRepositoryResolver.ts :: WebhookRepositoryResolver`
+  `modules/task-execution/infrastructure/agentLaunchResourceOperations.ts :: AgentLaunchResourceOperations`
+
+### 抽一条看实质：确实是「同一台机器抄了两遍」
+
+`developmentToolConnectionStore.ts`（125 行）里两份实现逐方法对照，差别只有 `await` 位置与
+`.limit(1)`：
+
+```
+SQLite:  db.select()…get()                 ← 同步游标，不 await
+PG:      await db.select()…limit(1).get()  ← 异步
+```
+
+也就是说，**两份实现存在的唯一理由就是同步 / 异步这条缝**——而这正是本 RFC 的统一事务原语
+要消掉的那条缝。它同时还是一处活的 `.get()` 同步游标（AC-6 乙类那个阻塞的同族）。
+
+### 为什么这条要单独记
+
+§5fh 的争论是「`PROVIDER_PAIR_COUNT` 降到 0 才算完工」还是「已登记的机制差异保留对拍即满足」。
+**现在多了第三个事实：这个数本身漏计。** 它今天报 8，而同文件形态至少还有 3 处属于它本该数的
+那个类别（其余 22 处需逐条判，多数是合法组合根）。所以：
+
+- 拿「8」当完工进度**偏乐观**；
+- 但也**不能**简单把它改成 33 就完事——25 处里大部分是合法的组合根选择，
+  一股脑计入会把判据变成噪声（那就成了「文件数」而不是「还剩多少份重复实现」）。
+
+**本轮没有动判据、没有合任何一对。** 要动它，需要的是一次**连带的裁决**：
+①判据是否扩到同文件对；②若扩，如何把「合法组合根选择」与「重复的存储适配器」分开
+（可能的判据：只计 `infrastructure/` 下、且两侧都直接发 SQL 的那些）；
+③扩完之后 §5fh 的完工线按新口径怎么定。三件事必须一起定，否则数字会在两个口径之间横跳。
+
+**可直接动手的那一条**：上面 3 处 `infrastructure/` 对里，`DevelopmentToolConnectionStore`
+已确认只差同步 / 异步一条缝，属于「可以合、且合了就少一份实现」的明确目标——
+但它该不该合、以及合了算不算 AC-1 销账，仍取决于 §5fh 的裁决口径。
