@@ -262,9 +262,11 @@ const UNITS: readonly SourceUnit[] = packageSrcUnits(REPO_ROOT, 'backend')
  *   · **W4 在收敛的 provider 对**（task-execution 6、后台维护 4）——随各 context 合一一起清。
  */
 export const PROVIDER_BRANCH_DEBT: readonly string[] = [
-  'cli/database.ts: 2',
+  // AC-10 第二波销账：`cli/database.ts` 两处与 `cli/doctor.ts` 一处改读新增的两个 traits
+  // 字段（`serverVersionFallback` / `failureRecoveryHint`）——它们是「这个引擎怎么称呼自己」
+  // 与「失败了能不能从备份恢复」，答案由各引擎各声明一次，调用方不再现场拼品牌三元。
   'cli/dbCompact.ts: 1',
-  'cli/doctor.ts: 3',
+  'cli/doctor.ts: 2',
   'cli/migrate.ts: 1',
   'cli/start.ts: 2',
   // RFC-359 4 → 3：`package` 子命令的资源包装配此前是一个 `provider === 'sqlite' ? … : …`，

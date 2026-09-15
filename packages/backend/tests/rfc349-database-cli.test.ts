@@ -244,6 +244,48 @@ describe('RFC-349 database CLI', () => {
     expect(fake.released).toBe(1)
   })
 
+  // RFC-359 AC-10 —— `--to` 的判据是「这个 provider **能不能当迁移目标**」，不是「它是不是
+  // 字面量 'postgresql'」。原来那句写死 PostgreSQL 的拒绝语没有任何测试断言过，改判据时
+  // 也就没有网；这两条补上网。
+  test('--to 按能力判定：认不出的 provider 与不能当目标的 provider 都被拒，且一次都不碰 operations', async () => {
+    for (const bad of ['sqlite', 'mysql', 'POSTGRESQL', '']) {
+      const fake = fixture()
+      const result = await databaseCommand(
+        ['migrate', '--to', bad, '--url-env', 'AW_DATABASE_URL', '--auto'],
+        fake.operations,
+        fake.lockFactory,
+      )
+      expect(result.status, `--to ${bad} 应当被拒`).toBe('error')
+      expect(result.output).toContain('migration target')
+      // 拒绝发生在任何一次 operations 调用与取锁之前。
+      expect(fake.calls).toHaveLength(0)
+      expect(fake.acquired).toBe(0)
+    }
+    // `sqlite` 被拒的理由是它的 `migrationRole` 是 `source`——不是因为名字对不上，
+    // 所以这条断言同时锁住「判的是能力」。
+    const fake = fixture()
+    expect(
+      (
+        await databaseCommand(
+          ['migrate', '--to', 'sqlite', '--url-env', 'AW_DATABASE_URL', '--auto'],
+          fake.operations,
+          fake.lockFactory,
+        )
+      ).output,
+    ).not.toContain('SQLite remains the default provider')
+  })
+
+  // RFC-359 AC-10 —— 服务端版本取不到时的兜底文案由 traits 提供（语料里 `serverVersion`
+  // 是 null，正好走兜底）。这一行此前没有任何断言，把品牌三元换成 traits 时也就没有网。
+  // 单独一个用例、单独一份 fixture：塞进上面那条会多记一次 `overview`，把它的调用序列断言打乱。
+  test('服务端版本取不到时，兜底文案来自 traits 而不是现场拼的品牌三元', async () => {
+    const fake = fixture()
+    expect(await databaseCommand(['status'], fake.operations, fake.lockFactory)).toMatchObject({
+      status: 'ok',
+      output: expect.stringContaining('server:       embedded SQLite'),
+    })
+  })
+
   test('database status and preflight are online read/probe actions without the daemon lock', async () => {
     const fake = fixture()
     expect(await databaseCommand(['status'], fake.operations, fake.lockFactory)).toMatchObject({

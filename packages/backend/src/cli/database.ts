@@ -10,6 +10,8 @@ import {
 import type { Lock } from '@/util/lock'
 import { acquireLock, DaemonLockHeldError } from '@/util/lock'
 import { Paths } from '@/util/paths'
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+import { DATABASE_PROVIDERS } from '@/platform/persistence/databaseProviders'
 import type { DatabaseMigrationCommands } from '@/modules/system-operations/public/commands'
 import type { DatabaseMigrationQueries } from '@/modules/system-operations/public/queries'
 import type {
@@ -82,8 +84,14 @@ function requiredChunkFlag(argv: readonly string[]): number {
 }
 
 function targetFromArgs(argv: readonly string[]): DatabaseMigrationTargetView {
-  if (flag(argv, '--to') !== 'postgresql') {
-    throw new Error('--to postgresql is required (SQLite remains the default provider)')
+  // RFC-359 AC-10：`--to` 先解析成 `DatabaseProvider`，再问它**能不能当迁移目标**。
+  // 原来直接比字面量 `'postgresql'`，于是第三个 provider 会被一句写死 PostgreSQL 的话拒绝掉，
+  // 而不是被「这个 provider 不是迁移目标」拒绝。
+  const requested = DATABASE_PROVIDERS.find((provider) => provider === flag(argv, '--to'))
+  if (requested === undefined || databaseProviderTraits(requested).migrationRole !== 'target') {
+    throw new Error(
+      `--to must name a provider that can be a migration target (got: ${flag(argv, '--to') ?? '<missing>'})`,
+    )
   }
   return {
     provider: 'postgresql',
@@ -140,7 +148,7 @@ export function formatDatabaseRuntimeOverview(overview: DatabaseRuntimeOverview)
     `  generation:   ${overview.generationId}`,
     `  schema:       ${overview.schemaDigest}`,
     `  fingerprint:  ${overview.databaseFingerprint ?? 'unavailable'}`,
-    `  server:       ${overview.serverVersion ?? (overview.provider === 'sqlite' ? 'embedded SQLite' : 'unavailable')}`,
+    `  server:       ${overview.serverVersion ?? databaseProviderTraits(overview.provider).serverVersionFallback}`,
     `  source:       ${overview.source === null ? 'not retained' : `${formatBytes(overview.source.fileBytes)}, ${overview.source.totalRows} rows`}`,
     `  tables:       ${overview.tableCounts.source} source (${overview.tableCounts.active} active + ${overview.tableCounts.archiveOnly} archive-only)`,
   ].join('\n')

@@ -175,9 +175,9 @@ export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
       ok: report.ok,
       message:
         `${report.provider} generation ${report.generationId}: ${details}` +
-        (!report.ok && databaseProviderTraits(report.provider).storage === 'embedded-file'
-          ? ' — recover: agent-workflow restore <backup>'
-          : ''),
+        // RFC-359 AC-10：提示语由各引擎自己声明一句（没有可给的就是 null），
+        // 不再由调用方先问存储形态再自己拼。
+        (report.ok ? '' : (databaseProviderTraits(report.provider).failureRecoveryHint ?? '')),
     }
     if (resolved.provider === 'sqlite') {
       return [providerCheck, checkLifecycleHealth(), checkSealedCredentials()]

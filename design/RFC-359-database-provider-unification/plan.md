@@ -11349,6 +11349,31 @@ sha256 内容锁。改完 frameBackfill 调用它立刻红——而且红得恰�
 按守卫要求写了 `allowGrowth` 并点名本波：涨的是一条边，换掉的是一处品牌分叉，
 而且同域两个文件早有同一条 import，**边的形状是既有先例，不是新开的耦合**。
 
+### 第二波（同一提）：再销 3 处，`cli/database.ts` 清零
+
+新增两个 traits 字段，把两处**调用方现场拼的品牌三元**收回到「各引擎各声明一次」：
+
+| 新字段 | 原写法 | 含义 |
+| --- | --- | --- |
+| `serverVersionFallback` | `provider === 'sqlite' ? 'embedded SQLite' : 'unavailable'` | `db info` 取不到服务端版本时显示什么 |
+| `failureRecoveryHint` | `storage === 'embedded-file' ? ' — recover: …' : ''` | provider 自检失败时给用户的下一步（没有就是 `null`） |
+
+外加 `cli/database.ts` 的 `--to`：原来直接比 `flag(argv,'--to') !== 'postgresql'`，
+现在先把它解析成 `DatabaseProvider`、再问 `migrationRole === 'target'`。差别不只是形状——
+**原来第三个 provider 会被一句写死 PostgreSQL 的话拒绝掉**（「--to postgresql is required」），
+而不是被「这个 provider 不能当迁移目标」拒绝。
+
+`PROVIDER_BRANCH_DEBT` 再 → 9 条（19 → 16 处），`cli/database.ts` 在两份账本里都清零退役。
+
+**这三处原本一处覆盖都没有**（agent 扫出来的：那句拒绝语全仓只出现在它自己的定义处，
+`db info` 的 `server:` 行也从没被断言过）。所以补了三条判据：
+`--to` 认不出的值 / 不能当目标的值都要被拒**且拒在任何 operations 调用与取锁之前**；
+`sqlite` 被拒时**不得**再出现「SQLite remains the default provider」那句话——
+这一条同时锁住「判的是能力不是名字」；以及 `server:` 行确实走 traits 的兜底。
+
+顺带一条测试写法的坑：那条兜底断言不能塞进现成的 status 用例——多跑一次 `databaseCommand`
+就多记一次 `overview`，把同一用例后面的调用序列断言打乱。单独用例 + 单独 fixture 才干净。
+
 ### 剩下 19 处：两件必须先问过用户的事
 
 1. **`maintenanceService.ts:350/:431` + `maintenanceWorkerSupervisor.ts:348`（共 3 处）——

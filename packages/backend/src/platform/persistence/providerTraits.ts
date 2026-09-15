@@ -58,6 +58,24 @@ export interface DatabaseProviderTraits {
    * happened to be the `else`.
    */
   readonly migrationRole: 'source' | 'target'
+
+  /**
+   * `db info` 在拿不到服务端版本号时显示什么。
+   *
+   * RFC-359 AC-10：原来写成 `provider === 'sqlite' ? 'embedded SQLite' : 'unavailable'`——
+   * 一个纯展示文案的品牌三元，第三个 provider 会静默拿到 `'unavailable'`。
+   * 这不是「能力」而是「这个引擎怎么称呼自己」，但判据一样：值由各引擎各自声明一次。
+   */
+  readonly serverVersionFallback: string
+
+  /**
+   * provider 自检失败时，给用户的下一步提示；没有可给的就是 `null`。
+   *
+   * RFC-359 AC-10：原来写成 `storage === 'embedded-file' ? ' — recover: …' : ''`。
+   * 「本地文件能用备份恢复」是真的能力差异，但它的答案是**一句话**，所以直接把那句话
+   * 声明出来，而不是让调用方再问一次存储形态再自己拼。
+   */
+  readonly failureRecoveryHint: string | null
 }
 
 export const DATABASE_PROVIDER_TRAITS = {
@@ -66,12 +84,16 @@ export const DATABASE_PROVIDER_TRAITS = {
     booleanLiteral: (value) => (value ? '1' : '0'),
     classifyRetryable: retryableSqliteWriteErrorCode,
     migrationRole: 'source',
+    serverVersionFallback: 'embedded SQLite',
+    failureRecoveryHint: ' — recover: agent-workflow restore <backup>',
   },
   postgresql: {
     storage: 'external-server',
     booleanLiteral: (value) => (value ? 'TRUE' : 'FALSE'),
     classifyRetryable: postgresqlSerializationFailureCode,
     migrationRole: 'target',
+    serverVersionFallback: 'unavailable',
+    failureRecoveryHint: null,
   },
 } as const satisfies Record<DatabaseProvider, DatabaseProviderTraits>
 

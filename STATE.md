@@ -11,7 +11,12 @@
 > 删标签即消掉 main.ts 那条三元）、4 处改问 `migrationRole`（三个文件都已有在文先例）、
 > 1 处条件类型换成按 provider 索引的表（`Record<DatabaseProvider,…>` 约束即 forcing function）。
 >
-> 账本：`PROVIDER_BRANCH_DEBT` 14 → 10 条（26 → 19 处）、`PROVIDER_BRANCH_RELOCATION_DEBT`
+> 第二波同期再销 3 处（`cli/database.ts` 两处 + `cli/doctor.ts` 一处）：新增两个 traits 字段
+> `serverVersionFallback` / `failureRecoveryHint`，把调用方现场拼的品牌三元收回各引擎各声明一次；
+> `--to` 从比字面量改成解析成 `DatabaseProvider` 再问 `migrationRole`（原来第三个 provider 会被
+> 一句写死 PostgreSQL 的话拒掉）。这三处**原本零覆盖**，补了三条判据。**16 处**，`cli/database.ts` 清零。
+>
+> 账本：`PROVIDER_BRANCH_DEBT` 14 → 9 条（26 → 16 处）、`PROVIDER_BRANCH_RELOCATION_DEBT`
 > **清空**、`PROVIDER_FORK_LEDGER` 退役 `db/providerSchema.ts` 条目、`main.ts` 3 → 2。
 > census 连带 +1 条 observed edge（新增一条 providerTraits import），按规矩写了 `allowGrowth`。
 >

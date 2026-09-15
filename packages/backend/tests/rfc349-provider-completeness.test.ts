@@ -89,7 +89,9 @@ const CANONICAL_UNION_FILE = 'packages/backend/src/platform/persistence/schemaCo
 //   boot-fence           the deliberate closed list that refuses to boot a
 //                        provider nobody has adapted yet (see the test below).
 const PROVIDER_FORK_LEDGER = {
-  'cli/database.ts': { forks: 1, fence: 'display-text' },
+  // RFC-359 AC-10 第二波：`cli/database.ts` 的条目退役。两处品牌分叉都换成了 traits ——
+  // `--to` 先解析成 `DatabaseProvider` 再问 `migrationRole === 'target'`，
+  // `db info` 的服务端版本兜底改读 `serverVersionFallback`。
   'cli/doctor.ts': { forks: 1, fence: 'fenced-dispatch' },
   'cli/migrate.ts': { forks: 1, fence: 'fenced-dispatch' },
   // cli/start.ts：RFC-359 W3-T16 后没有 provider 执行分支——会话装配按 DatabaseProvider 查表，
@@ -242,7 +244,12 @@ describe('RFC-349 provider completeness', () => {
     expect(declared.sort()).toEqual([
       'booleanLiteral',
       'classifyRetryable',
+      // RFC-359 AC-10：`db info` 的服务端版本兜底文案、以及 provider 自检失败时的下一步提示。
+      // 两条原本都是调用方现场写的品牌三元（`provider === 'sqlite' ? … : …` /
+      // `storage === 'embedded-file' ? … : ''`），现在由各引擎各声明一次。
+      'failureRecoveryHint',
       'migrationRole',
+      'serverVersionFallback',
       'storage',
     ])
     const consumers = backendSources().filter(
