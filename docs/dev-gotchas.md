@@ -6657,7 +6657,22 @@ DrizzleQueryError                 // 没有 code / constraint
 `open()` 的参数。一条用例同时要两种形态时，只能拆成两个注册面
 （`auth-routes` 的 bootstrap 用例因此拆成两条：新装机的载荷校验 / 已就绪实例的 actor 闸门）。
 
-## 「睡一觉等 fire-and-forget 落库」在 PostgreSQL 上必然间歇性红（2026-09-12 推红一格）
+## 「睡一觉等 fire-and-forget 落库」在 PostgreSQL 上必然间歇性红（2026-09-12 推红一格；**2026-09-15 又红一格**）
+
+> **2026-09-15 复发，同一个形状、另一个文件。** `rfc257-webhook-ingress` 的
+> 「UUID 缺失 → 无去重，逐条处理」在 ubuntu shard 10/12 的 **[postgresql]** 道红
+> （`expect(calls.length).toBe(2)` 读到 **1**），同名的 `[sqlite]` 那条同一次全绿。
+> 肇事行逐字就是本条讲的那个：`await new Promise((r) => setTimeout(r, 10))`。
+> 该文件里**一共四处**同款，只有一处输掉了这次竞速——四处全改成
+> `eventuallyAtLeast` / `eventually`（`tests/helpers/eventually.ts`，本仓为这件事写的共用原语）。
+>
+> **全仓扫下来还有约 33 处** `setTimeout(r, 5..25)` 形态的短固定睡分布在 7 个测试文件里
+> （`change-narrative` / `plugins-http` / `rfc152-ws-channel-registry` / `rfc234-intent-routes` /
+> `rfc234-turn-engine` / `rfc355-intent-session-event-callsites` /
+> `rfc359-w8-child-launch-conformance`）。它们**未必**都在等 fire-and-forget（也可能在等定时器
+> 或防抖），所以没有一把梭；但改到它们时**顺手换掉**，别等它在别人的提交上红——
+> 这个形状已经推红两次，两次的直接触发者都与被测代码无关。
+
 
 `rfc247-token-audit` 的 AC-20 三条用例原来这样等审计快照：
 

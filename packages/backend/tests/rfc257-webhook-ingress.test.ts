@@ -26,6 +26,7 @@ import { createWebhookRateLimiters } from '../src/services/webhook/rateLimiter'
 import { recoverInterruptedDeliveries } from '../src/services/webhook/deliveryStore'
 import { eq } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'
+import { eventually, eventuallyAtLeast } from './helpers/eventually'
 
 const SECRET = 's3cret-token-for-gitlab'
 const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
@@ -267,8 +268,9 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
       expect(rows[0]?.eventType).toBe('push')
       expect(rows[0]?.repoPath).toBe('platform/api')
       expect(rows[0]?.streamHint).toBe('platform/api|branch:feature/x')
-      // 异步分发在微任务里排队；推进事件循环一拍后应已到达 fake dispatcher
-      await new Promise((r) => setTimeout(r, 10))
+      // 分发是**应答之后**的 fire-and-forget：bun:sqlite 同一拍就到，PostgreSQL 要一次真实
+      // 往返。原来固定睡 10ms，慢机器上就是 flaky——改成读到为止（`helpers/eventually`）。
+      await eventuallyAtLeast(async () => calls, 1, 'dispatch 到达 fake dispatcher')
       expect(calls.map((c) => c.deliveryId)).toEqual([body.deliveryId])
     })
 
@@ -287,7 +289,12 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
       })
       const res = await post(app, URL_OK, pushBody(), H_OK)
       expect(res.status).toBe(200) // dispatch 永久挂起中，响应已经回来了
-      await new Promise((r) => setTimeout(r, 10))
+      // 同上：等「dispatch 已开始」为真，而不是睡一个固定时长。
+      await eventually(
+        async () => started,
+        (value) => value,
+        { what: 'dispatch 已开始' },
+      )
       expect(started).toBe(true)
       release()
     })
@@ -306,7 +313,8 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
       expect(body2.status).toBe('duplicate')
       expect(body2.deliveryId).toBe(id1)
       expect(body2.attemptCount).toBe(2)
-      await new Promise((r) => setTimeout(r, 10))
+      // 等第一条分发落到 fake dispatcher 再断言「只有一条」——固定睡 10ms 在 PG 上会早读。
+      await eventuallyAtLeast(async () => calls, 1, 'dispatch 到达 fake dispatcher')
       expect(calls.length).toBe(1)
       expect((await deliveryRows(db)).length).toBe(1)
     })
@@ -387,7 +395,9 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
         const res = await post(app, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
         expect(((await res.json()) as { status: string }).status).toBe('received')
       }
-      await new Promise((r) => setTimeout(r, 10))
+      // 2026-09-15 实撞：这条在 ubuntu shard 10/12 的 [postgresql] 道红过一次
+      // （`expect(calls.length).toBe(2)` 读到 1）——固定睡 10ms 不够 PG 走完两次往返。
+      await eventuallyAtLeast(async () => calls, 2, '两条分发都到达 fake dispatcher')
       expect((await deliveryRows(db)).length).toBe(2)
       expect(calls.length).toBe(2)
     })
