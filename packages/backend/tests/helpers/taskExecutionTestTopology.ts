@@ -4,7 +4,7 @@ import { createCollaborationRuntimeMechanics } from '../../src/modules/collabora
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
 import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
-import { createSqliteTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
@@ -68,7 +68,7 @@ export function composeTaskExecutionTestRuntime(
   options: Readonly<{ codeHostConnections?: CodeHostConnectionsService }> = {},
 ) {
   const identity = createTaskExecutionTestIdentity(db)
-  const persistence = createSqliteTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db)
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createSqliteTaskExecutionRuntimeParticipants({
@@ -190,7 +190,7 @@ export function runTaskWithRealTestTopology(
   if (identityAccess === undefined) throw new Error('task-execution-test-identity-missing')
   const memoryInjectionQueries =
     options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(options.db)
-  const persistence = options.persistence ?? createSqliteTaskExecutionPersistence(options.db)
+  const persistence = options.persistence ?? createTaskExecutionPersistence(options.db)
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)

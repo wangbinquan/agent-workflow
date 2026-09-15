@@ -20,10 +20,7 @@ import {
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import {
-  createPostgresqlTaskExecutionPersistence,
-  createSqliteTaskExecutionPersistence,
-} from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composePluginGenerationGcCommand } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 import {
   composePostgresqlResourcePackageApplyMaintenance,
@@ -548,7 +545,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
         composeWebhookDeliveryPersistenceFor(client),
       )
-      const taskExecution = createPostgresqlTaskExecutionPersistence(client)
+      const taskExecution = createTaskExecutionPersistence(client)
       taskRecoveryOperations = taskExecution.recoveryAdministration
       taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(client)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
@@ -657,7 +654,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
         composeWebhookDeliveryPersistenceFor(sqliteDb),
       )
-      const taskExecution = createSqliteTaskExecutionPersistence(sqliteDb)
+      const taskExecution = createTaskExecutionPersistence(sqliteDb)
       taskRecoveryOperations = taskExecution.recoveryAdministration
       taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(sqliteDb)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>

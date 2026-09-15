@@ -9,7 +9,7 @@ import type {
   TaskDriverLifecyclePort,
 } from '../application/drive/taskDriveCoordinator'
 import { createTaskExecutionContext } from '../composition/sqliteTaskExecutionContext'
-import { createSqliteTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,
@@ -119,7 +119,7 @@ function releaseDependencies(
 ): TaskDriverReleaseDependencies {
   return {
     registry: taskExecutionModule.runtimeRegistry,
-    persistence: createSqliteTaskExecutionPersistence(db),
+    persistence: createTaskExecutionPersistence(db),
     stopHeartbeat: (tokenKey) => {
       const timer = ownerHeartbeatTimers.get(tokenKey)
       if (timer !== undefined) clearInterval(timer)

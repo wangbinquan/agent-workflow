@@ -1,7 +1,15 @@
-// RFC-359 W17: boot-orphan's real composition keeps its historical clock and
-// CAS/companion order while both transaction mechanisms share physical steps.
-// These cases run against the original writers before the refactor. Existing
-// companion-record fields are opaque data; no domain decisions are exercised.
+// RFC-359 W17 / AC-10: boot-orphan 的真实装配，两个引擎逐字同一条。
+//
+// 开这个文件时它锁的是「各自保留各自的历史形状」——SQLite 与 PostgreSQL 在**三件事**上不同：
+// 记账时钟（墙上 vs 调用方传入）、companion 相对任务行的写入次序、以及终态化的判据松紧。
+// AC-10 把恢复管理面合成一份实现之后这三条各自收敛到强的一侧，本文件的断言随之**不再分引擎**：
+//   · 时钟 —— `Date.now()` 被 mock 成 `WALL_NOW`，而 `runningMs` / 事件时间戳必须仍是
+//     `INPUT_NOW`。这个 spy 现在是**证据**：证明调用方传入的 `now` 被真的用上了，
+//     同一行里的 `finishedAt` 与 `runningMs` 记的是同一个瞬间。
+//   · 次序 —— companion 写在任务行之前，触发器看到的 `tasks.status` 两个引擎都还是 `running`。
+//   · 判据 —— 终态化写回行数对不上就 `task-continuation-stale` 整笔回滚，SQLite 不再「写没写进去
+//     都算成功」。
+// Existing companion-record fields are opaque data; no domain decisions are exercised.
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
 import { eq, sql } from 'drizzle-orm'
@@ -213,7 +221,7 @@ describeEachProvider(
       registerAfterCommitEventPump(null)
     })
 
-    test('keeps its own accounting clock, companion phase and post-commit publication', async () => {
+    test('honours the caller clock, writes companions first and publishes after commit', async () => {
       const before = await snapshot(harness.db)
       const publications: Awaited<ReturnType<typeof snapshot>>[] = []
       registerAfterCommitEventPump({
@@ -233,7 +241,8 @@ describeEachProvider(
           clock.mockRestore()
         }
         const after = await snapshot(harness.db)
-        const sampledAt = harness.capabilities.isolation === 'exclusive' ? WALL_NOW : INPUT_NOW
+        // `Date.now()` 被 mock 成 WALL_NOW；两个引擎都必须无视它，用调用方传入的 INPUT_NOW。
+        const sampledAt = INPUT_NOW
         expect(after.task).toEqual({
           ...before.task,
           status: 'interrupted',
@@ -259,11 +268,7 @@ describeEachProvider(
         })
         expect(
           await harness.db.all(sql`SELECT task_status FROM rfc359_boot_companion_observations`),
-        ).toEqual([
-          {
-            task_status: harness.capabilities.isolation === 'exclusive' ? 'interrupted' : 'running',
-          },
-        ])
+        ).toEqual([{ task_status: 'running' }])
         expect(publications).toEqual([after])
       })
     })
@@ -286,36 +291,26 @@ describeEachProvider(
       expect(published).toBe(false)
     })
 
+    // AC-10 前：SQLite 走宽判据，被触发器吞掉的终态化**当成功**——任务落到 `interrupted`，
+    // intent 却还留在 `pending`，事件照发。PostgreSQL 同一情形是 `task-continuation-stale`
+    // 整笔回滚。这条现在两个引擎同一个结果。
     test.each(['skip-intent', 'skip-record'] as const)(
-      '%s retains the existing returned-row branch',
+      'a swallowed %s write fails the whole boot recovery on both engines',
       async (mode) => {
         const before = await snapshot(harness.db)
         await withWriteTrigger(harness, mode, async () => {
-          const operation = () =>
+          await expect(
             createTaskExecutionPersistence(
               harness.db,
-            ).recoveryAdministration.interruptBootOrphanTask(bootInput)
-          if (harness.capabilities.isolation === 'exclusive') {
-            expect(await operation()).toBe(true)
-            const after = await snapshot(harness.db)
-            expect(after.task.status).toBe('interrupted')
-            expect(after.intent).toEqual(
-              mode === 'skip-intent' ? before.intent : terminalIntent(before.intent),
-            )
-            expect(after.record).toEqual(
-              mode === 'skip-record' ? before.record : terminalRecord(before.record),
-            )
-            expect(after.events).toHaveLength(1)
-          } else {
-            await expect(operation()).rejects.toMatchObject({
-              code: 'task-continuation-stale',
-              message:
-                mode === 'skip-intent'
-                  ? `task '${ID}' active intents changed during terminalization`
-                  : "replay decision 'record-boot' changed during intent terminalization",
-            })
-            expect(await snapshot(harness.db)).toEqual(before)
-          }
+            ).recoveryAdministration.interruptBootOrphanTask(bootInput),
+          ).rejects.toMatchObject({
+            code: 'task-continuation-stale',
+            message:
+              mode === 'skip-intent'
+                ? `task '${ID}' active intents changed during terminalization`
+                : "replay decision 'record-boot' changed during intent terminalization",
+          })
+          expect(await snapshot(harness.db)).toEqual(before)
         })
       },
     )

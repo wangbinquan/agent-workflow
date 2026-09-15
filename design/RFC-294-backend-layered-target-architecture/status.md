@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:9ee7873f093d53e8733c689bd70e3a656c66ef63ce16254ecad483946b77e78f`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -18,7 +18,7 @@
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 494 |
-| background work entries | 334 |
+| background work entries | 333 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
 | RFC-317 boundary census（inbound / outbound） | 258 / 33 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4606 |
-| `backgroundJobs` | 334 |
-| `crossContextImports` | 5119 |
+| `architectureExceptions` | 4601 |
+| `backgroundJobs` | 333 |
+| `crossContextImports` | 5114 |
 | `facades` | 317 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24739 |
-| `mutationEntrypoints` | 1699 |
+| `moduleSymbolOwners` | 24733 |
+| `mutationEntrypoints` | 1696 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 959 |
-| `transactionExternalEffects` | 253 |
+| `transactionExternalEffects` | 252 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3061 |
-| legacy-inbound | 1357 |
+| legacy-outbound | 3057 |
+| legacy-inbound | 1356 |
 | infrastructure-external | 270 |
 | offered-consumption | 157 |
 | temporary-internal-debt | 89 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3061 |
-| legacy-inbound | 1357 |
+| legacy-outbound | 3057 |
+| legacy-inbound | 1356 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 88 |
 | no-circular | 6 |
@@ -227,8 +227,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2329 |
-| W4-E1 | 815 |
+| W9 | 2326 |
+| W4-E1 | 813 |
 | W4-C | 332 |
 | W4-E0 | 214 |
 | W4 | 193 |

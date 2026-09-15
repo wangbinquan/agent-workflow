@@ -30,7 +30,6 @@ import {
   CANCELABLE_TASK_STATUSES,
   DAEMON_RESTART_ERROR_SUMMARY,
   REPO_PREP_NODE_ID,
-  TERMINAL_NODE_RUN_STATUSES,
 } from '@agent-workflow/shared'
 import type {
   RecordTaskRecoveryEventInput,
@@ -52,7 +51,6 @@ import { hasUndispatchedDesignerRecoveryEvidence } from '../application/ports/ta
 import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinuation'
 
 const CLARIFY_RERUN_CAUSES = ['clarify-answer', 'cross-clarify-questioner-rerun'] as const
-const TERMINAL_NODE_RUN_SET: ReadonlySet<string> = new Set(TERMINAL_NODE_RUN_STATUSES)
 const LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE = 400
 
 function chunksOf<T>(values: readonly T[], size: number): readonly (readonly T[])[] {
@@ -540,80 +538,10 @@ export type TaskRecoveryMutationOperations = Pick<
   | 'interruptPeriodicTaskIfIdle'
 >
 
-/**
- * 孤儿收割后的运行时会话租约修复：终态 run 仍握着的租约——会话身份完好则释放回可复用，
- * 否则连 run 上的会话 id 一起作废。统一事务原语上跑，两个 provider 的装配面都可直接注入。
- */
-export function repairRuntimeSessionLeaseAfterOrphanReapTx(
-  db: ProviderNeutralDatabase,
-  nodeRunId: string,
-): Promise<number> {
-  return databaseSessionFor(db).transaction(async (tx) => {
-    const leases = await tx
-      .select()
-      .from(runtimeSessionLeases)
-      .where(eq(runtimeSessionLeases.leaseNodeRunId, nodeRunId))
-    let repaired = 0
-    for (const lease of leases) {
-      if (lease.leaseNodeRunId === null || lease.leaseNonceDigest === null) continue
-      const run = await tx
-        .select({
-          status: nodeRuns.status,
-          sessionId: nodeRuns.opencodeSessionId,
-          failureCode: nodeRuns.failureCode,
-        })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, lease.leaseNodeRunId))
-        .limit(1)
-        .get()
-      if (run === undefined || !TERMINAL_NODE_RUN_SET.has(run.status)) continue
-      const reusable =
-        run.failureCode !== 'runtime-session-identity-invalid' &&
-        !lease.resetPending &&
-        run.sessionId === lease.sessionId
-      if (reusable) {
-        const released = await tx
-          .update(runtimeSessionLeases)
-          .set({ leaseNodeRunId: null, leaseNonceDigest: null, leasedAt: null })
-          .where(
-            and(
-              eq(runtimeSessionLeases.protocol, lease.protocol),
-              eq(runtimeSessionLeases.sessionId, lease.sessionId),
-              eq(runtimeSessionLeases.leaseNodeRunId, lease.leaseNodeRunId),
-              eq(runtimeSessionLeases.leaseNonceDigest, lease.leaseNonceDigest),
-              eq(runtimeSessionLeases.resetPending, false),
-            ),
-          )
-          .returning({ sessionId: runtimeSessionLeases.sessionId })
-        if (released[0] !== undefined) repaired += 1
-        continue
-      }
-      await tx
-        .update(nodeRuns)
-        .set({ opencodeSessionId: null })
-        .where(
-          and(
-            eq(nodeRuns.id, lease.leaseNodeRunId),
-            eq(nodeRuns.opencodeSessionId, lease.sessionId),
-          ),
-        )
-        .run()
-      const discarded = await tx
-        .delete(runtimeSessionLeases)
-        .where(
-          and(
-            eq(runtimeSessionLeases.protocol, lease.protocol),
-            eq(runtimeSessionLeases.sessionId, lease.sessionId),
-            eq(runtimeSessionLeases.leaseNodeRunId, lease.leaseNodeRunId),
-            eq(runtimeSessionLeases.leaseNonceDigest, lease.leaseNonceDigest),
-          ),
-        )
-        .returning({ sessionId: runtimeSessionLeases.sessionId })
-      if (discarded[0] !== undefined) repaired += 1
-    }
-    return repaired
-  })
-}
+// RFC-359 AC-10：这里曾有一份 `repairRuntimeSessionLeaseAfterOrphanReapTx`——把租约修复的
+// release / discard 两支**手抄**进一笔事务里，只给 PostgreSQL 的装配面用。抄的时候漏了
+// `fenceTaskWrite` 那道任务归属闸，于是同一件事在两个引擎上强弱不同。两边现已统一走共享的
+// lease 原语（`runtimeSessionLeaseOperations.repairAfterOrphanReap`），手抄件随之删除。
 
 export function createTaskRecoveryOperations(
   db: ProviderNeutralDatabase,

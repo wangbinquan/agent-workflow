@@ -52,7 +52,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, users, workflows } from '@/db/schema'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
-import { createPostgresqlTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 // 两侧实现各值 import 一条：这一对的对拍见证判据就锁在这里（`rfc359-w5-provider-pair-conformance`），
 // 走 composition 的再导出会让这份对拍在账本里看不见。
 import { createPostgresqlChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations'
@@ -302,7 +302,7 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
     }
   }
   const db = harness.db as unknown as PostgresqlDatabaseClient
-  const persistence = createPostgresqlTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db)
   let finalized = false
   const operations = createPostgresqlChildExecutionLaunchOperations({
     db,

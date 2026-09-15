@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { taskRepos, tasks } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
   createOwnershipToken,
   createWorkerIdentity,
@@ -137,7 +137,7 @@ describe('RFC-349 task-execution provider adapters', () => {
         worktreePath: '/tmp/worktree',
       })
       .run()
-    const persistence = createSqliteTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db)
     await expect(persistence.drive.load('task-1')).resolves.toMatchObject({
       task: { id: 'task-1', status: 'pending' },
       repositories: [{ repoIndex: 0, workspaceProfileVersion: null }],
@@ -278,7 +278,7 @@ describe('RFC-349 task-execution provider adapters', () => {
     const executionContext = createTaskExecutionContext({
       intentId: 'intent-1',
       token,
-      persistence: createSqliteTaskExecutionPersistence(createInMemoryDb(MIGRATIONS)),
+      persistence: createTaskExecutionPersistence(createInMemoryDb(MIGRATIONS)),
     })
 
     const outcome = await new DrizzleTaskEngineApplicationPersistence(fake.db)

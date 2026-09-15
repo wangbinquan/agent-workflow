@@ -31,10 +31,7 @@ import type {
 } from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createDaemonLockProof } from '@/modules/task-execution/composition/bootRecovery'
-import {
-  createTaskExecutionPersistence,
-  createSqliteTaskExecutionPersistence,
-} from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
   bindTaskLifecycleRepair,
   createTaskLifecycleAutoRepairCommand,
@@ -69,7 +66,7 @@ function commandFor(harness: ProviderHarness, options: CommandOptions = {}): Com
   }
   if (harness.capabilities.isolation === 'exclusive') {
     const db = harness.db as unknown as DbClient
-    const persistence = createSqliteTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db)
     // SQLite 侧的复活是引擎里写死的 `resumeTask(db, taskId, deps)`，没有注入缝——
     // 唯一能观测/控制它的把手是 `deps.schedulerDriver.drive`（成功路径的最后一步）。
     const deps: StartTaskDeps = {

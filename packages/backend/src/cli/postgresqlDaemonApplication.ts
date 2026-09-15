@@ -107,7 +107,7 @@ import {
 import { createPostgresqlTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/participants'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
-import { createPostgresqlTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
@@ -850,7 +850,7 @@ export async function composePostgresqlApplication(
     input.db,
     taskExecutionResourceSnapshots,
   )
-  const taskExecutionPersistence = createPostgresqlTaskExecutionPersistence(input.db)
+  const taskExecutionPersistence = createTaskExecutionPersistence(input.db)
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
   const collaborationRuntime = createCollaborationRuntimeMechanics(input.db)

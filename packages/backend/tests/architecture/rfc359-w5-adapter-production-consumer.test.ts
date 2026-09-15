@@ -369,8 +369,11 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
         '确认是收敛就把门槛跟着调低（只降不升），并在注释里记下这一档的实测值。' +
         'RFC-359 AC-12（2026-09-14，plan §5ek）：120 → 114，intent apply 五个文件改名去前缀。' +
         'RFC-359 AC-10（2026-09-15）：114 → 113，删掉最后一条死适配器 ' +
-        '`server.ts::composeSqliteProviderAppDeps`（全仓零引用的同义包装），本账本随之清空。',
-    ).toBeGreaterThanOrEqual(113)
+        '`server.ts::composeSqliteProviderAppDeps`（全仓零引用的同义包装），本账本随之清空。' +
+        'RFC-359 AC-10（2026-09-15，同日第二笔）：113 → 111，恢复管理面合一——' +
+        '`create{Sqlite,Postgresql}RecoveryAdministration` 与 ' +
+        '`create{Sqlite,Postgresql}TaskExecutionPersistence` 各自收成一份中立实现。',
+    ).toBeGreaterThanOrEqual(111)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

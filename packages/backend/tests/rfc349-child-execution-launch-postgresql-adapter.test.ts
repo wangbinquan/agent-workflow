@@ -10,7 +10,7 @@ import { buildActor } from '@/auth/actor'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
-import { createPostgresqlTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { SchedulerDriverPort } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
@@ -255,7 +255,7 @@ describe('RFC-349 PostgreSQL child execution launch', () => {
   test('mints a source-less inherited child atomically before coordinator admission', async () => {
     const trace: string[] = []
     const fixture = postgresqlFixture(trace)
-    const persistence = createPostgresqlTaskExecutionPersistence(fixture.db)
+    const persistence = createTaskExecutionPersistence(fixture.db)
     const executionModule = createProviderTaskExecutionModule({
       daemonGeneration: 'daemon-child-test',
       persistence,

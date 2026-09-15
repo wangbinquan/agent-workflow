@@ -306,7 +306,7 @@ import { composeDigitalEmployeeExecution } from '@/modules/task-execution/compos
 import {
   composeTaskClarifyDirectiveRouteOperations,
   composeTaskExecutionRuntime,
-  createSqliteTaskExecutionPersistence,
+  createTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
@@ -1848,7 +1848,7 @@ export function composeSqliteApplicationDeps(
     deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
   const memoryInjectionQueries =
     deps.memoryOperations?.injectionQueries ?? composeSqliteMemoryInjectionQueries(deps.db)
-  const taskExecutionPersistence = createSqliteTaskExecutionPersistence(deps.db)
+  const taskExecutionPersistence = createTaskExecutionPersistence(deps.db)
   // RFC-359 W11：读模型先定下来，再决定要不要装配 runtime。此前是反过来的——先装 runtime、
   // 再从 `deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels` 取，于是类型上多出
   // 一个 `undefined` 分支要兜一句 throw，而那个分支**根本不可达**（runtime 只在
@@ -2412,7 +2412,7 @@ function composeSqliteApiRouteMounts(
   composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
   agentResourceIntegrity: AgentResourceIntegrityComposition,
   intentApply: IntentApplyOperations,
-  taskExecutionPersistence: ReturnType<typeof createSqliteTaskExecutionPersistence>,
+  taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
   unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root

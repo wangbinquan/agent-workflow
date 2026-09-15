@@ -13,9 +13,9 @@ import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '@/db/schema'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import {
   createTaskRecoveryOperations,
-  repairRuntimeSessionLeaseAfterOrphanReapTx,
   type TaskRecoveryMutationOperations,
 } from '@/modules/task-execution/infrastructure/taskRecoveryOperations'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -207,7 +207,7 @@ describeEachProvider('RFC-359 W4-B1 批 2e —— 运行时会话租约的孤儿
     await seedLease(db, { taskId, runId: reusable, sessionId: 'ses-ok' })
     const { operations } = operationsFor(db)
     expect(await operations.findHeldRuntimeSessionId(reusable)).toBe('ses-ok')
-    expect(await repairRuntimeSessionLeaseAfterOrphanReapTx(db, reusable)).toBe(1)
+    expect(await createRuntimeSessionLeaseOperations(db).repairAfterOrphanReap(reusable)).toBe(1)
     const released = await db
       .select({ leaseNodeRunId: runtimeSessionLeases.leaseNodeRunId })
       .from(runtimeSessionLeases)
@@ -221,7 +221,7 @@ describeEachProvider('RFC-359 W4-B1 批 2e —— 运行时会话租约的孤儿
       failureCode: 'runtime-session-identity-invalid',
     })
     await seedLease(db, { taskId, runId: invalid, sessionId: 'ses-bad' })
-    expect(await repairRuntimeSessionLeaseAfterOrphanReapTx(db, invalid)).toBe(1)
+    expect(await createRuntimeSessionLeaseOperations(db).repairAfterOrphanReap(invalid)).toBe(1)
     expect(
       await db
         .select({ sessionId: runtimeSessionLeases.sessionId })
@@ -240,8 +240,8 @@ describeEachProvider('RFC-359 W4-B1 批 2e —— 运行时会话租约的孤儿
     const taskId = await seedTask(db)
     const running = await seedRun(db, taskId, { status: 'running', opencodeSessionId: 'ses-live' })
     await seedLease(db, { taskId, runId: running, sessionId: 'ses-live' })
-    expect(await repairRuntimeSessionLeaseAfterOrphanReapTx(db, running)).toBe(0)
-    expect(await repairRuntimeSessionLeaseAfterOrphanReapTx(db, 'missing')).toBe(0)
+    expect(await createRuntimeSessionLeaseOperations(db).repairAfterOrphanReap(running)).toBe(0)
+    expect(await createRuntimeSessionLeaseOperations(db).repairAfterOrphanReap('missing')).toBe(0)
     const { operations } = operationsFor(db)
     expect(await operations.findHeldRuntimeSessionId(running)).toBe('ses-live')
   })

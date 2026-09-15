@@ -32,7 +32,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。**2026-09-13 逮到一条用户可见的分叉并修掉**：数字员工「计划人审闸门」在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、PG 显示「规划中」）——成因是端口**同步且可选**，PG 侧的 composition 实现不了、少实现也没有任何地方会红。判定已收成一份 async 中立实现、两侧都装，并加了**装配锁**（删掉 PG 侧那个方法当场红 4 格，§5dm）。同批做了一次**全类扫查**：端口/参与者接口上的可选方法全仓只有 9 个，其余 8 个都是按功能可选（工作组宿主能力 / 连接目录 / 契约投影），不是按引擎——这一类已经清干净。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | **2026-09-13 连续 exact-SHA 全绿**：`63030aaea` / `b41a8cab2` / `55864e0c8` / `51aeda3f3` / `5b706bca8` / `7482255fc` 六笔各自的 push CI run 终态 success（十二个 ubuntu 后端分片带真 postgres:17、macOS 六分片、lint/format/depcheck、单二进制 build smoke、Playwright e2e）。同期修掉两次自己推出的红并各带回归用例：①`void <promise>` 没接 rejection（PG 上 `0 fail` 却退 1 的形态，§5dk）；②铸行 id 非单调（macOS 分片随机红，§5dl）。**仍待办**：RFC 收口后需要在最终 SHA 上再取一次终态取证。 | 进行中 |
-| AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                                                                                                                         | ✅     |
+| AC-10 | 业务 provider literal 分支为零                    | **2026-09-15 精确账本 26 → 8 处 / 5 个文件**（`PROVIDER_BRANCH_DEBT`，穷尽性围栏按形状豁免不计）。第一～五波是可证无行为变化的那一类（品牌换 traits、恒假条件、摆设标签、bootstrap 客户端上提）。**第六波（§5fb）是唯一一条改了用户可见行为的**：`taskExecutionPersistence.ts` 的 2 处清零——两份 persistence 聚合的唯一差别是恢复管理面，而它四个方法里有两个不同、且**各让一个引擎更弱**，按用户「不允许两种数据库一个好一个不好」各自收敛到强的一侧。余下 8 处：`cli/start.ts` 2、`modules/system-operations/composition.ts` 2、`platform/background/maintenanceService.ts` 2、`cli/doctor.ts` 1、`maintenanceWorkerSupervisor.ts` 1，都是组合根装配 / 可辨识联合收窄，销账要连注入接缝一起做。 | 进行中 |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新已核仍是 W52 full `34427756137` 的 360 样本 / 18 组：两项绝对失败——SQLite `tasks-first` p95 150.616ms 未低于 150ms 预算、PG `workgroup-pending` **max** 11.571ms 未低于 10ms 预算；其余 16 项通过。**2026-09-14（§5ee）已在 `948d9b5fb` 上跑过一次 `scale=full`**（run `34816698143`）：W52 那两条绝对失败都已清，只剩 `overview` 在 PG 上 11.003ms > 10ms 一条；EXPLAIN 实测根因是**语句条数**（22 条，九端点最多）而非查询代价（四条任务计数走 Index Only Scan，库内合计 < 1.6ms）。**闭合条件**：收掉 overview 的冗余语句后在新 SHA 上再跑一次 `scale=full`（`scripts/perf-run.ts`，100k tasks / 10M events，判据见 `scripts/perf-compare.ts` 的 `PERF_HTTP_SCENARIOS`）。本轮**没有**动性能代码——本仓规矩是「数字都是跑出来的，不是估的」，没有 full 实测就不做盲优化；`workgroup-pending` 那一格若复现，第一嫌疑是 `pendingRows` 里跟着可见任务数走的两条 `inArray(...)`（`workgroupTaskRoomQueries.ts`）。 | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。**2026-09-14（§5ea）**：intent apply 合一带走九个 provider 命名的装配 / 工厂（`compose{Sqlite,Postgresql}IntentApplyOperations` / `compose|createSqliteIntentApplyArtifactLifecycle` / `compose{Sqlite,Postgresql}IntentMaintenance{CommandsForAppHome,SnapshotQueries}` / `composePostgresqlIntentApplyConvergence` / `composeSqliteSkillArtifactCompensation` / `createLegacyIntentApplyResourceSession`），换成不带引擎前缀的 `composeIntentApply*` / `composeIntentMaintenance*`。provider 命名文件 47 → **44**、适配器语料 130 → **120**、组合根 57 → **48**。                                                                                    | 进行中 |
 
@@ -11492,3 +11492,83 @@ SQLite bootstrap 走的是**另一个**函数 `composeSqliteAppDeps`，从不经
 其余 14 处（cli/doctor·dbCompact·migrate·database、main.ts 余下 2、start.ts、composition.ts、
 maintenanceService.ts:601）是可做的工程，按难度分波，其中 6 处**当前零测试覆盖**，
 要先补测试再动——这一波刻意没碰它们。
+
+## §5fb —— AC-10 第六波：`taskExecutionPersistence` 的 2 处，**本 RFC 第一条真正改了用户可见行为的合一**
+
+§5fa 收尾时把这条明确挂起了，原话是「合并它等于裁掉『开机孤儿终态化用哪条判据』，
+是用户可见行为决策，应当单独立项」。这一波不再等——用户对本 RFC 的立项原话就是判据本身：
+**「我要的是，数据库统一抽象，以后不允许再出现两种数据库一个好一个不好的分支」**。
+「哪条判据」这个问题，在「两条判据里有一条更弱」的前提下不需要再问一次。
+
+### 先把差异数清楚：不是 1 条，是 3 条，而且**方向相反**
+
+账本记的是 `createTaskExecutionPersistence` 里那道分派三元（2 处等值比较）。但分派存在的**理由**
+是两份 persistence 聚合不同，而两份聚合的**唯一**差别是恢复管理面
+（`create{Sqlite,Postgresql}RecoveryAdministration`）。这两个工厂各有四个方法，
+`interruptNodeRun` / `interruptPeriodicTaskIfIdle` 逐字相同，另外两个各不相同：
+
+| 方法 | SQLite | PostgreSQL | 谁更弱 |
+| --- | --- | --- | --- |
+| `interruptBootOrphanTask` 的**判据** | `'unchecked'`：终态化的 UPDATE 写没写进去都当成功 | `'require-returned-rows'`：写回行数对不上就 `task-continuation-stale` 整笔回滚 | **SQLite** |
+| `interruptBootOrphanTask` 的**时钟** | 漏传 `now`，落到 `args.now ?? Date.now()` 的兜底 | 显式传 `now: input.now` | **SQLite** |
+| `interruptBootOrphanTask` 的**次序** | companion 写在任务行**之后** | companion 写在任务行**之前** | 无优劣，但必须一致 |
+| `repairRuntimeSessionLeaseAfterOrphanReap` | 走共享 lease 原语，每笔 release / discard 都过 `fenceTaskWrite` 归属闸 | 走一份**手抄**的事务内联版，抄的时候把闸漏了 | **PostgreSQL** |
+
+也就是说这不是「PG 严、SQLite 松」这么简单——**每个引擎各有一处比对方弱**，
+正好是用户那句话描述的病灶本身。
+
+时钟那条尤其不像设计决策：SQLite 分支把 `input.now` 传给了 `finishedAt`，却**没有**传给
+`trySetTaskStatus` 的 `now`，于是同一行里 `finishedAt` 记调用方时钟、`runningMs` 记墙上时钟，
+两个瞬间对不上。这是漏传，不是取舍。
+
+### 收敛：各自取强的一侧，两份聚合随之逐字相同
+
+- 判据取严 —— 两个引擎都走 `terminalizeTaskExecutionIntentsInTx`（`'require-returned-rows'`）。
+  强判据在 SQLite 上**早就被证明可跑**：同一个文件里
+  `rfc359-w17` 的「异步 companion 保持严判据」两条本来就是双引擎跑的，SQLite 侧一直绿。
+- 时钟取调用方 —— 统一走 `taskLifecycle.trySetWithGuard` 并显式传 `now: input.now`。
+- 次序随之统一为 companion 先写（`trySetWithGuard` 的 `guard?.(tx)` 在任务行写入之前）。
+- 归属闸两边都过 —— 统一走共享的 `runtimeSessionLeaseOperations.repairAfterOrphanReap`，
+  手抄件 `repairRuntimeSessionLeaseAfterOrphanReapTx`（75 行）删除，它的**唯一**生产调用方
+  就是被收掉的那条 PG 分支。
+
+四个方法于是一个 provider 名都不问，`createRecoveryAdministration` 收成一份中立实现；
+两份聚合逐字相同，分派三元与那道 `unhandledDatabaseProvider` 穷尽性围栏一并消失。
+
+### 守卫当场咬住了中间形态，处方也是它给的
+
+第一版改完把 `create{Sqlite,Postgresql}TaskExecutionPersistence` 留成了两个薄别名——
+函数体逐字相同、只有形参类型不同。`rfc359-w5-identical-provider-twins` 立刻红：
+
+> 有一对 provider 命名的函数，函数体**逐字节相同**——那不是两台机器，是同一台机器抄了两遍名字。
+> 把形参放宽到 `ProviderNeutralDatabase`、收成一份，两个装配根都装它。
+
+照办：收成一份 `createTaskExecutionPersistence(db: ProviderNeutralDatabase)`，十四个调用点改名。
+**这条守卫是自己写的账本第一次反过来改我的设计**，值得记一笔——它挡住的正是
+「账面清零、形状还在」这种假销账。
+
+### 判据变化都落在测试里，不是悄悄改的
+
+`rfc359-w17-boot-orphan-terminalization` 此前的标题叫「keeps its own accounting clock,
+companion phase and post-commit publication」——它**就是**这三条不对称的纪念碑，
+三处断言都写着 `harness.capabilities.isolation === 'exclusive' ? A : B`。现在三处全部去掉分支：
+
+- 时钟：`Date.now()` 仍被 mock 成 `WALL_NOW`，而 `runningMs` / 事件时间戳必须是 `INPUT_NOW`。
+  这个 spy 从「记录差异」变成了**证据**——证明调用方传入的 `now` 真的被用上。
+- 次序：触发器看到的 `tasks.status` 两个引擎都是 `running`。
+- 判据：原来那条 `'%s retains the existing returned-row branch'` 改名为
+  `'a swallowed %s write fails the whole boot recovery on both engines'`——
+  被触发器吞掉写入时两个引擎都 `task-continuation-stale` 整笔回滚。
+  **改判据前 SQLite 侧的行为是**：任务落到 `interrupted`、intent 却还留在 `pending`、事件照发，
+  且调用方收到 `true`。这是一条真实的用户可见缺陷，只是它一直被写成「既有行为」锁着。
+
+`rfc359-w4-b1-batch2e-adapters` 里四处对手抄件的调用改指共享原语，
+四条断言（复用 ⇒ 1 / 作废 ⇒ 1 / 未终态 ⇒ 0 / 无租约 ⇒ 0）一条没改，两个引擎各跑一遍。
+
+### 账本
+
+`PROVIDER_BRANCH_DEBT` 6 → 5 条目 / 10 → 8 处；`ledger-baselines.json` 的
+`rfc359-w5-provider-branch` 基线 6 → 5。provider 命名函数语料一次退四个
+（两个恢复管理面工厂 + 两个带品牌的聚合入口）：
+`rfc359-w5-identical-provider-twins` 115 → **111**、
+`rfc359-w5-adapter-production-consumer` 113 → **111**，两处都按只降不升记下实测值。

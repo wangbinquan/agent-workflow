@@ -20,7 +20,7 @@ import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTur
 import { composeExecutionMergeRecovery } from '../composition/executionMergeRecovery'
 import { createProviderTaskExecutionModule, type ProviderTaskExecutionModule } from '../composition'
 import { driveTaskEngineApplication } from '../composition/taskEngineApplication'
-import { createPostgresqlTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import { composeWrapperRuntime } from '../composition/wrapperRuntime'
 import { createPostgresqlChildTaskLifecycleParticipant } from './postgresqlChildTaskLifecycleParticipant'
 import {
@@ -78,7 +78,7 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
   db: PostgresqlDatabaseClient,
   dependencies: PostgresqlTaskExecutionRuntimeDependencies,
 ): PostgresqlTaskExecutionRuntimeAggregate {
-  const persistence = dependencies.persistence ?? createPostgresqlTaskExecutionPersistence(db)
+  const persistence = dependencies.persistence ?? createTaskExecutionPersistence(db)
   const executionModule =
     dependencies.executionModule ??
     createProviderTaskExecutionModule({

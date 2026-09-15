@@ -3,10 +3,7 @@ export {
   type TaskExecutionRuntime,
   type TaskRepositoryPublicationTransport,
 } from './runtimeAssembly'
-export {
-  createPostgresqlTaskExecutionPersistence,
-  createSqliteTaskExecutionPersistence,
-} from './taskExecutionPersistence'
+export { createTaskExecutionPersistence } from './taskExecutionPersistence'
 export {
   createPostgresqlTaskExecutionRuntimeParticipants,
   type PostgresqlTaskExecutionRuntimeDependencies,

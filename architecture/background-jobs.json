@@ -553,9 +553,9 @@
     {
       "callee": "installMaintenanceWorkerErrorBoundary",
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "id": "ambient:packages/backend/src/platform/background/maintenanceWorker.ts#installMaintenanceWorkerErrorBoundary:163",
+      "id": "ambient:packages/backend/src/platform/background/maintenanceWorker.ts#installMaintenanceWorkerErrorBoundary:160",
       "kind": "register-call",
-      "line": 163,
+      "line": 160,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
@@ -5454,8 +5454,8 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 8,
-    "entries": 334,
-    "executionLocal": 41,
+    "entries": 333,
+    "executionLocal": 40,
     "longRunning": 77,
     "managed": 11,
     "periodic": 208
@@ -8238,7 +8238,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
       "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createPostgresqlRecoveryAdministration",
+      "id": "background:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createRecoveryAdministration",
       "kind": "execution-local",
       "lifecycle": {
         "health": false,
@@ -8250,32 +8250,9 @@
       },
       "lifetime": "execution-local",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createPostgresqlRecoveryAdministration",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createRecoveryAdministration",
       "phase": "before-ready",
-      "symbol": "createPostgresqlRecoveryAdministration",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createSqliteRecoveryAdministration",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createSqliteRecoveryAdministration",
-      "phase": "before-ready",
-      "symbol": "createSqliteRecoveryAdministration",
+      "symbol": "createRecoveryAdministration",
       "targetContext": "task-execution"
     },
     {
@@ -9263,7 +9240,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:752",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:749",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9277,7 +9254,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:752",
+      "symbol": "$setInterval:749",
       "targetContext": "platform"
     },
     {
@@ -9286,7 +9263,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:754",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:751",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9300,7 +9277,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:754",
+      "symbol": "$setInterval:751",
       "targetContext": "platform"
     },
     {
@@ -9309,7 +9286,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:218",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:215",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9323,7 +9300,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:218",
+      "symbol": "$setTimeout:215",
       "targetContext": "platform"
     },
     {
@@ -12822,5 +12799,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9ee7873f093d53e8733c689bd70e3a656c66ef63ce16254ecad483946b77e78f"
+  "sourceDigest": "sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e"
 }

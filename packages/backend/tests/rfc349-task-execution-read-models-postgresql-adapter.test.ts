@@ -20,7 +20,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
-import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
@@ -168,7 +168,7 @@ describe('RFC-349 PostgreSQL task-execution read-model adapter', () => {
         identityAccess: createTaskExecutionTestIdentity(sqlite).resources,
         memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
         collaborationRuntime: createCollaborationRuntimeMechanics(sqlite),
-        persistence: createSqliteTaskExecutionPersistence(sqlite),
+        persistence: createTaskExecutionPersistence(sqlite),
         runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
         runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
         workgroupTurns: composeTestWorkgroupTurns(sqlite),

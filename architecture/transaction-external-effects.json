@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 27,
-    "transactionCallbacks": 253
+    "transactionCallbacks": 252
   },
   "entries": [
     {
@@ -2834,20 +2834,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#transaction:551",
-      "line": 551,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#repairRuntimeSessionLeaseAfterOrphanReapTx",
-      "status": "clear",
-      "symbol": "repairRuntimeSessionLeaseAfterOrphanReapTx",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#transaction:651",
-      "line": 651,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#transaction:579",
+      "line": 579,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#createTaskRecoveryOperations",
       "status": "clear",
       "symbol": "createTaskRecoveryOperations",
@@ -3100,7 +3088,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9ee7873f093d53e8733c689bd70e3a656c66ef63ce16254ecad483946b77e78f",
+  "sourceDigest": "sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

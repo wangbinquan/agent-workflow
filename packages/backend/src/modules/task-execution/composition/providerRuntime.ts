@@ -72,7 +72,7 @@ import {
 import { composeTaskExecutionRuntime, type TaskExecutionRuntime } from './runtimeAssembly'
 import { composeTaskAutoResumeCommand } from './taskAutoResume'
 import { composeTaskClarifyDirectiveRouteOperations } from './taskClarifyDirectiveRoutes'
-import { createSqliteTaskExecutionPersistence } from './taskExecutionPersistence'
+import { createTaskExecutionPersistence } from './taskExecutionPersistence'
 import {
   createBuildScheduleLaunch,
   createPostgresqlTaskExecutionTriggerParticipant,
@@ -219,7 +219,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
   db: DbClient,
   dependencies: SqliteTaskExecutionProviderRuntimeDependencies<C>,
 ): SelectedSqliteTaskExecutionProviderRuntime<C> {
-  const persistence = createSqliteTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db)
   const participants = createSqliteTaskExecutionRuntimeParticipants({
     db,
     persistence,

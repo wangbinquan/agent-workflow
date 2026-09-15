@@ -291,7 +291,11 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // （`sqlite ⇒ source` / `postgresql ⇒ target`），三个文件都已有同名判据的在文先例；
   // `postgresqlProviderBackup` 另有一处 `options.runtime.provider !== 'postgresql'` 是**恒假**
   // （`PostgresqlDatabaseRuntime.provider` 是字面量类型），直接删掉。
-  'modules/task-execution/composition/taskExecutionPersistence.ts: 2',
+  // AC-10 销账：`taskExecutionPersistence.ts` 清零。这里原来按客户端句柄的品牌在两份
+  // persistence 聚合之间三元选一，而两份聚合的**唯一**差别是恢复管理面：四个方法里两个逐字
+  // 相同，另两个各让一个引擎更弱——`interruptBootOrphanTask` 上 SQLite 宽判据且漏传 `now`，
+  // `repairRuntimeSessionLeaseAfterOrphanReap` 上 PostgreSQL 走的手抄件漏了归属闸。各自收敛
+  // 到强的一侧之后两份聚合逐字相同，分派连同那道穷尽性围栏一起消失（手抄件已删）。
   // AC-10 销账 3 → 2：WAL checkpoint 的那道闸原来问的是
   // `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，还让这个**中立**的后台服务
   // 直接 import 了 `platform/persistence/sqlite/systemProviderBackup`。改成由装配方交答案：

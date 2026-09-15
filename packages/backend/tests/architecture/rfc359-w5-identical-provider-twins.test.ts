@@ -109,10 +109,17 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
     // provider 前缀（`legacy*` 孪生早已随 §5ea 退役），于是它们的函数整批退出本判据的分母。
     // RFC-359 AC-10（2026-09-15）：116 → 115。删掉 `server.ts::composeSqliteProviderAppDeps`
     // ——全仓零引用的同义包装，是「伪装成 provider 对等」的死适配器最后一条。
+    // RFC-359 AC-10（2026-09-15，同日第二笔）：115 → 111，一次退四个。
+    // `create{Sqlite,Postgresql}RecoveryAdministration` 合成一份中立的
+    // `createRecoveryAdministration`，退两个；剩下的
+    // `create{Sqlite,Postgresql}TaskExecutionPersistence` 于是函数体逐字相同——正是本判据
+    // 要挡的形状，改完第一版当场被它咬住。按它给的处方办：形参放宽到
+    // `ProviderNeutralDatabase`、收成一份 `createTaskExecutionPersistence`，十四个调用点
+    // 改名，两个带品牌的名字也退出分母。
     expect(
       REAL_FUNCTIONS.length,
       'provider 命名的函数一个都没扫到 ⇒ 命名匹配器塌了',
-    ).toBeGreaterThanOrEqual(115)
+    ).toBeGreaterThanOrEqual(111)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

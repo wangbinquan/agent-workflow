@@ -36,7 +36,7 @@ import { composeResourceCatalogFor } from '@/modules/resource-catalog/compositio
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { createNodeRunLifecycleParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
-import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { NotFoundError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -369,7 +369,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
       const command = composeWorkspaceMaintenanceCommand({
         db: harness.db,
         appHome,
-        terminalMaintenance: createSqliteTaskExecutionPersistence(asSqlite(harness.db))
+        terminalMaintenance: createTaskExecutionPersistence(asSqlite(harness.db))
           .terminalMaintenance,
         isMaterializingTask: () => false,
         invalidateWorkspacePath() {},

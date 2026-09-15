@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2552,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24739
+    "symbolsIncludingFileRoots": 24733
   },
   "entries": [
     {
@@ -119380,58 +119380,10 @@
       "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#composeTaskExecutionPersistence",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createRecoveryAdministration",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
-      "symbol": "composeTaskExecutionPersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createPostgresqlRecoveryAdministration",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "createPostgresqlRecoveryAdministration",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createPostgresqlTaskExecutionPersistence",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "createPostgresqlTaskExecutionPersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createSqliteRecoveryAdministration",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "createSqliteRecoveryAdministration",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createSqliteTaskExecutionPersistence",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "createSqliteTaskExecutionPersistence",
+      "symbol": "createRecoveryAdministration",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -133178,18 +133130,6 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#repairRuntimeSessionLeaseAfterOrphanReapTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "repairRuntimeSessionLeaseAfterOrphanReapTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#rowsByTask",
@@ -133220,18 +133160,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskRecoveryMutationOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#TERMINAL_NODE_RUN_SET",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "TERMINAL_NODE_RUN_SET",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -297545,5 +297473,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9ee7873f093d53e8733c689bd70e3a656c66ef63ce16254ecad483946b77e78f"
+  "sourceDigest": "sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e"
 }
