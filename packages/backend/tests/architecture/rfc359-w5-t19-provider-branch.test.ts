@@ -269,25 +269,35 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   'cli/start.ts: 2',
   // RFC-359 4 → 3：`package` 子命令的资源包装配此前是一个 `provider === 'sqlite' ? … : …`，
   // 两台 apply 引擎合一后只剩一条装配（见 `rfc271-cli` 的源码锁）。
-  'main.ts: 3',
+  // AC-10 第一波 3 → 2：`runFrameBackfillOnBoot` 的 provider 标签是**摆设**——联合的两个成员
+  // 结构逐字相同、函数体从不读它（W4-B1 存储合一之后就没人读了），却逼着这里写一条三元分叉。
+  // 标签一删，分叉自然消失，不需要任何替代判据。
+  'main.ts: 2',
   'modules/system-operations/composition.ts: 2',
-  'modules/system-operations/infrastructure/databaseMigrationCoordinator.ts: 1',
-  'modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts: 2',
-  'modules/system-operations/infrastructure/postgresqlProviderBackup.ts: 2',
+  // AC-10 第一波销账：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` /
+  // `postgresqlProviderBackup` 共 5 处改问 `databaseProviderTraits(...).migrationRole`
+  // （`sqlite ⇒ source` / `postgresql ⇒ target`），三个文件都已有同名判据的在文先例；
+  // `postgresqlProviderBackup` 另有一处 `options.runtime.provider !== 'postgresql'` 是**恒假**
+  // （`PostgresqlDatabaseRuntime.provider` 是字面量类型），直接删掉。
   'modules/task-execution/composition/taskExecutionPersistence.ts: 2',
   'platform/background/maintenanceService.ts: 3',
   'platform/background/maintenanceWorkerSupervisor.ts: 1',
-  'server.ts: 1',
+  // AC-10 第一波销账：`server.ts` 的 `TProvider extends 'postgresql' ? … : …` 换成按 provider
+  // 索引的表（`Record<DatabaseProvider, …>` 约束即 forcing function，加 provider 就编译不过）。
 ]
 
 /**
  * **搬家债**：功能上就是「把品牌翻译成能力」的那一层，只是住在白名单目录之外。
  *
  * 销账方式是**搬进 `platform/persistence/`**，不是重写——把它和合一债混在一份账本里，会让人
- * 以为 schema 投影本身要被改掉。今天只有一条：`db/providerSchema.ts` 按 provider 选
- * `PgColumn` / `SQLiteColumn` 的类型判定，它离白名单只差一个目录。
+ * 以为 schema 投影本身要被改掉。
+ *
+ * **账本已空**（RFC-359 AC-10 第一波）。原来唯一那条是 `db/providerSchema.ts` 的
+ * `concreteDatabaseColumn`——按 provider 在 `PgColumn` / `SQLiteColumn` 之间做类型判定。
+ * 它**根本没有调用方**（全仓只有自己的定义），所以销账方式不是搬家而是**删除**；
+ * 同文件的孪生 `concreteDatabaseTable` 是活的（`schemaContract.ts` 在用），保留。
  */
-export const PROVIDER_BRANCH_RELOCATION_DEBT: readonly string[] = ['db/providerSchema.ts: 1']
+export const PROVIDER_BRANCH_RELOCATION_DEBT: readonly string[] = []
 
 /** 相对 `src` 的路径 + 计债站点数，按路径字典序；白名单目录已剔除。 */
 function scan(): string[] {

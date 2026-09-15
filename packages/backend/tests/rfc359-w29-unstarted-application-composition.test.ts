@@ -490,8 +490,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     expect(phaseBlocks).toHaveLength(8)
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     expect(restored.statements).toHaveLength(160)
+    // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
+    // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
+    // 相同、函数体从不读它），删掉它同时消掉了 `main.ts` 里那条三元分叉。
+    // **语句数仍是 160、顺序未变**——改的只是一个实参，这正是这条判据要区分的两种情况。
     expect(digest(restored, pg)).toBe(
-      '7c6182a573030eb46abd1448842459702803955a1e4a8b323b46f31033bec3a7',
+      '8d4ff74135671d038a41d5bb8cf761970313b1c4213d9c73168de67a5e6ae711',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

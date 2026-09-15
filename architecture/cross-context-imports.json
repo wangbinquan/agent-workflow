@@ -66218,6 +66218,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/postgresqlProviderBackup.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/postgresqlProviderBackup.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d85728595096590cf23e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
+      "toPath": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toSymbol": "databaseProviderTraits",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromSymbol": "$file",
@@ -78287,9 +78304,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4605,
+    "architectureExceptions": 4606,
     "implementationSccs": 0,
-    "observedEdges": 5118,
+    "observedEdges": 5119,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -147531,6 +147548,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/postgresqlProviderBackup.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/postgresqlProviderBackup.ts#$file",
+      "id": "import:d85728595096590cf23e",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/providerTraits",
+      "syntax": "static-import",
+      "targetSymbol": "databaseProviderTraits",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "knowledge-evolution",
       "fromFile": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
@@ -160723,7 +160756,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c7ea86ecf126c3c5d488b0832dbf5d63fd3bb08a9cb53209761520cdcadedae2",
+  "sourceDigest": "sha256:6a92a79e85ed8dee42d0df041d8e7156aa715270879f985303a0f470dce38756",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

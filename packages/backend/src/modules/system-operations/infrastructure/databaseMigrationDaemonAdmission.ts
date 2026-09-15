@@ -240,7 +240,11 @@ export function createDatabaseMigrationDaemonAdmission(
         )
       }
       phase = 'switching'
-      if (provider !== 'sqlite' || generationId !== input.sourceGenerationId) {
+      // RFC-359 AC-10：问能力不问品牌。同方法 :237 已经这么问了，这两条是剩下的。
+      if (
+        databaseProviderTraits(provider).migrationRole !== 'source' ||
+        generationId !== input.sourceGenerationId
+      ) {
         await options.switchProviderComposition({
           operationId: input.operationId,
           provider: 'sqlite',
@@ -281,7 +285,10 @@ export function createDatabaseMigrationDaemonAdmission(
     async openPostgresqlAdmission(input) {
       assertLive()
       assertOperation(input.operationId)
-      if (provider !== 'postgresql' || generationId !== input.generationId) {
+      if (
+        databaseProviderTraits(provider).migrationRole !== 'target' ||
+        generationId !== input.generationId
+      ) {
         throw new DatabaseMigrationDaemonAdmissionError(
           'database-admission-state',
           'database admission PostgreSQL generation does not match the activated composition',

@@ -11314,3 +11314,54 @@ dfb49eb8 / 56713f37      FAIL —— 仍然只红在 workgroup-pending +23.87 / 
 
 新增判据一条，锁比例项的语义：语料放大 1 倍时 `tasks-second` 预算 2.2ms（5ms 的差判红）、
 放大 4 倍时预算 8.8ms（同样 5ms 判绿），而毫秒项为 0 的 `tasks-first` 两种机器下预算都是 0。
+
+## §5fa —— AC-10 第一波：品牌分叉 26 → 19，全是**可证无行为变化**的那一类
+
+用户裁决 AC-11 收口之后，RFC 剩下的硬缺口里 AC-10 最明确：业务代码里 `provider === '<literal>'`
+要为零，账上还有 14 个文件 / **26 处**。切了一个只读 agent 把 26 处逐条分类（按能力提问 /
+收进组合根 / 可辨识联合 / 搬进白名单），本波只做**第一类**：证得出「改完行为逐字不变」的那些。
+
+### 这一波做掉的 7 处（另加 1 处搬家债）
+
+| 处置 | 站点 | 依据 |
+| --- | --- | --- |
+| **删死码** | `postgresqlProviderBackup.ts` 的 `options.runtime.provider !== 'postgresql'` | `options.runtime` 是 `PostgresqlDatabaseRuntime`，其 `provider` 是**字面量类型** `'postgresql'`（`postgresqlRuntime.ts:41`），该比较**恒假**，一行都跑不到 |
+| **删死码** | `db/providerSchema.ts` 的 `concreteDatabaseColumn` | **全仓没有任何调用方**（只有自己的定义）。孪生的 `concreteDatabaseTable` 是活的（`schemaContract.ts` 在用），保留 |
+| **删摆设标签** | `main.ts` 的 `provider === 'sqlite' ? {provider:'sqlite',db} : {provider:'postgresql',db}` | `FrameBackfillDatabase` 联合的两个成员**结构逐字相同**，而 `runFrameBackfillOnBoot` **从不读** `database.provider`（只用 `database.db`）——W4-B1 存储合一后它就只是个摆设，却逼着调用方写这条三元。标签一删，分叉自然消失 |
+| **问能力** ×4 | `databaseMigrationCoordinator.ts:315`、`databaseMigrationDaemonAdmission.ts:243/:284`、`postgresqlProviderBackup.ts:80` | 全部换成 `databaseProviderTraits(...).migrationRole`（`sqlite ⇒ source` / `postgresql ⇒ target`）。**三个文件都已有同名判据的在文先例**——coordinator 的 `:719` / `:729` 早就用 `migrationRole === 'target'` 抛同一个错误码，admission 的 `:237` 早就问 `migrationRole === 'source'`；这几处是最后的手写孪生 |
+| **类型层** | `server.ts` 的 `TProvider extends 'postgresql' ? Pg… : …` | 换成按 provider 索引的表。`extends Record<DatabaseProvider, …>` 这条约束**就是** forcing function：往 `DatabaseProvider` 加成员，接口立刻编译不过 |
+
+账本：`PROVIDER_BRANCH_DEBT` 14 → 10 条（26 → 19 处），
+`PROVIDER_BRANCH_RELOCATION_DEBT` **1 → 0（清空）**，
+`PROVIDER_FORK_LEDGER` 的 `db/providerSchema.ts` 条目退役、`main.ts` 3 → 2。
+
+### 一条守卫替我挡住了漏改
+
+`rfc359-w29-unstarted-application-composition` 对 `composePostgresqlApplication` 的**函数体**做
+sha256 内容锁。改完 frameBackfill 调用它立刻红——而且红得恰到好处：
+**语句数仍是 160、顺序未变**，只有摘要变了，正说明改的是一个实参而不是结构。
+摘要随之更新并写明原因（判据继续锁住「结构没动」这一半）。
+
+### 顺带记一条 census 的连带涨
+
+`postgresqlProviderBackup.ts` 新增一条 `providerTraits` 的 import，于是
+`rfc294-cross-context-observed-imports` 与 `rfc294-architecture-exceptions` 各 +1。
+按守卫要求写了 `allowGrowth` 并点名本波：涨的是一条边，换掉的是一处品牌分叉，
+而且同域两个文件早有同一条 import，**边的形状是既有先例，不是新开的耦合**。
+
+### 剩下 19 处：两件必须先问过用户的事
+
+1. **`maintenanceService.ts:350/:431` + `maintenanceWorkerSupervisor.ts:348`（共 3 处）——
+   两份守卫互相矛盾。** W5-T19 把它们记成债；而 `rfc349-provider-completeness.test.ts:77-80`
+   把同样三处归为 `discriminated-union` 并**逐字写着「Strongest fence here; do not 'simplify'
+   these into traits lookups.」**。这不是代码问题，是两条判据打架，需要裁决：AC-10 是否凌驾于
+   那条 fence，还是给它们一个写进 W5-T19 头注的豁免（像 `unhandledDatabaseProvider` 那样）。
+2. **`taskExecutionPersistence.ts:216/:218`(2 处)——两个分支行为并不等价。**
+   SQLite 侧 `interruptBootOrphanTask` 走 `trySetTaskStatus` 的**宽**判据，PG 侧走
+   `taskLifecycle.trySetWithGuard`；源码 `:115-119` 明写这条不对称，且
+   `rfc359-w17-boot-orphan-terminalization` 的 skip-intent / skip-record 两条**正是在锁它**。
+   合并它等于裁掉「开机孤儿终态化用哪条判据」，是用户可见行为决策，应当单独立项。
+
+其余 14 处（cli/doctor·dbCompact·migrate·database、main.ts 余下 2、start.ts、composition.ts、
+maintenanceService.ts:601）是可做的工程，按难度分波，其中 6 处**当前零测试覆盖**，
+要先补测试再动——这一波刻意没碰它们。

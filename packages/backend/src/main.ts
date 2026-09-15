@@ -394,12 +394,7 @@ async function main(): Promise<void> {
           run: async () => {
             const provider = await resolveCommandProvider()
             try {
-              return await runFrameBackfillOnBoot(
-                provider.provider === 'sqlite'
-                  ? { provider: 'sqlite', db: provider.db }
-                  : { provider: 'postgresql', db: provider.db },
-                { force: true },
-              )
+              return await runFrameBackfillOnBoot({ db: provider.db }, { force: true })
             } finally {
               await provider.runtime.close()
             }

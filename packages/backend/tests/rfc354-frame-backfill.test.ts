@@ -234,7 +234,6 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
     const { taskId } = await seedLegacyTask(db)
 
     const first = await runFrameBackfillOnBoot({
-      provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
       db,
     })
     expect(first.skipped).toBe(false)
@@ -295,16 +294,12 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
 
     // Next boot: the marker short-circuits the walk.
     const second = await runFrameBackfillOnBoot({
-      provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
       db,
     })
     expect(second.skipped).toBe(true)
 
     // Manual re-run: walks again, finds nothing left to do (idempotent).
-    const forced = await runFrameBackfillOnBoot(
-      { provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql', db },
-      { force: true },
-    )
+    const forced = await runFrameBackfillOnBoot({ db }, { force: true })
     expect(forced.skipped).toBe(false)
     expect(forced.tasks).toBe(1)
     expect(forced.rowsUpdated).toBe(0)
@@ -316,7 +311,6 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
     const { taskId } = await seedLegacyTask(db)
     await db.update(tasks).set({ workflowSnapshot: '{not json' }).where(eq(tasks.id, taskId))
     const report = await runFrameBackfillOnBoot({
-      provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
       db,
     })
     expect(report.unreadableTasks).toEqual([taskId])
@@ -355,7 +349,6 @@ describeEachProvider('RFC-354 T4 — doctor --backfill-containers', (harness) =>
       run: () =>
         runFrameBackfillOnBoot(
           {
-            provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
             db,
           },
           { force: true },

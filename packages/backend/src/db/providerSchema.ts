@@ -143,21 +143,6 @@ export function concreteDatabaseTable<T extends object>(table: T, provider: Data
   return projection[provider] as T
 }
 
-export function concreteDatabaseColumn<T extends object>(column: T, provider: DatabaseProvider): T {
-  const table = (column as { readonly table?: object }).table
-  if (table === undefined) return column
-  const projection = projectionFor(table)
-  if (projection === undefined) return column
-  const name = (column as { readonly name?: string }).name
-  if (name === undefined) return column
-  const concreteTable = projection[provider] as unknown as Record<string, unknown>
-  const concreteColumns = Object.values(concreteTable).filter(
-    (value): value is PgColumn | AnySQLiteColumn =>
-      provider === 'postgresql' ? is(value, PgColumn) : is(value, SQLiteColumn),
-  )
-  return (concreteColumns.find((candidate) => candidate.name === name) ?? column) as T
-}
-
 /**
  * Set once during provider bootstrap. The returned disposer exists for isolated
  * unit tests; production treats a second, different selection as a fence error.

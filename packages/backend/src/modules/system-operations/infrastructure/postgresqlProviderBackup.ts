@@ -10,6 +10,7 @@ import {
   type PortableBackupResult,
 } from '@/services/portableBackupArchive'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
 import {
   openPostgresqlLogicalSource,
@@ -77,11 +78,14 @@ export async function createPostgresqlProviderBackup(
     expectedSchemaDigest: contract.digest,
   }).payload
   if (
-    generation.provider !== 'postgresql' ||
+    // RFC-359 AC-10：问能力（这一代是不是迁移的**目标**端），不问品牌名。
+    databaseProviderTraits(generation.provider).migrationRole !== 'target' ||
     generation.operationId === null ||
     generation.manifestDigest === null ||
     generation.generationId !== targetGenerationId(generation.operationId) ||
-    options.runtime.provider !== 'postgresql' ||
+    // `options.runtime` 是 `PostgresqlDatabaseRuntime`，它的 `provider` 是**字面量类型**
+    // `'postgresql'`（`platform/persistence/postgresqlRuntime.ts:41`），所以原来这里那条
+    // `options.runtime.provider !== 'postgresql'` 恒为假、一行都跑不到——删掉，不是改写。
     options.runtime.generationId !== generation.generationId
   ) {
     throw new PostgresqlProviderBackupError(

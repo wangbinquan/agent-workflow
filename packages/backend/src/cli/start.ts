@@ -2077,7 +2077,7 @@ async function composeSqliteProviderSession(
   try {
     const { runFrameBackfillOnBoot } =
       await import('@/modules/task-execution/composition/frameBackfill')
-    const backfill = await runFrameBackfillOnBoot({ provider: 'sqlite', db })
+    const backfill = await runFrameBackfillOnBoot({ db })
     if (!backfill.skipped) {
       log.info('rfc354 frame backfill completed on boot', {
         tasks: backfill.tasks,

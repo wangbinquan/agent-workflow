@@ -2,6 +2,28 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 31，**AC-10 第一波**：品牌分叉 26 → 19）
+>
+> 落档 plan §5fa。AC-11 收口后 AC-10 是最明确的硬缺口（`provider === '<literal>'` 要为零，
+> 账上 14 文件 / 26 处）。先切只读 agent 逐条分类，本波只做**证得出行为逐字不变**的那一类：
+> 2 处**死码**（`options.runtime.provider !== 'postgresql'` 恒假；`concreteDatabaseColumn`
+> 全仓无调用方）、1 处**摆设标签**（`FrameBackfillDatabase` 两成员结构相同且函数体从不读它，
+> 删标签即消掉 main.ts 那条三元）、4 处改问 `migrationRole`（三个文件都已有在文先例）、
+> 1 处条件类型换成按 provider 索引的表（`Record<DatabaseProvider,…>` 约束即 forcing function）。
+>
+> 账本：`PROVIDER_BRANCH_DEBT` 14 → 10 条（26 → 19 处）、`PROVIDER_BRANCH_RELOCATION_DEBT`
+> **清空**、`PROVIDER_FORK_LEDGER` 退役 `db/providerSchema.ts` 条目、`main.ts` 3 → 2。
+> census 连带 +1 条 observed edge（新增一条 providerTraits import），按规矩写了 `allowGrowth`。
+>
+> **`rfc359-w29` 的函数体 sha256 锁替我挡住了漏改**，而且红得恰到好处：语句数仍 160、顺序未变，
+> 只有摘要变——正说明改的是实参不是结构。
+>
+> **剩下 19 处里有两件要先问用户**：① maintenance 那 3 处**两份守卫互相矛盾**（W5-T19 记成债，
+> 而 `rfc349-provider-completeness` 把它们归为 `discriminated-union` 并逐字写着「do not
+> 'simplify' these into traits lookups」）；② `taskExecutionPersistence` 那 2 处**两分支行为不等价**
+> （SQLite 侧宽判据 / PG 侧窄判据，`rfc359-w17-boot-orphan-terminalization` 正在锁这条不对称），
+> 合并等于裁掉用户可见行为，应单独立项。其余 14 处可做，但其中 6 处零覆盖，须先补测试。
+
 > ## 📌 RFC-359 最新一段（2026-09-15 续 30，新判据第一跑就红——**红的是我自己的登记值**）
 >
 > 落档 plan §5ez。`070af2205` 验收 run（`34909856404`）只红一条：`tasks-second` 中位数差

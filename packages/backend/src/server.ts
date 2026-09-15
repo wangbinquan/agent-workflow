@@ -1020,14 +1020,28 @@ export type AppHttpProviderCore = Pick<
  * consumes only the authentication subset, while bootstrap reuses the same
  * value for WebSocket, health, repository and system-operation participants.
  */
+/**
+ * RFC-359 AC-10 —— 用**按 provider 索引的表**代替条件类型。
+ *
+ * 原来是 `TProvider extends 'postgresql' ? Pg… : …`：第三个 provider 进来会静默落进
+ * false 分支、拿到 SQLite 那个模块类型，编译器一声不吭——正是本 RFC 要消灭的形状，
+ * 只不过发生在类型层。
+ *
+ * 换成索引访问之后，`extends Record<DatabaseProvider, …>` 这条约束就是 forcing function：
+ * 往 `DatabaseProvider` 里加一个成员，这个接口**立刻编译不过**，必须先回答「新 provider 的
+ * system-operations 模块是哪一个」。
+ */
+interface SystemOperationsModuleByProvider extends Record<
+  DaemonProviderCore['provider'],
+  SystemOperationsModule
+> {
+  readonly sqlite: SystemOperationsModule
+  readonly postgresql: PostgresqlSystemOperationsModule
+}
+
 export type SelectedDaemonProviderCore<
   TProvider extends DaemonProviderCore['provider'] = DaemonProviderCore['provider'],
-> = Omit<
-  DaemonProviderCore<
-    TProvider extends 'postgresql' ? PostgresqlSystemOperationsModule : SystemOperationsModule
-  >,
-  'provider'
-> & {
+> = Omit<DaemonProviderCore<SystemOperationsModuleByProvider[TProvider]>, 'provider'> & {
   readonly provider: TProvider
 }
 

@@ -94,11 +94,16 @@ const PROVIDER_FORK_LEDGER = {
   'cli/migrate.ts': { forks: 1, fence: 'fenced-dispatch' },
   // cli/start.ts：RFC-359 W3-T16 后没有 provider 执行分支——会话装配按 DatabaseProvider 查表，
   // 运行时收窄走 platform/persistence 的 requireDatabaseProviderRuntime。
-  'db/providerSchema.ts': { forks: 1, fence: 'projection-fenced' },
+  // RFC-359 AC-10 第一波：`db/providerSchema.ts` 的条目退役。原来那处 fork 是
+  // `concreteDatabaseColumn` 按 provider 在 `PgColumn` / `SQLiteColumn` 之间做类型判定，
+  // 而它**全仓没有任何调用方**（只有自己的定义），所以处置是删除而不是改写；
+  // 同文件的孪生 `concreteDatabaseTable` 是活的（`schemaContract.ts` 在用），保留。
   // RFC-359 W4-D8 / D9：identity-access 与 auth 运行时的装配入口收中立句柄，main.ts 少了三个 provider 三元分支。
   // RFC-359（apply 引擎合一，plan §5dv）4 → 3：`package` 子命令的资源包装配此前是一个
   // `provider === 'sqlite' ? … : …`，现在两个 provider 装同一条组合根。
-  'main.ts': { forks: 3, fence: 'fenced-dispatch' },
+  // RFC-359 AC-10 第一波 3 → 2：`runFrameBackfillOnBoot` 的 provider 标签是摆设——联合的两个
+  // 成员结构逐字相同、函数体从不读它，却逼着 main.ts 写一条三元分叉。标签删掉，分叉消失。
+  'main.ts': { forks: 2, fence: 'fenced-dispatch' },
   'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },
   // RFC-354 T4: the frame backfill picks its store by the provider-keyed
   // `FrameBackfillDatabase` union — a third provider cannot be passed in

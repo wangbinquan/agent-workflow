@@ -1271,7 +1271,7 @@ export async function composePostgresqlApplication(
     // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed
     // (marker-gated; a single maintenance_state read on every later boot).
     try {
-      const backfill = await runFrameBackfillOnBoot({ provider: 'postgresql', db: input.db })
+      const backfill = await runFrameBackfillOnBoot({ db: input.db })
       if (!backfill.skipped) {
         log.info('rfc354 frame backfill completed on boot', {
           tasks: backfill.tasks,
