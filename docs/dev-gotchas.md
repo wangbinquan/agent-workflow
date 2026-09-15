@@ -7207,3 +7207,48 @@ git diff --name-only HEAD -- packages/backend/src | sed 's|^packages/backend/||'
    prettier / CI-format 的范围外，但 `rfc317-ledger-highwater` 判的是**commit 之间的基线差**，
    与这一笔改了什么文件无关。推之前那条 `bun test packages/backend/tests/architecture/`
    省不得——它 60 秒，比推红主干便宜得多。
+
+## 「job 根本没跑起来」和「job 跑了并失败」要分开——前者重跑是**取证**，不是「重跑就过了」（2026-09-15 实撞）
+
+推了一笔**只改注释和 markdown** 的提交，CI 报 `Playwright e2e (macos-latest shard 1/3)` 失败。
+通知里它和真失败长得一模一样，但它的指纹完全不同：
+
+```
+gh api repos/<o>/<r>/actions/runs/<run>/jobs --jq '.jobs[]|select(.name=="<job>")|.steps'
+  ⇒ []                                   # 一个 step 都没有
+gh api repos/<o>/<r>/actions/jobs/<job>/logs
+  ⇒ <Error><Code>BlobNotFound</Code>     # 没有日志，不是日志没抓到，是压根没产生
+gh api repos/<o>/<r>/check-runs/<job>/annotations --jq '.[].message'
+  ⇒ The job was not started because it repeatedly failed to be acquired (5 attempts).
+```
+
+**annotation 那句话是判据**：GitHub 五次都没申请到 runner，这个 job **从未执行**。
+
+### 为什么这不违反「绝不允许『重跑就过了』」
+
+本仓那条硬规则针对的是「**跑了、红了、重跑变绿**」——那种情况下红是真信号，重跑只是把它藏起来。
+而这里 job **没有跑过**，所以：
+
+- 重跑**不是**在赌第二次运气，是去**取一次从来没取到的证**；
+- 反过来，若不重跑就把它当红，你会去排查一个**不存在的 bug**（我就差点去追一个只改了注释的提交）。
+
+**先分类再动作**：拿到红先问「它跑了吗」。三个信号任一成立就是「没跑起来」——
+`steps` 为空、日志 `BlobNotFound`、annotation 写 `failed to be acquired`。
+三个都不成立才是真失败，那时按本文件其它条目归因，**不许重跑**。
+
+### 操作细节
+
+`gh run rerun <run-id> --failed` 在**整个 run 还没结束时会被拒**
+（`cannot be rerun; This workflow is already running`）——同一 OS 的其它分片可能还在跑。
+先等 run 终态，再重跑失败 job：
+
+```
+until [ "$(gh api repos/<o>/<r>/actions/runs/<id> --jq .status)" = completed ]; do sleep 30; done
+gh run rerun <id> --failed
+```
+
+判绿时注意：重跑后**该看这个 run 的最新终态**，而不是最初那次的 conclusion。
+
+**实撞收尾（同日）**：重跑后那个 job `success`，而且 `steps` 长度从 **0 变成 17**——
+这就是「第一次根本没执行」最干净的反证。**归档时把 steps 数一起记下来**：
+它把「没跑起来」和「跑了但失败」分得比任何日志都清楚。
