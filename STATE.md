@@ -16,7 +16,13 @@
 > `--to` 从比字面量改成解析成 `DatabaseProvider` 再问 `migrationRole`（原来第三个 provider 会被
 > 一句写死 PostgreSQL 的话拒掉）。这三处**原本零覆盖**，补了三条判据。**16 处**，`cli/database.ts` 清零。
 >
-> 账本：`PROVIDER_BRANCH_DEBT` 14 → 9 条（26 → 16 处）、`PROVIDER_BRANCH_RELOCATION_DEBT`
+> 第三波再销 2 处：`dbCompact` / `doctor` 那两处**早就不问品牌名了**（问的是 `storage`），
+> 却仍在账上——因为 `storage` 的两个取值也在 `PROVIDER_VOCABULARY` 里：它比品牌名好一档，
+> 但仍是**同一张真值表的另一种拼法**，第三个 provider 照样只能落进一边。终点是「字段本身
+> 就是答案」：`offlineCompaction`（不能压缩就连要说的话一起给）、`absentLocalStoreMessage`
+> （`null` 即「没有本地库文件这回事」，连 `existsSync` 都不必做）。**14 处**，`dbCompact` 清零。
+>
+> 账本：`PROVIDER_BRANCH_DEBT` 14 → 8 条（26 → 14 处）、`PROVIDER_BRANCH_RELOCATION_DEBT`
 > **清空**、`PROVIDER_FORK_LEDGER` 退役 `db/providerSchema.ts` 条目、`main.ts` 3 → 2。
 > census 连带 +1 条 observed edge（新增一条 providerTraits import），按规矩写了 `allowGrowth`。
 >

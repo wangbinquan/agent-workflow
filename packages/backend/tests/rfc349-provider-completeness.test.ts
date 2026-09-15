@@ -242,13 +242,18 @@ describe('RFC-349 provider completeness', () => {
     const traits = backendSource('packages/backend/src/platform/persistence/providerTraits.ts').text
     const declared = [...traits.matchAll(/^\s{2}readonly (\w+):/gmu)].map((m) => m[1])
     expect(declared.sort()).toEqual([
+      // RFC-359 AC-10 第三波：「本地库文件还不存在」时 doctor 该报的那句话
+      //（`null` = 这个引擎没有本地文件这回事），以及 `db compact` 能不能做事
+      //（不能就连要对用户说的话一起给）。两条原本都问 `storage`——比品牌名好一档，
+      // 但仍是**两值枚举**，是同一张真值表的另一种拼法，第三个 provider 只能落进其中一边。
+      'absentLocalStoreMessage',
       'booleanLiteral',
       'classifyRetryable',
-      // RFC-359 AC-10：`db info` 的服务端版本兜底文案、以及 provider 自检失败时的下一步提示。
-      // 两条原本都是调用方现场写的品牌三元（`provider === 'sqlite' ? … : …` /
-      // `storage === 'embedded-file' ? … : ''`），现在由各引擎各声明一次。
+      // RFC-359 AC-10 第二波：`db info` 的服务端版本兜底文案、以及 provider 自检失败时的
+      // 下一步提示。两条原本都是调用方现场写的品牌三元，现在由各引擎各声明一次。
       'failureRecoveryHint',
       'migrationRole',
+      'offlineCompaction',
       'serverVersionFallback',
       'storage',
     ])

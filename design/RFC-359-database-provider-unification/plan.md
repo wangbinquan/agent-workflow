@@ -11374,7 +11374,24 @@ sha256 内容锁。改完 frameBackfill 调用它立刻红——而且红得恰�
 顺带一条测试写法的坑：那条兜底断言不能塞进现成的 status 用例——多跑一次 `databaseCommand`
 就多记一次 `overview`，把同一用例后面的调用序列断言打乱。单独用例 + 单独 fixture 才干净。
 
-### 剩下 19 处：两件必须先问过用户的事
+### 第三波（同一提）：`storage` 这一档也不算终点
+
+`cli/dbCompact.ts:55` 与 `cli/doctor.ts:136` 早已不问品牌名了，问的是
+`databaseProviderTraits(...).storage === 'embedded-file'`——**但它们仍然在账上**，因为
+`storage` 的两个取值也在 `PROVIDER_VOCABULARY` 里。守卫的头注把理由写得很清楚：
+它比品牌名好一档（问的是能力而非名字），但在本仓它的值域恰好只有两个成员、与品牌一一对应，
+**今天仍是同一张真值表的另一种拼法**，第三个 provider 照样只能落进其中一边。
+
+终点是「**字段本身就是答案**」，不是「换一个两值枚举再比一次」：
+
+| 新字段 | 原写法 | 为什么这是答案 |
+| --- | --- | --- |
+| `offlineCompaction` | `storage !== 'embedded-file'` + 调用方写死「PostgreSQL」文案 | 能压缩就是 `{supported:true}`；不能就连**要对用户说的那句话**一起给（`explain(generationId)`），逐字保留原文案 |
+| `absentLocalStoreMessage` | `storage === 'embedded-file' && !existsSync(...)`，且那句话写死「SQLite」 | `null` 直接表达「这个引擎没有本地库文件这回事」，调用方连 `existsSync` 都不必做——**判据与文案是同一件事**，一起声明 |
+
+`PROVIDER_BRANCH_DEBT` 9 → 8 条（16 → 14 处），`cli/dbCompact.ts` 清零。
+
+### 剩下 14 处：两件必须先问过用户的事
 
 1. **`maintenanceService.ts:350/:431` + `maintenanceWorkerSupervisor.ts:348`（共 3 处）——
    两份守卫互相矛盾。** W5-T19 把它们记成债；而 `rfc349-provider-completeness.test.ts:77-80`

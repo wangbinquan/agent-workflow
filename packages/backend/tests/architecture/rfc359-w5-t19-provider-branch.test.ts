@@ -265,8 +265,12 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // AC-10 第二波销账：`cli/database.ts` 两处与 `cli/doctor.ts` 一处改读新增的两个 traits
   // 字段（`serverVersionFallback` / `failureRecoveryHint`）——它们是「这个引擎怎么称呼自己」
   // 与「失败了能不能从备份恢复」，答案由各引擎各声明一次，调用方不再现场拼品牌三元。
-  'cli/dbCompact.ts: 1',
-  'cli/doctor.ts: 2',
+  // AC-10 第三波销账：`cli/dbCompact.ts` 清零、`cli/doctor.ts` 2 → 1。两处原本问的是
+  // `storage`（embedded-file / external-server）——比品牌名好一档，但仍是**两值枚举**、
+  // 是同一张真值表的另一种拼法，第三个 provider 照样只能落进其中一边。改成让**答案本身**
+  // 被声明：`offlineCompaction`（能不能压缩，不能就连要说的话一起给）与
+  // `absentLocalStoreMessage`（`null` 即「这个引擎没有本地库文件这回事」）。
+  'cli/doctor.ts: 1',
   'cli/migrate.ts: 1',
   'cli/start.ts: 2',
   // RFC-359 4 → 3：`package` 子命令的资源包装配此前是一个 `provider === 'sqlite' ? … : …`，

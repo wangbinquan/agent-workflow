@@ -50,15 +50,12 @@ export function dbCompactCommand(): DbCompactResult {
     operationsRoot: Paths.databaseMigrationsDir,
     contract: buildLogicalSchemaContract(),
   })
-  // Compaction is an embedded-file operation; an external server's storage
-  // reclamation is owned by its own autovacuum/operator policy.
-  if (databaseProviderTraits(generation.payload.provider).storage !== 'embedded-file') {
-    return {
-      status: 'ok',
-      output:
-        `live database is PostgreSQL generation ${generation.payload.generationId}; ` +
-        '`db compact` is SQLite-only. PostgreSQL storage reclamation is owned by autovacuum/operator policy.\n',
-    }
+  // RFC-359 AC-10 —— 问「这个引擎能不能离线压缩」，答案（连同说给用户的话）由引擎自己声明。
+  // 原来问的是 `storage !== 'embedded-file'`：比品牌名好一档，但仍是两值枚举，
+  // 第三个 provider 照样只能落进其中一边，而且那段文案还得由这里写死「PostgreSQL」。
+  const compaction = databaseProviderTraits(generation.payload.provider).offlineCompaction
+  if (!compaction.supported) {
+    return { status: 'ok', output: compaction.explain(generation.payload.generationId) }
   }
   const dbPath = Paths.db
   if (!existsSync(dbPath)) {

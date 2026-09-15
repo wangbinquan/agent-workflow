@@ -76,6 +76,27 @@ export interface DatabaseProviderTraits {
    * 声明出来，而不是让调用方再问一次存储形态再自己拼。
    */
   readonly failureRecoveryHint: string | null
+
+  /**
+   * `db compact` 对这个引擎能不能做事；不能做就**直接给出要对用户说的话**。
+   *
+   * RFC-359 AC-10：原来写成 `storage !== 'embedded-file'` 再由调用方自己拼一段写死
+   * 「PostgreSQL」的文案。`storage` 比品牌名好一档，但它仍是**两值枚举**（同一张真值表的
+   * 另一种拼法），第三个 provider 照样只能落进其中一边。这里改成让答案本身被声明出来：
+   * 能压缩就是 `{ supported: true }`，不能就连解释一起给。
+   */
+  readonly offlineCompaction:
+    | { readonly supported: true }
+    | { readonly supported: false; readonly explain: (generationId: string) => string }
+
+  /**
+   * 这个引擎「本地库文件还不存在」时，`doctor` 该报的那句话；没有本地库文件的引擎是 `null`。
+   *
+   * RFC-359 AC-10：原来写成 `storage === 'embedded-file' && !existsSync(Paths.db)`，
+   * 并且那句话里还写死了「SQLite」。`null` 同时表达了「这个引擎没有本地文件这回事」，
+   * 于是调用方连 `existsSync` 都不必做——判据与文案是同一件事，一起声明。
+   */
+  readonly absentLocalStoreMessage: string | null
 }
 
 export const DATABASE_PROVIDER_TRAITS = {
@@ -86,6 +107,8 @@ export const DATABASE_PROVIDER_TRAITS = {
     migrationRole: 'source',
     serverVersionFallback: 'embedded SQLite',
     failureRecoveryHint: ' — recover: agent-workflow restore <backup>',
+    offlineCompaction: { supported: true },
+    absentLocalStoreMessage: 'SQLite (no database yet)',
   },
   postgresql: {
     storage: 'external-server',
@@ -94,6 +117,14 @@ export const DATABASE_PROVIDER_TRAITS = {
     migrationRole: 'target',
     serverVersionFallback: 'unavailable',
     failureRecoveryHint: null,
+    offlineCompaction: {
+      supported: false,
+      // 逐字保留原文案（`rfc349-db-compact-provider` 对它做整串断言）。
+      explain: (generationId) =>
+        `live database is PostgreSQL generation ${generationId}; ` +
+        '`db compact` is SQLite-only. PostgreSQL storage reclamation is owned by autovacuum/operator policy.\n',
+    },
+    absentLocalStoreMessage: null,
   },
 } as const satisfies Record<DatabaseProvider, DatabaseProviderTraits>
 

@@ -129,16 +129,17 @@ export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
       },
     ]
   }
-  // Ask the trait, not the provider name: "is there a local file the daemon
-  // owns?" A new external-server provider then answers correctly by declaration
-  // instead of relying on `!== 'sqlite'` happening to mean the right thing.
-  const storage = databaseProviderTraits(config.database.provider).storage
-  if (storage === 'embedded-file' && !existsSync(Paths.db)) {
+  // RFC-359 AC-10 —— 判据与文案是同一件事，一起由引擎声明：`absentLocalStoreMessage` 为
+  // `null` 就表示「这个引擎没有本地库文件这回事」，于是连 `existsSync` 都不必做。
+  // 原来问的是 `storage === 'embedded-file'` 且那句话里写死了「SQLite」——`storage` 比品牌名
+  // 好一档，但仍是两值枚举，第三个 provider 只能落进其中一边。
+  const absentLocalStore = databaseProviderTraits(config.database.provider).absentLocalStoreMessage
+  if (absentLocalStore !== null && !existsSync(Paths.db)) {
     return [
       {
         name: 'database provider',
         ok: true,
-        message: 'SQLite (no database yet)',
+        message: absentLocalStore,
       },
       checkLifecycleHealth(),
       checkSealedCredentials(),

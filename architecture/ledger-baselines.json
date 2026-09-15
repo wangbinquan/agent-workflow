@@ -426,8 +426,8 @@
       "id": "rfc359-w5-provider-branch",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
       "symbol": "PROVIDER_BRANCH_DEBT",
-      "baseline": 9,
-      "why": "RFC-359 W5「防复辟」波次。业务代码里按 provider 名分叉（`provider === 'sqlite'` / `storage === 'embedded-file'` 及 switch / 条件类型）。正解是判**能力**（`engineOf(tx)` / capabilities）而不是判品牌。已按形状豁免穷尽性围栏（比较链落到 `unhandledDatabaseProvider` 的 fail-loud 收窄闸，方向与本 RFC 同向）；语料限 backend——前端显示「当前跑在哪个数据库上」是产品语义，不是分叉。 RFC-359 AC-10 第一波 14 → 10：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` / `postgresqlProviderBackup` 三个文件的 5 处改问 `migrationRole`（其中一处 `options.runtime.provider !== 'postgresql'` 恒假、直接删），`server.ts` 的条件类型换成按 provider 索引的表，四行条目随之退役；`main.ts` 3 → 2（frameBackfill 的 provider 标签是摆设，删标签即消分叉）。 第二波 10 → 9：`cli/database.ts` 两处改读新增的 `serverVersionFallback` / `migrationRole`，该文件条目清零退役。"
+      "baseline": 8,
+      "why": "RFC-359 W5「防复辟」波次。业务代码里按 provider 名分叉（`provider === 'sqlite'` / `storage === 'embedded-file'` 及 switch / 条件类型）。正解是判**能力**（`engineOf(tx)` / capabilities）而不是判品牌。已按形状豁免穷尽性围栏（比较链落到 `unhandledDatabaseProvider` 的 fail-loud 收窄闸，方向与本 RFC 同向）；语料限 backend——前端显示「当前跑在哪个数据库上」是产品语义，不是分叉。 RFC-359 AC-10 第一波 14 → 10：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` / `postgresqlProviderBackup` 三个文件的 5 处改问 `migrationRole`（其中一处 `options.runtime.provider !== 'postgresql'` 恒假、直接删），`server.ts` 的条件类型换成按 provider 索引的表，四行条目随之退役；`main.ts` 3 → 2（frameBackfill 的 provider 标签是摆设，删标签即消分叉）。 第二波 10 → 9：`cli/database.ts` 两处改读新增的 `serverVersionFallback` / `migrationRole`，该文件条目清零退役。 第三波 9 → 8：`cli/dbCompact.ts` 清零、`cli/doctor.ts` 2 → 1，两处原本问 `storage`（两值枚举）的改成让答案本身被声明（`offlineCompaction` / `absentLocalStoreMessage`）。"
     },
     {
       "id": "rfc359-w5-provider-branch-relocation",
@@ -886,7 +886,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2240e8f88a6ba8ed20f50d863d5c8faf669ab724ea9d7d2683b88a4527870431",
+    "sourceDigest": "sha256:e88ca9581bee27a4da67b365c18d76dedba12274e06fcad2678870ee0385a04e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4cabf7426379df328b8e08ce41961f18ff713a22",
-    "contentDigest": "sha256:405dffbd5f420fde30471d9129962c2f857124dcdc7fd0285f9cb8b018d34b33",
+    "currentSnapshotSha": "41327db9c9d8761e889131705924efaab1e815e1",
+    "contentDigest": "sha256:7109d5746b21a204d069fc28a60571c2d1c970aa405e145515e62f073bfe31eb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
