@@ -7,10 +7,8 @@ import {
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
-import { openDb } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
 import type { MaintenanceRunStore } from './maintenanceRunStorePort'
-import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { startMaintenanceTicker, type MaintenanceTickerHandle } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
@@ -18,16 +16,13 @@ import { FIXED_MAINTENANCE_JOB_SPECS, maintenanceJobSpec } from './maintenanceCa
 import { parseMaintenanceJobPayload } from './maintenanceJobPayload'
 import type { MaintenanceWorkerDelta, MaintenanceWorkerEvent } from './maintenanceProtocol'
 import { startMaintenanceScheduleCoordinator, type CleanupSlot } from './maintenanceSchedule'
-import {
-  startMaintenanceWorkerSupervisor,
-  type MaintenanceWorkerSupervisor,
-} from './maintenanceWorkerSupervisor'
+import type { MaintenanceWorkerSupervisor } from './maintenanceWorkerSupervisor'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
 
 const log = createLogger('maintenance-service')
 const CHECKPOINT_SUPERVISOR_MS = 60_000
 const ADMISSION_MAX_RETRY_DELAY_MS = 30_000
-const ADMISSION_BUSY_TIMEOUT_MS = 5
 const EVENT_LOOP_SAMPLE_MS = 50
 const EVENT_LOOP_WINDOW_MS = 30_000
 /**
@@ -75,43 +70,45 @@ export interface MaintenancePayloadSources {
   readonly bootIntentTurnIds: () => Promise<readonly string[]> | readonly string[]
 }
 
+/**
+ * 装配方交出的「准入存储从哪来」。SQLite 侧自带一条**短等待**本地连接（见调用点）并负责
+ * 关闭；外部服务器侧直接给已验证代上组好的 store，没有本地连接可关，`close` 省略。
+ */
+export interface MaintenanceAdmissionStore {
+  readonly store: MaintenanceRunStore
+  readonly close?: () => void
+}
+
+/**
+ * RFC-359 AC-10：这里原来是一个**按 provider 字面量判别的联合**，服务体内因此问了两次
+ * `options.provider === 'postgresql'`——一次决定准入存储怎么来，一次决定 Worker 监工怎么起。
+ * 判别联合确实能把字段收窄出来，但「谁来装」这件事本来就该由**装配方**回答一次，而不是
+ * 把两套装配参数一起塞进来、让服务自己挑。
+ *
+ * 改成交答案：`openAdmissionStore` / `startSupervisor` 两个工厂由装配方给（两个调用点本来
+ * 就各自知道自己在装哪个 provider）。`provider` 字段保留，但只作 traits 查表用
+ * （`databaseProviderTraits(...).classifyRetryable`），不再有任何分支读它。
+ *
+ * 顺带这是这个服务的**第一个注入接缝**：此前它直接 `import` 监工，既没法替身也没法断言，
+ * 这正是它零覆盖的原因——加接缝和消分叉本来就是同一件事。
+ */
 export type MaintenanceServiceOptions = MaintenanceServiceCommonOptions &
-  (
-    | Readonly<{
-        /**
-         * RFC-359 AC-10 —— **必填**。原来是 `provider?: 'sqlite'`，于是
-         * `options.provider ?? 'sqlite'` 让「没写」静默等于 SQLite——这正是本 RFC 要消灭的
-         * 「落进 else 继承 SQLite 行为」，只不过穿的是 `??` 而不是 `if`。
-         * 配置层的零配置默认（`config.json` 不写 database 就是 sqlite）不受影响，那是 zod
-         * 的 `.default()`；这里是**内部装配选项**，装配方本来就知道自己在装哪个 provider。
-         */
-        provider: 'sqlite'
-        dbPath: string
-        migrationsFolder: string
-        generationId?: never
-        database?: never
-        store?: never
-        payloadSources: MaintenancePayloadSources
-      }>
-    | Readonly<{
-        provider: 'postgresql'
-        dbPath?: never
-        migrationsFolder?: never
-        generationId: string
-        database: {
-          readonly provider: 'postgresql'
-          readonly urlEnv: string
-          readonly poolMax: number
-          readonly connectTimeoutMs: number
-          readonly statementTimeoutMs: number
-          readonly idleTimeoutMs: number
-        }
-        /** Dedicated admission adapter composed from the verified live
-         * PostgreSQL generation. The Worker opens its own bounded pool. */
-        store: MaintenanceRunStore
-        payloadSources: MaintenancePayloadSources
-      }>
-  )
+  Readonly<{
+    provider: DatabaseProvider
+    payloadSources: MaintenancePayloadSources
+    openAdmissionStore: (config: Config) => MaintenanceAdmissionStore
+    startSupervisor: (
+      config: Config,
+      handlers: {
+        readonly onDelta: (
+          runId: string,
+          job: MaintenanceJobKey,
+          delta: MaintenanceWorkerDelta,
+        ) => void
+        readonly onEvent: (event: MaintenanceWorkerEvent) => void
+      },
+    ) => MaintenanceWorkerSupervisor
+  }>
 
 export interface MaintenanceService {
   readonly status: () => MaintenanceStatus
@@ -352,42 +349,11 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
   }, EVENT_LOOP_SAMPLE_MS)
   eventLoopTimer.unref?.()
 
-  // SQLite keeps the RFC-338 short-wait admission connection; PostgreSQL
-  // receives an async store already composed from the verified generation.
-  // Neither path borrows the foreground request connection for Worker bodies.
-  let admissionDb: ReturnType<typeof openDb> | null = null
-  let store: MaintenanceRunStore
-  let payloadSources: MaintenancePayloadSources
-  // NOTE: this stays a provider-literal check on purpose — `MaintenanceServiceOptions`
-  // is a union discriminated by that literal, so the check also narrows
-  // `store` / `database` / `generationId` into existence. A third provider cannot
-  // reach here without adding its own variant, which makes the caller fail to
-  // compile; that is a stronger fence than a traits lookup, not a weaker one.
-  if (options.provider === 'postgresql') {
-    store = options.store
-    payloadSources = options.payloadSources
-  } else {
-    // Main-thread admission uses its own short-wait connection. A contended
-    // durable INSERT may defer a slot by one supervisor tick, but can never sit
-    // on the HTTP event loop for the primary connection's historical 5 seconds.
-    admissionDb = openDb({
-      path: options.dbPath,
-      migrationsFolder: options.migrationsFolder,
-      skipMigrations: true,
-      skipIntegrityCheck: true,
-      journalMode: 'preserve',
-      synchronous: currentConfig.sqliteSynchronous,
-      pageCacheMib: Math.min(16, currentConfig.sqlitePageCacheMib),
-      mmapMib: currentConfig.sqliteMmapMib,
-      // Daily mode admits every heavy job at one wall-clock instant. Keep each
-      // INSERT wait tiny so a contended 12-job cycle cannot add up to a visible
-      // main-event-loop pause; the admission controller retries every slot.
-      busyTimeoutMs: ADMISSION_BUSY_TIMEOUT_MS,
-      slowQueryMs: 0,
-    })
-    store = createMaintenanceRunStore(admissionDb)
-    payloadSources = options.payloadSources
-  }
+  // 准入存储由装配方交出：SQLite 侧是一条自带的短等待本地连接（绝不借用前台请求连接），
+  // 外部服务器侧是已验证代上组好的 store。服务这边只拿 store 和一个可选的关闭钩子。
+  const admissionStore = options.openAdmissionStore(currentConfig)
+  const store = admissionStore.store
+  const payloadSources = options.payloadSources
   const bootIntentTurnIds = Promise.resolve(payloadSources.bootIntentTurnIds())
 
   let projection: Awaited<ReturnType<MaintenanceRunStore['readProjection']>> = {
@@ -443,29 +409,10 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     }
   }
 
-  const supervisor: MaintenanceWorkerSupervisor =
-    options.provider === 'postgresql'
-      ? startMaintenanceWorkerSupervisor({
-          provider: 'postgresql',
-          generationId: options.generationId,
-          database: options.database,
-          appHome: options.appHome,
-          onDelta: consumeDelta,
-          onEvent: observeWorkerEvent,
-        })
-      : startMaintenanceWorkerSupervisor({
-          dbPath: options.dbPath,
-          migrationsFolder: options.migrationsFolder,
-          appHome: options.appHome,
-          sqlite: {
-            synchronous: currentConfig.sqliteSynchronous,
-            pageCacheMib: currentConfig.sqlitePageCacheMib,
-            mmapMib: currentConfig.sqliteMmapMib,
-            busyTimeoutMs: 50,
-          },
-          onDelta: consumeDelta,
-          onEvent: observeWorkerEvent,
-        })
+  const supervisor: MaintenanceWorkerSupervisor = options.startSupervisor(currentConfig, {
+    onDelta: consumeDelta,
+    onEvent: observeWorkerEvent,
+  })
 
   const payloadFor = async (
     job: MaintenanceJobKey,
@@ -694,7 +641,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
       clearInterval(eventLoopTimer)
       await Promise.all([admission.stop(), supervisor.stop()])
       await projectionRefresh?.catch(() => undefined)
-      ;(admissionDb as unknown as { $client?: { close(): void } } | null)?.$client?.close()
+      admissionStore.close?.()
     })()
     stopPromise = pending
     return pending

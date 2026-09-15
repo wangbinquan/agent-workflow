@@ -95,7 +95,16 @@ describe('RFC-338 maintenance architecture', () => {
     expect(service).not.toContain('runMaintenanceJob(')
     expect(service).toContain('payloadSources = options.payloadSources')
     expect(service).not.toContain('@/modules/intent/infrastructure/')
-    expect(service).toContain("journalMode: 'preserve'")
+    // RFC-359 AC-10：准入连接从服务体内搬走了（`startMaintenanceService` 不再按 provider
+    // 自己开连接，改由装配方的 `openAdmissionStore` 交出），而**开库这件事落在
+    // `platform/persistence/`**——`cli/start.ts` 不得 import `@/db/client`，那是
+    // `rfc349-provider-cutover` 的既有规则（provider factory owns SQLite）。
+    // 这条锁的东西没变——**准入连接绝不改日志模式**——只是跟着连接搬到它现在所在的文件。
+    expect(service).not.toContain("journalMode: 'preserve'")
+    expect(readBackend('src/platform/persistence/sqlite/maintenanceAdmissionStore.ts')).toContain(
+      "journalMode: 'preserve'",
+    )
+    expect(readBackend('src/cli/start.ts')).toContain('openSqliteMaintenanceAdmissionStore({')
     expect(service).toContain('recoverTurnIds: bootIntentTurnIds')
     expect(service).not.toContain('recoverTurns: true')
     expect(worker).toContain("if ('database' in parsed)")

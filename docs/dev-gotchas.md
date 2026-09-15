@@ -7133,3 +7133,37 @@ SQLiteError: no such table: agent_workflow.workflows
 并直接给出处方：「把形参放宽到 `ProviderNeutralDatabase`、收成一份」。
 **写这类合一时预期会连红两三条架构守卫，那是它们在干活**——
 逐条按守卫给的处方改，别急着调门槛；门槛只在确认是真收敛之后往下调，并在注释里记实测值。
+
+## 爆炸半径要算上「把源码当**文本**读」的守卫，且守卫不按目录归类（2026-09-15 同一次改动连撞两条）
+
+改完一个符号、按「谁 import 它」推导爆炸半径、跑完 68 个文件全绿——然后 CI 红两格。
+两条漏网守卫是**两种不同的漏法**，都值得记：
+
+**一、它不 import 任何符号，它读文件内容。**
+`rfc359-w29-unstarted-application-composition` 用 `readBackend('src/server.ts')` 取源码、
+对装配体算 SHA-256，用来区分「装配图变了」与「只是改了名字」。一次纯改名（
+`createSqliteTaskExecutionPersistence` → `createTaskExecutionPersistence`）不改变任何行为，
+却必然改变文本摘要。这类守卫在 `grep -l "<符号名>"` 里**根本不会出现**。
+
+推导半径时除了「谁 import 我改的符号」，还要加一条按**文件路径**的检索：
+
+```
+git diff --name-only HEAD -- packages/backend/src | sed 's|^packages/backend/||' \
+  | while read -r p; do grep -rln -- "${p#src/}" packages/backend/tests/; done | sort -u
+```
+
+命中的通常是摘要 / 文本断言 / 账本类守卫。重钉摘要前先确认**同一条测试里的结构断言**
+（例如 `expect(restored.statements).toHaveLength(160)`）还是绿的——那正是它用来把
+「改名」和「改图」分开的那半条判据；结构断言也红就不是重钉，是真的改了装配。
+
+**二、`tests/architecture/` 不是「架构守卫」的全集。**
+同一次改动的另一格红来自 `tests/rfc349-provider-completeness.test.ts`——它是不折不扣的
+架构账本（provider fork 数 + 围栏形状），但住在 `tests/` 根下。我本地跑了整个
+`tests/architecture/` 目录就以为「架构面都过了」，其实漏了它。
+**守卫按目录分布，不按目录分类**；要覆盖这一类，按**判据关键词**检索而不是按目录：
+`grep -rln "LEDGER\|DEBT\|baseline\|toBeGreaterThanOrEqual" packages/backend/tests/`。
+
+**顺带一条账本自身的判据**：fork 数归零时，**围栏声明要跟着删**。
+上面那条账本同时记 `forks` 与 `fence`，fork 清零却留着 `fence: 'fenced-dispatch'`，
+守卫就会去找一个已经不存在的 `unhandledDatabaseProvider(...)` never 汇，红在
+「声明了围栏却没有围栏」上——而此刻正确的状态恰恰是两者都没有。

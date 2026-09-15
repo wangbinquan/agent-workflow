@@ -20,6 +20,12 @@ interface Sources {
   catalog: string
   schedule: string
   txSync: string
+  /**
+   * RFC-359 AC-10：准入连接搬到了 `platform/persistence/`（`cli/start.ts` 不得 import
+   * `@/db/client`，见 `rfc349-provider-cutover`），`ADMISSION_BUSY_TIMEOUT_MS` 跟着搬。
+   * 判据不变——准入必须保持**短**忙等——只是跟到它现在所在的文件。
+   */
+  admissionStore: string
 }
 
 const original: Sources = {
@@ -35,6 +41,7 @@ const original: Sources = {
   catalog: readBackend('src/platform/background/maintenanceCatalog.ts'),
   schedule: readBackend('src/platform/background/maintenanceSchedule.ts'),
   txSync: readBackend('src/db/txSync.ts'),
+  admissionStore: readBackend('src/platform/persistence/sqlite/maintenanceAdmissionStore.ts'),
 }
 
 function issues(source: Sources): string[] {
@@ -56,7 +63,11 @@ function issues(source: Sources): string[] {
   if (
     !source.worker.includes('const MAX_BUSY_BACKOFF_MS = 30_000') ||
     !source.worker.includes('sqliteBusyDeferrals: 1') ||
-    !source.service.includes('const ADMISSION_BUSY_TIMEOUT_MS = 5')
+    // 用 `\b` 收尾，不能用 `includes`：把 5 改成 5_000 之后
+    // `'const ADMISSION_BUSY_TIMEOUT_MS = 5_000'` **仍然包含** `'… = 5'`，
+    // 于是这一半判据从来没咬到过——整条 busy-backoff 收据一直只靠上面 worker 那一半在绿。
+    // （这是搬家时顺手发现的旧洞，不是搬家引入的：判据读 `service` 时就已经这样。）
+    !/const ADMISSION_BUSY_TIMEOUT_MS = 5\b/u.test(source.admissionStore)
   ) {
     out.push('busy-backoff')
   }
@@ -155,7 +166,9 @@ describe('RFC-338 mutation receipts', () => {
           'const MAX_BUSY_BACKOFF_MS = 30_000',
           'const MAX_BUSY_BACKOFF_MS = Infinity',
         ),
-        service: source.service.replace(
+        // RFC-359 AC-10：跟着常量搬到 `admissionStore`。留在 `service` 上会变成一次**空替换**
+        // ——判据仍绿，但绿的全部来自上面 worker 那一半，准入忙等这一半已经不咬了。
+        admissionStore: source.admissionStore.replace(
           'const ADMISSION_BUSY_TIMEOUT_MS = 5',
           'const ADMISSION_BUSY_TIMEOUT_MS = 5_000',
         ),

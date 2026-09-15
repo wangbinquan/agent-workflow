@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1696,
+    "entries": 1697,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -28281,15 +28281,17 @@
       "controls": {
         "audit": true,
         "authority": "system",
-        "authorization": true,
+        "authorization": false,
         "event": true,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService",
       "missingControls": [
+        "authorization",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService",
@@ -30439,6 +30441,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#ArchiveContract",
       "symbol": "ArchiveContract",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts#openSqliteMaintenanceAdmissionStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts#openSqliteMaintenanceAdmissionStore",
+      "symbol": "openSqliteMaintenanceAdmissionStore",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -40524,7 +40551,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e",
+  "sourceDigest": "sha256:1a50cbf73e984e5c694baef283de3bdc1f0e8720fa0001d1bff10027b0eca997",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

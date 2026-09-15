@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2558",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2568",
       "kind": "register-call",
-      "line": 2558,
+      "line": 2568,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2564",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2574",
       "kind": "register-call",
-      "line": 2564,
+      "line": 2574,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -36,9 +36,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:672",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:682",
       "kind": "register-call",
-      "line": 672,
+      "line": 682,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -47,9 +47,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:678",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:688",
       "kind": "register-call",
-      "line": 678,
+      "line": 688,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2878",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2910",
       "kind": "register-call",
-      "line": 2878,
+      "line": 2910,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:842",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:852",
       "kind": "register-call",
-      "line": 842,
+      "line": 852,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -80,9 +80,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1610",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1620",
       "kind": "register-call",
-      "line": 1610,
+      "line": 1620,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2918",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2950",
       "kind": "global-setter",
-      "line": 2918,
+      "line": 2950,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -102,9 +102,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:687",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:697",
       "kind": "global-setter",
-      "line": 687,
+      "line": 697,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -542,9 +542,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
-      "id": "ambient:packages/backend/src/platform/background/maintenanceService.ts#registerConfigAppliedListener:636",
+      "id": "ambient:packages/backend/src/platform/background/maintenanceService.ts#registerConfigAppliedListener:583",
       "kind": "register-call",
-      "line": 636,
+      "line": 583,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService",
       "removeAfterWave": "W6/W9",
       "symbol": "startMaintenanceService",
@@ -9148,7 +9148,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setInterval:328",
+      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setInterval:325",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9162,7 +9162,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:328",
+      "symbol": "$setInterval:325",
       "targetContext": "platform"
     },
     {
@@ -9171,7 +9171,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setInterval:613",
+      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setInterval:560",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9185,7 +9185,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:613",
+      "symbol": "$setInterval:560",
       "targetContext": "platform"
     },
     {
@@ -9194,7 +9194,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setTimeout:172",
+      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setTimeout:169",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9208,7 +9208,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:172",
+      "symbol": "$setTimeout:169",
       "targetContext": "platform"
     },
     {
@@ -9217,7 +9217,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setTimeout:565",
+      "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setTimeout:512",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9231,7 +9231,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#$file",
       "phase": "before-ready",
-      "symbol": "$setTimeout:565",
+      "symbol": "$setTimeout:512",
       "targetContext": "platform"
     },
     {
@@ -12799,5 +12799,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e"
+  "sourceDigest": "sha256:1a50cbf73e984e5c694baef283de3bdc1f0e8720fa0001d1bff10027b0eca997"
 }

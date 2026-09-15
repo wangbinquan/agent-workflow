@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1775,
+    "backendFiles": 1776,
     "frontendFiles": 622,
-    "legacyFiles": 594,
+    "legacyFiles": 595,
     "moduleFiles": 1181,
-    "productionFiles": 2552,
+    "productionFiles": 2553,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24733
+    "symbolsIncludingFileRoots": 24737
   },
   "entries": [
     {
@@ -136734,18 +136734,6 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
-      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#ADMISSION_BUSY_TIMEOUT_MS",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "ADMISSION_BUSY_TIMEOUT_MS",
-      "targetContext": "platform",
-      "targetLayer": "background"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#ADMISSION_MAX_RETRY_DELAY_MS",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -136870,6 +136858,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MaintenanceAdmissionInput",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#MaintenanceAdmissionStore",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "MaintenanceAdmissionStore",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -147190,6 +147190,54 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "uniqueStrings",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts#ADMISSION_BUSY_TIMEOUT_MS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ADMISSION_BUSY_TIMEOUT_MS",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts#openSqliteMaintenanceAdmissionStore",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "openSqliteMaintenanceAdmissionStore",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/maintenanceAdmissionStore.ts#SqliteMaintenanceAdmissionInput",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "SqliteMaintenanceAdmissionInput",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -297473,5 +297521,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e"
+  "sourceDigest": "sha256:1a50cbf73e984e5c694baef283de3bdc1f0e8720fa0001d1bff10027b0eca997"
 }

@@ -426,8 +426,8 @@
       "id": "rfc359-w5-provider-branch",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
       "symbol": "PROVIDER_BRANCH_DEBT",
-      "baseline": 5,
-      "why": "RFC-359 W5「防复辟」波次。业务代码里按 provider 名分叉（`provider === 'sqlite'` / `storage === 'embedded-file'` 及 switch / 条件类型）。正解是判**能力**（`engineOf(tx)` / capabilities）而不是判品牌。已按形状豁免穷尽性围栏（比较链落到 `unhandledDatabaseProvider` 的 fail-loud 收窄闸，方向与本 RFC 同向）；语料限 backend——前端显示「当前跑在哪个数据库上」是产品语义，不是分叉。 RFC-359 AC-10 第一波 14 → 10：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` / `postgresqlProviderBackup` 三个文件的 5 处改问 `migrationRole`（其中一处 `options.runtime.provider !== 'postgresql'` 恒假、直接删），`server.ts` 的条件类型换成按 provider 索引的表，四行条目随之退役；`main.ts` 3 → 2（frameBackfill 的 provider 标签是摆设，删标签即消分叉）。 第二波 10 → 9：`cli/database.ts` 两处改读新增的 `serverVersionFallback` / `migrationRole`，该文件条目清零退役。 第三波 9 → 8：`cli/dbCompact.ts` 清零、`cli/doctor.ts` 2 → 1，两处原本问 `storage`（两值枚举）的改成让答案本身被声明（`offlineCompaction` / `absentLocalStoreMessage`）。 第四刀 8 → 7：`cli/migrate.ts` 清零——`db migrate` 的回话改在 `prepareDatabaseProviderForBoot`（白名单层、品牌已知处）定稿，CLI 只剩「拿来输出 + finally 关闭」。 第五刀 7 → 6：`main.ts` 清零——bootstrap 客户端改由 `prepareDatabaseProviderForBoot` 的 `openBootstrapClient()` 交出，两支的唯一差别（openClient 入参个数）消失。 第六刀 6 → 5：`modules/task-execution/composition/taskExecutionPersistence.ts` 清零——两份 persistence 聚合的唯一差别是恢复管理面，而它四个方法里只有两个不同、且**各让一个引擎更弱**（`interruptBootOrphanTask` 上 SQLite 宽判据且漏传 `now`，`repairRuntimeSessionLeaseAfterOrphanReap` 上 PostgreSQL 的手抄件漏了归属闸）。各自收敛到强的一侧后两份聚合逐字相同，分派三元与穷尽性围栏一并消失，手抄件删除。"
+      "baseline": 4,
+      "why": "RFC-359 W5「防复辟」波次。业务代码里按 provider 名分叉（`provider === 'sqlite'` / `storage === 'embedded-file'` 及 switch / 条件类型）。正解是判**能力**（`engineOf(tx)` / capabilities）而不是判品牌。已按形状豁免穷尽性围栏（比较链落到 `unhandledDatabaseProvider` 的 fail-loud 收窄闸，方向与本 RFC 同向）；语料限 backend——前端显示「当前跑在哪个数据库上」是产品语义，不是分叉。 RFC-359 AC-10 第一波 14 → 10：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` / `postgresqlProviderBackup` 三个文件的 5 处改问 `migrationRole`（其中一处 `options.runtime.provider !== 'postgresql'` 恒假、直接删），`server.ts` 的条件类型换成按 provider 索引的表，四行条目随之退役；`main.ts` 3 → 2（frameBackfill 的 provider 标签是摆设，删标签即消分叉）。 第二波 10 → 9：`cli/database.ts` 两处改读新增的 `serverVersionFallback` / `migrationRole`，该文件条目清零退役。 第三波 9 → 8：`cli/dbCompact.ts` 清零、`cli/doctor.ts` 2 → 1，两处原本问 `storage`（两值枚举）的改成让答案本身被声明（`offlineCompaction` / `absentLocalStoreMessage`）。 第四刀 8 → 7：`cli/migrate.ts` 清零——`db migrate` 的回话改在 `prepareDatabaseProviderForBoot`（白名单层、品牌已知处）定稿，CLI 只剩「拿来输出 + finally 关闭」。 第五刀 7 → 6：`main.ts` 清零——bootstrap 客户端改由 `prepareDatabaseProviderForBoot` 的 `openBootstrapClient()` 交出，两支的唯一差别（openClient 入参个数）消失。 第六刀 6 → 5：`modules/task-execution/composition/taskExecutionPersistence.ts` 清零——两份 persistence 聚合的唯一差别是恢复管理面，而它四个方法里只有两个不同、且**各让一个引擎更弱**（`interruptBootOrphanTask` 上 SQLite 宽判据且漏传 `now`，`repairRuntimeSessionLeaseAfterOrphanReap` 上 PostgreSQL 的手抄件漏了归属闸）。各自收敛到强的一侧后两份聚合逐字相同，分派三元与穷尽性围栏一并消失，手抄件删除。 第七刀 5 → 4：`platform/background/maintenanceService.ts` 清零——按 provider 字面量判别的联合改成由装配方交出 `openAdmissionStore` / `startSupervisor` 两个工厂，`provider` 字段只留给 traits 查表；同时这是该服务的第一个注入接缝，零覆盖随之可解。"
     },
     {
       "id": "rfc359-w5-provider-branch-relocation",
@@ -790,8 +790,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1696,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1697,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-10 第七波：新增 `platform/persistence/sqlite/maintenanceAdmissionStore.ts`（维护准入连接从 `maintenanceService` 搬到 persistence 层——`cli/start.ts` 不得 import `@/db/client`，见 `rfc349-provider-cutover`）。涨的是这一个新文件带来的符号 / 写入口，不是新增债务。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -881,12 +884,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24733,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24737,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-10 第七波：新增 `platform/persistence/sqlite/maintenanceAdmissionStore.ts`（维护准入连接从 `maintenanceService` 搬到 persistence 层——`cli/start.ts` 不得 import `@/db/client`，见 `rfc349-provider-cutover`）。涨的是这一个新文件带来的符号 / 写入口，不是新增债务。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:275b0579680a45429b76d69382977140b2733ff4fec506ec1911acd7bf24644e",
+    "sourceDigest": "sha256:1a50cbf73e984e5c694baef283de3bdc1f0e8720fa0001d1bff10027b0eca997",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +905,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "30574a5b9f82044c6189d7854b66bb5a34efdf01",
-    "contentDigest": "sha256:89880e11aea679070ccf5db0f973c2abb6938a37dc6614a2f1da93ddb92e7ea3",
+    "currentSnapshotSha": "e866c9804be79dbe6521bc2324cf8ab528cd579d",
+    "contentDigest": "sha256:6339028f84ec90e10c7debf3aefef67d3a72bcc6e02a25cb67e06944ce23df7d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -303,7 +303,12 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // 没有「本地文件快照」这回事）——与原行为逐字一致，PG 本来就从不因此跳过。
   // 余下 2 处是 provider-keyed 可辨识联合的收窄（见 `rfc349-provider-completeness` 的
   // `discriminated-union` 一档），销账走组合根上提，不是 traits 查表。
-  'platform/background/maintenanceService.ts: 2',
+  // AC-10 第七波销账：`maintenanceService.ts` 清零。这里原来是一个**按 provider 字面量判别
+  // 的联合**，服务体内因此问了两次——一次决定准入存储怎么来，一次决定 Worker 监工怎么起。
+  // 判别联合确实能收窄字段，但「谁来装」本来就该由装配方回答一次；改成交答案
+  // （`openAdmissionStore` / `startSupervisor` 两个工厂），`provider` 字段只留给 traits 查表。
+  // 顺带这是该服务的第一个注入接缝——此前它直接 import 监工，既没法替身也没法断言，
+  // 这正是它零覆盖的原因；接缝落地后补上了 `rfc359-ac10-maintenance-service-seam`。
   'platform/background/maintenanceWorkerSupervisor.ts: 1',
   // AC-10 第一波销账：`server.ts` 的 `TProvider extends 'postgresql' ? … : …` 换成按 provider
   // 索引的表（`Record<DatabaseProvider, …>` 约束即 forcing function，加 provider 就编译不过）。

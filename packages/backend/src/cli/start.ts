@@ -309,12 +309,14 @@ import {
   type PostgresqlDaemonApplicationInput,
 } from './postgresqlDaemonApplication'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
+import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
 import {
   createPostgresqlHumanGateContinuationRecoveryQueries,
   createPostgresqlHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
+import { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqlite/maintenanceAdmissionStore'
 import { enforceLimits } from '@/services/limits'
 import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
@@ -514,9 +516,17 @@ async function composePostgresqlProviderSession(
     // 外部服务器的存储在服务端，没有「本地文件快照」这回事——恒为 false 与原行为逐字一致
     // （原来写的是 `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，PG 侧从不跳过）。
     fileSnapshotInFlight: () => false,
-    generationId: input.provider.generation.payload.generationId,
-    database: input.config.database,
-    store: createMaintenanceRunStore(db),
+    // RFC-359 AC-10：准入存储与 Worker 监工都由**装配方**交出，服务体内不再问 provider。
+    // 这一侧的 store 组在已验证代上，没有本地连接可关，所以不给 `close`。
+    openAdmissionStore: () => ({ store: createMaintenanceRunStore(db) }),
+    startSupervisor: (_config, handlers) =>
+      startMaintenanceWorkerSupervisor({
+        provider: 'postgresql',
+        generationId: input.provider.generation.payload.generationId,
+        database: input.config.database,
+        appHome: Paths.root,
+        ...handlers,
+      }),
     appHome: Paths.root,
     configPath: Paths.config,
     loadConfig: () => loadConfig(Paths.config),
@@ -2640,8 +2650,30 @@ async function composeSqliteProviderSession(
     provider: 'sqlite',
     // 本地库文件正在被快照时别发 WAL checkpoint——两者抢同一份文件。
     fileSnapshotInFlight: isDbSnapshotInProgress,
-    dbPath: Paths.db,
-    migrationsFolder,
+    // RFC-359 AC-10：准入存储与 Worker 监工都由**装配方**交出，服务体内不再问 provider。
+    // 准入走自己的**短等待**本地连接：被争用的持久 INSERT 最多把一个槽位推迟一个监工 tick，
+    // 永远不会占着 HTTP 事件循环上主连接历史上的那 5 秒。
+    openAdmissionStore: (config) =>
+      openSqliteMaintenanceAdmissionStore({
+        dbPath: Paths.db,
+        migrationsFolder,
+        synchronous: config.sqliteSynchronous,
+        pageCacheMib: config.sqlitePageCacheMib,
+        mmapMib: config.sqliteMmapMib,
+      }),
+    startSupervisor: (config, handlers) =>
+      startMaintenanceWorkerSupervisor({
+        dbPath: Paths.db,
+        migrationsFolder,
+        appHome: Paths.root,
+        sqlite: {
+          synchronous: config.sqliteSynchronous,
+          pageCacheMib: config.sqlitePageCacheMib,
+          mmapMib: config.sqliteMmapMib,
+          busyTimeoutMs: 50,
+        },
+        ...handlers,
+      }),
     appHome: Paths.root,
     configPath: Paths.config,
     loadConfig: () => loadConfig(Paths.config),
