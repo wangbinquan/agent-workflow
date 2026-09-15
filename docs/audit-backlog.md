@@ -5309,23 +5309,35 @@ ERROR: could not serialize access due to read/write dependencies among transacti
 已把常态冲突压到 0，「剩下的尖峰只出现在**维护作业与前台写重叠**的窗口……那段窗口里 6 次
 预算实测仍有个位数逃逸」。这次多半就落在那条曲线上。
 
-**另外记一个结构性的洞（待核实，不要当结论用）**：
-`platform/persistence/databaseTransaction.ts` 里三个入口都以
+**～～另外记一个结构性的洞（待核实）～～ —— 已核实，**不是**本次的原因，更正如下**：
 
-```ts
-const reused = reuseFrame(client)
-if (reused !== undefined) return await body(reused)
+我原先怀疑「`serializable()` 在已有事务帧时整段跳过自己的重试循环」。沿调用链查完，
+**这条路径是带重试的**：
+
+```
+workgroupTaskRoom.createWorkgroupTaskRoomTransactionRunner
+  → runResourceCatalogTransaction(db, body)                 (resourceCatalogTransaction.ts:19)
+  → databaseSessionFor(db).serializable(body)               ← 带 10 次重试 + 满抖动退避
 ```
 
-开头。也就是说 `serializable()` 在**已有事务帧**时**整段跳过它自己的重试循环**；
-而 `transaction()` / `snapshotRead()` 本身不带重试。于是「`serializable()` 嵌在
-`transaction()` 里」这种形态会**既拿不到 SERIALIZABLE 隔离、也拿不到重试**。
-本次失败是否正是这个形态，**没有核实**——需要沿工作组回合引擎的写路径把最外层那一帧找出来。
+而且那个怀疑**自相矛盾**：若最外层真是 `transaction()`（READ COMMITTED），内层复用帧就**不是**
+SERIALIZABLE，PG 根本不会抛 40001（`could not serialize access due to read/write dependencies`
+是 SSI 专有的）。所以「嵌套复用导致没重试」这个解释与观察到的错误码不相容。
 
-**候选处置**（都没做）：
-1. 把重试单元上提到**最外层帧**：谁开的帧谁负责重放，嵌套调用不再各自决定；
-2. `transaction()` / `snapshotRead()` 也带上同一套重试（40001 在 REPEATABLE READ 下同样可能）；
-3. 维持现状，但给这条用例显式标注「并发敏感、允许在特定顺序下重跑」——**最差的一条**，
-   等于把判据让给运气。
+**证据指向的是「重试预算被耗尽」**。算一遍就对得上：满抖动退避 10 次期望累计 **55ms**
+（最坏 110ms），而这条用例失败耗时 **674.25ms**、同名 `[sqlite]` 那条 45.42ms。
+`(674 − 55) / 10 ≈ 62ms/次`——PG 上跑一遍这个回合约 62ms 完全合理。也就是说
+**十次全撞上了 40001**，正是 `postgresqlSerializationRetry.ts` 头注预告过的
+「维护作业与前台写重叠的窗口……个位数逃逸」。
 
-**下一个接手的人先做第一步**：确认最外层帧是谁开的，再决定 1 还是 2。
+**所以处置方向变了**（原来那三条里第 1、2 条是按「缺重试」写的，已不适用）：
+
+1. **先找出对手方**——十次连撞说明有个持续的写者在和它成环。查那一刻同进程里还有谁在写
+   `node_runs` / `tasks`（回合引擎自身的 inflight 并发？还是同文件别的用例？）。
+   这一步没做，是下一个接手的人的第一步。
+2. 找到之后再决定：是消掉那个环（调整读写顺序 / 缩小 SERIALIZABLE 覆盖面），
+   还是这条路径确实需要比 10 更大的预算。
+3. **不要**只把预算调大就收工——头注已经说明预算不是万能的，10 次是为「常态 0 冲突 +
+   偶发尖峰」设的；连撞十次说明的是**结构性争用**，不是运气差。
+
+
