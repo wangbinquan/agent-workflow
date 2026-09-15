@@ -7185,3 +7185,25 @@ git diff --name-only HEAD -- packages/backend/src | sed 's|^packages/backend/||'
 顺带一条 harness 用法：把 `wc -l` 之类的前置命令和 `bun test` 放进同一个后台调用，
 再用「输出文件非空」当完成信号会**提前触发**——前置命令的那一行立刻就把文件写非空了。
 等的是测试结果就等测试结果的形状（`until grep -q "^Ran " "$F"`），别等「有没有输出」。
+
+## `allowGrowth` 是**一次性**的：下一个 commit 不涨就必须删——**纯文档提交也算那个 commit**（2026-09-15 实撞）
+
+`architecture/ledger-baselines.json` 的 `allowGrowth` 由 `rfc317-ledger-highwater` 的两条判据夹住：
+
+- 「基线比上一个 commit 高、又没声明 allowGrowth」→ 红（挡住悄悄涨）；
+- 「声明了 allowGrowth，但**这个 commit 没涨**」→ 也红（`allowGrowth 无过期条目`，挡住长期挂着）。
+
+所以它的生命周期恰好是**一个 commit**：涨的那一笔里声明，**紧接着的下一笔里删掉**。
+
+实撞的形态是：AC 收尾那一笔正当地声明了 allowGrowth（新增一个导出符号），CI 绿；
+**下一笔是纯文档提交**（只动 `STATE.md` / `design/**`），我只跑了读 STATE.md 的那条测试就推了，
+于是 allowGrowth 在一个「没涨」的 commit 上过期，**主干红在一个没碰任何源码的提交上**。
+
+两条可操作的结论：
+
+1. **只要上一笔声明过 allowGrowth，下一笔无论改了什么都要删它**——把「删 allowGrowth」当成
+   声明它时就欠下的、下一笔必还的债。
+2. **纯文档提交不等于不用跑架构守卫。** `docs/**` / `design/**` / `STATE.md` 确实在
+   prettier / CI-format 的范围外，但 `rfc317-ledger-highwater` 判的是**commit 之间的基线差**，
+   与这一笔改了什么文件无关。推之前那条 `bun test packages/backend/tests/architecture/`
+   省不得——它 60 秒，比推红主干便宜得多。

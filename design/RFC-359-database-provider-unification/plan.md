@@ -28,13 +28,13 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                                                                                         | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 当日收敛轨迹**：530 → 460（判据从文本扫改成 AST 数真调用点）→ 421 → **401**，其中「真债」`OPEN_MIGRATION_DEBT` **95**。总账按**该不该双引擎**分成五条机械免责判据（`migration-chain` / `sqlite-execution-engine` / `real-file-database` / `sqlite-only-primitive` / `sync-engine-capability`）与「真债」两栏，后者是唯一需要往下压的数字。**尾巴的形状已经变了**（§5do）：剩下的 95 个文件里，批量转换器对 22 个候选实跑下来只有 3 个能迁，**8 个卡在 SQLite-only 的生产签名上**（intent apply / 资源包 apply / 资源上限 / 几个 `composeSqlite*` 参与者）。**继续压这个数字的正解不再是转换测试，而是逐对收生产侧的引擎（AC-1）**——每收一对，下游那一串测试自然跟着能迁。 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 当日收敛轨迹**：530 → 460（判据从文本扫改成 AST 数真调用点）→ 421 → **401**，其中「真债」`OPEN_MIGRATION_DEBT` **95**。总账按**该不该双引擎**分成五条机械免责判据（`migration-chain` / `sqlite-execution-engine` / `real-file-database` / `sqlite-only-primitive` / `sync-engine-capability`）与「真债」两栏，后者是唯一需要往下压的数字。**尾巴的形状已经变了**（§5do）：剩下的 95 个文件里，批量转换器对 22 个候选实跑下来只有 3 个能迁，**8 个卡在 SQLite-only 的生产签名上**（intent apply / 资源包 apply / 资源上限 / 几个 `composeSqlite*` 参与者）。**继续压这个数字的正解不再是转换测试，而是逐对收生产侧的引擎（AC-1）**——每收一对，下游那一串测试自然跟着能迁。 **2026-09-15 实测更正**：这一行写的「真债 95」**已过期**——`OPEN_MIGRATION_DEBT` 今天实测 **27 条**（`rfc359-w5-t19f-test-engine-hardcoding` 8 pass / 0 fail，账本与源码逐字相等）。剩余 27 条都是「没有机械正当理由的单引擎测试」，销账只有两条路：真迁到 `describeEachProvider`，或证明它落进 `SANCTIONED_SINGLE_ENGINE` 的某一类（账本明写**不许**为某个文件量身定做一条豁免）。抽查一条（`rfc097-task-status-cas.test.ts`，612 行 / 16 例）：被测的 `setTaskStatus` / `trySetTaskStatus` 本身是中立的，**可迁**，但它的 CAS 竞态用例是「在 helper 的 SELECT 与 UPDATE 之间插入竞争写者」，迁过去要重新对齐两个引擎的并发语义——**是真工作，不是机械转换**。 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。**2026-09-13 逮到一条用户可见的分叉并修掉**：数字员工「计划人审闸门」在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、PG 显示「规划中」）——成因是端口**同步且可选**，PG 侧的 composition 实现不了、少实现也没有任何地方会红。判定已收成一份 async 中立实现、两侧都装，并加了**装配锁**（删掉 PG 侧那个方法当场红 4 格，§5dm）。同批做了一次**全类扫查**：端口/参与者接口上的可选方法全仓只有 9 个，其余 8 个都是按功能可选（工作组宿主能力 / 连接目录 / 契约投影），不是按引擎——这一类已经清干净。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | **2026-09-13 连续 exact-SHA 全绿**：`63030aaea` / `b41a8cab2` / `55864e0c8` / `51aeda3f3` / `5b706bca8` / `7482255fc` 六笔各自的 push CI run 终态 success（十二个 ubuntu 后端分片带真 postgres:17、macOS 六分片、lint/format/depcheck、单二进制 build smoke、Playwright e2e）。同期修掉两次自己推出的红并各带回归用例：①`void <promise>` 没接 rejection（PG 上 `0 fail` 却退 1 的形态，§5dk）；②铸行 id 非单调（macOS 分片随机红，§5dl）。**仍待办**：RFC 收口后需要在最终 SHA 上再取一次终态取证。 | 进行中 |
 | AC-10 | 业务 provider literal 分支为零                    | **2026-09-15 账本清零**：`PROVIDER_BRANCH_DEBT` 从开账的 31 处 / 16 个文件降到 **0**。十一波各自的处方**不相同**，这是本 AC 最该带走的东西——同一个账本条目，销账方式取决于「那个分叉到底在问什么」：①**品牌换能力**（traits 声明答案：`migrationRole` / `serverVersionFallback` / `failureRecoveryHint` / `offlineCompaction` / `absentLocalStoreMessage`）；②**删恒假 / 摆设标签**；③**按 provider 查表**（`satisfies Record<DatabaseProvider, …>` 即 forcing function，把「少一个 provider」从运行时抛错提前成编译错——`PRE_OPEN_STAGED_RESTORE` / `ENGINE_HEALTH_CHECKS` / `LOCAL_SYSTEM_OPERATIONS_COMPOSERS`）；④**装配方交答案**（`openAdmissionStore` / `startSupervisor` / `databaseInit`）；⑤**搬进白名单层**（`requireDatabaseConfig`）；⑥**各自收敛到强的一侧**（§5fb，唯一一条真改了用户可见行为的）。**traits 放答案、不放机械**是其中一条硬边界：`cli/start.ts` 的暂存恢复答案是一段 SQLite 机械，所以走查表而不是 traits。 | ✅     |
 | AC-11 | 两引擎中位数基线，PG 各端点不劣于登记值 | **判据已换**（§5ey / §5ez，用户裁决「承认并改判据」）：从「PG 各端点 P95 不慢于 SQLite」换成「**中位数差不超过登记值**」。换的理由不是调数字过关，是**统计量选错了**——CI 的 `rounds: 20` 配 floor-quantile 让「P95」实际等于 **max**，六个轻端点的判决因此由单次抖动决定；而中位数差在每一个历史 run 上都同号。登记值逐端点写在 `scripts/perf-compare.ts` 的 `PERF_HTTP_SCENARIOS`（`medianAllowanceMs` + 可选 `medianAllowanceRatio`）。**换判据之后该红的照样红**：9 个历史 run 回放 4 FAIL / 5 PASS（`948d9b5f` / `602264d5`×2 红在 repos-first·reviews-pending，`dfb49eb8` / `56713f37` 红在 workgroup-pending +23.9/+24.9）。新判据上线第一跑就把**我自己校准错的一条登记值**顶了出来（`tasks-second` 的差随机器档次变号，EPYC 9V45 上 SQLite 提速 42% / PG 28%），据此补了比例项 `medianAllowanceRatio: 0.20`；`tasks-first` / `tasks-running` 九个 run 全负，比例项保持 0（不放宽）。**闭合条件**：在收口 SHA 上再取一次 `scale=full` 实测（`scripts/perf-run.ts`，100k tasks / 10M events）。 | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。**2026-09-14（§5ea）**：intent apply 合一带走九个 provider 命名的装配 / 工厂（`compose{Sqlite,Postgresql}IntentApplyOperations` / `compose|createSqliteIntentApplyArtifactLifecycle` / `compose{Sqlite,Postgresql}IntentMaintenance{CommandsForAppHome,SnapshotQueries}` / `composePostgresqlIntentApplyConvergence` / `composeSqliteSkillArtifactCompensation` / `createLegacyIntentApplyResourceSession`），换成不带引擎前缀的 `composeIntentApply*` / `composeIntentMaintenance*`。provider 命名文件 47 → **44**、适配器语料 130 → **120**、组合根 57 → **48**。                                                                                    **2026-09-15 分类（§5fi）**：剩余三条组合根占位**没有一条是「装配没做完」**——两条 `marker` 是**判据误报**（`intentCatalogActors` 那段是 WeakMap token 注册表不变量，`contextFor` 铸出即登记、`resolveActor` 读回，同一字面量同一作用域；处置是**按形状加豁免**而非改名——改名正是该守卫要防的逃逸），一条 `prose=5` 是**能力参数化**（那五个依赖确实可选，`review.ts:1078/1598` 只传 `{db, appHome}`；处置是把能力带进类型，属 API 形状变更，先定方向）。在这两件事之前占位数**降不下去、也不该靠改名或改必填硬降**。 | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。**2026-09-14（§5ea）**：intent apply 合一带走九个 provider 命名的装配 / 工厂（`compose{Sqlite,Postgresql}IntentApplyOperations` / `compose|createSqliteIntentApplyArtifactLifecycle` / `compose{Sqlite,Postgresql}IntentMaintenance{CommandsForAppHome,SnapshotQueries}` / `composePostgresqlIntentApplyConvergence` / `composeSqliteSkillArtifactCompensation` / `createLegacyIntentApplyResourceSession`），换成不带引擎前缀的 `composeIntentApply*` / `composeIntentMaintenance*`。provider 命名文件 47 → **44**、适配器语料 130 → **120**、组合根 57 → **48**。                                                                                    **2026-09-15 分类（§5fi）**：账本剩 **5 条**（先前误报为 3，已更正），**没有一条是「装配没做完」**——`marker` 那几条是 WeakMap **token 注册表不变量**（判据**高估**），`commandContext.ts` 的 `prose=5` 是**能力参数化**（依赖确实可选，`review.ts:1078/1598` 只传 `{db, appHome}`）。**另一个方向也不准**：`server.ts:2525` 有一处逐字同构的兜底因文案不含关键词而**两条判据都咬不到**（账本原话「改名逃逸不是假想」）。⇒ **占位计数现在不是可信的完工度量**。且这些前面的 session 已逐条分析、**明知误报也有意不豁免**；在已承认存在逃逸时再加豁免＝扩大盲区，故本轮不动判据。推进需一次方向裁决，两个选项见 §5fi。 | 进行中 |
 
 ### AC-9 取证（2026-09-10，exact `03b34a783`）
 
@@ -11898,10 +11898,14 @@ post({ type: 'init', version, catalogDigest, appHome: options.appHome, ...option
 
 在裁决前 AC-1 保持「进行中」，本节只做对账，不动任何判据数字。
 
-## §5fi —— AC-12 剩余三条占位的实测分类：两条是**判据误报**，一条是真的能力参数化
+## §5fi —— AC-12 剩余占位的实测分类：判据**两个方向都不准**，数字暂时不是可信度量
 
-同样是清完 AC-10 之后顺手核的。`COMPOSITION_ROOT_PLACEHOLDER_DEBT` 今天剩三条
-（marker=2, prose=5），逐条看下来**没有一条是「以后再补的装配槽」**：
+同样是清完 AC-10 之后顺手核的。
+
+**先更正一处我自己的清点错误**：`COMPOSITION_ROOT_PLACEHOLDER_DEBT` 今天是 **5 条**
+（`cli/postgresqlDaemonApplication.ts` / `cli/start.ts` / `commandContext.ts` /
+`taskEngineApplication.ts` / `server.ts`），不是 3 条——我先前只看了账本的一个窗口就报了 3。
+逐条看下来**没有一条是「以后再补的装配槽」**：
 
 ### 一、两条 `marker` 是误报：它们是 token 注册表不变量，不是装配槽
 
@@ -11951,8 +11955,26 @@ context」，是**不透明 token 的运行期不变量**，不是跨阶段装�
 （受影响面是 `CollaborationCommandContext<C>` 的全部调用方），**需要先定方向再动手**，
 不是机械改写。
 
-### 结论
+### 三、判据**另一个方向**也不准：已知有逃逸
 
-AC-12 的这三条**都不是「装配没做完」**：两条是判据误报（处置=按形状加豁免，单独一刀）、
-一条是能力参数化（处置=把能力带进类型，先定方向）。在这两件事之前，AC-12 的占位数**降不下去**，
-而且**也不该靠改名或改必填硬降**。本节只做分类与取证，不动任何数字。
+账本自己记着一条盲点（`server.ts` 条目上方）：`server.ts:2525` 有一处与 PG 根
+`digitalEmployee.runtime === null` **逐字同构**的兜底，只因文案写成
+`'task catalog requires the digital employee runtime'`、不带 `not-bound|not-composed`，
+**marker 与 prose 两条判据都咬不到它**。原话：「改名逃逸不是假想。」
+
+### 结论：先别动这个数字
+
+把两个方向合起来看：判据**既高估**（WeakMap token 注册表被算成占位）**又低估**
+（同构的兜底因为文案不同而漏掉）。所以**占位计数现在不是一个可信的完工度量**。
+
+更要紧的是：上面这些**前面的 session 已经逐条分析过并写进账本注释了**，而他们
+**明知是误报也选择留着不豁免**。那是一个有意的保守决定，理由就写在账本的总则里——
+「加一条豁免比修一处问题便宜，这正是账本会失控的方向」。在已经承认存在逃逸的前提下再加豁免，
+等于把已知的盲区继续扩大。
+
+**所以本轮不动判据、不加豁免、不改名、不改必填**，只把分类与取证落档。真要推进 AC-12，
+需要的是一次**方向裁决**：
+1. 是否接受「按形状豁免 token 注册表」，并同时**补上 `server.ts:2525` 那类文案逃逸**
+   （两件事一起做才不会让账本更不准）；还是
+2. 先做 `CollaborationCommandContext<C>` 的能力入类型（API 形状变更，影响全部调用方），
+   把 prose=5 真正消掉，marker 那几条留作已知误报并在账本里显式标注。

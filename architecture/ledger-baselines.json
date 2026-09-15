@@ -882,10 +882,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24745,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-10 第十一波：`maintenanceWorkerSupervisor.ts` 新增导出类型 `MaintenanceWorkerDatabaseInit`（装配方交给监工的那一半 init 帧）。涨的是这一个符号；同一刀里判别联合 `MaintenanceWorkerSupervisorOptions` 收成了单一形状，本账本因此净涨 1。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -902,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "36f6a63e87052fb855789a942ca73901ddc7cac7",
-    "contentDigest": "sha256:a8487be7e251feab4c341b651f19498896682f2d634c55a5ee777ffc74040348",
+    "currentSnapshotSha": "c577c7c25590b065b5ae392e9b7de129b30fc897",
+    "contentDigest": "sha256:681ce4523db6573cdb85c19da9931d7f7378fe5dd7775e29720ff0823a63440d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
