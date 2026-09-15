@@ -517,10 +517,12 @@ async function composePostgresqlProviderSession(
     openAdmissionStore: () => ({ store: createMaintenanceRunStore(db) }),
     startSupervisor: (_config, handlers) =>
       startMaintenanceWorkerSupervisor({
-        provider: 'postgresql',
-        generationId: input.provider.generation.payload.generationId,
-        database: input.config.database,
         appHome: Paths.root,
+        databaseInit: {
+          provider: 'postgresql',
+          generationId: input.provider.generation.payload.generationId,
+          database: input.config.database,
+        },
         ...handlers,
       }),
     appHome: Paths.root,
@@ -2692,14 +2694,16 @@ async function composeSqliteProviderSession(
       }),
     startSupervisor: (config, handlers) =>
       startMaintenanceWorkerSupervisor({
-        dbPath: Paths.db,
-        migrationsFolder,
         appHome: Paths.root,
-        sqlite: {
-          synchronous: config.sqliteSynchronous,
-          pageCacheMib: config.sqlitePageCacheMib,
-          mmapMib: config.sqliteMmapMib,
-          busyTimeoutMs: 50,
+        databaseInit: {
+          dbPath: Paths.db,
+          migrationsFolder,
+          sqlite: {
+            synchronous: config.sqliteSynchronous,
+            pageCacheMib: config.sqlitePageCacheMib,
+            mmapMib: config.sqliteMmapMib,
+            busyTimeoutMs: 50,
+          },
         },
         ...handlers,
       }),

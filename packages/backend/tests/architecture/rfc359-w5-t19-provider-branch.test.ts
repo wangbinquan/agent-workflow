@@ -332,7 +332,14 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // （`openAdmissionStore` / `startSupervisor` 两个工厂），`provider` 字段只留给 traits 查表。
   // 顺带这是该服务的第一个注入接缝——此前它直接 import 监工，既没法替身也没法断言，
   // 这正是它零覆盖的原因；接缝落地后补上了 `rfc359-ac10-maintenance-service-seam`。
-  'platform/background/maintenanceWorkerSupervisor.ts: 1',
+  // AC-10 第十一波销账：`maintenanceWorkerSupervisor.ts` 清零，**本账本至此为空**。
+  // 这是十一波里唯一一处拼的是**进程间线格式**而非本进程装配：监工原来按 `options.provider`
+  // 决定发哪一种 Worker `init` 帧，而两种帧字段互不相同（`MaintenanceWorkerInitSchema` 是
+  // protocol 里的 **strict** 联合）。所以它既不是能力差异、也做不成 traits；处方与 §5fc 同类——
+  // **交答案**：装配方把帧的连库那一半（`databaseInit`）交出来，监工只补协议头
+  // （`type` / `version` / `catalogDigest` / `appHome`）再 `post`。
+  // 顺带 `sqlite.busyTimeoutMs` 从 `?? 50` 的静默默认改成必填——那正是本 RFC 要消灭的
+  // 「落进 else」，只不过它穿的是 `??` 而不是 `if`。
   // AC-10 第一波销账：`server.ts` 的 `TProvider extends 'postgresql' ? … : …` 换成按 provider
   // 索引的表（`Record<DatabaseProvider, …>` 约束即 forcing function，加 provider 就编译不过）。
 ]

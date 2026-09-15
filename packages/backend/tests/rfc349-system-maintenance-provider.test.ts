@@ -104,16 +104,18 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     }
 
     startMaintenanceWorkerSupervisor({
-      provider: 'postgresql',
-      generationId: 'dbg_maintenance_pg',
       appHome: '/provider-owned/application-home',
-      database: {
+      databaseInit: {
         provider: 'postgresql',
-        urlEnv: 'RFC349_TEST_DATABASE_URL',
-        poolMax: 8,
-        connectTimeoutMs: 5_000,
-        statementTimeoutMs: 30_000,
-        idleTimeoutMs: 30_000,
+        generationId: 'dbg_maintenance_pg',
+        database: {
+          provider: 'postgresql',
+          urlEnv: 'RFC349_TEST_DATABASE_URL',
+          poolMax: 8,
+          connectTimeoutMs: 5_000,
+          statementTimeoutMs: 30_000,
+          idleTimeoutMs: 30_000,
+        },
       },
       workerFactory: () => worker,
       setTimer: () => Object.freeze({}),
@@ -121,13 +123,17 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     })
 
     expect(posted).toHaveLength(1)
+    // RFC-359 AC-10 第十一波：**线格式没有变**。装配方交给监工的那一半叫 `databaseInit`，
+    // 但监工是把它 spread 进 init 帧的——帧本身仍然是 protocol 里那个扁平的 strict 联合
+    // （`MaintenanceWorkerInitSchema`）。这条断言锁的是**帧**，所以它必须保持扁平；
+    // 如果这里跟着改成嵌套，就等于把一次「内部装配接缝」偷偷变成了一次协议变更。
     expect(posted[0]).toEqual({
       type: 'init',
       version: 1,
       catalogDigest: expect.any(String),
+      appHome: '/provider-owned/application-home',
       provider: 'postgresql',
       generationId: 'dbg_maintenance_pg',
-      appHome: '/provider-owned/application-home',
       database: {
         provider: 'postgresql',
         urlEnv: 'RFC349_TEST_DATABASE_URL',

@@ -40,37 +40,48 @@ interface MaintenanceWorkerSupervisorCommonOptions {
   readonly clearTimer?: (handle: unknown) => void
 }
 
-export type MaintenanceWorkerSupervisorOptions = MaintenanceWorkerSupervisorCommonOptions &
-  (
-    | Readonly<{
-        provider?: 'sqlite'
-        dbPath: string
-        migrationsFolder: string
-        sqlite: {
-          readonly synchronous: 'NORMAL' | 'FULL'
-          readonly pageCacheMib: number
-          readonly mmapMib: number
-          readonly busyTimeoutMs?: number
-        }
-        generationId?: never
-        database?: never
+/**
+ * init 帧里**连库参数**那一半；协议头（`type` / `version` / `catalogDigest` / `appHome`）由监工
+ * 自己补——那是它的身份，不该让装配方拼。
+ *
+ * RFC-359 AC-10 第十一波：这里原来是 `MaintenanceWorkerSupervisorOptions` 上一个按
+ * `provider` 字面量判别的联合，监工体内因此问一次 `options.provider === 'postgresql'`，
+ * 决定发哪一种 init 帧。两种帧的字段互不相同（`MaintenanceWorkerInitSchema` 是 protocol 里的
+ * **strict** 联合），所以这不是「能力差异」而是**两种线格式**——把它做成 traits 或能力查询都不对。
+ *
+ * 处方与 §5fc 的维护服务同类：**交答案**。装配方本来就知道自己在装哪个 provider，直接把这一半
+ * 帧交出来，监工只负责补协议头再 `post`。于是监工体内一个 provider 名都不问。
+ *
+ * 注意 `sqlite.busyTimeoutMs` 变成**必填**：原来监工里写 `options.sqlite.busyTimeoutMs ?? 50`，
+ * 那是「没写就静默当 50」——本 RFC 要消灭的正是这种落进 else 的默认，只不过它穿的是 `??`。
+ * 装配方本来就知道自己要多少，写出来。
+ */
+export type MaintenanceWorkerDatabaseInit =
+  | Readonly<{
+      dbPath: string
+      migrationsFolder: string
+      sqlite: Readonly<{
+        synchronous: 'NORMAL' | 'FULL'
+        pageCacheMib: number
+        mmapMib: number
+        busyTimeoutMs: number
       }>
-    | Readonly<{
+    }>
+  | Readonly<{
+      provider: 'postgresql'
+      generationId: string
+      database: Readonly<{
         provider: 'postgresql'
-        dbPath?: never
-        migrationsFolder?: never
-        sqlite?: never
-        generationId: string
-        database: {
-          readonly provider: 'postgresql'
-          readonly urlEnv: string
-          readonly poolMax: number
-          readonly connectTimeoutMs: number
-          readonly statementTimeoutMs: number
-          readonly idleTimeoutMs: number
-        }
+        urlEnv: string
+        poolMax: number
+        connectTimeoutMs: number
+        statementTimeoutMs: number
+        idleTimeoutMs: number
       }>
-  )
+    }>
+
+export type MaintenanceWorkerSupervisorOptions = MaintenanceWorkerSupervisorCommonOptions &
+  Readonly<{ databaseInit: MaintenanceWorkerDatabaseInit }>
 
 export interface MaintenanceWorkerSupervisor {
   wake(): void
@@ -345,32 +356,13 @@ export function startMaintenanceWorkerSupervisor(
         }
         scheduleSpawn()
       })
-      if (options.provider === 'postgresql') {
-        post({
-          type: 'init',
-          version: MAINTENANCE_PROTOCOL_VERSION,
-          catalogDigest: MAINTENANCE_CATALOG_DIGEST,
-          provider: 'postgresql',
-          generationId: options.generationId,
-          appHome: options.appHome,
-          database: options.database,
-        })
-      } else {
-        post({
-          type: 'init',
-          version: MAINTENANCE_PROTOCOL_VERSION,
-          catalogDigest: MAINTENANCE_CATALOG_DIGEST,
-          dbPath: options.dbPath,
-          migrationsFolder: options.migrationsFolder,
-          appHome: options.appHome,
-          sqlite: {
-            synchronous: options.sqlite.synchronous,
-            pageCacheMib: options.sqlite.pageCacheMib,
-            mmapMib: options.sqlite.mmapMib,
-            busyTimeoutMs: options.sqlite.busyTimeoutMs ?? 50,
-          },
-        })
-      }
+      post({
+        type: 'init',
+        version: MAINTENANCE_PROTOCOL_VERSION,
+        catalogDigest: MAINTENANCE_CATALOG_DIGEST,
+        appHome: options.appHome,
+        ...options.databaseInit,
+      })
       handshakeTimer = setTimer(
         () => scheduleRestart('maintenance worker handshake timed out', true),
         10_000,

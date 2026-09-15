@@ -32,7 +32,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。**2026-09-13 逮到一条用户可见的分叉并修掉**：数字员工「计划人审闸门」在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、PG 显示「规划中」）——成因是端口**同步且可选**，PG 侧的 composition 实现不了、少实现也没有任何地方会红。判定已收成一份 async 中立实现、两侧都装，并加了**装配锁**（删掉 PG 侧那个方法当场红 4 格，§5dm）。同批做了一次**全类扫查**：端口/参与者接口上的可选方法全仓只有 9 个，其余 8 个都是按功能可选（工作组宿主能力 / 连接目录 / 契约投影），不是按引擎——这一类已经清干净。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | **2026-09-13 连续 exact-SHA 全绿**：`63030aaea` / `b41a8cab2` / `55864e0c8` / `51aeda3f3` / `5b706bca8` / `7482255fc` 六笔各自的 push CI run 终态 success（十二个 ubuntu 后端分片带真 postgres:17、macOS 六分片、lint/format/depcheck、单二进制 build smoke、Playwright e2e）。同期修掉两次自己推出的红并各带回归用例：①`void <promise>` 没接 rejection（PG 上 `0 fail` 却退 1 的形态，§5dk）；②铸行 id 非单调（macOS 分片随机红，§5dl）。**仍待办**：RFC 收口后需要在最终 SHA 上再取一次终态取证。 | 进行中 |
-| AC-10 | 业务 provider literal 分支为零                    | **2026-09-15 精确账本 26 → 1 处 / 1 个文件**（`PROVIDER_BRANCH_DEBT`，穷尽性围栏按形状豁免不计）。第一～五波是可证无行为变化的那一类（品牌换 traits、恒假条件、摆设标签、bootstrap 客户端上提）。**第六波（§5fb）是唯一一条改了用户可见行为的**：`taskExecutionPersistence.ts` 的 2 处清零——两份 persistence 聚合的唯一差别是恢复管理面，而它四个方法里有两个不同、且**各让一个引擎更弱**，按用户「不允许两种数据库一个好一个不好」各自收敛到强的一侧。**第七波（§5fc）把 `maintenanceService.ts` 的 2 处清零**：判别联合改成由装配方交出`openAdmissionStore` / `startSupervisor` 两个工厂，同时给这个零覆盖的服务装上第一个注入接缝并补了覆盖——消分叉与补覆盖本来就是同一件事。**第八波（§5fd）把 `cli/start.ts` 的 2 处清零**，两处各用一条处方：预打开暂存恢复改成按 provider 查表（traits 放答案不放机械），配置收窄 `requirePostgresqlConfig` 搬进 `platform/persistence/`。**第九波（§5fe）把 `cli/doctor.ts` 清零**：按 provider 选体检项清单改成 `ENGINE_HEALTH_CHECKS` 查表，连那道手写的 never 汇一起消失（`satisfies Record<DatabaseProvider, …>` 把「少一个 provider」从运行时抛错提前成编译错）。**第十波（§5ff）把 `system-operations/composition.ts` 清零**：它是账本开账时归的「组合根装配」那一堆、也就是**合法的那一次选择**，处方是把两支各收成一个组合根、由 `satisfies Record<DatabaseProvider, …>` 的表选一次（两支形状不同且不该抹平——外部服务器侧一次装好，本地库文件侧是惰性装配）。**余下 1 处：`maintenanceWorkerSupervisor.ts`**，两套 Worker `init` **线格式**帧（protocol 里的 strict 联合），收敛要连十个调用点与进程间协议对拍一起走。 | 进行中 |
+| AC-10 | 业务 provider literal 分支为零                    | **2026-09-15 账本清零**：`PROVIDER_BRANCH_DEBT` 从开账的 31 处 / 16 个文件降到 **0**。十一波各自的处方**不相同**，这是本 AC 最该带走的东西——同一个账本条目，销账方式取决于「那个分叉到底在问什么」：①**品牌换能力**（traits 声明答案：`migrationRole` / `serverVersionFallback` / `failureRecoveryHint` / `offlineCompaction` / `absentLocalStoreMessage`）；②**删恒假 / 摆设标签**；③**按 provider 查表**（`satisfies Record<DatabaseProvider, …>` 即 forcing function，把「少一个 provider」从运行时抛错提前成编译错——`PRE_OPEN_STAGED_RESTORE` / `ENGINE_HEALTH_CHECKS` / `LOCAL_SYSTEM_OPERATIONS_COMPOSERS`）；④**装配方交答案**（`openAdmissionStore` / `startSupervisor` / `databaseInit`）；⑤**搬进白名单层**（`requireDatabaseConfig`）；⑥**各自收敛到强的一侧**（§5fb，唯一一条真改了用户可见行为的）。**traits 放答案、不放机械**是其中一条硬边界：`cli/start.ts` 的暂存恢复答案是一段 SQLite 机械，所以走查表而不是 traits。 | ✅     |
 | AC-11 | 两引擎中位数基线，PG 各端点不劣于登记值 | **判据已换**（§5ey / §5ez，用户裁决「承认并改判据」）：从「PG 各端点 P95 不慢于 SQLite」换成「**中位数差不超过登记值**」。换的理由不是调数字过关，是**统计量选错了**——CI 的 `rounds: 20` 配 floor-quantile 让「P95」实际等于 **max**，六个轻端点的判决因此由单次抖动决定；而中位数差在每一个历史 run 上都同号。登记值逐端点写在 `scripts/perf-compare.ts` 的 `PERF_HTTP_SCENARIOS`（`medianAllowanceMs` + 可选 `medianAllowanceRatio`）。**换判据之后该红的照样红**：9 个历史 run 回放 4 FAIL / 5 PASS（`948d9b5f` / `602264d5`×2 红在 repos-first·reviews-pending，`dfb49eb8` / `56713f37` 红在 workgroup-pending +23.9/+24.9）。新判据上线第一跑就把**我自己校准错的一条登记值**顶了出来（`tasks-second` 的差随机器档次变号，EPYC 9V45 上 SQLite 提速 42% / PG 28%），据此补了比例项 `medianAllowanceRatio: 0.20`；`tasks-first` / `tasks-running` 九个 run 全负，比例项保持 0（不放宽）。**闭合条件**：在收口 SHA 上再取一次 `scale=full` 实测（`scripts/perf-run.ts`，100k tasks / 10M events）。 | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。**2026-09-14（§5ea）**：intent apply 合一带走九个 provider 命名的装配 / 工厂（`compose{Sqlite,Postgresql}IntentApplyOperations` / `compose|createSqliteIntentApplyArtifactLifecycle` / `compose{Sqlite,Postgresql}IntentMaintenance{CommandsForAppHome,SnapshotQueries}` / `composePostgresqlIntentApplyConvergence` / `composeSqliteSkillArtifactCompensation` / `createLegacyIntentApplyResourceSession`），换成不带引擎前缀的 `composeIntentApply*` / `composeIntentMaintenance*`。provider 命名文件 47 → **44**、适配器语料 130 → **120**、组合根 57 → **48**。                                                                                    | 进行中 |
 
@@ -11819,3 +11819,45 @@ const { module, prepareRestoreArtifact } =
 监工只补协议头 `type` / `version` / `catalogDigest` / `appHome`），但它拼的是**进程间协议**
 而不是本进程装配，改动面也大一档：十个调用点（2 生产 / 8 测试）加 `rfc338-maintenance-worker*`
 的对拍。留作下一波。
+
+## §5fg —— AC-10 第十一波：**品牌分叉账本清零**（开账 31 处 / 16 个文件 → 0）
+
+最后一处是 `maintenanceWorkerSupervisor.ts`，也是十一波里**唯一一处拼的是进程间线格式**、
+而不是本进程装配的。监工原来按 `options.provider === 'postgresql'` 决定发哪一种 Worker `init`
+帧，而两种帧字段互不相同（`MaintenanceWorkerInitSchema` 是 protocol 里的 **strict** 联合）。
+
+所以前几波的处方都套不上：它不是「能力差异」（做不成 traits），也不是「选实现」（不是查表
+挑一段代码跑），它就是**两种线格式**。处方与 §5fc 的维护服务同类——**交答案**：
+
+```
+export type MaintenanceWorkerDatabaseInit =
+  | Readonly<{ dbPath; migrationsFolder; sqlite: { synchronous; pageCacheMib; mmapMib; busyTimeoutMs } }>
+  | Readonly<{ provider: 'postgresql'; generationId; database: {…} }>
+
+post({ type: 'init', version, catalogDigest, appHome: options.appHome, ...options.databaseInit })
+```
+
+装配方把帧的**连库那一半**交出来，监工只补协议头（`type` / `version` / `catalogDigest` /
+`appHome`）——协议头是监工的身份，不该让装配方拼。于是监工体内一个 provider 名都不问。
+
+顺带 `sqlite.busyTimeoutMs` 从 `options.sqlite.busyTimeoutMs ?? 50` 的**静默默认**改成必填：
+那正是本 RFC 一直在消灭的「落进 else 继承 SQLite 行为」，只不过它穿的是 `??` 而不是 `if`。
+装配方本来就知道自己要多少，写出来。十个调用点（2 生产 / 8 测试）由编译器逐个顶出来。
+
+### 一条差点被偷换的判据
+
+批量改调用点时，正则把 `rfc349-system-maintenance-provider` 里**期望的 init 帧**也一起嵌套了
+（它和调用点长得一样）。测试当场红——而这一红很要紧：`databaseInit` 是**装配方交给监工的入参
+名**，帧本身仍然是 protocol 里那个扁平的 strict 联合。如果那条期望跟着改成嵌套，就等于把一次
+**内部装配接缝**偷偷变成了一次**协议变更**。已恢复扁平，并在断言上方写明它锁的是帧、不是入参。
+
+### 账本
+
+`PROVIDER_BRANCH_DEBT` **清空**（1 → 0 条目 / 1 → 0 处）；`ledger-baselines` 的
+`rfc359-w5-provider-branch` 基线 1 → **0**；`rfc349-provider-completeness` 的
+`PROVIDER_FORK_LEDGER` 里该文件整条退役。
+
+**AC-10 的判据是「业务 provider literal 分支为零」——账本至此逐字为零。**
+（白名单目录 `platform/persistence/` 下的翻译层不计，那是设计上就该知道品牌的地方；
+穷尽性围栏按形状本来就豁免，而本波之后连围栏都不剩几处——查表把「少一个 provider」
+从运行时抛错提前成了编译错。）

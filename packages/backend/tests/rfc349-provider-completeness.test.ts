@@ -132,7 +132,8 @@ const PROVIDER_FORK_LEDGER = {
   // 字面量判别的联合，服务体内因此问了两次——准入存储怎么来、Worker 监工怎么起。改成由
   // 装配方交出 `openAdmissionStore` / `startSupervisor` 两个工厂（两个调用点本来就各自知道
   // 自己在装哪个 provider），`provider` 字段只留给 traits 查表，fork 与围栏一并消失。
-  'platform/background/maintenanceWorkerSupervisor.ts': { forks: 1, fence: 'discriminated-union' },
+  // RFC-359 AC-10 第十一波销账：条目退役（1 → 0）。Worker `init` 帧的连库那一半由装配方交出
+  // （`databaseInit`），监工只补协议头；判别联合与 fork 一并消失。
   // RFC-359 T19h: runtime selection plus three engine-specific schema preparation branches.
   'platform/persistence/databaseProviderRuntime.ts': { forks: 4, fence: 'fenced-dispatch' },
   // RFC-359：统一事务原语按客户端品牌挑会话实现（$provider 缺失 = bun:sqlite），残余分支沉入 never 汇。

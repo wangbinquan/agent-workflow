@@ -114,10 +114,12 @@ describe('RFC-338 maintenance Worker boot drain', () => {
     const second = new FakeWorker()
     const workers: FakeWorker[] = [first, second]
     const supervisor = startMaintenanceWorkerSupervisor({
-      dbPath: '/tmp/rfc338-boot-drain.sqlite',
-      migrationsFolder: MIGRATIONS,
       appHome: '/tmp/rfc338-boot-drain',
-      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      databaseInit: {
+        dbPath: '/tmp/rfc338-boot-drain.sqlite',
+        migrationsFolder: MIGRATIONS,
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
       workerFactory: () => workers.shift()!,
     })
     expect(first.messages[0]).toMatchObject({ type: 'init' })

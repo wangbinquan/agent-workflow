@@ -120,10 +120,12 @@ describe('RFC-338 maintenance Worker', () => {
     const workers = [first, second]
     const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
     const supervisor = startMaintenanceWorkerSupervisor({
-      dbPath: '/tmp/rfc338-supervisor.sqlite',
-      migrationsFolder: MIGRATIONS,
       appHome: '/tmp/rfc338-supervisor',
-      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      databaseInit: {
+        dbPath: '/tmp/rfc338-supervisor.sqlite',
+        migrationsFolder: MIGRATIONS,
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
       workerFactory: () => workers.shift()!,
       setTimer: (fn, ms) => {
         const timer = { fn, ms, cleared: false }
@@ -229,10 +231,12 @@ describe('RFC-338 maintenance Worker', () => {
     const workers = [first, second]
     const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
     const supervisor = startMaintenanceWorkerSupervisor({
-      dbPath: '/tmp/rfc338-close.sqlite',
-      migrationsFolder: MIGRATIONS,
       appHome: '/tmp/rfc338-close',
-      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      databaseInit: {
+        dbPath: '/tmp/rfc338-close.sqlite',
+        migrationsFolder: MIGRATIONS,
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
       workerFactory: () => workers.shift()!,
       setTimer: (fn, ms) => {
         const timer = { fn, ms, cleared: false }
@@ -300,10 +304,12 @@ describe('RFC-338 maintenance Worker', () => {
     const second = new FakeWorker()
     const workers = [first, second]
     const supervisor = startMaintenanceWorkerSupervisor({
-      dbPath: '/tmp/rfc338-pause-resume.sqlite',
-      migrationsFolder: MIGRATIONS,
       appHome: '/tmp/rfc338-pause-resume',
-      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      databaseInit: {
+        dbPath: '/tmp/rfc338-pause-resume.sqlite',
+        migrationsFolder: MIGRATIONS,
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
       workerFactory: () => workers.shift()!,
     })
     first.emit({
@@ -368,10 +374,12 @@ describe('RFC-338 maintenance Worker', () => {
     const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
     let now = 1_000
     const supervisor = startMaintenanceWorkerSupervisor({
-      dbPath: '/tmp/rfc338-heartbeat.sqlite',
-      migrationsFolder: MIGRATIONS,
       appHome: '/tmp/rfc338-heartbeat',
-      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      databaseInit: {
+        dbPath: '/tmp/rfc338-heartbeat.sqlite',
+        migrationsFolder: MIGRATIONS,
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
       workerFactory: () => workers.shift()!,
       now: () => now,
       heartbeatTimeoutMs: 900,
@@ -450,10 +458,12 @@ describe('RFC-338 maintenance Worker', () => {
       resolveCompleted = resolve
     })
     const supervisor = startMaintenanceWorkerSupervisor({
-      dbPath,
-      migrationsFolder: MIGRATIONS,
       appHome,
-      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      databaseInit: {
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
       onEvent: (event) => {
         if (event.type === 'completed' && event.runId === 'worker-run') {
           if (event.outcome === 'deferred') {
@@ -527,10 +537,12 @@ describe('RFC-338 maintenance Worker', () => {
     let waitingForPostWakeHeartbeat = false
     const degraded: string[] = []
     const supervisor = startMaintenanceWorkerSupervisor({
-      dbPath,
-      migrationsFolder: MIGRATIONS,
       appHome,
-      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      databaseInit: {
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
       onEvent: (event) => {
         if (event.type === 'ready') resolveReady()
         if (event.type === 'heartbeat' && waitingForPostWakeHeartbeat) {
