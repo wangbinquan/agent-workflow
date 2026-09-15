@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2553,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24739
+    "symbolsIncludingFileRoots": 24744
   },
   "entries": [
     {
@@ -107463,6 +107463,18 @@
     {
       "currentContext": "system-operations",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#ComposedLocalSystemOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ComposedLocalSystemOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/system-operations/composition.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeLocalSystemOperations",
@@ -107475,12 +107487,36 @@
     {
       "currentContext": "system-operations",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composePostgresqlLocalSystemOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composePostgresqlLocalSystemOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/system-operations/composition.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composePostgresqlSystemOperations",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "composePostgresqlSystemOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeSqliteLocalSystemOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeSqliteLocalSystemOperations",
       "targetContext": "system-operations",
       "targetLayer": "composition"
     },
@@ -107535,12 +107571,36 @@
     {
       "currentContext": "system-operations",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#LOCAL_SYSTEM_OPERATIONS_COMPOSERS",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LOCAL_SYSTEM_OPERATIONS_COMPOSERS",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/system-operations/composition.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition.ts#LocalSystemOperations",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "LocalSystemOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#LocalSystemOperationsComposeInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LocalSystemOperationsComposeInput",
       "targetContext": "system-operations",
       "targetLayer": "composition"
     },
@@ -297545,5 +297605,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:34ee0c5ea84ff7c44b6fa661f99fa44ee395e34465c4106824f7f919797e6c1a"
+  "sourceDigest": "sha256:30fa27a3bf284866edc5db25b2fe024356f1ad4a7d849482466aca5725dec37a"
 }

@@ -18,6 +18,7 @@ import {
   resolveDatabaseProviderRuntime,
   type ResolvedDatabaseProviderRuntime,
   requireDatabaseConfig,
+  requireDatabaseProviderRuntime,
 } from '@/platform/persistence/databaseProviderRuntime'
 import {
   prepareDatabaseSchemaUpgrade,
@@ -25,6 +26,7 @@ import {
 } from './infrastructure/databaseSchemaUpgradeCoordinator'
 import {
   buildLogicalSchemaContract,
+  type DatabaseProvider,
   type LogicalSchemaContract,
 } from '@/platform/persistence/schemaContract'
 import {
@@ -249,6 +251,128 @@ export interface LocalSystemOperations {
   shutdown(): Promise<void>
 }
 
+/**
+ * 一个 provider 的本地系统运维装配：交出 `module` 与 `prepareRestoreArtifact` 两件东西。
+ *
+ * RFC-359 AC-10 第十波：这两支原来是 `composeLocalSystemOperations` 体内的一个
+ * `if (provider.provider === 'postgresql') … else …`。它是账本开账时归的「**组合根装配**」
+ * 那一堆——「装配期按 provider 选一次实现」本该只发生一次，而这里就是那一次，所以处方不是
+ * 「把答案声明进 traits」，也不是在原地查表判品牌，而是**把两套装配各自收成一个组合根**、
+ * 由一张按 `DatabaseProvider` 穷举的表选一次。
+ *
+ * 两支的形状本来就不同、也不该被抹平：外部服务器侧一次装好；本地库文件侧是**惰性**装配
+ * （`resolveDatabase()` / `resolveRestoreMigrations()` 到用时才开库、才解析迁移目录），
+ * 因为 `doctor` / `restore` 这类路径可能在库还不存在时就调到它。
+ */
+interface LocalSystemOperationsComposeInput {
+  readonly provider: ResolvedDatabaseProviderRuntime
+  readonly databaseConfig: DatabaseConfig
+  readonly appHome: string
+  readonly contract: ReturnType<typeof buildLogicalSchemaContract>
+  readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant | undefined
+}
+
+interface ComposedLocalSystemOperations {
+  readonly module: SystemOperationsModule
+  readonly prepareRestoreArtifact: (path: string) => Promise<RestoreArtifactRef>
+}
+
+function composePostgresqlLocalSystemOperations({
+  provider,
+  databaseConfig,
+  appHome,
+  contract,
+  repositoryBackupPreparation: injectedBackupPreparation,
+}: LocalSystemOperationsComposeInput): ComposedLocalSystemOperations {
+  // RFC-359 AC-10：「运行时选了这一支、配置也必须是这一支」的收窄，与紧挨着的
+  // `requireDatabaseProviderRuntime` 同一层、同一个名字家族（§5fd 把它从 `cli/start.ts`
+  // 的手写版搬进 `platform/persistence/`）。这里是它的第二个消费者。
+  const postgresqlConfig = requireDatabaseConfig(databaseConfig, 'postgresql')
+  const runtime = requireDatabaseProviderRuntime(provider, 'postgresql')
+  const database = runtime.openClient()
+  const repositoryBackupPreparation =
+    injectedBackupPreparation ??
+    composeRepositoryWorkspaceOperations(
+      composePostgresqlRepositoryWorkspaceStore(database),
+      createSecretBox(Paths.secretKeyFile),
+    ).backupPreparation
+  const module = composePostgresqlSystemOperations({
+    runtime: runtime.runtime,
+    db: database,
+    databaseConfig: postgresqlConfig,
+    repositoryBackupPreparation,
+    appHome,
+    lockPath: Paths.lock,
+    contract,
+  })
+  const prepareRestoreArtifact = async (path: string) => module.artifacts.ingestLocalPath(path)
+  return { module, prepareRestoreArtifact }
+}
+
+function composeSqliteLocalSystemOperations({
+  provider,
+  appHome,
+  repositoryBackupPreparation: injectedBackupPreparation,
+}: LocalSystemOperationsComposeInput): ComposedLocalSystemOperations {
+  const artifacts = createRestoreArtifactIngress({
+    uploadRoot: join(appHome, '.restore-upload'),
+  })
+  let restoreMigrations: Promise<string> | undefined
+  const resolveRestoreMigrations = (): Promise<string> => {
+    restoreMigrations ??= resolveMigrationsFolder({ force: true })
+    return restoreMigrations
+  }
+  let database: DbClient | null = null
+  let composedBackupPreparation: RepositoryBackupPreparationParticipant | null = null
+  const sqliteRuntime = requireDatabaseProviderRuntime(provider, 'sqlite')
+  const resolveDatabase = async (): Promise<DbClient> =>
+    (database ??= sqliteRuntime.openClient({
+      migrationsFolder: await resolveMigrationsFolder(),
+    }))
+  const resolveBackupPreparation = async (): Promise<RepositoryBackupPreparationParticipant> => {
+    if (composedBackupPreparation !== null) return composedBackupPreparation
+    composedBackupPreparation = composeRepositoryWorkspaceOperations(
+      composeSqliteRepositoryWorkspaceStore(await resolveDatabase()),
+      createSecretBox(Paths.secretKeyFile),
+    ).backupPreparation
+    return composedBackupPreparation
+  }
+  const repositoryBackupPreparation =
+    injectedBackupPreparation ??
+    Object.freeze({
+      async prepare(input: Parameters<RepositoryBackupPreparationParticipant['prepare']>[0]) {
+        return (await resolveBackupPreparation()).prepare(input)
+      },
+    })
+  const adapter = createLegacyPlatformRecoveryAdapter({
+    artifacts,
+    appHome,
+    dbPath: Paths.db,
+    lockPath: Paths.lock,
+    async backupResources() {
+      return { db: await resolveDatabase() }
+    },
+    prepareBackup: bindRepositoryBackupPreparation(repositoryBackupPreparation),
+    postOpenRecovery: composeSqlitePostRestoreRecovery(),
+    resolveRestoreMigrations,
+  })
+  const module = composeSystemOperationsWithArtifacts({ artifacts, adapter })
+  const prepareRestoreArtifact = async (path: string) => {
+    await resolveRestoreMigrations()
+    return module.artifacts.ingestLocalPath(path)
+  }
+  return { module, prepareRestoreArtifact }
+}
+
+/** 按 provider 查表；表按 `DatabaseProvider` 穷举，少一个 provider 就编译不过。 */
+const LOCAL_SYSTEM_OPERATIONS_COMPOSERS = {
+  postgresql: composePostgresqlLocalSystemOperations,
+  sqlite: composeSqliteLocalSystemOperations,
+} satisfies Record<
+  DatabaseProvider,
+  (input: LocalSystemOperationsComposeInput) => ComposedLocalSystemOperations
+>
+
 export function composeLocalSystemOperations(
   deps: {
     readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant
@@ -268,78 +392,13 @@ export function composeLocalSystemOperations(
       operationsRoot: Paths.databaseMigrationsDir,
       contract,
     })
-  let module: SystemOperationsModule
-  let prepareRestoreArtifact: (path: string) => Promise<RestoreArtifactRef>
-  if (provider.provider === 'postgresql') {
-    // RFC-359 AC-10：「运行时选了这一支、配置也必须是这一支」的收窄，与紧挨着的
-    // `requireDatabaseProviderRuntime` 同一层、同一个名字家族（§5fd 把它从 `cli/start.ts`
-    // 的手写版搬进 `platform/persistence/`）。这里是它的第二个消费者。
-    const postgresqlConfig = requireDatabaseConfig(databaseConfig, 'postgresql')
-    const database = provider.openClient()
-    const repositoryBackupPreparation =
-      deps.repositoryBackupPreparation ??
-      composeRepositoryWorkspaceOperations(
-        composePostgresqlRepositoryWorkspaceStore(database),
-        createSecretBox(Paths.secretKeyFile),
-      ).backupPreparation
-    module = composePostgresqlSystemOperations({
-      runtime: provider.runtime,
-      db: database,
-      databaseConfig: postgresqlConfig,
-      repositoryBackupPreparation,
-      appHome,
-      lockPath: Paths.lock,
-      contract,
-    })
-    prepareRestoreArtifact = async (path) => module.artifacts.ingestLocalPath(path)
-  } else {
-    const artifacts = createRestoreArtifactIngress({
-      uploadRoot: join(appHome, '.restore-upload'),
-    })
-    let restoreMigrations: Promise<string> | undefined
-    const resolveRestoreMigrations = (): Promise<string> => {
-      restoreMigrations ??= resolveMigrationsFolder({ force: true })
-      return restoreMigrations
-    }
-    let database: DbClient | null = null
-    let composedBackupPreparation: RepositoryBackupPreparationParticipant | null = null
-    const resolveDatabase = async (): Promise<DbClient> =>
-      (database ??= provider.openClient({
-        migrationsFolder: await resolveMigrationsFolder(),
-      }))
-    const resolveBackupPreparation = async (): Promise<RepositoryBackupPreparationParticipant> => {
-      if (composedBackupPreparation !== null) return composedBackupPreparation
-      composedBackupPreparation = composeRepositoryWorkspaceOperations(
-        composeSqliteRepositoryWorkspaceStore(await resolveDatabase()),
-        createSecretBox(Paths.secretKeyFile),
-      ).backupPreparation
-      return composedBackupPreparation
-    }
-    const repositoryBackupPreparation =
-      deps.repositoryBackupPreparation ??
-      Object.freeze({
-        async prepare(input: Parameters<RepositoryBackupPreparationParticipant['prepare']>[0]) {
-          return (await resolveBackupPreparation()).prepare(input)
-        },
-      })
-    const adapter = createLegacyPlatformRecoveryAdapter({
-      artifacts,
-      appHome,
-      dbPath: Paths.db,
-      lockPath: Paths.lock,
-      async backupResources() {
-        return { db: await resolveDatabase() }
-      },
-      prepareBackup: bindRepositoryBackupPreparation(repositoryBackupPreparation),
-      postOpenRecovery: composeSqlitePostRestoreRecovery(),
-      resolveRestoreMigrations,
-    })
-    module = composeSystemOperationsWithArtifacts({ artifacts, adapter })
-    prepareRestoreArtifact = async (path) => {
-      await resolveRestoreMigrations()
-      return module.artifacts.ingestLocalPath(path)
-    }
-  }
+  const { module, prepareRestoreArtifact } = LOCAL_SYSTEM_OPERATIONS_COMPOSERS[provider.provider]({
+    provider,
+    databaseConfig,
+    appHome,
+    contract,
+    repositoryBackupPreparation: deps.repositoryBackupPreparation,
+  })
   const context = Object.freeze({}) as LocalSystemOperationContext
 
   const localOperations: LocalSystemOperations = {

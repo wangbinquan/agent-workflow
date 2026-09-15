@@ -851,6 +851,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0201aab8a09cbc7fd70d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file",
+      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toSymbol": "DatabaseProvider",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts#$file",
@@ -59809,6 +59826,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c54052f9c545d4673636",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#requireDatabaseProviderRuntime",
+      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toSymbol": "requireDatabaseProviderRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "fromSymbol": "$file",
@@ -78236,9 +78270,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4602,
+    "architectureExceptions": 4604,
     "implementationSccs": 0,
-    "observedEdges": 5115,
+    "observedEdges": 5117,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -78917,6 +78951,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "id": "import:0201aab8a09cbc7fd70d",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/schemaContract",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseProvider",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -140840,6 +140890,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "id": "import:c54052f9c545d4673636",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseProviderRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "requireDatabaseProviderRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#requireDatabaseProviderRuntime"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
@@ -160624,7 +160690,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:34ee0c5ea84ff7c44b6fa661f99fa44ee395e34465c4106824f7f919797e6c1a",
+  "sourceDigest": "sha256:30fa27a3bf284866edc5db25b2fe024356f1ad4a7d849482466aca5725dec37a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

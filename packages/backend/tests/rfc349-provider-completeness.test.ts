@@ -113,7 +113,8 @@ const PROVIDER_FORK_LEDGER = {
   // 本刀 2 → 0：bootstrap 客户端改由 `prepareDatabaseProviderForBoot` 交出
   // （`openBootstrapClient()`），两支的唯一差别（`openClient` 入参个数）随之消失。
   // 文件里残留的两处 `unhandledDatabaseProvider` 穷尽性围栏不计债（按形状豁免）。
-  'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },
+  // RFC-359 AC-10 第十波销账：条目退役（1 → 0）。两支各自收成一个组合根，由按
+  // `DatabaseProvider` 穷举的表选一次；判别联合的收窄与 fork 一并消失。
   // RFC-354 T4: the frame backfill picks its store by the provider-keyed
   // `FrameBackfillDatabase` union — a third provider cannot be passed in
   // without its own variant.

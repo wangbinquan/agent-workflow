@@ -303,7 +303,12 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // `requireDatabaseConfig`（§5fd 把它从 `cli/start.ts` 的手写版搬进 `platform/persistence/`，
   // 与紧挨着的 `requireDatabaseProviderRuntime` 同一个名字家族）。这里是它的第二个消费者。
   // 余下 1 处是外层的组合根选择（两套完整模块装配），销账走组合根上提。
-  'modules/system-operations/composition.ts: 1',
+  // AC-10 第十波销账：`modules/system-operations/composition.ts` 清零。这是账本开账时归的
+  // 「**组合根装配**」那一堆——「装配期按 provider 选一次实现」本该只发生一次，而这里就是
+  // 那一次，所以处方既不是 traits 查表、也不是在原地按品牌拐：把两支各自收成一个组合根
+  // （`compose{Postgresql,Sqlite}LocalSystemOperations`），由 `satisfies Record<DatabaseProvider, …>`
+  // 的表选一次。两支的形状本来就不同、也不该抹平：外部服务器侧一次装好，本地库文件侧是
+  // **惰性**装配（到用时才开库、才解析迁移目录），因为 doctor / restore 可能在库还不存在时调到它。
   // AC-10 第一波销账：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` /
   // `postgresqlProviderBackup` 共 5 处改问 `databaseProviderTraits(...).migrationRole`
   // （`sqlite ⇒ source` / `postgresql ⇒ target`），三个文件都已有同名判据的在文先例；
