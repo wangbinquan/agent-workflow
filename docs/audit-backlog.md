@@ -5280,3 +5280,52 @@ LOG:  checkpointer process was terminated by signal 6: Aborted
 
 在腾出空间之前，任何足够大的 PG 测试都可能再把它写满、再崩一次，而症状每次都会伪装成
 「某个测试文件有 teardown 竞态」。备用端点：`aw-pg-w57`，`postgres://postgres:postgres@127.0.0.1:55460/awtest`。
+
+## PostgreSQL 的 40001 仍会逃逸到调用方：`rfc359-w4-d19c` 工作组回合在 CI 上间歇红（2026-09-15 实撞，未修）
+
+**现象**：`RFC-359 W4-D19c —— 工作组回合引擎 [postgresql] > 成员瞬态故障重试耗尽…` 在
+ubuntu shard 5/12 红，**同名的 `[sqlite]` 那条同一次全绿**：
+
+```
+error: outcome.kind=failed summary=workgroup leader turn failed
+       message=Failed query: insert into "agent_workflow"."node_runs" (…)
+```
+
+服务端日志在**同一秒内**（03:23:48.484 / .491 / .498，失败发生在 .689）记了十条
+
+```
+ERROR: could not serialize access due to read/write dependencies among transactions
+```
+
+即 SQLSTATE **40001**。SQLite 侧没有 SSI，这条路径天然不会红——正是 RFC-359 要消灭的
+「同一件事两个引擎一个好一个不好」。
+
+**不是某一次提交造成的**：CI 的种子是 `(GITHUB_RUN_NUMBER * 10 + shard) % 2147483647`，
+**每个 run 的随机顺序都不同**，所以并发敏感的用例只在某些顺序上现形；撞见它的那一提
+（`4b0126e14`）只改了另一个测试文件的超时预算与文档。本机 `--isolate` 下该文件连跑 6 次
+15/15 全绿，复现不出来。
+
+**已知的逃逸面（`postgresqlSerializationRetry.ts` 头注自己写着）**：预算 10 次 + 满抖动退避
+已把常态冲突压到 0，「剩下的尖峰只出现在**维护作业与前台写重叠**的窗口……那段窗口里 6 次
+预算实测仍有个位数逃逸」。这次多半就落在那条曲线上。
+
+**另外记一个结构性的洞（待核实，不要当结论用）**：
+`platform/persistence/databaseTransaction.ts` 里三个入口都以
+
+```ts
+const reused = reuseFrame(client)
+if (reused !== undefined) return await body(reused)
+```
+
+开头。也就是说 `serializable()` 在**已有事务帧**时**整段跳过它自己的重试循环**；
+而 `transaction()` / `snapshotRead()` 本身不带重试。于是「`serializable()` 嵌在
+`transaction()` 里」这种形态会**既拿不到 SERIALIZABLE 隔离、也拿不到重试**。
+本次失败是否正是这个形态，**没有核实**——需要沿工作组回合引擎的写路径把最外层那一帧找出来。
+
+**候选处置**（都没做）：
+1. 把重试单元上提到**最外层帧**：谁开的帧谁负责重放，嵌套调用不再各自决定；
+2. `transaction()` / `snapshotRead()` 也带上同一套重试（40001 在 REPEATABLE READ 下同样可能）；
+3. 维持现状，但给这条用例显式标注「并发敏感、允许在特定顺序下重跑」——**最差的一条**，
+   等于把判据让给运气。
+
+**下一个接手的人先做第一步**：确认最外层帧是谁开的，再决定 1 还是 2。
