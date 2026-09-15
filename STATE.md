@@ -2,6 +2,59 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 35，**AC-10 判据达成：品牌分叉账本清零**）
+>
+> `PROVIDER_BRANCH_DEBT` 从开账的 **31 处 / 16 个文件**降到 **0**，`ledger-baselines` 基线同步为 0，
+> plan 的 AC-10 行改判 ✅。本段在续 34 的基础上又推三波（§5fe / §5ff / §5fg）。
+>
+> **最该带走的一句：同一个账本条目，销账方式取决于「那个分叉到底在问什么」。**
+> 十一波用了**六种**处方，硬套任何一种都会走偏：
+>
+> | 处方 | 用在哪 |
+> | --- | --- |
+> | ①品牌换能力（traits **声明答案**） | `migrationRole` / `serverVersionFallback` / `failureRecoveryHint` / `offlineCompaction` / `absentLocalStoreMessage` |
+> | ②删恒假 / 摆设标签 | frameBackfill 的 provider 标签、`postgresqlProviderBackup` 的恒假条件 |
+> | ③按 provider 查表 | `PRE_OPEN_STAGED_RESTORE` / `ENGINE_HEALTH_CHECKS` / `LOCAL_SYSTEM_OPERATIONS_COMPOSERS` |
+> | ④装配方交答案 | `openAdmissionStore` / `startSupervisor` / `databaseInit` |
+> | ⑤搬进白名单层 | `requireDatabaseConfig`（`cli/start.ts` → `platform/persistence/`） |
+> | ⑥各自收敛到强的一侧 | §5fb，**唯一一条真改了用户可见行为的** |
+>
+> 两条硬边界值得单记：
+> - **traits 放答案、不放机械**。`cli/start.ts` 的暂存恢复答案不是一句话、是一段 SQLite 恢复机械，
+>   所以走查表而**不是** traits——塞进 traits 只会让那张表开始 import 引擎实现。
+> - **查表比穷尽性围栏更进一步**。`satisfies Record<DatabaseProvider, …>` 把「少一个 provider」
+>   从运行时抛错提前成**编译错**，于是手写的 `unhandledDatabaseProvider` never 汇成了冗余
+>   （doctor / taskExecutionPersistence 两处因此直接删掉）。
+>
+> **最后一波差点把内部接缝偷换成协议变更**：批量改 supervisor 调用点时，正则把
+> `rfc349-system-maintenance-provider` 里**期望的 init 帧**也一起嵌套了（它和调用点长得一样）。
+> 测试当场红。`databaseInit` 是**装配方交给监工的入参名**，而帧本身仍是 protocol 里那个扁平的
+> strict 联合——那条期望若跟着改，就等于把一次内部装配接缝悄悄变成一次线格式变更。
+> 已恢复扁平并在断言上方写明它锁的是**帧**、不是入参。
+>
+> 落库：`36f6a63e8`（§5ff，composition 两支各收成组合根）→ `86785b0f5`（§5fg，账本清零）。
+> 前者 CI 已绿。验证口径：architecture 全套 699 pass / 0 fail；
+> 内容推导半径 139 文件以 **CI 同款 `--isolate`** 跑 1535 pass / 0 fail。
+>
+> **RFC-359 仍未完**，且本段顺手把两个 AC 的「还差什么」查清了（都是**对账，没动任何判据数字**）：
+>
+> - **AC-1（§5fh）—— 判据自相矛盾，需要一次裁决。** 实测：跨目录对已空、未验证对拍数 0、
+>   仍成对共存 **8 对**且逐条判过「不合」并各有双引擎对拍。但「完工线」有两份定义：
+>   AC 判据原文是「已登记的机制差异**保留对拍**，其余重复实现合一」（按此**已满足**），
+>   而 `PROVIDER_PAIR_COUNT` 的注释写「降到 **0** 才是合一完工线」（按此**还差 8 对**，
+>   含两套落盘工件格式与两台迁移器）。这直接决定 RFC 还剩多少工作量，**没擅自选一个**。
+> - **AC-12（§5fi）—— 三条占位没有一条是「装配没做完」。** 两条 `marker` 是**判据误报**
+>   （`intentCatalogActors` 那段是 WeakMap token 注册表不变量：`contextFor` 铸出即登记、
+>   `resolveActor` 读回，同一字面量同一作用域，没有任何「以后再 bind」）——处置是**按形状加豁免**，
+>   **不是改名**（改名正是该守卫写明要防的逃逸）；一条 `prose=5` 是**能力参数化**
+>   （那五个依赖确实可选，`review.ts:1078/1598` 只传 `{db, appHome}`），处置是把能力带进类型，
+>   属 API 形状变更，先定方向再动手。**在这两件事之前占位数降不下去，也不该硬降。**
+>
+> 其余：AC-6（`OPEN_MIGRATION_DEBT` 95 文件，plan 已判「正解是随 AC-1 逐对收生产侧引擎」）、
+> AC-8 / AC-9（收口 SHA 的终态取证）、AC-11（新中位数判据还缺一次 `scale=full`——
+> 判据原文要求在**收口 SHA** 上取，所以本段**刻意没有**提前 dispatch
+> `postgresql-evidence.yml`，那会花掉一次 210 分钟预算却拿到一个不是收口的 SHA）。
+
 > ## 📌 RFC-359 最新一段（2026-09-15 续 34，**AC-10 收到 10 → 2**；本段推红两次，两次都追到根）
 >
 > 本段落五笔，AC-10 的品牌分叉账本从 **10 处 / 6 个文件**降到 **2 处 / 2 个文件**（开账是 26）。
