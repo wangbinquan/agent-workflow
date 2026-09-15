@@ -2,6 +2,33 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 32，**AC-10 收到 26 → 10**，六个文件清零）
+>
+> 落档 plan §5fa（逐刀记录）。第一波之后又走了四刀：
+> · `cli/database.ts` / `cli/doctor.ts` 各一部分 → 新增 `serverVersionFallback` /
+>   `failureRecoveryHint` 两个 traits 字段；`--to` 从比字面量改成问 `migrationRole`。
+> · `cli/dbCompact.ts` 清零 + `doctor` 再减一 → `storage` 这一档**也不算终点**（它在本仓只有
+>   两个取值、与品牌一一对应，仍是同一张真值表的另一种拼法）；终点是**字段本身就是答案**：
+>   `offlineCompaction`（不能压缩就连要说的话一起给）、`absentLocalStoreMessage`。
+> · `cli/migrate.ts` 清零 → 回话改在 `prepareDatabaseProviderForBoot`（品牌已知处）定稿；
+>   源码锁随之**变强**（从「数出恰好两处 close」变成「恰好一处、且必须在 finally 里」）。
+> · `main.ts` 清零 → 那条分叉里藏着一次**算完就丢**的求值：SQLite 支 `await
+>   resolveMigrationsFolder()` 的结果根本没被用（prepare 阶段早已用同一个值开库并 adopt，
+>   `openClient(input)` 此时不看 `input`）。改由白名单层交出 `openBootstrapClient()`。
+> · WAL checkpoint 那道闸 → 顺带拆掉「中立后台服务 import sqlite 专属模块」这条层间依赖。
+>
+> **两条与「数字」有关的自我提醒**：
+> ① 账本只是**下界**——`MaintenanceServiceOptions` 的 `provider?: 'sqlite'` + `?? 'sqlite'`
+>    是标准的「静默落进 else」，但守卫只数等值比较/switch/条件类型，**看不见它**（已改必填，
+>    编译器当场顶出唯一依赖默认的调用点）。
+> ② 站点数减少 ≠ 条目数减少——checkpoint 那一刀把一行的站点数 3 → 2，条目数不变。
+>
+> **剩 10 处，三类，都不宜无网硬上**：`taskExecutionPersistence` 2 处（两分支行为不等价，
+> 等用户裁决）；maintenance 可辨识联合 2 处（路线=组合根上提，但 `startMaintenanceService`
+> 直接 import supervisor、**没有注入接缝**，加接缝与消分叉是同一件事）；
+> `start.ts` / `composition.ts` / `doctor.ts` 共 6 处（守护进程启动时序、eager-vs-lazy 模块图、
+> 跨层谓词），其中多处零覆盖，须先补网。
+
 > ## 📌 RFC-359 最新一段（2026-09-15 续 31，**AC-10 第一波**：品牌分叉 26 → 19）
 >
 > 落档 plan §5fa。AC-11 收口后 AC-10 是最明确的硬缺口（`provider === '<literal>'` 要为零，
