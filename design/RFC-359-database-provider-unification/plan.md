@@ -12560,3 +12560,41 @@ export const composePostgresqlApprovalGatewayRunner = composeApprovalGatewayRunn
 **匹配到了字符串字面量里的一段 import**（一条负 fixture 的内容就是一段 import 源码文本），
 把引号拆断、整个文件语法错。已 `git checkout` 该文件并改用手工收尾。
 **教训：批量重写只对 import / export 语句本身安全，不能对「长得像语句的字符串」下手。**
+
+## §5fv —— 把剩下 24 条从「还没做」变成「挡在哪」：AC-1 的余量全在 infrastructure 层
+
+§5fu 之后账本剩 32 条。逐条问「它为什么还在」，得到一张比数字有用得多的图。
+
+### 先补 3 条裁决（它们本来就不该合）
+
+机械分类把 3 条判成「无下层品牌依赖、可直接合」，读源码发现**判反了**——它们各自命中 §5fq ②：
+
+| 条目 | 为什么是 ② |
+| --- | --- |
+| `cli/doctor.ts::checkSealedCredentials` | doctor 要在**守护进程没起来**时也能查：SQLite 直接 `new Database(<文件>, {readonly:true})`，PostgreSQL 必须问一台**服务器**要连接池 |
+| `embed.ts::countEmbeddedSqlMigrations` | 两条迁移链是**两套各自落盘的工件**，与 `util/migrationsFolder.ts` 同一条理由 |
+| `embed.ts::extractMigrationsTo` | 同上 |
+
+**这是「机械信号只排序、不裁决」那句话的又一次兑现**（§5fs 已写过一次）：
+粗筛说「没有下层品牌依赖」，可真正的差异在**它自己那几行**里——`new Database(文件)`。
+
+### 剩下 24 条：没有一条是「composition 层自己的问题」
+
+逐条扫函数体里调用的品牌符号，**24 条全部**至少调一个下层的
+`create/composePostgresql*` 或 `create/composeSqlite*`：
+
+| 挡住它的下层 | 条目数 |
+| --- | --- |
+| infrastructure 层的成对适配器（`…Participant` / `…Operations` / `…Store` / `…Runtime`） | 20 |
+| 另加还挂在 `services/task` SQLite 专属启动面上的 | 4（`actionExecutionEnvironment` / `digitalEmployeeExecution` / `server.ts` 两条） |
+
+**结论：AC-1 在 composition 层已经基本做完了，余量全部沉在 infrastructure 层。**
+这 24 条不是 24 件独立的工作——它们是 20 来个 infrastructure 孪生**向上冒出来的影子**，
+下层合一，这一层会自己塌成一份。所以账本里每条的理由都改写成「挡在下层的哪个符号上」，
+下一个人看一眼就知道该去动谁，而不是从头再推一遍。
+
+典型链条：`actionExecutionEnvironment` ← `scriptActionExecution` + `agentActionExecution`
+（动一个下层，两条同时销）；而 `actionExecutionEnvironment` 自己挡在更下面——
+SQLite 那半走 `services/task` 的 `startTask`（legacy、12 处同步游标），
+PG 那半走 `PostgresqlRootTaskLaunchKernel`，**是两套启动架构**，
+不是一个引擎差异。那是 AC-6 乙类一直挂着的同一个 blocker。
