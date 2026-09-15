@@ -58,13 +58,13 @@ import { composeLegacyCodeReadProviders } from '@/modules/code-capability/compos
 import {
   composeCapabilityTemplateOperations,
   createPostgresqlCapabilityTemplatePackageMutationOwner,
-  createPostgresqlCapabilityTemplatePersistence,
+  createCapabilityTemplatePersistence,
 } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import {
   composePostgresqlMemoryOperations,
   composeSkillMemoryFusionParticipantFactory,
 } from '@/modules/memory/composition'
-import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
+import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
@@ -88,7 +88,7 @@ import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resourc
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
-import { composePostgresqlIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
@@ -109,7 +109,7 @@ import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
-import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
@@ -175,7 +175,7 @@ import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/develo
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import {
-  composePostgresqlDevelopmentConfigOperations,
+  composeDevelopmentConfigOperationsFor,
   type DevelopmentConfigResourceAccess,
 } from '@/modules/development-automation/composition/configOperations'
 import {
@@ -183,7 +183,7 @@ import {
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
 import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
-import { composePostgresqlRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeForeignResourceAclFor } from '@/modules/resource-catalog/composition/resourceAcl'
@@ -246,7 +246,7 @@ import {
   composeDevelopmentCodeHostEventObserver,
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import { composePostgresqlApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composePostgresqlEventCenter } from '@/modules/event-center/composition'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
@@ -294,7 +294,7 @@ import { createOidcProvidersService } from '@/services/oidcProviders'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { createRepositoryEndpointDiscovery } from '@/modules/integration/composition'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
-import { composePostgresqlPipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
+import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
@@ -602,7 +602,7 @@ export async function composePostgresqlApplication(
     },
     catalogBinding: {
       contexts: identityAccess.contexts,
-      authorization: composePostgresqlResourceScopeAccessParticipant(),
+      authorization: composeResourceScopeAccessParticipant(),
     },
   })
   const memoryCatalog = memoryOperations.catalog
@@ -731,7 +731,7 @@ export async function composePostgresqlApplication(
     db: input.db,
     secretBox: input.secretBox,
     connections: codeHostConnections,
-    pipeline: composePostgresqlPipelineEvidenceRunner(input.db),
+    pipeline: composePipelineEvidenceRunnerFor(input.db),
   })
 
   const codeHistoryQueries = composeCodeHistoryQueries(input.db)
@@ -744,7 +744,7 @@ export async function composePostgresqlApplication(
     registrations: developmentExecutionContractRegistrations,
     implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
   })
-  const capabilityTemplatePersistence = createPostgresqlCapabilityTemplatePersistence(input.db)
+  const capabilityTemplatePersistence = createCapabilityTemplatePersistence(input.db)
   const capabilityTemplateOperations = composeCapabilityTemplateOperations({
     db: input.db,
     access: {
@@ -975,7 +975,7 @@ export async function composePostgresqlApplication(
       codeHostConnections,
       repositoryPublicationTransport,
       dynamicWorkflow: Object.freeze({
-        persistence: composePostgresqlDynamicWorkflowPersistence(input.db),
+        persistence: composeDynamicWorkflowPersistence(input.db),
         validationContext,
       }),
       processConcurrencyScope: input.provider.runtime,
@@ -1216,7 +1216,7 @@ export async function composePostgresqlApplication(
     },
   })
 
-  const integrationTriggerSnapshots = composePostgresqlIntegrationTriggerResourceSnapshotFactory({
+  const integrationTriggerSnapshots = composeIntegrationTriggerResourceSnapshotFactory({
     assertNotBuiltin,
   })
   const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
@@ -1314,7 +1314,7 @@ export async function composePostgresqlApplication(
    * provider 上测的不是一回事）。能力不全的桩由下面几处 `supports*` 探测兜住。
    */
   const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
-  const developmentApprovalGateway = composePostgresqlApprovalGatewayRunner(input.db)
+  const developmentApprovalGateway = composeApprovalGatewayRunnerFor(input.db)
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composePostgresqlEventCenter({
     db: input.db,
@@ -1573,7 +1573,7 @@ export async function composePostgresqlApplication(
     db: input.db,
     identity: developmentAdapter.resourceAclIdentity,
   })
-  const developmentConfig = composePostgresqlDevelopmentConfigOperations({
+  const developmentConfig = composeDevelopmentConfigOperationsFor({
     db: input.db,
     developmentAdapter,
     access: developmentConfigAccess,
@@ -1625,7 +1625,7 @@ export async function composePostgresqlApplication(
     db: input.db,
     appHome: input.appHome,
     admissionLookup: developmentAdmissionLookup,
-    requirementSource: composePostgresqlRequirementSourceRunner(input.db),
+    requirementSource: composeRequirementSourceRunnerFor(input.db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: repositoryPublicationTransport,

@@ -92,7 +92,4 @@ export function composeSkillVersionCommitParticipantFactory(): SkillVersionCommi
   })
 }
 
-/** 旧名保留为装配别名，PG 装配收敛后删除。 */
-export const composePostgresqlSkillVersionCommitParticipantFactory =
-  composeSkillVersionCommitParticipantFactory
 export type PostgresqlSkillVersionCommitParticipantFactory = SkillVersionCommitParticipantFactory

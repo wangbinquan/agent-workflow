@@ -12522,3 +12522,41 @@ if (harness.capabilities.provider !== 'sqlite') {
 - 三条语料下限跟着降：identical-twins 111 → 108、adapter-production-consumer 111 → 107、
   provider-runtime-exercised 47 → 45（退出分母的是 store 两个 + catalog 两个，共四个 provider 命名的函数）。
 - 同文件孪生账本 **48 → 46**。
+
+## §5fu —— 一次退役 14 对纯装配别名：账本 46 → 32
+
+§5fs 开账后，先给剩下的 41 条 `漂移待合` 做了一次机械分类：把「品牌名是不是
+`export const <brand> = <一个中立目标>`」当判据扫一遍，**14 对全中**。
+
+它们的源码里自己写着结论：
+
+```ts
+/** 旧名保留为装配别名，bootstrap 收敛后删除。 */
+export const composeSqliteApprovalGatewayRunner = composeApprovalGatewayRunnerFor
+export const composePostgresqlApprovalGatewayRunner = composeApprovalGatewayRunnerFor
+```
+
+**一个函数，三个名字。** 与 §5fr 那一条是同一个毛病，只是这次一次找齐了。
+
+留着的唯一效果是**让账本、让读代码的人、也让测试以为这里有两份 provider 实现**——
+`rfc359-w5-provider-runtime-exercised` 的「provider 组合根」正是按名字派生的，
+于是它在**同一个组合根**上数了两遍（这条判据的语料下限因此一次从 45 掉到 31：
+掉的是重复计数，不是覆盖）。
+
+20 个别名（14 对，有几对只有单侧）全部删除，62 处消费者改用本名。
+
+### 两处需要手工收尾的
+
+- `capabilityTemplateOperations.ts` 的中立名是**从别处 import 进来的**，两个别名是它的再导出；
+  删掉别名后要补一句 `export { createCapabilityTemplatePersistence }`，
+  否则消费者得改 import 路径——**改名不该顺带改导入路径**。
+- `rfc349-digital-development-provider-boundary` 有一条**源码文本断言**
+  `expect(digital).toContain('composePostgresqlDigitalEmployeeMaintenanceCommands')`。
+  判据的意图不变（「维护命令这条路在装配面上出得来」），改成断言本名。
+
+### 一次工具性事故（记在这里提醒后来人）
+
+批量改名时用正则做「同一 import 语句里去重」，那个正则 `\{([^}]*)\}` 配 `re.S`
+**匹配到了字符串字面量里的一段 import**（一条负 fixture 的内容就是一段 import 源码文本），
+把引号拆断、整个文件语法错。已 `git checkout` 该文件并改用手工收尾。
+**教训：批量重写只对 import / export 语句本身安全，不能对「长得像语句的字符串」下手。**

@@ -100,28 +100,38 @@ describe('RFC-349 Development and Integration provider composition', () => {
     expect(fake.statements.every((statement) => statement.includes('agent_workflow'))).toBe(true)
   })
 
-  test('every PostgreSQL composition names its provider adapter instead of aliasing SQLite', () => {
+  // RFC-359 AC-1（plan §5fu）—— 这条判据**反过来了**，因为它要防的事已经发生完了。
+  //
+  // 原judgement 是「每个 PostgreSQL 装配都得指名自己的适配器，不许只是别名 SQLite 那份」——
+  // 它假设本 context 里**存在** PG 专属装配，只是怕它偷懒转交。经过 §5ft（工具连接目录合一，
+  // 那是这里唯一真的按 provider 分叉过的一处）与 §5fu（14 对纯装配别名退役），
+  // 本 context 里**一个 provider 专属装配都不剩了**：三个 runner 各只有一份中立入口。
+  //
+  // 原样留着就成了空转（`files` 为空，循环一次都不进），所以改成断言那个**更强的终态**：
+  // 这几个装配文件里**不得再出现任何 provider 命名的导出**。谁将来在这里新开一个
+  // `composePostgresqlXxx`，这条当场红——防的还是同一件事（provider 分叉悄悄回潮），
+  // 但防在更前面一步，而且不再依赖「清单里记得加上新文件」。
+  test('integration 装配面已无 provider 专属入口——谁新开一个品牌装配，这条当场红', () => {
     const files = [
       'modules/integration/composition/pipelineEvidence.ts',
       'modules/integration/composition/requirementSource.ts',
       'modules/integration/composition/approvalGateway.ts',
-      // RFC-359 AC-1（plan §5ft）：digitalEmployeeToolConnections.ts 已是一份中立入口
-      // （无 provider 分支可命名）。它此前是本 context 里**唯一真的按 provider 分叉**的一处——
-      // 一份写成 bun:sqlite 的同步 `.get()`、一份 `await`；按 §5fq 三条判据都不命中，判为漂移并合一。
-      // 合一后由本文件上面那条用例（PG 客户端上跑同一份 catalog）与
-      // `rfc359-w7-integration-composition-roots` 的双引擎用例共同覆盖——后者原本因为同步 store
-      // 在 PG 上不成立而**整条 skip 掉 PostgreSQL 泳道**，合一后那条 skip 也删掉了。
-      // RFC-359 W4-D13：development-automation 的装配已是一份中立入口（无 provider 分支可命名），
-      // 由 rfc349-digital-development-provider-boundary 与 rfc359-w4-d13-adapters 的双引擎用例覆盖。
-      // RFC-359 W4-D10：executionTerminalObserver.ts 已是一份中立入口（无 provider 分支可命名），
-      // 由 rfc349-digital-development-provider-boundary 与 rfc359-w4-d10-adapters 的双引擎用例覆盖。
+      'modules/integration/composition/digitalEmployeeToolConnections.ts',
     ]
-    for (const file of files) {
+    const branded = files.flatMap((file) => {
       const source = readFileSync(resolve(import.meta.dir, '..', 'src', file), 'utf8')
-      expect(source, file).toMatch(/(?:compose|create)Postgresql/)
-      expect(source, file).not.toMatch(
-        /(?:compose|create)Postgresql[A-Za-z0-9_]*[^{]*\{[^}]*return\s+(?:compose|create)Sqlite/s,
-      )
-    }
+      return [
+        ...source.matchAll(
+          /export\s+(?:function|const)\s+((?:compose|create)(?:Sqlite|Postgresql)[A-Za-z0-9_]*)/g,
+        ),
+      ].map((match) => `${file} :: ${match[1] ?? ''}`)
+    })
+
+    expect(
+      branded,
+      'integration 装配面又出现了 provider 命名的导出。先按 plan §5fq 的三条判据问自己：' +
+        '这个差异源于引擎本身吗（独有原语 / 独有资源形态 / 驱动强加的线上差异）？' +
+        '指不出来就别分叉——一份中立装配吃 `ProviderNeutralDatabase` 即可。',
+    ).toEqual([])
   })
 })

@@ -9,6 +9,3 @@ export function composeDynamicWorkflowPersistence(
 ): DynamicWorkflowPersistence {
   return new DrizzleDynamicWorkflowPersistence(db)
 }
-
-export const composeSqliteDynamicWorkflowPersistence = composeDynamicWorkflowPersistence
-export const composePostgresqlDynamicWorkflowPersistence = composeDynamicWorkflowPersistence

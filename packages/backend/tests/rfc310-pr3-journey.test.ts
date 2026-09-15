@@ -55,7 +55,7 @@ import {
   composeDevelopmentAutomation,
   type DevelopmentAutomationModule,
 } from '../src/modules/development-automation/composition'
-import { composeSqliteRequirementSourceRunner } from '../src/modules/integration/composition/requirementSource'
+import { composeRequirementSourceRunnerFor } from '../src/modules/integration/composition/requirementSource'
 import type { MissionRow } from '../src/modules/development-automation/application/ports/missionStore'
 import {
   createUploadSessionPersistence,
@@ -275,7 +275,7 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
   automation = composeDevelopmentAutomation({
     db,
     appHome: opened.appHome,
-    requirementSource: composeSqliteRequirementSourceRunner(db),
+    requirementSource: composeRequirementSourceRunnerFor(db),
   })
 }
 

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import {
-  composePostgresqlDigitalEmployeeMaintenanceCommands,
+  composeDigitalEmployeeMaintenanceCommands,
   composePostgresqlDigitalEmployeeWriterCutover,
 } from '@/modules/digital-employee/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -142,7 +142,7 @@ describe('RFC-349 Digital/Development PostgreSQL maintenance owners', () => {
   test('upload GC, retention and employee-input GC use owner tables and bounded counters', async () => {
     const fake = fixture()
     const development = composeDevelopmentAutomationMaintenanceCommands(fake.db)
-    const digital = composePostgresqlDigitalEmployeeMaintenanceCommands(fake.db)
+    const digital = composeDigitalEmployeeMaintenanceCommands(fake.db)
 
     await expect(development.sweepExpiredUploads(2_000, 100)).resolves.toBe(1)
     await expect(development.sweepRetention(2_000)).resolves.toEqual({

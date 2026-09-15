@@ -23,16 +23,16 @@ import { agents, users, workflows } from '@/db/schema'
 import { createPostgresqlIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
-import { composePostgresqlMemoryCatalogOperations } from '@/modules/memory/composition'
+import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
-import { composePostgresqlIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import {
   composePostgresqlSkillArtifactCompensation,
   composeLegacyIntentSkillArtifactCompat,
 } from '@/modules/resource-catalog/composition/intentApply'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
-import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
+import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import { composeSqlitePostRestoreRecovery } from '@/modules/system-operations/composition'
@@ -177,7 +177,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
   test('memory 的 scope 访问参与者：缺行为 none，公共资源可读，私有资源对外人不可读', async () => {
     const owner = await seedActor(harness.db)
     const stranger = await seedActor(harness.db)
-    const participant = composePostgresqlResourceScopeAccessParticipant()
+    const participant = composeResourceScopeAccessParticipant()
     const publicWorkflowId = `wf_${ulid()}`
     const privateWorkflowId = `wf_${ulid()}`
     await harness.db.insert(workflows).values([
@@ -228,7 +228,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     })
     const resources = createIntegrationTriggerResources(
       harness.db,
-      composePostgresqlIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     )
     const snapshots = await resources.loadAuthorized(triggerPairOf(owner), [
       { kind: 'scheduled-workflow', workflowId },
@@ -322,10 +322,10 @@ describeEachProvider('RFC-359 W7 —— Identity Access / Auth / Memory 组合�
 
   test('记忆目录装配：列表 / 单读 / 可见性过滤在两个引擎上同形', async () => {
     const actor = await seedActor(harness.db, 'admin')
-    const catalog = composePostgresqlMemoryCatalogOperations({
+    const catalog = composeMemoryCatalogOperations({
       db: harness.db,
       contexts: composeIdentityAccess(harness.db).contexts,
-      authorization: composePostgresqlResourceScopeAccessParticipant(),
+      authorization: composeResourceScopeAccessParticipant(),
     })
     expect(await catalog.queries.list()).toEqual([])
     expect(await catalog.queries.getById(`mem_${ulid()}`)).toBeNull()

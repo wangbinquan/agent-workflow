@@ -111,10 +111,6 @@ export function composeDigitalEmployeeMaintenanceCommands(
   }
 }
 
-/** RFC-349 期的 PostgreSQL 入口名，与中立入口同一实现。 */
-export const composePostgresqlDigitalEmployeeMaintenanceCommands =
-  composeDigitalEmployeeMaintenanceCommands
-
 /** 两个 provider 同一份（RFC-359 W4-D7a）。 */
 export function composeDigitalEmployeeWriterCutoverFor(
   db: ProviderNeutralDatabase,

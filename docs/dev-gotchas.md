@@ -7355,3 +7355,27 @@ gh run rerun <id> --failed
 条数没红、只有摘要红 ⇒ 装配图没变，只是被调用者改了名字 ⇒ 更新摘要并在旁边
 **写清这一次改的是什么名字**（该文件里已经积了七八条这样的注释，正是这么用的）。
 两条一起红才说明装配图真的变了，那时才要停下来查。
+
+### `git commit --amend` 会把 census 的 provenance SHA 变成**孤儿**，两条守卫当场红
+
+2026-09-15 实撞。顺序是这样的：
+
+1. `bun run scripts/architecture-census.ts --write --snapshot-sha HEAD` —— 它把
+   `architecture/*.json` 的 `provenance.currentSnapshotSha` 钉成**当时的 HEAD**；
+2. 发现漏了一个修复，`git commit --amend` 把那个 commit 换成了新 SHA；
+3. 推上去 —— 提交里的账本指着一个**已经不在历史上**的 SHA。
+
+CI 两格红，同一个根因：
+- `rfc294-canonical-manifests`：`merge-base --is-ancestor <currentSnapshotSha> HEAD` 失败；
+- 另一条的报错更直白：「账本记了当前历史走不到的 SHA（典型成因：记了 rebase 前的本地提交）」。
+
+**本地看不出来**：amend 之后我又跑了一次 census，本地文件已经指向新 SHA、架构守卫全绿；
+**红的是提交里的那份**。本地绿与提交内容不一致，正是这类事故最难自查的地方。
+
+**处置（二选一）**：
+- amend 之后**必须重跑一次 census 并把结果一起 amend 进去**（`--amend` 两次）；
+- 或者干脆**不要 amend 带 census 产物的提交**，补一笔新 commit。
+
+顺带：`gh api` 的 `{owner}/{repo}` 占位在 `$(...)` 里取到多行结果时会拼出带换行的 URL
+（`net/url: invalid control character in URL`）——`gh run list --json databaseId` 在同一
+SHA 有多个 workflow 时会返回多行，取 run id 要加 `select(.workflowName=="CI")` 再 `head -1`。

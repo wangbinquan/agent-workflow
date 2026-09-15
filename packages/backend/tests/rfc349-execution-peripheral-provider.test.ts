@@ -14,7 +14,7 @@ import {
   composePostgresqlAgentLaunchResourceOperations,
   composeSqliteAgentLaunchResourceOperations,
 } from '@/modules/task-execution/composition/agentLaunchResources'
-import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -128,7 +128,7 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
   test('SQLite agent-launch and dynamic-workflow adapters perform real durable reads and writes', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const agentLaunch = composeSqliteAgentLaunchResourceOperations(db)
-    const dynamicWorkflow = composeSqliteDynamicWorkflowPersistence(db)
+    const dynamicWorkflow = composeDynamicWorkflowPersistence(db)
 
     await agentLaunch.ensureHostWorkflow()
     await agentLaunch.ensureHostWorkflow()

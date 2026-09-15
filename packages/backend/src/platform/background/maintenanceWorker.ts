@@ -13,10 +13,7 @@ import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWrit
 import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
 import type { IntentMaintenanceCommands } from '@/modules/intent/public/commands'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
-import {
-  composeDigitalEmployeeMaintenanceCommands,
-  composePostgresqlDigitalEmployeeMaintenanceCommands,
-} from '@/modules/digital-employee/composition'
+import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/composition'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -564,7 +561,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       )
       maintenanceExecutionFence = createMaintenanceExecutionFence(client)
       developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(client)
-      digitalEmployeeMaintenance = composePostgresqlDigitalEmployeeMaintenanceCommands(client)
+      digitalEmployeeMaintenance = composeDigitalEmployeeMaintenanceCommands(client)
       const operational = createPostgresqlDatabaseOperationalAdapter({
         runtime,
         contract: buildLogicalSchemaContract(),

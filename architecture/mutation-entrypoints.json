@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1695,
+    "entries": 1691,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1841,54 +1841,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#createTemplateUpstreamOperations",
       "symbol": "createTemplateUpstreamOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#createPostgresqlCapabilityTemplatePersistence",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#createPostgresqlCapabilityTemplatePersistence",
-      "symbol": "createPostgresqlCapabilityTemplatePersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#createSqliteCapabilityTemplatePersistence",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#createSqliteCapabilityTemplatePersistence",
-      "symbol": "createSqliteCapabilityTemplatePersistence",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -11322,31 +11274,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
-      "symbol": "createSqliteDevelopmentAdapterStore",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/integration/infrastructure/developmentApprovalAdapter.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentApprovalAdapter.ts#createApprovalExecutionAdapter",
@@ -13121,31 +13048,6 @@
       "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#createFusionPersistence",
       "symbol": "createFusionPersistence",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#createPostgresqlFusionPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#createPostgresqlFusionPersistence",
-      "symbol": "createPostgresqlFusionPersistence",
       "targetContext": "knowledge-evolution",
       "targetLayer": "infrastructure"
     },
@@ -40502,7 +40404,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:476d78db586d26f9345f40f349a57f6fbfad7a49128f164a84649ba09f734f3b",
+  "sourceDigest": "sha256:d2031849b93724af401aa9a03d7d364ae6f3ad9065f2fc5c09db22b09bf353e7",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

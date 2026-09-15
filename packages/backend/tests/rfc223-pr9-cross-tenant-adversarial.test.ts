@@ -61,7 +61,7 @@ import {
   TEST_RESOURCE_SCOPE_AUTHORIZATION,
 } from './helpers/resourceScopeAuthority'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
+import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
@@ -357,7 +357,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
         appHome,
-        memories: composeSqliteMemoryCatalogOperations({
+        memories: composeMemoryCatalogOperations({
           db,
           contexts: composeIdentityAccess(db).contexts,
           authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,

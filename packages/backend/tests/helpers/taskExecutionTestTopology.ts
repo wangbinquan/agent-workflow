@@ -21,7 +21,7 @@ import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/mod
 import { composeWorkgroupTurnsOperations } from '../../src/modules/resource-catalog/composition/workgroupTurns'
 import { composeWorkgroupHostLedgerParticipantFactory } from '../../src/modules/task-execution/composition/workgroupHostLedger'
 import { createSqliteChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations'
-import { composeSqliteDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { buildWorkflowValidationContext } from '../../src/services/workflow.validator'
 import type { CodeHostConnectionsService } from '../../src/services/codeHost/connections'
 
@@ -87,7 +87,7 @@ export function composeTaskExecutionTestRuntime(
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       runtimeRegistry: composeRuntimeRegistryOperations(db),
       dynamicWorkflow: {
-        persistence: composeSqliteDynamicWorkflowPersistence(db),
+        persistence: composeDynamicWorkflowPersistence(db),
         validationContext: { load: () => buildWorkflowValidationContext(db) },
       },
       ...(options.codeHostConnections === undefined
@@ -199,7 +199,7 @@ export function runTaskWithRealTestTopology(
   const dynamicWorkflow =
     options.dynamicWorkflow ??
     Object.freeze({
-      persistence: composeSqliteDynamicWorkflowPersistence(options.db),
+      persistence: composeDynamicWorkflowPersistence(options.db),
       validationContext: { load: () => buildWorkflowValidationContext(options.db) },
     })
   const runtime = composeTaskExecutionRuntime({

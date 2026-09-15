@@ -96,7 +96,7 @@ import {
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
-import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
   composeResourceCatalogFor,
   type ProviderResourceCatalogComposition,
@@ -288,7 +288,7 @@ import { composeMissionInputUploadOperations } from '@/modules/development-autom
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import {
   composeCapabilityTemplateOperations,
-  createSqliteCapabilityTemplatePersistence,
+  createCapabilityTemplatePersistence,
 } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
@@ -387,16 +387,16 @@ import {
   composeDevelopmentCodeHostEventObserver,
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import {
   composeIntegrationTriggerResourceQueries,
   composeScheduledTaskRuntimeFor,
 } from '@/modules/integration/composition/scheduledTasks'
 import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integration/composition/webhookDispatch'
-import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
+import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
-import { composeSqliteRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import {
   createCodeHostWebhookDeliveryConsumer,
@@ -1555,7 +1555,7 @@ function composeApplicationEventCenter(
   developmentDeliveryProvider: DevelopmentDeliveryProvider,
   unstarted?: UnstartedApplicationScope,
 ): EventCenterModule {
-  const approvalGateway = composeSqliteApprovalGatewayRunner(deps.db)
+  const approvalGateway = composeApprovalGatewayRunnerFor(deps.db)
   const missionContinuation = createMissionCodeHostEventContinuation(deps.db)
   const codeHostDeliveryDispatcher =
     deps.webhookDispatcher !== undefined &&
@@ -1660,7 +1660,7 @@ function composeSqliteUncredentialedDevelopmentDeliveryProvider(input: {
           .get() ?? null
       )
     },
-    pipeline: composeSqlitePipelineEvidenceRunner(input.db),
+    pipeline: composePipelineEvidenceRunnerFor(input.db),
   })
 }
 
@@ -1705,7 +1705,7 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
           db: deps.db,
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
           connections: codeHostConnections,
-          pipeline: composeSqlitePipelineEvidenceRunner(deps.db),
+          pipeline: composePipelineEvidenceRunnerFor(deps.db),
         })
   const repositoryEndpointDiscovery =
     codeHostConnections === null
@@ -1762,7 +1762,7 @@ function composeFallbackDevelopmentAutomation(
     db: deps.db,
     appHome,
     admissionLookup: deps.developmentAdmissionLookup,
-    requirementSource: composeSqliteRequirementSourceRunner(deps.db),
+    requirementSource: composeRequirementSourceRunnerFor(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: deps.repositoryPublicationTransport,
@@ -1797,7 +1797,7 @@ function composeFallbackDevelopmentAutomation(
       ),
       onTerminal: terminalObserver.script,
     }),
-    approvalGateway: composeSqliteApprovalGatewayRunner(deps.db),
+    approvalGateway: composeApprovalGatewayRunnerFor(deps.db),
   })
   return automation
 }
@@ -1875,7 +1875,7 @@ export function composeSqliteApplicationDeps(
             runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
             runtimeRegistry,
             dynamicWorkflow: {
-              persistence: composeSqliteDynamicWorkflowPersistence(deps.db),
+              persistence: composeDynamicWorkflowPersistence(deps.db),
               validationContext: composeSqliteDynamicWorkflowValidationContext(deps.db),
             },
             identityAccess,
@@ -2493,7 +2493,7 @@ function composeSqliteApiRouteMounts(
     },
     collaborationContext: deps.collaborationContext,
   }
-  const approvalGateway = composeSqliteApprovalGatewayRunner(deps.db)
+  const approvalGateway = composeApprovalGatewayRunnerFor(deps.db)
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     db: deps.db,
     appHome,
@@ -2717,7 +2717,7 @@ function composeSqliteApiRouteMounts(
     scheduledTaskRuntime.operations,
   )
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(deps.db)
-  const capabilityTemplatePersistence = createSqliteCapabilityTemplatePersistence(deps.db)
+  const capabilityTemplatePersistence = createCapabilityTemplatePersistence(deps.db)
   const capabilityTemplateAccess = Object.freeze({
     filterVisible: (actor, rows) => filterVisibleRows(deps.db, actor, 'capability_template', rows),
     canView: (actor, row) => canViewResource(deps.db, actor, 'capability_template', row),

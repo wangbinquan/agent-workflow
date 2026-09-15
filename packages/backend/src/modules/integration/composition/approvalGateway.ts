@@ -98,5 +98,3 @@ export function composeApprovalGatewayRunnerFor(
 }
 
 /** 旧名保留为装配别名，bootstrap 收敛后删除。 */
-export const composeSqliteApprovalGatewayRunner = composeApprovalGatewayRunnerFor
-export const composePostgresqlApprovalGatewayRunner = composeApprovalGatewayRunnerFor

@@ -54,8 +54,5 @@ export function composeIntegrationTriggerResourceSnapshotFactory(
   })
 }
 
-/** RFC-359：两个 provider 共用一份；旧名保留为装配别名，bootstrap 收敛后删除。 */
-export const composePostgresqlIntegrationTriggerResourceSnapshotFactory =
-  composeIntegrationTriggerResourceSnapshotFactory
 export type PostgresqlIntegrationTriggerResourceSnapshotFactory =
   IntegrationTriggerResourceSnapshotFactory

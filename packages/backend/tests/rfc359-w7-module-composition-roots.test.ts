@@ -30,11 +30,11 @@ import {
 import { composeCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { DrizzleReviewerResolutionRead } from '@/modules/code-capability/infrastructure/reviewerResolutionRead'
-import { composePostgresqlDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
+import { composeDevelopmentConfigOperationsFor } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
-import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { createNodeRunLifecycleParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -263,7 +263,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
       ...actor,
       userId: actor.user.id,
     }) as unknown as Parameters<
-      ReturnType<typeof composePostgresqlDevelopmentConfigOperations>['upsertAssignment']
+      ReturnType<typeof composeDevelopmentConfigOperationsFor>['upsertAssignment']
     >[0]
     const catalog = composeResourceCatalogFor({ db: harness.db })
     const access = {
@@ -288,8 +288,8 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
         row: never,
       ) => catalog.authorization.requireResourceGovern(subject, type, row),
       assertNameUnchangedForEditor: catalog.authorization.assertNameUnchangedForEditor,
-    } as unknown as Parameters<typeof composePostgresqlDevelopmentConfigOperations>[0]['access']
-    const operations = composePostgresqlDevelopmentConfigOperations({
+    } as unknown as Parameters<typeof composeDevelopmentConfigOperationsFor>[0]['access']
+    const operations = composeDevelopmentConfigOperationsFor({
       db: harness.db,
       developmentAdapter: composeDevelopmentAdapterConfigOperationsFor({
         db: harness.db,
@@ -405,7 +405,7 @@ describeEachProvider(
   'RFC-359 W7 —— task-execution 组合根（无需 daemon 装配的那几个）',
   (harness) => {
     test('动态工作流持久化：任务快照 / 节点运行计数 / 状态写回都落真库', async () => {
-      const persistence = composePostgresqlDynamicWorkflowPersistence(harness.db)
+      const persistence = composeDynamicWorkflowPersistence(harness.db)
       const taskId = `t_${ulid()}`
       await seedTask(harness.db, taskId)
       expect(await persistence.loadTask(`t_${ulid()}`)).toBeNull()

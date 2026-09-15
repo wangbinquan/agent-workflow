@@ -45,7 +45,7 @@ import {
   runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithProvider,
   type DynamicWorkflowEngineArgs,
 } from '../src/services/dynamicWorkflowRunner'
-import { composeSqliteDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '../src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { buildWorkflowValidationContext } from '../src/services/workflow.validator'
 import { setNodeRunStatus } from '../src/services/lifecycle'
@@ -83,7 +83,7 @@ const runDynamicWorkflowGenerate = (
   const { db, ...rest } = args
   return runDynamicWorkflowGenerateWithProvider({
     ...rest,
-    persistence: composeSqliteDynamicWorkflowPersistence(db),
+    persistence: composeDynamicWorkflowPersistence(db),
     nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
     validationContext: { load: () => buildWorkflowValidationContext(db) },
   })

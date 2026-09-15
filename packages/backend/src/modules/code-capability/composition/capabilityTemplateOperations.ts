@@ -6,9 +6,11 @@ import {
 } from '../application/capabilityTemplateOperations'
 import { createCapabilityTemplatePersistence } from '../infrastructure/capabilityTemplatePersistence'
 
+// RFC-359 AC-1（plan §5fu）：两个品牌别名退役后，中立名从这里继续对外可见——
+// 消费者原来 import 的就是这个模块，改名不该顺带改 import 路径。
+export { createCapabilityTemplatePersistence }
+
 /** RFC-359：两个 provider 共用一份实现；旧名保留为装配别名，bootstrap 收敛后删除。 */
-export const createSqliteCapabilityTemplatePersistence = createCapabilityTemplatePersistence
-export const createPostgresqlCapabilityTemplatePersistence = createCapabilityTemplatePersistence
 
 export { createPostgresqlCapabilityTemplatePackageCommit } from '../infrastructure/capabilityTemplatePackageCommit'
 export { createPostgresqlCapabilityTemplatePackageMutationOwner } from '../infrastructure/postgresqlCapabilityTemplatePackageMutationOwner'

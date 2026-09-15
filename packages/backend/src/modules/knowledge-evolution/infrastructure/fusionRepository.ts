@@ -928,4 +928,3 @@ export function createFusionPersistence(input: {
 }
 
 /** 旧名保留为装配别名，PG 装配收敛后删除。 */
-export const createPostgresqlFusionPersistence = createFusionPersistence

@@ -43,5 +43,3 @@ export function composeRequirementSourceRunnerFor(
 }
 
 /** 旧名保留为装配别名，bootstrap 收敛后删除。 */
-export const composeSqliteRequirementSourceRunner = composeRequirementSourceRunnerFor
-export const composePostgresqlRequirementSourceRunner = composeRequirementSourceRunnerFor

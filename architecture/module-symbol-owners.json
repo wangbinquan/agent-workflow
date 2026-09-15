@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2553,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24743
+    "symbolsIncludingFileRoots": 24723
   },
   "entries": [
     {
@@ -11767,30 +11767,6 @@
       "removeAfterWave": "W4-E8",
       "status": "current-module",
       "symbol": "composeCapabilityTemplateOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "code-capability",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#createPostgresqlCapabilityTemplatePersistence",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "createPostgresqlCapabilityTemplatePersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "code-capability",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts",
-      "id": "owner:packages/backend/src/modules/code-capability/composition/capabilityTemplateOperations.ts#createSqliteCapabilityTemplatePersistence",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "createSqliteCapabilityTemplatePersistence",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -32385,18 +32361,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/composition/configOperations.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/configOperations.ts#composePostgresqlDevelopmentConfigOperations",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composePostgresqlDevelopmentConfigOperations",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/configOperations.ts",
       "id": "owner:packages/backend/src/modules/development-automation/composition/configOperations.ts#DevelopmentConfigAccessRow",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
@@ -45605,18 +45569,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/composition.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/composition.ts#composePostgresqlDigitalEmployeeMaintenanceCommands",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlDigitalEmployeeMaintenanceCommands",
-      "targetContext": "digital-employee",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "digital-employee",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/digital-employee/composition.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/composition.ts#ComposePostgresqlDigitalEmployeeOptions",
       "removeAfterWave": null,
       "status": "current-module",
@@ -57770,30 +57722,6 @@
     {
       "currentContext": "integration",
       "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/approvalGateway.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/approvalGateway.ts#composePostgresqlApprovalGatewayRunner",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composePostgresqlApprovalGatewayRunner",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/approvalGateway.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/approvalGateway.ts#composeSqliteApprovalGatewayRunner",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composeSqliteApprovalGatewayRunner",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/integration/composition/approvalGateway.ts",
       "id": "owner:packages/backend/src/modules/integration/composition/approvalGateway.ts#gateway",
@@ -58370,30 +58298,6 @@
     {
       "currentContext": "integration",
       "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/pipelineEvidence.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/pipelineEvidence.ts#composePostgresqlPipelineEvidenceRunner",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composePostgresqlPipelineEvidenceRunner",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/pipelineEvidence.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/pipelineEvidence.ts#composeSqlitePipelineEvidenceRunner",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composeSqlitePipelineEvidenceRunner",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/integration/composition/pipelineEvidence.ts",
       "id": "owner:packages/backend/src/modules/integration/composition/pipelineEvidence.ts#runner",
@@ -58420,34 +58324,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/integration/composition/requirementSource.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/requirementSource.ts#composePostgresqlRequirementSourceRunner",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composePostgresqlRequirementSourceRunner",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/requirementSource.ts",
       "id": "owner:packages/backend/src/modules/integration/composition/requirementSource.ts#composeRequirementSourceRunnerFor",
       "removeAfterWave": "W4-B",
       "status": "current-module",
       "symbol": "composeRequirementSourceRunnerFor",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/composition/requirementSource.ts",
-      "id": "owner:packages/backend/src/modules/integration/composition/requirementSource.ts#composeSqliteRequirementSourceRunner",
-      "removeAfterWave": "W4-B",
-      "status": "current-module",
-      "symbol": "composeSqliteRequirementSourceRunner",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -59972,18 +59852,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createPostgresqlDevelopmentAdapterRevisionStore",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
-      "id": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteDevelopmentAdapterStore",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -70256,18 +70124,6 @@
     {
       "currentContext": "knowledge-evolution",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
-      "id": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#createPostgresqlFusionPersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlFusionPersistence",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "knowledge-evolution",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "id": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#finishOperation",
@@ -72399,30 +72255,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/memory/composition.ts",
-      "id": "owner:packages/backend/src/modules/memory/composition.ts#composePostgresqlMemoryCatalogOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlMemoryCatalogOperations",
-      "targetContext": "memory",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/memory/composition.ts",
-      "id": "owner:packages/backend/src/modules/memory/composition.ts#composeSqliteMemoryCatalogOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composeSqliteMemoryCatalogOperations",
-      "targetContext": "memory",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/memory/composition.ts",
       "id": "owner:packages/backend/src/modules/memory/composition.ts#MemoryCatalogBinding",
       "removeAfterWave": null,
       "status": "current-module",
@@ -73699,18 +73531,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/memory/infrastructure/skillMemoryFusionParticipant.ts",
-      "id": "owner:packages/backend/src/modules/memory/infrastructure/skillMemoryFusionParticipant.ts#composePostgresqlSkillMemoryFusionParticipantFactory",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlSkillMemoryFusionParticipantFactory",
       "targetContext": "memory",
       "targetLayer": "infrastructure"
     },
@@ -82372,18 +82192,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts#composePostgresqlIntegrationTriggerResourceSnapshotFactory",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "composePostgresqlIntegrationTriggerResourceSnapshotFactory",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts#IntegrationTriggerResourceAuthorityPair",
       "removeAfterWave": "W4-C",
       "status": "current-module",
@@ -83576,18 +83384,6 @@
       "removeAfterWave": "W4-C",
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/composition/resourceScopeAuthorization.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/composition/resourceScopeAuthorization.ts#composePostgresqlResourceScopeAccessParticipant",
-      "removeAfterWave": "W4-C",
-      "status": "current-module",
-      "symbol": "composePostgresqlResourceScopeAccessParticipant",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -96884,18 +96680,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/skillVersionCommitParticipant.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/skillVersionCommitParticipant.ts#composePostgresqlSkillVersionCommitParticipantFactory",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlSkillVersionCommitParticipantFactory",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -117524,30 +117308,6 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "composeDynamicWorkflowPersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts#composePostgresqlDynamicWorkflowPersistence",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "composePostgresqlDynamicWorkflowPersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts#composeSqliteDynamicWorkflowPersistence",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "composeSqliteDynamicWorkflowPersistence",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -297593,5 +297353,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:476d78db586d26f9345f40f349a57f6fbfad7a49128f164a84649ba09f734f3b"
+  "sourceDigest": "sha256:d2031849b93724af401aa9a03d7d364ae6f3ad9065f2fc5c09db22b09bf353e7"
 }

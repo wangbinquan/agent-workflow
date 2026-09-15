@@ -16,7 +16,7 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { agents, memories } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
+import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import type { MemoryCatalogOperations } from '../src/modules/memory/public/catalog'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 
@@ -28,7 +28,7 @@ function actorOfRole(role: 'admin' | 'user', id = `u_${role}`): Actor {
 }
 
 function catalogOf(db: ProviderNeutralDatabase): MemoryCatalogOperations {
-  return composeSqliteMemoryCatalogOperations({
+  return composeMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
     authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,

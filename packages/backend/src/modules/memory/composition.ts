@@ -42,14 +42,9 @@ import {
 
 // RFC-359 W4-D4：memory 的目录 / 融合 participant / 蒸馏运行时解析都只有一份实现，两个 provider 共用；
 // provider 只在 bootstrap 交来的数据库客户端上体现。旧的 provider 命名入口保留为装配别名。
-export {
-  composePostgresqlSkillMemoryFusionParticipantFactory,
-  composeSkillMemoryFusionParticipantFactory,
-} from './infrastructure/skillMemoryFusionParticipant'
+export { composeSkillMemoryFusionParticipantFactory } from './infrastructure/skillMemoryFusionParticipant'
 export { composeMemoryCatalogOperations, type MemoryCatalogTestHooks, type MemoryTransaction }
 /** 旧名保留为装配别名，PG 装配收敛后删除。 */
-export const composeSqliteMemoryCatalogOperations = composeMemoryCatalogOperations
-export const composePostgresqlMemoryCatalogOperations = composeMemoryCatalogOperations
 
 // RFC-353 T6/T7：legacy 技能回滚要的 SQLite 同步解融合核心同样从 composition 出。
 // **不从 `public/participants` 出**——那会让 public 面直接点名一个 provider 适配器

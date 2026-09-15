@@ -61,7 +61,7 @@ import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
 } from '@/modules/integration/application/developmentAdapterCommands'
-import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
 import { createPipelineEvidenceAdapter } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { AdapterFailureReceipt } from '@/modules/integration/infrastructure/developmentAdapterRunner'
@@ -412,7 +412,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
         'pipeline-gate': pipelineConnectionRef,
         'approval-gateway': approvalAdapterRef,
       } as const
-      const approvalGateway = composeSqliteApprovalGatewayRunner(db, {
+      const approvalGateway = composeApprovalGatewayRunnerFor(db, {
         approvalMockUrl: suite.endpoints.developmentApprovalBaseUrl,
       })
       const pipelineRunner = createPipelineEvidenceAdapter({

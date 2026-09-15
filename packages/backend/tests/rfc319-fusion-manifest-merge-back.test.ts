@@ -41,7 +41,7 @@ import {
 import { forcedPortPathsForTask } from '../src/services/portArtifacts'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
+import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import {
   createManagedSkill,
@@ -127,7 +127,7 @@ async function build(): Promise<Harness> {
     model: 'openai/gpt-5.6',
   })
   const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
-  const memoryCatalog = composeSqliteMemoryCatalogOperations({
+  const memoryCatalog = composeMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
     authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,

@@ -63,7 +63,7 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
+import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -196,7 +196,7 @@ async function build(): Promise<H> {
     model: 'openai/gpt-5.6',
   })
   const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
-  const memoryCatalog = composeSqliteMemoryCatalogOperations({
+  const memoryCatalog = composeMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
     authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,

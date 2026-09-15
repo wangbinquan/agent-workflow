@@ -25,8 +25,8 @@ import {
   createDevelopmentMissionExecutionTerminalObserver,
   createMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
-import { composeSqliteRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
+import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
+import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -40,7 +40,7 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
-import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
   composeSqliteTaskExecutionProviderRuntime,
   type SelectedSqliteTaskExecutionProviderRuntime,
@@ -54,7 +54,7 @@ import {
   composeSqliteMemoryInjectionQueries,
 } from '@/modules/memory/composition'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
-import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -1731,7 +1731,7 @@ async function composeSqliteProviderSession(
     db,
     secretBox,
     connections: repositoryMetadataConnections,
-    pipeline: composeSqlitePipelineEvidenceRunner(db),
+    pipeline: composePipelineEvidenceRunnerFor(db),
   })
   const developmentWorkspaceRepositoryPreparation = createDevelopmentWorkspaceRepositoryPreparation(
     {
@@ -1872,7 +1872,7 @@ async function composeSqliteProviderSession(
           taskExecutionResources,
         }),
         dynamicWorkflow: Object.freeze({
-          persistence: composeSqliteDynamicWorkflowPersistence(db),
+          persistence: composeDynamicWorkflowPersistence(db),
           validationContext: composeSqliteDynamicWorkflowValidationContext(db),
         }),
         codeHostConnections: repositoryMetadataConnections,
@@ -2369,7 +2369,7 @@ async function composeSqliteProviderSession(
       digitalEmployeeWorkStart,
     }),
   })
-  const developmentApprovalGateway = composeSqliteApprovalGatewayRunner(db)
+  const developmentApprovalGateway = composeApprovalGatewayRunnerFor(db)
   const missionEventContinuation = createMissionCodeHostEventContinuation(db)
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
   const employeeWriterState = await employeeWriterCutover.activate()
@@ -2404,7 +2404,7 @@ async function composeSqliteProviderSession(
     db,
     appHome: Paths.root,
     admissionLookup: developmentAdmissionLookup,
-    requirementSource: composeSqliteRequirementSourceRunner(db),
+    requirementSource: composeRequirementSourceRunnerFor(db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: repositoryPublicationTransport,

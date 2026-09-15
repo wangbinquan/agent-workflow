@@ -93,9 +93,6 @@ export function composeSkillMemoryFusionParticipantFactory(): SkillMemoryFusionP
   })
 }
 
-/** 旧名保留为装配别名，PG 装配收敛后删除。 */
-export const composePostgresqlSkillMemoryFusionParticipantFactory =
-  composeSkillMemoryFusionParticipantFactory
 export type PostgresqlSkillMemoryFusionParticipantFactory = SkillMemoryFusionParticipantFactory
 
 /**

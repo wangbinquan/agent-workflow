@@ -154,7 +154,10 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     expect(digital).toContain('createDigitalEmployeeAuthoringReads')
     expect(digital).not.toContain('composeSqliteDigitalEmployeeBootstrapReads')
     expect(digital).not.toContain('createPostgresqlDigitalEmployeeAuthoringReads')
-    expect(digital).toContain('composePostgresqlDigitalEmployeeMaintenanceCommands')
+    // RFC-359 AC-1（plan §5fu）：`composePostgresqlDigitalEmployeeMaintenanceCommands` 是
+    // `composeDigitalEmployeeMaintenanceCommands` 的纯别名，已随这一批退役。判据的**意图不变**
+    // ——「维护命令这条路在 digital-employee 的装配面上出得来」——只是它现在叫本名。
+    expect(digital).toContain('composeDigitalEmployeeMaintenanceCommands')
     expect(digital).toContain('composePostgresqlDigitalEmployeeWriterCutover')
     expect(development).toContain('composeDevelopmentAutomationMaintenanceCommands')
     // RFC-359 W4-D12：维护装配只剩一份中立入口，不再有 provider 命名的孪生。

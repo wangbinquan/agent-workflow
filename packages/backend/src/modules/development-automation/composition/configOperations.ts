@@ -679,4 +679,3 @@ export function composeDevelopmentConfigOperations(
 }
 
 /** RFC-349 期的 PostgreSQL 入口名，RFC-359 W4-D6b 起与中立入口同一实现。 */
-export const composePostgresqlDevelopmentConfigOperations = composeDevelopmentConfigOperationsFor

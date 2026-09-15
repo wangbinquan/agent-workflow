@@ -38,13 +38,10 @@ import {
   webhookMrStreamStates,
   workflows,
 } from '@/db/schema'
-import { composePostgresqlApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
-import {
-  composePostgresqlPipelineEvidenceRunner,
-  composeSqlitePipelineEvidenceRunner,
-} from '@/modules/integration/composition/pipelineEvidence'
-import { composePostgresqlRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
+import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
@@ -627,10 +624,10 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
 
 describeEachProvider('RFC-359 W7 —— Integration 组合根：外部适配器运行器', (harness) => {
   test('requirementSource / pipelineEvidence / approvalGateway：绑定解析走真库，用途不符与未发布各成一条分支', async () => {
-    const requirement = composePostgresqlRequirementSourceRunner(asPostgresql(harness.db))
-    const pipelineSqlite = composeSqlitePipelineEvidenceRunner(asSqlite(harness.db))
-    const pipelinePostgresql = composePostgresqlPipelineEvidenceRunner(asPostgresql(harness.db))
-    const approval = composePostgresqlApprovalGatewayRunner(asPostgresql(harness.db))
+    const requirement = composeRequirementSourceRunnerFor(asPostgresql(harness.db))
+    const pipelineSqlite = composePipelineEvidenceRunnerFor(asSqlite(harness.db))
+    const pipelinePostgresql = composePipelineEvidenceRunnerFor(asPostgresql(harness.db))
+    const approval = composeApprovalGatewayRunnerFor(asPostgresql(harness.db))
 
     // ① 库里没有这条 revision ⇒ 绑定解析不出来（真查询回 null）。
     const missing = await requirement.acquire({
@@ -720,11 +717,11 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
   // 同一份中立实现的两个装配别名会是**同一个函数对象**（`export const composeSqliteX = composeXFor`），
   // 所以这里不比对象身份，只确认每个导出名都真的解析成了可调用的生产工厂。
   const roots: readonly unknown[] = [
-    composePostgresqlApprovalGatewayRunner,
+    composeApprovalGatewayRunnerFor,
     composeDevelopmentToolConnectionCatalog,
-    composePostgresqlPipelineEvidenceRunner,
-    composeSqlitePipelineEvidenceRunner,
-    composePostgresqlRequirementSourceRunner,
+    composePipelineEvidenceRunnerFor,
+    composePipelineEvidenceRunnerFor,
+    composeRequirementSourceRunnerFor,
     composeScheduledTaskRuntimeFor,
     composeWebhookTerminalWorkspacePrunePolicy,
     composeWebhookDeliveryPersistenceFor,

@@ -28,7 +28,7 @@ import {
 import { composeCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
 import {
   composeCapabilityTemplateOperations,
-  createSqliteCapabilityTemplatePersistence,
+  createCapabilityTemplatePersistence,
 } from '../src/modules/code-capability/composition/capabilityTemplateOperations'
 import { createTemplateUpstreamPersistence } from '../src/modules/code-capability/infrastructure/templateUpstreamPersistence'
 import {
@@ -76,14 +76,7 @@ const copyTemplate = (
   actor: Actor,
   name: string | undefined,
   now?: number,
-) =>
-  copyTemplateWithPersistence(
-    createSqliteCapabilityTemplatePersistence(db),
-    source,
-    actor,
-    name,
-    now,
-  )
+) => copyTemplateWithPersistence(createCapabilityTemplatePersistence(db), source, actor, name, now)
 
 const COPIER = {
   user: { id: 'u-copier', name: 'copier', role: 'user' },
@@ -511,7 +504,7 @@ describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went w
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    const persistence = createSqliteCapabilityTemplatePersistence(db)
+    const persistence = createCapabilityTemplatePersistence(db)
     const capabilityTemplateAcl: CapabilityTemplateRouteDeps['capabilityTemplateAcl'] = {
       load: (id) => persistence.load(id),
       canView: async (routeActor, resource) =>
