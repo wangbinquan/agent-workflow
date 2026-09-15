@@ -507,8 +507,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （工具连接目录合一，§5ft）。
     // **语句数仍是 160、顺序未变**——上面那条 `toHaveLength(160)` 没红，正是这条判据用来
     // 区分「只是改了个名字」与「装配图真的变了」的那道闸。
+    // RFC-359 AC-1（2026-09-15，plan §5fu）：摘要随**纯装配别名批退**再更新——那一批 20 个
+    // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
+    // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
     expect(digest(restored, pg)).toBe(
-      '55c4fe1bcdb8f17d412a086a9eda3bf8e743bb10bae84751f19665eee35098e1',
+      'ff545123ef38687ec8598e2fe039dcbbe8cb824b7f695cd460eb2dbabdb55956',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -540,8 +543,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-10（2026-09-15）：同上，`createSqliteTaskExecutionPersistence(deps.db)` →
     // `createTaskExecutionPersistence(deps.db)`（连同 import 与那处 `ReturnType<typeof …>`）。
     // 装配图一条没动，动的是名字。
+    // RFC-359 AC-1（2026-09-15，plan §5fu）：同上，纯装配别名批退波及这一层的
+    // `composeSqliteMemoryCatalogOperations` → `composeMemoryCatalogOperations` 等
+    // （那一批 20 个别名本来就指着同一个函数）。**装配图一条没动，动的是名字。**
+    // RFC-359 AC-1（2026-09-15，plan §5fu）：摘要随**纯装配别名批退**再更新——那一批 20 个
+    // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
+    // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      '36bace673f89ceb95bee86b562e649ee23c8b56e8bf9f057eb5c9ee3f15329b5',
+      'b2b49ab08f623d84a969ff4cb2a801263777086892fc20d37409bc763cc29831',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -563,11 +572,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-1（2026-09-15，plan §5ft）：摘要随一处被调用者改名更新——
     // `composeSqliteDevelopmentToolConnectionCatalog` → `composeDevelopmentToolConnectionCatalog`
     // （工具连接目录合一）。**挂载图未变**，只是被调用者少了个品牌前缀。
+    // RFC-359 AC-1（2026-09-15，plan §5fu）：摘要随**纯装配别名批退**再更新——那一批 20 个
+    // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
+    // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'e068d1e370e4fbc31abe94927b472c6595397d38e70e0c35d4a1b4e6506389ac',
+      '80925a2d786a10c56973c51ea3e372f6ed6dad90a2dbfad5ff8849a3ca5c9049',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
-      '3e6131c32a868090e7236eb8e554605e8b46a5df15a149671acd396c0a072194',
+      '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',
     )
     const eventBody = functionBody(server, 'composeApplicationEventCenter')
     expect(namedCalls(eventBody, server, 'composeEventCenter')).toHaveLength(1)

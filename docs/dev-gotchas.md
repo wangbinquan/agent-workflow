@@ -7379,3 +7379,26 @@ CI 两格红，同一个根因：
 顺带：`gh api` 的 `{owner}/{repo}` 占位在 `$(...)` 里取到多行结果时会拼出带换行的 URL
 （`net/url: invalid control character in URL`）——`gh run list --json databaseId` 在同一
 SHA 有多个 workflow 时会返回多行，取 run id 要加 `select(.workflowName=="CI")` 再 `head -1`。
+
+### 半径因内存被 kill 时，**分片重跑，不要缩名单**——我缩掉的正好是刚写过 gotcha 的那一类
+
+2026-09-15，同一晚第二次被同一个摘要守卫咬。经过：
+
+1. 按「谁把我改的文件当文本读」算出 200 个文件的半径（这是**对的**算法，见上一条）；
+2. `bun test --isolate` 跑到一半被系统以内存不足 kill；
+3. 我把名单从 200 缩到 43（只留「直接消费被改符号」的），跑绿就推了；
+4. CI 两格红——**`rfc359-w29-unstarted-application-composition` 不在那 43 个里**，
+   而它正是上一条 gotcha 讲的「钉函数体 SHA-256 的摘要守卫」。
+
+缩名单时我用的判据是「谁 import 了被改的符号」，而摘要守卫**一个符号都不 import**，
+于是它第一个被筛掉。**同一个盲点，第二次踩。**
+
+**处置**：`--isolate` 半径被 kill 时**分片重跑**，别缩名单：
+
+    split -n l/4 radius.txt part-       # 或 awk 'NR%4==<i>'
+    for p in part-*; do bun test --isolate $(cat $p | tr '\n' ' ') || break; done
+
+另外，改过 `server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts` 三个组合根
+**任意一个**，就把 `rfc359-w29-unstarted-application-composition.test.ts` 无条件加进半径
+——它一个文件里钉着**四段**装配体的摘要（PG daemon 段、SQLite applicationDeps 段、
+SQLite apiRouteMounts 段等），是这三个文件的改动最集中的落点。
