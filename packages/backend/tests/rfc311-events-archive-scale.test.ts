@@ -114,6 +114,20 @@ describe('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳水位', () 
   })
 })
 
+/**
+ * 两条**大 backlog**用例（插 40k / 36k 行事件再整批归档）的显式预算。
+ *
+ * 它们此前吃 bun 的默认 5s，而本机（空载、`--isolate`）单条就要 ~2s——只有 2.5 倍余量。
+ * 2026-09-15 在 macOS shard 4/6 上，`global cap …` 那条实测 **7355ms** 越过 5s 被判超时而红，
+ * 且**与被测代码无关**（那一提只删了一个全仓零引用的函数）。同文件更重的 40k 那条只是这次
+ * 没输掉这场竞速，下一次同样会。
+ *
+ * 所以按 `docs/dev-gotchas.md` 的规矩给**足以匹配实际工作量**的预算，而不是等它再红一次：
+ * 共享 runner 上 3–4 倍的放慢是常态，30s 对 ~2s 的真实工作量是够而不滥。
+ * 判据本身一点没放松——超时仍然会失败，变的只是预算与它实际要做的事相称。
+ */
+const HEAVY_BACKLOG_TIMEOUT_MS = 30_000
+
 describeEachProvider('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳水位', (provider) => {
   // 分窗之前，增量扫描的上界是开的:首轮(水位=0)等于把整张事件表 GROUP BY 一遍,
   // 10M 行库实测**单条语句 1.19 秒**——daemon 只有一条同步连接,这段时间整站无
@@ -157,45 +171,49 @@ describeEachProvider('RFC-311 — events archiver at backlog scale', (provider) 
   // 所以「40k 行 > 32766」这个前提在本环境根本不成立,测试名与注释都是未验证假设。
   // 真正要锁的是**语句形状**:每条 DELETE 的绑定参数是常数(区间删),批次数随
   // toDrop 线性——这与引擎的参数上限解耦,换个更保守的 SQLite 构建也照样成立。
-  test('a 40k-row backlog archives in bounded batches with constant-size DELETEs', async () => {
-    const db = provider.db
-    const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-'))
-    try {
-      await seedRun(db, 't1', 'run1')
-      await insertEvents(db, 'run1', 40_000)
+  test(
+    'a 40k-row backlog archives in bounded batches with constant-size DELETEs',
+    async () => {
+      const db = provider.db
+      const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-'))
+      try {
+        await seedRun(db, 't1', 'run1')
+        await insertEvents(db, 'run1', 40_000)
 
-      const result = await archiveEvents(
-        db,
-        { eventsArchiveThresholds: { perNodeRunRows: 5_000, globalRows: 1_000_000 } },
-        logsDir,
-      )
-      expect(result.perGroupArchived).toBe(35_000)
-      expect(await eventCount(db)).toBe(5_000)
+        const result = await archiveEvents(
+          db,
+          { eventsArchiveThresholds: { perNodeRunRows: 5_000, globalRows: 1_000_000 } },
+          logsDir,
+        )
+        expect(result.perGroupArchived).toBe(35_000)
+        expect(await eventCount(db)).toBe(5_000)
 
-      // 形状锁:删除走「node_run_id = ? AND id <= ?」的区间形式(两个绑定参数),
-      // 不得回到 `IN (<toDrop 个 id>)`。
-      const src = readArchiveImplementation()
-      expect(src).toMatch(/lte\(nodeRunEvents\.id, lastId\)/)
-      expect(src).not.toMatch(/inArray\(\s*nodeRunEvents\.id/)
-      // 且每批不超过 ARCHIVE_BATCH_ROWS——批大小是常数,与 backlog 无关。
-      expect(src).toMatch(/ARCHIVE_BATCH_ROWS = 5_000/)
+        // 形状锁:删除走「node_run_id = ? AND id <= ?」的区间形式(两个绑定参数),
+        // 不得回到 `IN (<toDrop 个 id>)`。
+        const src = readArchiveImplementation()
+        expect(src).toMatch(/lte\(nodeRunEvents\.id, lastId\)/)
+        expect(src).not.toMatch(/inArray\(\s*nodeRunEvents\.id/)
+        // 且每批不超过 ARCHIVE_BATCH_ROWS——批大小是常数,与 backlog 无关。
+        expect(src).toMatch(/ARCHIVE_BATCH_ROWS = 5_000/)
 
-      // The JSONL carries exactly the archived prefix, ids ascending.
-      const archived = await readArchivedEvents(logsDir, 't1', 'run1', 0, 50_000)
-      expect(archived.length).toBe(35_000)
-      expect(archived[0]!.payload).toBe('line-0')
-      expect(archived.at(-1)!.payload).toBe('line-34999')
+        // The JSONL carries exactly the archived prefix, ids ascending.
+        const archived = await readArchivedEvents(logsDir, 't1', 'run1', 0, 50_000)
+        expect(archived.length).toBe(35_000)
+        expect(archived[0]!.payload).toBe('line-0')
+        expect(archived.at(-1)!.payload).toBe('line-34999')
 
-      // DB retains the newest tail — seamless continuation for the reader.
-      const remaining = await db
-        .select({ payload: nodeRunEvents.payload })
-        .from(nodeRunEvents)
-        .limit(1)
-      expect(remaining[0]?.payload).toBe('line-35000')
-    } finally {
-      rmSync(logsDir, { recursive: true, force: true })
-    }
-  })
+        // DB retains the newest tail — seamless continuation for the reader.
+        const remaining = await db
+          .select({ payload: nodeRunEvents.payload })
+          .from(nodeRunEvents)
+          .limit(1)
+        expect(remaining[0]?.payload).toBe('line-35000')
+      } finally {
+        rmSync(logsDir, { recursive: true, force: true })
+      }
+    },
+    HEAVY_BACKLOG_TIMEOUT_MS,
+  )
 
   test('high-water advances after a clean pass and skips unchanged runs', async () => {
     const db = provider.db
@@ -257,21 +275,25 @@ describeEachProvider('RFC-311 — events archiver at backlog scale', (provider) 
     }
   })
 
-  test('global cap also archives via range deletes without parameter blowups', async () => {
-    const db = provider.db
-    const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-glob-'))
-    try {
-      await seedRun(db, 't1', 'run1')
-      await insertEvents(db, 'run1', 36_000)
-      const result = await archiveEvents(
-        db,
-        { eventsArchiveThresholds: { perNodeRunRows: 1_000_000, globalRows: 1_000 } },
-        logsDir,
-      )
-      expect(result.globalArchived).toBe(35_000)
-      expect(await eventCount(db)).toBe(1_000)
-    } finally {
-      rmSync(logsDir, { recursive: true, force: true })
-    }
-  })
+  test(
+    'global cap also archives via range deletes without parameter blowups',
+    async () => {
+      const db = provider.db
+      const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-glob-'))
+      try {
+        await seedRun(db, 't1', 'run1')
+        await insertEvents(db, 'run1', 36_000)
+        const result = await archiveEvents(
+          db,
+          { eventsArchiveThresholds: { perNodeRunRows: 1_000_000, globalRows: 1_000 } },
+          logsDir,
+        )
+        expect(result.globalArchived).toBe(35_000)
+        expect(await eventCount(db)).toBe(1_000)
+      } finally {
+        rmSync(logsDir, { recursive: true, force: true })
+      }
+    },
+    HEAVY_BACKLOG_TIMEOUT_MS,
+  )
 })

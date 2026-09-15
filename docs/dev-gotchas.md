@@ -7068,3 +7068,26 @@ SQLiteError: no such table: agent_workflow.workflows
 状态**，而不是被测代码。一次只跑一个文件时无所谓。
 **别拿这种红去改生产代码**——我第一次判断它是「会随分片变化红 CI 的真 bug」，
 查了 `ci.yml` 才发现 CI 本来就免疫，差点为一个不存在的问题去动认证/持久化热路径。
+
+## 重用例吃 bun 的默认 **5s** 就是在和 runner 赛跑——本机 2s 的活在 macOS 分片上能跑到 7.3s（2026-09-15 推红一次）
+
+**现象**：`rfc311-events-archive-scale` 的
+`global cap also archives via range deletes without parameter blowups` 在 macOS shard 4/6 红：
+
+```
+(fail) … [sqlite] > global cap also archives … [7355.31ms]
+  ^ this test timed out after 5000ms.
+```
+
+**它与那一提的改动毫无关系**——那提只删了一个全仓零引用的函数，而这个文件对被删符号零引用。
+本机（空载 + `--isolate`）同一条 ~2s，整文件 11 格 8.9s。也就是说它一直只有 **2.5 倍余量**，
+共享 runner 上 3–4 倍的放慢是常态，输掉只是时间问题。
+
+**关键是别只修红的那一条。** 同文件更重的一条（插 **40k** 行 vs 这条 36k）只是这次没输掉
+同一场竞速，下一次同样会红——而且会红在另一个与改动无关的提交上，让那个人先花时间排除自己。
+所以按工作量给**两条**都加显式预算（`HEAVY_BACKLOG_TIMEOUT_MS = 30_000`），并在常量上方写清
+实测值与由来。
+
+**判据一点没放松**：超时仍然会失败，变的只是预算与它实际要做的事相称——
+同 `docs/dev-gotchas.md` 里「`beforeAll` / `afterAll` 里做真 I/O 必须显式给超时」那条同一个道理，
+只是这次落在 `test()` 上。**写重用例时顺手给预算，别等它在别人的提交上红。**
