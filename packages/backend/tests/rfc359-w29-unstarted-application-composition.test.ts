@@ -494,8 +494,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
     // 相同、函数体从不读它），删掉它同时消掉了 `main.ts` 里那条三元分叉。
     // **语句数仍是 160、顺序未变**——改的只是一个实参，这正是这条判据要区分的两种情况。
+    // RFC-359 AC-10（2026-09-15，恢复管理面合一）：摘要随
+    // `createPostgresqlTaskExecutionPersistence(input.db)` → `createTaskExecutionPersistence(input.db)`
+    // 更新。两份 persistence 聚合合一后只剩一个中立入口，这里改的**只是被调用者的名字**——
+    // **语句数仍是 160、顺序未变**（上一行那条断言就是为了把这两种情况分开）。
     expect(digest(restored, pg)).toBe(
-      '8d4ff74135671d038a41d5bb8cf761970313b1c4213d9c73168de67a5e6ae711',
+      'ffd9bf70741e36484f30fa7974e5967a7b5dc0653608a1c618a9a4019154c6e0',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -524,8 +528,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // apply 那一段**——此前 `composeSqliteIntentApplyOperations` + `composeIntentApplyResourceBinding`
     // （legacy 资源会话）+ `composeSqliteIntentApplyArtifactLifecycle`，现在是与 PG 根同一份的
     // `composeIntentApplyOperations`（资源会话与工件生命周期由它自己按 db + appHome 装配）。
+    // RFC-359 AC-10（2026-09-15）：同上，`createSqliteTaskExecutionPersistence(deps.db)` →
+    // `createTaskExecutionPersistence(deps.db)`（连同 import 与那处 `ReturnType<typeof …>`）。
+    // 装配图一条没动，动的是名字。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      '38572603b7213cb4d06932596037ad0c4b26c65a2b38e70b3647aec2ffbaab71',
+      '36bace673f89ceb95bee86b562e649ee23c8b56e8bf9f057eb5c9ee3f15329b5',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
