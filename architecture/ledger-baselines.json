@@ -790,7 +790,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1697,
+      "baseline": 1696,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -825,7 +825,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5117,
+      "baseline": 5115,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -846,7 +846,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4604,
+      "baseline": 4602,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -886,7 +886,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:187e561d7e645d15e692508ae1449c7a19cfdd79aa9e1e4bc1cd43c29c38fc9f",
+    "sourceDigest": "sha256:edca9f4cd40ff5c3e0ae42b8c6fa316616c68219c9916483c393ee49bb8eaf8e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "26f1432714a2e3dc7cbf6fb5642b888d8e78ff1c",
-    "contentDigest": "sha256:edc88b3b89ba9d78a2fd1957ada6ffb26d765347fd43b7d7d2e02a51d63f0683",
+    "currentSnapshotSha": "f0e60db76b697556d371432514cdaa8bb8e5eb8a",
+    "contentDigest": "sha256:27c57e968ea02ea1f7eafbe8d3010646903960b02205eb020ce15b0e6fcdc8e3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

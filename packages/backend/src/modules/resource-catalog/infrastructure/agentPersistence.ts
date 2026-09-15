@@ -124,6 +124,19 @@ function frontmatterSidecars(
   }
 }
 
+/**
+ * RFC-359 AC-1 —— 存储里那串 `frontmatter_extra` JSON 的**对外视图**：四个 sidecar 键
+ * （`outputKinds` / `role` / `outputWrapperPortNames` / `branchPorts`）已被本层提升成
+ * `Agent` 的一等字段，不再算 extra，所以 `Agent.frontmatterExtra` 里看不到它们。
+ *
+ * 导出它是因为**窄投影**的读者（只取 4 列、不整行解码）此前只能自己 `JSON.parse`，
+ * 于是拿到的是**没剥 sidecar 的原始对象**——同一行数据在整行路径与窄投影路径上形状不同。
+ * 合一到这一个函数后两条路不可能再漂。
+ */
+export function exposedFrontmatterExtra(storedJson: string): Record<string, unknown> {
+  return frontmatterSidecars(JSON.parse(storedJson), 'stored-json').exposed
+}
+
 function decodeAgentPersistenceRow(row: AgentPersistenceRow, decoding: AgentRowDecoding): Agent {
   const sidecars = frontmatterSidecars(
     decoding === 'normalized' ? jsonRecord(row.frontmatterExtra) : JSON.parse(row.frontmatterExtra),

@@ -211,6 +211,21 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
  * 所以**没有擅自改任何一边**——数字与判据都按现状钉着。裁决出来之前，读这个数的人要知道
  * 它**不是**「还欠多少合一」，而是「还有多少对共存」，其中含**有意保留**的那几对。
  */
+/**
+ * 成对共存的 provider 适配器对数。**只降不升。**
+ *
+ * **完工线不是 0**——plan §5fq 的裁决：一对孪生必须合一，除非差异源于引擎本身，而那只有三种
+ * （只有一个引擎有的原语 / 只有一个引擎有的资源形态 / 驱动强加的线上差异）。
+ * 留下来的每一对得**指名命中哪一条**；指不出来就是漂移，处方是各取更强的一半合成一份。
+ * 现存 8 对里，落盘工件格式与迁移器命中第二条（SQLite 是一个文件、PostgreSQL 是一台服务器），
+ * 是真差异不是债。
+ *
+ * **这个数本身还是结构性低估的**（§5fh 实测）：`classify(path)` 按**文件名词干**配对，
+ * 于是**同一个文件里的一对**它一个也看不见——同文件对实测 25 对 / 24 个文件，其中三对在
+ * `infrastructure/`。§5fp 合掉的那一对（`create{,Postgresql}ExecutionContractResourceAdapter`）
+ * 正是同文件对，所以合掉它这个数一动不动。要按 §5fq 的判据把 AC-1 走完，**同文件对必须
+ * 进入某个账本**，否则「还剩几对」永远只数得到一半。
+ */
 export const PROVIDER_PAIR_COUNT = 8
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
@@ -445,7 +460,11 @@ describe('RFC-359 W5 —— 成对 provider 适配器：合一进度 + 对拍覆
       expect(
         SCANNED_ROWS.length,
         `成对共存的 provider 适配器还剩 ${String(SCANNED_ROWS.length)} 对，账本记的是 ` +
-          `${String(PROVIDER_PAIR_COUNT)}。这个数是 RFC-359 的合一进度，只降不升，降到 0 是完工线。`,
+          `${String(PROVIDER_PAIR_COUNT)}。这个数只降不升。**完工线不是 0**（plan §5fq 的裁决）：` +
+          '留下来的每一对必须指名它命中三条「差异源于引擎本身」里的哪一条——' +
+          '①只有一个引擎有的原语（advisory lock / PRAGMA / `$client` / `dbTxSync` / PG 的只读可重复读快照）；' +
+          '②只有一个引擎有的资源形态（SQLite 是一个**文件**，PostgreSQL 是一台**服务器**）；' +
+          '③驱动强加的线上差异（占位符 / 类型编解码）。指不出来就是漂移，处方是各取更强的一半合成一份。',
       ).toBe(PROVIDER_PAIR_COUNT)
       expect(
         SCANNED_ROWS.filter(isUnverifiedRow).length,

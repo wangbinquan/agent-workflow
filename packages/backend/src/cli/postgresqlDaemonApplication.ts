@@ -132,7 +132,7 @@ import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/com
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import {
   composeExecutionContract,
-  createPostgresqlExecutionContractResourceAdapter,
+  createExecutionContractResourceAdapter,
 } from '@/modules/execution-contract/composition'
 import {
   composeDigitalEmployeePlatformInventoryParticipant,
@@ -736,7 +736,7 @@ export async function composePostgresqlApplication(
 
   const codeHistoryQueries = composeCodeHistoryQueries(input.db)
   const executionContracts = composeExecutionContract({
-    resources: createPostgresqlExecutionContractResourceAdapter(
+    resources: createExecutionContractResourceAdapter(
       input.db,
       developmentImplicitAgentContractDeclarations,
     ),

@@ -26,7 +26,7 @@ import {
 import { developmentExecutionContractRegistrations } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   composeExecutionContract,
-  createPostgresqlExecutionContractResourceAdapter,
+  createExecutionContractResourceAdapter,
 } from '@/modules/execution-contract/composition'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
 import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
@@ -213,7 +213,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
                 registrations: developmentExecutionContractRegistrations,
               })
             : composeExecutionContract({
-                resources: createPostgresqlExecutionContractResourceAdapter(
+                resources: createExecutionContractResourceAdapter(
                   harness.db as unknown as PostgresqlDatabaseClient,
                 ),
                 appHome,

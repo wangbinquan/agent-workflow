@@ -7290,3 +7290,41 @@ gh run rerun <id> --failed
 **最后一定要做变异验证**：把那个注入点在生产里注释掉重跑。这次删掉 `await args.beforeCas?.()`
 ⇒ **两个引擎共 4 格红**（sqlite/postgresql × setTaskStatus/trySetTaskStatus）。
 只有这一步能证明「新造法在**两个引擎上**都真的咬」，而不是靠 SQLite 那半边撑着。
+
+### 本地「大半径一次跑完」有上限：342 个文件塞进一个 `bun test` 进程，会自己造出 55 个假红
+
+2026-09-15 实撞。改动落在 `workflowFromPersistenceRow` 这类**每次工作流读取都会过**的函数上，
+于是按「谁引用了这些符号 / 路径」算出 342 个文件的半径，一条 `bun test <342 个文件>` 跑完，
+**4085 pass / 56 fail**。
+
+56 条里 **55 条是假红**：`task-start-git-identity`（8）/ `rfc107-url-upload-multipart`（13）/
+`rfc122-clarify-directive-dispatch`（10）/ `tasks-multipart`（20）/ `start-task-url`（4）
+——**每个文件单独跑都是满绿**，加起来正好 55，和大跑的失败数逐条对得上。
+剩下 1 条是真红（见下条）。
+
+原因是这些都是**重量级集成用例**：spawn runtime 子进程、建临时 HOME、做真 git 操作、
+抢同一批端口与临时目录。CI 跑的是 `bun test --isolate --randomize --shard=N/M`，
+`--isolate` 每个文件一个干净进程、分片又把它们分散到不同 runner 上，所以 CI 上不会这样。
+
+**处置**：
+- 半径大到几百个文件时**别用单进程一条命令**。要么 `--isolate`（慢但对），
+  要么按 CI 的形状分片，要么**把半径收窄到真正会被改动影响的那几十个文件**
+  （纯 rename / 纯抽取不改行为的部分不用进半径，只有**行为真的变了**的那一处才要）。
+- 大跑红了，**先逐文件单独复跑**再下结论。单独跑绿 + 失败条数逐条对得上 ⇒ 是共存干扰（co-residency）。
+  这不违反「不许重跑就过了」：那条禁的是**没有假设、指望概率**的重跑；这里的假设是具体的
+  （「只在 342 文件共进程时红」），单独跑正是**证伪这个假设的实验**，而且数字要能对上账。
+
+### 改了 `services/*` facade 的**导入符号**，会踩到一条不在 `tests/architecture/` 里的账本
+
+同日同一笔改动的**真红**：`packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts`
+逐条记着「哪个 facade → 哪个消费者、导入了**哪些符号**」。把
+`taskExecutionAdapter.ts` 的 `getAgentById` 换成 `exposedFrontmatterExtra`、
+`getWorkflow + migrateDefinitionToLatest` 换成 `decodeStoredWorkflowDefinition` 之后，
+两条边的 `importedSymbols` 与账本不符，当场红。
+
+它**不在 `tests/architecture/` 下**，所以跑一遍架构守卫套件看不见它——这和之前
+`rfc349-provider-completeness` 那次是同一个坑的不同实例：**「读源码文本的账本」散落在
+`tests/` 里，不全在 `tests/architecture/`**。
+
+**处置**：改任何 `services/*` facade 的导入符号后，除了架构守卫，还要
+`grep -rln "<你改的符号>" packages/backend/tests` 扫一遍，把命中的文件都跑掉。

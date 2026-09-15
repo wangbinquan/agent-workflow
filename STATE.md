@@ -2,6 +2,50 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-15 续 36，**AC-1 开张：第一对真孪生合一，量出两处「换个数据库结果就不一样」**）
+>
+> 续 35 收了 AC-10（品牌分叉账本清零）。本段做两件事：**先修正一条我自己的错误分类，
+> 再拿修正后的判据去扫，扫出 AC-1 的第一条真合一。**
+>
+> **一、修正（§5fo）：「用了假池」≠「有两份实现」。**
+> §5fm 把 7 条 `rfc349-*` 一股脑归成丙类「PG 覆盖是脚本化假池 ⇒ 迁真库等于重写」。
+> 做 `rfc349-websocket-provider` 时发现这归类是错的：那条「假池」用例和它上面那条「真 SQLite」
+> 用例 `new` 的是**同一个类**（`DrizzleRealtimeStore(db: ProviderNeutralDatabase)`）——
+> 一份中立实现被喂了两种库，其中一种是假的，**不欠 AC-1 任何东西**，直接合成一条双引擎即可。
+> 正确判据：**看那条用例 `new`/`compose` 出来的是不是同一个符号。**
+> 是 ⇒ 只是喂了两种库（直接可迁）；不是 ⇒ 才是 AC-1 territory。
+> 5 例 → 7 例；`OPEN_MIGRATION_DEBT` 25 → 24。CI `f0e60db76` 全绿（46 job 零非成功）。
+>
+> **二、拿新判据扫，AC-1 第一条真合一（§5fp）：执行合同资源读取。**
+> 两份实现都落到同一个 `…FromLookup`，只是「怎么把行读出来」各写各的。把两份**接到同一个
+> 真 PostgreSQL 库、喂同一批行**，量出两处差异：
+>
+> | | 中立那份 | PostgreSQL 那份 |
+> | --- | --- | --- |
+> | A. 交给 `implicitAgentDeclarations` 的 `frontmatterExtra` 键 | `["digitalEmployeeTemplate"]` | `["digitalEmployeeTemplate","role"]` |
+> | B. `definition` 存成坏 JSON 时抛什么 | `ValidationError/workflow-definition-corrupt` | 裸 `SyntaxError` |
+>
+> A 是 sidecar 泄漏（四个已提升为 `Agent` 一等字段的键从窄投影那条路漏回 extra），
+> **今天还没咬到人**——两个消费者读的都不是 sidecar 键；据实说是**潜伏**，不吹成活 bug。
+> B **是活的**：同一个坏 definition，用户看到的错误码取决于管理员选了哪种数据库。
+>
+> **合的时候各取更强的一半**：投影取 PG 那半（窄投影，SQLite 顺带受益），解码取中立那半——
+> 但抽成两个独立导出 `exposedFrontmatterExtra()` / `decodeStoredWorkflowDefinition()`，
+> 让**整行路径与窄投影路径共用同一段解码**，这才是「不可能再漂」而不是「这次对齐了」。
+>
+> **最该带走的一句：合一不是把两份删成一份，是先量出它们到底差在哪、再决定哪一半活下来。**
+> 上来就删任意一份都会静默改掉一个 provider 的用户可见行为——A 会让 SQLite 开始泄漏 sidecar，
+> B 会让 SQLite 开始抛裸 `SyntaxError`。**两份实现的存在本身就是一份没人读过的差异清单。**
+>
+> 三条新判据全部**双引擎各自单独咬**（变异验证：换回裸 parse ⇒ A 红 2 格；换回裸 parse ⇒ B 红 2 格；
+> 窄投影改回 `.select()` ⇒ 第三条红 2 格）。5 例 → **14 例**。
+>
+> **下一段的入口**：用新判据重扫剩下 6 个假池文件已得初步结论——
+> `rfc349-task-execution-read-models-postgresql-adapter` 的 `composePostgresqlTaskExecutionReadModels`
+> 竟是 `createTaskExecutionReadModels` 的**纯别名再导出**（同文件还有两个零消费者的死别名），
+> 属 §5fo 形状、直接可迁；`rfc349-daemon-provider-core` 才是真结构对（内含 6 个子对，
+> 其中 systemOperations / maintenanceDisk 两对**确实**该分——SQLite 是文件、PostgreSQL 是服务器）。
+
 > ## 📌 RFC-359 最新一段（2026-09-15 续 35，**AC-10 判据达成：品牌分叉账本清零**）
 >
 > `PROVIDER_BRANCH_DEBT` 从开账的 **31 处 / 16 个文件**降到 **0**，`ledger-baselines` 基线同步为 0，

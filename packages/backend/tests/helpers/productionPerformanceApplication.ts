@@ -26,7 +26,7 @@ import {
 } from '@/modules/digital-employee/composition'
 import {
   composeExecutionContract,
-  createPostgresqlExecutionContractResourceAdapter,
+  createExecutionContractResourceAdapter,
 } from '@/modules/execution-contract/composition'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -101,7 +101,7 @@ export async function createProductionPerformanceApplication(
   const executionContracts = isPostgresql(db)
     ? composeExecutionContract({
         ...executionContractInput,
-        resources: createPostgresqlExecutionContractResourceAdapter(db),
+        resources: createExecutionContractResourceAdapter(db),
       })
     : (() => {
         assertSqlite(db)

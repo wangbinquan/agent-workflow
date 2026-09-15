@@ -323,7 +323,10 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   edge(
     'services/agent.ts',
     'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
-    ['getAgentById'],
+    // RFC-359 AC-1（plan §5fp）：`getAgentById` → `exposedFrontmatterExtra`。合一那对适配器时
+    // 投影收窄成 4 列，整行读没了；换来的是**存储 JSON 的对外视图解码口**——四个 sidecar 键
+    // 已提升为 `Agent` 的一等字段，这个口负责把它们从 extra 里剥掉，与整行路径同一个函数。
+    ['exposedFrontmatterExtra'],
     'execution-contract Agent projection',
     REMOVE_OWNERS.executionContractResources,
   ),
@@ -459,7 +462,11 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   edge(
     'services/workflow.ts',
     'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
-    ['getWorkflow', 'migrateDefinitionToLatest'],
+    // RFC-359 AC-1（plan §5fp）：`getWorkflow` + `migrateDefinitionToLatest` →
+    // `decodeStoredWorkflowDefinition`。同上，投影收窄成 3 列；解码走与整行路径同一个口，
+    // 于是坏 definition 在两条路上都抬成 `ValidationError('workflow-definition-corrupt')`
+    // ——合一前窄投影那条路漏的是裸 `SyntaxError`。
+    ['decodeStoredWorkflowDefinition'],
     'execution-contract Workflow projection',
     REMOVE_OWNERS.executionContractResources,
   ),

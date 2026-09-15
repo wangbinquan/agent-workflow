@@ -21,10 +21,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:110028091270f0f04df0",
         "import:1c67086598d7bdb3102d",
         "import:27c7dced4b9c333cf59a",
-        "import:582010bd11a8e1414cf8",
-        "import:cb1b84ca9a78f2e5bb72"
+        "import:582010bd11a8e1414cf8"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/agent.ts",
@@ -6454,8 +6454,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:247b5463ff8b47e8b5f2",
-        "import:539794500bfec494a119",
+        "import:a62165f141e79339620c",
         "import:cf2542962d358dfae239",
         "import:eb8a3488d786d9a3fa72"
       ],
@@ -6636,5 +6635,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:187e561d7e645d15e692508ae1449c7a19cfdd79aa9e1e4bc1cd43c29c38fc9f"
+  "sourceDigest": "sha256:edca9f4cd40ff5c3e0ae42b8c6fa316616c68219c9916483c393ee49bb8eaf8e"
 }

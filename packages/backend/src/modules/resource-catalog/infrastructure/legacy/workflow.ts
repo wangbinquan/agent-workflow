@@ -93,6 +93,7 @@ import {
   WORKFLOW_NAME_INVALID_MESSAGE,
   assertCanonicalWorkflowAgentIds,
   assertChangedWorkflowName,
+  decodeStoredWorkflowDefinition,
   normalizeWorkflowSnapshot,
   workflowDetailOf as workflowToDetail,
   workflowDraftSnapshotOf,
@@ -104,6 +105,7 @@ import {
 export {
   WORKFLOW_NAME_INVALID_MESSAGE,
   assertCanonicalWorkflowAgentIds,
+  decodeStoredWorkflowDefinition,
   workflowDraftSnapshotOf,
   workflowRevisionOf,
   workflowToDetail,

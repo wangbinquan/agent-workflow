@@ -1,8 +1,6 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
-  WorkflowDefinitionSchema,
   migrateWorkflowDefinitionToLatest,
-  type Agent,
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
@@ -14,10 +12,9 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 
 import { agents, workflows } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { getAgentById } from '@/services/agent'
+import { exposedFrontmatterExtra } from '@/services/agent'
 import { resolveScriptInterpreter, runScriptProcess } from '@/services/scriptRun'
-import { getWorkflow, migrateDefinitionToLatest } from '@/services/workflow'
+import { decodeStoredWorkflowDefinition } from '@/services/workflow'
 import { sha256Hex } from '@/util/hash'
 import type {
   ExecutionContractProgramFixturePort,
@@ -61,15 +58,6 @@ interface ExecutionContractWorkflowResource {
 interface ExecutionContractResourceLookup {
   loadAgent(id: string): Promise<ExecutionContractAgentResource | null>
   loadWorkflow(id: string): Promise<ExecutionContractWorkflowResource | null>
-}
-
-function executionContractAgentResource(agent: Agent): ExecutionContractAgentResource {
-  return {
-    name: agent.name,
-    outputs: agent.outputs,
-    updatedAt: agent.updatedAt,
-    frontmatterExtra: agent.frontmatterExtra,
-  }
 }
 
 export function inspectExecutionContractWorkflowDefinition(
@@ -162,8 +150,30 @@ function createExecutionContractResourceAdapterFromLookup(
   }
 }
 
-/** RFC-359 AC-6：两个 provider 共用这一份。体内只调 `getAgentById` / `getWorkflow`，
- * 两者早就是中立签名且都被 await——原来的 `DbClient` 标注纯粹是编译期的，没有运行期含义。 */
+/**
+ * RFC-359 AC-1 —— **两个 provider 唯一的一份**执行合同资源读取。
+ *
+ * 此前这里是一对孪生：中立那份走 `getAgentById` / `getWorkflow`（整行 `select()` + 整行
+ * 解码），PostgreSQL 那份自己窄投影 4 / 3 列再就地 `JSON.parse`。同一行数据经两条路得到
+ * **两种结果**，实测（plan §5fp）：
+ *
+ *   A. 同一个 agent 行、同一个真 PostgreSQL 库：中立那份交给 `implicitAgentDeclarations`
+ *      的 `frontmatterExtra` 是 `["digitalEmployeeTemplate"]`，PostgreSQL 那份是
+ *      `["digitalEmployeeTemplate","role"]` —— sidecar 键（`outputKinds` / `role` /
+ *      `outputWrapperPortNames` / `branchPorts`，本层已提升为 `Agent` 的一等字段）
+ *      从窄投影那条路漏了出去。
+ *   B. 同一个坏掉的 workflow definition：中立那份抛
+ *      `ValidationError('workflow-definition-corrupt')`（带 workflowId 与 zod issues），
+ *      PostgreSQL 那份抛**裸 `SyntaxError`** —— 用户可见的错误码取决于你用哪种数据库。
+ *
+ * 合一取的是**各自更强的那一半**：窄投影（少取 6 / 8 列，PostgreSQL 上是实打实的传输量，
+ * SQLite 也顺带受益）+ 中立那份的两个解码口（`exposedFrontmatterExtra` /
+ * `decodeStoredWorkflowDefinition`，与整行路径同一个函数，不可能再漂）。
+ *
+ * `.limit(1)` + `rows[0]` 而不是 `.get()`：`ProviderNeutralDatabase` 是
+ * `BaseSQLiteDatabase<'sync' | 'async'>`，`await` 之后两边一致的正是这一种写法
+ * （`getAgentById` / `getWorkflow` 本来就这么写）。
+ */
 export function createExecutionContractResourceAdapter(
   db: ProviderNeutralDatabase,
   implicitAgentDeclarations: (input: {
@@ -173,33 +183,7 @@ export function createExecutionContractResourceAdapter(
   return createExecutionContractResourceAdapterFromLookup(
     {
       async loadAgent(id) {
-        const agent = await getAgentById(db, id)
-        return agent === null ? null : executionContractAgentResource(agent)
-      },
-      async loadWorkflow(id) {
-        const workflow = await getWorkflow(db, id)
-        return workflow === null
-          ? null
-          : { name: workflow.name, version: workflow.version, definition: workflow.definition }
-      },
-    },
-    implicitAgentDeclarations,
-  )
-}
-
-/** PostgreSQL adapter for the execution-contract resource projection. Only the
- * four Agent fields and three Workflow fields owned by this port cross the
- * infrastructure boundary; no provider handle reaches application/public. */
-export function createPostgresqlExecutionContractResourceAdapter(
-  db: PostgresqlDatabaseClient,
-  implicitAgentDeclarations: (input: {
-    readonly frontmatterExtra: Readonly<Record<string, unknown>>
-  }) => readonly { readonly contractId: string; readonly version: number }[] = () => [],
-): ExecutionContractResourcePort {
-  return createExecutionContractResourceAdapterFromLookup(
-    {
-      async loadAgent(id) {
-        const row = await db
+        const rows = await db
           .select({
             name: agents.name,
             outputs: agents.outputs,
@@ -209,17 +193,17 @@ export function createPostgresqlExecutionContractResourceAdapter(
           .from(agents)
           .where(eq(agents.id, id))
           .limit(1)
-          .get()
+        const row = rows[0]
         if (row === undefined) return null
         return {
           name: row.name,
           outputs: JSON.parse(row.outputs) as string[],
           updatedAt: row.updatedAt,
-          frontmatterExtra: JSON.parse(row.frontmatterExtra) as Record<string, unknown>,
+          frontmatterExtra: exposedFrontmatterExtra(row.frontmatterExtra),
         }
       },
       async loadWorkflow(id) {
-        const row = await db
+        const rows = await db
           .select({
             name: workflows.name,
             version: workflows.version,
@@ -228,14 +212,12 @@ export function createPostgresqlExecutionContractResourceAdapter(
           .from(workflows)
           .where(eq(workflows.id, id))
           .limit(1)
-          .get()
+        const row = rows[0]
         if (row === undefined) return null
         return {
           name: row.name,
           version: row.version,
-          definition: migrateDefinitionToLatest(
-            WorkflowDefinitionSchema.parse(JSON.parse(row.definition) as unknown),
-          ),
+          definition: decodeStoredWorkflowDefinition(id, row.definition),
         }
       },
     },

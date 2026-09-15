@@ -11,7 +11,7 @@ import type {
   ExecutionContractRegistration,
 } from './public/types'
 
-export { createPostgresqlExecutionContractResourceAdapter } from './infrastructure/taskExecutionAdapter'
+export { createExecutionContractResourceAdapter } from './infrastructure/taskExecutionAdapter'
 
 type ExecutionContractResourceComposition =
   | { readonly db: DbClient; readonly resources?: never }

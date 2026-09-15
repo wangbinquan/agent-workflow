@@ -51729,36 +51729,12 @@
     {
       "currentContext": "execution-contract",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
-      "id": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createPostgresqlExecutionContractResourceAdapter",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlExecutionContractResourceAdapter",
-      "targetContext": "execution-contract",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "execution-contract",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
       "id": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#declarationsSchema",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "declarationsSchema",
-      "targetContext": "execution-contract",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "execution-contract",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
-      "id": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#executionContractAgentResource",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "executionContractAgentResource",
       "targetContext": "execution-contract",
       "targetLayer": "infrastructure"
     },
@@ -85418,6 +85394,18 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistence.ts#exposedFrontmatterExtra",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "exposedFrontmatterExtra",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistence.ts#frontmatterSidecars",
@@ -97484,6 +97472,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createWorkflowPersistenceValues",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#decodeStoredWorkflowDefinition",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "decodeStoredWorkflowDefinition",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -297617,5 +297617,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:187e561d7e645d15e692508ae1449c7a19cfdd79aa9e1e4bc1cd43c29c38fc9f"
+  "sourceDigest": "sha256:edca9f4cd40ff5c3e0ae42b8c6fa316616c68219c9916483c393ee49bb8eaf8e"
 }

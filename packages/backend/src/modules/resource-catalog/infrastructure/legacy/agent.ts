@@ -88,8 +88,11 @@ import {
 import {
   agentContentPersistenceValues,
   agentFromStoredJsonRow,
+  exposedFrontmatterExtra,
   serializeAgentInputs,
 } from '../agentPersistence'
+
+export { exposedFrontmatterExtra }
 import { continueResourceCommit, finishSynchronousResourceCommit } from '../resourceCommitSequence'
 
 type AgentRow = typeof agents.$inferSelect
