@@ -99,11 +99,13 @@ function readPortFlag(argv: string[]): number | undefined {
 
 async function composeUserCommandBootstrap() {
   const provider = await resolveCommandProvider()
-  // Residual fence: the bootstrap union has exactly these two variants, so this is
-  // unreachable today; a third one widens `provider` and stops this compiling rather
-  // than silently letting a new provider fall through the composition below.
+  // Residual fence: the bootstrap carries exactly these two provider values, so this is
+  // unreachable today; a third one widens `provider.provider` and stops this compiling
+  // rather than silently letting a new provider fall through the composition below.
+  // RFC-359 AC-10：收窄的对象不再是可辨识联合（bootstrap 客户端已由白名单层交出，
+  // 这里不按品牌分叉），所以围栏喂给 `never` 汇的是**那个 provider 值**本身。
   if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
-    return unhandledDatabaseProvider(provider)
+    return unhandledDatabaseProvider(provider.provider)
   }
   const identityAccess = createIdentityAccessRuntime({ db: provider.db })
   const auth = createAuthRuntimeFor({
@@ -148,24 +150,16 @@ async function resolveCommandProvider() {
   })
   const runtime = prepared.runtime
   try {
-    if (runtime.provider === 'postgresql') {
-      return Object.freeze({
-        provider: 'postgresql' as const,
-        runtime,
-        db: runtime.openClient(),
-      })
-    }
-    if (runtime.provider === 'sqlite') {
-      return Object.freeze({
-        provider: 'sqlite' as const,
-        runtime,
-        db: runtime.openClient({ migrationsFolder: await resolveMigrationsFolder() }),
-      })
-    }
-    // Both variants handled above, so `runtime` is `never` here. A third variant
-    // on ResolvedDatabaseProviderRuntime widens it and this stops compiling,
-    // instead of the new provider silently taking the SQLite bootstrap.
-    return unhandledDatabaseProvider(runtime)
+    // RFC-359 AC-10 —— bootstrap 客户端由 `prepareDatabaseProviderForBoot`（白名单层、品牌
+    // 已知处）交出来，这里不再按品牌分叉。原来两支的唯一差别是 `openClient` 的入参个数，
+    // 而 SQLite 那支还会**多算一次** `await resolveMigrationsFolder()` 然后把结果丢掉：
+    // prepare 阶段早已用同一个值把库打开并 adopt 进 runtime，`openClient(input)` 此时
+    // 根本不看 `input`。
+    return Object.freeze({
+      provider: runtime.provider,
+      runtime,
+      db: prepared.openBootstrapClient(),
+    })
   } catch (error) {
     await runtime.close()
     throw error
@@ -174,11 +168,13 @@ async function resolveCommandProvider() {
 
 async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap> {
   const provider = await resolveCommandProvider()
-  // Residual fence: the bootstrap union has exactly these two variants, so this is
-  // unreachable today; a third one widens `provider` and stops this compiling rather
-  // than silently letting a new provider fall through the composition below.
+  // Residual fence: the bootstrap carries exactly these two provider values, so this is
+  // unreachable today; a third one widens `provider.provider` and stops this compiling
+  // rather than silently letting a new provider fall through the composition below.
+  // RFC-359 AC-10：收窄的对象不再是可辨识联合（bootstrap 客户端已由白名单层交出，
+  // 这里不按品牌分叉），所以围栏喂给 `never` 汇的是**那个 provider 值**本身。
   if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
-    return unhandledDatabaseProvider(provider)
+    return unhandledDatabaseProvider(provider.provider)
   }
   const identityAccess = createIdentityAccessRuntime({ db: provider.db })
   type PostgresqlResourcePackageProviderInput = Parameters<

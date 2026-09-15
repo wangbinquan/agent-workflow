@@ -105,9 +105,12 @@ const PROVIDER_FORK_LEDGER = {
   // RFC-359 W4-D8 / D9：identity-access 与 auth 运行时的装配入口收中立句柄，main.ts 少了三个 provider 三元分支。
   // RFC-359（apply 引擎合一，plan §5dv）4 → 3：`package` 子命令的资源包装配此前是一个
   // `provider === 'sqlite' ? … : …`，现在两个 provider 装同一条组合根。
-  // RFC-359 AC-10 第一波 3 → 2：`runFrameBackfillOnBoot` 的 provider 标签是摆设——联合的两个
-  // 成员结构逐字相同、函数体从不读它，却逼着 main.ts 写一条三元分叉。标签删掉，分叉消失。
-  'main.ts': { forks: 2, fence: 'fenced-dispatch' },
+  // RFC-359 AC-10：`main.ts` 的条目退役（3 → 2 → 0）。
+  // 第一波 3 → 2：`runFrameBackfillOnBoot` 的 provider 标签是摆设——联合两个成员结构逐字相同、
+  // 函数体从不读它，却逼着 main.ts 写一条三元分叉；标签删掉，分叉消失。
+  // 本刀 2 → 0：bootstrap 客户端改由 `prepareDatabaseProviderForBoot` 交出
+  // （`openBootstrapClient()`），两支的唯一差别（`openClient` 入参个数）随之消失。
+  // 文件里残留的两处 `unhandledDatabaseProvider` 穷尽性围栏不计债（按形状豁免）。
   'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },
   // RFC-354 T4: the frame backfill picks its store by the provider-keyed
   // `FrameBackfillDatabase` union — a third provider cannot be passed in

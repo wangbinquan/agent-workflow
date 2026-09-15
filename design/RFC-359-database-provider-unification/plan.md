@@ -11412,6 +11412,26 @@ sha256 内容锁。改完 frameBackfill 调用它立刻红——而且红得恰�
    （没有任何测试 import 它，`MaintenanceServiceOptions` 两个变体都没被测试构造过），
    唯一的网是 `rfc338-maintenance-architecture` 对 `cli/start.ts` 的一条正则。
    在那上面做组合根上提是无网作业——先补网。
+### `main.ts` 清零：那条分叉里藏着一次**算完就丢**的求值
+
+`main.ts` 的两支看着是「PG 不用传参、SQLite 要传 `migrationsFolder`」，于是 SQLite 那支写了
+`openClient({ migrationsFolder: await resolveMigrationsFolder() })`。**但那次求值的结果直接被丢弃**：
+
+`prepareDatabaseProviderForBoot` 在 `openDb({ ...options.sqliteOptions, path })` 这一步**已经
+用同一个值把库打开**，并把 client 一路 adopt 进 runtime（`composeSqliteProviderRuntime` 的
+`let client = initialClient`）。所以 `openClient(input)` 里 `client ??= openDb(...)` 的左侧非空，
+**`input` 根本不看**。也就是说这条分叉不仅是品牌分叉，还让启动路径多做了一次
+`resolveMigrationsFolder()`（在单二进制形态下那是可能要**解压迁移目录**的操作）。
+
+处置与上一刀同一个形状：由 `prepareDatabaseProviderForBoot`（白名单层、品牌已知处）交出
+`openBootstrapClient()`，调用方连「哪个 provider 要传什么」都不必知道。两支合一。
+
+连带一处**围栏的喂法**要改：收窄的对象不再是可辨识联合了，所以两处
+`unhandledDatabaseProvider(provider)` 改成喂 `provider.provider`——那个值排除两个字面量之后
+才是 `never`。这不是将就，是把围栏喂给**真正在分类的那个量**。
+
+`PROVIDER_BRANCH_DEBT` 7 → 6 条（13 → 11 处），`main.ts` 在两份账本里都清零。
+
 ### 顺手清掉一处**守卫看不见**的「落进 else」
 
 `MaintenanceServiceOptions` 的 SQLite 变体原本是 `provider?: 'sqlite'`（**可选**），

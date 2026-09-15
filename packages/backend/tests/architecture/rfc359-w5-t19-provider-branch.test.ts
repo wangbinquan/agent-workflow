@@ -280,7 +280,11 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // AC-10 第一波 3 → 2：`runFrameBackfillOnBoot` 的 provider 标签是**摆设**——联合的两个成员
   // 结构逐字相同、函数体从不读它（W4-B1 存储合一之后就没人读了），却逼着这里写一条三元分叉。
   // 标签一删，分叉自然消失，不需要任何替代判据。
-  'main.ts: 2',
+  // AC-10 销账：`main.ts` 清零。原来两支的**唯一**差别是 `openClient` 的入参个数，
+  // 而 SQLite 那支还会多算一次 `await resolveMigrationsFolder()` 然后把结果丢掉——
+  // prepare 阶段早已用同一个值把库打开并 adopt 进 runtime，`openClient(input)` 此时
+  // 根本不看 `input`。改成由 `prepareDatabaseProviderForBoot`（白名单层、品牌已知处）
+  // 交出 `openBootstrapClient()`，调用方连「哪个 provider 要传什么」都不必知道。
   'modules/system-operations/composition.ts: 2',
   // AC-10 第一波销账：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` /
   // `postgresqlProviderBackup` 共 5 处改问 `databaseProviderTraits(...).migrationRole`

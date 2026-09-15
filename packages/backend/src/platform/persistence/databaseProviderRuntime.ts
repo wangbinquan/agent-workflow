@@ -5,6 +5,7 @@
 import { unhandledDatabaseProvider, type DatabaseProvider } from './databaseProviders'
 import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
 import { openDb, type DbClient, type OpenDbOptions } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   createPostgresqlDatabaseOperationalAdapter,
   createSqliteDatabaseOperationalAdapter,
@@ -243,6 +244,7 @@ type PreparedDatabaseProviderSchema =
       readonly runtime: SqliteDatabaseProviderRuntime
       readonly databaseConfig: DatabaseConfig
       readonly describeSchemaOutcome: () => string
+      readonly openBootstrapClient: () => ProviderNeutralDatabase
     }
   | {
       readonly provider: 'postgresql'
@@ -259,6 +261,16 @@ type PreparedDatabaseProviderSchema =
        * 而不是静默继承 SQLite 的那句。
        */
       readonly describeSchemaOutcome: () => string
+      /**
+       * RFC-359 AC-10 —— bootstrap 要用的那个客户端，**也在品牌已知处交出来**。
+       *
+       * 原来是 `main.ts` 自己 `if (runtime.provider === 'postgresql') … else …`，两支的唯一
+       * 差别是 `openClient` 的**入参个数**（SQLite 那支还要再 `await resolveMigrationsFolder()`
+       * 一次——而 prepare 阶段早已用同一个值把库打开了，那次求值的结果**直接被丢弃**：
+       * 已 adopt 的 SQLite runtime 里 `client` 非空，`openClient(input)` 根本不看 `input`）。
+       * 由这里交出来之后，调用方连「哪个 provider 要传什么」都不必知道。
+       */
+      readonly openBootstrapClient: () => ProviderNeutralDatabase
     }
 
 /**
@@ -322,6 +334,8 @@ export async function prepareDatabaseProviderRuntime(
         }),
         // 打开所选 SQLite 客户端这一步本身就把待迁移全部应用了，所以这里已经可以定稿。
         describeSchemaOutcome: () => `migrations applied (database: ${options.sqlitePath})\n`,
+        // 这个 client 就是上面 `openDb(...)` 打开的那一个（已 adopt 进 runtime），直接交出去。
+        openBootstrapClient: () => client,
       }
     } catch (error) {
       client.$client.close()
@@ -368,6 +382,7 @@ export async function prepareDatabaseProviderRuntime(
       describeSchemaOutcome: () =>
         `PostgreSQL schema ${receipt.applied ? 'applied' : 'verified'} ` +
         `(generation: ${adopted.generation.payload.generationId}, active tables: ${receipt.activeTableCount})\n`,
+      openBootstrapClient: () => adopted.openClient(),
     }
   } catch (error) {
     await runtime.close()
