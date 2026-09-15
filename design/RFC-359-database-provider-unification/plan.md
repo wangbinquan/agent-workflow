@@ -11978,3 +11978,25 @@ context」，是**不透明 token 的运行期不变量**，不是跨阶段装�
    （两件事一起做才不会让账本更不准）；还是
 2. 先做 `CollaborationCommandContext<C>` 的能力入类型（API 形状变更，影响全部调用方），
    把 prose=5 真正消掉，marker 那几条留作已知误报并在账本里显式标注。
+
+## §5fj —— AC-6 尾巴的抽样取证：**四个候选，四种不同的真阻塞**，都通向生产侧
+
+§5fh/§5fi 更正了 AC-6 的数字（真债 95 → **实测 27**）。这一节回答下一个问题：
+**这 27 条是「还没动手」还是「动不了」？** 按体量从小到大抽了四条，逐条查根因——
+结论是 plan 早前那句「继续压这个数字的正解不再是转换测试，而是逐对收生产侧的引擎（AC-1）」
+**被抽样证实**，不是推测。
+
+| 候选 | 体量 | 真阻塞 |
+| --- | --- | --- |
+| `start-task-deps.test.ts` | 62 行 / 2 例 | **生产签名是 SQLite 品牌**：`buildStartTaskDeps(db: LegacySqliteTaskDatabase, …)`。测试本身连库都没查（只断言 `deps.db` 恒等透传 + config 每次重读），**换 harness 一分钟的事**——但换完形参类型就不对。要先把 `StartTaskDeps.db` 那条链收中立。 |
+| `rfc349-task-execution-read-models-postgresql-adapter.test.ts` | 192 行 / 4 例 | **它的「PG 覆盖」是脚本化假池**：`fixture(responses)` 造一个回放罐头行的 `PostgresqlPool`，断言的是**发出去的 SQL 文本**。迁到真 PG 不是换 harness，是**重写**——而且正是本 RFC 在别处批评过的那种「全部覆盖是脚本化 SQL 抄本」。 |
+| `rfc221-login-policy-routes.test.ts` | 226 行 / 4 例 | **已经迁了大半**：文件第 19 行就是 `describeEachProviderHttpApplication`。只剩一例自己 `createInMemoryDb` + `createApp`，因为 `createApp` 的入参还是 SQLite 形状——源码里已写明「独立一刀，见 plan §5bg」。 |
+| `rfc097-task-status-cas.test.ts` | 612 行 / 16 例 | 被测 helper（`setTaskStatus` / `trySetTaskStatus`）**是中立的、可迁**，但 CAS 竞态用例的做法是「在 helper 的 SELECT 与 UPDATE 之间插入竞争写者」——迁过去要**重新对齐两个引擎的并发语义**，是真工作。 |
+
+四条里**没有一条是「转换器跑一下就行」**：三条卡在生产侧（品牌签名 / `createApp` 入参 /
+假池本身就该换成真库），一条卡在并发语义。这与 plan 早前对 22 个候选实跑的结论一致
+（只有 3 个能迁、8 个卡在 SQLite-only 生产签名上）。
+
+**所以 AC-6 的销账节奏是被 AC-1 决定的**：每收一对生产侧引擎，下游那一串测试才跟着能迁。
+在 §5fh 那个「完工线」裁决出来之前，硬压这个数字只会逼出两种坏做法——
+要么给单个文件量身定做 sanctioned 豁免（账本明令禁止），要么把假池抄本当成「双引擎覆盖」。
