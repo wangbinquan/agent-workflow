@@ -69,7 +69,14 @@ export interface MaintenancePayloadSources {
 export type MaintenanceServiceOptions = MaintenanceServiceCommonOptions &
   (
     | Readonly<{
-        provider?: 'sqlite'
+        /**
+         * RFC-359 AC-10 —— **必填**。原来是 `provider?: 'sqlite'`，于是
+         * `options.provider ?? 'sqlite'` 让「没写」静默等于 SQLite——这正是本 RFC 要消灭的
+         * 「落进 else 继承 SQLite 行为」，只不过穿的是 `??` 而不是 `if`。
+         * 配置层的零配置默认（`config.json` 不写 database 就是 sqlite）不受影响，那是 zod
+         * 的 `.default()`；这里是**内部装配选项**，装配方本来就知道自己在装哪个 provider。
+         */
+        provider: 'sqlite'
         dbPath: string
         migrationsFolder: string
         generationId?: never
@@ -519,9 +526,9 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     wake: supervisor.wake,
     // Per-provider retryable classification lives in the traits table: a new
     // provider must declare its own codes instead of inheriting SQLite's.
-    // An absent provider is the product's documented zero-config default, which
-    // is spelled out here rather than left to a branch fallthrough.
-    classifyRetryable: databaseProviderTraits(options.provider ?? 'sqlite').classifyRetryable,
+    // RFC-359 AC-10：`provider` 现在是必填的，所以这里不再有 `?? 'sqlite'` 兜底——
+    // 少写一个 provider 是编译错，不是静默当成 SQLite。
+    classifyRetryable: databaseProviderTraits(options.provider).classifyRetryable,
     onAdmitted: refreshProjection,
     onDeferred: ({ job, attempt, delayMs, contentionCode }) => {
       log.warn('maintenance admission deferred', { job, attempt, delayMs, contentionCode })

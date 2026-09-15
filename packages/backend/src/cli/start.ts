@@ -2631,6 +2631,9 @@ async function composeSqliteProviderSession(
   // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
   let resourcePackageApplyActivity: (() => readonly string[]) | null = null
   const maintenanceService = startMaintenanceService({
+    // RFC-359 AC-10：装配方本来就知道自己在装哪个 provider，写出来。
+    // 此前这里不写、由 `options.provider ?? 'sqlite'` 静默兜底——那是「落进 else」的另一种写法。
+    provider: 'sqlite',
     dbPath: Paths.db,
     migrationsFolder,
     appHome: Paths.root,

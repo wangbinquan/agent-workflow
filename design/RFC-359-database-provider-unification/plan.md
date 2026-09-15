@@ -11393,11 +11393,40 @@ sha256 内容锁。改完 frameBackfill 调用它立刻红——而且红得恰�
 
 ### 剩下 14 处：两件必须先问过用户的事
 
-1. **`maintenanceService.ts:350/:431` + `maintenanceWorkerSupervisor.ts:348`（共 3 处）——
-   两份守卫互相矛盾。** W5-T19 把它们记成债；而 `rfc349-provider-completeness.test.ts:77-80`
-   把同样三处归为 `discriminated-union` 并**逐字写着「Strongest fence here; do not 'simplify'
-   these into traits lookups.」**。这不是代码问题，是两条判据打架，需要裁决：AC-10 是否凌驾于
-   那条 fence，还是给它们一个写进 W5-T19 头注的豁免（像 `unhandledDatabaseProvider` 那样）。
+1. ~~**两份守卫互相矛盾**~~ —— **这条我说错了，撤回。** 再读一遍两边的原文就不矛盾：
+
+   · `rfc349-provider-completeness.test.ts:77-80` 禁的是**一条具体路线**——
+     「do not **'simplify' these into traits lookups**」。它的理由是这三处的字面量同时在
+     收窄一个 provider-keyed 的可辨识联合，**调用方**构造不出第三个 provider 就编译不过；
+     换成运行期 traits 查表反而把这条强围栏**削弱**了。同一段开头还写着
+     「A fork is not automatically a bug」。
+   · `W5-T19` 的头注给的销账方式是**两条**：「把分叉改成按能力提问，**或收进组合根装配一次**」。
+
+   也就是说：被禁的是 traits 那条，而**组合根那条没被禁**——两份账本可以同时满足。
+   我把「禁其中一条路线」读成了「两条判据打架」，不该把它当成需要用户裁决的事推给用户。
+
+   **实际结论没变，但理由要换成真的那个**：这三处该走**组合根**路线（把 store /
+   payloadSources / supervisor / init 消息的选择上提到 `cli/start.ts` 与
+   `cli/postgresqlDaemonApplication.ts` 两个 bootstrap，让 `MaintenanceServiceOptions`
+   退化成单一形状）。不在本轮做的原因是**覆盖面**：`startMaintenanceService` **零运行时覆盖**
+   （没有任何测试 import 它，`MaintenanceServiceOptions` 两个变体都没被测试构造过），
+   唯一的网是 `rfc338-maintenance-architecture` 对 `cli/start.ts` 的一条正则。
+   在那上面做组合根上提是无网作业——先补网。
+### 顺手清掉一处**守卫看不见**的「落进 else」
+
+`MaintenanceServiceOptions` 的 SQLite 变体原本是 `provider?: 'sqlite'`（**可选**），
+消费端写成 `databaseProviderTraits(options.provider ?? 'sqlite')`。这**不被 W5-T19 计债**
+（它数的是等值比较 / switch / 条件类型，`??` 不在其内），但它正是本 RFC 要消灭的那个形状——
+「没写就静默当成 SQLite」，只不过穿的是 `??` 而不是 `if`。
+
+改成**必填**之后，编译器当场把唯一依赖那个默认的调用点顶了出来
+（`cli/start.ts:2633`，`Property 'provider' is missing`）——forcing function 立刻生效。
+配置层的零配置默认不受影响（`config.json` 不写 database 仍然是 sqlite，那是 zod 的
+`.default()`）；这里是**内部装配选项**，而装配方本来就知道自己在装哪个 provider。
+
+**账本计数不变**（本来就没计它），但这正说明账本只是**下界**：
+账面清零不等于品牌分叉清零，`??` / 默认参数 / 可选字段这类「静默继承」守卫都看不见。
+
 2. **`taskExecutionPersistence.ts:216/:218`(2 处)——两个分支行为并不等价。**
    SQLite 侧 `interruptBootOrphanTask` 走 `trySetTaskStatus` 的**宽**判据，PG 侧走
    `taskLifecycle.trySetWithGuard`；源码 `:115-119` 明写这条不对称，且

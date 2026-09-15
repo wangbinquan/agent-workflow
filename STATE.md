@@ -29,9 +29,10 @@
 > **`rfc359-w29` 的函数体 sha256 锁替我挡住了漏改**，而且红得恰到好处：语句数仍 160、顺序未变，
 > 只有摘要变——正说明改的是实参不是结构。
 >
-> **剩下 19 处里有两件要先问用户**：① maintenance 那 3 处**两份守卫互相矛盾**（W5-T19 记成债，
-> 而 `rfc349-provider-completeness` 把它们归为 `discriminated-union` 并逐字写着「do not
-> 'simplify' these into traits lookups」）；② `taskExecutionPersistence` 那 2 处**两分支行为不等价**
+> **剩下 19 处里有两件要先问用户**：① ~~maintenance 那 3 处两份守卫互相矛盾~~ **说错了，已撤回**
+> （见 plan §5fa 的更正）——被禁的只是 traits 那条路线，而 W5-T19 给的是两条路线、组合根那条
+> 没被禁，两份账本可以同时满足；不做的真实理由是 `startMaintenanceService` **零运行时覆盖**；
+> ② `taskExecutionPersistence` 那 2 处**两分支行为不等价**
 > （SQLite 侧宽判据 / PG 侧窄判据，`rfc359-w17-boot-orphan-terminalization` 正在锁这条不对称），
 > 合并等于裁掉用户可见行为，应单独立项。其余 14 处可做，但其中 6 处零覆盖，须先补测试。
 
