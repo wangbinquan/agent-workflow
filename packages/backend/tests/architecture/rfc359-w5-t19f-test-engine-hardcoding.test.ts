@@ -197,7 +197,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc097-pending-orphan-reap.test.ts: 1',
   'rfc097-repair-liveness.test.ts: 1',
   'rfc097-resume-mutex.test.ts: 1',
-  'rfc097-task-status-cas.test.ts: 1',
+  // RFC-359 AC-6 销账：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，
+  // 唯一那处 `createInMemoryDb` 随之消失（36 例 → 两引擎各 36 例）。
   'rfc098-commitpush-nonblocking.test.ts: 1',
   'rfc098-fanout-consumed-gate.test.ts: 1',
   'rfc098-fanout-shard-hash-rerun.test.ts: 1',
@@ -637,7 +638,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'architecture/rfc329-mcp-surface-guard.test.ts',
   'execution-contract-platform.test.ts',
   'helpers/rfc310Pr3Fixture.ts',
-  'rfc097-task-status-cas.test.ts',
   'rfc189-wg-round.test.ts',
   'rfc221-login-policy-routes.test.ts',
   'rfc257-webhook-error-codes.test.ts',

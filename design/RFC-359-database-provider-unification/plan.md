@@ -12017,3 +12017,46 @@ context」，是**不透明 token 的运行期不变量**，不是跨阶段装�
 **所以 AC-6 的销账节奏是被 AC-1 决定的**：每收一对生产侧引擎，下游那一串测试才跟着能迁。
 在 §5fh 那个「完工线」裁决出来之前，硬压这个数字只会逼出两种坏做法——
 要么给单个文件量身定做 sanctioned 豁免（账本明令禁止），要么把假池抄本当成「双引擎覆盖」。
+
+
+## §5fk —— AC-6 第一条真迁：`rfc097-task-status-cas` 上双引擎，靠的是**换判据的造法**而不是换 harness
+
+§5fj 把这条列为「可迁，但 CAS 竞态要重对齐两个引擎的并发语义——是真工作」。这一节把它做完了，
+并且做法值得单记：**卡住的不是 harness，是「竞态怎么造」**。
+
+### 原来的造法为什么在 PG 上会静默失效
+
+旧版造竞态靠一个 db 代理：在 `transaction` / `run`（统一原语开事务发的第一条 `BEGIN IMMEDIATE`）
+被调用的瞬间，**同步**插入竞争写者，再放行事务。文件头注释自己写明了前提：
+「bun:sqlite 全同步（`.run()` 立即落库），时序 100% 确定」。
+
+这个前提**只对 SQLite 成立**。PostgreSQL 驱动是异步的：同一个代理会在竞争写者**还在飞**的时候
+就放行事务，CAS 的 `WHERE status = from` 照样命中、helper 照常成功——判据于是**静默退化成
+「没有并发」**，而且是绿的。这正是本 RFC 一直在防的那种假绿：测试还在，预言力没了。
+
+### 换成 helper 自己的注入点
+
+`setTaskStatus` 里本来就有 `await args.beforeCas?.()`，位置在 SELECT + 双闸校验之后、
+CAS 事务之前——**正是「SELECT 与 UPDATE 之间」**，而且**被 await**，所以两个引擎上都是确定时序。
+改用它之后代理整个删掉，竞态由一行 `beforeCas: async () => { await …update… }` 造出来。
+
+顺带给 `trySetTaskStatus` 的入参**补上 `beforeCas` 的类型声明**：它本来就把 `args` 原样转交给
+`setTaskStatus`，运行时一直是通的，只是类型上没写——这是一处纯声明补全，零行为变化。
+
+### 判据没有被稀释（变异验证）
+
+把生产里那句 `await args.beforeCas?.()` 删掉重跑：**两个引擎的竞态用例共 4 格红**
+（sqlite / postgresql × setTaskStatus / trySetTaskStatus）。说明新造法在**两个引擎上都真的咬**，
+不是靠 SQLite 那半边撑着。
+
+36 例 → 两引擎各 36 例，72 pass / 0 fail。
+
+### 账本
+
+`TEST_ENGINE_HARDCODING_DEBT` 333 → **332**（那处 `createInMemoryDb` 消失）；
+`OPEN_MIGRATION_DEBT` 27 → **26**。
+
+**这条给 AC-6 剩下 26 条提供了一个可复用的判据**：迁移前先问「这个测试的判据依赖哪个引擎的
+执行模型？」——依赖同步落库、依赖 `.get()` 立即返回、依赖代理拦同步调用的，都不能直接换 harness，
+要先找到一个**两个引擎都被 await 的注入点**；找不到就得先在生产侧开一个（像这次补 `beforeCas`
+声明那样），而不是把判据降级。

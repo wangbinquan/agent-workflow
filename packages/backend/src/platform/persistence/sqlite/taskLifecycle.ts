@@ -811,6 +811,14 @@ export async function trySetTaskStatus(args: {
   executionContext?: TaskExecutionContextRef
   committedEventIdentity?: Partial<TaskCommittedEventIdentity>
   sourceTerminationEffectRef?: string | null
+  /**
+   * 与 `setTaskStatus` 同一个注入点（本函数原样转交 `args`，运行时一直是通的，
+   * 只是类型上没声明）。RFC-359 AC-6 补声明：CAS 竞态判据要在 SELECT 与 UPDATE 之间
+   * 插入竞争写者，而这是唯一**被 await 的**、两个引擎都成立的时机——
+   * 此前测试靠代理 `db.run`/`db.transaction` 模拟，那依赖 bun:sqlite 的同步落库，
+   * 在 PostgreSQL 上不成立（见 `rfc097-task-status-cas.test.ts` 头注释）。
+   */
+  beforeCas?: () => void | Promise<void>
   reason: string
 }): Promise<boolean> {
   try {
