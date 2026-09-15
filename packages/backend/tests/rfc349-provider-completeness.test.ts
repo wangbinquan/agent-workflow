@@ -119,10 +119,12 @@ const PROVIDER_FORK_LEDGER = {
   // RFC-359 W8 销账：`providerRuntime.ts` 的品牌分派整段消失——归档维护命令那一对合一后，
   // 装配点直接构造同一个中立实现，两个 provider 共用；此处不再有 fork，条目随之退役。
   // RFC-359 W4-D24：运行时会话租约合一后这里少了一处按品牌的分派（4 → 2；租约那两支收成一行转出口）。
-  'modules/task-execution/composition/taskExecutionPersistence.ts': {
-    forks: 2,
-    fence: 'fenced-dispatch',
-  },
+  // RFC-359 AC-10 销账：`taskExecutionPersistence.ts` 的条目退役（2 → 0）。两份 persistence
+  // 聚合的唯一差别是恢复管理面，而它四个方法里只有两个不同、且**各让一个引擎更弱**
+  // （`interruptBootOrphanTask` 上 SQLite 宽判据且漏传 `now`，
+  // `repairRuntimeSessionLeaseAfterOrphanReap` 上 PostgreSQL 的手抄件漏了归属闸）。
+  // 各自收敛到强的一侧后两份聚合逐字相同，分派三元连同那道 `fenced-dispatch` 的 never 汇
+  // 一起消失——**没有 fork 就不该再声明围栏**，否则守卫会去找一个不存在的 never 汇。
   'platform/background/maintenanceService.ts': { forks: 2, fence: 'discriminated-union' },
   'platform/background/maintenanceWorkerSupervisor.ts': { forks: 1, fence: 'discriminated-union' },
   // RFC-359 T19h: runtime selection plus three engine-specific schema preparation branches.
