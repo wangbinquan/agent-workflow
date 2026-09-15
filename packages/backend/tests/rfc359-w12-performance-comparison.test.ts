@@ -210,6 +210,43 @@ describe('RFC-359 AC11 original HTTP performance comparison', () => {
     expect(result.endpoints.every((endpoint) => endpoint.postgresqlNoSlower)).toBe(false)
   })
 
+  test('比例项按 SQLite 的中位数放大——同一个毫秒差，机器越慢越容易过', () => {
+    const shift = 5
+    const build = (scale: number) => {
+      const sq = report('sqlite')
+      const pg = report('postgresql')
+      return comparePerformanceReports(
+        {
+          ...sq,
+          scenarios: sq.scenarios.map((scenario) => {
+            const samples = scenario.samples.map((sample) => sample * scale)
+            return { ...scenario, samples, ...performanceStats(samples) }
+          }),
+        },
+        {
+          ...pg,
+          scenarios: pg.scenarios.map((scenario) => {
+            const samples = scenario.samples.map((sample) => sample * scale + shift)
+            return { ...scenario, samples, ...performanceStats(samples) }
+          }),
+        },
+      )
+    }
+    const second = (result: ReturnType<typeof comparePerformanceReports>) =>
+      result.endpoints.find((endpoint) => endpoint.id === 'tasks-second')!
+    // 语料基准中位数是 11。放大 1 倍：预算 0.2×11 = 2.2ms < 5ms 的差 ⇒ 红。
+    expect(second(build(1)).medianBudgetMs).toBeCloseTo(2.2, 9)
+    expect(second(build(1)).postgresqlWithinAllowance).toBe(false)
+    // 放大 4 倍（更慢的机器）：预算 0.2×44 = 8.8ms > 同样 5ms 的差 ⇒ 绿。
+    expect(second(build(4)).medianBudgetMs).toBeCloseTo(8.8, 9)
+    expect(second(build(4)).postgresqlWithinAllowance).toBe(true)
+    // 毫秒项为 0 的端点不受比例项影响，同样 5ms 的差在两种机器上都红。
+    const first = (r: ReturnType<typeof comparePerformanceReports>) =>
+      r.endpoints.find((e) => e.id === 'tasks-first')!
+    expect(first(build(1)).medianBudgetMs).toBe(0)
+    expect(first(build(4)).medianBudgetMs).toBe(0)
+  })
+
   test('P95 被单个离群样本翻号时不再影响闸门——这正是换判据的理由', () => {
     const pg = report('postgresql')
     const result = comparePerformanceReports(report('sqlite'), {
@@ -229,7 +266,24 @@ describe('RFC-359 AC11 original HTTP performance comparison', () => {
     expect(result.acceptancePassed).toBe(true)
   })
 
-  test('登记的允许差是 exact 清单：三个重端点必须零容忍，六个轻端点逐条登记', () => {
+  test('登记的允许差是 exact 清单：毫秒项与比例项都逐条钉死', () => {
+    // 比例项只给 `tasks-second`——只有它的差随机器档次变号（实测 9 个 run：差占 SQLite 中位数的
+    // −11.8% ~ +14.3%）。另两个重端点 9 个 run 全负，保持毫秒 0 的紧判据。
+    expect(
+      Object.fromEntries(
+        PERF_HTTP_SCENARIOS.map((scenario) => [scenario.id, scenario.medianAllowanceRatio]),
+      ),
+    ).toEqual({
+      'tasks-first': 0,
+      'tasks-second': 0.2,
+      'tasks-running': 0,
+      'repos-first': 0,
+      'repos-referenced': 0,
+      'reviews-pending': 0,
+      'clarify-pending': 0,
+      'workgroup-pending': 0,
+      overview: 0,
+    })
     expect(
       Object.fromEntries(
         PERF_HTTP_SCENARIOS.map((scenario) => [scenario.id, scenario.medianAllowanceMs]),

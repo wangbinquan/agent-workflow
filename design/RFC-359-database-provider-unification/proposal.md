@@ -168,8 +168,16 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
     往返**（每请求 4 条）。减往返（合并两笔认证读 / 审计写离开请求路径）有工程解，
     **用户 2026-09-15 裁决本轮不做**。
 
-  **修订后的第二款**：闸门改为**中位数差不超过逐条登记的允许值**
-  （`PERF_HTTP_SCENARIOS[].medianAllowanceMs`，见 `scripts/perf-compare.ts`）：
+  **修订后的第二款**：闸门改为**中位数差不超过逐条登记的允许值**——
+  `medianGapMs <= medianAllowanceMs + medianAllowanceRatio × SQLite 中位数`
+  （两个登记项都在 `PERF_HTTP_SCENARIOS[]`，见 `scripts/perf-compare.ts`）：
+
+  **为什么要两个单位**（2026-09-15 第一跑实证）：9 个 run 摊开看，**重端点的毫秒差跨度
+  9~34ms 而比值跨度只有 0.12~0.26；轻端点正好相反**（`reviews-pending` 毫秒跨度 1.89ms、
+  比值跨度 1.34）。原因是机器档次：抽到 EPYC 9V45 96 核那一跑，同一份代码 SQLite 从 ~48ms
+  掉到 27.8ms（−42%）、PG 只从 ~44ms 掉到 31.8ms（−28%），`tasks-second` 的差**由负转正**。
+  所以比例项只给 `tasks-second`（0.20）；`tasks-first` / `tasks-running` 9 个 run 全负，
+  比例项为 0、不放宽；六个轻端点比例项为 0，只用毫秒。
 
   - 三个重端点 `tasks-first` / `tasks-second` / `tasks-running` 登记 **0**——PG 在它们上稳定
     大胜（−2.8 ~ −87ms），不给任何余量；

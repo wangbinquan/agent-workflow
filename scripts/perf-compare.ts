@@ -37,6 +37,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 150,
     budgetStatistic: 'p95',
     medianAllowanceMs: 0,
+    medianAllowanceRatio: 0,
   },
   {
     id: 'tasks-second',
@@ -46,6 +47,19 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 150,
     budgetStatistic: 'p95',
     medianAllowanceMs: 0,
+    /**
+     * 唯一一个用**比例**而不是毫秒的端点——它的差随机器档次变号。
+     *
+     * 实测 9 个 run：PG/SQLite 中位数之比 0.882 ~ 1.143，差（PG−SQLite）占 SQLite 中位数的
+     * −11.8% ~ +14.3%。抽到最快的一台（EPYC 9V45 96 核）时 SQLite 从 ~48ms 掉到 27.8ms
+     * （−42%）、PG 只从 ~44ms 掉到 31.8ms（−28%），于是差**由负转正**（−4.1ms → +4.0ms）。
+     * 另两个重端点没有这个问题（`tasks-first` −64%~−53%、`tasks-running` −56%~−41%，
+     * 9 个 run 全负），所以只有这一条需要比例项，它们保持毫秒 0 的紧判据。
+     *
+     * 0.20 = 实测上界 0.143 加约 40% 余量。**不是把数字调到能过**：绝对毫秒对这条端点是
+     * 错的单位（9 个 run 的毫秒跨度 9.35，比例跨度只有 0.262），换成机器无关的单位才判得准。
+     */
+    medianAllowanceRatio: 0.2,
   },
   {
     id: 'tasks-running',
@@ -55,6 +69,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 150,
     budgetStatistic: 'p95',
     medianAllowanceMs: 0,
+    medianAllowanceRatio: 0,
   },
   {
     id: 'repos-first',
@@ -64,6 +79,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 100,
     budgetStatistic: 'p95',
     medianAllowanceMs: 2,
+    medianAllowanceRatio: 0,
   },
   {
     id: 'repos-referenced',
@@ -73,6 +89,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 100,
     budgetStatistic: 'p95',
     medianAllowanceMs: 2,
+    medianAllowanceRatio: 0,
   },
   {
     id: 'reviews-pending',
@@ -82,6 +99,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 10,
     budgetStatistic: 'max',
     medianAllowanceMs: 1.2,
+    medianAllowanceRatio: 0,
   },
   {
     id: 'clarify-pending',
@@ -91,6 +109,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 10,
     budgetStatistic: 'max',
     medianAllowanceMs: 1.4,
+    medianAllowanceRatio: 0,
   },
   {
     id: 'workgroup-pending',
@@ -100,6 +119,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 10,
     budgetStatistic: 'max',
     medianAllowanceMs: 2,
+    medianAllowanceRatio: 0,
   },
   {
     id: 'overview',
@@ -109,6 +129,7 @@ export const PERF_HTTP_SCENARIOS = [
     budgetMs: 10,
     budgetStatistic: 'max',
     medianAllowanceMs: 3.5,
+    medianAllowanceRatio: 0,
   },
 ] as const
 
@@ -376,6 +397,11 @@ export function comparePerformanceReports(sqlite: PerfHttpReport, postgresql: Pe
         const right = postgresql.scenarios[i]!
         // 中位数差：闸门。P95 的两个数照旧保留，但只作证据。
         const medianGapMs = right.p50 - left.p50
+        // 允许值 = 绝对毫秒 + 与 SQLite 中位数成比例的一项。轻端点只用毫秒（比例在小绝对值上
+        // 抖得厉害：`reviews-pending` 的比值跨度 1.19~2.53，而毫秒跨度只有 1.89ms）；
+        // 重端点反过来（见 `tasks-second` 的注释）。默认比例项为 0，即只用毫秒。
+        const medianBudgetMs =
+          scenario.medianAllowanceMs + (scenario.medianAllowanceRatio ?? 0) * left.p50
         return {
           id: scenario.id,
           sqliteP95Ms: left.p95,
@@ -386,7 +412,9 @@ export function comparePerformanceReports(sqlite: PerfHttpReport, postgresql: Pe
           postgresqlP50Ms: right.p50,
           medianGapMs,
           medianAllowanceMs: scenario.medianAllowanceMs,
-          postgresqlWithinAllowance: medianGapMs <= scenario.medianAllowanceMs,
+          medianAllowanceRatio: scenario.medianAllowanceRatio ?? 0,
+          medianBudgetMs,
+          postgresqlWithinAllowance: medianGapMs <= medianBudgetMs,
           originalBudget: {
             statistic: scenario.budgetStatistic,
             strictlyBelowMs: scenario.budgetMs,
