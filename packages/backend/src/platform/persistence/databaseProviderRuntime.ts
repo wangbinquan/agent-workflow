@@ -242,12 +242,23 @@ type PreparedDatabaseProviderSchema =
       readonly provider: 'sqlite'
       readonly runtime: SqliteDatabaseProviderRuntime
       readonly databaseConfig: DatabaseConfig
+      readonly describeSchemaOutcome: () => string
     }
   | {
       readonly provider: 'postgresql'
       readonly runtime: PostgresqlDatabaseProviderRuntime
       readonly databaseConfig: DatabaseConfig
       readonly receipt: PostgresqlMigrationReceipt
+      /**
+       * RFC-359 AC-10 —— `db migrate` 要对用户说的那句话，**在这里就定下来**。
+       *
+       * 原来是 `cli/migrate.ts` 自己 `if (prepared.provider === 'postgresql')` 再分别拼：
+       * PG 读 `receipt`、SQLite 报库文件路径。那是典型的「调用方按品牌再问一遍」——
+       * 而这里是**品牌已经确定**的地方（本目录是白名单层），一次性把答案连同措辞定下来，
+       * 调用方就只剩「拿来输出」。第三个 provider 必须在这里回答它的那句话，
+       * 而不是静默继承 SQLite 的那句。
+       */
+      readonly describeSchemaOutcome: () => string
     }
 
 /**
@@ -309,6 +320,8 @@ export async function prepareDatabaseProviderRuntime(
           provider: 'sqlite',
           client,
         }),
+        // 打开所选 SQLite 客户端这一步本身就把待迁移全部应用了，所以这里已经可以定稿。
+        describeSchemaOutcome: () => `migrations applied (database: ${options.sqlitePath})\n`,
       }
     } catch (error) {
       client.$client.close()
@@ -341,14 +354,20 @@ export async function prepareDatabaseProviderRuntime(
             },
       afterCommitted: () => options.advancePointer(),
     })
+    const adopted = adoptPreparedDatabaseProviderRuntime(runtimeOptions, {
+      provider: 'postgresql',
+      runtime,
+    })
     return {
       provider: 'postgresql',
       databaseConfig: config,
-      runtime: adoptPreparedDatabaseProviderRuntime(runtimeOptions, {
-        provider: 'postgresql',
-        runtime,
-      }),
+      runtime: adopted,
       receipt,
+      // 措辞逐字保留（`tests/cli.test.ts` 与托管取证都读这句），世代号照旧从 adopt 出来的
+      // runtime 上取——不改数据来源，只改「在哪里定稿」。
+      describeSchemaOutcome: () =>
+        `PostgreSQL schema ${receipt.applied ? 'applied' : 'verified'} ` +
+        `(generation: ${adopted.generation.payload.generationId}, active tables: ${receipt.activeTableCount})\n`,
     }
   } catch (error) {
     await runtime.close()

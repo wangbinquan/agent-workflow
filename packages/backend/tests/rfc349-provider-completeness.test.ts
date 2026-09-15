@@ -93,7 +93,9 @@ const PROVIDER_FORK_LEDGER = {
   // `--to` 先解析成 `DatabaseProvider` 再问 `migrationRole === 'target'`，
   // `db info` 的服务端版本兜底改读 `serverVersionFallback`。
   'cli/doctor.ts': { forks: 1, fence: 'fenced-dispatch' },
-  'cli/migrate.ts': { forks: 1, fence: 'fenced-dispatch' },
+  // RFC-359 AC-10：`cli/migrate.ts` 的条目退役——要说的那句话在
+  // `prepareDatabaseProviderForBoot`（白名单层、品牌已确定处）就定稿，CLI 只剩「拿来输出」。
+  // 文件里残留的 `unhandledDatabaseProvider` 穷尽性围栏不计债（按形状豁免）。
   // cli/start.ts：RFC-359 W3-T16 后没有 provider 执行分支——会话装配按 DatabaseProvider 查表，
   // 运行时收窄走 platform/persistence 的 requireDatabaseProviderRuntime。
   // RFC-359 AC-10 第一波：`db/providerSchema.ts` 的条目退役。原来那处 fork 是

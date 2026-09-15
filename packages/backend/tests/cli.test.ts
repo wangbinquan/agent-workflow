@@ -98,6 +98,10 @@ describe('CLI subcommands (P-1-05)', () => {
     const { output } = await migrateCommand()
     expect(output).toContain(dbPath)
     expect(existsSync(dbPath)).toBe(true)
+    // RFC-359 AC-10：这句话现在由 `prepareDatabaseProviderForBoot` 定稿、CLI 只负责输出，
+    // 中间多了一层间接。此前只断言过「输出里含库文件路径」，措辞本身没有任何地方钉着——
+    // 把它钉上，换措辞就必须是有意为之。
+    expect(output).toBe(`migrations applied (database: ${dbPath})\n`)
   })
 
   // RFC-254 T31 (task#11): migrateCommand must CLOSE its DB handle. A leaked
@@ -108,16 +112,23 @@ describe('CLI subcommands (P-1-05)', () => {
   // too. (Root-caused on the ARM64 VM: 0 lingering processes, leaked DB handle.)
   test('migrateCommand closes its DB handle (no leaked bun:sqlite lock)', () => {
     const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'migrate.ts'), 'utf8')
-    // RFC-359 T19h prepares and adopts the client before returning it. Keep
-    // both the PG finally-close and the SQLite close-before-output pinned.
+    // RFC-359 AC-10 起这条判据**变强了**。此前两条 provider 路径各有一处关闭（PG 在
+    // `finally`、SQLite 先关再返回），所以只能分别钉两个源码位置、并数出「恰好两处 close」。
+    // 现在两条路径合成一条：消息在 `prepareDatabaseProviderForBoot` 里就定稿，这里只剩
+    // 「拿来输出」，于是关闭**只有一处、且在 `finally` 里**——这同时覆盖了原来的两件事
+    //（拼消息途中抛也要关；返回给调用方之前一定已经关）。
     const openAt = source.indexOf('await prepareDatabaseProviderForBoot(')
-    const closeAt = source.indexOf(
-      'await provider.close()\n  return { output: `migrations applied',
-      openAt,
-    )
     expect(openAt).toBeGreaterThan(-1)
-    expect(closeAt).toBeGreaterThan(openAt)
-    expect(source.match(/await provider\.close\(\)/g)).toHaveLength(2)
+    // ① 恰好一处关闭——多出一处就说明又长出了一条分支路径。
+    expect(source.match(/await provider\.close\(\)/g)).toHaveLength(1)
+    // ② 那一处必须在 `finally` 里，且在 prepare 之后。`[\s\S]*?` 只跨到第一个 `finally`，
+    //    所以把 close 挪出 `finally`（例如挪回 `return` 之前）这条就会红。
+    const finallyClose = /\} finally \{\s*await provider\.close\(\)\s*\}/.exec(source)
+    expect(finallyClose, 'provider.close() 必须留在 finally 里').not.toBeNull()
+    expect(finallyClose!.index).toBeGreaterThan(openAt)
+    // ③ 输出走的是定稿好的那句话，不是就地按 provider 拼的。
+    expect(source).toContain('prepared.describeSchemaOutcome()')
+    expect(source).not.toContain("prepared.provider === 'postgresql'")
   })
 
   // --- doctor ---

@@ -271,7 +271,9 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // 被声明：`offlineCompaction`（能不能压缩，不能就连要说的话一起给）与
   // `absentLocalStoreMessage`（`null` 即「这个引擎没有本地库文件这回事」）。
   'cli/doctor.ts: 1',
-  'cli/migrate.ts: 1',
+  // AC-10 销账：`cli/migrate.ts` 清零——`db migrate` 要说的那句话改在
+  // `prepareDatabaseProviderForBoot` 里定稿（品牌在那儿本来就是已知的、且是白名单层），
+  // CLI 只剩「拿来输出 + finally 关闭」，两条 provider 路径合成一条。
   'cli/start.ts: 2',
   // RFC-359 4 → 3：`package` 子命令的资源包装配此前是一个 `provider === 'sqlite' ? … : …`，
   // 两台 apply 引擎合一后只剩一条装配（见 `rfc271-cli` 的源码锁）。
