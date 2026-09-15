@@ -292,7 +292,14 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // `postgresqlProviderBackup` 另有一处 `options.runtime.provider !== 'postgresql'` 是**恒假**
   // （`PostgresqlDatabaseRuntime.provider` 是字面量类型），直接删掉。
   'modules/task-execution/composition/taskExecutionPersistence.ts: 2',
-  'platform/background/maintenanceService.ts: 3',
+  // AC-10 销账 3 → 2：WAL checkpoint 的那道闸原来问的是
+  // `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，还让这个**中立**的后台服务
+  // 直接 import 了 `platform/persistence/sqlite/systemProviderBackup`。改成由装配方交答案：
+  // SQLite 侧给 `isDbSnapshotInProgress`，外部服务器侧给 `() => false`（存储在服务端，
+  // 没有「本地文件快照」这回事）——与原行为逐字一致，PG 本来就从不因此跳过。
+  // 余下 2 处是 provider-keyed 可辨识联合的收窄（见 `rfc349-provider-completeness` 的
+  // `discriminated-union` 一档），销账走组合根上提，不是 traits 查表。
+  'platform/background/maintenanceService.ts: 2',
   'platform/background/maintenanceWorkerSupervisor.ts: 1',
   // AC-10 第一波销账：`server.ts` 的 `TProvider extends 'postgresql' ? … : …` 换成按 provider
   // 索引的表（`Record<DatabaseProvider, …>` 约束即 forcing function，加 provider 就编译不过）。

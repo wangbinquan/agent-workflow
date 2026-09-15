@@ -11,7 +11,6 @@ import { openDb } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
 import type { MaintenanceRunStore } from './maintenanceRunStorePort'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
-import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { startMaintenanceTicker, type MaintenanceTickerHandle } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
@@ -52,6 +51,16 @@ interface MaintenanceServiceCommonOptions {
   readonly appHome: string
   readonly configPath: string
   readonly loadConfig: () => Config
+  /**
+   * 「此刻是否正在对这个库做**文件级**快照」——正在做就别发 WAL checkpoint，两者会抢同一份文件。
+   *
+   * RFC-359 AC-10：原来写成 `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，
+   * 并且让这个中立的后台服务直接 import 了 `platform/persistence/sqlite/systemProviderBackup`。
+   * 答案由**装配方**给（它本来就知道自己在装哪个 provider）：
+   * SQLite 侧给 `isDbSnapshotInProgress`，外部服务器侧给 `() => false`——它的存储在服务端，
+   * 根本没有「本地文件快照」这回事，所以恒为 false 与原行为逐字一致（PG 原本就从不因此跳过）。
+   */
+  readonly fileSnapshotInFlight: () => boolean
   readonly onLifecycleDelta?: (
     delta: Extract<MaintenanceWorkerDelta, { kind: 'lifecycle-alerts' }>,
   ) => void
@@ -605,7 +614,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     try {
       const intervalMs = currentConfig.walCheckpointIntervalMs
       if (intervalMs <= 0 || Date.now() - lastCheckpointSucceededAt < intervalMs) return
-      if (options.provider !== 'postgresql' && isDbSnapshotInProgress()) return
+      if (options.fileSnapshotInFlight()) return
       const at = Date.now()
       admit({
         job: 'walCheckpoint',

@@ -314,6 +314,7 @@ import {
   createPostgresqlHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { enforceLimits } from '@/services/limits'
 import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
@@ -510,6 +511,9 @@ async function composePostgresqlProviderSession(
 
   const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
     provider: 'postgresql',
+    // 外部服务器的存储在服务端，没有「本地文件快照」这回事——恒为 false 与原行为逐字一致
+    // （原来写的是 `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，PG 侧从不跳过）。
+    fileSnapshotInFlight: () => false,
     generationId: input.provider.generation.payload.generationId,
     database: input.config.database,
     store: createMaintenanceRunStore(db),
@@ -2634,6 +2638,8 @@ async function composeSqliteProviderSession(
     // RFC-359 AC-10：装配方本来就知道自己在装哪个 provider，写出来。
     // 此前这里不写、由 `options.provider ?? 'sqlite'` 静默兜底——那是「落进 else」的另一种写法。
     provider: 'sqlite',
+    // 本地库文件正在被快照时别发 WAL checkpoint——两者抢同一份文件。
+    fileSnapshotInFlight: isDbSnapshotInProgress,
     dbPath: Paths.db,
     migrationsFolder,
     appHome: Paths.root,

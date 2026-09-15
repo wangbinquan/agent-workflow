@@ -11432,6 +11432,24 @@ sha256 内容锁。改完 frameBackfill 调用它立刻红——而且红得恰�
 
 `PROVIDER_BRANCH_DEBT` 7 → 6 条（13 → 11 处），`main.ts` 在两份账本里都清零。
 
+### WAL checkpoint 那道闸：顺带把一条**层间依赖**也拆了
+
+`maintenanceService.ts:601` 原来写的是
+`options.provider !== 'postgresql' && isDbSnapshotInProgress()`——除了品牌分叉，它还让这个
+**中立的后台服务**直接 import 了 `platform/persistence/sqlite/systemProviderBackup`。
+
+问题其实是「此刻是否正在对这个库做**文件级**快照」（正在做就别发 WAL checkpoint，两者抢同一份
+文件）。答案由**装配方**给：SQLite 侧给 `isDbSnapshotInProgress`，外部服务器侧给 `() => false`
+——它的存储在服务端，根本没有「本地文件快照」这回事。**与原行为逐字一致**：PG 原本就从不因此
+跳过（原式里 `provider !== 'postgresql'` 为假，整个条件恒假）。
+
+顺带 `maintenanceService.ts` 不再 import 任何 sqlite 专属模块。
+
+这一条**不减账本条目数**（那一行的站点数 3 → 2），但它减的是 11 → 10 处。
+余下那 2 处是 provider-keyed 可辨识联合的收窄，销账走组合根上提（不是 traits 查表），
+要连同注入接缝一起做——`startMaintenanceService` 直接 `import` 了 supervisor、没有接缝，
+这正是它零覆盖的原因，**加接缝和消分叉本来就是同一件事**。
+
 ### 顺手清掉一处**守卫看不见**的「落进 else」
 
 `MaintenanceServiceOptions` 的 SQLite 变体原本是 `provider?: 'sqlite'`（**可选**），
