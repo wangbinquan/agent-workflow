@@ -196,7 +196,21 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
  */
 export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 
-/** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
+/**
+ * 还成对共存的 provider 适配器对数（= `SCANNED_ROWS.length`，**机械扫描的全部对，不排除
+ * 已判「不合」的那些**）。**只降不升。**
+ *
+ * ⚠️ **「降到 0 就是完工线」这句话与另外两处记载冲突，尚未裁决**（RFC-359 plan §5fh）：
+ *   - **AC-1 的判据原文**是「**已登记的机制差异保留对拍**，其余重复实现合一」——
+ *     按它读，已登记的机制差异**本来就该以成对形式留着**，不进合一；
+ *   - **本文件上面的逐对注释**也逐条判过「不合」并写了机制理由
+ *     （`Migrator` 两侧机制本身不同、`ResourcePackageMaintenance` 的 `ArtifactRecovery`
+ *     是两套**落盘工件格式**、`TaskExecutionRuntimeParticipants` 是两台 children 引擎 + 两个 registry）。
+ *
+ * 也就是说：**两处说这些对该留着，一处说降到 0 才算完**。这直接决定 RFC 还剩多少工作量，
+ * 所以**没有擅自改任何一边**——数字与判据都按现状钉着。裁决出来之前，读这个数的人要知道
+ * 它**不是**「还欠多少合一」，而是「还有多少对共存」，其中含**有意保留**的那几对。
+ */
 export const PROVIDER_PAIR_COUNT = 8
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
