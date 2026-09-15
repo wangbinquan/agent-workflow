@@ -119,7 +119,8 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
     expect(
       REAL_FUNCTIONS.length,
       'provider 命名的函数一个都没扫到 ⇒ 命名匹配器塌了',
-    ).toBeGreaterThanOrEqual(111)
+      // RFC-359 AC-1（2026-09-15，plan §5ft）：111 → 108。工具连接目录那一对合一，四个 provider 命名的函数（store 两个 + catalog 两个）退出分母。
+    ).toBeGreaterThanOrEqual(108)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

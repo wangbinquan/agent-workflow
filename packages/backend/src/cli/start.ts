@@ -55,7 +55,7 @@ import {
 } from '@/modules/memory/composition'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
-import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
@@ -3104,7 +3104,7 @@ async function composeSqliteProviderSession(
       },
     },
     inputArtifacts: employeeInputArtifacts,
-    connectionCatalog: composeSqliteDevelopmentToolConnectionCatalog(db),
+    connectionCatalog: composeDevelopmentToolConnectionCatalog(db),
     runtime: {
       eventCenter: employeeEventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],

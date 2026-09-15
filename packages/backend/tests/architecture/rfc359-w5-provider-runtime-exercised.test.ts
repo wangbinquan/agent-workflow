@@ -378,7 +378,8 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
       // 留一次有署名的记录，而不是把门槛调宽一次性放过后面所有变化。
       // RFC-359 AC-12（2026-09-14，plan §5ek）：48 → 47。intent apply 的组合根随合一改名，
       // 不再是 provider 命名，退出本判据的分母；确认是收敛，门槛跟着降。
-      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(47)
+      // RFC-359 AC-1（2026-09-15，plan §5ft）：47 → 45。同上，工具连接目录那一对合一。
+      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(45)
       // 架构账本排除必须是**真的排除**：该目录确实在语料里（本文件就躺在里面），
       // 才谈得上把它从「现状」证据里摘出去。目录改名会让这条当场红。
       expect(

@@ -184,7 +184,7 @@ import {
 } from '@/modules/development-automation/composition/missionOperations'
 import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
 import { composePostgresqlRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import { composePostgresqlDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeForeignResourceAclFor } from '@/modules/resource-catalog/composition/resourceAcl'
 import {
@@ -1527,7 +1527,7 @@ export async function composePostgresqlApplication(
       },
     },
     inputArtifacts: employeeInputArtifacts,
-    connectionCatalog: composePostgresqlDevelopmentToolConnectionCatalog(input.db),
+    connectionCatalog: composeDevelopmentToolConnectionCatalog(input.db),
     runtime: {
       eventCenter: eventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],

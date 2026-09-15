@@ -16,8 +16,8 @@
 // 本 context 绝大多数 `composeSqliteXxx` / `composePostgresqlXxx` 是同一份 provider 中立实现
 // 的两个装配别名（源码里写着「旧名保留为装配别名，bootstrap 收敛后删除」）。既然是同一个函数，
 // 两个名字在两个引擎上都必须成立——把它们各跑一遍，正好把「这对别名真的中立」也一起锁住。
-// 真正按 provider 分叉的那一个（`composeSqliteDevelopmentToolConnectionCatalog` 走同步
-// `.get()`）在下面单独按引擎分叉，并写明理由。
+// 唯一一个**真的**按 provider 分叉过的（工具连接目录：一份写成同步 `.get()`、一份 `await`）
+// 已按 RFC-359 AC-1 / plan §5ft 合一——见文件下半部那段注释。
 
 import { expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -39,7 +39,7 @@ import {
   workflows,
 } from '@/db/schema'
 import { composePostgresqlApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
-import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import {
   composePostgresqlPipelineEvidenceRunner,
   composeSqlitePipelineEvidenceRunner,
@@ -678,24 +678,23 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：外部适配器�
 })
 
 // ---------------------------------------------------------------------------
-// 真正按 provider 分叉的那一个
+// 曾经「真正按 provider 分叉」的那一个——RFC-359 AC-1（plan §5ft）已合一
 // ---------------------------------------------------------------------------
 //
-// `composeSqliteDevelopmentToolConnectionCatalog` 装的是
-// `createSqliteDevelopmentToolConnectionStore`——它用 bun:sqlite 的**同步** `.get()` / `.all()`，
-// 在 PostgreSQL 客户端上这两个返回 Promise，`row === undefined` 恒为 false，投影会拿到 Promise
-// 而不是行。所以这个别名只在 SQLite 引擎上成立；PostgreSQL 侧由
-// `composePostgresqlDevelopmentToolConnectionCatalog`（已被别处覆盖）承担。
-// 这里按引擎分叉而不是硬跑两遍，正是账本判据要保住的那点诚实。
+// 原注释记着它为什么必须分叉：`createSqliteDevelopmentToolConnectionStore` 用 bun:sqlite 的
+// **同步** `.get()` / `.all()`，在 PostgreSQL 客户端上这两个返回 Promise，`row === undefined`
+// 恒为 false，投影会拿到 Promise 而不是行。那条观察是对的，但结论下反了：
+// **那不是「引擎逼出来的分叉」，是「其中一份是照着同步 API 写的」**——按 §5fq 的三条判据
+// （独有原语 / 独有资源形态 / 驱动线上差异）一条都不命中，所以是漂移，该合。
+//
+// 合一取「`await` + `.limit(1)` + 取第 0 行」这一半：它在两个引擎上都成立，而同步那半
+// 只在一个引擎上成立。于是这里的 `if (provider !== 'sqlite') return` 也跟着删掉——
+// **那条 skip 正是分叉的成本：PostgreSQL 侧在这个目录上一直是零覆盖。**
 
 describeEachProvider('RFC-359 W7 —— Integration 组合根：数字员工工具连接目录', (harness) => {
-  test('SQLite 目录：published revision 可解析为闭包摘要，自动挑选按 purpose 命中', async () => {
-    if (harness.capabilities.provider !== 'sqlite') {
-      // PostgreSQL 侧走 composePostgresqlDevelopmentToolConnectionCatalog（同步 store 不适用）。
-      return
-    }
+  test('目录：published revision 可解析为闭包摘要，自动挑选按 purpose 命中', async () => {
     const adapter = await seedAdapter(harness.db, 'requirement-source')
-    const catalog = composeSqliteDevelopmentToolConnectionCatalog(asSqlite(harness.db))
+    const catalog = composeDevelopmentToolConnectionCatalog(harness.db)
     const resolved = await catalog.resolve({ id: adapter.id, revision: adapter.revision })
     expect(resolved).toMatchObject({
       purpose: 'requirement-source',
@@ -722,7 +721,7 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
   // 所以这里不比对象身份，只确认每个导出名都真的解析成了可调用的生产工厂。
   const roots: readonly unknown[] = [
     composePostgresqlApprovalGatewayRunner,
-    composeSqliteDevelopmentToolConnectionCatalog,
+    composeDevelopmentToolConnectionCatalog,
     composePostgresqlPipelineEvidenceRunner,
     composeSqlitePipelineEvidenceRunner,
     composePostgresqlRequirementSourceRunner,

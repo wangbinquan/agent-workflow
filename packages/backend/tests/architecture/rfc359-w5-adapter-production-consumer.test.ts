@@ -373,7 +373,8 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
         'RFC-359 AC-10（2026-09-15，同日第二笔）：113 → 111，恢复管理面合一——' +
         '`create{Sqlite,Postgresql}RecoveryAdministration` 与 ' +
         '`create{Sqlite,Postgresql}TaskExecutionPersistence` 各自收成一份中立实现。',
-    ).toBeGreaterThanOrEqual(111)
+      // RFC-359 AC-1（2026-09-15，plan §5ft）：111 → 107。工具连接目录那一对合一，四个 provider 命名的函数（store 两个 + catalog 两个）退出分母。
+    ).toBeGreaterThanOrEqual(107)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

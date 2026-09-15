@@ -517,8 +517,8 @@
       "id": "rfc359-w5-same-file-provider-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w5-same-file-provider-pairs.test.ts",
       "symbol": "SAME_FILE_PROVIDER_PAIRS",
-      "baseline": 48,
-      "why": "RFC-359 AC-1（plan §5fs）——**同文件** provider 孪生的高水位。开账 48 对 / 42 个文件。为什么要新开一份：`rfc359-w5-provider-pair-conformance` 按**文件名词干**配对，于是同一个文件里的一对它一个也看不见；§5fp 合掉的那一对正是这个形状，合掉它 `PROVIDER_PAIR_COUNT` 一动不动。AC-1 的真实规模此前只被数到一小半（账本记 8，实测另有 48 对在同文件里）。每一条都必须带 §5fq 的裁决标记（① 原语 / ② 资源形态 / ③ 驱动线上差异 / 漂移待合）——想留下来就得指名命中哪一条，指不出来就只能挂着等合。"
+      "baseline": 46,
+      "why": "RFC-359 AC-1（plan §5fs）——**同文件** provider 孪生的高水位。开账 48 对 / 42 个文件。为什么要新开一份：`rfc359-w5-provider-pair-conformance` 按**文件名词干**配对，于是同一个文件里的一对它一个也看不见；§5fp 合掉的那一对正是这个形状，合掉它 `PROVIDER_PAIR_COUNT` 一动不动。AC-1 的真实规模此前只被数到一小半（账本记 8，实测另有 48 对在同文件里）。每一条都必须带 §5fq 的裁决标记（① 原语 / ② 资源形态 / ③ 驱动线上差异 / 漂移待合）——想留下来就得指名命中哪一条，指不出来就只能挂着等合。 RFC-359 AC-1（plan §5ft）48 → 46：工具连接目录那一对（store + catalog 两层）合一——它是本 context 里唯一**真的**按 provider 分叉过的一处（一份写成 bun:sqlite 同步 `.get()`、一份 `await`），按 §5fq 三条判据一条都不命中，判漂移。合一后那条双引擎用例里的 `if (provider !== 'sqlite') return` 也删掉了：那条 skip 正是分叉的成本——PostgreSQL 侧在这个目录上此前是零覆盖。"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding",
@@ -797,7 +797,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1696,
+      "baseline": 1695,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -832,7 +832,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5115,
+      "baseline": 5113,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -853,7 +853,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4602,
+      "baseline": 4600,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -888,12 +888,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24745,
+      "baseline": 24743,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:17709c46d1e07fb1fe7a4d23954b96102646e7234324c36f35b840091d593534",
+    "sourceDigest": "sha256:476d78db586d26f9345f40f349a57f6fbfad7a49128f164a84649ba09f734f3b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -906,8 +906,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b0d8f5090047433d1ff735197854573c8739aaa7",
-    "contentDigest": "sha256:319355498bcdb52d3bc0991a0595c67525adf4146d5db17206559d24a9da9621",
+    "currentSnapshotSha": "20e951f7fcf0c0fee1aa033d1b81245f15b9789b",
+    "contentDigest": "sha256:2d64d83ba0d8bc14ba516ca12bce1e527b6ccf3acc7acbde6ab620054652f857",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

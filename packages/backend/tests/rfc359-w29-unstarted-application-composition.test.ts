@@ -498,8 +498,17 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `createPostgresqlTaskExecutionPersistence(input.db)` → `createTaskExecutionPersistence(input.db)`
     // 更新。两份 persistence 聚合合一后只剩一个中立入口，这里改的**只是被调用者的名字**——
     // **语句数仍是 160、顺序未变**（上一行那条断言就是为了把这两种情况分开）。
+    // RFC-359 AC-1（2026-09-15，plan §5fp / §5fr / §5ft）：摘要随**三处被调用者改名**更新——
+    // `createPostgresqlExecutionContractResourceAdapter` → `createExecutionContractResourceAdapter`
+    // （两份实现合一，§5fp）、
+    // `createPostgresqlTaskExecutionCatalogSourceFactory` → `createDatabaseTaskExecutionCatalogSourceFactory`
+    // （纯别名退役，§5fr）、
+    // `composePostgresqlDevelopmentToolConnectionCatalog` → `composeDevelopmentToolConnectionCatalog`
+    // （工具连接目录合一，§5ft）。
+    // **语句数仍是 160、顺序未变**——上面那条 `toHaveLength(160)` 没红，正是这条判据用来
+    // 区分「只是改了个名字」与「装配图真的变了」的那道闸。
     expect(digest(restored, pg)).toBe(
-      'ffd9bf70741e36484f30fa7974e5967a7b5dc0653608a1c618a9a4019154c6e0',
+      '55c4fe1bcdb8f17d412a086a9eda3bf8e743bb10bae84751f19665eee35098e1',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -550,8 +559,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `resourcePackageBinding: ResourcePackageRouteBinding | null`，资源包路由挂载改从这个绑定
     // 取目录与 `commandContextFor`——写会话要把 `context.authority` 解回 Actor 并与传入的 Actor
     // 对照，所以目录与「造 context 的那条路」必须同源。
+    //
+    // RFC-359 AC-1（2026-09-15，plan §5ft）：摘要随一处被调用者改名更新——
+    // `composeSqliteDevelopmentToolConnectionCatalog` → `composeDevelopmentToolConnectionCatalog`
+    // （工具连接目录合一）。**挂载图未变**，只是被调用者少了个品牌前缀。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '415dd229037050ccde00cb5fb30402e728ca7c6ce7144cebcd546b7e22fb11da',
+      'e068d1e370e4fbc31abe94927b472c6595397d38e70e0c35d4a1b4e6506389ac',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '3e6131c32a868090e7236eb8e554605e8b46a5df15a149671acd396c0a072194',

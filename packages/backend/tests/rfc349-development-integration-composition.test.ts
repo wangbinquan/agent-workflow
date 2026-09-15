@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { composePostgresqlDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { createDevelopmentAdapterStore } from '@/modules/integration/infrastructure/developmentAdapterStore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -89,7 +89,7 @@ describe('RFC-349 Development and Integration provider composition', () => {
       contentDigest: 'digest-1',
     })
 
-    const catalog = composePostgresqlDevelopmentToolConnectionCatalog(fake.db)
+    const catalog = composeDevelopmentToolConnectionCatalog(fake.db)
     await expect(catalog.resolve({ id: 'adapter-1', revision: 1 })).resolves.toMatchObject({
       ref: { id: 'adapter-1', revision: 1 },
       purpose: 'pipeline-gate',
@@ -105,7 +105,12 @@ describe('RFC-349 Development and Integration provider composition', () => {
       'modules/integration/composition/pipelineEvidence.ts',
       'modules/integration/composition/requirementSource.ts',
       'modules/integration/composition/approvalGateway.ts',
-      'modules/integration/composition/digitalEmployeeToolConnections.ts',
+      // RFC-359 AC-1（plan §5ft）：digitalEmployeeToolConnections.ts 已是一份中立入口
+      // （无 provider 分支可命名）。它此前是本 context 里**唯一真的按 provider 分叉**的一处——
+      // 一份写成 bun:sqlite 的同步 `.get()`、一份 `await`；按 §5fq 三条判据都不命中，判为漂移并合一。
+      // 合一后由本文件上面那条用例（PG 客户端上跑同一份 catalog）与
+      // `rfc359-w7-integration-composition-roots` 的双引擎用例共同覆盖——后者原本因为同步 store
+      // 在 PG 上不成立而**整条 skip 掉 PostgreSQL 泳道**，合一后那条 skip 也删掉了。
       // RFC-359 W4-D13：development-automation 的装配已是一份中立入口（无 provider 分支可命名），
       // 由 rfc349-digital-development-provider-boundary 与 rfc359-w4-d13-adapters 的双引擎用例覆盖。
       // RFC-359 W4-D10：executionTerminalObserver.ts 已是一份中立入口（无 provider 分支可命名），

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1696,
+    "entries": 1695,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -11469,7 +11469,7 @@
       },
       "file": "packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts#createPostgresqlDevelopmentToolConnectionStore",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts#createDevelopmentToolConnectionStore",
       "missingControls": [
         "audit",
         "authority",
@@ -11477,32 +11477,8 @@
         "event",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts#createPostgresqlDevelopmentToolConnectionStore",
-      "symbol": "createPostgresqlDevelopmentToolConnectionStore",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts#createSqliteDevelopmentToolConnectionStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts#createSqliteDevelopmentToolConnectionStore",
-      "symbol": "createSqliteDevelopmentToolConnectionStore",
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts#createDevelopmentToolConnectionStore",
+      "symbol": "createDevelopmentToolConnectionStore",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -40526,7 +40502,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:17709c46d1e07fb1fe7a4d23954b96102646e7234324c36f35b840091d593534",
+  "sourceDigest": "sha256:476d78db586d26f9345f40f349a57f6fbfad7a49128f164a84649ba09f734f3b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -7328,3 +7328,30 @@ gh run rerun <id> --failed
 
 **处置**：改任何 `services/*` facade 的导入符号后，除了架构守卫，还要
 `grep -rln "<你改的符号>" packages/backend/tests` 扫一遍，把命中的文件都跑掉。
+
+### 「读源码文本的账本」还有一类**连符号名都没有**：钉住函数体 SHA-256 的摘要守卫
+
+2026-09-15 第三次踩同一个坑的**不同子类**，值得单列。前两次的处方是
+「改完 `grep -rln "<你改的符号>" packages/backend/tests`」——这次那个 grep **扫不出来**，
+因为摘要守卫里一个符号名都没有，它只有一串十六进制：
+
+    expect(digest(restored, pg)).toBe('ffd9bf70741e36…')   // composePostgresqlApplication 的 daemon 段
+
+三次改名（`createPostgresqlExecutionContractResourceAdapter` →
+`createExecutionContractResourceAdapter` 等）把那个函数体的文本改了，摘要跟着变，
+本地半径、架构守卫全绿，**CI 的 backend shard 8/12 红**。
+
+**正确的扫法是按「谁把我改的文件当文本读」找，不是按符号名找**：
+
+    cd packages/backend/tests
+    for f in $(grep -rl "readFileSync\|readFile(" . | grep '\.test\.ts$'); do
+      grep -qE "<你改的源文件名1>|<源文件名2>|…" "$f" && echo "$f"
+    done
+
+一次改动实测扫出 115 个文件（`server.ts` / `cli/start.ts` 这种被到处 import 的尤其多）。
+
+**摘要守卫红了不等于出了 bug**：这类守卫通常**成对**——一条钉语句条数
+（`expect(restored.statements).toHaveLength(160)`），一条钉摘要。
+条数没红、只有摘要红 ⇒ 装配图没变，只是被调用者改了名字 ⇒ 更新摘要并在旁边
+**写清这一次改的是什么名字**（该文件里已经积了七八条这样的注释，正是这么用的）。
+两条一起红才说明装配图真的变了，那时才要停下来查。

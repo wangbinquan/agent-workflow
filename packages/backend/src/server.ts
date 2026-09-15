@@ -397,7 +397,7 @@ import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integr
 import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeSqliteRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
@@ -2538,7 +2538,7 @@ function composeSqliteApiRouteMounts(
       },
     },
     inputArtifacts,
-    connectionCatalog: composeSqliteDevelopmentToolConnectionCatalog(deps.db),
+    connectionCatalog: composeDevelopmentToolConnectionCatalog(deps.db),
     runtime: {
       eventCenter: eventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],

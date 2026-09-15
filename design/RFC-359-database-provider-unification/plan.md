@@ -12479,3 +12479,46 @@ export function composePostgresqlFoo(db: PostgresqlDatabaseClient) { … }
 本轮**先只裁决我读过源码、能指名理由的 5 条**（`maintenanceDisk` / `system-operations/composition`
 / `capabilities` / `databaseTransaction` / `migrationsFolder` 命中 ① 或 ②），其余 43 条一律标
 `漂移待合`——**不给没读过的条目编理由**。
+
+## §5ft —— 第一条按新账本销账：唯一「真的按 provider 分叉」的那一处，其实也是漂移
+
+§5fs 开账 48 对，其中 43 条标 `漂移待合`。第一条动它的：Integration context 的**工具连接目录**。
+
+挑它是因为它**看起来最不像漂移**——仓里有一段专门写给它的注释，解释它为什么必须分叉：
+
+> `composeSqliteDevelopmentToolConnectionCatalog` 装的是 `createSqliteDevelopmentToolConnectionStore`
+> ——它用 bun:sqlite 的**同步** `.get()` / `.all()`，在 PostgreSQL 客户端上这两个返回 Promise，
+> `row === undefined` 恒为 false，投影会拿到 Promise 而不是行。所以这个别名只在 SQLite 引擎上成立。
+
+**那段观察完全正确，但结论下反了。** 同步写法在 PG 上确实会错得无声无息；可那不是
+「引擎逼出来的分叉」，是「**其中一份是照着同步 API 写的**」。按 §5fq 的三条判据逐条问：
+不是独有原语（`select` 而已）、不是独有资源形态（都是查表）、不是驱动强加的线上差异。
+**一条都不命中 ⇒ 漂移 ⇒ 该合。**
+
+两份函数体逐行对应，差别只有两处：`await` 的位置、以及 PG 那份多一个 `.limit(1)`。
+合一取「`await` + `.limit(1)` + 取第 0 行」这一半——**它在两个引擎上都成立，而同步那半
+只在一个引擎上成立**。这正是 §5fq「各取更强的一半」的字面含义。
+
+### 分叉的真实成本：PostgreSQL 侧此前零覆盖
+
+`rfc359-w7-integration-composition-roots` 里那条双引擎用例，开头写着：
+
+```ts
+if (harness.capabilities.provider !== 'sqlite') {
+  // PostgreSQL 侧走 composePostgresqlDevelopmentToolConnectionCatalog（同步 store 不适用）。
+  return
+}
+```
+
+**那条 skip 就是分叉的账单。** 目录的解析 / 自动挑选逻辑在 PostgreSQL 上**一次都没被跑过**
+（PG 侧唯一的覆盖是另一个文件里对着假池的一条）。合一之后 skip 删掉，同一组判据两个引擎各跑一遍。
+实测该文件 12 例（SQLite 单跑）→ 23 例（双跑）。
+
+### 连带
+
+- `rfc349-development-integration-composition` 的「每个 PG 装配都得指名自己的适配器、不许别名
+  SQLite」清单里移除该文件——它现在是**一份中立入口，没有 provider 分支可命名**，比清单要求的更进一步
+  （同一清单里已有两条同样理由的先例）。
+- 三条语料下限跟着降：identical-twins 111 → 108、adapter-production-consumer 111 → 107、
+  provider-runtime-exercised 47 → 45（退出分母的是 store 两个 + catalog 两个，共四个 provider 命名的函数）。
+- 同文件孪生账本 **48 → 46**。

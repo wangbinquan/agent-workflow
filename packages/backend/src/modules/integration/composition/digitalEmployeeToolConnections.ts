@@ -1,10 +1,8 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { isVisibleToAudienceSnapshot } from '@/services/resourceAcl'
 import { developmentAdapterContentSchema } from '../domain/developmentAdapterDefinition'
 import {
-  createPostgresqlDevelopmentToolConnectionStore,
-  createSqliteDevelopmentToolConnectionStore,
+  createDevelopmentToolConnectionStore,
   type DevelopmentToolConnectionStore,
 } from '../infrastructure/developmentToolConnectionStore'
 
@@ -103,10 +101,7 @@ function catalog(store: DevelopmentToolConnectionStore) {
   }
 }
 
-export function composeSqliteDevelopmentToolConnectionCatalog(db: DbClient) {
-  return catalog(createSqliteDevelopmentToolConnectionStore(db))
-}
-
-export function composePostgresqlDevelopmentToolConnectionCatalog(db: PostgresqlDatabaseClient) {
-  return catalog(createPostgresqlDevelopmentToolConnectionStore(db))
+// RFC-359 AC-1（plan §5ft）：store 合一之后这里也只剩一份——两个 bootstrap 根装的是同一个。
+export function composeDevelopmentToolConnectionCatalog(db: ProviderNeutralDatabase) {
+  return catalog(createDevelopmentToolConnectionStore(db))
 }
