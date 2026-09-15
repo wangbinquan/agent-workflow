@@ -107,10 +107,12 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
     // 门槛只能往下调，并在这里记一次实测值。
     // RFC-359 AC-12（2026-09-14，plan §5ek）：135 → 116。intent apply 的五个文件随合一改名去掉
     // provider 前缀（`legacy*` 孪生早已随 §5ea 退役），于是它们的函数整批退出本判据的分母。
+    // RFC-359 AC-10（2026-09-15）：116 → 115。删掉 `server.ts::composeSqliteProviderAppDeps`
+    // ——全仓零引用的同义包装，是「伪装成 provider 对等」的死适配器最后一条。
     expect(
       REAL_FUNCTIONS.length,
       'provider 命名的函数一个都没扫到 ⇒ 命名匹配器塌了',
-    ).toBeGreaterThanOrEqual(116)
+    ).toBeGreaterThanOrEqual(115)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

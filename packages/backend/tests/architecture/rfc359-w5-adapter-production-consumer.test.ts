@@ -311,15 +311,17 @@ const DECLARATIONS: readonly ProviderAdapterDeclaration[] = providerAdapterDecla
  * 「真实能力在哪」不是记账装饰，是这条账本存在的理由：删掉一份摆设之前，你必须先知道
  * 生产上到底是谁在干这件事，否则删除会变成一次盲改。处置标记的语义见文件头。
  */
-export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] = [
-  [
-    'server.ts::composeSqliteProviderAppDeps',
-    '纯死代码：全仓零引用（连测试都没有）。它只是同文件 `composeProviderAppDeps`（`server.ts:1265`）的同义包装；' +
-      'PG bootstrap 走并列的 `composePostgresqlAppDeps`（`server.ts:1436` → `cli/postgresqlDaemonApplication.ts:2158`），' +
-      'SQLite bootstrap 走的是另一个函数 `composeSqliteAppDeps`（`server.ts:1785`，经 `server.ts:3248` 的 `createComposedApp`），' +
-      '从不经过本函数。RFC-359 W8 清理批未动它：`server.ts` 当时正被并发改动持有。',
-  ],
-]
+/**
+ * **账本已空**（RFC-359 AC-10 收尾）。最后一条 `server.ts::composeSqliteProviderAppDeps`
+ * 是纯死代码——全仓零引用（连测试都没有），只是同文件 `composeProviderAppDeps` 的同义包装：
+ * PG bootstrap 走并列的 `composePostgresqlAppDeps`（`cli/postgresqlDaemonApplication.ts:2290`），
+ * SQLite bootstrap 走的是另一个函数 `composeSqliteAppDeps`，**从不经过它**。
+ * W8 清理批当时没动它的唯一原因是 `server.ts` 正被并发改动持有；这次直接删掉。
+ *
+ * 它正是这条判据要抓的那种「**伪装成 provider 对等**」——名字并排、看着两侧都有实现，
+ * 实际只有一侧在跑。账本空掉不代表判据退役：下面那条断言此刻变成纯防复辟网。
+ */
+export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] = []
 
 describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
   test('migration authoring commands must actually call their immutable artifact constructors', () => {
@@ -365,8 +367,10 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
         '[形容词]<Provider>…` / `class <Provider>…`），要么动词表被改坏；此刻账本再准也毫无预言力。' +
         '注意：数字掉到门槛以下**未必**是判据坏了——RFC-359 每合一批适配器分母就小一截，' +
         '确认是收敛就把门槛跟着调低（只降不升），并在注释里记下这一档的实测值。' +
-        'RFC-359 AC-12（2026-09-14，plan §5ek）：120 → 114，intent apply 五个文件改名去前缀。',
-    ).toBeGreaterThanOrEqual(114)
+        'RFC-359 AC-12（2026-09-14，plan §5ek）：120 → 114，intent apply 五个文件改名去前缀。' +
+        'RFC-359 AC-10（2026-09-15）：114 → 113，删掉最后一条死适配器 ' +
+        '`server.ts::composeSqliteProviderAppDeps`（全仓零引用的同义包装），本账本随之清空。',
+    ).toBeGreaterThanOrEqual(113)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

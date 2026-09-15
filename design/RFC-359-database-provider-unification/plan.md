@@ -11391,6 +11391,24 @@ sha256 内容锁。改完 frameBackfill 调用它立刻红——而且红得恰�
 
 `PROVIDER_BRANCH_DEBT` 9 → 8 条（16 → 14 处），`cli/dbCompact.ts` 清零。
 
+### 死适配器账本清零：最后一条是「**伪装成 provider 对等**」的典型
+
+`DEAD_PROVIDER_ADAPTER_DEBT` 最后一条 `server.ts::composeSqliteProviderAppDeps` ——
+全仓**零引用**（连测试都没有）的同义包装：PG bootstrap 走并列的 `composePostgresqlAppDeps`，
+SQLite bootstrap 走的是**另一个**函数 `composeSqliteAppDeps`，从不经过它。
+名字并排摆着，看上去两个 provider 各有一份入口，实际只有一侧在跑——这条判据抓的就是这个。
+（W8 清理批当时跳过它的唯一原因是 `server.ts` 正被并发改动持有。）
+
+删掉之后两条**扫描下界**跟着降，都按各自注释里写的规矩办（只降不升 + 记实测值）：
+`adapter-production-consumer` 114 → 113、`identical-provider-twins` 116 → 115。
+
+**顺带一个我自己踩的坑**：删函数时把它上面那行 JSDoc 一起删了，而那行
+`/** Named production entry points … */` 是 `rfc349-daemon-provider-core` 用来切片源码的
+**区段标记**（`source.indexOf('/** Named production entry points', composeStart)`），
+删掉后那条判据拿到 `-1` 直接红。它描述的是「具名生产入口」这一段、而不是被删的那一个函数，
+所以正确处置是把它移到仍然存活的 `composePostgresqlAppDeps` 上方，不是连它一起删。
+**删死代码时，附近的注释未必属于它**。
+
 ### 剩下 14 处：两件必须先问过用户的事
 
 1. ~~**两份守卫互相矛盾**~~ —— **这条我说错了，撤回。** 再读一遍两边的原文就不矛盾：

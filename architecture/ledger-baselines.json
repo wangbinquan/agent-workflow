@@ -391,8 +391,8 @@
       "id": "rfc359-w5-dead-provider-adapter",
       "file": "packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts",
       "symbol": "DEAD_PROVIDER_ADAPTER_DEBT",
-      "baseline": 1,
-      "why": "RFC-359 W5「防复辟」波次。生产零消费者的 provider 适配器工厂/类（`create|compose|open|bind` 四个构造动词，含品牌名前带形容词的形态）。这类死适配器会**伪装成 provider 对等**——看起来两侧都有实现，实际只有一侧在跑。账本按性质机器校验分两类：`纯死代码：`（8 条，连测试都零引用，可直接删）与 `改指：`（10 条，真实能力在别处）。纯再导出与字符串字面量不算消费。"
+      "baseline": 0,
+      "why": "RFC-359 W5「防复辟」波次。生产零消费者的 provider 适配器工厂/类（`create|compose|open|bind` 四个构造动词，含品牌名前带形容词的形态）。这类死适配器会**伪装成 provider 对等**——看起来两侧都有实现，实际只有一侧在跑。账本按性质机器校验分两类：`纯死代码：`（8 条，连测试都零引用，可直接删）与 `改指：`（10 条，真实能力在别处）。纯再导出与字符串字面量不算消费。 RFC-359 AC-10（2026-09-15）1 → 0：最后一条 server.ts::composeSqliteProviderAppDeps 是全仓零引用的同义包装（W8 清理批因 server.ts 被并发持有而跳过），已删除，账本清空。"
     },
     {
       "id": "rfc359-w5-dual-engine-predicate-gaps",
@@ -881,12 +881,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24740,
+      "baseline": 24739,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:48db171e64a73d7455e44fcd85e6074aa679ae350c5a229c4dd741a41e92b44d",
+    "sourceDigest": "sha256:9ee7873f093d53e8733c689bd70e3a656c66ef63ce16254ecad483946b77e78f",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -899,8 +899,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "780da513f02859cd46491574957070f6b1ed2da3",
-    "contentDigest": "sha256:6d0be86bbb67c9264a843c23755e3eb0c45e7ae674d7ee3baae26247dcb806d1",
+    "currentSnapshotSha": "5f70d67bba6324f0e344734163bc08fd5da14d48",
+    "contentDigest": "sha256:37b0c4792c4e0dbb82b968e156cbefef5378b5b8e5f3508c7b6c2e87a146c288",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

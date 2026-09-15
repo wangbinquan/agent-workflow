@@ -1455,12 +1455,6 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
 }
 
 /** Named production entry points keep provider selection explicit at bootstrap. */
-export function composeSqliteProviderAppDeps(
-  input: SqliteAppCompositionInput,
-): ProviderComposedAppDeps<'sqlite'> {
-  return composeProviderAppDeps(input)
-}
-
 export function composePostgresqlAppDeps(
   input: PostgresqlAppCompositionInput,
 ): ProviderComposedAppDeps<'postgresql'> {
