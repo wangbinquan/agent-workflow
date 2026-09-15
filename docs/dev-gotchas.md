@@ -7033,3 +7033,38 @@ VACUUM 之后 : Index Only Scan      0.557ms   Heap Fetches: 0     ← 3.0×
 
 **判据别用耗时**：要锁这件事就断言 `Heap Fetches: 0`（可见性本身，与机器负载无关），
 不要断言毫秒数——同 `rfc359-w6-t26-postgresql-plan-audit` 其余判据的原则。
+
+## 本地手动 `bun test a.test.ts b.test.ts` **不带 `--isolate`**，模块单例会跨文件泄漏（CI 不会，2026-09-15 被我自己坑了一次）
+
+**现象**：本地跑
+`bun test rfc359-t19h-postgresql-upgrade.integration.test.ts rfc359-t19h-generation-upgrade.test.ts`，
+第二个文件的 **SQLite** 查询报
+
+```
+SQLiteError: no such table: agent_workflow.workflows
+  at exportWorkflows (platform/persistence/portableApplicationAssets.ts:151)
+```
+
+`agent_workflow.` 是 **PostgreSQL 的 schema 前缀**跑到 SQLite 查询上了。两个文件**单独跑都绿**，
+换一对文件也绿，只有这一对红。
+
+**机制**：`db/providerSchema.ts` 的 `activeProvider` 是**模块级变量**，
+而 `createPostgresqlDatabaseClient`（`postgresqlDatabaseClient.ts:380`）会
+`selectDatabaseSchemaProvider('postgresql')` 并**丢掉返回的还原函数**——这在生产里是对的
+（那个函数的头注写着「Set once during provider bootstrap；disposer 只给隔离单测用」），
+但在**一个进程里连跑多个测试文件**时，前一个文件建过 PG 客户端，后一个文件就继承了那个全局。
+
+注意被牵连的那个集成测试**自己是守规矩的**（`try/finally` + `restoreProvider()`）——
+漏的是**客户端内部**那次，发生在它自己那次之后，还原函数被丢掉。所以「谁没写 finally」这个
+方向查不出来。
+
+**为什么 CI 不会红**：CI 与 `bun run test` 都带 **`--isolate`**
+（`package.json` 的 `test:backend:serial` / `packages/backend/package.json` 的 `test`、
+以及 `.github/workflows/ci.yml:228`；ci.yml:197 的注释就写着
+「--isolate prevents coverage-mode module singletons from leaking across …」）。
+`--isolate` 给每个文件一份全新的模块注册表，`activeProvider` 随之每文件复位。
+
+**规矩**：本地一次跑**多个**测试文件时加上 `--isolate`，否则你量到的可能是**上一个文件的全局
+状态**，而不是被测代码。一次只跑一个文件时无所谓。
+**别拿这种红去改生产代码**——我第一次判断它是「会随分片变化红 CI 的真 bug」，
+查了 `ci.yml` 才发现 CI 本来就免疫，差点为一个不存在的问题去动认证/持久化热路径。
