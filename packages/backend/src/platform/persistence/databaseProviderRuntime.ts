@@ -127,6 +127,36 @@ export function requireDatabaseProviderRuntime(
   return runtime
 }
 
+/**
+ * `requireDatabaseProviderRuntime` 的**配置孪生**：把 `DatabaseConfig` 这个按 provider 判别的
+ * 联合收窄到已选中的那一支。
+ *
+ * RFC-359 AC-10：这段判定原本手写在 `cli/start.ts` 里（`requirePostgresqlConfig`，
+ * `config.database.provider !== 'postgresql'` 就抛）。判定本身没问题——会话装配确实需要
+ * 「运行时选了 PG，配置也必须是 PG 那一支」这条不变量——但它住错了地方：daemon 入口不该
+ * 自己拼品牌比较，而紧挨着的 `requireDatabaseProviderRuntime` 早就把同一个形状做在了
+ * 这一层。搬过来之后两条收窄用同一个名字家族、同一种错误文案，入口只剩调用。
+ */
+export function requireDatabaseConfig(
+  config: DatabaseConfig,
+  provider: 'sqlite',
+): Extract<DatabaseConfig, { provider: 'sqlite' }>
+export function requireDatabaseConfig(
+  config: DatabaseConfig,
+  provider: 'postgresql',
+): Extract<DatabaseConfig, { provider: 'postgresql' }>
+export function requireDatabaseConfig(
+  config: DatabaseConfig,
+  provider: DatabaseProvider,
+): DatabaseConfig {
+  if (config.provider !== provider) {
+    throw new Error(
+      `database-provider-config-mismatch: expected ${provider}, configured ${config.provider}`,
+    )
+  }
+  return config
+}
+
 function composeSqliteProviderRuntime(
   options: ResolveDatabaseProviderRuntimeOptions,
   generation: ResolvedDatabaseGeneration,

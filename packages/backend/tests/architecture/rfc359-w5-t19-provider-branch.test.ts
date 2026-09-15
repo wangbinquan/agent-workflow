@@ -274,7 +274,15 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // AC-10 销账：`cli/migrate.ts` 清零——`db migrate` 要说的那句话改在
   // `prepareDatabaseProviderForBoot` 里定稿（品牌在那儿本来就是已知的、且是白名单层），
   // CLI 只剩「拿来输出 + finally 关闭」，两条 provider 路径合成一条。
-  'cli/start.ts: 2',
+  // AC-10 第八波销账：`cli/start.ts` 清零（2 → 0），两处的处方各不相同：
+  //   · **预打开的暂存恢复**原来问 `databaseProviderTraits(...).storage === 'embedded-file'`。
+  //     `storage` 比品牌名好一档，但仍是两值枚举；而这一段又不能像 `offlineCompaction` 那样
+  //     「把答案声明进 traits」——答案不是一句话，是一段 SQLite 恢复机械，traits 放答案不放机械。
+  //     改走另一条既有处方：按 provider 查表（`PRE_OPEN_STAGED_RESTORE`），形状与紧挨着的
+  //     会话装配表一致，`satisfies Record<DatabaseProvider, …>` 即 forcing function。
+  //   · **配置收窄**（`requirePostgresqlConfig`）判定没问题、住错了地方：daemon 入口自己拼
+  //     品牌比较，而 `platform/persistence/` 里紧挨着的 `requireDatabaseProviderRuntime` 早就
+  //     是同一个形状。搬成 `requireDatabaseConfig` 的重载孪生，入口只剩调用。
   // RFC-359 4 → 3：`package` 子命令的资源包装配此前是一个 `provider === 'sqlite' ? … : …`，
   // 两台 apply 引擎合一后只剩一条装配（见 `rfc271-cli` 的源码锁）。
   // AC-10 第一波 3 → 2：`runFrameBackfillOnBoot` 的 provider 标签是**摆设**——联合的两个成员
@@ -285,7 +293,11 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // prepare 阶段早已用同一个值把库打开并 adopt 进 runtime，`openClient(input)` 此时
   // 根本不看 `input`。改成由 `prepareDatabaseProviderForBoot`（白名单层、品牌已知处）
   // 交出 `openBootstrapClient()`，调用方连「哪个 provider 要传什么」都不必知道。
-  'modules/system-operations/composition.ts: 2',
+  // AC-10 第八波 2 → 1：内层那处「运行时选了 PG、配置也必须是 PG」的收窄改调
+  // `requireDatabaseConfig`（§5fd 把它从 `cli/start.ts` 的手写版搬进 `platform/persistence/`，
+  // 与紧挨着的 `requireDatabaseProviderRuntime` 同一个名字家族）。这里是它的第二个消费者。
+  // 余下 1 处是外层的组合根选择（两套完整模块装配），销账走组合根上提。
+  'modules/system-operations/composition.ts: 1',
   // AC-10 第一波销账：`databaseMigrationCoordinator` / `databaseMigrationDaemonAdmission` /
   // `postgresqlProviderBackup` 共 5 处改问 `databaseProviderTraits(...).migrationRole`
   // （`sqlite ⇒ source` / `postgresql ⇒ target`），三个文件都已有同名判据的在文先例；

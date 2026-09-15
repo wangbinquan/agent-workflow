@@ -17,6 +17,7 @@ import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresq
 import {
   resolveDatabaseProviderRuntime,
   type ResolvedDatabaseProviderRuntime,
+  requireDatabaseConfig,
 } from '@/platform/persistence/databaseProviderRuntime'
 import {
   prepareDatabaseSchemaUpgrade,
@@ -270,9 +271,10 @@ export function composeLocalSystemOperations(
   let module: SystemOperationsModule
   let prepareRestoreArtifact: (path: string) => Promise<RestoreArtifactRef>
   if (provider.provider === 'postgresql') {
-    if (databaseConfig.provider !== 'postgresql') {
-      throw new Error('postgresql-system-operations-config-mismatch')
-    }
+    // RFC-359 AC-10：「运行时选了这一支、配置也必须是这一支」的收窄，与紧挨着的
+    // `requireDatabaseProviderRuntime` 同一层、同一个名字家族（§5fd 把它从 `cli/start.ts`
+    // 的手写版搬进 `platform/persistence/`）。这里是它的第二个消费者。
+    const postgresqlConfig = requireDatabaseConfig(databaseConfig, 'postgresql')
     const database = provider.openClient()
     const repositoryBackupPreparation =
       deps.repositoryBackupPreparation ??
@@ -283,7 +285,7 @@ export function composeLocalSystemOperations(
     module = composePostgresqlSystemOperations({
       runtime: provider.runtime,
       db: database,
-      databaseConfig,
+      databaseConfig: postgresqlConfig,
       repositoryBackupPreparation,
       appHome,
       lockPath: Paths.lock,

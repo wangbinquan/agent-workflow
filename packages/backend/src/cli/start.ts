@@ -236,6 +236,7 @@ import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import {
+  requireDatabaseConfig,
   requireDatabaseProviderRuntime,
   resolveDatabaseProviderRuntime,
   type ResolvedDatabaseProviderRuntime,
@@ -306,7 +307,6 @@ import {
 import {
   composePostgresqlDaemonApplication,
   type PostgresqlDaemonApplication,
-  type PostgresqlDaemonApplicationInput,
 } from './postgresqlDaemonApplication'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
@@ -446,15 +446,6 @@ interface ComposedPostgresqlProviderSession {
   readonly session: Awaited<ReturnType<typeof _createComposedDaemonProviderRuntimeSession>>
 }
 
-function requirePostgresqlConfig(
-  config: ReturnType<typeof loadConfig>,
-): PostgresqlDaemonApplicationInput['config'] {
-  if (config.database.provider !== 'postgresql') {
-    throw new Error('postgresql-daemon-config-provider-mismatch')
-  }
-  return Object.freeze({ ...config, database: config.database })
-}
-
 /**
  * Compose one complete frozen PostgreSQL daemon session. The selected client
  * is captured by owner factories once; HTTP, WS, workers and maintenance all
@@ -466,7 +457,12 @@ async function composePostgresqlProviderSession(
   const input = Object.freeze({
     ...composeInput,
     provider: requireDatabaseProviderRuntime(composeInput.provider, 'postgresql'),
-    config: requirePostgresqlConfig(composeInput.config),
+    // RFC-359 AC-10：品牌收窄搬到了 `platform/persistence/`，与紧挨着的
+    // `requireDatabaseProviderRuntime` 同一个名字家族；入口只剩调用。
+    config: Object.freeze({
+      ...composeInput.config,
+      database: requireDatabaseConfig(composeInput.config.database, 'postgresql'),
+    }),
   })
   const db = input.provider.openClient()
   const databaseMigration = composeDatabaseMigrationModule({
@@ -1002,6 +998,42 @@ type DaemonProviderSessionComposer = (
   input: DaemonProviderSessionComposeInput,
 ) => Promise<ComposedDaemonProviderSession>
 
+/**
+ * 开机时的**预打开恢复**：把暂存的 restore 目录落到位。这一步必须跑在库被打开之前，
+ * 所以它不能等到会话装配（`composeDaemonProviderSession`）之后再做。
+ *
+ * RFC-359 AC-10：原来写成
+ * `databaseProviderTraits(bootGenerationPayload.provider).storage === 'embedded-file'`。
+ * `storage` 比品牌名好一档，但它仍是**两值枚举**——同一张真值表的另一种拼法，第三个 provider
+ * 照样只能落进其中一边。而这一段又不能像 `offlineCompaction` 那样「把答案声明进 traits」：
+ * 答案不是一句话，是一段 SQLite 恢复机械，traits 表里放的是答案不是机械。
+ * 所以走另一条既有处方——**按 provider 查表**，与下面的会话装配表同一个形状：
+ * 表按 `DatabaseProvider` 穷举，少一个 provider 就编译不过。
+ */
+const PRE_OPEN_STAGED_RESTORE = {
+  sqlite: async (input: {
+    readonly appHome: string
+    readonly dbPath: string
+    readonly migrationsFolder: string
+  }): Promise<boolean> =>
+    await applyPendingRestoreIfAny({
+      appHome: input.appHome,
+      dbPath: input.dbPath,
+      migrationsFolder: input.migrationsFolder,
+      postOpenRecovery: composeSqlitePostRestoreRecovery(),
+    }),
+  // 外部服务器的存储在服务端：恢复走它自己的目标路径，没有「在库文件旁边暂存一个目录」
+  // 这回事，所以这一步恒为「什么都没应用」——与原来「不进这个分支」逐字同义。
+  postgresql: async (): Promise<boolean> => false,
+} satisfies Record<
+  DatabaseProvider,
+  (input: {
+    readonly appHome: string
+    readonly dbPath: string
+    readonly migrationsFolder: string
+  }) => Promise<boolean>
+>
+
 /** 按 provider 查表；表按 `DatabaseProvider` 穷举，少一个 provider 就编译不过。 */
 function composeDaemonProviderSession(
   input: DaemonProviderSessionComposeInput,
@@ -1367,15 +1399,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
   // staged dir is quarantined and the boot continues on the untouched DB. The
   // catch below only guards truly unexpected filesystem-level throws.
-  // Staging a restore dir next to the db file is an embedded-file operation;
-  // an external-server provider restores through its own target path.
-  if (databaseProviderTraits(bootGenerationPayload.provider).storage === 'embedded-file') {
+  {
     try {
-      const applied = await applyPendingRestoreIfAny({
+      const applied = await PRE_OPEN_STAGED_RESTORE[bootGenerationPayload.provider]({
         appHome: Paths.root,
         dbPath: Paths.db,
         migrationsFolder,
-        postOpenRecovery: composeSqlitePostRestoreRecovery(),
       })
       if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
     } catch (err) {

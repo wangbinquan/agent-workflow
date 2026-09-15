@@ -32,7 +32,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。**2026-09-13 逮到一条用户可见的分叉并修掉**：数字员工「计划人审闸门」在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、PG 显示「规划中」）——成因是端口**同步且可选**，PG 侧的 composition 实现不了、少实现也没有任何地方会红。判定已收成一份 async 中立实现、两侧都装，并加了**装配锁**（删掉 PG 侧那个方法当场红 4 格，§5dm）。同批做了一次**全类扫查**：端口/参与者接口上的可选方法全仓只有 9 个，其余 8 个都是按功能可选（工作组宿主能力 / 连接目录 / 契约投影），不是按引擎——这一类已经清干净。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | **2026-09-13 连续 exact-SHA 全绿**：`63030aaea` / `b41a8cab2` / `55864e0c8` / `51aeda3f3` / `5b706bca8` / `7482255fc` 六笔各自的 push CI run 终态 success（十二个 ubuntu 后端分片带真 postgres:17、macOS 六分片、lint/format/depcheck、单二进制 build smoke、Playwright e2e）。同期修掉两次自己推出的红并各带回归用例：①`void <promise>` 没接 rejection（PG 上 `0 fail` 却退 1 的形态，§5dk）；②铸行 id 非单调（macOS 分片随机红，§5dl）。**仍待办**：RFC 收口后需要在最终 SHA 上再取一次终态取证。 | 进行中 |
-| AC-10 | 业务 provider literal 分支为零                    | **2026-09-15 精确账本 26 → 6 处 / 4 个文件**（`PROVIDER_BRANCH_DEBT`，穷尽性围栏按形状豁免不计）。第一～五波是可证无行为变化的那一类（品牌换 traits、恒假条件、摆设标签、bootstrap 客户端上提）。**第六波（§5fb）是唯一一条改了用户可见行为的**：`taskExecutionPersistence.ts` 的 2 处清零——两份 persistence 聚合的唯一差别是恢复管理面，而它四个方法里有两个不同、且**各让一个引擎更弱**，按用户「不允许两种数据库一个好一个不好」各自收敛到强的一侧。**第七波（§5fc）把 `maintenanceService.ts` 的 2 处清零**：判别联合改成由装配方交出`openAdmissionStore` / `startSupervisor` 两个工厂，同时给这个零覆盖的服务装上第一个注入接缝并补了覆盖——消分叉与补覆盖本来就是同一件事。余下 6 处：`cli/start.ts` 2、`modules/system-operations/composition.ts` 2、`cli/doctor.ts` 1、`maintenanceWorkerSupervisor.ts` 1。 | 进行中 |
+| AC-10 | 业务 provider literal 分支为零                    | **2026-09-15 精确账本 26 → 4 处 / 3 个文件**（`PROVIDER_BRANCH_DEBT`，穷尽性围栏按形状豁免不计）。第一～五波是可证无行为变化的那一类（品牌换 traits、恒假条件、摆设标签、bootstrap 客户端上提）。**第六波（§5fb）是唯一一条改了用户可见行为的**：`taskExecutionPersistence.ts` 的 2 处清零——两份 persistence 聚合的唯一差别是恢复管理面，而它四个方法里有两个不同、且**各让一个引擎更弱**，按用户「不允许两种数据库一个好一个不好」各自收敛到强的一侧。**第七波（§5fc）把 `maintenanceService.ts` 的 2 处清零**：判别联合改成由装配方交出`openAdmissionStore` / `startSupervisor` 两个工厂，同时给这个零覆盖的服务装上第一个注入接缝并补了覆盖——消分叉与补覆盖本来就是同一件事。**第八波（§5fd）把 `cli/start.ts` 的 2 处清零**，两处各用一条处方：预打开暂存恢复改成按 provider 查表（traits 放答案不放机械），配置收窄 `requirePostgresqlConfig` 搬进 `platform/persistence/`。余下 4 处：`modules/system-operations/composition.ts` 2、`cli/doctor.ts` 1、`maintenanceWorkerSupervisor.ts` 1。 | 进行中 |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新已核仍是 W52 full `34427756137` 的 360 样本 / 18 组：两项绝对失败——SQLite `tasks-first` p95 150.616ms 未低于 150ms 预算、PG `workgroup-pending` **max** 11.571ms 未低于 10ms 预算；其余 16 项通过。**2026-09-14（§5ee）已在 `948d9b5fb` 上跑过一次 `scale=full`**（run `34816698143`）：W52 那两条绝对失败都已清，只剩 `overview` 在 PG 上 11.003ms > 10ms 一条；EXPLAIN 实测根因是**语句条数**（22 条，九端点最多）而非查询代价（四条任务计数走 Index Only Scan，库内合计 < 1.6ms）。**闭合条件**：收掉 overview 的冗余语句后在新 SHA 上再跑一次 `scale=full`（`scripts/perf-run.ts`，100k tasks / 10M events，判据见 `scripts/perf-compare.ts` 的 `PERF_HTTP_SCENARIOS`）。本轮**没有**动性能代码——本仓规矩是「数字都是跑出来的，不是估的」，没有 full 实测就不做盲优化；`workgroup-pending` 那一格若复现，第一嫌疑是 `pendingRows` 里跟着可见任务数走的两条 `inArray(...)`（`workgroupTaskRoomQueries.ts`）。 | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。**2026-09-13（§5dv）**：资源包 apply 的两个 SQLite 专属装配（`composeSqliteResourcePackageProvider` / `createSqliteResourcePackageExecutionAdapter`）因合一后零生产消费者而退役；`main.ts` / `server.ts` 的资源包三元各删一处。provider 适配器语料 133 → 131、provider 组合根 58 → 57。**2026-09-14（§5ea）**：intent apply 合一带走九个 provider 命名的装配 / 工厂（`compose{Sqlite,Postgresql}IntentApplyOperations` / `compose|createSqliteIntentApplyArtifactLifecycle` / `compose{Sqlite,Postgresql}IntentMaintenance{CommandsForAppHome,SnapshotQueries}` / `composePostgresqlIntentApplyConvergence` / `composeSqliteSkillArtifactCompensation` / `createLegacyIntentApplyResourceSession`），换成不带引擎前缀的 `composeIntentApply*` / `composeIntentMaintenance*`。provider 命名文件 47 → **44**、适配器语料 130 → **120**、组合根 57 → **48**。                                                                                    | 进行中 |
 
@@ -11642,3 +11642,84 @@ startSupervisor:    (config, { onDelta, onEvent }) => MaintenanceWorkerSuperviso
 `platform/background/maintenanceWorkerSupervisor.ts` 1。其中监工那一处的形状与本波同类
 （判别联合 + 两套 Worker `init` 帧），但它拼的是**协议线格式**（`MaintenanceWorkerInitSchema`
 是 strict 联合），收敛要连帧的装配一起上提，单独一波做。
+
+## §5fd —— AC-10 第八波：`cli/start.ts` 清零，两处用了**两条不同的处方**
+
+余下站点里这两处挨在同一个文件，但它们不是同一类问题，硬套同一条处方都会走偏。
+
+### 一、预打开的暂存恢复：traits 放答案，不放机械
+
+原来写成：
+
+```
+if (databaseProviderTraits(bootGenerationPayload.provider).storage === 'embedded-file') {
+  const applied = await applyPendingRestoreIfAny({ …, postOpenRecovery: composeSqlitePostRestoreRecovery() })
+}
+```
+
+`storage` 比品牌名好一档，但它仍是**两值枚举**——同一张真值表的另一种拼法，第三个 provider
+照样只能落进其中一边。前几波对付这种形状的处方是「把答案声明进 traits」
+（`offlineCompaction` / `absentLocalStoreMessage`），**但这一处套不上**：
+答案不是一句话，是一段 SQLite 恢复机械（`applyPendingRestoreIfAny` + `composeSqlitePostRestoreRecovery`），
+而 traits 表里放的是**答案**，不是**机械**。把机械塞进 traits 只会让那张表开始 import 引擎实现。
+
+走另一条既有处方：**按 provider 查表**。`start.ts` 里紧挨着就有同一个形状的先例
+（`composeDaemonProviderSession` 的 `composers` 表），照抄它：
+
+```
+const PRE_OPEN_STAGED_RESTORE = {
+  sqlite: async (input) => await applyPendingRestoreIfAny({ …, postOpenRecovery: composeSqlitePostRestoreRecovery() }),
+  postgresql: async () => false,   // 存储在服务端，没有「库文件旁边暂存一个目录」这回事
+} satisfies Record<DatabaseProvider, (input: …) => Promise<boolean>>
+```
+
+`satisfies Record<DatabaseProvider, …>` 就是 forcing function：少一个 provider 编译不过。
+PG 侧恒为「什么都没应用」，与原来「不进这个分支」逐字同义。
+
+这一步**必须跑在库被打开之前**，所以它不能等到会话装配之后再做——这也是它当初只能写在
+共享启动路径上、而不是各自会话里的原因。
+
+### 二、配置收窄：判定没问题，住错了地方
+
+`requirePostgresqlConfig`（`config.database.provider !== 'postgresql'` 就抛）表达的不变量是对的
+——运行时选了 PG，配置也必须是 PG 那一支。问题在于它手写在 **daemon 入口**里，
+而 `platform/persistence/` 里**紧挨着的 `requireDatabaseProviderRuntime` 早就是同一个形状**
+（重载 + 品牌不符就抛）。这属于账本里「搬家」那一类：销账方式不是重写判据，是把它搬到
+它本该在的那一层。
+
+搬成 `requireDatabaseConfig` 的重载孪生之后，两条收窄同一个名字家族、同一种错误文案，
+入口只剩一次调用。
+
+### 账本
+
+`PROVIDER_BRANCH_DEBT` 4 → 3 条目 / 6 → 4 处；`ledger-baselines` 的
+`rfc359-w5-provider-branch` 基线 4 → 3。
+
+余下 4 处：`modules/system-operations/composition.ts` 2（两套完整模块装配，组合根上提）、
+`cli/doctor.ts` 1（按 provider 选体检项清单）、
+`platform/background/maintenanceWorkerSupervisor.ts` 1（判别联合 + 两套 Worker `init` **线格式**帧，
+`MaintenanceWorkerInitSchema` 是 strict 联合，收敛要连帧的装配一起上提）。
+
+### §5fd 续：`system-operations/composition.ts` 2 → 1，以及两条守卫账本的连带归零
+
+搬家过的 `requireDatabaseConfig` 落地当天就有了第二个消费者：
+`modules/system-operations/composition.ts` 里同一形状的内层收窄
+（`if (databaseConfig.provider !== 'postgresql') throw`）改成调它。余下 1 处是外层的组合根
+选择（两套完整模块装配），销账走组合根上提，不在本波。
+
+本波顺带让另外两条守卫账本归零 / 下调，两条都是**账本自己写好的退役条件**兑现：
+
+- `rfc359-w5-t19c` 的 `PROVIDER_EXECUTION_BRANCH_DEBT` **归零**。那条唯一记账
+  （`storage === 'embedded-file'` 的冷恢复）旁边写着正解：「一个中立的 boot-restore 端口 +
+  两个适配器，由中立序列调用一次；届时这条记账连同 `if` 一起删掉，账本改成空表」。
+  `PRE_OPEN_STAGED_RESTORE` 就是那张表，照做即退役。
+- 同文件的**真语料存活下限** 2 → 1（实测 1）。原话是「这个文件里至少有两处『拒绝装配』的
+  provider 收窄」——那两处正是本波销掉的。今天剩下的唯一一处是
+  `databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target'`。
+  下调时写清了一件要紧事：**判据存活的主证据不是它**，是文件末尾那组负向 fixture
+  （喂伪造源码，不随生产代码收敛而失效）；真语料这条只是二次确认，可以跟着生产代码往下走，
+  但**不许走到 0**——走到 0 就该换一份真语料，而不是默默接受假绿。
+
+搬家带来的一条新 import 边（`composition.ts` → `databaseProviderRuntime`）在
+`rfc294-cross-context-observed-imports` / `rfc294-architecture-exceptions` /
+`rfc294-module-symbol-owners` 上按规矩写了 `allowGrowth` 并点名本 RFC。

@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2553,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24737
+    "symbolsIncludingFileRoots": 24738
   },
   "entries": [
     {
@@ -4873,24 +4873,24 @@
     {
       "currentContext": "legacy",
       "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "owner:packages/backend/src/cli/start.ts#PRE_OPEN_STAGED_RESTORE",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "PRE_OPEN_STAGED_RESTORE",
+      "targetContext": "bootstrap",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/start.ts",
       "id": "owner:packages/backend/src/cli/start.ts#readyBrowserUrl",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "readyBrowserUrl",
-      "targetContext": "bootstrap",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "owner:packages/backend/src/cli/start.ts#requirePostgresqlConfig",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "requirePostgresqlConfig",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -141286,6 +141286,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "PreparedDatabaseProviderSchema",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#requireDatabaseConfig",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "requireDatabaseConfig",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -297521,5 +297533,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1a50cbf73e984e5c694baef283de3bdc1f0e8720fa0001d1bff10027b0eca997"
+  "sourceDigest": "sha256:663b1f7e6be1a4fec14ca94d4bd53e8ba13e7f5c7dd9d7be7d0f2f3d3924ea9a"
 }

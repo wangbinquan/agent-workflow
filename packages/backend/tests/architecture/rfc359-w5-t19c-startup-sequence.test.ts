@@ -143,12 +143,16 @@ const DAEMON_ENTRY_FILES: readonly string[] = [
  * 那类分叉。正解是一个中立的 boot-restore 端口 + 两个适配器，由中立序列调用一次；届时这条
  * 记账连同 `if` 一起删掉，账本改成空表。
  *
+ * **2026-09-15（RFC-359 AC-10 §5fd）：就按这条正解做完了，账本已空。**
+ * `cli/start.ts` 的 `PRE_OPEN_STAGED_RESTORE` 是那张按 `DatabaseProvider` 穷举的表
+ * （`satisfies Record<DatabaseProvider, …>`），SQLite 适配器跑 `applyPendingRestoreIfAny`，
+ * 外部服务器适配器恒为「什么都没应用」；中立序列在打开库之前调用它一次。
+ * `if` 连同这条记账一起删除。
+ *
  * **只降不升**：多一条就红——新的 boot 步骤要么两个 provider 都跑，要么走端口 + 适配器，
  * 不许再写成「入口里按 provider 拐一下」。
  */
-const PROVIDER_EXECUTION_BRANCH_DEBT: readonly string[] = [
-  "packages/backend/src/cli/start.ts | databaseProviderTraits(bootGenerationPayload.provider).storage === 'embedded-file'",
-]
+const PROVIDER_EXECUTION_BRANCH_DEBT: readonly string[] = []
 
 // ---------------------------------------------------------------------------
 // 判据（纯函数；扫描与负向 fixture 共用同一份实现）
@@ -557,9 +561,20 @@ describe('RFC-359 W5-T19c —— 语料下限（扫空 = 假绿）', () => {
     expect(
       providerConditions(start, 'cli/start.ts').length,
       'cli/start.ts 里一个 provider 判别式都没识别出来。' +
-        '这个文件里至少有两处「拒绝装配」的 provider 收窄；识别成 0 说明判据失效，' +
-        '此时「没有执行分支」的绿是假绿。',
-    ).toBeGreaterThanOrEqual(2)
+        '识别成 0 说明判据失效，此时「没有执行分支」的绿是假绿。',
+      // RFC-359 AC-10 §5fd：门槛 2 → **1**（实测 1）。原来这里写「至少有两处『拒绝装配』的
+      // provider 收窄」——那两处正是本波销掉的：`storage === 'embedded-file'` 换成了按
+      // provider 查表，`requirePostgresqlConfig` 的 `if (…) throw` 搬进了
+      // `platform/persistence/` 成为 `requireDatabaseConfig`。今天剩下的唯一一处是
+      // `databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target'`
+      // （assembly=true，拒绝装配，不计执行分支账）。
+      //
+      // 注意这条**不是**判据存活的主证据：主证据是本文件末尾那组负向 fixture（注释 / 字符串
+      // 不算、执行分支计入、拒绝装配放过、return-only 计入），它们喂的是伪造源码、
+      // 不随生产代码收敛而失效。这条只是「真语料上也还咬得到」的二次确认，
+      // 所以它可以跟着生产代码往下走，但**不许走到 0**——走到 0 就该换一份真语料，
+      // 而不是默默接受假绿。
+    ).toBeGreaterThanOrEqual(1)
   })
 })
 
