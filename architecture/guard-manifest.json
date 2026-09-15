@@ -1840,6 +1840,18 @@
       "lines": 574
     },
     {
+      "id": "rfc359-w5-same-file-provider-pairs",
+      "file": "packages/backend/tests/architecture/rfc359-w5-same-file-provider-pairs.test.ts",
+      "runner": "bun",
+      "mechanism": "regex",
+      "corpusScanner": true,
+      "minCorpusFiles": 500,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 217
+    },
+    {
       "id": "rfc359-w5-t17-provider-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "runner": "bun",
@@ -2507,8 +2519,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "53fe8df1d50b70a68b80fa10f98dbab64490d4db",
-    "contentDigest": "sha256:bb6d13e7643c9f1a53b9bd5b6ad516334fb962cae46812bec7d0c66cabc039cc",
+    "currentSnapshotSha": "b0d8f5090047433d1ff735197854573c8739aaa7",
+    "contentDigest": "sha256:0daeba399779e136ea6d374efcee0499fe44c4849d5e10c6f6589cd223b62f4a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

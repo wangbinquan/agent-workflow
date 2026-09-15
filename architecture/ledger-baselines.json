@@ -514,6 +514,13 @@
       "why": "RFC-359 W5「防复辟」：`void <promise>` 且链上没有 `.catch` / 双参 `.then` 的 fire-and-forget。bun:sqlite 上这类调用往往同步 settle、看不出问题；PostgreSQL 上同一条是真异步查询，库一关就以 `Connection closed` 拒绝、无人接住 → 进程级 unhandled rejection（bun test 记成「Unhandled error between tests」：用例全过、进程退 1，CI run 34768029441 ubuntu 分片 2/12 实撞）。逐文件计数；退役一条的机械判据是在调用点链上补拒绝处理器。"
     },
     {
+      "id": "rfc359-w5-same-file-provider-pairs",
+      "file": "packages/backend/tests/architecture/rfc359-w5-same-file-provider-pairs.test.ts",
+      "symbol": "SAME_FILE_PROVIDER_PAIRS",
+      "baseline": 48,
+      "why": "RFC-359 AC-1（plan §5fs）——**同文件** provider 孪生的高水位。开账 48 对 / 42 个文件。为什么要新开一份：`rfc359-w5-provider-pair-conformance` 按**文件名词干**配对，于是同一个文件里的一对它一个也看不见；§5fp 合掉的那一对正是这个形状，合掉它 `PROVIDER_PAIR_COUNT` 一动不动。AC-1 的真实规模此前只被数到一小半（账本记 8，实测另有 48 对在同文件里）。每一条都必须带 §5fq 的裁决标记（① 原语 / ② 资源形态 / ③ 驱动线上差异 / 漂移待合）——想留下来就得指名命中哪一条，指不出来就只能挂着等合。"
+    },
+    {
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
@@ -899,8 +906,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "53fe8df1d50b70a68b80fa10f98dbab64490d4db",
-    "contentDigest": "sha256:8f305c615c5cc51d42d6d1e58c01f89a43801421766fee0797d6d950b4cf4cc8",
+    "currentSnapshotSha": "b0d8f5090047433d1ff735197854573c8739aaa7",
+    "contentDigest": "sha256:319355498bcdb52d3bc0991a0595c67525adf4146d5db17206559d24a9da9621",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

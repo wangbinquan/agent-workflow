@@ -12423,3 +12423,59 @@ export {
 
 实测 4 例 → **8 例**；`AW_TEST_PROVIDERS=sqlite` 对照 5 例，证明多出来的 3 例是真 PG 泳道。
 账本只改条目名（新文件同样留 1 处 `createInMemoryDb`，被测物是 SQLite 组合根，属甲类）。
+
+## §5fs —— AC-1 的另一半：同文件孪生此前**一个都没被数到**，补一份账本 + 守卫
+
+§5fq 给 AC-1 定了完成线（指名命中哪一条，否则必须合）。拿它去逐对套用时撞上一个更基本的问题：
+**「还剩几对」这个数本身是错的。**
+
+`rfc359-w5-provider-pair-conformance` 是本仓数对数的地方，它的 `classify(path)` 按**文件名词干**
+配对（`sqliteFoo.ts` ↔ `postgresqlFoo.ts`）。于是**同一个文件里的一对**它一个也看不见：
+
+```ts
+// 一个文件里
+export function composeSqliteFoo(db: DbClient) { … }
+export function composePostgresqlFoo(db: PostgresqlDatabaseClient) { … }
+```
+
+§5fp 合掉的 `create{,Postgresql}ExecutionContractResourceAdapter` 正是这个形状——
+**合掉一对真孪生，`PROVIDER_PAIR_COUNT` 一动不动。** 这不是账本记错了数，是它**按定义看不见**
+这一类。
+
+### 实测：48 对 / 42 个文件
+
+判据认两种成对形态（只看**导出**的声明——没导出的东西不可能被两个组合根分别选用）：
+
+- **双品牌**：`composeSqliteFoo` + `composePostgresqlFoo`；
+- **中立名 + 品牌名同处一文件**：`composeFoo` + `composePostgresqlFoo`。
+  这种更隐蔽——中立那份看起来「已经合一了」，其实旁边还挂着一份品牌实现。
+
+扫出 **48 对 / 42 个文件**（跨文件对账本记的是 8）。所以 AC-1 的真实规模此前只被数到一小半，
+而且被数到的恰好是**最显眼**的那一小半。
+
+一个粗筛（按函数体里有没有 `$client` / `PRAGMA` / `dbTxSync` / `pg_dump` / `providerPool` /
+`dbPath` 这类只有一个引擎有的东西）给出 **7 命中 / 41 零信号**。
+**这个粗筛只是排序用，不是裁决**：它只看函数体自己的文本，看不见差异藏在被调用方里
+（`composeSqliteDaemonProviderCore` 命中靠的是它自己那几行，不是它调的那六个子对）。
+所以「41 条零信号」是**漂移的上界**，不是漂移的证明——每一条仍要按 §5fq 逐条指名。
+
+### 守卫
+
+新增 `packages/backend/tests/architecture/rfc359-w5-same-file-provider-pairs.test.ts`：
+
+- 逐条与源码相等（增了是新开的分叉，减了是合一，都要改账本）；
+- **每一条必须带 §5fq 裁决标记**（`①` 原语 / `②` 资源形态 / `③` 驱动线上差异 / `漂移待合`）
+  ——想让一对留下来，得指名它命中哪一条；指不出来就只能挂着 `漂移待合` 等人来合；
+- 语料下限 + 判别式非空（扫成 0 = 假绿）；
+- 四例合成 fixture 锁住分类边界：双品牌算、中立+品牌算、**只有一侧**不算（那归跨文件判据管）、
+  **没导出的**不算。
+
+两条断言分开（身份一条、裁决一条），红的时候一眼知道是「多了一对」还是「少了个理由」。
+
+变异验证：往 `util/hash.ts` 塞一对 `create{Sqlite,Postgresql}MutationProbe` ⇒ 身份那条红并点名新增行；
+抽掉任意一条的裁决标记 ⇒ 裁决那条红。两条各自单独咬。
+
+已开账 48，注册进 `architecture/ledger-baselines.json`（只降不升）与 `guard-manifest.json`。
+本轮**先只裁决我读过源码、能指名理由的 5 条**（`maintenanceDisk` / `system-operations/composition`
+/ `capabilities` / `databaseTransaction` / `migrationsFolder` 命中 ① 或 ②），其余 43 条一律标
+`漂移待合`——**不给没读过的条目编理由**。
