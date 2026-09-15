@@ -648,7 +648,12 @@ describeEachProviderHttpApplication(
       expect(ovNoRepos.resources.memories).toBe(3)
       expect(ovNoRepos.resources.workgroups).toBeNull()
       expect(ovNoRepos.resources.scheduled).toBeNull()
-    })
+      // RFC-359 AC-6（2026-09-15）：显式预算，不吃 bun 的 5s 缺省。
+      // 这条用例先 seed 两批资源，再用**七种不同权限组合**各跑一遍 `buildOverview`——
+      // 每一遍在 SQLite 上是进程内调用、在 PostgreSQL 上是一串真实往返。
+      // 分片跑时实测 5364ms，刚好越过 5000ms 缺省预算而红（单独跑 1s 出头）。
+      // 这不是「重跑就过了」：慢是真的，缺省预算对这条用例本来就不合适。
+    }, 30_000)
 
     test('7d 边界（注入时钟）：cutoff-1ms 不计 / 恰好 cutoff 计 / cutoff+1ms 计', async () => {
       const T0 = 1_900_000_000_000 // fixed, far from wall-clock seed noise

@@ -12598,3 +12598,35 @@ export const composePostgresqlApprovalGatewayRunner = composeApprovalGatewayRunn
 SQLite 那半走 `services/task` 的 `startTask`（legacy、12 处同步游标），
 PG 那半走 `PostgresqlRootTaskLaunchKernel`，**是两套启动架构**，
 不是一个引擎差异。那是 AC-6 乙类一直挂着的同一个 blocker。
+
+### §5fv 附：那 24 条挡在谁身上（下一波的施工图）
+
+把 24 条的品牌被调用者去重，得到 **56 个下层符号**。按所在文件归拢后，形状很清楚：
+
+**第一层（composition 互相挡）**——这些本身也在 32 条账本里，会随下层一起塌：
+`actionExecutionEnvironment` / `agentActionExecution` / `scriptActionExecution` /
+`agentLaunchResources` / `sourceTermination` / `triggerExecution` / `providerRuntime` /
+`digitalEmployeeExecution` / `webhookDispatch` / `resourcePackageMaintenance` /
+`maintenanceDisk` / `system-operations/composition`。
+
+**第二层（真正的 infrastructure 孪生，AC-1 的余量在这里）**：
+
+| 孪生 | 备注 |
+| --- | --- |
+| `sqliteTaskRouteOperations` ↔ `postgresqlTaskRouteOperations` | 两千行级 |
+| `sqliteTaskRouteLaunchOperations` ↔ `postgresqlTaskRouteLaunchOperations` | 含 `RootTaskLaunchKernel` |
+| `sqliteTaskExecutionRuntimeParticipants` ↔ `postgresqlTaskExecutionRuntimeParticipants` | |
+| `fusionEngineTaskOperations` ↔ `postgresqlFusionEngineTaskOperations` | |
+| `sqliteSourceTerminationParticipant` ↔ `postgresqlSourceTerminationParticipant` | PG 侧多收一个 runtimeRegistry |
+| `webhookRepositoryResolver` / `webhookTriggerValidation` | integration 侧 |
+| `databaseOperationalAdapter` | 已判 ① 的近邻，待逐条确认 |
+
+**第三层（架构级 blocker，不是一个孪生能解决的）**：
+`actionExecutionEnvironment` 的 SQLite 半走 `services/task` 的 `startTask`
+（legacy，12 处同步游标），PG 半走 `PostgresqlRootTaskLaunchKernel`——
+**两套启动架构**。这与 AC-6 乙类（`start-task-deps`）挂着的是同一个 blocker，
+要先有一次「启动面合一」的波次，上面一串才有得合。
+
+所以下一波的入口不是「再挑几条漂移待合」，而是**从第二层挑一个孪生做掉，
+看它一次带塌几条 composition**——`sourceTermination`（两个参与者、PG 多一个可选形参）
+体量最小，是验证这条链路的合适起点。
