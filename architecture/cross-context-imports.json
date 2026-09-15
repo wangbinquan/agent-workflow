@@ -47297,23 +47297,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9c674cbab8589a3dd113",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts",
-      "toSymbol": "createPostgresqlTaskExecutionCatalogSourceFactory",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
       "fromSymbol": "$file",
@@ -65279,6 +65262,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "maintenanceState",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d63c80c36c6c6bb4dd88",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts",
+      "toSymbol": "createDatabaseTaskExecutionCatalogSourceFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -127736,22 +127736,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:9c674cbab8589a3dd113",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/taskExecutionRuntime",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlTaskExecutionCatalogSourceFactory",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
@@ -146551,6 +146535,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#maintenanceState"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:d63c80c36c6c6bb4dd88",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/taskExecutionRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "createDatabaseTaskExecutionCatalogSourceFactory",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/operationAuthority.ts",
@@ -160624,7 +160624,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:edca9f4cd40ff5c3e0ae42b8c6fa316616c68219c9916483c393ee49bb8eaf8e",
+  "sourceDigest": "sha256:17709c46d1e07fb1fe7a4d23954b96102646e7234324c36f35b840091d593534",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

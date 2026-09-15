@@ -104,7 +104,7 @@ import {
   type SelectedPostgresqlTaskExecutionProviderRuntime,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import { createPostgresqlTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import { createDatabaseTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/participants'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -1182,7 +1182,7 @@ export async function composePostgresqlApplication(
   const taskExecutionCatalogSources = composeTaskExecutionCatalogSources(
     // RFC-357：目录源不再经 `routes.tasks.listItems` 把行拉进内存，改用与 SQLite 共用的
     // 下推页查询；owner 身份由这里注入（模块自己去 compose 别的 context 是被判红的形状）。
-    createPostgresqlTaskExecutionCatalogSourceFactory(
+    createDatabaseTaskExecutionCatalogSourceFactory(
       input.db,
       composeOwnerIdentityQueries(input.db),
     ),

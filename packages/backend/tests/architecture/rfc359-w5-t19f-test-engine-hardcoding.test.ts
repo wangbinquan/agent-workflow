@@ -347,7 +347,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-sqlite-logical-source.test.ts: 3',
   'rfc349-sqlite-migration-compatibility.test.ts: 2',
   'rfc349-task-execution-provider-adapters.test.ts: 3',
-  'rfc349-task-execution-read-models-postgresql-adapter.test.ts: 1',
   // RFC-359 AC-6 销账：`rfc349-websocket-provider.test.ts` —— 那对「真 SQLite + 假池 PG」的
   // 手搓孪生合成一条双引擎。`DrizzleRealtimeStore` 的形参本来就是 `ProviderNeutralDatabase`
   // （一份实现），两条用例只是喂了两种库；合并后同一份真数据、同一组断言跑两个引擎，
@@ -366,6 +365,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-t19h-generation-upgrade.test.ts: 4',
   'rfc359-t19h-logical-backup-restore.test.ts: 1',
   'rfc359-t19h-postgresql-upgrade.integration.test.ts: 1',
+  'rfc359-task-execution-read-models.test.ts: 1',
   'rfc359-w14-agent-commit-sequence.test.ts: 1',
   'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
   'rfc359-w25-task-page-bounded-prefix.test.ts: 1',
@@ -659,10 +659,10 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc349-dual-provider-behavior-oracle.test.ts',
   'rfc349-execution-peripheral-provider.test.ts',
   'rfc349-task-execution-provider-adapters.test.ts',
-  'rfc349-task-execution-read-models-postgresql-adapter.test.ts',
   'rfc359-execution-contract-resource-adapter.test.ts',
   'rfc359-t19h-logical-backup-restore.test.ts',
   'rfc359-t19h-postgresql-upgrade.integration.test.ts',
+  'rfc359-task-execution-read-models.test.ts',
   'rfc359-w7-catalog-composition-roots.test.ts',
   'start-task-deps.test.ts',
 ]

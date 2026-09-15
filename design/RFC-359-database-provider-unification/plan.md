@@ -12377,3 +12377,49 @@ census 自动下修三条 RFC-294 账本：`rfc294-mutation-entrypoints` 1697 �
 
 判据的**好处是可反驳**：任何一对想留下，得指出它命中哪一条；指不出来就得合。
 这比「还剩 8 对」这种数字有用得多——数字不告诉你下一步该干什么。
+
+## §5fr —— 「品牌别名」不是适配器：四个具名工厂原地退役，一条测试跟着从假池迁到真库
+
+§5fo 的判据（看用例 `new`/`compose` 的是不是同一个符号）拿去扫第二个假池文件
+`rfc349-task-execution-read-models-postgresql-adapter`，结果比 §5fo 那条还极端——
+它导入的 `composePostgresqlTaskExecutionReadModels` **根本不是一个实现**：
+
+```ts
+// taskExecutionRuntime.ts，W4-B1 留下的过渡绑定
+export {
+  createTaskExecutionReadModels as composeTaskExecutionReadModels,
+  createTaskExecutionReadModels as composeSqliteTaskExecutionReadModels,
+  createTaskExecutionReadModels as composePostgresqlTaskExecutionReadModels,
+} from '../infrastructure/taskExecutionReadModels'
+```
+
+一个函数，三个名字。旁边的注释自己写着「读模型只有一份实现；两个具名工厂只做绑定
+（**bootstrap 收敛后一并删**）」——bootstrap 早就收敛了，别名却留着。
+
+**留着的代价不是几行代码，是它把一条测试的意图带偏了**：那条测试叫
+「PostgreSQL task-execution read-model adapter」，读起来像在验一个 PG 专属适配器，
+实际上验的是同一份中立实现被喂了一个假池。**名字撒的谎比代码多。**
+
+### 处置
+
+四个别名一起退役（同文件那条 catalog source 的 `createPostgresqlTaskExecutionCatalogSourceFactory`
+是同一个毛病——唯一作用是让 PG 组合根那一行读起来「对称」，而那是**假的对称**）：
+
+| 别名 | 消费者 | 处置 |
+| --- | --- | --- |
+| `composeTaskExecutionReadModels` | 0 | 删 |
+| `composeSqliteTaskExecutionReadModels` | 0 | 删 |
+| `composePostgresqlTaskExecutionReadModels` | 1 条测试 | 测试改用本名后删 |
+| `createPostgresqlTaskExecutionCatalogSourceFactory` | 1 处 PG 组合根 | 改用本名后删 |
+
+测试更名为 `rfc359-task-execution-read-models.test.ts` 并转双引擎：三条投影判据从
+「假池回放罐头行 + 断言发出的 SQL 文本」改成**真库真行**，另加一条「未知 id 一律 null」。
+两条 SQLite 组合根用例（runtime 身份透传、`start.ts` 源码文本）保持不变。
+
+丢掉的 SQL 文本断言（`order by "agent_workflow"."task_repos"."repo_index"` /
+`inner join "agent_workflow"."tasks"`）换成 `harness.recordStatements()` 的**形状**判据：
+四个投影恰好五条 SELECT、多仓那条必须带 `ORDER BY` 且取回 2 行。
+变异验证：删掉 `orderBy(asc(taskRepos.repoIndex))` ⇒ **两个引擎各红一格**。
+
+实测 4 例 → **8 例**；`AW_TEST_PROVIDERS=sqlite` 对照 5 例，证明多出来的 3 例是真 PG 泳道。
+账本只改条目名（新文件同样留 1 处 `createInMemoryDb`，被测物是 SQLite 组合根，属甲类）。
