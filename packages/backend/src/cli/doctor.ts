@@ -2,7 +2,7 @@
 // Mirrors design.md §11.3.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
-import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
+import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
 import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,7 +11,11 @@ import { statMetadataIsAuthoritative } from '@/util/fileTrust'
 import { loadConfig } from '@/config'
 import { quickCheckDbFile } from '@/db/integrity'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
-import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
+import {
+  resolveDatabaseProviderRuntime,
+  requireDatabaseProviderRuntime,
+  type ResolvedDatabaseProviderRuntime,
+} from '@/platform/persistence/databaseProviderRuntime'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { capabilitiesFromVersion, MIN_GIT_VERSION, parseGitVersion } from '@/services/gitVersion'
@@ -116,6 +120,38 @@ export async function checkPostgresqlSealedCredentials(
 
 /** RFC-349: inspect the verified live provider. A retained pre-cutover SQLite
  * file is recovery evidence after PostgreSQL activation, not the live DB. */
+/**
+ * 各引擎自己那一组体检项。
+ *
+ * RFC-359 AC-10：原来是 `if (resolved.provider === 'sqlite') return […]` 加一道
+ * `unhandledDatabaseProvider` 穷尽性围栏——「这个引擎要体检哪几项」这件事本来就该由**引擎
+ * 各自声明一次**，而不是让 `doctor` 现场按品牌拐一下。改成按 provider 查表，形状与
+ * `cli/start.ts` 的 `PRE_OPEN_STAGED_RESTORE` / `composeDaemonProviderSession` 一致：
+ * `satisfies Record<DatabaseProvider, …>` 就是 forcing function，少一个 provider 编译不过，
+ * 于是也不再需要那道手写的 never 汇。
+ *
+ * 句柄收窄走白名单层的 `requireDatabaseProviderRuntime`（与 `cli/start.ts` 同一个名字家族），
+ * 品牌不符即抛——这一支本来就只会在自己那一格里被取到。
+ */
+const ENGINE_HEALTH_CHECKS = {
+  sqlite: async (): Promise<readonly CheckResult[]> => [
+    checkLifecycleHealth(),
+    checkSealedCredentials(),
+  ],
+  postgresql: async (
+    resolved: ResolvedDatabaseProviderRuntime,
+  ): Promise<readonly CheckResult[]> => {
+    const runtime = requireDatabaseProviderRuntime(resolved, 'postgresql').runtime
+    return [
+      await checkPostgresqlLifecycleHealth(runtime),
+      await checkPostgresqlSealedCredentials(runtime),
+    ]
+  },
+} satisfies Record<
+  DatabaseProvider,
+  (resolved: ResolvedDatabaseProviderRuntime) => Promise<readonly CheckResult[]>
+>
+
 export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
   let config: ReturnType<typeof loadConfig>
   try {
@@ -180,17 +216,7 @@ export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
         // 不再由调用方先问存储形态再自己拼。
         (report.ok ? '' : (databaseProviderTraits(report.provider).failureRecoveryHint ?? '')),
     }
-    if (resolved.provider === 'sqlite') {
-      return [providerCheck, checkLifecycleHealth(), checkSealedCredentials()]
-    }
-    // Everything below reads the PostgreSQL runtime handle; a third variant on
-    // ResolvedDatabaseProviderRuntime widens this residual and stops compiling.
-    if (resolved.provider !== 'postgresql') return unhandledDatabaseProvider(resolved)
-    return [
-      providerCheck,
-      await checkPostgresqlLifecycleHealth(resolved.runtime),
-      await checkPostgresqlSealedCredentials(resolved.runtime),
-    ]
+    return [providerCheck, ...(await ENGINE_HEALTH_CHECKS[resolved.provider](resolved))]
   } finally {
     await resolved.close()
   }

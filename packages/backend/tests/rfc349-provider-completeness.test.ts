@@ -92,7 +92,9 @@ const PROVIDER_FORK_LEDGER = {
   // RFC-359 AC-10 第二波：`cli/database.ts` 的条目退役。两处品牌分叉都换成了 traits ——
   // `--to` 先解析成 `DatabaseProvider` 再问 `migrationRole === 'target'`，
   // `db info` 的服务端版本兜底改读 `serverVersionFallback`。
-  'cli/doctor.ts': { forks: 1, fence: 'fenced-dispatch' },
+  // RFC-359 AC-10 第九波销账：`cli/doctor.ts` 的条目退役（1 → 0）。「这个引擎要体检哪几项」
+  // 改由引擎各自在 `ENGINE_HEALTH_CHECKS` 里声明一次（`satisfies Record<DatabaseProvider, …>`
+  // 即 forcing function），fork 与那道手写的 never 汇一并消失——没有 fork 就不该再声明围栏。
   // RFC-359 AC-10：`cli/migrate.ts` 的条目退役——要说的那句话在
   // `prepareDatabaseProviderForBoot`（白名单层、品牌已确定处）就定稿，CLI 只剩「拿来输出」。
   // 文件里残留的 `unhandledDatabaseProvider` 穷尽性围栏不计债（按形状豁免）。

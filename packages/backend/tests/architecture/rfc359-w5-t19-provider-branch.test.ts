@@ -270,7 +270,13 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
   // 是同一张真值表的另一种拼法，第三个 provider 照样只能落进其中一边。改成让**答案本身**
   // 被声明：`offlineCompaction`（能不能压缩，不能就连要说的话一起给）与
   // `absentLocalStoreMessage`（`null` 即「这个引擎没有本地库文件这回事」）。
-  'cli/doctor.ts: 1',
+  // AC-10 第九波销账：`cli/doctor.ts` 清零。原来是
+  // `if (resolved.provider === 'sqlite') return […]` 加一道 `unhandledDatabaseProvider` 围栏。
+  // 「这个引擎要体检哪几项」本来就该由**引擎各自声明一次**，而不是让 doctor 现场按品牌拐一下：
+  // 改成按 provider 查表（`ENGINE_HEALTH_CHECKS`），形状与 `cli/start.ts` 的
+  // `PRE_OPEN_STAGED_RESTORE` / `composeDaemonProviderSession` 一致，
+  // `satisfies Record<DatabaseProvider, …>` 即 forcing function——于是连手写的 never 汇
+  // 都不再需要（句柄收窄交给白名单层的 `requireDatabaseProviderRuntime`）。
   // AC-10 销账：`cli/migrate.ts` 清零——`db migrate` 要说的那句话改在
   // `prepareDatabaseProviderForBoot` 里定稿（品牌在那儿本来就是已知的、且是白名单层），
   // CLI 只剩「拿来输出 + finally 关闭」，两条 provider 路径合成一条。
