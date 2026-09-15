@@ -56,7 +56,19 @@
 >   在已承认存在逃逸的前提下再加豁免＝把盲区继续扩大，**所以本轮不动判据、不加豁免、
 >   不改名、不改必填**，只落档分类与取证。推进它需要一次方向裁决（两个选项见 §5fi）。
 >
-> 其余：**AC-6 的「95」已过期——实测 `OPEN_MIGRATION_DEBT` 只剩 27 条**（守卫 8 pass / 0 fail，账本与源码逐字相等）。销账只有「真迁到 `describeEachProvider`」或「证明落进 sanctioned 类」两条路，账本明写不许为单个文件量身定做豁免。抽查 `rfc097-task-status-cas.test.ts`：被测 helper 本身中立、**可迁**，但 CAS 竞态用例要在 SELECT 与 UPDATE 之间插竞争写者，迁过去须重对齐两引擎并发语义——是真工作。**按体量抽了四条逐条查根因（§5fj）：四条、四种不同的真阻塞，没有一条是「转换器跑一下就行」**——`start-task-deps` 卡在`buildStartTaskDeps(db: LegacySqliteTaskDatabase)` 的品牌签名；`rfc349-…-read-models-postgresql-adapter` 的「PG 覆盖」是**脚本化假池**（断言发出的 SQL 文本），迁到真库是重写；`rfc221-login-policy-routes` 其实已迁大半，只剩一例卡在 `createApp` 入参（源码已标「独立一刀，见 §5bg」）。⇒ **AC-6 的销账节奏由 AC-1 决定**，在「完工线」裁决前硬压只会逼出量身定做豁免或把假池抄本当双引擎覆盖。另有 
+> **AC-6 已推进 27 → 25（两条真迁，均 CI 绿），并把剩下 25 条一次分完类（§5fm）**：
+> 甲类「已半迁」9 条——但其中 `rfc311-repos-page`（断言 SQLite 查询计划）、
+> `rfc359-w7-catalog-composition-roots`（显式 pin sqlite）、`rfc189-wg-round`（喂部分迁移集）
+> **不该迁**，卡在「理由正当却没有通用 sanctioned 判据接住」这个**规则缺口**上；
+> 乙类 `start-task-deps` 看着极便宜，实则 `services/task.ts` 里有 **12 处同步游标**，
+> 只放宽形参是说谎——**由 AC-1 决定**；丙类 7 条 `rfc349-*` 的「PG 覆盖」是**脚本化假池**，
+> 迁真库是重写。**25 条里「换个 harness 就行」的已经没有了**，§5fk / §5fl 收的正是最后两条。
+>
+> 两条真迁各示范一种处置：`rfc097`（判据依赖 bun:sqlite 同步落库 ⇒ 换成两引擎都被 await 的
+> `beforeCas` 注入点，**变异验证两引擎共 4 格红**）、`rfc291-closure-call-edges`
+> （被 `freezeCallClosure(db: DbClient)` 这个**残留品牌标注**钉住 ⇒ 形参放宽即解，
+> 零生产调用点改动，9 例 → 17 例）。
+> 原文：**AC-6 的「95」已过期——实测 `OPEN_MIGRATION_DEBT`**（守卫 8 pass / 0 fail，账本与源码逐字相等）。销账只有「真迁到 `describeEachProvider`」或「证明落进 sanctioned 类」两条路，账本明写不许为单个文件量身定做豁免。抽查 `rfc097-task-status-cas.test.ts`：被测 helper 本身中立、**可迁**，但 CAS 竞态用例要在 SELECT 与 UPDATE 之间插竞争写者，迁过去须重对齐两引擎并发语义——是真工作。**按体量抽了四条逐条查根因（§5fj）：四条、四种不同的真阻塞，没有一条是「转换器跑一下就行」**——`start-task-deps` 卡在`buildStartTaskDeps(db: LegacySqliteTaskDatabase)` 的品牌签名；`rfc349-…-read-models-postgresql-adapter` 的「PG 覆盖」是**脚本化假池**（断言发出的 SQL 文本），迁到真库是重写；`rfc221-login-policy-routes` 其实已迁大半，只剩一例卡在 `createApp` 入参（源码已标「独立一刀，见 §5bg」）。⇒ **AC-6 的销账节奏由 AC-1 决定**，在「完工线」裁决前硬压只会逼出量身定做豁免或把假池抄本当双引擎覆盖。另有 
 > AC-8 / AC-9（收口 SHA 的终态取证）、AC-11（新中位数判据还缺一次 `scale=full`——
 > 判据原文要求在**收口 SHA** 上取，所以本段**刻意没有**提前 dispatch
 > `postgresql-evidence.yml`，那会花掉一次 210 分钟预算却拿到一个不是收口的 SHA）。

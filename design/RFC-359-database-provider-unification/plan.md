@@ -12097,3 +12097,55 @@ export async function freezeCallClosure(db: DbClient, …)
 ### 账本
 
 `TEST_ENGINE_HARDCODING_DEBT` 332 → **331**；`OPEN_MIGRATION_DEBT` 26 → **25**。
+
+
+## §5fm —— AC-6 剩余 25 条的**完整分类**：三种阻塞，各自的处置不同
+
+做完 §5fk / §5fl 两条之后，把剩下 25 条一次扫完分了类——**不再逐条现查**。
+判据是机械的：文件里有没有 `.get()` / `.run()` / `setTimeout` / `createPostgresqlDatabaseClient`
+/ `describeEachProvider`，以及 `createInMemoryDb` 的个数。
+
+### 甲类：**已半迁**（9 条）——文件里已有 `describeEachProvider`，只剩一两处残留
+
+`execution-contract-platform` / `rfc189-wg-round` / `rfc221-login-policy-routes` /
+`rfc257-webhook-error-codes` / `rfc291-unavailable-mount` / `rfc310-pr7b-handover` /
+`rfc311-repos-page` / `rfc311-task-page-fastpath` / `rfc359-w7-catalog-composition-roots`。
+
+**但「半迁」不等于「差一步」**——逐个看残留的**用途**，又分成两支：
+
+- **残留是真·待迁**：`rfc291-closure-call-edges`（§5fl 已收）就是这一支，被一个残留品牌标注钉住。
+- **残留是有意为之**：
+  - `rfc311-repos-page:336` 的注释直接写着「**而不是把这两条改成双引擎**」——它断言的是
+    **SQLite 查询计划**；
+  - `rfc359-w7-catalog-composition-roots:387` 显式 `selectDatabaseSchemaProvider('sqlite')`
+    再建库——它测的**就是 SQLite 组合根**；
+  - `rfc189-wg-round:108` 用 `partialMigrationsDir()`——**部分迁移集**，迁移 DDL 本就只对 SQLite 有意义。
+
+这三条**不该迁**。但账本的规矩是「要么真迁、要么证明落进 sanctioned 类」，而 sanctioned
+**必须是通用判据**（账本明令「不要为了让数字好看而加一条只为某个文件量身定做的判据」）。
+所以它们今天卡在一个**规则缺口**上：理由正当、却没有一条通用判据能接住。
+补判据要一次性想清楚形态（例如「断言查询计划的」「显式 pin provider 的」「喂部分迁移集的」），
+**属于改判据、需要单独一刀**，不在本波。
+
+### 乙类：**生产侧仍有同步游标**（`start-task-deps` 等）——AC-1 territory
+
+`start-task-deps.test.ts` 看起来极便宜（62 行 / 2 例、连库都没查），但它拿到的
+`StartTaskDeps.db` 类型是 `LegacySqliteTaskDatabase`（= `DbClient`），而消费它的
+**`services/task.ts` 里有 12 处 `.get()` / `dbTxSync`**。只放宽 `buildStartTaskDeps` 的形参
+是**说谎**——返回的 deps 会喂给一个真正需要同步游标的消费者。
+
+**这一支的销账节奏由 AC-1 决定**，与 §5fj 的结论一致，只是现在有了确数（12）而不是推测。
+
+### 丙类：**「PG 覆盖」是脚本化假池**（7 条 `rfc349-*` + oracle）
+
+`rfc349-execution-contract-postgresql-adapter` / `…-peripheral-provider` /
+`…-read-models-postgresql-adapter` / `…-task-execution-provider-adapters` /
+`…-websocket-provider` / `…-daemon-provider-core` / `rfc349-dual-provider-behavior-oracle`。
+它们都 import 了 `createPostgresqlDatabaseClient`，但喂的是回放罐头行的假池、断言发出去的 SQL 文本。
+迁到真库**不是换 harness 是重写**（§5fj 已记）。
+
+### 结论
+
+25 条里真正「换个 harness 就行」的**已经没有了**——§5fk / §5fl 收的正是最后两条那类。
+剩下的分别卡在：**判据缺口**（甲类里有意单引擎的几条）、**AC-1 的生产侧收敛**（乙类）、
+**重写假池**（丙类）。三者都不是「再努力一点」能解决的，各自需要一次单独的决定或一次大改。
