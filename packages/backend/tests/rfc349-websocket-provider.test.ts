@@ -10,14 +10,21 @@
 // `rfc359-w7-realtime-store-conformance.test.ts`.
 
 import type { ServerWebSocket } from 'bun'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
-import { createInMemoryDb } from '@/db/client'
-import { nodeRunEvents, nodeRuns, taskCollaborators, tasks, users, workflows } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  memories,
+  nodeRunEvents,
+  nodeRuns,
+  taskCollaborators,
+  tasks,
+  users,
+  workflows,
+} from '@/db/schema'
 import { createRealtimeChannelAccess } from '@/modules/runtime-management/application/realtimeChannelAccess'
 import { DrizzleRealtimeStore } from '@/modules/runtime-management/infrastructure/realtimeStore'
 import type {
@@ -30,68 +37,13 @@ import type {
   DirectRequestAuthority,
   PresenceLease,
 } from '@/modules/identity-access/public/participants'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
 import { createLogger } from '@/util/log'
-import {
-  resetConnectionsForTest,
-  revalidateAllConnections,
-  trackConnection,
-} from '@/ws/connections'
+import { revalidateAllConnections, trackConnection } from '@/ws/connections'
 import type { WsConnectionData } from '@/ws/registry'
 import { buildWebSocketAdapter } from '@/ws/server'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function sqlRows(values: readonly (readonly unknown[])[]): SqlRows {
-  return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
-    async values() {
-      return values
-    },
-  })
-}
-
-function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
-  const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
-  const run = (sql: string, parameters?: readonly unknown[]) => {
-    executions.push({ sql, parameters })
-    return sqlRows(responses.shift() ?? [])
-  }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
-  const pool: PostgresqlPool = {
-    async reserve() {
-      return connection
-    },
-    unsafe: run,
-    async close() {},
-  }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'dbg_realtime_pg',
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    providerPool: () => pool,
-    async close() {},
-  }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
-}
-
-afterEach(() => {
-  resetConnectionsForTest()
-  selectDatabaseSchemaProvider('sqlite')
-})
+// RFC-359 AC-6：`sqlRows` / `postgresqlFixture`（回放罐头行的假池）随本波删除——
+// 唯一的消费者是那条断言 SQL 文本的 store 用例，它已经合进双引擎、跑真库了。
 
 describe('RFC-349 WebSocket provider boundary', () => {
   test('transport and realtime contracts have no database-provider imports', () => {
@@ -296,141 +248,140 @@ describe('RFC-349 WebSocket provider boundary', () => {
     expect(resolutions).toBe(1)
   })
 
-  test('SQLite channel access preserves task audience and ordered redacted replay', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await db.insert(users).values([
-      {
-        id: 'realtime-owner',
-        username: 'realtime-owner',
-        displayName: 'Realtime Owner',
-        role: 'user',
+  /**
+   * RFC-359 AC-6：这两条此前是一对**手搓的单引擎孪生**——上面一条用真 SQLite 跑
+   * `createRealtimeChannelAccess`，下面一条用 `postgresqlFixture` 回放罐头行跑
+   * `DrizzleRealtimeStore`，并断言**发出去的 SQL 文本**含 `"agent_workflow"."<表>"`。
+   *
+   * 但 `DrizzleRealtimeStore` 的形参本来就是 `ProviderNeutralDatabase`——**一份实现**，
+   * 两条用例只是喂了两种库。于是合成一条双引擎：同一份真数据、同一组断言，两个引擎各跑一遍。
+   *
+   * 丢掉的只有那组 SQL 文本断言，这是**净赚**：它们原本用来证明 PG 投影带 schema 限定名，
+   * 而在**真 PostgreSQL 上跑通**是对同一件事强得多的证明（限定名写错，查询当场报错）。
+   */
+  describeEachProvider('RFC-349 realtime store / channel access（双引擎）', (harness) => {
+    async function seed(): Promise<void> {
+      const db = harness.db
+      await db.insert(users).values([
+        {
+          id: 'realtime-owner',
+          username: 'realtime-owner',
+          displayName: 'Realtime Owner',
+          role: 'user',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        {
+          id: 'realtime-member',
+          username: 'realtime-member',
+          displayName: 'Realtime Member',
+          role: 'user',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ])
+      await db
+        .insert(workflows)
+        .values({ id: 'realtime-workflow', name: 'Realtime workflow', definition: '{}' })
+      await db.insert(tasks).values({
+        id: 'realtime-task',
+        name: 'Realtime task',
+        workflowId: 'realtime-workflow',
+        workflowSnapshot: '{}',
+        repoPath: '/repo',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+        branch: 'agent-workflow/realtime-task',
+        status: 'done',
+        inputs: '{}',
+        startedAt: 1,
+        ownerUserId: 'realtime-owner',
+      })
+      await db.insert(taskCollaborators).values({
+        taskId: 'realtime-task',
+        userId: 'realtime-member',
+        role: 'collaborator',
+        addedBy: 'realtime-owner',
+        addedAt: 1,
+      })
+      await db.insert(nodeRuns).values({
+        id: 'realtime-run',
+        taskId: 'realtime-task',
+        nodeId: 'node-1',
+        status: 'done',
+        retryIndex: 0,
+        startedAt: 1,
+      })
+      await db.insert(nodeRunEvents).values([
+        { id: 1, nodeRunId: 'realtime-run', ts: 1, kind: 'text', payload: '{"token":"old"}' },
+        { id: 2, nodeRunId: 'realtime-run', ts: 2, kind: 'text', payload: '{"token":"new"}' },
+      ])
+      await db.insert(memories).values({
+        id: 'memory-1',
+        scopeType: 'repo',
+        scopeId: 'repo-1',
+        title: 'realtime memory',
+        bodyMd: 'body',
+        status: 'approved',
+        sourceKind: 'manual',
         createdAt: 1,
-        updatedAt: 1,
-      },
-      {
-        id: 'realtime-member',
-        username: 'realtime-member',
-        displayName: 'Realtime Member',
-        role: 'user',
-        createdAt: 1,
-        updatedAt: 1,
-      },
-    ])
-    await db.insert(workflows).values({
-      id: 'realtime-workflow',
-      name: 'Realtime workflow',
-      definition: '{}',
-    })
-    await db.insert(tasks).values({
-      id: 'realtime-task',
-      name: 'Realtime task',
-      workflowId: 'realtime-workflow',
-      workflowSnapshot: '{}',
-      repoPath: '/repo',
-      worktreePath: '/worktree',
-      baseBranch: 'main',
-      branch: 'agent-workflow/realtime-task',
-      status: 'done',
-      inputs: '{}',
-      startedAt: 1,
-      ownerUserId: 'realtime-owner',
-    })
-    await db.insert(taskCollaborators).values({
-      taskId: 'realtime-task',
-      userId: 'realtime-member',
-      role: 'collaborator',
-      addedBy: 'realtime-owner',
-      addedAt: 1,
-    })
-    await db.insert(nodeRuns).values({
-      id: 'realtime-run',
-      taskId: 'realtime-task',
-      nodeId: 'node-1',
-      status: 'done',
-      retryIndex: 0,
-      startedAt: 1,
-    })
-    await db.insert(nodeRunEvents).values([
-      { id: 1, nodeRunId: 'realtime-run', ts: 1, kind: 'text', payload: '{"token":"old"}' },
-      { id: 2, nodeRunId: 'realtime-run', ts: 2, kind: 'text', payload: '{"token":"new"}' },
-    ])
-
-    const channels = createRealtimeChannelAccess(new DrizzleRealtimeStore(db), {
-      resourceVisibility: { canViewResource: async () => false },
-      memoryVisibility: { canViewMemory: async () => false },
-      repoImportOwnerUserId: () => null,
-      redactTaskEventPayload: (payload) => ({ payload, redacted: true }),
-    })
-    const actor = buildActor({
-      user: {
-        id: 'realtime-member',
-        username: 'realtime-member',
-        displayName: 'Realtime Member',
-        role: 'user',
-        status: 'active',
-      },
-      source: 'session',
-    })
-
-    await expect(channels.canViewTask(actor, 'realtime-task')).resolves.toBe(true)
-    await expect(channels.canViewTask(actor, 'missing-task')).resolves.toBe(false)
-    await expect(channels.replayTaskEvents('session', 'realtime-task', 1)).resolves.toEqual([
-      {
-        id: 2,
-        type: 'node.event',
-        nodeRunId: 'realtime-run',
-        ts: 2,
-        kind: 'text',
-        payload: { payload: { token: 'new' }, redacted: true },
-      },
-    ])
-    db.$client.close()
-  })
-
-  test('PostgreSQL store uses the same closed audience/resource/memory/event contract', async () => {
-    const fake = postgresqlFixture([
-      [['realtime-owner']],
-      [['realtime-member']],
-      [['workflow-1', 'realtime-owner', 'private']],
-      [['repo', 'repo-1']],
-      [[2, 'realtime-run', 2, 'text', '{"token":"new"}']],
-    ])
-    const store = new DrizzleRealtimeStore(fake.db)
-
-    await expect(store.findTaskAudience('realtime-task', 'realtime-member')).resolves.toEqual({
-      ownerUserId: 'realtime-owner',
-      member: true,
-    })
-    await expect(store.findResource('workflow', 'workflow-1')).resolves.toEqual({
-      id: 'workflow-1',
-      ownerUserId: 'realtime-owner',
-      visibility: 'private',
-    })
-    await expect(store.findMemoryScope('memory-1')).resolves.toEqual({
-      scopeType: 'repo',
-      scopeId: 'repo-1',
-    })
-    await expect(store.listTaskEvents('realtime-task', 1)).resolves.toEqual([
-      {
-        id: 2,
-        nodeRunId: 'realtime-run',
-        ts: 2,
-        kind: 'text',
-        payload: '{"token":"new"}',
-      },
-    ])
-
-    expect(fake.executions).toHaveLength(5)
-    const sql = fake.executions.map((execution) => execution.sql).join('\n')
-    for (const table of [
-      'tasks',
-      'task_collaborators',
-      'workflows',
-      'memories',
-      'node_run_events',
-      'node_runs',
-    ]) {
-      expect(sql).toContain(`"agent_workflow"."${table}"`)
+      })
     }
+
+    test('store answers audience / memory scope / ordered events off real rows', async () => {
+      await seed()
+      const store = new DrizzleRealtimeStore(harness.db)
+
+      expect(await store.findTaskAudience('realtime-task', 'realtime-member')).toEqual({
+        ownerUserId: 'realtime-owner',
+        member: true,
+      })
+      expect(await store.findMemoryScope('memory-1')).toEqual({
+        scopeType: 'repo',
+        scopeId: 'repo-1',
+      })
+      expect(await store.listTaskEvents('realtime-task', 1)).toEqual([
+        {
+          id: 2,
+          nodeRunId: 'realtime-run',
+          ts: 2,
+          kind: 'text',
+          payload: '{"token":"new"}',
+        },
+      ])
+    })
+
+    test('channel access preserves task audience and ordered redacted replay', async () => {
+      await seed()
+      const channels = createRealtimeChannelAccess(new DrizzleRealtimeStore(harness.db), {
+        resourceVisibility: { canViewResource: async () => false },
+        memoryVisibility: { canViewMemory: async () => false },
+        repoImportOwnerUserId: () => null,
+        redactTaskEventPayload: (payload) => ({ payload, redacted: true }),
+      })
+      const actor = buildActor({
+        user: {
+          id: 'realtime-member',
+          username: 'realtime-member',
+          displayName: 'Realtime Member',
+          role: 'user',
+          status: 'active',
+        },
+        source: 'session',
+      })
+
+      await expect(channels.canViewTask(actor, 'realtime-task')).resolves.toBe(true)
+      await expect(channels.canViewTask(actor, 'missing-task')).resolves.toBe(false)
+      await expect(channels.replayTaskEvents('session', 'realtime-task', 1)).resolves.toEqual([
+        {
+          id: 2,
+          type: 'node.event',
+          nodeRunId: 'realtime-run',
+          ts: 2,
+          kind: 'text',
+          payload: { payload: { token: 'new' }, redacted: true },
+        },
+      ])
+    })
   })
 })

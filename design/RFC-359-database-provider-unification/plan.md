@@ -12214,3 +12214,49 @@ PG:      await db.select()…limit(1).get()  ← 异步
 **可直接动手的那一条**：上面 3 处 `infrastructure/` 对里，`DevelopmentToolConnectionStore`
 已确认只差同步 / 异步一条缝，属于「可以合、且合了就少一份实现」的明确目标——
 但它该不该合、以及合了算不算 AC-1 销账，仍取决于 §5fh 的裁决口径。
+
+
+## §5fo —— 更正 §5fm 的丙类：「用了假池」**不等于**「是一对要合的实现」（27 → 24）
+
+§5fm 把 7 条 `rfc349-*` 一股脑归成丙类「PG 覆盖是脚本化假池 ⇒ 迁真库是重写」。
+做 `rfc349-websocket-provider.test.ts` 时发现**这个归类不够细，至少对它是错的**。
+
+### 它根本不是一对适配器
+
+那条「假池」用例和它上面那条「真 SQLite」用例，构造的是**同一个类**：
+
+```
+test A: new DrizzleRealtimeStore(createInMemoryDb(...))   ← 真 SQLite
+test B: new DrizzleRealtimeStore(fake.db)                 ← 回放罐头行的假池
+```
+
+而 `DrizzleRealtimeStore` 的构造形参本来就是 `ProviderNeutralDatabase`——**一份实现**。
+两条用例只是给同一份实现喂了两种库，其中一种是假的。这跟 AC-1 的「成对适配器」完全是两回事，
+**不需要任何生产侧合一**，直接合成一条双引擎即可：同一份真数据、同一组断言、两个引擎各跑一遍。
+
+### 丢掉的 SQL 文本断言是净赚
+
+假池那条断言 `fake.executions` 的 SQL 文本含 `"agent_workflow"."<表>"`，用来证明 PG 投影带
+schema 限定名。合并后这组断言没了——**但这是净赚**：在**真 PostgreSQL 上跑通**是对同一件事
+强得多的证明（限定名写错，查询当场报错，而不是靠比对字符串）。
+`sqlRows` / `postgresqlFixture` 两个假池 helper 随之删除（45 行）。
+
+实测 **5 例 → 7 例**（2 条 × 2 引擎 + 3 条源码文本断言只跑一次），7 pass / 0 fail；
+realtime / ws 半径 15 文件以 `--isolate` 跑 169 pass / 0 fail。
+
+### 丙类要重新分
+
+所以「文件里出现 `createPostgresqlDatabaseClient`」这个机械信号**只说明用了假池**，
+不说明「有两份实现」。丙类里要再分一刀：
+
+- **假池 + 一份中立实现**（本条）——**直接可迁**，把假池换成真库即可，不欠 AC-1 任何东西；
+- **假池 + 真的两份实现**（如 `rfc349-execution-peripheral-provider` 的
+  `composeSqlite/PostgresqlAgentLaunchResourceOperations`，两者形参不同、一个要注入协作者）
+  ——那才是 AC-1 territory。
+
+判据：看那条用例 `new`/`compose` 出来的**是不是同一个符号**。是，就只是喂了两种库；
+不是，才是两份实现。
+
+### 账本
+
+`TEST_ENGINE_HARDCODING_DEBT` 331 → **330**；`OPEN_MIGRATION_DEBT` 25 → **24**。
