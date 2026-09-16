@@ -13461,3 +13461,55 @@ zsh 不对未加引号的变量分词，于是 `$1` 是整串、`$2` **恒为空
 
 **补进自查清单的一条**：写完「条件满足才动作」的循环，先拿一个**已知满足条件**的输入试跑一遍。
 这 5 个里任何一个，只要拿一个早已 completed 的 SHA 试一次，就会当场暴露。
+
+---
+
+## §5gr　AC-6 剩余 15 条里，两条的 blocker 现在有名字了
+
+§5gm 说剩下的「是真迁移量或真被别的波次挡着」。逐个读时把**挡在哪**落实到具体行，
+这样下一波开工时不用重新推一遍。
+
+### `rfc349-digital-employee-platform-tools-wiring`：卡在**同步 SQLite 根 vs 异步 PG 根**
+
+这个文件是回归防护，锁的是一个真出过的产品事故：`/work-items/:ref/tools` 在 SQLite daemon 上
+恒返回 `{"items":[]}`，岗位模版编辑器里「选择默认工具」整个下拉不存在，零配置上手流程断掉。
+
+查下来两个根拿同一份平台工具目录的**方式不同**：
+
+| | 怎么拿到 `platformTools` |
+| --- | --- |
+| PostgreSQL 根 | `postgresqlDaemonApplication.ts:1503` **就地 `await` 构造**，不可能缺 |
+| SQLite 根 | `server.ts:2527` 的**可选注入**——`deps.digitalEmployeePlatformTools` 没给就条件展开成空 |
+
+**事故正是后者的必然结果**：`cli/start.ts` 当时只把目录交给了自己那份 `employeeOs`，
+忘了交给 `createComposedApp`，而那是个可选参数，于是**静默**少了一整个面。
+这个测试文件存在的唯一理由，就是拿一条源码文本断言（grep `start.ts` 里有没有把它传进
+`composeSqliteAppDeps`）替那个可选参数把关。
+
+按 §5fq 这是**漂移**不是引擎固有差异，处方也是现成的（§5fy / §5ge 的「装配者提供答案」：
+让弱的那半也自己造）。**但它现在做不了**，原因很具体：
+
+- `composeDigitalEmployeeBuiltinToolCatalog` 是 **async**（`digitalEmployeeBuiltinToolCatalog.ts:91`）；
+- `composeSqliteAppDeps` 是 **sync**（`server.ts:1813`，`createApp` 一路同步返回）。
+
+同步的根 `await` 不了异步的目录，所以只能退化成「让调用方先 await 好再注入」——
+可选注入与那条源码文本断言都是这个形状逼出来的。PG 根因为本来就在异步装配路径上，就地 await 即可。
+
+**所以这一条不是「忘了迁」，是压在「组合根签名对齐 / 合一」那一波下面**——而且它给那一波提供了
+一个比「签名不对称」具体得多的理由：**不对称的不只是签名，是同步性**，
+而同步性差异正在制造真实的产品事故（上面那条）与只能靠 grep 源码兜底的测试。
+
+### `start-task-deps`：卡在 legacy 启动路径
+
+同 §5gm 已记：`buildStartTaskDeps` 的形参类型是 `LegacySqliteTaskDatabase`
+（`= DbClient`，注释自称「provider-private alias for shrinking the legacy SQLite compatibility tail」），
+属于 `services/task` 的 `startExecution` vs `PostgresqlRootTaskLaunchKernel` 那一刀。
+
+### 一次差点报错的假警报，记下来当判据
+
+查这条时我先 grep `digitalEmployeePlatformTools`，PG daemon **零命中**，差点当成
+「PG 侧根本没接平台工具目录」的产品缺口报出去。实际 PG 侧接了，只是**没有用那个中间变量名**
+（直接 `platformTools: await composeDigitalEmployeeBuiltinToolCatalog({…})`）。
+**按变量名找「另一侧有没有做同一件事」是坏判据**——两个根本来就不共享局部变量命名。
+正确的问法是「同一个**消费点**（这里是 `composeDigitalEmployee({ platformTools })`）
+两侧是不是都喂到了」。
