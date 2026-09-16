@@ -7421,3 +7421,25 @@ SQLite apiRouteMounts 段等），是这三个文件的改动最集中的落点�
 并且改完立刻 `grep -rn "<target>\b" | grep -v "<已知合法用法>"` 扫一眼有没有多改。
 这次是 typecheck 当场咬住才没漏出去——**但账本那一行 typecheck 看不见**，
 是 `rfc359-w5-same-file-provider-pairs` 的逐条相等判据把它揪出来的。
+
+### `scripts/rfc359-p0-mutations.ts` 在本机（macOS）**跑不出真结论**：`current-before` 必红
+
+2026-09-16 实撞。这个 P0 变异守卫按**测试名**比对每个阶段的通过集，而它是从 bun 的
+`(pass) …` 逐条输出里解析名字的。**本机 bun 不打那些行**（只打末尾的 `26 pass`），
+于是 `actualPasses` 恒为 0 → 第一个阶段 `current-before` 就判「passing test names differ」，
+整个 harness 停在那里。`CI=true` / `GITHUB_ACTIONS=true` 都不改变这一点（试过）。
+
+CI 上（Linux）同一份代码 `actualPasses=26`，`current-before` / `current-after` 都 valid。
+
+**处置**：本机不要指望跑通整个 harness。要验证某一个变异是否还咬得住，**单独跑那一个**：
+
+    RFC359_P0_MUTATION=p0-8-command-omission bun test <被咬的测试文件> \
+      --preload ./packages/backend/tests/fixtures/rfc359-p0-mutations.ts
+
+看它抛出的错误与函数名是不是 `scripts/rfc359-p0-mutations.ts` 里为该阶段登记的那几条正则。
+整体结论仍以 CI 的 `Backend tests (real PostgreSQL)` 那一格为准。
+
+**这类守卫对「合一」特别敏感**：它用 `source.split(snippet).length !== N` 钉住注入点**个数**。
+合掉一对孪生工厂，注入点就从 2 变 1，守卫报 `mutation sites drifted`——
+**那不是变异失效，是被建模的那处历史回归现在只有一个边界可复现**。
+改 N 的同时要把「为什么从两处变一处」写在旁边，否则下一个人无从判断这次改 N 是不是在放水。

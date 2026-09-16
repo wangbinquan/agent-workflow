@@ -490,10 +490,15 @@ async function restoreMissingCollaborationCommands(): Promise<void> {
   const source = readFileSync(target, 'utf8')
   const current = `return createCollaborationCommandContextFromPersistence({
     ...input,`
-  if (source.split(current).length !== 3) throw new Error('P0-8 mutation sites drifted')
+  // RFC-359 AC-1（plan §5ga）：这里原来要求**两处**——当年两个 DB 工厂
+  // （`createCollaborationCommandContext` 与 `createPostgresqlCollaborationCommandContext`）
+  // 各有一处边界。那两份**函数体逐字节相同**、只差形参上一个更窄的标注，已合成一份，
+  // 于是边界只剩**一处**。被建模的历史回归没有变：那次事故就是「构造上下文时把三个命令依赖
+  // 全漏了」，在**当前唯一的**工厂边界上复现它，语义与当年两处时完全一致。
+  if (source.split(current).length !== 2) throw new Error('P0-8 mutation sites drifted')
   // 01e4b1b7b: cli/postgresqlDaemonApplication.ts:706–711 omitted all three
-  // command dependencies. Restore that omission at both current DB factory
-  // boundaries; the real constructor/persistence and public require functions
+  // command dependencies. Restore that omission at the current DB factory
+  // boundary; the real constructor/persistence and public require functions
   // still execute. This models the historical root call, not old function bytes
   // or a complete daemon startup. Keep all exports in the same real module so
   // constructed contexts and their resolver retain the same dependency map.

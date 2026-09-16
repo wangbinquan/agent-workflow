@@ -2,61 +2,42 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> ## ⛔ 2026-09-16 —— **本机 git 被 Xcode 许可门卡死，13 段工作已完成但未提交**
+> ## 📌 RFC-359 最新一段（2026-09-16 续 38，**AC-1 同文件孪生 48 → 19；AC-6 24 → 23**）
 >
-> `git --version` 本身就报 `You have not agreed to the Xcode license agreements`。
-> `/usr/bin/git` 是本机唯一的 git（无 homebrew git、无 isomorphic-git、`xcrun` 同样被卡），
-> 因此 **commit / push / census 全部不可执行**。解法只有一条，需要人来跑：
+> 已推 `3c81bd90a`（§5fw–§5gh 十三段一笔落地）。**原计划拆六笔，实际没拆**：
+> `server.ts` 一个文件就带了其中四段的改动，按 hunk 切分是高风险手术；
+> 每段在 `plan.md` 里各有独立小节可查，所以选「一笔完整」而不是「六笔切坏」。
 >
-> ```
-> sudo xcodebuild -license accept
-> ```
+> **最该带走的一句：判别式负责捞嫌疑，是不是真的一对得人读一眼。**
+> 本轮三次被自己的判别式带偏，每次都是不同的限度：
 >
-> **最后推上去的是 `66013c86e`（main 绿）。** 其后 §5fw–§5gh 共 13 段**只在工作树里**。
+> | 限度 | 撞在哪 |
+> | --- | --- |
+> | 名字相同 ≠ 同一层 | §5gb：一个收端口、一个收 db，是同一族的**两层**，判别式把它们配成了「一对 provider 实现」 |
+> | 配对配得对，修法也可能不是二选一 | §5gc：中立那份把下层 helper 的三行**又抄了一遍**，处方是让抄的那份去调它抄的东西 |
+> | 别名有两种写法 | §5gf：§5fu 只认 `export const X = Y`，漏了 `export function X(a){ return Y(a) }` |
 >
-> ### 已验证到什么程度
+> 还有一次是**机械信号把裁决下反了**（§5fv → §5gg）：粗筛说「无下层品牌依赖、可直接合」，
+> 读源码发现三条其实命中 §5fq ②（doctor 要在 daemon 没起来时开**文件**、两条迁移链是两套落盘工件）。
+> **粗筛只排序、不裁决**——这句话本轮兑现了两次。
 >
-> typecheck / eslint 全干净；按「改了哪些符号」算的 107 文件半径分 4 片跑
-> **1316 pass / 46 fail**——46 格里 **2 格是我的**（`rfc359-w29` 的装配体摘要，
-> 因为又动了组合根；已修，该文件 8/8），**44 格全是 git 门**
-> （逐个确认过错误里带 `Xcode ... license`：`gitHttpRemote` / fusion worktree /
-> scratch repo / 延后准备）。**没有别的红。**
+> **一条故意没写的判据（§5gh）**：AC-6 剩下 23 条里 7 条共用一个根因（`createInMemoryDb` 喂给
+> `createApp`）。写一条「被测物是 SQLite 组合根」的判据能一次压到 16，**没写**——它分不出
+> 「组合根就是被测物」与「组合根只是顺手的脚手架」，两者都长成 `createApp({…, db})`。
+> **把真实覆盖缺口洗成绿数字，正是本 RFC 要防的事。**
 >
-> ### git 恢复后的提交计划（按此拆，别一笔闷进去）
+> **剩下的不是零碎，是两个架构波次**：
+> - **组合根签名对齐**——`createApp` 的 `db` 写死 `DbClient`，两个根装配签名不对称
+>   → 挡 AC-6 的 7 条 + AC-1 的 `server.ts` 两条（§5gh / §5bg）；
+> - **启动面合一**——`services/task` 的 legacy `startExecution`（12 处同步游标）
+>   vs `PostgresqlRootTaskLaunchKernel` → 挡 AC-1 的 5 条 + AC-6 的 `start-task-deps`。
 >
-> 1. `refactor(provider)`：§5fw 名字收干净 + §5fx 删转交层 + §5fu 剩余（webhookRepositoryResolver /
->    sqliteWebhookTriggerValidation）
-> 2. `refactor(provider)`：§5fy + §5gb + §5ge（「装配者提供答案」三条：MR 终端控制 /
->    webhookDispatch 两对 / agent 启动资源两层）
-> 3. `refactor(provider)`：§5fz + §5ga + §5gf（体逐字节相同的中立+品牌，含转交式函数别名）
-> 4. `refactor(integration)`：§5gc（code-host webhook 两条，抄了一遍的那种）
-> 5. `test(architecture)`：§5gd（AC-6 首条通用 sanctioned 判据 `frozen-migration-revision`）
-> 6. `docs(rfc-359)`：§5gg + §5gh（把 blocker 写准；AC-6 甲类 7 条一簇的结论）
+> AC-8 / AC-9 / AC-11 要的是**收口 SHA 上的取证**，按定义排在这两波之后。
 >
-> 每笔都要：`bun run scripts/architecture-census.ts --write --snapshot-sha HEAD` →
-> 架构守卫 → 按路径 `git add` + `git commit -F <msg> -- <paths>` →
-> push → **按 exact SHA 查 CI**。`packages/system-mocks/src/cli.ts` 是别人的，**别 add**。
->
-> ⚠️ **census 与 amend 不能混**：census 把 provenance 钉成当时的 HEAD，
-> 之后 `--amend` 会让那个 SHA 变成孤儿、CI 两格红（本轮实撞，已落 gotchas）。
->
-> ### 账本现状（工作树里，未提交）
->
-> | 账本 | 起 | 现 |
-> | --- | --- | --- |
-> | AC-1 同文件孪生 | 48 | **19**（9 条已裁决为引擎固有，10 条 drift） |
-> | AC-6 open migration | 24 | **23** |
-> | provider 命名文件 | 39 | **38** |
->
-> ### 剩下的是两个架构波次，不是一堆零碎
->
-> - **组合根签名对齐**：`createApp` 的 `db` 写死 `DbClient`，两个组合根装配签名不对称
->   → 挡住 AC-6 甲类 7 条 + AC-1 的 `server.ts` 两条（见 plan §5gh / §5bg）；
-> - **启动面合一**：`services/task` 的 legacy `startExecution`（12 处同步游标）
->   vs `PostgresqlRootTaskLaunchKernel` → 挡住 AC-1 的 5 条 + AC-6 的 `start-task-deps`。
->
-> 两个都是跨两个 bootstrap 的千行级改动，**必须有 CI 才动**。
-> AC-8 / AC-9 / AC-11 要的是**收口 SHA 上的取证**，按定义得等这些落地之后。
+> **本轮新增 gotchas**（都在 `docs/dev-gotchas.md`）：census 与 `--amend` 不能混
+> （provenance 会变孤儿、CI 两格红）；半径被 OOM kill 要**分片**不要缩名单
+> （缩名单那次正好缩掉了摘要守卫，同一晚推红两次）；批量改符号名要带词边界
+> （`composePostgresqlDigitalEmployee` 是 `…Execution` 的前缀，连账本文本一起改坏）。
 
 > ## 📌 RFC-359 最新一段（2026-09-15 续 37，**AC-1 的规模一直被数错：同文件孪生 48 对，此前一个都没数到**）
 >
