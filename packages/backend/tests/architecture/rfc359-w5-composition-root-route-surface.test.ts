@@ -70,9 +70,7 @@ describeEachProviderHttpApplication(
     test('这个引擎的组合根装出来的路由面被记下来（非空）', async () => {
       await scope.open()
       const surface = surfaceOf()
-      const provider: TestProvider =
-        scope.harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql'
-      mountedSurfaces.set(provider, surface)
+      mountedSurfaces.set(scope.harness.capabilities.provider as TestProvider, surface)
       expect(
         surface.length,
         '组合根装完一条路由都没挂上——说明这次量的根本不是真应用的路由面，后面的比对也就没有意义',

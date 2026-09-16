@@ -592,7 +592,10 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
      * 新守卫——**它红了，这条判据的前提就没了**，届时这一类要跟着重判，而不是接着豁免。
      */
     id: 'provider-independent-route-registry',
-    holds: (_rel, code) => code.includes('allRouteMeta('),
+    // `codeOnly` 按 token 重拼、token 之间补空格，所以 `allRouteMeta()` 在这里是
+    // `allRouteMeta ( )`——写成 `includes('allRouteMeta(')` 只会**碰巧**命中字符串字面量里的
+    // 那一份（源码层断言的文本），调用点本身反而漏掉。一律用带 `\s*` 的正则。
+    holds: (_rel, code) => /allRouteMeta\s*\(/.test(code),
   },
   {
     /**
@@ -621,6 +624,36 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
         sqlite.has(m[1]),
       )
     },
+  },
+  {
+    /**
+     * RFC-359 AC-6（2026-09-16，plan §5gm）—— **判据文本是 SQLite 的计划词汇**。
+     *
+     * `EXPLAIN QUERY PLAN` 的 detail 列（`TEMP B-TREE` / 具体索引名）是 SQLite 独有的一套词汇；
+     * PostgreSQL 的 `EXPLAIN` 输出是另一套，同一条断言换引擎后**锁的不是同一件事**。
+     * 同一批用例还必须用 SQLite 的位置占位符 `?`（PG 是 `$1`）——实现门要求在**绑定参数**下看计划，
+     * 字面量下看不出展开式的退化。这是 §5fq ③「驱动线上差异」的标准形态。
+     *
+     * 要给 PostgreSQL 补同类守卫，走 `harness.explain()`（它按引擎各自渲染计划、且带真实绑定参数），
+     * 而**不是**把这些断言改成双引擎——两个引擎的计划守卫本来就该是两条各自的判据。
+     */
+    id: 'sqlite-plan-vocabulary',
+    holds: (_rel, code) => code.includes('EXPLAIN QUERY PLAN'),
+  },
+  {
+    /**
+     * RFC-359 AC-6（2026-09-16，plan §5gm）—— **注入机制**依赖 bun:sqlite 的同步执行面。
+     *
+     * 与上面几条不同：这一类里**被测代码本身是中立的**（而且同文件的双引擎格已经在两个引擎上
+     * 各跑过一遍），单引擎的是**故障注入的机制**——用 `Proxy` 包住 DB 客户端，在同步的 `select`
+     * 拦截器里当场改库。PostgreSQL 上 `.run()` 只返回一个没人 await 的 Promise，
+     * 改库与随后那次读之间**没有任何定序**，判据会退化成掷骰子；
+     * 按「第 N 次 select」钉阶段的那种注入，换引擎后那个序数指向的也不再是同一个阶段。
+     *
+     * 认的是结构（`new Proxy(` 包住一个现建的库），不是某个文件的特征串。
+     */
+    id: 'sync-client-fault-injection',
+    holds: (_rel, code) => /new\s+Proxy\s*\(/.test(code) && /createInMemoryDb\s*\(/.test(code),
   },
   {
     id: 'sqlite-only-primitive',
@@ -714,9 +747,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc257-webhook-error-codes.test.ts',
   'rfc268-webhook-scratch-launch.test.ts',
   'rfc269-webhook-code-host-context-e2e.test.ts',
-  'rfc291-unavailable-mount.test.ts',
-  'rfc311-repos-page.test.ts',
-  'rfc311-task-page-fastpath.test.ts',
   'rfc349-digital-employee-platform-tools-wiring.test.ts',
   'rfc349-dual-provider-behavior-oracle.test.ts',
   'rfc349-execution-peripheral-provider.test.ts',

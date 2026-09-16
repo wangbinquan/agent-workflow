@@ -13187,3 +13187,52 @@ PG 侧把生命周期交给外层会话）。塞进同一个 harness 只会逼�
 `OPEN_MIGRATION_DEBT` 22 → 19（`ledger-baselines.json` 同步改小）。
 总账 `TEST_ENGINE_HARDCODING_DEBT` **不动**——这三个文件仍然各有一处直建 SQLite 库，
 只是那处从「还没迁的债」重判成「按裁决就该单引擎」。这正是那两张名单要分开数的理由。
+
+---
+
+## §5gm　AC-6：把「文件里已写明理由、只是没判据认领」的三条收进判据（19 → 16）
+
+§5gl 之后剩 19 条。挨个读下去发现有一批的共同点是：**文件里早就有一段写得很清楚的理由**，
+说明它为什么该留在单引擎，但 `SANCTIONED_SINGLE_ENGINE` 里没有任何一条判据认领它，
+于是它一直被记成「还没迁的债」。这不是迁移量，是**分类没跟上**。
+
+| 文件 | 新判据 | 它自己写的理由 |
+| --- | --- | --- |
+| `rfc311-repos-page` | `sqlite-plan-vocabulary` | 判据文本是 `EXPLAIN QUERY PLAN` 的 detail 列（`TEMP B-TREE` / 索引名）＋ SQLite 的 `?` 占位符 |
+| `rfc311-task-page-fastpath` | 同上 | 同上（它甚至已经写了 `if (harness.capabilities.provider !== 'sqlite') return`） |
+| `rfc291-unavailable-mount` | `sync-client-fault-injection` | 被测代码中立、双引擎格已各跑一遍；单引擎的是**注入机制**——`Proxy` 包客户端在同步 `select` 拦截器里当场改库 |
+
+两条判据都按 §5fq 归位：前者是 ③「驱动线上差异」（两个引擎的计划词汇本就不同，
+要给 PG 补同类守卫该走 `harness.explain()`，那本来就是另一条判据，不是把这条改成双引擎）；
+后者是 ①「引擎独有原语」的一个变体——**独有的不是被测物，是注入机制**：
+PG 上 `.run()` 只返回一个没人 await 的 Promise，改库与随后那次读之间没有任何定序，
+判据会退化成掷骰子。
+
+### 写判据时踩到判据自己的坑（值得记）
+
+`sanctionFor` 喂给判据的不是原文，是 `codeOnly(text)`：用 TS scanner 把文件重新 tokenize，
+**token 之间一律补一个空格**再拼回去。于是源码里的 `allRouteMeta()` 到了判据眼里是
+`allRouteMeta ( )`。
+
+后果很隐蔽：`code.includes('allRouteMeta(')` **仍然返回 true**——但命中的是**字符串字面量**
+里的那一份（源码层断言的文本原样保留在一个 token 里），真正的调用点反而漏掉。
+也就是说判据「通过了」，却是**因为错误的理由**通过的；换一个没写源码层断言的同类文件就会漏判。
+`new Proxy(` 那条就没这么走运，直接不匹配，测试当场红——这一红才把上面那条的假通过也暴露出来。
+
+**定式**：往这张表加判据，一律写成带 `\s*` 的正则（`/allRouteMeta\s*\(/`），
+不要用 `includes('xxx(')`。既有判据本来就全是这么写的（`/new\s+Database\s*\(/`、
+`/dbTxSync\s*\(/`），只是没人写下**为什么**必须这样。
+
+### 顺手修掉新守卫里的一处绕路
+
+§5gk 的守卫原来靠 `capabilities.isolation === 'exclusive'` 反推 provider——
+其实 `EngineCapabilities` 上就有 `provider`（`src/platform/persistence/capabilities.ts:74`），
+`rfc311-task-page-fastpath` 早就在直接用它。改成直读。
+
+### 剩下的 16 条是什么
+
+不再是「分类没跟上」，是**真的迁移量或真的被别的波次挡着**。已确认的一例：
+`start-task-deps.test.ts` 测的 `buildStartTaskDeps` 形参类型是 `LegacySqliteTaskDatabase`
+（`= DbClient`，注释自称「provider-private alias for shrinking the legacy SQLite compatibility tail」），
+它属于 **legacy 启动路径**那一刀（`services/task` 的 `startExecution` vs `PostgresqlRootTaskLaunchKernel`），
+不是一次测试迁移能解决的——**留在债里是对的**，不给它造判据。
