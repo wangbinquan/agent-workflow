@@ -142,7 +142,11 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // RFC-359 AC-1（2026-09-16，plan §5gs）：91 → 90。`composeSqliteWebhookDispatchCore` 改名成中立的
       // `composeWebhookDispatchCore`——它**没有 PostgreSQL 孪生**，形参早就是 `ProviderNeutralDatabase`，
       // 前缀纯属历史（proposal.md AC-1 第三款的「命名债」）。**是改名不是删实现**，分母因此少一。
-    ).toBeGreaterThanOrEqual(90)
+      // RFC-359 AC-1（2026-09-16，plan §5hi）：90 → 86。数字员工动作执行的三层同文件孪生合齐，
+      // 退役四个 provider 命名的导出：`createPostgresqlActionExecutionEnvironment` /
+      // `createSqliteActionExecutionEnvironment` / `composePostgresqlAgentActionExecution` /
+      // `composePostgresqlScriptActionExecution`。**是合一不是删覆盖**，分母因此少四。
+    ).toBeGreaterThanOrEqual(86)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

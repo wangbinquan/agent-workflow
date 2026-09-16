@@ -38,6 +38,8 @@ import {
   reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
+import { createTaskDriveCoordinator } from '@/services/task'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
@@ -90,6 +92,7 @@ import {
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import {
+  cancelTask,
   composeHumanGateContinuationDriver,
   activeTaskIdsSnapshot,
   isTaskActive,
@@ -118,7 +121,7 @@ import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import { admitDaemonIdentity } from '@/auth/session'
+import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import {
   composeMcpRuntimeTestProvider,
   createMcpTransactionLifecycle,
@@ -2406,6 +2409,76 @@ async function composeSqliteProviderSession(
       }
     },
   })
+  // RFC-359 AC-1（plan §5hi）：数字员工的宿主任务改走**启动内核**，与 PostgreSQL 同一条路。
+  // 此前 SQLite 侧走 `startTask` + `preCreatedWorktree`，PG 侧走内核 + 借用工作区租约——
+  // 两份 action 执行装配面因此长期是一对。内核在两个引擎上都真启动过（plan §5hh 的用例），
+  // 所以这里换的是「走哪条机制」，不是「赌它能不能跑」。
+  //
+  // 失败上报逐条对齐 PostgreSQL daemon 那份（`postgresqlDaemonApplication.ts` 的
+  // `boundTaskDriveCoordinator.failureReporter`）：驱动崩了要把任务落成 failed 并终结意图，
+  // 否则失败会表现成「动作卡住不失败」。
+  const hostActionEnvironment = (() => {
+    const hostLaunchStartDeps = buildStartTaskDeps(
+      db,
+      taskExecutionRuntime.schedulerDriver,
+      Paths.config,
+      SYSTEM_USER_ID,
+      secretBox,
+      identityAccess,
+    )
+    const hostTaskLaunch = composeHostTaskLaunchKernel({
+      db,
+      appHome: Paths.root,
+      secretBox,
+      gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+      coordinator: createTaskDriveCoordinator({
+        deps: hostLaunchStartDeps,
+        appHome: Paths.root,
+        engineFailureMessage: 'digital employee host task drive threw',
+        failureReporter: {
+          async report({ taskId, error, execution }) {
+            const now = Date.now()
+            await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
+              taskId,
+              to: 'failed',
+              allowedFrom: ['pending', 'running'],
+              extra: {
+                finishedAt: now,
+                errorSummary: 'task drive failed',
+                errorMessage: error instanceof Error ? error.message : String(error),
+              },
+              executionContext: execution,
+              now,
+              reason: 'task-drive',
+            })
+            await taskExecutionProvider.persistence.intentTerminalization.terminalize({
+              taskId,
+              state: 'failed',
+              failureCode: 'task-drive-failed',
+              now,
+              claimedOwnerEpoch: execution.token.epoch,
+            })
+          },
+        },
+      }),
+    })
+    return {
+      db,
+      launch: hostTaskLaunch,
+      resolveActor: async () => {
+        const identity = await admitDaemonIdentity(identityAccess)
+        if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
+        return actorOfDirectAuthority(identity)
+      },
+      resourceAuthorityFor: (actor: Actor) => ({
+        actor,
+        authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+        resources: taskExecutionResources,
+      }),
+      cancelTask: (taskId: string) => cancelTask(db, taskId),
+      readModels: taskExecutionProvider.readModels,
+    }
+  })()
   const developmentAutomation = composeDevelopmentAutomation({
     db,
     appHome: Paths.root,
@@ -2420,7 +2493,7 @@ async function composeSqliteProviderSession(
     ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
-      db,
+      ...hostActionEnvironment,
       agents: {
         // RFC-345：bootstrap 只从模块的目录查询面取 Agent，不再经 services/agent 门面。
         get: async (id) => {
@@ -2429,20 +2502,12 @@ async function composeSqliteProviderSession(
           return agentCatalog.queries.get(identity.actor, { id })
         },
       },
-      startDeps: buildStartTaskDeps(
-        db,
-        taskExecutionRuntime.schedulerDriver,
-        Paths.config,
-        SYSTEM_USER_ID,
-        secretBox,
-        identityAccess,
-      ),
       onTerminal: (executionRef) => {
         void developmentTerminalObserver.agent(executionRef)
       },
     }),
     scriptLauncher: composeScriptActionExecution({
-      db,
+      ...hostActionEnvironment,
       agents: {
         // RFC-345：bootstrap 只从模块的目录查询面取 Agent，不再经 services/agent 门面。
         get: async (id) => {
@@ -2451,14 +2516,6 @@ async function composeSqliteProviderSession(
           return agentCatalog.queries.get(identity.actor, { id })
         },
       },
-      startDeps: buildStartTaskDeps(
-        db,
-        taskExecutionRuntime.schedulerDriver,
-        Paths.config,
-        SYSTEM_USER_ID,
-        secretBox,
-        identityAccess,
-      ),
       onTerminal: (executionRef) => {
         void developmentTerminalObserver.script(executionRef)
       },

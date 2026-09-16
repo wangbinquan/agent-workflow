@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1683,
+    "entries": 1682,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22834,7 +22834,7 @@
       },
       "file": "packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createPostgresqlActionExecutionEnvironment",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createActionExecutionEnvironment",
       "missingControls": [
         "audit",
         "authority",
@@ -22842,32 +22842,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createPostgresqlActionExecutionEnvironment",
-      "symbol": "createPostgresqlActionExecutionEnvironment",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createSqliteActionExecutionEnvironment",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createSqliteActionExecutionEnvironment",
-      "symbol": "createSqliteActionExecutionEnvironment",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createActionExecutionEnvironment",
+      "symbol": "createActionExecutionEnvironment",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -40210,7 +40186,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:da8ba764975348361a2368ea5ff38b9326120d73b70dfc385534dab2eeb92b53",
+  "sourceDigest": "sha256:31ac38df13466c5f90b4aa0ddcdcfe52d5c2a7c29a1cd1074453605f12790b32",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

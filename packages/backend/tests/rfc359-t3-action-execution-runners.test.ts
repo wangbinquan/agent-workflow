@@ -509,11 +509,11 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
   }
 }
 
-test('源码锁：PG daemon 接上 launcher 与终态观察者；两个 composer 是薄壳，执行器只有一份', () => {
+test('源码锁：三个组合根接上同一对 launcher 与终态观察者；两个 composer 是薄壳，执行器只有一份', () => {
   const root = resolve(import.meta.dir, '..', 'src')
   const daemon = readFileSync(join(root, 'cli', 'postgresqlDaemonApplication.ts'), 'utf8')
-  expect(daemon).toContain('agentLauncher: composePostgresqlAgentActionExecution({')
-  expect(daemon).toContain('scriptLauncher: composePostgresqlScriptActionExecution({')
+  expect(daemon).toContain('agentLauncher: composeAgentActionExecution({')
+  expect(daemon).toContain('scriptLauncher: composeScriptActionExecution({')
   expect(daemon).toContain('createDevelopmentMissionExecutionTerminalObserver({')
   // RFC-359 W11：观察者与 automation 之间那个 `{ current: … | null }` 的回填盒子已经拆掉
   // ——环改打在词法作用域上，观察者直接闭包引用同作用域后面那个 `const developmentAutomation`。
@@ -525,8 +525,30 @@ test('源码锁：PG daemon 接上 launcher 与终态观察者；两个 composer
     daemon.indexOf('const developmentAutomation = composeDevelopmentAutomation({'),
   )
   expect(daemon.indexOf('const taskLaunchKernel = ')).toBeLessThan(
-    daemon.indexOf('agentLauncher: composePostgresqlAgentActionExecution({'),
+    daemon.indexOf('agentLauncher: composeAgentActionExecution({'),
   )
+  // RFC-359 AC-1（plan §5hi）：`composePostgresql*ActionExecution` 这对名字已经不存在——
+  // 两个 provider 合成一对 composer。三个组合根（PG daemon + 两个 SQLite 根）必须都接它，
+  // 且都得先在同作用域里造出启动内核：谁要是退回 `startTask` + `preCreatedWorktree`
+  // 那条只服务 SQLite 的老路，这条就红。
+  for (const file of ['cli/start.ts', 'server.ts'] as const) {
+    // 两个 SQLite 根都从模块的**组合入口**取内核（RFC-331：组合根不深挖 infrastructure/）。
+    const kernelAnchor = 'composeHostTaskLaunchKernel({'
+    const source = readFileSync(join(root, ...file.split('/')), 'utf8')
+    expect(source, `${file} 必须接合并后的 agent launcher`).toContain(
+      'agentLauncher: composeAgentActionExecution({',
+    )
+    expect(source, `${file} 必须接合并后的 script launcher`).toContain(
+      'scriptLauncher: composeScriptActionExecution({',
+    )
+    expect(source, `${file} 不得再出现 provider 前缀的 composer`).not.toContain(
+      'composePostgresqlAgentActionExecution',
+    )
+    expect(source.indexOf(kernelAnchor), `${file} 必须先造启动内核`).toBeGreaterThanOrEqual(0)
+    expect(source.indexOf(kernelAnchor)).toBeLessThan(
+      source.indexOf('agentLauncher: composeAgentActionExecution({'),
+    )
+  }
   for (const file of ['agentActionExecution.ts', 'scriptActionExecution.ts']) {
     const source = readFileSync(
       join(root, 'modules', 'task-execution', 'composition', file),

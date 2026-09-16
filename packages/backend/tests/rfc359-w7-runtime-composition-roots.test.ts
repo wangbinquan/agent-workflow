@@ -22,8 +22,8 @@ import {
   composePostgresqlResourcePackageApplyMaintenance,
   composeSqliteResourcePackageApplyMaintenance,
 } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
-import { composePostgresqlAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
-import { composePostgresqlScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
+import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -190,7 +190,7 @@ describeEachProvider('RFC-359 W7 —— 数字员工动作执行器组合根', (
       launch: () => {
         throw new Error('rfc359 w7 read-path test must not launch a host task')
       },
-    } as unknown as Parameters<typeof composePostgresqlAgentActionExecution>[0]['launch']
+    } as unknown as Parameters<typeof composeAgentActionExecution>[0]['launch']
     const dependencies = {
       db: asPostgresql(harness.db),
       actor,
@@ -204,10 +204,10 @@ describeEachProvider('RFC-359 W7 —— 数字员工动作执行器组合根', (
         statusProjection: persistence.reads.statusProjection,
       },
       agents: { get: async () => null },
-    } as unknown as Parameters<typeof composePostgresqlAgentActionExecution>[0]
+    } as unknown as Parameters<typeof composeAgentActionExecution>[0]
 
-    const agentRunner = composePostgresqlAgentActionExecution(dependencies)
-    const scriptRunner = composePostgresqlScriptActionExecution(dependencies)
+    const agentRunner = composeAgentActionExecution(dependencies)
+    const scriptRunner = composeScriptActionExecution(dependencies)
 
     const missing = `t_${ulid()}`
     expect(await agentRunner.fetchOutcome(missing)).toEqual({

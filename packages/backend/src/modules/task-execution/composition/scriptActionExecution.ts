@@ -9,10 +9,8 @@ import {
   type ScriptActionExecutionRunner,
 } from './actionExecutionRunners'
 import {
-  createPostgresqlActionExecutionEnvironment,
-  createSqliteActionExecutionEnvironment,
-  type PostgresqlActionExecutionEnvironmentDependencies,
-  type SqliteActionExecutionEnvironmentDependencies,
+  createActionExecutionEnvironment,
+  type ActionExecutionEnvironmentDependencies,
 } from './actionExecutionEnvironment'
 
 export {
@@ -20,15 +18,12 @@ export {
   type ScriptActionExecutionRunner,
 } from './actionExecutionRunners'
 
+/**
+ * RFC-359 AC-1（plan §5hi）：**两个 provider 装配面合成一个**，走启动内核那半。
+ * 内核在两个引擎上都真启动过（§5hh），SQLite 侧不再走 `startTask`。
+ */
 export function composeScriptActionExecution(
-  deps: SqliteActionExecutionEnvironmentDependencies,
+  deps: ActionExecutionEnvironmentDependencies,
 ): ScriptActionExecutionRunner {
-  return createScriptActionExecutionRunner(createSqliteActionExecutionEnvironment(deps))
-}
-
-/** RFC-359 W1-T3：PostgreSQL daemon 的同一个执行器。 */
-export function composePostgresqlScriptActionExecution(
-  deps: PostgresqlActionExecutionEnvironmentDependencies,
-): ScriptActionExecutionRunner {
-  return createScriptActionExecutionRunner(createPostgresqlActionExecutionEnvironment(deps))
+  return createScriptActionExecutionRunner(createActionExecutionEnvironment(deps))
 }

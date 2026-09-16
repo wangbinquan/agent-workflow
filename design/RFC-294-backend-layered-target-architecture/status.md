@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:da8ba764975348361a2368ea5ff38b9326120d73b70dfc385534dab2eeb92b53`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:31ac38df13466c5f90b4aa0ddcdcfe52d5c2a7c29a1cd1074453605f12790b32`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1775 |
+| backend production TS 文件 | 1776 |
 | `services/` 文件 | 317 |
-| `modules/**` 文件 / 非空 context | 1180 / 17 |
+| `modules/**` 文件 / 非空 context | 1181 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -35,8 +35,8 @@
 | `crossContextImports` | 5101 |
 | `facades` | 317 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24709 |
-| `mutationEntrypoints` | 1683 |
+| `moduleSymbolOwners` | 24707 |
+| `mutationEntrypoints` | 1682 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 959 |
 | `transactionExternalEffects` | 252 |
@@ -51,8 +51,8 @@
 | task-execution / infrastructure | 97 |
 | task-execution / application | 87 |
 | resource-catalog / application | 55 |
+| task-execution / composition | 52 |
 | development-automation / application | 51 |
-| task-execution / composition | 51 |
 | collaboration / infrastructure | 46 |
 | collaboration / application | 35 |
 | development-automation / domain | 33 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3045 |
-| legacy-inbound | 1356 |
+| legacy-outbound | 3043 |
+| legacy-inbound | 1358 |
 | infrastructure-external | 270 |
 | offered-consumption | 157 |
 | off-dag-offered | 88 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3045 |
-| legacy-inbound | 1356 |
+| legacy-outbound | 3043 |
+| legacy-inbound | 1358 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 88 |
 | no-circular | 6 |
@@ -228,9 +228,9 @@
 | removeAfterWave | 数量 |
 | --- | --- |
 | W9 | 2320 |
-| W4-E1 | 814 |
+| W4-E1 | 813 |
 | W4-C | 331 |
-| W4-E0 | 211 |
+| W4-E0 | 212 |
 | W4 | 193 |
 | W4-B | 181 |
 | W5 | 152 |

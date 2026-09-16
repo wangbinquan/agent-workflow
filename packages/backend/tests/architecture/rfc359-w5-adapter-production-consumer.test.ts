@@ -396,7 +396,11 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // RFC-359 AC-1（2026-09-16，plan §5gs）：87 → 86。`composeSqliteWebhookDispatchCore` 改名成中立的
       // `composeWebhookDispatchCore`——它**没有 PostgreSQL 孪生**，形参早就是 `ProviderNeutralDatabase`，
       // 前缀纯属历史（proposal.md AC-1 第三款的「命名债」）。**是改名不是删实现**，分母因此少一。
-    ).toBeGreaterThanOrEqual(86)
+      // RFC-359 AC-1（2026-09-16，plan §5hi）：86 → 82。数字员工动作执行的三层同文件孪生合齐，
+      // 退役四个 provider 命名的导出：`createPostgresqlActionExecutionEnvironment` /
+      // `createSqliteActionExecutionEnvironment` / `composePostgresqlAgentActionExecution` /
+      // `composePostgresqlScriptActionExecution`。**是合一不是删覆盖**，分母因此少四。
+    ).toBeGreaterThanOrEqual(82)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

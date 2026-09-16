@@ -14319,3 +14319,82 @@ Step C 回到正常难度——仍需 Step B②（`cli/start.ts` 造出根内核
 三对合并（§5hg 已实做验证过：改完只剩 6 处类型错，全在两个 SQLite 调用点与 4 处测试）
 ＋ 把约 60 行内核装配从 PG daemon 抄进 `cli/start.ts` 与 `server.ts`。
 前置条件到此满足。
+
+## §5hi —— 三对 action 执行装配面合一：SQLite 也走启动内核
+
+### 做了什么
+
+数字员工的动作执行（agent / script）此前在**同一个文件里**各有两份：
+
+| 文件 | SQLite 那份 | PostgreSQL 那份 |
+| --- | --- | --- |
+| `composition/actionExecutionEnvironment.ts` | `createSqliteActionExecutionEnvironment` | `createPostgresqlActionExecutionEnvironment` |
+| `composition/agentActionExecution.ts` | `composeAgentActionExecution` | `composePostgresqlAgentActionExecution` |
+| `composition/scriptActionExecution.ts` | `composeScriptActionExecution` | `composePostgresqlScriptActionExecution` |
+
+差别只有一处：**宿主任务怎么启动**。SQLite 那份走 `startTask` + `preCreatedWorktree`
+（只服务 SQLite），PG 那份走启动内核 + `borrowedPostgresqlWorkspace` 租约。
+
+合并取**内核**那半，三对塌成三个中立实现。合并后：
+
+- `ActionExecutionEnvironmentDependencies` 把 `db` 收成 `ProviderNeutralDatabase`，
+  并把 `actor` 换成**惰性**的 `resolveActor: () => Promise<Actor>`——
+  `server.ts` 的 `composeFallbackDevelopmentAutomation` 是同步函数，
+  取不到 `await admitDaemonIdentity(...)`；惰性是两侧都成立的那半。
+- 新增模块的组合入口 `composition/hostTaskLaunch.ts::composeHostTaskLaunchKernel`。
+  PG daemon 从自己的 provider runtime 取内核（`routeLaunch.workflow`），
+  另外两个根没有 provider runtime 可取，从这个入口装。
+  **组合根因此不必深挖 `infrastructure/`**——否则 `rfc331-task-execution-topology`
+  的分层判据会红（实撞过：两条新 deep import 被它逐字抓出来）。
+- `cli/start.ts` 与 `server.ts` 各装一次内核：`createTaskDriveCoordinator`
+  （§5hb 导出的那个工厂）+ 逐条对齐 PG daemon 的 `failureReporter`
+  （trySet failed + `intentTerminalization.terminalize`）。漏了这半，
+  驱动崩掉会表现成「动作卡住不失败」。
+
+### 证据
+
+- `rfc359-w14-legacy-mission-execution`（`describeEachProvider`，真子进程、驱到终态）
+  **两个引擎各 2 条全绿**——SQLite 这一侧现在跑的就是合并后的 composer + 内核。
+- `rfc310-pr4-execution-host`（真子进程执行链，8 条）改走内核后全绿。
+- 源码锁 `rfc359-t3-action-execution-runners` 扩成**三个组合根**同时锁：
+  三者都得接合并后的那对 composer、都得先造出内核、都不许再出现 `composePostgresql*ActionExecution`。
+  变异验证：把 `server.ts` 的内核装配换回 `createPostgresqlRootTaskLaunchKernel`（绕开组合入口）⇒ **红**。
+
+### 一处真实行为差异，测试是对的
+
+`rfc310-pr4` 锁着「宿主任务的 `gitUserName` 为 NULL」。改走内核后第一版红了——
+因为我的 fixture 自己播了个普通用户。**生产不是这样**：三个组合根都用
+`admitDaemonIdentity` admit `__system__`，而内核对系统用户不冻结 git identity
+（`postgresqlTaskRouteLaunchOperations.ts` 的 `input.actor.user.id === SYSTEM_USER_ID ? null : …`）。
+fixture 改成和组合根同一条取身份路径后即绿——**改的是 fixture，不是那条断言**。
+
+### 账本连动
+
+- `rfc359-w5-same-file-provider-pairs`：19 → **16**（三行一起删）。
+- `rfc317-ledger-highwater` 基线同步改小到 16。
+- 三条「语料非空」下限各减 4（退役了四个 provider 命名的导出）：
+  `identical-provider-twins` 90 → 86、`provider-runtime-exercised` 18 → 16、
+  `adapter-production-consumer` 86 → 82。**是合一不是删覆盖**。
+- `rfc359-w5-t19d-coverage-parity`：`TaskRouteLaunchOperations` 的
+  `postgresql 6/2 → 7/3`。同 §5hh：账本按符号名归边，这台**两个引擎共用**的内核
+  顶着 `Postgresql` 前缀，两边的覆盖全记在 postgresql 一侧——**倒挂数字变大 = 覆盖变好**。
+- `rfc359-w29` daemon 相的摘要随两处被调用者改名 + 一处实参改名更新；
+  **语句数仍是 160、顺序未变**（那条断言没红，正是用来分开这两种情况的闸）。
+
+### 留下的债（下一刀）
+
+**§5hj —— `createPostgresqlRootTaskLaunchKernel` 的命名债。**
+这台内核现在**两个引擎共用**，已经没有 provider 语义了，按 `proposal.md` AC-1
+第三款该改成中立名。没有顺手做，是因为它所在的
+`infrastructure/postgresqlTaskRouteLaunchOperations.ts` 同文件里还装着路由级的
+PG 专属类型（`PostgresqlTaskRouteLaunchDependencies` 等），
+而旁边确实存在真孪生 `sqliteTaskRouteLaunchOperations.ts`（账本记 `sqlite 2/1`）——
+改名要连着「哪些是内核、哪些是路由级 PG」一起拆，单独立一批做。
+
+**§5hk —— SQLite 的 `routeLaunch.workflow` 仍是空的。**
+`providerRuntime.ts` 的基类把它写成 `workflow?: PostgresqlRootTaskLaunchKernel`，
+只有 PG 那支收窄成必填——类型本身就在说「一个引擎有、另一个没有」。
+本刀没动它：`composeSqliteTaskExecutionProviderRuntime` 要造内核就得先拿到协调器，
+而协调器又要 `provider.runtime.schedulerDriver`（PG 用同作用域 `const` 转发面破环，
+SQLite 可照抄）。做完这一刀，两个 SQLite 组合根就能和 PG 一样直接读
+`taskExecutionProvider.routeLaunch.workflow`，`hostTaskLaunch.ts` 这个入口也可以退役。

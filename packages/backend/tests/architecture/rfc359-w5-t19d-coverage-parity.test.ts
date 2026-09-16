@@ -106,7 +106,15 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 按 proposal AC-1 第三款该保留前缀），所以这笔两边都跑的覆盖被记到了 postgresql 一侧。
   // **倒挂看起来加深，实际是覆盖变好了**：此前「内核 + SQLite 库」零覆盖（plan §5hg）。
   // 等启动面合一收尾、这一对塌成一份，这两行会一起消失。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 6/2',
+  // RFC-359 AC-1（plan §5hi）：`postgresql 6/2 → 7/3`。数字员工动作执行的启动面合一，
+  // **SQLite 的两个组合根现在也用这台内核**——经模块的中立组合入口
+  // `composition/hostTaskLaunch.ts`（+1 ref），而 `rfc359-w14-legacy-mission-execution` /
+  // `rfc310-pr4-execution-host` 在 SQLite 上真驱动它（+1 drive）。同 §5hh：账本按**符号名**
+  // 归边，这台顶着 `Postgresql` 前缀的内核所收的两边覆盖全记在 postgresql 一侧，
+  // **倒挂数字变大 = 覆盖变好**。它现在已经没有 provider 语义了（两个引擎共用一台），
+  // 按 proposal AC-1 第三款是**命名债**，该改成中立名——那一刀连着整个文件的
+  // 路由级 PG 类型，单独立一批做（plan §5hj）。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 7/3',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
@@ -146,7 +154,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359：两条 intent apply 的倒挂随合一一起消失（见 `COVERAGE_PARITY_LEDGER` 的注释）。
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 10 vs 6',
   // 同上（§5hh）：差额 5 → 6 来自那次双引擎的内核启动，不是新的单侧倾斜。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 6',
+  // RFC-359 AC-1（plan §5hi）：6 → 7，来源同上（SQLite 两个根改用这台内核）。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 7',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。

@@ -19,8 +19,21 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
+import type { Actor } from '@/auth/actor'
+import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
+import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import {
+  createTaskExecutionResourceBinding,
+  type TaskExecutionResourceAuthority,
+} from '@/services/execution/taskExecutionResources'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { cancelTask } from '@/services/task'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks } from '../src/db/schema'
+import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 import { AGENT_RESULT_PORT } from '../src/modules/development-automation/domain/agentEnvelope'
 import {
   composeAgentActionExecution,
@@ -61,6 +74,10 @@ interface Harness {
   workspacePath: string
   agentId: string
   tmp: string
+  actor: Actor
+  identityAccess: ReturnType<typeof createIdentityAccessRuntime>
+  launchResources: TaskExecutionResourceAuthority
+  persistence: TaskExecutionPersistence
 }
 
 async function buildHarness(): Promise<Harness> {
@@ -69,6 +86,21 @@ async function buildHarness(): Promise<Harness> {
   mkdirSync(appHome, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
   await seedTestDefaultOpencodeRuntime(db)
+  // 组合根怎么取身份，这里就怎么取：两个 SQLite 组合根（`cli/start.ts` /
+  // `server.ts`）与 PostgreSQL daemon 都用 `admitDaemonIdentity` admit `__system__`，
+  // 而启动内核对系统用户不冻结 git identity（见下面 `gitUserName` 断言）。
+  const identityAccess = createIdentityAccessRuntime({ db })
+  const admitted = await admitDaemonIdentity(identityAccess)
+  if (admitted === null) throw new Error('execution-host fixture daemon identity unavailable')
+  const actor = actorOfDirectAuthority(admitted)
+  const launchResources: TaskExecutionResourceAuthority = Object.freeze({
+    actor,
+    authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+    resources: createTaskExecutionResourceBinding(
+      db,
+      composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
+    ),
+  })
 
   const baseline = join(tmp, 'baseline')
   mkdirSync(baseline)
@@ -118,7 +150,18 @@ async function buildHarness(): Promise<Harness> {
     frontmatterExtra: {},
     bodyMd: '',
   })
-  return { db, appHome, baselineSha: sha, workspacePath, agentId: agent.id, tmp }
+  return {
+    db,
+    appHome,
+    baselineSha: sha,
+    workspacePath,
+    agentId: agent.id,
+    tmp,
+    actor,
+    identityAccess,
+    launchResources,
+    persistence: createTaskExecutionPersistence(db),
+  }
 }
 
 function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {
@@ -140,19 +183,31 @@ function runner(
   h: Harness,
   extra: { awaitScheduler?: boolean; onTerminal?: (ref: string) => void } = {},
 ): AgentActionExecutionRunner {
+  // RFC-359 AC-1（plan §5hi）：宿主任务的启动面合并成一份（启动内核），
+  // SQLite 侧不再有 `startTask` + `preCreatedWorktree` 的平行装配。
+  // 这条用例证的仍是真子进程执行链，只是换了同一个内核入口。
   return composeAgentActionExecution({
     db: h.db,
     agents: { get: async (id) => getAgentById(h.db, id) },
-    startDeps: {
+    resolveActor: async () => h.actor,
+    resourceAuthorityFor: () => h.launchResources,
+    launch: createTestHostTaskLaunchKernel({
       db: h.db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-        .schedulerDriver,
       appHome: h.appHome,
-      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-      awaitScheduler: extra.awaitScheduler ?? true,
-      defaultNodeRetries: 0,
-      defaultPerNodeTimeoutMs: 60_000,
-    },
+      gitCommitIdentity: h.identityAccess.getUserGitCommitIdentity,
+      coordinatorDeps: {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        defaultNodeRetries: 0,
+        defaultPerNodeTimeoutMs: 60_000,
+      },
+      persistence: h.persistence,
+      completionMode: (extra.awaitScheduler ?? true) ? 'await-settle' : 'background',
+    }),
+    cancelTask: (taskId) => cancelTask(h.db, taskId),
+    readModels: h.persistence.reads,
     ...(extra.onTerminal !== undefined ? { onTerminal: extra.onTerminal } : {}),
     terminalPollMs: 25,
   })

@@ -255,8 +255,8 @@ import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-empl
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import { createDevelopmentMissionExecutionTerminalObserver } from '@/modules/development-automation/composition/executionTerminalObserver'
-import { composePostgresqlAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
-import { composePostgresqlScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
+import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/application/overview'
 import {
   ensureDigitalEmployeeAgentTemplates,
@@ -1603,7 +1603,7 @@ export async function composePostgresqlApplication(
   })
   const actionExecutionEnvironment = {
     db: input.db,
-    actor: systemActor,
+    resolveActor: async () => systemActor,
     resourceAuthorityFor: (actor: Actor) => ({
       actor,
       authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
@@ -1631,13 +1631,13 @@ export async function composePostgresqlApplication(
     ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     approvalGateway: developmentApprovalGateway,
-    agentLauncher: composePostgresqlAgentActionExecution({
+    agentLauncher: composeAgentActionExecution({
       ...actionExecutionEnvironment,
       onTerminal: (executionRef) => {
         void developmentTerminalObserver.agent(executionRef)
       },
     }),
-    scriptLauncher: composePostgresqlScriptActionExecution({
+    scriptLauncher: composeScriptActionExecution({
       ...actionExecutionEnvironment,
       onTerminal: (executionRef) => {
         void developmentTerminalObserver.script(executionRef)

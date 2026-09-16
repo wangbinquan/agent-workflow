@@ -30,7 +30,9 @@ import {
   type DatabaseSourceWriteWindow,
 } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
-import { admitDaemonIdentity, multiAuth } from '@/auth/session'
+import { actorOfDirectAuthority, admitDaemonIdentity, multiAuth } from '@/auth/session'
+import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
+import { cancelTask, createTaskDriveCoordinator } from '@/services/task'
 import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -1755,6 +1757,75 @@ function composeFallbackDevelopmentAutomation(
   // RFC-345：Agent 查询由 bootstrap 从模块的目录查询面提供，本文件不再经 services/agent 门面。
   agents: Parameters<typeof composeAgentActionExecution>[0]['agents'],
 ): DevelopmentAutomationModule {
+  // RFC-359 AC-1（plan §5hi）：数字员工的宿主任务改走**启动内核**，与 PostgreSQL 同一条路。
+  // 此前 SQLite 侧走 `startTask` + `preCreatedWorktree`，PG 侧走内核 + 借用工作区租约——
+  // 两份 action 执行装配面因此长期是一对。内核在两个引擎上都真启动过（plan §5hh 的用例），
+  // 所以这里换的是「走哪条机制」，不是「赌它能不能跑」。
+  //
+  // 失败上报逐条对齐 PostgreSQL daemon 那份（`postgresqlDaemonApplication.ts` 的
+  // `boundTaskDriveCoordinator.failureReporter`）：驱动崩了要把任务落成 failed 并终结意图，
+  // 否则失败会表现成「动作卡住不失败」。
+  const persistence = createTaskExecutionPersistence(deps.db)
+  const hostLaunchStartDeps = buildStartTaskDeps(
+    deps.db,
+    deps.schedulerDriver,
+    deps.configPath,
+    SYSTEM_USER_ID,
+    deps.secretBox,
+    deps.identityAccess,
+  )
+  const hostTaskLaunch = composeHostTaskLaunchKernel({
+    db: deps.db,
+    appHome,
+    secretBox: deps.secretBox,
+    gitCommitIdentity: deps.identityAccess.getUserGitCommitIdentity,
+    coordinator: createTaskDriveCoordinator({
+      deps: hostLaunchStartDeps,
+      appHome,
+      engineFailureMessage: 'digital employee host task drive threw',
+      failureReporter: {
+        async report({ taskId, error, execution }) {
+          const now = Date.now()
+          await persistence.runtimeLifecycle.trySet({
+            taskId,
+            to: 'failed',
+            allowedFrom: ['pending', 'running'],
+            extra: {
+              finishedAt: now,
+              errorSummary: 'task drive failed',
+              errorMessage: error instanceof Error ? error.message : String(error),
+            },
+            executionContext: execution,
+            now,
+            reason: 'task-drive',
+          })
+          await persistence.intentTerminalization.terminalize({
+            taskId,
+            state: 'failed',
+            failureCode: 'task-drive-failed',
+            now,
+            claimedOwnerEpoch: execution.token.epoch,
+          })
+        },
+      },
+    }),
+  })
+  const hostActionEnvironment = {
+    db: deps.db,
+    launch: hostTaskLaunch,
+    resolveActor: async () => {
+      const identity = await admitDaemonIdentity(deps.identityAccess)
+      if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
+      return actorOfDirectAuthority(identity)
+    },
+    resourceAuthorityFor: (actor: Actor) => ({
+      actor,
+      authority: deps.identityAccess.directAuthority.authorityForLegacyProjection(actor),
+      resources: deps.identityAccess.taskExecutionResources,
+    }),
+    cancelTask: (taskId: string) => cancelTask(deps.db, taskId),
+    readModels: deps.taskExecutionReadModels,
+  }
   // RFC-359 W11：终态观察者要回调 `automation.drive`，而 automation 的两个 launcher 又要这个
   // 观察者。环打在**词法作用域**上，不再打在一个可空的盒子上：`automation` 是同一作用域里的
   // `const`，箭头只在运行期取值。这样「忘了回填」在类型层不可表达——删掉下面那行
@@ -1778,29 +1849,13 @@ function composeFallbackDevelopmentAutomation(
     ...buildDevelopmentPipelineDeps(deps.developmentDeliveryProvider.pipeline),
     ...buildDevelopmentMrFactsDeps(deps.developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
-      db: deps.db,
+      ...hostActionEnvironment,
       agents,
-      startDeps: buildStartTaskDeps(
-        deps.db,
-        deps.schedulerDriver,
-        deps.configPath,
-        SYSTEM_USER_ID,
-        deps.secretBox,
-        deps.identityAccess,
-      ),
       onTerminal: terminalObserver.agent,
     }),
     scriptLauncher: composeScriptActionExecution({
-      db: deps.db,
+      ...hostActionEnvironment,
       agents,
-      startDeps: buildStartTaskDeps(
-        deps.db,
-        deps.schedulerDriver,
-        deps.configPath,
-        SYSTEM_USER_ID,
-        deps.secretBox,
-        deps.identityAccess,
-      ),
       onTerminal: terminalObserver.script,
     }),
     approvalGateway: composeApprovalGatewayRunnerFor(deps.db),

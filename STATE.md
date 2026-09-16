@@ -2,6 +2,39 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-16 续 41，**AC-1 同文件孪生 19 → 16：数字员工动作执行的三层一次合齐**）
+>
+> **最该带走的一句：「启动面合一」这道波次开张了，而且开在最硬的那一层——真跑子进程的执行链上。**
+> 数字员工动作执行（agent / script）此前在三个文件里各有一对 provider 孪生，差别只有一处：
+> **宿主任务怎么启动**。SQLite 走 `startTask` + `preCreatedWorktree`（按定义只服务 SQLite），
+> PG 走启动内核 + 借用工作区租约。取内核那半合并，三对塌成三个中立实现。
+>
+> 内核装配收进模块的组合入口 `composition/hostTaskLaunch.ts`——**组合根不许深挖
+> `infrastructure/`**（`rfc331-task-execution-topology` 的分层判据当场抓出两条 deep import，
+> 已改走组合入口，没有登记新债）。三个组合根（PG daemon、`cli/start.ts`、
+> `server.ts` 嵌入式回退）从此接同一对 composer。
+>
+> **证据是真执行，不是源码断言**：`rfc359-w14-legacy-mission-execution`（双引擎、真子进程、驱到终态）
+> 两侧全绿；`rfc310-pr4-execution-host`（真子进程执行链 8 条）改走内核后全绿。
+> 源码锁 `rfc359-t3-action-execution-runners` 扩成三根同锁，变异验证会红。
+>
+> **一处红是测试对、我错**：`rfc310-pr4` 锁着宿主任务 `gitUserName` 为 NULL，我的 fixture 自己
+> 播了个普通用户所以红。生产三个根都用 `admitDaemonIdentity` admit `__system__`，而内核对系统
+> 用户不冻结 git identity——改 fixture 走同一条取身份路径即绿，**那条断言一个字没动**。
+>
+> 账本连动：同文件孪生 19 → 16、`rfc317` 基线同步改小；三条「语料非空」下限各减 4
+> （退役四个 provider 命名的导出，**是合一不是删覆盖**）；`t19d` 覆盖对等
+> `TaskRouteLaunchOperations` 记到 `postgresql 7/3`——账本按符号名归边，这台**两个引擎共用**的
+> 内核顶着 `Postgresql` 前缀，两边覆盖全记在 PG 一侧，**倒挂数字变大 = 覆盖变好**；
+> `rfc359-w29` daemon 相摘要随改名更新（**语句数仍 160、顺序未变**）。
+>
+> **下一刀已写死在 plan §5hj / §5hk**：①`createPostgresqlRootTaskLaunchKernel` 的命名债
+> （两引擎共用了，但同文件还装着路由级 PG 类型，要连着拆）；
+> ②SQLite 的 `routeLaunch.workflow` 仍是 `?`——类型本身在说「一个引擎有、另一个没有」，
+> 破环照抄 PG 的同作用域转发面即可，做完 `hostTaskLaunch.ts` 这个入口也能退役。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hi。
+
 > ## 📌 RFC-359 最新一段（2026-09-16 续 40，**AC-6 24 → 14；剩余缺口收敛成「启动面合一」一道波次**）
 >
 > 已推并 CI 绿：`f7728ca8d` · `5348d9bf1` · `02408ca5a`(红→修) · `091620684` · `037ad5749` ·

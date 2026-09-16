@@ -1,15 +1,17 @@
 // RFC-359 W1-T3（F-H2-2）—— 数字员工 action 执行器的两个 provider 装配面。
 //
-// 中立实现在 `actionExecutionRunners.ts`；这里只提供它注入的两件 provider 私有能力——
-// 「在借用工作区上启动宿主任务」与「取消宿主任务」——以及各自的读模型 / agent 查询。
+// 中立实现在 `actionExecutionRunners.ts`；这里提供它注入的两件能力——「在借用工作区上启动宿主任务」
+// 与「取消宿主任务」——以及读模型 / agent 查询。
+//
+// RFC-359 AC-1（plan §5hi）：**两份合成一份**。此前 SQLite 那份走 `startTask` + `preCreatedWorktree`，
+// PostgreSQL 那份走启动内核 + `borrowedPostgresqlWorkspace` 租约。合并取内核那半——
+// 它在**两个引擎上都真跑过**（`rfc359-w5-kernel-launch-provider-parity`，plan §5hh），
+// 而 `startTask` 那条按定义只服务 SQLite。
 
 import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID } from '../domain/digitalEmployeeHost'
-import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import type {
   PostgresqlRootTaskLaunchKernel,
   PostgresqlTaskRoutePreparedWorkspace,
@@ -61,76 +63,14 @@ export function borrowedPostgresqlWorkspace(input: {
   })
 }
 
-export interface SqliteActionExecutionEnvironmentDependencies {
-  readonly db: DbClient
-  /** 生产 = cli 的 buildStartTaskDeps 产物；测试注入 binaryOverride/awaitScheduler。 */
-  readonly startDeps: StartTaskDeps
-  /** agent 资源查询，由 bootstrap 注入（与 PostgreSQL 侧同形，本模块不 import resource-catalog 内部）。 */
-  readonly agents: ActionExecutionEnvironment['agents']
-  /** attempt 终态通知（DA 侧据此记 wake hint）；daemon 内 watcher 轮询驱动。 */
+export interface ActionExecutionEnvironmentDependencies {
+  readonly db: ProviderNeutralDatabase
   /**
-   * 终态回调，同步 / 异步都可以：唯一的消费者 `watchTerminal` 用 `.then(() => notify(ref))`
-   * 接它，两种都会被等到。**这里的 `void |` 不是 dev-gotchas 警告的那种放宽**——那条说的是
-   * 「产出方的 Promise 被调用方合法丢掉」；此处调用方显式串进了 promise 链。
+   * **惰性**取 actor：只有 `launchHostTask` 用得到它，而 SQLite 侧的组合根
+   * （`server.ts` 的 `composeFallbackDevelopmentAutomation`）是**同步**函数，
+   * 取不到 `await admitDaemonIdentity(...)`。惰性是两侧都成立的那半。
    */
-  readonly onTerminal?: (executionRef: string) => void | Promise<void>
-  /** watcher 轮询间隔（测试提速用）。 */
-  readonly terminalPollMs?: number
-}
-
-export function createSqliteActionExecutionEnvironment(
-  deps: SqliteActionExecutionEnvironmentDependencies,
-): ActionExecutionEnvironment {
-  const readModels = createTaskExecutionReadModels(deps.db)
-  return Object.freeze({
-    db: deps.db,
-    agents: deps.agents,
-    outcomes: readModels.executionOutcome,
-    statusProjection: readModels.statusProjection,
-    async launchHostTask(input: ActionHostTaskLaunch) {
-      const startInput: StartTask = {
-        workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-        name: input.name,
-        inputs: { ...input.inputs },
-        ...(input.wallTimeMs === null ? {} : { maxDurationMs: input.wallTimeMs }),
-      }
-      const task = await startTask(startInput, {
-        ...deps.startDeps,
-        catalogVisibility: 'internal',
-        digitalEmployeeLaunch: {
-          actionRunId: input.actionRunId,
-          snapshotJson: JSON.stringify(input.snapshot),
-        },
-        internalSource: {
-          kind: 'local-path',
-          repoPath: input.workspacePath,
-          baseBranch: input.baselineSha,
-        },
-        platformInputPaths: input.platformInputPaths,
-        preCreatedWorktree: {
-          taskId: input.taskId,
-          worktreePath: input.workspacePath,
-          branch: '',
-          baseCommit: input.baselineSha,
-          cleanup: { kind: 'borrowed' },
-        },
-        ...(deps.startDeps.launchProvenance === undefined && deps.startDeps.callLaunch === undefined
-          ? { launchProvenance: { kind: 'direct-json' as const, initiator: 'api' as const } }
-          : {}),
-      })
-      return task.id
-    },
-    async cancelHostTask(executionRef: string) {
-      await cancelTask(deps.db, executionRef)
-    },
-    ...(deps.onTerminal === undefined ? {} : { onTerminal: deps.onTerminal }),
-    ...(deps.terminalPollMs === undefined ? {} : { terminalPollMs: deps.terminalPollMs }),
-  })
-}
-
-export interface PostgresqlActionExecutionEnvironmentDependencies {
-  readonly db: PostgresqlDatabaseClient
-  readonly actor: Actor
+  readonly resolveActor: () => Promise<Actor>
   readonly resourceAuthorityFor: (
     actor: Actor,
   ) => Parameters<PostgresqlRootTaskLaunchKernel['launch']>[0]['resourceAuthority']
@@ -147,8 +87,8 @@ export interface PostgresqlActionExecutionEnvironmentDependencies {
   readonly terminalPollMs?: number
 }
 
-export function createPostgresqlActionExecutionEnvironment(
-  deps: PostgresqlActionExecutionEnvironmentDependencies,
+export function createActionExecutionEnvironment(
+  deps: ActionExecutionEnvironmentDependencies,
 ): ActionExecutionEnvironment {
   return Object.freeze({
     db: deps.db,
@@ -162,9 +102,10 @@ export function createPostgresqlActionExecutionEnvironment(
         inputs: { ...input.inputs },
         ...(input.wallTimeMs === null ? {} : { maxDurationMs: input.wallTimeMs }),
       }
+      const actor = await deps.resolveActor()
       const launched = await deps.launch.launch({
-        actor: deps.actor,
-        resourceAuthority: deps.resourceAuthorityFor(deps.actor),
+        actor,
+        resourceAuthority: deps.resourceAuthorityFor(actor),
         invoker: { type: 'user', launchKind: 'direct-json' },
         task,
         subject: {

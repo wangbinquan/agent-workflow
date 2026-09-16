@@ -510,8 +510,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-1（2026-09-15，plan §5fu）：摘要随**纯装配别名批退**再更新——那一批 20 个
     // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
     // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
+    // RFC-359 AC-1（2026-09-16，plan §5hi）：摘要随**两处被调用者改名**更新——
+    // `composePostgresqlAgentActionExecution` / `composePostgresqlScriptActionExecution`
+    // → `composeAgentActionExecution` / `composeScriptActionExecution`（数字员工动作执行的
+    // 两份 composer 合成一对，两个引擎共用）。另加一处实参改名：动作执行环境的 `actor`
+    // 换成惰性的 `resolveActor`（SQLite 那个组合根是同步函数，取不到 `await admit…`）。
+    // **语句数仍是 160、顺序未变**——上面那条 `toHaveLength(160)` 没红。
     expect(digest(restored, pg)).toBe(
-      '465d04e357a5a29946a2f4c06a1c82deee0d10398d542f3de886dfec11c50051',
+      '16a2750b7a8864ccbd290572fefc2fbbcf536367d7584f012bc45454a4b21b40',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

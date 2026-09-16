@@ -34,15 +34,10 @@ import {
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import { createPostgresqlRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+import { createTestHostTaskLaunchKernel } from './hostTaskLaunchKernel'
 import type { ActionExecutionEnvironment } from '@/modules/task-execution/composition/actionExecutionRunners'
-import {
-  composeAgentActionExecution,
-  composePostgresqlAgentActionExecution,
-} from '@/modules/task-execution/composition/agentActionExecution'
-import {
-  composeScriptActionExecution,
-  composePostgresqlScriptActionExecution,
-} from '@/modules/task-execution/composition/scriptActionExecution'
+import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
@@ -251,18 +246,28 @@ export async function createEachProviderTaskExecution(
       launchResources,
       persistence: provider.persistence,
       composeLegacyMissionLaunchers(options: LegacyMissionActionLauncherOptions) {
+        // RFC-359 AC-1（plan §5hi）：SQLite 这一支也走启动内核，和 PG 同一个装配面
+        // （生产侧对应 `cli/start.ts` / `server.ts`）。协调器是真的——本 harness 的
+        // `rfc359-w14-legacy-mission-execution` 要把任务驱到终态，不能用记录式桩。
         const deps = {
           db: sqlite,
-          startDeps: {
+          resolveActor: async () => actor,
+          resourceAuthorityFor: () => launchResources,
+          launch: createTestHostTaskLaunchKernel({
             db: sqlite,
-            ...runConfig,
-            schedulerDriver: provider.runtime.schedulerDriver,
-            taskRecoveryOperations: provider.recovery,
-            identityAccess,
-            launchResources,
-            actorUserId: actor.user.id,
-            awaitScheduler: completionMode === 'await-settle',
-          },
+            appHome,
+            gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+            coordinatorDeps: {
+              db: sqlite,
+              ...runConfig,
+              schedulerDriver: provider.runtime.schedulerDriver,
+            },
+            persistence: provider.persistence,
+            completionMode,
+          }),
+          cancelTask: (taskId: string) =>
+            provider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
+          readModels: provider.readModels,
           agents: options.agents,
           terminalPollMs: options.terminalPollMs,
         }
@@ -405,7 +410,7 @@ export async function createEachProviderTaskExecution(
     composeLegacyMissionLaunchers(options: LegacyMissionActionLauncherOptions) {
       const deps = {
         db: postgresql,
-        actor,
+        resolveActor: async () => actor,
         resourceAuthorityFor: () => launchResources,
         launch: provider.routeLaunch.workflow,
         cancelTask: (taskId: string) =>
@@ -415,11 +420,11 @@ export async function createEachProviderTaskExecution(
         terminalPollMs: options.terminalPollMs,
       }
       return {
-        agentLauncher: composePostgresqlAgentActionExecution({
+        agentLauncher: composeAgentActionExecution({
           ...deps,
           onTerminal: options.onAgentTerminal,
         }),
-        scriptLauncher: composePostgresqlScriptActionExecution({
+        scriptLauncher: composeScriptActionExecution({
           ...deps,
           onTerminal: options.onScriptTerminal,
         }),
