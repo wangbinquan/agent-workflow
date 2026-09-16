@@ -13564,3 +13564,62 @@ zsh 不对未加引号的变量分词，于是 `$1` 是整串、`$2` **恒为空
 **实测排除**：拿一个 644 的临时文件跑 `prettier --write`（改写与「unchanged」两种路径都试），
 mode 一动不动。所以那是并发 session 自己 chmod 的（给 CLI 入口加可执行位很合理），
 按多人协作规矩**原样留着、不进暂存区**。
+
+---
+
+## §5gt　AC-1：`AppDeps.secretBox` 收成必填——删掉 11 处生产上到不了的容忍分支
+
+§5gr 把「SQLite 根可选注入 vs PG 根自建」记成了压在组合根合一之下的 blocker。
+逐项查下去发现**其中一项是可以单独摘出来做的**，而且它是这类不对称里最纯粹的一个。
+
+### 先把「生产上到不了」证实，而不是推断
+
+`server.ts` 里有 **11 处** `deps.secretBox === undefined ? … : …`，撑起下游一串可空值
+（`oidcProviders` / `codeHostConnections` / `webhookEndpointService` / `resourcePackageBinding` /
+`repositoryTransport`）。判断它们是不是死代码，靠的不是「看起来不会发生」：
+
+- `cli/start.ts:1480` 在**选 provider 之前**无条件 `createSecretBox(Paths.secretKeyFile)`，
+  源码注释原话是 "Provider-independent bootstrap secrets are needed by either selected composition"；
+- PG 根（`postgresqlDaemonApplication.ts`）的 `secretBox` 本来就是必填入参；
+- **决定性的一步是类型层 dry run**：把 `secretBox?:` 改成 `secretBox:` 再跑 `tsc`，
+  **23 条错误全部落在 16 个测试文件，`src/` 零错误**。
+  也就是说「省略 secretBox」这件事**只有测试在做**，生产两个引擎都不可能走到那些分支。
+
+可选性唯一的服务对象是「省事不传的测试」，代价却是一处纯粹的装配签名不对称。
+
+### 做了什么
+
+1. `AppDeps.secretBox` 改必填（原 doc 注释写着「Tests that do not exercise OIDC can omit it」，
+   那句话正是这笔债的自述）；
+2. 删掉 11 处容忍分支：5 处条件展开 `...(x === undefined ? {} : { secretBox: x })` 收成普通字段，
+   6 处 `x === undefined ? null : construct(…)` 收成直接构造；
+3. `OidcAuthRouteBindings.providers` 的 `| null` 一并去掉——**两个根都无条件构造它**
+   （`server.ts` 与 `postgresqlDaemonApplication.ts:683` 同一句），于是它撑起的两条 503
+   （`oidc-not-configured`）也是死的；
+4. 16 个测试文件补上 `secretBox`。
+
+### 一格测试连同它锁的分支一起退役
+
+`rfc221-login-policy-routes` 有一格 `no-secret deployment`，**故意不传 secretBox**，
+断言退化后的那两条 503。改完之后**被测状态不复存在**——实测那两条断言从 `503` 变 `404`
+（路由现在真的走进服务，只是没有名叫 `corp` 的 provider）。
+
+这不是「测试碍事就删」：该文件的注释**当年就写明**「正解是把 SQLite 根的 secretBox 收成必填、
+删掉 null 分支与那两个 503，那样这条用例连同本文件最后一条账本残留一起消失——但那要改 47 个
+测试文件的 createApp 入参并动生产路由分支，独立一刀」。现在正是那一刀，而实测代价是
+**16 个文件而不是 47 个**（那个估数偏大）。文件其余部分本来就在双引擎作用域上跑。
+
+账本：总账 328 → 327、`OPEN_MIGRATION_DEBT` 15 → 14。
+
+### 顺带查实的一处**既有**雷（非本次引入，本次不修）
+
+跑批验证时 `rfc107-url-upload-multipart` 在 8 文件批里红 13 格，单跑 13 全绿。
+二分下来是 `rfc165-agent-launch` 或 `rfc165-scheduled-kinds` 任一与它同批即红。
+
+**它不是我改出来的**：把 `server.ts` / `oidc-auth.ts` / 这两个测试文件一起 `git checkout` 回 HEAD
+再跑同一对，**照样 13 红**。属于与 §5gk 记的 `rfc099 → rfc305` 同一类的跨文件全局态泄漏，
+CI 现在是绿的说明分片没把它们排到一起——又一颗埋着的雷，单独记账，不折进本节。
+
+**方法论上值得记一笔**：怀疑「是不是我改红的」时，最快的判法不是读代码推断，
+而是**把涉及的文件整组 checkout 回 HEAD 跑一遍**——几十秒给出是非题的答案。
+（这一步不能用 `git stash`，本仓禁用；用 `cp` 备份 + `git checkout --` + 还原即可。）

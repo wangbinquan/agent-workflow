@@ -1,6 +1,7 @@
 // P-5-02: backup service + CLI.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { Database } from 'bun:sqlite'
 import {
   existsSync,
@@ -302,6 +303,7 @@ describe('POST /api/backup', () => {
     process.env.AGENT_WORKFLOW_HOME = h.appHome
     try {
       const app = createApp({
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
         token: 'tok',
         configPath: join(h.appHome, 'config.json'),
         opencodeVersion: '1.14.25',

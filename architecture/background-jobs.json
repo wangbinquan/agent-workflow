@@ -2995,9 +2995,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/oidc-auth.ts",
-      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:107",
+      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:114",
       "kind": "register-call",
-      "line": 107,
+      "line": 114,
       "ownerEntryId": "owner:packages/backend/src/routes/oidc-auth.ts#mountOidcAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountOidcAuthRoutes",
@@ -3006,9 +3006,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/oidc-auth.ts",
-      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:161",
+      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:167",
       "kind": "register-call",
-      "line": 161,
+      "line": 167,
       "ownerEntryId": "owner:packages/backend/src/routes/oidc-auth.ts#mountOidcAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountOidcAuthRoutes",
@@ -3017,9 +3017,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/oidc-auth.ts",
-      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:91",
+      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:97",
       "kind": "register-call",
-      "line": 91,
+      "line": 97,
       "ownerEntryId": "owner:packages/backend/src/routes/oidc-auth.ts#mountOidcAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountOidcAuthRoutes",
@@ -5349,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3204",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3201",
       "kind": "register-call",
-      "line": 3204,
+      "line": 3201,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5360,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1348",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1357",
       "kind": "register-call",
-      "line": 1348,
+      "line": 1357,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3001",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2998",
       "kind": "register-call",
-      "line": 3001,
+      "line": 2998,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3271",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3268",
       "kind": "register-call",
-      "line": 3271,
+      "line": 3268,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -12799,5 +12799,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f199535aa319eb53db7ad0fbea96492e1aec876259e29b1e6c065b89e001623a"
+  "sourceDigest": "sha256:b95d1019e070c466996ca05a708cf05fcd2023d3bae20db43e0a750855e6365a"
 }

@@ -26,6 +26,7 @@
 //               generated DAG as a reusable workflows row.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -840,6 +841,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     await seedTestDefaultOpencodeRuntime(db)
     await seedPoolAgents(db)
     app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'a'.repeat(64),
       configPath: '/tmp/aw-rfc167-dw-config.json',
       opencodeVersion: '1.14.25',

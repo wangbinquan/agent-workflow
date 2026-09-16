@@ -20,6 +20,7 @@
 // profiles crossing generate → execute without a name-based mis-selection.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -407,6 +408,7 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
 
   test('save-as persists an id-canonical workflow (nodes carry agentId, not a token/name)', async () => {
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'a'.repeat(64),
       configPath: '/tmp/aw-rfc223-pr3b-config.json',
       opencodeVersion: '1.14.25',

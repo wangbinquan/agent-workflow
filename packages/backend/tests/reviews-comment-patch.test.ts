@@ -18,6 +18,7 @@
 // 而合一前每次 `createInMemoryDb` 都是一个新库，天然不会。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { eq } from 'drizzle-orm'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import type { AppDeps } from '../src/server'
@@ -317,6 +318,7 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
 
     test('200 — round-trip via HTTP, response body matches db', async () => {
       const app = await composeProviderApp({
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
         token: 'tok',
         configPath: '',
         opencodeVersion: '1.14.99',
@@ -344,6 +346,7 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
 
     test('422 — empty commentText rejected by zod (min length 1)', async () => {
       const app = await composeProviderApp({
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
         token: 'tok',
         configPath: '',
         opencodeVersion: '1.14.99',

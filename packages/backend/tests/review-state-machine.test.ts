@@ -9,6 +9,7 @@
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -624,6 +625,7 @@ describe('RFC-005 review REST endpoints', () => {
 
   test('GET /api/reviews lists pending reviews + GET /:nodeRunId returns detail', async () => {
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'tok',
       configPath: '',
       opencodeVersion: '1.14.99',
@@ -650,6 +652,7 @@ describe('RFC-005 review REST endpoints', () => {
 
   test('GET /api/reviews/pending-count returns the badge count', async () => {
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'tok',
       configPath: '',
       opencodeVersion: '1.14.99',
@@ -666,6 +669,7 @@ describe('RFC-005 review REST endpoints', () => {
 
   test('POST /api/reviews/:nodeRunId/comments + DELETE round-trip', async () => {
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'tok',
       configPath: '',
       opencodeVersion: '1.14.99',
@@ -711,6 +715,7 @@ describe('RFC-005 review REST endpoints', () => {
 
   test('POST /api/reviews/:nodeRunId/decision approve → ok', async () => {
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'tok',
       configPath: '',
       opencodeVersion: '1.14.99',
@@ -745,6 +750,7 @@ describe('RFC-005 review REST endpoints', () => {
 
   test('POST /api/reviews/:nodeRunId/decision reject without reason → 422', async () => {
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'tok',
       configPath: '',
       opencodeVersion: '1.14.99',

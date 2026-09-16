@@ -74,11 +74,17 @@ export interface OidcAuthIdentityBindings {
 
 export interface OidcAuthRouteBindings {
   readonly auth: AuthRuntime
+  /**
+   * RFC-359 AC-1（plan §5gt）：**非空**。两个组合根都无条件构造它
+   * （`server.ts` 的 `createOidcProvidersService(...)` 与
+   * `postgresqlDaemonApplication.ts:683` 的同一句），所以此前的 `| null`
+   * 以及它撑起的两条 503（`oidc-not-configured`）在生产上一条都到不了。
+   */
   readonly providers: {
     readonly findById: (id: string) => Promise<OidcProvider | null>
     readonly findBySlug: (slug: string) => Promise<OidcProvider | null>
     readonly resolveClientSecret: (id: string) => Promise<string | null>
-  } | null
+  }
   readonly identities: OidcAuthIdentityBindings
 }
 
@@ -100,7 +106,8 @@ export function mountOidcAuthRoutes(
       summary: 'List enabled OIDC providers for the login page',
     },
     async (c) => {
-      return c.json(await auth.getLoginMethodDiscovery(providers !== null))
+      // OIDC 运行时恒在（见上面 `providers` 的说明）；「有没有配置 provider」由它自己答。
+      return c.json(await auth.getLoginMethodDiscovery(true))
     },
   )
 
@@ -117,7 +124,6 @@ export function mountOidcAuthRoutes(
     },
     async (c) => {
       await auth.assertBootstrapComplete()
-      if (providers === null) return c.json({ ok: false, code: 'oidc-not-configured' }, 503)
       const provider = await providers.findBySlug(c.req.param('slug'))
       if (!provider || !provider.enabled) {
         return c.json({ ok: false, code: 'provider-not-found' }, 404)
@@ -173,7 +179,6 @@ export function mountOidcAuthRoutes(
       if ((await auth.getLoginPolicy()).bootstrapCompletedAt === null) {
         return c.html(friendly('bootstrap-admin-required'), 403)
       }
-      if (providers === null) return c.html(friendly('oidc-not-configured'), 503)
       const code = c.req.query('code')
       const state = c.req.query('state')
       if (!code || !state) return c.html(friendly('invalid-callback'), 400)

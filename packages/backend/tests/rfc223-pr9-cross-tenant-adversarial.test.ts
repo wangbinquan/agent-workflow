@@ -10,6 +10,7 @@
 //
 // Existing strong coverage is intentionally not duplicated:
 //   - portable import 0/1/N + stale mapping: rfc223-import-refs.test.ts
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 //   - five-type transfer collision + workflow exception:
 //     rfc223-owner-transfer.test.ts
 
@@ -503,6 +504,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       config: JSON.stringify({ command: ['tenant-b-command'] }),
     })
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: TOKEN,
       configPath: '/tmp/aw-rfc223-pr9-config-never-used.json',
       opencodeVersion: '1.14.25',

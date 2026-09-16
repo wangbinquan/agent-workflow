@@ -27,6 +27,7 @@ import {
   test,
   beforeAll,
 } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Hono } from 'hono'
 import { execFileSync } from 'node:child_process'
 import {
@@ -297,6 +298,7 @@ async function buildHarness(): Promise<Harness> {
   })
 
   const app = createApp({
+    secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
     token: TOKEN,
     configPath: join(tmp, 'config.json'),
     opencodeVersion: '1.14.25',
@@ -686,6 +688,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
       } as never,
     })
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: TOKEN,
       configPath: join(tmp, 'config.json'),
       opencodeVersion: '1.14.25',

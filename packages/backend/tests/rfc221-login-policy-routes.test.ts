@@ -1,19 +1,15 @@
 // RFC-221 — admin login-method API and provider lifecycle protection.
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb } from '../src/db/client'
-import { createApp } from '../src/server'
 
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // RFC-359 AC-6：两个引擎各跑一遍。
 describeEachProviderHttpApplication(
@@ -172,55 +168,11 @@ describeEachProviderHttpApplication(
   },
 )
 
-// RFC-359 AC-6 例外：单引擎。被测状态（无 secretBox 的装配）**在两个引擎的生产部署里都
-// 不存在**——这比原来记的「在 PostgreSQL 上按构造不存在」更强，2026-09-12 对账所得。
-describe('RFC-221 login policy routes — no-secret deployment', () => {
-  test('public OIDC routes fail closed when runtime support or callback inputs are missing', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // **故意不给 secretBox**：这条判据测的就是「装配里没有密钥 ⇒ OIDC 运行时不可用」。
-    //
-    // 为什么只能单引擎（2026-09-12 按源码对账，比 plan §5u 原记载更准）：
-    //   · `server.ts` 的 SQLite 组合根是 `deps.secretBox === undefined ? null : …`，
-    //     所以 `oidcProviders === null` 只在**没传 secretBox** 时出现；
-    //   · `postgresqlDaemonApplication.ts` 无条件构造它（`secretBox` 是必填入参），
-    //     该状态在 PG 侧按构造不存在；
-    //   · 但关键一条是：`cli/start.ts` 在**选 provider 之前**就 `createSecretBox(...)`
-    //     （注释原话 "needed by either selected composition"），所以**两个引擎的真实
-    //     部署都必定带 secretBox**——这个 null 分支（及它背后那两个 503）在生产上
-    //     两边都到不了，不是「PG 缺了 SQLite 有的能力」。
-    //
-    // 也就是说这不是「一个引擎好一个不好」的分叉，而是两个组合根的**装配签名**不对称。
-    // 正解是把 SQLite 根的 `secretBox` 也收成必填、删掉 null 分支与那两个 503，
-    // 那样这条用例连同本文件最后一条账本残留一起消失——但那要改 47 个测试文件的
-    // `createApp` 入参并动生产路由分支，独立一刀，见 plan §5bg。
-    const app = createApp({
-      token: DAEMON_TOKEN,
-      configPath: '/tmp/aw-rfc221-no-secret-config-never-used.json',
-      opencodeVersion: 'test',
-      dbVersion: 110,
-      db,
-    })
-    const discovery = await app.request('/api/auth/oidc/providers')
-    expect(discovery.status).toBe(200)
-    expect((await discovery.json()) as Record<string, unknown>).toMatchObject({
-      mode: 'ready',
-      providers: [],
-      daemonTokenEnabled: false,
-    })
-
-    const start = await app.request('/api/auth/oidc/corp/login/start', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    })
-    expect(start.status).toBe(503)
-    expect((await start.json()) as Record<string, unknown>).toMatchObject({
-      ok: false,
-      code: 'oidc-not-configured',
-    })
-
-    const callback = await app.request('/api/auth/oidc/corp/callback')
-    expect(callback.status).toBe(503)
-    expect(await callback.text()).toContain('OIDC is not configured on this server.')
-  })
-})
+// RFC-359 AC-1（plan §5gt）：这里原来有一格 `no-secret deployment` —— 它**故意不传 secretBox**，
+// 断言 OIDC 装配退化成 null 之后那两条 503。本轮把 `AppDeps.secretBox` 收成必填、删掉了那个
+// null 分支，于是**被测状态不复存在**（改完实测：那两条断言从 503 变 404，因为路由现在真的
+// 走到服务里、只是没有名叫 corp 的 provider）。
+//
+// 这一格是连同它锁的分支一起退役的，不是「测试删了」：该文件注释当年就写明「正解是把 SQLite 根的
+// secretBox 收成必填、删掉 null 分支与那两个 503，那样这条用例连同本文件最后一条账本残留一起消失」。
+// 现在正是那一刀。文件其余部分本来就在 `describeEachProviderHttpApplication` 上双引擎跑。

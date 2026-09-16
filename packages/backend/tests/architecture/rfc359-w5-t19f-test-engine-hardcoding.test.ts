@@ -250,7 +250,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc220-oauth2-provider-schema-service.test.ts: 1',
   'rfc220-presented-name-sync.test.ts: 3',
   'rfc221-auth-policy.test.ts: 10',
-  'rfc221-login-policy-routes.test.ts: 1',
   'rfc222-task-delete.test.ts: 1',
   'rfc223-pr2-refs.test.ts: 2',
   'rfc223-pr3b-dynamic-token.test.ts: 2',
@@ -751,7 +750,6 @@ function sanctionOf(rel: string): string | null {
 export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'execution-contract-platform.test.ts',
   'helpers/rfc310Pr3Fixture.ts',
-  'rfc221-login-policy-routes.test.ts',
   'rfc257-webhook-error-codes.test.ts',
   'rfc268-webhook-scratch-launch.test.ts',
   'rfc269-webhook-code-host-context-e2e.test.ts',

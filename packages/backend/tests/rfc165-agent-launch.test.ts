@@ -31,6 +31,7 @@
 //       launch; agents:write WITHOUT tasks:launch may NOT.
 
 import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -492,6 +493,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-agent-http-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'a'.repeat(64),
       configPath: join(appHome, 'config.json'),
       opencodeVersion: '1.14.25',

@@ -15,6 +15,7 @@
 // 如果本文件变红，先对照 design/RFC-142-review-history-echo/design.md D3-D5。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -561,6 +562,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
     mkdirSync(appHome, { recursive: true })
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: DAEMON_TOKEN,
       configPath: '',
       opencodeVersion: '1.14.25',

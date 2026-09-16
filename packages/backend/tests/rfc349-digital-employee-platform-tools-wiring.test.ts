@@ -12,6 +12,7 @@
 // 同一个目录交给了 app 组装（否则第 ① 条在生产里永远走不到）。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -52,6 +53,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     }
     typeRef = `${descriptor.typeRef.typeId}@${descriptor.typeRef.revision}`
     composition = composeSqliteAppDeps({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'd'.repeat(64),
       configPath: join(appHome, 'config.json'),
       opencodeVersion: null,

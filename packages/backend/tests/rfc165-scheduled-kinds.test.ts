@@ -19,6 +19,7 @@
 //      clients keep working byte-for-byte).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -586,6 +587,7 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-kinds-http-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'a'.repeat(64),
       configPath: join(appHome, 'config.json'),
       opencodeVersion: '1.14.25',

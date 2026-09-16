@@ -15,6 +15,7 @@
 //   - HTTP route returns the same shape and 404s consistently.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -362,6 +363,7 @@ describeEachProvider(
 
       async function app(): Promise<ReturnType<typeof createApp>> {
         return composeProviderApp({
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
           configPath: '',
           opencodeVersion: '1.14.99',
@@ -427,6 +429,7 @@ describeEachProvider(
 
       async function app(): Promise<ReturnType<typeof createApp>> {
         return composeProviderApp({
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
           configPath: '',
           opencodeVersion: '1.14.99',

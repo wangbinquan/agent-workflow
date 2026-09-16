@@ -17,6 +17,7 @@
 // 旧的 `createPostgresqlExecutionContractResourceAdapter` 已删除。
 
 import { describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -205,6 +206,7 @@ describe('RFC-359 执行合同装配（SQLite 组合根）', () => {
       },
     })
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: DAEMON_TOKEN,
       configPath: '',
       opencodeVersion: null,

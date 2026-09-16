@@ -785,11 +785,20 @@ export interface AppDeps {
   /** RFC-349: selected-provider mechanism telemetry, kept separate from request latency. */
   databaseTelemetry?: () => DatabaseRuntimeTelemetry
   /**
-   * RFC-036 — AES-256-GCM seal/unseal helper. Required only for the OIDC
-   * routes (admin CRUD + login callback). Tests that do not exercise OIDC
-   * can omit it; the OIDC routes refuse to mount without it.
+   * RFC-036 — AES-256-GCM seal/unseal helper.
+   *
+   * RFC-359 AC-1（plan §5gt）：**必填**。此前是可选的，于是这棵组合树里长出 11 处
+   * `deps.secretBox === undefined ? … : …` 的容忍分支，以及它们下游一串可空值
+   * （`oidcProviders` / `codeHostConnections` / `webhookEndpointService` /
+   * `resourcePackageBinding` / `repositoryTransport`）。
+   *
+   * 那些分支**在生产里一条都到不了**：`cli/start.ts:1480` 在**选 provider 之前**就
+   * 无条件 `createSecretBox(...)`（源码注释原话：needed by either selected composition），
+   * 两个引擎的真实部署都必定带它。可选性唯一的服务对象是「省事不传的测试」，
+   * 代价却是 PostgreSQL 根要求必填、SQLite 根不要求——一处纯粹的装配签名不对称
+   * （`rfc221-login-policy-routes` 的注释早就把这条记成「正解是收成必填」）。
    */
-  secretBox?: SecretBox
+  secretBox: SecretBox
   /**
    * RFC-257 — async webhook dispatch (the T6 fan-out engine). The public
    * ingress route refuses to mount without BOTH this and secretBox (same
@@ -1677,10 +1686,7 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
     deps.providerCore?.repositoryTransportCredentialRepository ??
     new SQLiteRepositoryTransportCredentialRepository(deps.db)
   const repositoryTransport =
-    deps.repositoryTransport ??
-    (deps.secretBox === undefined
-      ? null
-      : composeRepositoryTransportCredentials(repository, deps.secretBox))
+    deps.repositoryTransport ?? composeRepositoryTransportCredentials(repository, deps.secretBox)
   if (repositoryTransport !== null) {
     void reconcileRepositoryTransportConnectionProjections(
       repository,
@@ -1688,7 +1694,7 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
     )
   }
   const codeHostConnections =
-    deps.secretBox === undefined || repositoryTransport === null
+    repositoryTransport === null
       ? null
       : createCodeHostConnectionsService({
           secretBox: deps.secretBox,
@@ -1699,11 +1705,11 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
       ? composeSqliteUncredentialedDevelopmentDeliveryProvider({
           db: deps.db,
           store: repositoryWorkspaceStore,
-          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+          secretBox: deps.secretBox,
         })
       : createDevelopmentDeliveryProvider({
           db: deps.db,
-          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+          secretBox: deps.secretBox,
           connections: codeHostConnections,
           pipeline: composePipelineEvidenceRunnerFor(deps.db),
         })
@@ -1734,7 +1740,7 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
       deps.repositoryPublicationTransport ??
       createRepositoryPublicationTransport({
         repository,
-        ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+        secretBox: deps.secretBox,
         appHome,
         ...(repositoryEndpointDiscovery === undefined
           ? {}
@@ -2096,51 +2102,48 @@ export function composeSqliteApplicationDeps(
   // journal + prestage/compensate 的原子 apply。两份做同一件事，判据却只跑前者。
   // 现在两边都装后者；`authorityResolver` 把路由那一层的 authority 认回请求者本人。
   const packageActorsByAuthority = new WeakMap<object, Actor>()
-  const resourcePackageBinding: ResourcePackageRouteBinding | null =
-    effectiveDeps.secretBox === undefined
-      ? null
-      : (() => {
-          const box = effectiveDeps.secretBox
-          const provider = composePostgresqlResourcePackageProvider({
-            db: effectiveDeps.db,
-            appHome,
-            authorityResolver: {
-              resolve(authority) {
-                const actor = packageActorsByAuthority.get(authority)
-                if (actor === undefined) throw new Error('foreign-resource-package-authority')
-                return actor
-              },
-            },
-            mcpLifecycle: createMcpTransactionLifecycle(),
-            capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
-              db: effectiveDeps.db,
-            }),
-            pluginInstaller: createResourcePackagePluginInstaller(),
-          })
-          const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
-            db: effectiveDeps.db,
-            box,
-          })
-          return Object.freeze({
-            applyActivity: atomicApply,
-            catalog: composePostgresqlResourcePackageCatalog({
-              provider,
-              execution: createPostgresqlResourcePackageExecutionAdapter({
-                box,
-                provider,
-                atomicApply,
-              }),
-            }),
-            commandContextFor(actor: Actor): CommandContext {
-              const context = identityAccess.contexts.fromAuthority(
-                directRequestAuthority(identityAccess.directAuthority, actor),
-                'http',
-              )
-              packageActorsByAuthority.set(context.authority, actor)
-              return context
-            },
-          })
-        })()
+  const resourcePackageBinding: ResourcePackageRouteBinding | null = (() => {
+    const box = effectiveDeps.secretBox
+    const provider = composePostgresqlResourcePackageProvider({
+      db: effectiveDeps.db,
+      appHome,
+      authorityResolver: {
+        resolve(authority) {
+          const actor = packageActorsByAuthority.get(authority)
+          if (actor === undefined) throw new Error('foreign-resource-package-authority')
+          return actor
+        },
+      },
+      mcpLifecycle: createMcpTransactionLifecycle(),
+      capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
+        db: effectiveDeps.db,
+      }),
+      pluginInstaller: createResourcePackagePluginInstaller(),
+    })
+    const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+      db: effectiveDeps.db,
+      box,
+    })
+    return Object.freeze({
+      applyActivity: atomicApply,
+      catalog: composePostgresqlResourcePackageCatalog({
+        provider,
+        execution: createPostgresqlResourcePackageExecutionAdapter({
+          box,
+          provider,
+          atomicApply,
+        }),
+      }),
+      commandContextFor(actor: Actor): CommandContext {
+        const context = identityAccess.contexts.fromAuthority(
+          directRequestAuthority(identityAccess.directAuthority, actor),
+          'http',
+        )
+        packageActorsByAuthority.set(context.authority, actor)
+        return context
+      },
+    })
+  })()
   // RFC-359 —— Intent apply 两个 provider 共用**同一台**引擎与同一份装配。此处此前是
   // SQLite 专属的那条线（legacy 资源会话 + SQLite 工件生命周期），与 PostgreSQL 根的
   // `createIntentApplyEngine` 并行存在；判据长期只喂其中一侧。
@@ -2440,7 +2443,7 @@ function composeSqliteApiRouteMounts(
         identityAccess,
       ),
     multipart: {
-      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+      secretBox: deps.secretBox,
       configPath: deps.configPath,
       schedulerDriver,
       identityAccess: Object.freeze({
@@ -2502,7 +2505,7 @@ function composeSqliteApiRouteMounts(
     repositoryPreparation: createDevelopmentWorkspaceRepositoryPreparation({
       store: repositoryWorkspaceStore,
       appHome,
-      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+      secretBox: deps.secretBox,
     }),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
@@ -2610,10 +2613,7 @@ function composeSqliteApiRouteMounts(
   const developmentConfigOperations = deps.developmentConfigOperations
   const developmentMissionOperations = deps.developmentMissionOperations
   const databaseMigration = deps.databaseMigration
-  const oidcProviders =
-    deps.secretBox === undefined
-      ? null
-      : createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
+  const oidcProviders = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
   const oidcIdentities = composeOidcIdentityOperations({
     db: deps.db,
     identityAccess,
@@ -2703,14 +2703,11 @@ function composeSqliteApiRouteMounts(
       identityAccess,
       agentLaunchResources,
     )
-  const webhookEndpointService =
-    deps.secretBox === undefined
-      ? null
-      : composeWebhookEndpointServiceDependencies({
-          db: deps.db,
-          configPath: deps.configPath,
-          secretBox: deps.secretBox,
-        })
+  const webhookEndpointService = composeWebhookEndpointServiceDependencies({
+    db: deps.db,
+    configPath: deps.configPath,
+    secretBox: deps.secretBox,
+  })
   // RFC-359 AC-1（plan §5gb）：触发器服务依赖的装配收成一份后，`validateSaveable` 由**调用方**
   // 提供（PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
   const webhookTriggerService = composeWebhookTriggerServiceDependenciesFor(

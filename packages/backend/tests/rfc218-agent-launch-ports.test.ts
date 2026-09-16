@@ -23,6 +23,7 @@
 //       / upload-port agent → 422 at save; text-port payload saves.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Hono } from 'hono'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -408,6 +409,7 @@ async function buildHarness(): Promise<Harness> {
   const configPath = join(tmp, 'config.json')
   writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
   const app = createApp({
+    secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
     token: TOKEN,
     configPath,
     opencodeVersion: '1.14.25',

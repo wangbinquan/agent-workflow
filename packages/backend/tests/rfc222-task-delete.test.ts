@@ -10,6 +10,7 @@
 //   D-6  concurrent/front gates: active-in-memory → 409; fusion-internal → 409.
 
 import { beforeEach, afterEach, describe, expect, test } from 'bun:test'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Hono } from 'hono'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -429,6 +430,7 @@ describe('RFC-222 D-6 — front gates（active-in-memory，单引擎）', () => 
   test('active-in-memory (canceled but controller live) → 409 task-active', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const app = createApp({
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: DAEMON_TOKEN,
       configPath: '/tmp/aw-rfc222-delete-config-never-used.json',
       opencodeVersion: '1.14.25',
