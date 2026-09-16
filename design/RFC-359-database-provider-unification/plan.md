@@ -14174,3 +14174,56 @@ PG 走 `launch.launch`）**没有任何行为覆盖**。
 
 **③a 本身是一件可独立交付的事**（建 e2e 对拍、把「驱不动」那面覆盖上），
 它不改任何生产行为，却把 ③b/④ 从「赌」变成「可验证」。下一刀从它开始。
+
+---
+
+## §5hf　更正 §5he：那个「必须先建」的 e2e 对拍**已经存在**，就在 helper 里
+
+§5he 判「两条启动路没有可对拍的面，Step C 前必须先建 e2e 对拍（③a）」。
+再查一层，**这个结论下重了**。③a 的绝大部分已经有人做完了。
+
+### 已经存在的东西
+
+`tests/helpers/eachProviderTaskExecution.ts` 里**两条启动机制各有一个分支**，
+而且藏在同一个引擎无关的 `launch(task, workspace)` 后面：
+
+| 引擎 | 它实际调什么 |
+| --- | --- |
+| SQLite（第 228 行） | `startTask(task, { …, internalSource: { kind: 'local-path', … }, preCreatedWorktree: { …, cleanup: { kind: 'borrowed' } } })` |
+| PostgreSQL（第 375 行） | `routeLaunch.workflow.launch({ …, internal: { workspace: borrowedPostgresqlWorkspace(workspace) } })` |
+
+**这正是 §5he 说「合并意味着 SQLite 侧改用租约语义、必须逐条验」的那两件东西**——
+它们已经被同一个 API 包起来，由同一批断言在两个引擎上各跑一遍。
+
+消费它的四个文件（`rfc359-w5-t21b-execution-chain` / `rfc359-w12-digital-employee-execution` /
+`rfc359-w8-runtime-participants-conformance` / `rfc359-w14-legacy-mission-execution`）
+本轮实跑：**21 例、两个引擎、全绿**。
+
+另外 `tasks.test.ts` 用 `describeEachProviderHttpApplication` 做真 `POST /api/tasks`，
+两个引擎各一遍、58 例全绿——**HTTP 层的端到端启动对拍也早就在**
+（PG 那侧正是经 `createPostgresqlRootTaskLaunchKernel`，见
+`postgresqlTaskRouteLaunchOperations.ts:944 / 1228`）。
+
+### 那 §5he 引的那句「驱不动」错了吗
+
+没错，只是**范围比我读到的窄**。`rfc359-w7-task-route-conformance` C 段说的是
+「**这一对端口**的 `launch` 不能靠端口级 oracle 对拍」——那是对的，它指的是
+「拿两个 `TaskRouteLaunchOperations` 实现直接比返回值」这种做法。
+但「**经各自的生产路径跑真启动、再比可观察结果**」是另一回事，而那件事仓库里已经有了。
+
+**我把「端口级 oracle 不可行」读成了「任何对拍都不可行」。** 判据的适用范围要连着它的原文一起读。
+
+### 于是 ③a 缩成一件小事
+
+不必新建 e2e 对拍。剩下的缺口只有一处：
+`rfc359-t3-action-execution-runners` 把 `launchHostTask` 桩掉了，
+所以**两份环境实现自己**（`createSqlite/PostgresqlActionExecutionEnvironment`）没有直接的行为用例
+——虽然它们各自调用的那两条启动机制已经被上面那套覆盖了。
+
+补一条针对这两份实现的双引擎用例即可，而不是造一整套 e2e。
+
+### Step C 的风险重估
+
+原判「零覆盖路径上的产品行为变更」**不成立**：两条机制的等价性已由 21 例双引擎测试在跑。
+Step C 回到正常难度——仍需 Step B②（`cli/start.ts` 造出根内核）先落地，
+因为生产 SQLite 侧目前没有内核可用；但那是接线，不是赌。
