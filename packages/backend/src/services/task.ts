@@ -1504,8 +1504,32 @@ const missingMemoryDistillEnqueuer: MemoryDistillEnqueuer = Object.freeze({
   },
 })
 
-function createTaskDriveCoordinator(input: {
-  readonly deps: StartTaskDeps
+/**
+ * RFC-359 AC-1（plan §5ha 第 ① 步）—— 「造一台任务驱动协调器」需要的**确切**依赖面。
+ *
+ * 为什么把它从 `StartTaskDeps` 里摘出来：这台协调器是 `PostgresqlRootTaskLaunchKernel`
+ * 的四件入参之一，PostgreSQL daemon 在自己那边**就地**造一台
+ * （`cli/postgresqlDaemonApplication.ts:953`），与 `StartTaskDeps` 无关；
+ * 而 SQLite 侧唯一的造法锁在本文件里、且以 legacy 启动路的那个大依赖包为入参，
+ * 于是 `cli/start.ts` **造不出内核**——这正是启动面合一（plan §5gv）Step B 的卡点。
+ *
+ * 这个类型是**按函数体实际读到的字段**列的，不是拍脑袋收窄：
+ * `runtimeConfigOpts` 那一组（它自己就已经是 `Pick<StartTaskDeps, …>`）＋ 下面这六个。
+ * `StartTaskDeps` 仍然满足它，所以本文件内四处既有构造点一个字都不用改。
+ */
+export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOpts>[0] &
+  Pick<
+    StartTaskDeps,
+    | 'db'
+    | 'schedulerDriver'
+    | 'binaryOverride'
+    | 'configPath'
+    | 'subagentLiveCapture'
+    | 'memoryDistillEnqueuer'
+  >
+
+export function createTaskDriveCoordinator(input: {
+  readonly deps: TaskDriveCoordinatorDependencies
   readonly appHome: string
   readonly ensureWorkspaceProfiles?: boolean
   readonly admittedContinuation?: RepositoryPreparationStep

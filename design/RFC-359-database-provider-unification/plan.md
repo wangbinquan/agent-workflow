@@ -13992,3 +13992,51 @@ PostgreSQL 侧则是在 daemon 里**就地**造一个 `TaskDriveCoordinator`（9
 
 - §5gy：源任务缺 cached mirror id 时，legacy 报计数 + 指引、内核只报一句——**留 legacy 那份措辞**。
 （这张清单在迁移过程中继续加；每条都要在合一的 PR 里点名处置，不能让合一悄悄降级用户可见行为。）
+
+---
+
+## §5hb　Step B 第 ① 步落地：协调器工厂从 legacy 单体里解出来（零行为改动）
+
+§5ha 把 Step B 的卡点定在一件事上：SQLite 侧唯一能造 `TaskDriveCoordinator` 的地方
+（`services/task.ts:1507` 的 `createTaskDriveCoordinator`）**不导出**，且入参是 `StartTaskDeps`
+——legacy 启动路那个大依赖包。于是 `cli/start.ts` 造不出启动内核。
+
+### 做法：按函数体实际读到的字段收窄，然后导出
+
+新增 `TaskDriveCoordinatorDependencies`，**不是拍脑袋收窄**，是逐字段对着函数体列的：
+
+```ts
+export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOpts>[0] &
+  Pick<StartTaskDeps,
+    'db' | 'schedulerDriver' | 'binaryOverride' | 'configPath'
+    | 'subagentLiveCapture' | 'memoryDistillEnqueuer'>
+```
+
+`runtimeConfigOpts` 那一组本来就已经是 `Pick<StartTaskDeps, …>`，直接复用它的参数类型，
+不重抄一遍字段名——抄一遍就会和它漂移。
+
+**`StartTaskDeps` 仍然满足这个类型**，所以本文件内四处既有构造点（3821 / 4394 / 4807 / 5442）
+一个字都不用改。`tsc` 0 错即为佐证：这是一次**纯类型收窄 + 导出**，零行为改动。
+
+### 账本连动：三处，其中一处是上一刀埋的
+
+1. `rfc294-module-symbol-owners` 24708 → 24709（多了个导出），挂 `allowGrowth` 并写明还款条件：
+   legacy 启动面退役后这个工厂搬去 task-execution 模块、不再从 `services/` 导出。
+2. **§5gz 挂的那两条 `allowGrowth` 到期了**，必须在本 commit 删除——
+   守卫原话：「`allowGrowth` 是**一次性**的：它授权的那次上涨完成后必须立刻删掉。
+   留着等于给这份账本发了长期上涨许可」。
+   §5gz 里我写过「这个过期语义在这里是**对的**，它逼着这笔债在很短的窗口里被处理」——
+   **下一个 commit 就兑现了**，而且兑现方式正是让我自己回来清理。
+3. `rfc359-w7-task-insert-lineage-completeness` 按行号登记的 `services/task.ts` 站点
+   3506 → 3530（我在它上面插了 24 行类型与注释）。按 §5gz 的教训，这一处**最后才改**。
+
+### 验证
+
+`tsc` 0 错；`eslint --max-warnings 0` / prettier 干净；`tests/architecture/` 706 全绿；
+`scripts/tests-referencing.sh` 半径 61 个文件——去掉那个**既有**的 `rfc107 ↔ rfc165` 冲突后
+726 例全绿（rfc107 单跑 13/13，且 10 条失败全在它；该冲突已于 §5gt 用「整组 checkout 回 HEAD」实证非本轮引入）。
+
+### 下一步（Step B 第 ② 步）
+
+`cli/start.ts` 用它造一台协调器 + 一个工作区参与者 + 那个中立的 git identity，装出**根内核**。
+四件入参现在**全部可得**了。
