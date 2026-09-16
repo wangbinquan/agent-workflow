@@ -14677,3 +14677,45 @@ B / C 两类各自先补一条**双引擎**对照用例，证明两条路当前�
 **不能证明两侧传给同一个函数的实参也一样**。落地前先补一条双引擎用例，
 断言同一份 launch 输入在两个引擎上落出**逐字相同的 task 行 + 快照**，
 再动实现——同 §5hm 的「先红后绿」。
+
+### §5hn 批次一的基线用例：**当场又照出一处用户可见差异**
+
+`rfc359-w5hn-agent-launch-provider-parity`（`describeEachProviderHttpApplication`）：
+同一份 `POST /api/agents/:id/tasks` 请求打到同一条路由，比对两个引擎落出的 task 行。
+
+**第一次跑就红。** 差的是这一格：
+
+```
+snapshotEveryNodePositioned:  sqlite=true  postgresql=false
+```
+
+**定位**：内置宿主快照的**规范排版**，SQLite 是**写时冻结**的——
+`services/task.ts:3060` 对 `workflow.builtin === true` 走 `layoutBuiltinWorkflowSnapshotJson`，
+落库那一行就带坐标；而启动内核直接
+`workflowSnapshot: JSON.stringify(input.subject.workflowSnapshot)`
+（`postgresqlTaskRouteLaunchOperations.ts:741`），靠**读时**投影补排版
+（`postgresqlTaskRouteOperations.ts:413` 的 `projectWorkflowSnapshotForRead`）。
+
+于是**启动响应体**与**库里那一行**在两个引擎上不同。这不是纯内部差异：
+启动响应是用户可见的 wire 输出（AC-8 的管辖面），而且「读时补」补不到别的消费者
+——导出、直接读库的下游、以及任何不经那条读投影的路径拿到的都是没有几何的快照。
+
+**处置（下一刀）**：合并两份编排时，内核也改成**写时冻结**——与 SQLite 对齐，
+取判据更强的那半（自描述的行 > 靠读端补）。**不改成「SQLite 也不冻结」**：
+那是把两边一起降到弱的那一档，与本 RFC 的方向相反。
+
+### 这条用例的形状：相等面 + 反向钉住的已知差异
+
+已知差异**不进相等面**——混进去只会让整条红成一团、盖住别的漂移。
+它单独用一条**反向**断言钉住**今天的**状态（sqlite=true / postgresql=false），
+合并把它关掉时这条会红并要求改成相等断言——**那正是销账的时刻**。
+
+其余十一步的实参**已实测逐字相同**（status / workflowId / spaceKind / inputs / scratch /
+catalogVisibility / 快照节点 id 与种类 / 边数），也就是 §5hn 那份「按函数名点的对账」
+补上了「实参也一样」这一格——**除了排版这一处**。
+
+变异实证：把 PG 侧 `taskInputs[AGENT_HOST_INPUT_KEY]` 后面缀一个 `_MUTANT` ⇒ 当场红。
+语料下限也钉了（节点 > 1、边 > 0），避免比较面塌成空壳时与「两引擎一致」同形。
+
+**顺带补上一个 AC-6 缺口**：`rfc165-agent-launch.test.ts` 是 SQLite 单引擎的
+（`createInMemoryDb`），PG 侧那份约 200 行的 `launchAgent` 编排此前**零行为用例**。
