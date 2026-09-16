@@ -980,6 +980,27 @@ constraint:'…', detail, table, … }`——**SQLSTATE 在 `errno`，`code` 恒
 几个」决定是重试还是把原错误原样抛出去。凡是「同一件事在不同平台给不同码」的场合（rmdir 的
 `ENOTEMPTY` / `EEXIST` 是 POSIX 明文允许二选一的），错误码白名单都是错的形状。
 
+## `allowGrowth` 是**一次性**的：加它的下一个 commit 必须删掉它（RFC-359 实撞，2026-09-16）
+
+`architecture/ledger-baselines.json` 的条目可以带 `allowGrowth: { why }`，授权**这一次**上涨。
+它的失效条件不是「过一段时间」，而是：**下一个没让这份账本继续上涨的 commit**，
+`rfc317-ledger-highwater` 就判它过期并红——原话「留着等于给这份账本发了长期上涨许可」。
+
+于是有一个很容易踩的节奏问题：
+
+```
+commit A：某处真的涨了 → 加 allowGrowth → 绿
+commit B：随便做点别的（哪怕只是修个超时、改个文档）→ A 的 allowGrowth 过期 → **红**
+```
+
+**B 不需要和账本有任何关系**，只要它没让那份账本继续涨就会红。本轮实撞两次：
+一次是 §5gz 挂的两条在 §5hb 到期（那次我预料到了，顺手清掉），
+一次是 §5hb 挂的那条在下一个「修超时」的 commit 上到期（那次没想起来，**把 main 推红了**）。
+
+**定式**：加过 `allowGrowth` 之后，把「下一个 commit 要删它」当成待办挂住；
+更省事的做法是**在同一个 commit 里就把涨的那件事做完**，别让 `allowGrowth` 跨 commit 存活。
+push 之前想一句：「上一个 commit 有没有留 allowGrowth？」——有就先删。
+
 ## 架构账本的联动点：动一次代码要同步 8 处（RFC-329 实测，2026-08-26 连推红六轮）
 
 一次 PR 里加了**一个守卫文件 + 一条账本条目**，主干连红四轮，每轮暴露一个此前不知道的

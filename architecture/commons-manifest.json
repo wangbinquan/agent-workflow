@@ -1402,7 +1402,7 @@
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "2f96233151b043a4e4bd6b479b4d0354a80c1719",
+    "currentSnapshotSha": "d60907e24387c7b8bdee6ee73e8a9343e9d50b4a",
     "contentDigest": "sha256:eb4f2495424ef0e8e113712cb0995af39d65880a9b6bddea77d5c5ff6d5beb6d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"

@@ -14077,3 +14077,37 @@ Step B①（§5hb）推上去后 `Backend tests (macos-latest shard 4/6)` 红一
 可靠的做法是**直接跑那个文件**（或从 CI 日志里取出该分片实际装载的文件列表）。
 本轮正是靠「时长 6762ms vs 邻居 70ms」这条线索定位的，而不是靠复现——
 **当复现不出来时，先看那一格的耗时**。
+
+---
+
+## §5hd　`d60907e24` 再红一次：`allowGrowth` 的过期节奏，我自己写过还是踩了
+
+§5hc 那笔修超时推上去后又红，这次两个分片都是同一条：
+`RFC-317 T17 > allowGrowth 无过期条目（这个 commit 没涨就必须删掉它）`。
+
+### 什么事
+
+§5hb 给 `rfc294-module-symbol-owners` 挂了 `allowGrowth`（新导出一个符号，账本 +1）。
+`allowGrowth` 授权的是**那一次**上涨；**下一个没让它继续涨的 commit** 就判过期。
+而 §5hc 那笔只是补了个测试超时——它当然没让符号表继续涨，于是 §5hb 的声明过期、红。
+
+**这件事我在 §5hb 里刚写过**：「§5gz 挂的那两条 allowGrowth 到期了，必须在本 commit 删除」，
+还专门夸了一句这个过期语义「是对的，它逼着这笔债在很短的窗口里被处理」。
+夸完，下一笔就忘了带上清理动作。
+
+### 为什么容易踩
+
+节奏是反直觉的：**让你红的那个 commit 可以和账本毫无关系**。
+
+```
+commit A：真涨了 → 加 allowGrowth → 绿
+commit B：修个超时 / 改个文档 → A 的 allowGrowth 过期 → 红
+```
+
+B 不需要碰账本、不需要碰代码，只要「没继续涨」就会红。
+
+### 定式（已落 docs/dev-gotchas.md）
+
+- 加过 `allowGrowth` 就把「下一个 commit 删掉它」挂成待办；
+- 更省事：**尽量在同一个 commit 里把涨的那件事做完**，别让 `allowGrowth` 跨 commit 存活；
+- push 前问一句：「上一个 commit 有没有留 allowGrowth？」——有就先删。

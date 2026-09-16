@@ -896,10 +896,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24709,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5ha 第 ① 步）—— `services/task.ts` 新导出 `createTaskDriveCoordinator` 与它的 `TaskDriveCoordinatorDependencies`，符号所有者表 +1。这是启动面合一 Step B 的解锁动作：那台协调器是启动内核的四件入参之一，PostgreSQL daemon 就地就能造，而 SQLite 侧唯一的造法此前锁在 legacy 单体里、且以 `StartTaskDeps` 为入参，导致 `cli/start.ts` 造不出内核。本次只做**类型收窄 + 导出**，零行为改动（四处既有构造点一字未改）。这一条会随 legacy 启动面退役一起还：那时这个工厂搬去 task-execution 模块、不再从 `services/` 导出。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -916,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "2f96233151b043a4e4bd6b479b4d0354a80c1719",
-    "contentDigest": "sha256:d02915bf65ff1eabd9e594b8892db9a9b8b82e959bdd5354e0c2809cd5652add",
+    "currentSnapshotSha": "d60907e24387c7b8bdee6ee73e8a9343e9d50b4a",
+    "contentDigest": "sha256:98cf5c840450e952b582ae7eec68c718ca8ffe0c06e360653a75728d0807febf",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
