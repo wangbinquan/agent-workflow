@@ -14,6 +14,7 @@
 // `platform/persistence/databaseTransaction.ts` 的 `serializable` 显式记着它以本文件为蓝本。
 
 import { tasks } from '@/db/schema'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   databaseSessionFor,
@@ -42,16 +43,12 @@ export type TaskExecutionTransaction = DatabaseTransaction
  * 保留这层薄包装而不是把 18 个调用点改成 `databaseSessionFor(x).serializable(…)`：
  * 名字本身在表达「任务执行写事务用可串行化语义」这条意图，摊平会把意图摊没。
  *
- * **形参此刻仍是 `PostgresqlDatabaseClient`，这是有意的。** 放宽成中立句柄本身零成本
- * （实测 0 条类型错），但它要新引一条 `@/db/query` 的跨 context import，
- * 于是 `rfc294-cross-context-observed-imports` 与 `rfc294-architecture-exceptions` 各涨一条，
- * 得挂 `allowGrowth`——而那个声明会在**下一个不涨的 commit** 上被判过期，
- * 等于给下一个人埋一次必红。为一个**现在没有调用方需要**的放宽去加一条跨域耦合并不划算：
- * 等启动面合一真的要从 SQLite 侧传中立句柄进来时再放宽，那时这条 import 是被需求逼出来的，
- * 不是预支的（plan §5gv / §5gw）。
+ * **形参已放宽到中立句柄**（RFC-359 plan §5gz）。§5gw 当时刻意没放，理由是「现在没有调用方需要」；
+ * 启动面合一开工后**有了**——SQLite 侧要把自己的库传进同一台启动内核，这条
+ * `@/db/query` 的跨 context import 于是是被需求逼出来的，不再是预支。
  */
 export async function withSerializableTaskExecution<T>(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   body: (tx: TaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return await databaseSessionFor(db).serializable(body)

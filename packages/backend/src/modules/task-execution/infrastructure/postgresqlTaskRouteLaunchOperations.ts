@@ -26,6 +26,7 @@ import {
   webhookTaskSourceLinkOf,
   workgroupLaunchReadiness,
 } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -43,7 +44,6 @@ import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource
 import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/mrTerminalControl'
 import type { SourceTerminationSnapshot } from '../public/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
 import {
   AGENT_HOST_INPUT_KEY,
@@ -275,7 +275,7 @@ export interface PostgresqlWorkgroupRouteLaunchResources {
 }
 
 export interface PostgresqlRootTaskLaunchDependencies {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly gitCommitIdentity: Readonly<{
     execute(userId: string): Promise<GitCommitIdentity>
   }>

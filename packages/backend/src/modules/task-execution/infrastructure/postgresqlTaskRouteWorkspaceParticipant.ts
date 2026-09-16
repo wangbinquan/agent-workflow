@@ -6,12 +6,12 @@ import {
   type SpaceKind,
   type StartTask,
 } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
 import { taskRepos, taskSpaceNodes } from '@/db/schema'
 import { composePostgresqlRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import {
   cleanupMaterializedSpace,
@@ -28,7 +28,7 @@ import type {
 } from './postgresqlTaskRouteLaunchOperations'
 
 export interface PostgresqlTaskRouteWorkspaceDependencies {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly secretBox?: SecretBox
   readonly cloneTimeoutMs?: number
@@ -64,7 +64,7 @@ function minimalNodePaths(mountPaths: readonly string[]): string[] {
 }
 
 async function loadFrozenSpaceLayout(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   sourceTaskId: string,
 ): Promise<PlannedSpaceLayout> {
   const rows = await db

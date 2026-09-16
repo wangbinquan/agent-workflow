@@ -13891,3 +13891,49 @@ SQLite 专属启动面上」。AC-6 剩下的 14 条里 `start-task-deps` 也指
 
 合一时**必须挑一份文案留下**，而不是让两份各自活着：按「取强的那半」（§5fq 的一贯处方），
 留 legacy 那份带计数与指引的措辞。这条要写进迁移清单——否则合一会悄悄把用户的帮助文案降级。
+
+---
+
+## §5gz　启动面合一 Step A：整叠启动内核放宽到中立句柄（0 条类型错）
+
+§5gv 把波次拆成三步，第 ① 步是「内核换中立 session + `db` 放宽」。§5gw 做掉了前半（改名），
+并**刻意没做**后半（放宽），理由写得很清楚：「现在没有调用方需要，为预支的放宽加一条跨域耦合不划算」。
+
+**现在有调用方了**——Step ③ 要让 SQLite 侧把自己的库传进同一台启动内核。于是后半在这里落地。
+
+### 改了什么
+
+三处 `db: PostgresqlDatabaseClient` → `ProviderNeutralDatabase`：
+
+- `postgresqlTaskRouteLaunchOperations.ts`（启动内核，1339 行）
+- `postgresqlTaskRouteWorkspaceParticipant.ts`（工作区物化，232 行）
+- `withSerializableTaskExecution`（§5gw 刚改过名的那层薄包装）
+
+**实测 0 条类型错**。这不是运气：那一叠里 PostgreSQL 独有原语（`$client` / `unsafe(` /
+`providerPool` / `pg_` / `RETURNING` / `ON CONFLICT` / advisory lock / `REPEATABLE READ` / `dbTxSync`）
+**计数全为 0**（§5gv 已量过），品牌标注基本是编译期的。
+
+### 代价与它的还款计划
+
+三条新的 `@/db/query` 跨 context import，`rfc294-cross-context-observed-imports` 5100 → 5103、
+`rfc294-architecture-exceptions` 4587 → 4590，两本账都挂了 `allowGrowth` 并点名本 RFC。
+
+**这三条会随波次收尾一起还**：legacy 启动面退役后，那一叠只剩一个中立实现，
+品牌名与多余的装配层一并消失。`allowGrowth` 的「下一个不涨的 commit 判过期」语义在这里是**对的**
+——它逼着这笔债在很短的窗口里被处理，而不是长期挂着。
+
+### 两条操作教训
+
+**一、`PostgresqlDatabaseClient` 的 import 会变成死导入。** 放宽形参之后那个类型在文件里
+就没人用了，`tsc` 不管，`eslint --max-warnings 0` 当场红。改完形参就得回头看 import——
+这是本 session 第四次撞同一类（迁移/放宽 ⇒ 死导入），已经成定式了：**改完跑一次改动文件的 eslint**。
+
+**二、按 `文件:行号` 钉死的账本要在**所有编辑落定之后**再更新。**
+`rfc359-w7-task-insert-lineage-completeness` 按行号登记 `insert(tasks)` 站点。我先把它改成 738，
+接着删掉那条死导入、行号又退回 737，于是白红一轮。这类账本的更新必须是**最后一步**，
+别在编辑中途「顺手」改。
+
+### 验证
+
+`tsc` 0 错；`eslint --max-warnings 0` 干净；`tests/architecture/` 706 全绿；
+`scripts/tests-referencing.sh` 半径 21 文件 244 例全绿。
