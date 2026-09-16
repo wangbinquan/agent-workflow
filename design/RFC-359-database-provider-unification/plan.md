@@ -13623,3 +13623,42 @@ CI 现在是绿的说明分片没把它们排到一起——又一颗埋着的�
 **方法论上值得记一笔**：怀疑「是不是我改红的」时，最快的判法不是读代码推断，
 而是**把涉及的文件整组 checkout 回 HEAD 跑一遍**——几十秒给出是非题的答案。
 （这一步不能用 `git stash`，本仓禁用；用 `cp` 备份 + `git checkout --` + 还原即可。）
+
+---
+
+## §5gu　把 main 推红一次：摘要守卫的半径，我自己记过又用窄了
+
+§5gt 推上去后 `02408ca5a` 两个后端分片红，红的是**同一条**判据：
+`rfc359-w29-unstarted-application-composition` 里对 `composeSqliteApplicationDeps` /
+`composeSqliteApiRouteMounts` 函数体的 **SHA-256 摘要**。改了函数体，摘要当然变。
+
+### 为什么半径没罩住它
+
+本 session 早先就记过这条教训（摘要守卫里**一个符号名都没有**，按符号名找依赖必然漏），
+处置也写过：**按「改动的源文件名」找那些 `readFileSync` 的测试**。
+
+这次我做的是 `bun test packages/backend/tests/architecture/` ——**把「架构守卫」默认等同于
+「`tests/architecture/` 目录」**。而这条摘要守卫在 `tests/`，不在那个目录下。
+判据放在哪个目录是**历史**，不是分类；按目录猜半径，等于把「我以为守卫都在哪」当成了事实。
+
+正确的半径命令（这次实跑 50 个文件、467 例全绿）：
+
+```bash
+# 改了 src/server.ts 与 src/routes/oidc-auth.ts
+python3 - <<'PY'   # 列出所有 readFileSync 且提到这两个文件名的测试
+...
+PY
+bun test $(cat list.txt)     # 注意：zsh 下必须用 $(cat …) 或 ${=VAR}
+```
+
+### 同一条命令里又踩了一次 zsh 分词
+
+第一次跑这个半径时写的是 `FILES=$(python3 …); bun test $FILES` ——
+zsh 不分词，50 个路径被当成**一个过滤串**，bun 回「10443 files were searched」然后 0 例。
+**这是我在上一笔（§5gq）刚写进 gotchas 的那条坑，隔了不到一小时又踩**；
+区别只是上次是 `set -- $VAR`、这次是 `bun test $FILES`（而后者正是 gotchas 里**原本就写着的**那个例子）。
+
+两条教训合起来指向同一件事：**文档里写着不等于用上了**。gotchas 第四次复发那条的结语
+（「一份很长的踩坑文档，只有在动手前真的去查才有用」）在这里第二次被兑现。
+可操作的收敛：**改了 `src/` 下任何文件，提交前固定跑一次上面那个 `readFileSync` 半径**，
+别按目录猜、也别用裸变量传路径。

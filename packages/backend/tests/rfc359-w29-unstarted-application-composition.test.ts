@@ -549,8 +549,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-1（2026-09-15，plan §5fu）：摘要随**纯装配别名批退**再更新——那一批 20 个
     // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
     // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
+    // RFC-359 AC-1（2026-09-16，plan §5gt）：摘要随 `AppDeps.secretBox` 收成**必填**而更新。
+    // 变的是文本不是装配图——11 处 `deps.secretBox === undefined ? … : …` 的容忍分支去掉了
+    // （5 处条件展开收成普通字段、6 处 `? null : construct(…)` 收成直接构造）。
+    // 那些分支在生产上一条都到不了（`cli/start.ts:1480` 在选 provider 之前就无条件建 secretBox），
+    // 所以**装配出来的东西不变，只是不再为「测试没传」留退路**；上面的语句数断言没红即为佐证。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      'b2b49ab08f623d84a969ff4cb2a801263777086892fc20d37409bc763cc29831',
+      '9f05d1bead6df62355b4d6a5b67ef261baed442bdc9521ce725925e2789b0002',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -575,8 +580,10 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-1（2026-09-15，plan §5fu）：摘要随**纯装配别名批退**再更新——那一批 20 个
     // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
     // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
+    // RFC-359 AC-1（2026-09-16，plan §5gt）：同上一处，随 secretBox 收成必填而更新——
+    // 这一段里去掉的是 `multipart` 与 employee 工作区那两处条件展开。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '78c1097916ce13fc80ca6b5ec8d236b3ff457a84d326080ba89e3149e13bf903',
+      'e104b889d1b3e56484af373d5c4a49653925afb96d0c033c3ae168c6b4d3bbcc',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',
