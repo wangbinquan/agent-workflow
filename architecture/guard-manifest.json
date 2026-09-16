@@ -1792,6 +1792,18 @@
       "lines": 401
     },
     {
+      "id": "rfc359-w5-composition-root-route-surface",
+      "file": "packages/backend/tests/architecture/rfc359-w5-composition-root-route-surface.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 114
+    },
+    {
       "id": "rfc359-w5-dual-engine-predicate-gaps",
       "file": "packages/backend/tests/architecture/rfc359-w5-dual-engine-predicate-gaps.test.ts",
       "runner": "bun",
@@ -2519,8 +2531,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "4095c6a2f7a89c3443c56e8245b16cc2e489a818",
-    "contentDigest": "sha256:37816a540cb77d70b8938a517b4dab4ceaa651bb56639531cb07fe03497d40c4",
+    "currentSnapshotSha": "fef2d4e3702e894737d683a5ebdfc6c72cc448f1",
+    "contentDigest": "sha256:52fb243f61e79d743c100bd88949d3b913185a23235c9a1fe00350b240f80bc0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

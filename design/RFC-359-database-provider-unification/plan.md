@@ -13076,3 +13076,69 @@ err="Failed query: select … from "agent_workflow"."development_feedback_ledger
 按 RFC-140 的老账，这会在两个 OS 上各红一格。删干净后 eslint exit=0。
 **记一笔**：凡「迁移 = 把某个构造方式换掉」的改动，删完调用点必定留死导入，
 这条自查不是可选的。
+
+---
+
+## §5gk　AC-6：给「两个组合根的路由面」立一条判据（新守卫 + 三条裁决）
+
+§5gi 留下三个没就近说明的 AC-6 文件（`rfc329-mcp-surface-guard` / `rfc305-architecture-lock` /
+`rfc349-daemon-provider-core`）。逐个读完发现前两个是**同一个形状**，而要判它们得先回答一个
+此前**没有任何判据回答过**的问题。
+
+### 那个问题
+
+`rfc329` 与 `rfc305` 都是「装一个应用**只为了**拿到路由 → 权限那张声明表，然后审这张表」。
+它们装的是 `createApp`——**SQLite 组合根**。于是它们审的其实是**一个引擎的**路由面，
+却当成「框架的路由面」在用。
+
+读源码能论证两侧应该一样：两个根都汇进同一个 `createComposedApp` → 同一个 `mountApiRoutes`，
+而后者里唯一条件挂载的一组是 `routes.databaseMigration?.(app)`（`AppRouteMount` 里唯一带 `?` 的字段）。
+**但「论证过」和「钉住了」是两件事**：今天只要有人给某个根多挂一组路由、或给同一条路由在两个根上
+配不同权限，这批守卫**一格都不会红**。
+
+### 新守卫：`rfc359-w5-composition-root-route-surface`
+
+不写账本、不列 470 条路由（那会让此后每个加路由的 RFC 都欠一笔维护），而是**把两个根都装出来直接比**：
+两条 lane 各把自己量到的面记进模块级 map，末尾的 describe 做逐字比对，失败时打印对称差。
+比的不只是路径，还带 `tokenAccess` 与**权限集合**——「两侧挂了同一批路径、但某条在一侧要的权限更松」
+正是本 RFC 要挡的那种「一个好一个不好」，只比 key 看不见它。
+
+**结论：两个根挂出来的面逐字相等。** `rfc329` / `rfc305` 的那个隐含前提，从此有判据钉着。
+
+变异验证（两条都真红过）：①把 SQLite 那侧的面砍掉一条 ⇒ 对称差里出现该条；
+②把 SQLite 那侧某条的 `token=` 改掉 ⇒ 差异里出现 `MUTANT`。
+
+### 写这条守卫时自己踩的两个坑（都是真红，值得记）
+
+**坑一：第一次跑就假红了一次。** 差异是 `POST /webhooks/:provider/:urlToken` 只在 PG 侧挂上。
+差点当成产品缺陷——**不是**：`mountWebhookIngressRoutes` 在缺 `webhookDispatcher` /
+`digitalEmployeeEventCenter` 时会**自我跳过**，而这一组正是两个根**所有权不同**的那一处
+（PG 根自己构造、SQLite 根当依赖收，`ProviderHttpApplicationInput` 的注释与 plan §5bi 已写明）。
+生产里 SQLite 侧由 `cli/start.ts:2806-2808` 注入，两侧**是**一样的。夹具补一个最小 dispatcher
+（只需带 `dispatchSubscription` 以过 `supportsEventCenterCodeHostDelivery`）后逐字相等。
+**教训**：守卫报出的「两个根不一样」，先分清是**根**不一样还是**夹具喂的东西**不一样——
+判前必须去看生产装配点。
+
+**坑二：`bun test` 多个文件跑在同一个进程里，而路由注册表是模块级的。**
+本守卫刚加上，`bun test tests/architecture/` 里 `rfc329-mcp-surface-guard` 就红了一格
+`uncovered`——多出来的正是本文件挂上去的 webhook 入站路由（它**单独跑是绿的**）。
+按 `rfc305-architecture-lock` 的既有做法前后各 `resetRouteMetaRegistry()` 一次即解。
+
+### 顺带查明的一处**既有**脆弱（不是本次引入，也不在本次改动里）
+
+`tests/rfc099-acl-endpoints-matrix` 之后紧跟 `tests/rfc305-architecture-lock` 跑，后者必红：
+
+```
+system-operations.get-database-runtime.v1: declared operation has no mounted binding
+  at assertOperationCatalogClosed (src/platform/operations/catalog.ts:729)
+```
+
+成因同属「模块级全局态跨文件泄漏」，但泄漏的是**操作目录**而不是路由注册表：
+rfc099 装的应用带 `databaseMigration`，把那条操作声明留在了目录里；rfc305 装的应用**不带**，
+于是 `routes.databaseMigration?.(app)` 整组跳过，声明有、绑定无，闭合校验当场抛。
+rfc305 只清了路由注册表、没清操作目录，所以清不掉这个。
+
+两个文件单独跑都绿，合起来才红——**CI 现在是绿的，说明分片没把它俩排到一起**，
+是一颗埋着的雷而不是当前的红。处置随下一节 AC-6 的三条裁决一起做（rfc305 补上
+`databaseMigration` 即可，同 `rfc329` 的做法；它的断言是全称量化的「每条路由都没有 `identity`」，
+多挂几组只会更强）。
