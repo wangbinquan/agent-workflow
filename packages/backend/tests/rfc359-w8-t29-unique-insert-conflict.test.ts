@@ -20,7 +20,7 @@
 //      'source-control:repository-groups')`。READ COMMITTED 每条语句取新快照，输家等到锁之后那条
 //      SELECT 就看得见赢家已提交的行 ⇒ 干净的 `name-conflict` → 409。
 //   ② `taskContinuationAdmission` 的 pending-intent 插入 —— **不可达**。生产入口把它塞进
-//      SERIALIZABLE（`.serializable()` / `withPostgresqlSerializableTaskExecution`），PG 的 SSI 先给
+//      SERIALIZABLE（`.serializable()` / `withSerializableTaskExecution`），PG 的 SSI 先给
 //      输家 40001，而 `serializable()` 的重试单位是**整笔事务**：重跑取新快照，活跃 intent 这才读得到
 //      ⇒ `task-continuation-conflict`。（生产路径上还有一道更早的 task 行 CAS，见 test 注释。）
 //   ③ `humanGateOpenParticipant.projectClarifyGateOpen` 的 taskQuestions 插入 —— **不可达**，

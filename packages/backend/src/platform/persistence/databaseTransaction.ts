@@ -274,7 +274,7 @@ export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): D
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)
       // 蓝本：modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts 的
-      // withPostgresqlSerializableTaskExecution。整笔事务作为重试单元——body 必须可重放。
+      // withSerializableTaskExecution。整笔事务作为重试单元——body 必须可重放。
       for (let attempt = 0; ; attempt += 1) {
         try {
           return await db.transaction(async (tx) => {

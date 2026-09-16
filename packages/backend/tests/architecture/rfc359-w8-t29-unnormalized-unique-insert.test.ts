@@ -103,7 +103,7 @@ const READ_CALLEES: ReadonlySet<string> = new Set(['select', 'selectDistinct'])
 const SERIALIZING_OPENERS: ReadonlySet<string> = new Set([
   'serializable',
   'withTaskExecutionSerializable',
-  'withPostgresqlSerializableTaskExecution',
+  'withSerializableTaskExecution',
   'withPostgresqlTaskAggregateTransaction',
   'runResourceCatalogTransaction',
 ])
@@ -492,7 +492,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *       task-execution 的 SERIALIZABLE 事务面。removeWhen —— 调用方降级时重判。
  *   modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts: 1
  *     :579 tasks（`idx_tasks_event_delivery_unique`）。
- *     why —— opener 是 `withPostgresqlSerializableTaskExecution`。removeWhen —— 同上。
+ *     why —— opener 是 `withSerializableTaskExecution`。removeWhen —— 同上。
  *   modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts: 1
  *     :814 taskCollaborators。why —— `withPostgresqlTaskAggregateTransaction`（事务头对 task 行
  *       取 `for update`），且插入前先整体 `delete` 同任务的成员行。removeWhen —— 那两条前提任一

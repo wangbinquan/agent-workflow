@@ -127504,22 +127504,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#PostgresqlTaskExecutionTransaction",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#TaskExecutionTransaction",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "PostgresqlTaskExecutionTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#withPostgresqlSerializableTaskExecution",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "withPostgresqlSerializableTaskExecution",
+      "symbol": "TaskExecutionTransaction",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -127532,6 +127520,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "withPostgresqlTaskAggregateTransaction",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#withSerializableTaskExecution",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withSerializableTaskExecution",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -297173,5 +297173,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b95d1019e070c466996ca05a708cf05fcd2023d3bae20db43e0a750855e6365a"
+  "sourceDigest": "sha256:8e00afd85f1f45a4a619d7831f13037230b2da74f7562cf98f9a476bc58560e3"
 }

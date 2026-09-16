@@ -54,8 +54,8 @@ import { childLaunchAdmissionIssue } from '../domain/childLaunchAdmission'
 import { sha256Hex } from '../domain/digest'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import {
-  type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
+  type TaskExecutionTransaction,
+  withSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
@@ -320,7 +320,7 @@ async function prepareWorkgroupSubject(
 }
 
 async function activeCollaborators(
-  tx: PostgresqlTaskExecutionTransaction,
+  tx: TaskExecutionTransaction,
   ownerUserId: string | null,
   collaboratorUserIds: readonly string[],
 ): Promise<readonly string[]> {
@@ -444,7 +444,7 @@ async function launchPreparedChild(
   const primary = space.repos[0]
   if (primary === undefined) throw new Error('child-materialized-space-missing-primary-repo')
 
-  const eventRef = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const parent = (
       await tx
         .select({

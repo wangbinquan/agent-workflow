@@ -92,8 +92,8 @@ import type {
 } from '../public/commands'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
 import {
-  type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
+  type TaskExecutionTransaction,
+  withSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
@@ -541,7 +541,7 @@ function taskProjection(input: {
 }
 
 async function activeTaskMembers(
-  db: PostgresqlTaskExecutionTransaction,
+  db: TaskExecutionTransaction,
   input: Readonly<{
     ownerUserId: string
     collaboratorUserIds: readonly string[]
@@ -727,147 +727,142 @@ function createRootLaunch(
           ? (input.task.workingBranch ?? `agent-workflow/${taskId}`)
           : preparedWorkspace.branch
       const memberIds = [...new Set(input.task.collaboratorUserIds ?? [])]
-      const eventRef = await withPostgresqlSerializableTaskExecution(
-        dependencies.db,
-        async (tx) => {
-          await guard?.verifyCanCommit()
-          guard?.assertCanCommit()
-          const activeMembers = await activeTaskMembers(tx, {
-            ownerUserId: input.actor.user.id,
-            collaboratorUserIds: memberIds,
-          })
-          await tx.insert(tasks).values({
-            id: taskId,
-            name: input.task.name,
-            workflowId: input.subject.workflowId,
-            workflowSnapshot: JSON.stringify(input.subject.workflowSnapshot),
-            workflowVersion: input.subject.workflowVersion,
-            repoPath: preparedWorkspace.repoPath,
-            repoUrl:
-              preparedWorkspace.repoUrl === null ? null : redactGitUrl(preparedWorkspace.repoUrl),
-            cachedRepoId: preparedWorkspace.cachedRepoId,
-            repoGroupId: preparedWorkspace.repoGroupId,
-            repoGroupName: preparedWorkspace.repoGroupName,
-            worktreePath: preparedWorkspace.worktreePath,
-            baseBranch: preparedWorkspace.baseBranch,
-            branch,
-            baseCommit: preparedWorkspace.baseCommit,
-            status: failed ? 'failed' : 'pending',
-            inputs: JSON.stringify(persistedInputs),
-            maxDurationMs: input.task.maxDurationMs ?? null,
-            maxTotalTokens: input.task.maxTotalTokens ?? null,
-            startedAt,
-            finishedAt: failed ? startedAt : null,
-            errorSummary,
-            errorMessage: preparedWorkspace.earlyError,
-            gitUserName: gitCommitIdentity?.name ?? null,
-            gitUserEmail: gitCommitIdentity?.email ?? null,
-            workingBranch: input.task.workingBranch ?? null,
-            autoCommitPush: input.task.autoCommitPush ?? false,
-            repoCount: Math.max(1, preparedWorkspace.repositories.length),
-            ownerUserId: input.actor.user.id,
-            launchOrigin: metadata.launchOrigin,
-            catalogVisibility: input.internal?.catalogVisibility ?? 'public',
-            scheduledTaskId: metadata.scheduledTaskId,
-            webhookTriggerId: metadata.webhookTriggerId,
-            webhookFireId: metadata.webhookFireId,
-            eventSubscriptionId: metadata.eventSubscriptionId,
-            eventDeliveryId: metadata.eventDeliveryId,
-            triggerContextJson:
-              metadata.triggerContext === null ? null : JSON.stringify(metadata.triggerContext),
-            platformInputPathsJson:
-              input.internal?.platformInputPaths === undefined ||
-              input.internal.platformInputPaths.length === 0
-                ? null
-                : JSON.stringify(input.internal.platformInputPaths),
-            sourceTerminationBinding: metadata.sourceTerminationSnapshot?.binding ?? null,
-            sourceTerminationLaunchRev: metadata.sourceTerminationSnapshot?.launchRevision ?? null,
-            sourceTerminationFence: metadata.sourceTerminationSnapshot?.fence ?? null,
-            sourceTerminationEffectRev: metadata.sourceTerminationSnapshot?.effectRevision ?? null,
-            workgroupId: input.subject.workgroup?.id ?? null,
-            workgroupConfigJson:
-              input.subject.workgroup === undefined
-                ? null
-                : JSON.stringify(input.subject.workgroup.config),
-            sourceAgentId: input.subject.sourceAgent?.id ?? null,
-            sourceAgentName: input.subject.sourceAgent?.name ?? null,
-            digitalEmployeeRoundId: input.internal?.digitalEmployeeLaunch?.actionRunId ?? null,
-            digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null,
-            spaceKind: preparedWorkspace.spaceKind,
-            workspacePrunedAt: failed && preparedWorkspace.worktreePath === '' ? startedAt : null,
-            branchStartedAt: startedAt,
-            rootTaskId: taskId,
-            executionLineageId: taskId,
-            lineageSlotPathJson: slotPathJson,
-            refClosureJson,
-          })
-          if (preparedWorkspace.repositories.length > 0) {
-            await tx
-              .insert(taskRepos)
-              .values(repoInsertRows(taskId, preparedWorkspace.repositories))
-          }
-          if (preparedWorkspace.nodePaths.length > 0) {
-            await tx.insert(taskSpaceNodes).values(
-              preparedWorkspace.nodePaths.map((nodePath) => ({
-                taskId,
-                nodePath,
-                schemaVersion: 1,
-              })),
-            )
-          }
-          await tx.insert(taskCollaborators).values(
-            activeMembers.map((userId) => {
-              const role: 'owner' | 'collaborator' =
-                userId === input.actor.user.id ? 'owner' : 'collaborator'
-              return { taskId, userId, role, addedBy: input.actor.user.id, addedAt: startedAt }
-            }),
+      const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+        await guard?.verifyCanCommit()
+        guard?.assertCanCommit()
+        const activeMembers = await activeTaskMembers(tx, {
+          ownerUserId: input.actor.user.id,
+          collaboratorUserIds: memberIds,
+        })
+        await tx.insert(tasks).values({
+          id: taskId,
+          name: input.task.name,
+          workflowId: input.subject.workflowId,
+          workflowSnapshot: JSON.stringify(input.subject.workflowSnapshot),
+          workflowVersion: input.subject.workflowVersion,
+          repoPath: preparedWorkspace.repoPath,
+          repoUrl:
+            preparedWorkspace.repoUrl === null ? null : redactGitUrl(preparedWorkspace.repoUrl),
+          cachedRepoId: preparedWorkspace.cachedRepoId,
+          repoGroupId: preparedWorkspace.repoGroupId,
+          repoGroupName: preparedWorkspace.repoGroupName,
+          worktreePath: preparedWorkspace.worktreePath,
+          baseBranch: preparedWorkspace.baseBranch,
+          branch,
+          baseCommit: preparedWorkspace.baseCommit,
+          status: failed ? 'failed' : 'pending',
+          inputs: JSON.stringify(persistedInputs),
+          maxDurationMs: input.task.maxDurationMs ?? null,
+          maxTotalTokens: input.task.maxTotalTokens ?? null,
+          startedAt,
+          finishedAt: failed ? startedAt : null,
+          errorSummary,
+          errorMessage: preparedWorkspace.earlyError,
+          gitUserName: gitCommitIdentity?.name ?? null,
+          gitUserEmail: gitCommitIdentity?.email ?? null,
+          workingBranch: input.task.workingBranch ?? null,
+          autoCommitPush: input.task.autoCommitPush ?? false,
+          repoCount: Math.max(1, preparedWorkspace.repositories.length),
+          ownerUserId: input.actor.user.id,
+          launchOrigin: metadata.launchOrigin,
+          catalogVisibility: input.internal?.catalogVisibility ?? 'public',
+          scheduledTaskId: metadata.scheduledTaskId,
+          webhookTriggerId: metadata.webhookTriggerId,
+          webhookFireId: metadata.webhookFireId,
+          eventSubscriptionId: metadata.eventSubscriptionId,
+          eventDeliveryId: metadata.eventDeliveryId,
+          triggerContextJson:
+            metadata.triggerContext === null ? null : JSON.stringify(metadata.triggerContext),
+          platformInputPathsJson:
+            input.internal?.platformInputPaths === undefined ||
+            input.internal.platformInputPaths.length === 0
+              ? null
+              : JSON.stringify(input.internal.platformInputPaths),
+          sourceTerminationBinding: metadata.sourceTerminationSnapshot?.binding ?? null,
+          sourceTerminationLaunchRev: metadata.sourceTerminationSnapshot?.launchRevision ?? null,
+          sourceTerminationFence: metadata.sourceTerminationSnapshot?.fence ?? null,
+          sourceTerminationEffectRev: metadata.sourceTerminationSnapshot?.effectRevision ?? null,
+          workgroupId: input.subject.workgroup?.id ?? null,
+          workgroupConfigJson:
+            input.subject.workgroup === undefined
+              ? null
+              : JSON.stringify(input.subject.workgroup.config),
+          sourceAgentId: input.subject.sourceAgent?.id ?? null,
+          sourceAgentName: input.subject.sourceAgent?.name ?? null,
+          digitalEmployeeRoundId: input.internal?.digitalEmployeeLaunch?.actionRunId ?? null,
+          digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null,
+          spaceKind: preparedWorkspace.spaceKind,
+          workspacePrunedAt: failed && preparedWorkspace.worktreePath === '' ? startedAt : null,
+          branchStartedAt: startedAt,
+          rootTaskId: taskId,
+          executionLineageId: taskId,
+          lineageSlotPathJson: slotPathJson,
+          refClosureJson,
+        })
+        if (preparedWorkspace.repositories.length > 0) {
+          await tx.insert(taskRepos).values(repoInsertRows(taskId, preparedWorkspace.repositories))
+        }
+        if (preparedWorkspace.nodePaths.length > 0) {
+          await tx.insert(taskSpaceNodes).values(
+            preparedWorkspace.nodePaths.map((nodePath) => ({
+              taskId,
+              nodePath,
+              schemaVersion: 1,
+            })),
           )
-          await tx.insert(taskExecutionIntents).values({
-            id: intentId,
+        }
+        await tx.insert(taskCollaborators).values(
+          activeMembers.map((userId) => {
+            const role: 'owner' | 'collaborator' =
+              userId === input.actor.user.id ? 'owner' : 'collaborator'
+            return { taskId, userId, role, addedBy: input.actor.user.id, addedAt: startedAt }
+          }),
+        )
+        await tx.insert(taskExecutionIntents).values({
+          id: intentId,
+          taskId,
+          kind: 'launch',
+          state: failed ? 'failed' : 'pending',
+          source: metadata.intentSource,
+          requestHash: sha256Hex(
+            JSON.stringify({
+              kind: 'launch',
+              taskId,
+              workflowId: input.subject.workflowId,
+              workflowVersion: input.subject.workflowVersion,
+              continuationSlotKey: 'task-root',
+              operationGeneration: 0,
+            }),
+          ),
+          payloadJson: JSON.stringify({ v: 1, workflowId: input.subject.workflowId }),
+          executionLineageId: taskId,
+          continuationSlotKey: 'task-root',
+          slotPathJson,
+          operationGeneration: 0,
+          expectedTaskRevision: 1,
+          failureCode: failed ? 'launch-materialization-failed' : null,
+          createdAt: startedAt,
+          completedAt: failed ? startedAt : null,
+          updatedAt: startedAt,
+        })
+        if (input.subject.workgroup !== undefined) {
+          await tx.insert(workgroupTaskState).values({
             taskId,
-            kind: 'launch',
-            state: failed ? 'failed' : 'pending',
-            source: metadata.intentSource,
-            requestHash: sha256Hex(
-              JSON.stringify({
-                kind: 'launch',
-                taskId,
-                workflowId: input.subject.workflowId,
-                workflowVersion: input.subject.workflowVersion,
-                continuationSlotKey: 'task-root',
-                operationGeneration: 0,
-              }),
-            ),
-            payloadJson: JSON.stringify({ v: 1, workflowId: input.subject.workflowId }),
-            executionLineageId: taskId,
-            continuationSlotKey: 'task-root',
-            slotPathJson,
-            operationGeneration: 0,
-            expectedTaskRevision: 1,
-            failureCode: failed ? 'launch-materialization-failed' : null,
-            createdAt: startedAt,
-            completedAt: failed ? startedAt : null,
+            gateStatus: 'idle',
+            dwStateJson:
+              input.subject.workgroup.dynamicState === null
+                ? null
+                : JSON.stringify(input.subject.workgroup.dynamicState),
             updatedAt: startedAt,
           })
-          if (input.subject.workgroup !== undefined) {
-            await tx.insert(workgroupTaskState).values({
-              taskId,
-              gateStatus: 'idle',
-              dwStateJson:
-                input.subject.workgroup.dynamicState === null
-                  ? null
-                  : JSON.stringify(input.subject.workgroup.dynamicState),
-              updatedAt: startedAt,
-            })
-          }
-          return await appendTaskCreatedCommittedEvent(tx, {
-            taskId,
-            status: failed ? 'failed' : 'pending',
-            errorSummary,
-            occurredAt: startedAt,
-          })
-        },
-      )
+        }
+        return await appendTaskCreatedCommittedEvent(tx, {
+          taskId,
+          status: failed ? 'failed' : 'pending',
+          errorSummary,
+          occurredAt: startedAt,
+        })
+      })
       databaseCommitted = true
       await guard?.taskCommitted(taskId)
       preparedWorkspace.commit()

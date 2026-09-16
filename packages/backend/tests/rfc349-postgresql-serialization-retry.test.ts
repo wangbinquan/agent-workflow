@@ -15,7 +15,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { withPostgresqlSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import {
   POSTGRESQL_SERIALIZATION_ATTEMPTS,
   postgresqlSerializationBackoffMs,
@@ -52,7 +52,7 @@ function clientThatFails(errors: readonly unknown[]): {
   const pending = [...errors]
   let attempts = 0
   const db = {
-    // RFC-359 W5-T18：`withPostgresqlSerializableTaskExecution` 的边界改走中立会话，而它按
+    // RFC-359 W5-T18：`withSerializableTaskExecution` 的边界改走中立会话，而它按
     // `$provider` 品牌分派（没有品牌 ⇒ 按 bun:sqlite 走显式 BEGIN IMMEDIATE）。假客户端要
     // 冒充 PostgreSQL 客户端就得自报家门，否则这里测的根本不是 PG 那条路。
     $provider: 'postgresql',
@@ -75,9 +75,9 @@ describe('RFC-349 PostgreSQL serialization retry', () => {
       ),
     ])
 
-    await expect(
-      withPostgresqlSerializableTaskExecution(fixture.db, async () => 'committed'),
-    ).resolves.toBe('committed')
+    await expect(withSerializableTaskExecution(fixture.db, async () => 'committed')).resolves.toBe(
+      'committed',
+    )
     expect(fixture.attempts()).toBe(2)
   })
 
@@ -88,9 +88,9 @@ describe('RFC-349 PostgreSQL serialization retry', () => {
       }),
     ])
 
-    await expect(
-      withPostgresqlSerializableTaskExecution(fixture.db, async () => 'committed'),
-    ).resolves.toBe('committed')
+    await expect(withSerializableTaskExecution(fixture.db, async () => 'committed')).resolves.toBe(
+      'committed',
+    )
     expect(fixture.attempts()).toBe(2)
   })
 
@@ -98,7 +98,7 @@ describe('RFC-349 PostgreSQL serialization retry', () => {
     const fixture = clientThatFails([bunPostgresError('23505', 'duplicate key value')])
 
     await expect(
-      withPostgresqlSerializableTaskExecution(fixture.db, async () => 'committed'),
+      withSerializableTaskExecution(fixture.db, async () => 'committed'),
     ).rejects.toThrow('duplicate key value')
     expect(fixture.attempts()).toBe(1)
   })
@@ -170,9 +170,9 @@ describe('RFC-349 PostgreSQL serialization retry', () => {
     )
     const fixture = clientThatFails(conflicts)
 
-    await expect(
-      withPostgresqlSerializableTaskExecution(fixture.db, async () => 'committed'),
-    ).resolves.toBe('committed')
+    await expect(withSerializableTaskExecution(fixture.db, async () => 'committed')).resolves.toBe(
+      'committed',
+    )
     expect(fixture.attempts()).toBe(POSTGRESQL_SERIALIZATION_ATTEMPTS)
   })
 })

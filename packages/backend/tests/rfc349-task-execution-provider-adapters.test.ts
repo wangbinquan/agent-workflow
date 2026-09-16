@@ -14,7 +14,7 @@ import {
   createWorkerIdentity,
 } from '@/modules/task-execution/domain/ownership'
 import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
-import { withPostgresqlSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 // RFC-359：owner CAS 围栏只有中立模块这一份定义（PG 那份是逐字重复，已删）。
 import { assertTaskOwnerTx } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
@@ -248,7 +248,7 @@ describe('RFC-349 task-execution provider adapters', () => {
     const fake = postgresqlFixture([{}, {}, { values: [[9]] }, {}])
 
     await expect(
-      withPostgresqlSerializableTaskExecution(fake.db, async (tx) => {
+      withSerializableTaskExecution(fake.db, async (tx) => {
         await assertTaskOwnerTx(tx, token, 200)
       }),
     ).resolves.toBeUndefined()

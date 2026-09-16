@@ -34,7 +34,7 @@ import { sha256Hex } from '../domain/digest'
 import type { OwnershipToken } from '../domain/ownership'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
-import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import {
   appendTaskCreatedCommittedEvent,
   appendTaskLifecycleTransitionCommittedEvent,
@@ -106,7 +106,7 @@ async function insertFusionTask(
   const now = Date.now()
   const intentId = ulid()
   const slotPathJson = taskSlotPath(command.taskId, workflow.version)
-  const eventRefs = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  const eventRefs = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     await tx.insert(tasks).values({
       id: command.taskId,
       name: command.name,
@@ -200,7 +200,7 @@ async function cancelPostgresqlTask(
 ): Promise<void> {
   let stopToken: OwnershipToken | null = null
   let childIds: readonly string[] = []
-  const eventRefs = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  const eventRefs = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const row = (
       await tx
         .select({

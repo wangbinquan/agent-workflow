@@ -89,7 +89,7 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     const port = read('modules/task-execution/application/ports/childExecutionLaunchOperations.ts')
 
     expect(adapter).toContain('createPostgresqlChildExecutionLaunchOperations')
-    expect(adapter).toContain('withPostgresqlSerializableTaskExecution')
+    expect(adapter).toContain('withSerializableTaskExecution')
     for (const write of [
       'tx.insert(tasks)',
       'tx.insert(taskRepos)',

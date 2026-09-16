@@ -105,9 +105,9 @@ import {
   type PostgresqlTaskRepairOperations,
 } from './postgresqlTaskRouteRepairOperations'
 import {
-  withPostgresqlSerializableTaskExecution,
+  withSerializableTaskExecution,
   withPostgresqlTaskAggregateTransaction,
-  type PostgresqlTaskExecutionTransaction,
+  type TaskExecutionTransaction,
 } from './postgresqlTaskLifecycleTransaction'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
@@ -1776,7 +1776,7 @@ async function syncWorkflow(
   }
 
   const now = dependencies.now?.() ?? Date.now()
-  const eventRef = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const changed = await tx
       .update(tasks)
       .set({
@@ -2017,7 +2017,7 @@ async function retryNode(
   ]
   const now = dependencies.now?.() ?? Date.now()
   const operationRef = `task-retry:${input.taskId}:${dependencies.id?.() ?? ulid()}`
-  const committed = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  const committed = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const changed = await tx
       .update(tasks)
       .set({
@@ -2189,7 +2189,7 @@ interface DeleteWorktreeTarget {
 // `DatabaseTransaction`，客户端仍是 PG 客户端——取二者共同的读面（`ProviderNeutralDatabase`
 // 是两个 provider 客户端的公共基类型，见 `db/query.ts`）。
 async function taskTreeIds(
-  db: Pick<PostgresqlTaskExecutionTransaction, 'select'>,
+  db: Pick<TaskExecutionTransaction, 'select'>,
   rootTaskId: string,
 ): Promise<readonly string[]> {
   const seen = new Set([rootTaskId])
@@ -2350,7 +2350,7 @@ async function deleteTask(
     claim,
     to: 'io-complete',
   })
-  await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const claimedRows = await tx
       .select({ taskId: taskExecutionMaintenanceMembers.taskId })
       .from(taskExecutionMaintenanceMembers)

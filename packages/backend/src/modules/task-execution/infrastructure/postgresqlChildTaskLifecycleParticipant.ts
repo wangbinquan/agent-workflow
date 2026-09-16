@@ -51,7 +51,7 @@ import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
-import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
@@ -255,7 +255,7 @@ async function admitResume(
 }> {
   const intentId = ulid()
   const now = Date.now()
-  const eventRefs = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  const eventRefs = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     await assertTaskOwnerlessTx(tx, task.id)
     const changed = await tx
       .update(tasks)
@@ -527,7 +527,7 @@ async function cancelCascade(
 ): Promise<void> {
   let stopToken = dependencies.executionModule.runtimeRegistry.tokenForTask(taskId)
   let revokedRevision: number | null = null
-  const committed = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
+  const committed = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const task = (
       await tx
         .select({

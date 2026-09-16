@@ -12,7 +12,7 @@
 //     两处 `dbTxSync`，并且**自己驱动进程内 scheduler**（`createTaskDriveCoordinator` + 续跑意图）。
 //   · PostgreSQL 那 2,048 行走的是**另一套执行架构**：命令一律委托给 `ChildTaskLifecycleParticipant`
 //     / `ActiveTaskExecutionParticipant` / `SchedulerRuntimeTopology` 三个端口，事务是
-//     `withPostgresqlSerializableTaskExecution`，事件走已提交事件出站。
+//     `withSerializableTaskExecution`，事件走已提交事件出站。
 //
 // 两侧满足同一个 route-facing 接口，但**不是同一个算法的两份实现**，是两台执行引擎。合它等于
 // 先把 `services/task.ts` 的调度耦合与同步事务面清掉——那是 W7 已记在案的结构性阻塞

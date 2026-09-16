@@ -112,7 +112,7 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     expect(adapter).toContain('WorkgroupTaskRoomContinuationDriver')
     expect(adapter).toContain('assertResumable')
     expect(adapter).toContain('driveAfterCommit')
-    expect(adapter).not.toContain('PostgresqlTaskExecutionTransaction')
+    expect(adapter).not.toContain('TaskExecutionTransaction')
     expect(adapter).not.toContain('PostgresqlCollaborationTransaction')
   })
 

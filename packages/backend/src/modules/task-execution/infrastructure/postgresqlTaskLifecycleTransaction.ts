@@ -28,11 +28,31 @@ import {
 // RFC-359 W5-T18：它不再从 PG 客户端的 `transaction` 签名里挖，而**就是**中立事务句柄
 // `DatabaseTransaction`——事务由中立会话开出，交给 body 的本来就是那一个。别名留着是因为
 // 这几个 atom 的调用点还叫这个名字；语义上它已经没有 provider 私有面了。
-export type PostgresqlTaskExecutionTransaction = DatabaseTransaction
+export type TaskExecutionTransaction = DatabaseTransaction
 
-export async function withPostgresqlSerializableTaskExecution<T>(
+/**
+ * RFC-359 AC-1（plan §5gw）：名字去掉 `Postgresql` 前缀——**它没有孪生，前缀纯属历史**。
+ *
+ * 它**从来就只是一层转交**——函数体就是 `databaseSessionFor(db).serializable(body)`，
+ * 而 `databaseSessionFor` 本身按引擎派发：PostgreSQL 侧渲染
+ * `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE` 并在序列化失败时重放整笔；
+ * SQLite 侧是 `serializable: transaction`（`BEGIN IMMEDIATE` 下整库独占，已是最强隔离）。
+ * 也就是说**两个引擎早就都实现了它**，只有这个名字和形参还钉在 PostgreSQL 上。
+ *
+ * 保留这层薄包装而不是把 18 个调用点改成 `databaseSessionFor(x).serializable(…)`：
+ * 名字本身在表达「任务执行写事务用可串行化语义」这条意图，摊平会把意图摊没。
+ *
+ * **形参此刻仍是 `PostgresqlDatabaseClient`，这是有意的。** 放宽成中立句柄本身零成本
+ * （实测 0 条类型错），但它要新引一条 `@/db/query` 的跨 context import，
+ * 于是 `rfc294-cross-context-observed-imports` 与 `rfc294-architecture-exceptions` 各涨一条，
+ * 得挂 `allowGrowth`——而那个声明会在**下一个不涨的 commit** 上被判过期，
+ * 等于给下一个人埋一次必红。为一个**现在没有调用方需要**的放宽去加一条跨域耦合并不划算：
+ * 等启动面合一真的要从 SQLite 侧传中立句柄进来时再放宽，那时这条 import 是被需求逼出来的，
+ * 不是预支的（plan §5gv / §5gw）。
+ */
+export async function withSerializableTaskExecution<T>(
   db: PostgresqlDatabaseClient,
-  body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
+  body: (tx: TaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return await databaseSessionFor(db).serializable(body)
 }
@@ -74,14 +94,14 @@ export async function withPostgresqlSerializableTaskExecution<T>(
  * `task_collaborators` 都属于同一个任务，锁住任务行就把同一任务的并发写手串起来了，
  * 而不同任务之间本来就没有需要串行化的不变量。**只有满足这个条件的路径才可以用它**：
  * 事务读写的行全部属于同一个聚合根，且判据不依赖聚合之外的快照。跨聚合的不变量
- * （跨表计数、全局唯一性）仍然必须留在 `withPostgresqlSerializableTaskExecution` 上。
+ * （跨表计数、全局唯一性）仍然必须留在 `withSerializableTaskExecution` 上。
  *
  * 任务行不存在时不取锁：调用方自己的 NotFound 判据仍然成立（没有行就没有要保护的聚合）。
  */
 export async function withPostgresqlTaskAggregateTransaction<T>(
   db: PostgresqlDatabaseClient,
   taskId: string,
-  body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
+  body: (tx: TaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return await databaseSessionFor(db).transaction(async (tx) => {
     // RFC-359 W11：行锁的渲染权归能力矩阵——PG 渲染 `select 1 … for update`，SQLite 是

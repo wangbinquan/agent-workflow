@@ -438,7 +438,7 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
   //     `withPostgresqlNodeRunAggregateTransaction`）从此只被两份测试引用着。处置是**删除**，
   //     不是改调；判「零生产消费者」时要把测试排除在消费者之外。
   //
-  // RFC-359 W5-T18 销账：同文件 `set-transaction ×1` —— `withPostgresqlSerializableTaskExecution`
+  // RFC-359 W5-T18 销账：同文件 `set-transaction ×1` —— `withSerializableTaskExecution`
   // 不再自己 `sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')` + 自己写 40001 重试循环，
   // 整个事务边界改走 `databaseSessionFor(db).serializable(...)`。那句方言现在只剩中立原语里的一处
   // （`platform/persistence/databaseTransaction.ts`，它本来就是渲染器），隔离级别的语义一字未变

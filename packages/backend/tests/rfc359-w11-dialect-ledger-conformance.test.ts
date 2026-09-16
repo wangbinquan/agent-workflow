@@ -524,10 +524,12 @@ describe('RFC-359 W11 —— 四条清偿的源码锚点', () => {
       'node run 那一对（非 SERIALIZABLE 的事务边界 + node_runs 行锁）回来了：它在 W4-B1 之后' +
         '就零生产调用方——写路径已合成一份并改走统一写事务原语 + 矩阵的 lockAggregateRoot。' +
         '留着只会让下一次「谁在用它」的普查再数错一次（判零消费者时要把测试排除在消费者之外）。',
+      // RFC-359 AC-1（plan §5gw）：两个纯品牌名去掉前缀后**字典序也变了**
+      // （`withPostgresql…` 现在排在 `withSerializable…` 前面）——这张表是 `.sort()` 之后比的。
     ).toEqual([
-      'PostgresqlTaskExecutionTransaction',
-      'withPostgresqlSerializableTaskExecution',
+      'TaskExecutionTransaction',
       'withPostgresqlTaskAggregateTransaction',
+      'withSerializableTaskExecution',
     ])
   }, 30_000)
 })

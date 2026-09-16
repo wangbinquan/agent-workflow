@@ -127,7 +127,7 @@
 //
 //   **07 `07-pg-source-termination-cas-race-recovery`（记载不实 → 改判为已裁决分叉）**
 //   账本写的是「PG 上状态 CAS 竞态直接抛 409」。实测**不成立**：PG 的 `applyOne` 整笔跑在
-//   `withPostgresqlSerializableTaskExecution` 里，并发终态写让那条 UPDATE 撞上
+//   `withSerializableTaskExecution` 里，并发终态写让那条 UPDATE 撞上
 //   `could not serialize access due to concurrent update`（40001），中立会话**重放整笔**，
 //   第二遍读到赢家的状态、走 already-terminal 分支收场——投递方一个 409 都收不到。
 //   真正的差额在**收据**，而且弱侧是 SQLite：它按开工前那次读报 `priorStatus='running'` /

@@ -13732,3 +13732,58 @@ SQLite 专属启动面上」。AC-6 剩下的 14 条里 `start-task-deps` 也指
 
 **本节只做勘察、不含生产改动**：这一刀要退役一整条启动路，属于该由用户点头的方向性决定，
 而勘察做完之后那个决定的成本已经很低——上面四步各自的大小都在这里写着了。
+
+---
+
+## §5gw　AC-1 命名债：可串行化事务包装的两个品牌名退役（**只改名，不预支放宽**）
+
+§5gv 勘察出「启动面合一」的第 ① 步是「内核换用中立 session + `db` 放宽」。这一节做掉其中
+**与启动面无关、可独立验证**的那半：两个纯品牌名。
+
+### 认定
+
+`postgresqlTaskLifecycleTransaction.ts` 里：
+
+- `withPostgresqlSerializableTaskExecution` —— 函数体就是
+  `return await databaseSessionFor(db).serializable(body)`，**一层转交**；
+  而 `databaseSessionFor` 按引擎派发，**两个引擎早就都实现了 `serializable`**
+  （PG 渲染 `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE` + 序列化失败重放；
+  SQLite 是 `serializable: transaction`，因为 `BEGIN IMMEDIATE` 下整库独占已是最强隔离）。
+- `PostgresqlTaskExecutionTransaction` —— `export type … = DatabaseTransaction`，**纯类型别名**。
+
+两个都没有孪生，前缀不指向任何区分：AC-1 第三款的「命名债」。
+改名 45 + 13 处、21 个文件（词边界正则，先查前缀碰撞——无）。
+
+### 特意**没有**顺手把形参放宽（这是本节的主要判断）
+
+放宽 `db: PostgresqlDatabaseClient → ProviderNeutralDatabase` 本身**零成本**：实测 0 条类型错。
+但它要新引一条 `@/db/query` 的**跨 context import**，于是
+`rfc294-cross-context-observed-imports`（5100 → 5101）与
+`rfc294-architecture-exceptions`（4587 → 4588）各涨一条，`rfc317-ledger-highwater` 当场红，
+要挂 `allowGrowth` 才能过。
+
+而 `allowGrowth` 的语义是「**在下一个不涨的 commit 上被判为过期、强制清理**」——
+也就是说我挂上它，下一个提交的人就会莫名其妙红一格。
+为一个**现在没有任何调用方需要**的放宽，去加一条跨域耦合、再给下一个人埋一次必红，不划算。
+
+所以：**改名落地，放宽留给启动面合一那一刀**。到那时 SQLite 侧真要传中立句柄进来，
+这条 import 是被需求逼出来的，不是预支的。理由写在函数的 doc 注释里，下一个人不用重新推一遍。
+
+（顺带一提，这个取舍本身是 `rfc317-ledger-highwater` 这条守卫**起作用**的样子：
+它把「顺手放宽一个形参」的真实代价——一条跨域耦合 + 一次给别人埋雷——摆到了台面上。）
+
+### 半径这次用对了工具
+
+按 §5gu 的教训，用 `scripts/tests-referencing.sh` 而不是手搓清单。它交出 51 个文件，
+**咬出两条按名字/行号钉死的账本**，都不是我会想到的地方：
+
+- `rfc359-w11-dialect-ledger-conformance`：断言该文件的导出名清单，而清单是 `.sort()` 之后比的
+  ——改名把**字典序**也改了（`withPostgresql…` 现在排在 `withSerializable…` 前面）；
+- `rfc359-w7-task-insert-lineage-completeness`：按 **`文件:行号`** 登记 `insert(tasks)` 站点。
+  改名让符号变短、prettier 把 import 块重排，站点从 739 变 737。
+
+**第三种「按位置钉死」的账本形态**（前两种是按符号名、按测试名）。它们的共同点还是那句：
+跨文件、按字符串做外键、编译器管不着。半径跑对了就都能捞到。
+
+验证：`tsc` / `eslint --max-warnings 0` / prettier 干净；半径 51 文件 585 例全绿；
+`tests/architecture/` 706 全绿；census 重跑后 highwater 无增长。

@@ -409,7 +409,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     })
   })
 
-  // RFC-359 W7：这一对适配器已合一。旧断言（PG 那份自带 withPostgresqlSerializableTaskExecution /
+  // RFC-359 W7：这一对适配器已合一。旧断言（PG 那份自带 withSerializableTaskExecution /
   // createNodeRunMintParticipantInTx / nodeRunLifecycle.inTransaction 的原生重写）随
   // `postgresqlCollaborationRuntimeMechanics.ts` 一并退役——2026-09-07 的双引擎对拍
   // （`rfc359-w7-collaboration-mechanics-conformance.test.ts`）照出那份重写的一处真实分叉：

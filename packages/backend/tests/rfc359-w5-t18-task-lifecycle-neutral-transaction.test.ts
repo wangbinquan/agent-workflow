@@ -1,5 +1,5 @@
 // RFC-359 W5-T18 —— 任务生命周期的事务 opener 从**裸驱动事务**改走中立会话
-// （`postgresqlTaskLifecycleTransaction.ts`：`withPostgresqlSerializableTaskExecution` /
+// （`postgresqlTaskLifecycleTransaction.ts`：`withSerializableTaskExecution` /
 // `withPostgresqlTaskAggregateTransaction` 各一处 `db.transaction(` →
 // `databaseSessionFor(db).serializable / .transaction`）。
 //
@@ -39,7 +39,7 @@
 // | # | 变异 | 结果 |
 // |---|------|------|
 // | ① | 非 serializable 的那个 opener 改回裸的 `db.transaction(body)` | **红 3 条**：PG 2（内层读不到外层未提交的写；外层回滚带不走内层的插入）、SQLite 1（体内抛错却留下了行——同步包装器在第一个 await 处就当场 COMMIT 了） |
-// | ② | `withPostgresqlSerializableTaskExecution` 改回裸的 `db.transaction(…SET ISOLATION SERIALIZABLE…)` | **红 3 条**：PG 1（外层回滚带不走内层的插入）、SQLite 2（体内抛错留行 + 外层回滚带不走内层的插入） |
+// | ② | `withSerializableTaskExecution` 改回裸的 `db.transaction(…SET ISOLATION SERIALIZABLE…)` | **红 3 条**：PG 1（外层回滚带不走内层的插入）、SQLite 2（体内抛错留行 + 外层回滚带不走内层的插入） |
 //
 // 两条变异在两个引擎上都红，但**红的理由不同**：
 //   · PG 红在「另一条连接独立提交」——内层是一笔真的、独立的事务；
@@ -62,9 +62,9 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos } from '@/db/schema'
 import {
-  withPostgresqlSerializableTaskExecution,
+  withSerializableTaskExecution,
   withPostgresqlTaskAggregateTransaction,
-  type PostgresqlTaskExecutionTransaction,
+  type TaskExecutionTransaction,
 } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -82,7 +82,7 @@ const asClient = (db: ProviderNeutralDatabase): PostgresqlDatabaseClient =>
   db as unknown as PostgresqlDatabaseClient
 
 /** 一行最小的业务行。选 `cached_repos`：两个引擎上列形状相同，且不牵扯任何生命周期不变量。 */
-async function insertRow(tx: PostgresqlTaskExecutionTransaction, id: string): Promise<void> {
+async function insertRow(tx: TaskExecutionTransaction, id: string): Promise<void> {
   await tx.insert(cachedRepos).values({
     id,
     urlHash: `h_${id}`.slice(0, 40),
@@ -116,7 +116,7 @@ describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：失
     const id = `cr_${ulid()}`
 
     await expect(
-      withPostgresqlSerializableTaskExecution(asClient(db), async (tx) => {
+      withSerializableTaskExecution(asClient(db), async (tx) => {
         await insertRow(tx, id)
         throw new Boom('body failed')
       }),
@@ -202,7 +202,7 @@ describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：可
 
     await expect(
       databaseSessionFor(db).transaction(async () => {
-        await withPostgresqlSerializableTaskExecution(asClient(db), async (inner) => {
+        await withSerializableTaskExecution(asClient(db), async (inner) => {
           await insertRow(inner, innerId)
         })
         throw new Boom('outer failed')

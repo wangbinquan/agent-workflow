@@ -130,10 +130,10 @@ describe('RFC-349 single-aggregate task transaction', () => {
 
     expect(body).toContain('withPostgresqlTaskAggregateTransaction')
     expect(body, '成员替换又回到 SERIALIZABLE ⇒ 托管上那 31 个 500 会一起回来').not.toContain(
-      'withPostgresqlSerializableTaskExecution',
+      'withSerializableTaskExecution',
     )
     // 跨聚合不变量仍然必须留在 SERIALIZABLE 上；别把这次替换扩大成全面降级。
-    expect(source).toContain('withPostgresqlSerializableTaskExecution(')
+    expect(source).toContain('withSerializableTaskExecution(')
   })
 
   test('the helper documents when it may be used at all', () => {
@@ -149,7 +149,7 @@ describe('RFC-349 single-aggregate task transaction', () => {
       source.indexOf('export async function withPostgresqlTaskAggregateTransaction'),
     )
     expect(doc).toContain('同一个聚合根')
-    expect(doc).toContain('withPostgresqlSerializableTaskExecution')
+    expect(doc).toContain('withSerializableTaskExecution')
   })
 })
 
