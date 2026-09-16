@@ -14879,3 +14879,44 @@ PG 的臂转给 `arms.launchAgent` → 启动内核。
 - `rfc165-agent-launch`（A1–A9）+ `rfc218-agent-launch-ports` **32/32 绿**。
   它们直调 `startAgentTask`，本刀没动那个函数，所以既有契约原样成立。
 - 120 文件影响半径 1357/1360，三处红全是账本/守卫更新（rfc331 分层、w29 摘要、血缘 file:line）。
+
+### §5hn 批次二勘察：`startExecution` ↔ PG 启动参与者，以及它连着的两对
+
+批次一只统一了路由。剩下的入口（定时启动 / 触发器 / 子任务 / multipart）在 SQLite 上
+仍走 `startExecution`。逐对量下来，这是**三对连在一起**的一块：
+
+**① 启动参与者**：`services/execution/executor.ts#startExecution`
+↔ `postgresqlTaskRouteLaunchOperations#createPostgresqlTaskExecutionLaunchParticipant`。
+两者都是**同一个三分支 switch**（workflow / agent / workgroup），
+SQLite 转 `startTask` / `startAgentTask` / `startWorkgroupTask`，
+PG 转 `launchRoot` / `arms.launchAgent` / `arms.launchWorkgroup`。
+agent 那一格批次一已经备好共享实现（`createAgentRouteLaunch`）。
+
+**② 触发器参与者**（同文件孪生，白送的）：`triggerExecution.ts` 里
+`createSqliteTaskExecutionTriggerParticipant` 自己调 `startExecution`，
+而 `createPostgresqlTaskExecutionTriggerParticipant` 只是**八行转发**
+（`input.launches.launch(request)` + `cancellation.cancel`）。
+SQLite 一旦有了启动参与者，这一对**立刻塌成一份**，不需要额外设计。
+
+**③ 工作组臂**：`legacy/workgroup/launch.ts#startWorkgroupTask`（470 行）
+↔ PG 的 `arms.launchWorkgroup`。又是同一个故事：`expectedWorkgroupId` /
+`expectedWorkgroupVersion` / `memberAgentIds` 派生逐项对得上，差别在
+**SQLite 直接读库**（`getWorkgroupById` + `canViewResource`）而 PG 收端口
+（`workgroup.loadVisible` / `loadExistingAgentIds` / `ensureHostWorkflow` / `integrity`）。
+处置同前四刀：端口化那半留下。
+另需先对账 `assertReplayVisible`——SQLite 用 `assertCanReplaySourceTask`、
+PG 用 `createTaskAuthorizationQueries`，是独立的一对。
+
+### 对 §5hn「捷径否决」那条结论的**修正**
+
+此前记的理由是「内核要的四项在 `StartTaskDeps` 上全可选，委托就得写回退」。
+批次一做完后回看，这条要修正一半：那四项**确实都能从 `StartExecutionDeps` 推出来**
+（`gitCommitIdentity` 有 `resolveTaskGitCommitIdentity(deps)`、工作区要的
+`appHome`/`secretBox` 都在、协调器可由 `createTaskDriveCoordinator(deps)` 造），
+而缺失时**抛一个具名错**并不是「静默回退」——`startExecution` 的 agent 分支
+本来就在两行之上这么做（`agent-launch-operations-not-composed`）。
+
+**结论不变但理由换了**：不走那条捷径，不是因为它做不出来，而是因为
+**参与者那条路顺带塌掉②、并把三个入口的启动语义收在一处**；
+捷径只修 agent 一格，workgroup / workflow 两格仍是两份。
+先做对的那件事，而不是最省的那件事。
