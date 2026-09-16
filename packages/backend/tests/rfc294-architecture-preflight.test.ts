@@ -1599,8 +1599,9 @@ const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
   'modules/collaboration/public/types.ts: ReviewActor leaks through public/types',
   'modules/task-execution/application/sourceTerminationCapability.ts#mintSourceTerminationEffectCapability: factory is outside capability owner',
   'modules/task-execution/application/sourceTerminationCapability.ts: casts/rewraps SourceTerminationEffectCapability outside owner factory',
-  'modules/task-execution/composition/triggerExecution.ts#createPostgresqlTaskExecutionTriggerParticipant: factory is outside capability owner',
-  'modules/task-execution/composition/triggerExecution.ts#createSqliteTaskExecutionTriggerParticipant: factory is outside capability owner',
+  // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：触发器参与者两个引擎合成一份，
+  // 这两条因此塌成一条（`createTaskExecutionTriggerParticipant`）。
+  'modules/task-execution/composition/triggerExecution.ts#createTaskExecutionTriggerParticipant: factory is outside capability owner',
   'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#createNodeRunLifecycleParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts: constructs RuntimeSessionLeaseToken outside owner factory',

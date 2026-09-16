@@ -23696,7 +23696,7 @@
       },
       "file": "packages/backend/src/modules/task-execution/composition/triggerExecution.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createPostgresqlTaskExecutionTriggerParticipant",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createTaskExecutionTriggerParticipant",
       "missingControls": [
         "audit",
         "authority",
@@ -23704,32 +23704,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createPostgresqlTaskExecutionTriggerParticipant",
-      "symbol": "createPostgresqlTaskExecutionTriggerParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/composition/triggerExecution.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createSqliteTaskExecutionTriggerParticipant",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createSqliteTaskExecutionTriggerParticipant",
-      "symbol": "createSqliteTaskExecutionTriggerParticipant",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createTaskExecutionTriggerParticipant",
+      "symbol": "createTaskExecutionTriggerParticipant",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -26247,6 +26223,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#createSqliteTaskExecutionRuntimeParticipants",
       "symbol": "createSqliteTaskExecutionRuntimeParticipants",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#createSqliteTaskExecutionLaunchParticipant",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#createSqliteTaskExecutionLaunchParticipant",
+      "symbol": "createSqliteTaskExecutionLaunchParticipant",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -40259,7 +40260,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea44f7e952f0f4e68acb85150453834aa05a0e0d9ed429f5e43c199ad0b4e579",
+  "sourceDigest": "sha256:f088d4c69e838f4f4fb16cdba23ca44adc52333f1fd3ba9c0dbf4d864fe2972b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

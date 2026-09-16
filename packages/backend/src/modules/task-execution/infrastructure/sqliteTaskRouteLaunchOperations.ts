@@ -5,8 +5,10 @@ import type {
 } from '../public/commands'
 import {
   createAgentRouteLaunch,
+  createPostgresqlTaskExecutionLaunchParticipant,
   createWorkgroupRouteLaunch,
   type AgentRouteLaunchDependencies,
+  type PostgresqlTaskExecutionLaunchParticipant,
   type WorkgroupRouteLaunchDependencies,
 } from './postgresqlTaskRouteLaunchOperations'
 import {
@@ -90,6 +92,26 @@ export function createSqliteTaskRouteLaunchOperations(
           resources: input.resourceAuthorityFor(actor),
         })
       },
+    }),
+  })
+}
+
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ①）—— SQLite 侧的**启动参与者**，与 PostgreSQL 共用同一份。
+ *
+ * 此前这一格是 `services/execution/executor.ts#startExecution`：**同一个三分支 switch**
+ * （workflow / agent / workgroup）的第二份写法，只是终端不同——它转
+ * `startTask` / `startAgentTask` / `startWorkgroupTask`。三条臂的共享实现在批次一 / 批次二 ③
+ * 已经就位，这里只差把工作区参与者从 `routeWorkspace` 物化出来再交给同一个工厂。
+ */
+export function createSqliteTaskExecutionLaunchParticipant(
+  input: SqliteTaskRouteLaunchDependencies,
+): PostgresqlTaskExecutionLaunchParticipant {
+  return createPostgresqlTaskExecutionLaunchParticipant({
+    ...input,
+    workspace: createPostgresqlTaskRouteWorkspaceParticipant({
+      db: input.db,
+      ...input.routeWorkspace,
     }),
   })
 }

@@ -1,4 +1,5 @@
 export {
+  createSqliteTaskExecutionLaunchParticipant,
   createSqliteTaskRouteLaunchOperations,
   type SqliteTaskRouteLaunchDependencies,
 } from '../infrastructure/sqliteTaskRouteLaunchOperations'

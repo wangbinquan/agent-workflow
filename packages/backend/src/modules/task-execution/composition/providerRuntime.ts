@@ -58,6 +58,7 @@ import {
 } from '../infrastructure/postgresqlTaskRouteWorkspaceParticipant'
 import { createPostgresqlRepositoryPreparationRetryCommand } from '../infrastructure/postgresqlRepositoryPreparationRetryCommand'
 import {
+  createSqliteTaskExecutionLaunchParticipant,
   createSqliteTaskRouteLaunchOperations,
   type SqliteTaskRouteLaunchDependencies,
 } from '../infrastructure/sqliteTaskRouteLaunchOperations'
@@ -75,8 +76,7 @@ import { composeTaskClarifyDirectiveRouteOperations } from './taskClarifyDirecti
 import { createTaskExecutionPersistence } from './taskExecutionPersistence'
 import {
   createBuildScheduleLaunch,
-  createPostgresqlTaskExecutionTriggerParticipant,
-  createSqliteTaskExecutionTriggerParticipant,
+  createTaskExecutionTriggerParticipant,
   type TaskExecutionTriggerParticipant,
 } from './triggerExecution'
 import {
@@ -203,11 +203,6 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     Parameters<typeof createSqliteFusionEngineTaskOperations>[0],
     'db' | 'schedulerDriver'
   >
-  readonly trigger: Readonly<{
-    readonly executionFor: Parameters<
-      typeof createSqliteTaskExecutionTriggerParticipant
-    >[0]['executionFor']
-  }>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
 }
@@ -240,10 +235,12 @@ export function composeSqliteTaskExecutionProviderRuntime<
     ...routeDependencies,
   })
   const cancellation = cancellationCommand(participants)
-  const taskExecutions = createSqliteTaskExecutionTriggerParticipant({
-    db,
+  // RFC-359 AC-1（plan §5hn 批次二 ①②）：触发器参与者两个引擎共用一份。
+  // 此前 SQLite 那半自己调 `startExecution`（那是启动参与者的第二份写法），
+  // PG 那半只是八行转发；SQLite 一有启动参与者，这一对就塌成一份。
+  const taskExecutions = createTaskExecutionTriggerParticipant({
+    launches: createSqliteTaskExecutionLaunchParticipant({ db, ...dependencies.routeLaunch }),
     cancellation,
-    executionFor: dependencies.trigger.executionFor,
   })
   const resume = Object.freeze({
     async resume(taskId: string) {
@@ -398,7 +395,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     ...routeDependencies,
   })
   const cancellation = cancellationCommand(participants)
-  const taskExecutions = createPostgresqlTaskExecutionTriggerParticipant({
+  const taskExecutions = createTaskExecutionTriggerParticipant({
     launches: createPostgresqlTaskExecutionLaunchParticipant(routeLaunchDependencies),
     cancellation,
   })

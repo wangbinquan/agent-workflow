@@ -4,13 +4,9 @@ import {
   StartTaskSchema,
 } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
 import type { WebhookTaskExecutionParticipant } from '@/modules/integration/application/ports/webhookExecution'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
-import type { Actor } from '@/auth/actor'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
-import { startExecution, type StartExecutionDeps } from '@/services/execution/executor'
-import type { StartExecutionRequest } from '@/services/execution/types'
 import type { ExecutionInvoker, TaskCancellationCommand } from '../public/commands'
 import type { PostgresqlTaskExecutionLaunchParticipant } from '../infrastructure/postgresqlTaskRouteLaunchOperations'
 
@@ -19,57 +15,21 @@ export type TaskExecutionTriggerParticipant = WebhookTaskExecutionParticipant<
   ExecutionInvoker
 >
 
-export interface SqliteTaskExecutionTriggerDependencies {
-  readonly db: DbClient
-  readonly executionFor: (actor: Actor) => StartExecutionDeps
-  readonly cancellation: TaskCancellationCommand
-}
-
-/** SQLite compatibility adapter over the same unified executor used by direct routes. */
-export function createSqliteTaskExecutionTriggerParticipant(
-  dependencies: SqliteTaskExecutionTriggerDependencies,
-): TaskExecutionTriggerParticipant {
-  return Object.freeze({
-    async launch(input: Parameters<TaskExecutionTriggerParticipant['launch']>[0]) {
-      await input.guard?.verifyCanCommit()
-      const request: StartExecutionRequest = (() => {
-        switch (input.target.kind) {
-          case 'workflow':
-            return {
-              kind: input.target.kind,
-              refId: input.target.refId,
-              invoker: input.invoker,
-              payload: input.target.payload,
-            }
-          case 'agent':
-            return {
-              kind: input.target.kind,
-              refId: input.target.refId,
-              invoker: input.invoker,
-              payload: input.target.payload,
-            }
-          case 'workgroup':
-            return {
-              kind: input.target.kind,
-              refId: input.target.refId,
-              invoker: input.invoker,
-              payload: input.target.payload,
-            }
-        }
-      })()
-      const task = await startExecution(dependencies.db, input.actor, request, {
-        ...dependencies.executionFor(input.actor),
-        launchResources: input.resources,
-      })
-      return { taskId: task.id }
-    },
-    async cancel(taskId: string) {
-      await dependencies.cancellation.cancel({ taskId, cause: { kind: 'user' } })
-    },
-  })
-}
-
-export function createPostgresqlTaskExecutionTriggerParticipant(input: {
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ①②）—— 触发器参与者，**两个引擎唯一的一份**。
+ *
+ * 合一前一对孪生，差别整个在「谁来启动」：PostgreSQL 那半是这八行转发，SQLite 那半自己调
+ * `services/execution/executor.ts#startExecution`——而那正是**启动参与者的第二份写法**
+ *（同一个 workflow / agent / workgroup 三分支 switch，只是终端转 `startTask` /
+ * `startAgentTask` / `startWorkgroupTask`）。SQLite 一有启动参与者，这一对就塌成一份，
+ * 不需要额外设计。
+ *
+ * 顺带一处**真行为补齐**：旧的 SQLite 那半只在进门 `await guard?.verifyCanCommit()`，
+ * 然后**把 guard 丢掉**——于是受保护 MR 的 webhook 启动在 SQLite 上既没有
+ * `assertProtectedLaunchGuard` 的快照一致性检查，也拿不到 `sourceTerminationLaunchSignal`
+ *（MR 中途关闭时那次克隆不会被打断）。现在两侧都把 guard 原样交给启动内核。
+ */
+export function createTaskExecutionTriggerParticipant(input: {
   readonly launches: PostgresqlTaskExecutionLaunchParticipant
   readonly cancellation: TaskCancellationCommand
 }): TaskExecutionTriggerParticipant {

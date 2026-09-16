@@ -6,7 +6,7 @@
     "moduleFiles": 1183,
     "productionFiles": 2555,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24717
+    "symbolsIncludingFileRoots": 24716
   },
   "entries": [
     {
@@ -119164,34 +119164,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/triggerExecution.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createPostgresqlTaskExecutionTriggerParticipant",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createTaskExecutionTriggerParticipant",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
-      "symbol": "createPostgresqlTaskExecutionTriggerParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/triggerExecution.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createSqliteTaskExecutionTriggerParticipant",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "createSqliteTaskExecutionTriggerParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/triggerExecution.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#SqliteTaskExecutionTriggerDependencies",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "SqliteTaskExecutionTriggerDependencies",
+      "symbol": "createTaskExecutionTriggerParticipant",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -129836,6 +129812,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#createSqliteTaskExecutionLaunchParticipant",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSqliteTaskExecutionLaunchParticipant",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -297281,5 +297269,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea44f7e952f0f4e68acb85150453834aa05a0e0d9ed429f5e43c199ad0b4e579"
+  "sourceDigest": "sha256:f088d4c69e838f4f4fb16cdba23ca44adc52333f1fd3ba9c0dbf4d864fe2972b"
 }

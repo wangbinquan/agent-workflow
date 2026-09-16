@@ -2,6 +2,40 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 51，**`startExecution` 的三分支 switch 退出 SQLite 启动路**）
+>
+> 本段待推：§5hn 批次二 ①②。
+>
+> **最该带走的一句：同一个 workflow/agent/workgroup 三分支 switch 在这个仓里有过三份写法，
+> 而从任何单一入口看过去都只看得见一份**——`startExecution`、provider runtime 后台 tick 的
+> `createBuildScheduleLaunch`、server.ts run-now 路由的 `services/scheduleLaunch.ts`。
+> 是逐格对账两个 `buildScheduleLaunch` 才看见的。
+>
+> SQLite 拿到启动参与者（`createSqliteTaskExecutionLaunchParticipant`，八行）之后：
+> `createSqliteTaskExecutionTriggerParticipant` 退役、PG 那份去掉品牌前缀成为
+> `createTaskExecutionTriggerParticipant`（两个引擎唯一一份）、`trigger.executionFor` 退役、
+> `services/scheduleLaunch.ts#buildScheduleLaunch` 生产上零调用点。
+>
+> **顺带补齐一处真行为**：旧的 SQLite 触发器只在进门 `verifyCanCommit()` 然后**把 guard 丢掉**
+> ——受保护 MR 的 webhook 启动因此既没有快照一致性检查，也拿不到
+> `sourceTerminationLaunchSignal`（MR 中途关闭时那次克隆不会被打断）。现在两侧都把 guard
+> 原样交给内核。
+>
+> **一处装配陷阱（用例当场抓住）**：给协调器补 `repositoryPreparation` 时第一版把它写成了
+> 依赖束的兄弟键而不是 `createTaskDriveCoordinator` 的入参——类型静默通过（那个 const 当时
+> 没有注解），运行时仍走 `skipRepositoryPreparation` 缺省，空工作流被跑完落 `done`。
+> **注解不是装饰**：去掉它的那一刻，放错位置的键就从编译错误降级成运行时行为差异。
+> 紧接着第二个同形陷阱：`cloneTimeoutMs` / `gitBaselineSyncWindowMs` 此前经
+> `buildStartTaskDeps` 隐式带过来，显式装配漏掉就等于把管理员调过的配置静默丢掉
+> （实撞：G6 窗口退回 60s）。
+>
+> 账本：`triggerExecution.ts` 的同文件孪生销账；孪生分母 84→83；适配器分母 80→79；
+> 能力归属债 19→18。
+>
+> 证据：四份启动等价性基线全绿；架构守卫 **796/796**；basename 半径 **110 文件 1283/1283**。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ①②落地。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 50，**RFC-287 G7 补进 PostgreSQL，落差销账**）
 >
 > 本段待推：§5hn 批次二 ①（下）。续 49 钉住的那处落差**已修**。

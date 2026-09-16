@@ -244,7 +244,6 @@ export async function createEachProviderTaskExecution(
           },
         },
         fusion: { appHome },
-        trigger: { executionFor: () => unavailable('trigger launch') },
         rootResumeRuntime,
         repositoryPreparationRetry: {
           retry: async () => unavailable('repository preparation retry'),

@@ -102,6 +102,8 @@ import {
   shutdownActiveTaskExecutions,
 } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
+import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import {
   composeTaskIdleTimeoutOperations,
   createSqliteTaskIdleTimeoutPersistence,
@@ -1961,12 +1963,6 @@ async function composeSqliteProviderSession(
         appHome: Paths.root,
         startDeps: fusionStartDeps,
       },
-      trigger: {
-        executionFor: (actor) => ({
-          ...taskStartDepsFor(actor.user.id),
-          deferRepoPreparation: true,
-        }),
-      },
       rootResumeRuntime: () => ({
         runConfig: {
           appHome: Paths.root,
@@ -1987,6 +1983,7 @@ async function composeSqliteProviderSession(
   // RFC-359 AC-1（plan §5hn 批次一）：单代理启动内核用的真协调器。上面 `routeLaunch.coordinator`
   // 那个转发面闭包引用它——环打在词法作用域上，删掉这一行 tsc 立刻报「Cannot find name」，
   // 而不是留下一个编译通过、运行期才炸的空槽（同 PostgreSQL daemon 的 `boundTaskDriveCoordinator`）。
+  const launchRuntimeConfig = resolveLaunchRuntimeConfig(Paths.config)
   const routeLaunchDriveCoordinator = createTaskDriveCoordinator({
     deps: {
       db,
@@ -1994,6 +1991,22 @@ async function composeSqliteProviderSession(
       configPath: Paths.config,
     },
     appHome: Paths.root,
+    // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：这台协调器同时驱动**定时 / webhook
+    // 触发**（触发器参与者收的就是它），所以必须带上延后仓库准备的第 0 步——缺了它，
+    // 占位行会永远停在 `pending`。直启路由不延后，那一步只会看到 `worktreePath !== ''`
+    // 并直接返回 ready。两个旋钮从配置取（此前经 `buildStartTaskDeps` 隐式带过来）。
+    repositoryPreparation: composeDeferredRepositoryPreparation({
+      db,
+      appHome: Paths.root,
+      repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
+      secretBox,
+      ...(launchRuntimeConfig.cloneTimeoutMs === undefined
+        ? {}
+        : { cloneTimeoutMs: launchRuntimeConfig.cloneTimeoutMs }),
+      ...(launchRuntimeConfig.gitBaselineSyncWindowMs === undefined
+        ? {}
+        : { gitBaselineSyncWindowMs: launchRuntimeConfig.gitBaselineSyncWindowMs }),
+    }),
     engineFailureMessage: 'agent route task drive threw',
     failureReporter: {
       async report({ taskId, error, execution }) {

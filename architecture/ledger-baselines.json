@@ -83,7 +83,7 @@
       "id": "rfc294-capability-compatibility-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CAPABILITY_COMPATIBILITY_DEBT",
-      "baseline": 19,
+      "baseline": 18,
       "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。 RFC-359 W4-D24：租约那条能力兼容债随实现合一销账，22→21。 RFC-359：`sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx` 随同步铸行链退役（`nodeRunMintProgram` 的同步解释器，src 侧唯一到达路径是零调用方的 `mintNodeRunTx`），20 → 19。"
     },
     {
@@ -517,7 +517,7 @@
       "id": "rfc359-w5-same-file-provider-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w5-same-file-provider-pairs.test.ts",
       "symbol": "SAME_FILE_PROVIDER_PAIRS",
-      "baseline": 15,
+      "baseline": 14,
       "why": "RFC-359 AC-1（plan §5fs）——**同文件** provider 孪生的高水位。开账 48 对 / 42 个文件。为什么要新开一份：`rfc359-w5-provider-pair-conformance` 按**文件名词干**配对，于是同一个文件里的一对它一个也看不见；§5fp 合掉的那一对正是这个形状，合掉它 `PROVIDER_PAIR_COUNT` 一动不动。AC-1 的真实规模此前只被数到一小半（账本记 8，实测另有 48 对在同文件里）。每一条都必须带 §5fq 的裁决标记（① 原语 / ② 资源形态 / ③ 驱动线上差异 / 漂移待合）——想留下来就得指名命中哪一条，指不出来就只能挂着等合。 RFC-359 AC-1（plan §5ft）48 → 46：工具连接目录那一对（store + catalog 两层）合一——它是本 context 里唯一**真的**按 provider 分叉过的一处（一份写成 bun:sqlite 同步 `.get()`、一份 `await`），按 §5fq 三条判据一条都不命中，判漂移。合一后那条双引擎用例里的 `if (provider !== 'sqlite') return` 也删掉了：那条 skip 正是分叉的成本——PostgreSQL 侧在这个目录上此前是零覆盖。 RFC-359 AC-1（plan §5fu）46 → 32：一次退役 14 对**纯装配别名**（`export const composeSqliteX = composeXFor` / `= composePostgresqlX`，源码里自己写着「旧名保留为装配别名，bootstrap 收敛后删除」）。它们一个实现都没有，只是三个名字指着同一个函数——留着的唯一效果是让账本、让读代码的人、也让测试**以为这里有两份 provider 实现**。 RFC-359 AC-1（plan §5fw）32 → 31：`webhookRepositoryResolver` 早就是**一份中立实现**，只是当年为了不让导出符号数变动而让正典沿用了 `createSqliteWebhookRepositoryResolver` 这个名字、PG 名做别名——于是账本一直把它记成「还有一对没合」。改名成中立的 `createWebhookRepositoryResolver` 并删掉别名：**是改名不是新增**，导出符号数 2 → 1。 RFC-359 AC-1（plan §5fy）31 → 30：MR 终端控制那一对——两份只差「谁提供 `taskTermination`」（SQLite 自己造、PG 要求注入），持久化端口本来就中立。按 AC-10 的「装配者提供答案」收成一份，**不必等下面的 sourceTermination 孪生先合**。 RFC-359 AC-1（plan §5fz）30 → 29：`composePostgresqlEventCenter` 与中立那份**函数体逐字节相同**，只差形参上一个更窄的 `PostgresqlDatabaseClient` 标注（而选项类型里的 `db` 本来就是 `ProviderNeutralDatabase`、四个 store 也早就中立）——纯编译期品牌标注，零运行期含义。`rfc359-w5-identical-provider-twins` 没咬住它，是因为那条判据只配「两个都带品牌名」的函数，而这一对是「中立名 + 品牌名」；这正是同文件账本要补的另一半。 RFC-359 AC-1（plan §5ga）29 → 27：把 §5fz 的判别式（「中立名 + 品牌名、函数体逐字节相同」）拿去扫剩下的漂移待合，又扫出两对——`createPostgresqlCollaborationCommandContext`（只差输入类型把 `db` 收窄）与 `createPostgresqlEmployeeReactionRoundQueries`（体就是一行 `createReactionRoundQueries(db)`），一并退役。 RFC-359 AC-1（plan §5gb）27 → 25：webhookDispatch 的两对——触发器服务依赖（两份只差「谁提供 `validateSaveable`」，同 §5fy 的形状）与 dispatch 持久化（品牌那份只是「从 db 造端口」的一层，旁边的中立同名函数其实是个恒等函数，两者本来就不是一对 provider 实现）。 RFC-359 AC-1（plan §5gc）25 → 23：两条 code-host webhook 装配——PG 那份走的是 `…WithPersistence` 那层，中立那份把同样三行**又抄了一遍**，两者算的是同一件事。中立那份也改走那层，PG 那份退役。 RFC-359 AC-1（plan §5ge）23 → 21：agent 启动资源的两层（infrastructure + composition）各自合一。三件事里两件的差别都是「自己造 vs 让人注入」（解析可见 agent、工作流校验），第三件本来就一样、只差 PG 那份多写了个 `.run()`。用**可选实参 + 建立在 `db` 上的缺省实现**收口：SQLite 侧两个 bootstrap 调用点语义不变，PG 侧照旧传自己的两份。 RFC-359 AC-1（plan §5gf）21 → 19：两个**转交式函数别名**退役——`createPostgresqlIdentityAccessRuntime` / `composePostgresqlDigitalEmployee`，函数体就是 `return 中立那份(input)`。§5fu 的别名判别式只认 `export const X = Y`，认不出写成 `export function X(a){ return Y(a) }` 的同一件事。 RFC-359 AC-1（plan §5hi）19 → 16：数字员工动作执行的三层同文件孪生一次合齐——`actionExecutionEnvironment` / `agentActionExecution` / `scriptActionExecution`。阻塞它们的「下层是品牌实现」这条前提已经拿掉：合并取**启动内核**那半（`createPostgresqlRootTaskLaunchKernel`，两个引擎上都真启动过，见 `rfc359-w5-kernel-launch-provider-parity`），SQLite 侧不再走只服务自己的 `startTask` + `preCreatedWorktree`。内核的装配收进模块的组合入口 `composition/hostTaskLaunch.ts`，三个组合根（PG daemon、`cli/start.ts`、`server.ts` 的嵌入式回退）从此接同一对 composer。 RFC-359 AC-1（plan §5hl）16 → 15：数字员工执行那一对合一。它的「漂移待合」理由写的是「挡在下层——下层仍是品牌实现，且这条路还挂在 `services/task` 的 SQLite 专属启动面上」，§5hi 把这两个前提都拿掉了（内核在两个引擎上都真启动过、组合入口 `composition/hostTaskLaunch.ts` 让两个 SQLite 根都能装内核），于是这一层按当初写的那样**自然塌成一份**。合并取端口 + 内核那半，库读收成 `composeDatabaseDigitalEmployeeExecutionPorts` 的缺省实现。"
     },
     {
@@ -839,10 +839,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5113,
+      "baseline": 5115,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**补上 PostgreSQL 从未实现过的 RFC-287 G7**）：延后仓库准备接进根启动内核（占位工作区）+ PostgreSQL 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。为此新增两处装配面：`composition/deferredRepositoryPreparation.ts`（两个引擎唯一的一份）与 `services/task.ts` 的 `DeferredRepositoryPreparationDependencies` / `composeDeferredRepositoryPreparationStep`——把这一步从 `StartTaskDeps`（`db: DbClient`）拆成中立依赖面。函数体本来就是中立的，只有类型把它钉死在 SQLite 那一侧，**后果是 G7 在 PostgreSQL 上根本没实现**：远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试（`rfc359-w5hn-deferred-repo-preparation-parity` 先钉住、本批销账）。新增的边都指向这一份共用实现；换来的是 PG 根不再需要任何 provider 专属的准备实现。"
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ①②）：SQLite 的**启动参与者 + 触发器参与者**改用与 PostgreSQL 同一份实现。此前 SQLite 那半自己调 `services/execution/executor.ts#startExecution`——那是同一个 workflow / agent / workgroup 三分支 switch 的第二份写法；触发器那一对因此塌成一份（PG 那半本来就只是八行转发）。两本跨 context 账各净增两条（新导出 `createSqliteTaskExecutionLaunchParticipant` 与组合根接它的边），换来的是：`createSqliteTaskExecutionTriggerParticipant` 与 `trigger.executionFor` 双双退役、`services/scheduleLaunch.ts#buildScheduleLaunch`（同一 switch 的第三份写法）在生产上零调用点，符号归属账因此**净降一条**。"
       }
     },
     {
@@ -863,10 +863,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4598,
+      "baseline": 4600,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**补上 PostgreSQL 从未实现过的 RFC-287 G7**）：延后仓库准备接进根启动内核（占位工作区）+ PostgreSQL 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。为此新增两处装配面：`composition/deferredRepositoryPreparation.ts`（两个引擎唯一的一份）与 `services/task.ts` 的 `DeferredRepositoryPreparationDependencies` / `composeDeferredRepositoryPreparationStep`——把这一步从 `StartTaskDeps`（`db: DbClient`）拆成中立依赖面。函数体本来就是中立的，只有类型把它钉死在 SQLite 那一侧，**后果是 G7 在 PostgreSQL 上根本没实现**：远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试（`rfc359-w5hn-deferred-repo-preparation-parity` 先钉住、本批销账）。新增的边都指向这一份共用实现；换来的是 PG 根不再需要任何 provider 专属的准备实现。"
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ①②）：SQLite 的**启动参与者 + 触发器参与者**改用与 PostgreSQL 同一份实现。此前 SQLite 那半自己调 `services/execution/executor.ts#startExecution`——那是同一个 workflow / agent / workgroup 三分支 switch 的第二份写法；触发器那一对因此塌成一份（PG 那半本来就只是八行转发）。两本跨 context 账各净增两条（新导出 `createSqliteTaskExecutionLaunchParticipant` 与组合根接它的边），换来的是：`createSqliteTaskExecutionTriggerParticipant` 与 `trigger.executionFor` 双双退役、`services/scheduleLaunch.ts#buildScheduleLaunch`（同一 switch 的第三份写法）在生产上零调用点，符号归属账因此**净降一条**。"
       }
     },
     {
@@ -901,15 +901,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24717,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**补上 PostgreSQL 从未实现过的 RFC-287 G7**）：延后仓库准备接进根启动内核（占位工作区）+ PostgreSQL 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。为此新增两处装配面：`composition/deferredRepositoryPreparation.ts`（两个引擎唯一的一份）与 `services/task.ts` 的 `DeferredRepositoryPreparationDependencies` / `composeDeferredRepositoryPreparationStep`——把这一步从 `StartTaskDeps`（`db: DbClient`）拆成中立依赖面。函数体本来就是中立的，只有类型把它钉死在 SQLite 那一侧，**后果是 G7 在 PostgreSQL 上根本没实现**：远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试（`rfc359-w5hn-deferred-repo-preparation-parity` 先钉住、本批销账）。新增的边都指向这一份共用实现；换来的是 PG 根不再需要任何 provider 专属的准备实现。"
-      }
+      "baseline": 24716,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ea44f7e952f0f4e68acb85150453834aa05a0e0d9ed429f5e43c199ad0b4e579",
+    "sourceDigest": "sha256:f088d4c69e838f4f4fb16cdba23ca44adc52333f1fd3ba9c0dbf4d864fe2972b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -922,8 +919,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d75f71252dc814b28111a2ade0321b8b5e71247f",
-    "contentDigest": "sha256:7707641970b046a323ab1dc81205ad1a97692e15a05eebefab354be11315e5c6",
+    "currentSnapshotSha": "128e17e0b1192881194b83d38a3bdbf7719dec2a",
+    "contentDigest": "sha256:da5b191e8f3f3b61f3c9f48cf48d020d35413019ff770033236eda23b69fb1cb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

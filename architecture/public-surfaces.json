@@ -24958,6 +24958,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:17d7bb9e4a877407bcf2",
             "import:64d0dcb1c8d8c7dd0a49"
           ],
           "name": "cancel",
@@ -56142,7 +56143,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:84c141fe35dcc5e097b6"
+          ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:launch.$parameter:command.worktreePath",
           "type": "string"
         },
@@ -56174,7 +56177,9 @@
           "type": "z.infer<typeof TaskStatusSchema>"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:84c141fe35dcc5e097b6"
+          ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:load.$return.$variant:0.worktreePath",
           "type": "string"
         },
@@ -58823,7 +58828,10 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:3cdf8922f68715adb097",
+            "import:84c141fe35dcc5e097b6"
+          ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:launch.$parameter:command.worktreePath",
           "type": "string"
         },
@@ -58856,7 +58864,10 @@
           "type": "z.infer<typeof TaskStatusSchema>"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:3cdf8922f68715adb097",
+            "import:84c141fe35dcc5e097b6"
+          ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:load.$return.$variant:0.worktreePath",
           "type": "string"
         },
@@ -65696,7 +65707,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:84c141fe35dcc5e097b6"
+          ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:launch.$parameter:command.worktreePath",
           "type": "string"
         },
@@ -65728,7 +65741,9 @@
           "type": "z.infer<typeof TaskStatusSchema>"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:84c141fe35dcc5e097b6"
+          ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:load.$return.$variant:0.worktreePath",
           "type": "string"
         },
@@ -73501,7 +73516,9 @@
           "signatureDigest": "sha256:01e52090e90d82e633c7699b45b5df850e1c71e100a38d9ce3fa39033ce7460d"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:82867d7d706f853a6771"
+          ],
           "name": "tick",
           "signatureDigest": "sha256:c1dcbef3e1978c08e787f900184f108b0aa8e1f9e52d628abc7d0ea9dec647ec"
         },
@@ -156243,6 +156260,7 @@
         {
           "consumerEdgeIds": [
             "import:1b3ff4a381d7045b9223",
+            "import:e12d9dac1ebc36c2c0d4",
             "import:fd64b0a73c1d0aa0acb1"
           ],
           "fieldPath": "callGraphWorkspace.$method:find.$return.$variant:0.worktreePath",
@@ -156528,6 +156546,7 @@
         {
           "consumerEdgeIds": [
             "import:1b3ff4a381d7045b9223",
+            "import:e12d9dac1ebc36c2c0d4",
             "import:fd64b0a73c1d0aa0acb1"
           ],
           "fieldPath": "portArtifacts.$method:find.$return.$variant:3.artifact.worktreePath",
@@ -159655,7 +159674,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea44f7e952f0f4e68acb85150453834aa05a0e0d9ed429f5e43c199ad0b4e579",
+  "sourceDigest": "sha256:f088d4c69e838f4f4fb16cdba23ca44adc52333f1fd3ba9c0dbf4d864fe2972b",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -41,7 +41,6 @@ import type {
   BuildScheduleLaunch,
   IntegrationTriggerResourceBinding,
 } from '@/services/scheduledTasks'
-import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
@@ -318,7 +317,15 @@ import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/co
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
-import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
+import {
+  createSqliteTaskExecutionLaunchParticipant,
+  createSqliteTaskRouteLaunchOperations,
+  type SqliteTaskRouteLaunchDependencies,
+} from '@/modules/task-execution/composition/taskRouteLaunch'
+import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
+import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { createTaskExecutionTriggerParticipant } from '@/modules/task-execution/composition/triggerExecution'
+import { createBuildScheduleLaunch } from '@/modules/task-execution/composition/triggerExecution'
 import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -2745,60 +2752,86 @@ function composeSqliteApiRouteMounts(
     resources: composeAgentLaunchResourceOperations({ db: deps.db }),
     integrity: agentResourceIntegrity.launch,
   })
-  const taskRouteLaunch =
-    deps.taskRouteLaunch ??
-    createSqliteTaskRouteLaunchOperations({
+  const launchRuntime = resolveLaunchRuntimeConfig(deps.configPath)
+  const launchRuntimeKnobs = Object.freeze({
+    ...(launchRuntime.cloneTimeoutMs === undefined
+      ? {}
+      : { cloneTimeoutMs: launchRuntime.cloneTimeoutMs }),
+    ...(launchRuntime.gitBaselineSyncWindowMs === undefined
+      ? {}
+      : { gitBaselineSyncWindowMs: launchRuntime.gitBaselineSyncWindowMs }),
+  })
+  // RFC-359 AC-1（plan §5hn 批次二 ①）：这一份依赖束同时喂给**路由启动**与**启动参与者**
+  // ——定时 / webhook 触发走后者，两条路因此共用同一台内核。
+  const taskRouteLaunchDependencies: SqliteTaskRouteLaunchDependencies = Object.freeze({
+    db: deps.db,
+    configPath: deps.configPath,
+    // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL 同一份编排。
+    gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+    agent: agentLaunchResources,
+    routeWorkspace: { appHome, secretBox: deps.secretBox },
+    resourceAuthorityFor: (actor: Actor) =>
+      Object.freeze({
+        actor,
+        authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+        resources: identityAccess.taskExecutionResources,
+      }),
+    // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组臂的资源面，两个根共用**同一份**
+    // （`composeWorkgroupLaunchResourceOperations`）。别在这里手拼 ACL 读法——
+    // 第一版按 PG daemon 抄成了「把 actor 投影成 direct authority 再查目录」，
+    // 那条路认不出定时 / webhook 的**委派** actor，PG 上当场 500。
+    workgroup: composeWorkgroupLaunchResourceOperations({
       db: deps.db,
-      configPath: deps.configPath,
-      // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL 同一份编排。
-      gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-      agent: agentLaunchResources,
-      routeWorkspace: { appHome, secretBox: deps.secretBox },
-      resourceAuthorityFor: (actor) =>
-        Object.freeze({
-          actor,
-          authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-          resources: identityAccess.taskExecutionResources,
-        }),
-      // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组臂的资源面，两个根共用**同一份**
-      // （`composeWorkgroupLaunchResourceOperations`）。别在这里手拼 ACL 读法——
-      // 第一版按 PG daemon 抄成了「把 actor 投影成 direct authority 再查目录」，
-      // 那条路认不出定时 / webhook 的**委派** actor，PG 上当场 500。
-      workgroup: composeWorkgroupLaunchResourceOperations({
-        db: deps.db,
-        integrity: agentResourceIntegrity.launch,
-      }),
-      coordinator: createTaskDriveCoordinator({
-        deps: { db: deps.db, schedulerDriver, configPath: deps.configPath },
-        appHome,
-        engineFailureMessage: 'agent route task drive threw',
-        failureReporter: {
-          async report({ taskId, error, execution }) {
-            const now = Date.now()
-            await taskExecutionPersistence.runtimeLifecycle.trySet({
-              taskId,
-              to: 'failed',
-              allowedFrom: ['pending', 'running'],
-              extra: {
-                finishedAt: now,
-                errorSummary: 'task drive failed',
-                errorMessage: error instanceof Error ? error.message : String(error),
-              },
-              executionContext: execution,
-              now,
-              reason: 'task-drive',
-            })
-            await taskExecutionPersistence.intentTerminalization.terminalize({
-              taskId,
-              state: 'failed',
-              failureCode: 'task-drive-failed',
-              now,
-              claimedOwnerEpoch: execution.token.epoch,
-            })
-          },
+      integrity: agentResourceIntegrity.launch,
+    }),
+    coordinator: createTaskDriveCoordinator({
+      deps: { db: deps.db, schedulerDriver, configPath: deps.configPath },
+      appHome,
+      engineFailureMessage: 'agent route task drive threw',
+      failureReporter: {
+        async report({ taskId, error, execution }) {
+          const now = Date.now()
+          await taskExecutionPersistence.runtimeLifecycle.trySet({
+            taskId,
+            to: 'failed',
+            allowedFrom: ['pending', 'running'],
+            extra: {
+              finishedAt: now,
+              errorSummary: 'task drive failed',
+              errorMessage: error instanceof Error ? error.message : String(error),
+            },
+            executionContext: execution,
+            now,
+            reason: 'task-drive',
+          })
+          await taskExecutionPersistence.intentTerminalization.terminalize({
+            taskId,
+            state: 'failed',
+            failureCode: 'task-drive-failed',
+            now,
+            claimedOwnerEpoch: execution.token.epoch,
+          })
         },
+      },
+      // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：这台协调器现在也要驱动**延后仓库准备**
+      // 的第 0 步——定时 / webhook 触发走的就是它。缺了这一格，占位行会永远停在 `pending`
+      // 或者（空工作流）被直接跑完落 `done`——两种都不是 G7 要的归宿。
+      // 直启路由不延后，届时这一步只会看到 `worktreePath !== ''` 并直接返回 ready。
+      // `cloneTimeoutMs` / `gitBaselineSyncWindowMs` 必须从配置里取：此前这条路经
+      // `buildStartTaskDeps`（它 spread 了 `resolveLaunchRuntimeConfig`）拿到它们，
+      // 换成显式装配后漏掉就等于把管理员调过的两个旋钮静默丢掉——实撞：G6 窗口退回默认
+      // 60s，一个必然失败的准备要退避重试整整一分钟。
+      repositoryPreparation: composeDeferredRepositoryPreparation({
+        db: deps.db,
+        appHome,
+        repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(deps.db),
+        ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+        ...launchRuntimeKnobs,
       }),
-    })
+    }),
+  })
+  const taskRouteLaunch =
+    deps.taskRouteLaunch ?? createSqliteTaskRouteLaunchOperations(taskRouteLaunchDependencies)
   const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db: deps.db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
@@ -2853,14 +2886,20 @@ function composeSqliteApiRouteMounts(
     ...identityAccess,
     integrationTriggerResources: scheduledTaskRuntime.integrationTriggerResources,
   })
+  // RFC-359 AC-1（plan §5hn 批次二 ①②）：定时 / webhook 触发与路由启动**共用同一台内核**。
+  // 此前这里是 `services/scheduleLaunch.ts#buildScheduleLaunch`——`startExecution` 那个
+  // 三分支 switch 的**第三份**写法（provider runtime 的后台 tick 是第二份）。
   const scheduledLaunch =
     deps.buildScheduleLaunch ??
-    buildScheduleLaunch(
-      deps.db,
-      schedulerDriver,
-      deps.configPath,
-      identityAccess,
-      agentLaunchResources,
+    createBuildScheduleLaunch(
+      createTaskExecutionTriggerParticipant({
+        launches: createSqliteTaskExecutionLaunchParticipant(taskRouteLaunchDependencies),
+        cancellation: Object.freeze({
+          async cancel(input: { readonly taskId: string }) {
+            await taskRouteOperations.cancel(input.taskId)
+          },
+        }),
+      }),
     )
   const webhookEndpointService = composeWebhookEndpointServiceDependencies({
     db: deps.db,

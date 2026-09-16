@@ -405,7 +405,9 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // RFC-359 AC-1（2026-09-16，plan §5hm）：81 → 80。驱动生命周期端口两个引擎合成一份，
       // 退役 `createPostgresqlTaskDriverLifecyclePort`（连同整个 `postgresqlTaskDriverLifecycle.ts`）。
       // **是合一不是删覆盖**，分母少一。
-    ).toBeGreaterThanOrEqual(80)
+      // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：80 → 79。触发器参与者两个引擎合成
+      // 一份，退役 `createSqliteTaskExecutionTriggerParticipant`。**是合一不是删覆盖**，分母少一。
+    ).toBeGreaterThanOrEqual(79)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

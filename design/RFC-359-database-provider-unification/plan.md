@@ -15315,3 +15315,71 @@ PostgreSQL 用户什么都看不到**，而且它落在 `POST /api/tasks` 这条
 - `rfc359-w5hn-deferred-repo-preparation-parity` **6/6 双引擎绿**（失败 + 成功两半）
 - 全部架构守卫 **796/796**
 - 改动文件 basename 半径 **105 文件 1063/1063** + 真克隆那四个文件 **80/80**
+
+## §5hn 批次二 ①②落地　`startExecution` 的三分支 switch 在 SQLite 上退出启动路
+
+批次二的 ① 与 ② 一起落：SQLite 拿到**启动参与者**之后，触发器那一对当场塌成一份。
+
+### 合的是什么
+
+`services/execution/executor.ts#startExecution` 是
+`createPostgresqlTaskExecutionLaunchParticipant` 的**第二份写法**——同一个
+workflow / agent / workgroup 三分支 switch，只是终端转
+`startTask` / `startAgentTask` / `startWorkgroupTask`。三条臂的共享实现在批次一与批次二 ③
+已经就位，这一刀只差把工作区参与者从 `routeWorkspace` 物化出来再交给同一个工厂
+（`createSqliteTaskExecutionLaunchParticipant`，八行）。
+
+于是：
+
+- `createSqliteTaskExecutionTriggerParticipant` **退役**，
+  `createPostgresqlTaskExecutionTriggerParticipant` 去掉品牌前缀成为
+  `createTaskExecutionTriggerParticipant`——两个引擎唯一的一份；
+- `SqliteTaskExecutionProviderRuntimeDependencies.trigger.executionFor` **退役**；
+- `services/scheduleLaunch.ts#buildScheduleLaunch`（同一 switch 的**第三份**写法）
+  在生产上零调用点（只剩两个测试消费者，随下一刀删）。
+
+**「同一个 switch 有三份写法」这件事，是逐格对账两个 `buildScheduleLaunch` 时才看见的**
+——它们各自服务不同的入口（provider runtime 的后台 tick / server.ts 的 run-now 路由），
+从任何单一入口看过去都只看得见一份。
+
+### 顺带补齐一处真行为
+
+旧的 SQLite 触发器参与者只在进门 `await guard?.verifyCanCommit()`，然后**把 guard 丢掉**。
+于是受保护 MR 的 webhook 启动在 SQLite 上：
+
+- 没有 `assertProtectedLaunchGuard` 的「invoker 必须带着同一份快照」一致性检查；
+- 拿不到 `sourceTerminationLaunchSignal`——**MR 中途关闭时那次克隆不会被打断**。
+
+现在两侧都把 guard 原样交给启动内核，两条都补齐。
+
+### 一处装配陷阱（用例当场抓住，值得记）
+
+给路由启动那台协调器补 `repositoryPreparation` 时，我第一版把它写成了
+**`taskRouteLaunchDependencies` 的兄弟键**而不是 `createTaskDriveCoordinator({...})` 的入参。
+类型上静默通过（那个 const 当时没有类型注解），运行时那一格于是仍是
+`skipRepositoryPreparation` 的缺省——空工作流被直接跑完落 `done`，
+G7 判据当场红在「准备失败必须把任务落成 failed，收到 done」。
+
+**处置有两半**：把键放回协调器里；给那个 const **加回类型注解**，
+让多余键在编译期就被 excess-property 检查挡住。**注解不是装饰**——去掉它的那一刻，
+一个放错位置的键就从编译错误降级成了运行时行为差异。
+
+第二个同形陷阱紧接着出现：这一步的两个旋钮（`cloneTimeoutMs` /
+`gitBaselineSyncWindowMs`）此前经 `buildStartTaskDeps`（它 spread 了
+`resolveLaunchRuntimeConfig`）**隐式**带过来，改成显式装配后漏掉就等于把管理员调过的配置
+静默丢掉——实撞：G6 窗口退回默认 60s，一个必然失败的准备要退避重试整整一分钟。
+两个组合根都改成从 `resolveLaunchRuntimeConfig` 显式取。
+
+### 账本
+
+- `rfc359-w5-same-file-provider-pairs`：`triggerExecution.ts` 那一对**销账**
+  （它此前的理由正是「挡在下层」——下层一合，这一层果然自然塌成一份）；
+- `rfc359-w5-identical-provider-twins` 分母 84 → 83；
+- `rfc359-w5-adapter-production-consumer` 分母 80 → 79；
+- `rfc294-capability-compatibility-debt` 19 → 18（两条能力归属债塌成一条）。
+
+### 证据
+
+- 四份启动等价性基线（agent / workgroup / scheduled / deferred-prep）**全绿**
+- 全部架构守卫 **796/796**
+- 改动文件 basename 半径 **110 文件 1283/1283**

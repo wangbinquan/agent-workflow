@@ -626,8 +626,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // 字面量（loadVisible / loadExistingAgentIds / integrity）换成一次
     // `composeWorkgroupLaunchResourceOperations({ db, integrity })` 调用——两个组合根与
     // PG 守护进程根共用同一份实现，手拼的那三份一起消失。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：摘要随**定时启动也改走共享编排**更新——
+    // `buildScheduleLaunch(db, …)`（`startExecution` 三分支 switch 的第三份写法）换成
+    // `createBuildScheduleLaunch(createTaskExecutionTriggerParticipant({ launches, cancellation }))`，
+    // 路由启动的依赖束提成具名 const 供两处复用，并给那台协调器补上延后仓库准备的第 0 步。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '532f6131c94c336d5538a69a3686fcf5a6a145029359983c213c49331fe479da',
+      '435dfd31a2debf80b12acf088da97540ae763c1391c45177ccaed70fb3d9270e',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

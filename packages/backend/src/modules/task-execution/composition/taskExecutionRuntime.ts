@@ -37,9 +37,7 @@ export type {
 } from '../application/ports/taskAutoResumeCommand'
 export {
   createBuildScheduleLaunch,
-  createPostgresqlTaskExecutionTriggerParticipant,
-  createSqliteTaskExecutionTriggerParticipant,
-  type SqliteTaskExecutionTriggerDependencies,
+  createTaskExecutionTriggerParticipant,
   type TaskExecutionTriggerParticipant,
 } from './triggerExecution'
 export {
