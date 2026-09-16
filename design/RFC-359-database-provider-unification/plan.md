@@ -14040,3 +14040,40 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
 
 `cli/start.ts` 用它造一台协调器 + 一个工作区参与者 + 那个中立的 git identity，装出**根内核**。
 四件入参现在**全部可得**了。
+
+---
+
+## §5hc　`c014df60e` 推红一次：不是断言失败，是一条漏写超时的重扫描用例撞穿默认 5s
+
+Step B①（§5hb）推上去后 `Backend tests (macos-latest shard 4/6)` 红一格：
+`rfc305-architecture-lock > module composition and public contracts have only the reviewed consumers`。
+
+### 归因过程（这次的判法值得记）
+
+先怀疑是自己那个新导出改了什么。三步排掉：
+
+1. **单跑绿**：`rfc305-architecture-lock` 本地 15 pass / 0 fail。
+2. **按 CI 原样跑**：`bun test --isolate --randomize --seed=43294 --shard=4/6`（连 `AW_TEST_PROVIDERS=sqlite`
+   一起对齐）——2630 pass / 0 fail。但这次**复现不算数**：本地 shard 4/6 里**根本没有这个文件**。
+   bun 的分片按文件发现顺序切，不同机器上同一个 `--shard=N/M` 装的不是同一批文件——
+   「我跑了同一个 shard」并不等于「我跑了同一批用例」。
+3. **看时长**：CI 那格 **6762ms**，而它的邻居都是 70ms 级。翻到源码：
+   这条用例**没有超时实参**（用 bun 的 5s 默认），而同文件另外 **6 条**同样扫全量源码的用例
+   全都写着 `}, 20_000)`。
+
+**结论：撞穿默认超时，不是断言失败。** 它扫整棵 `packages/backend/src` 并逐文件解析字符串字面量，
+耗时随仓库增长；macOS runner 上过了 5s 线。
+
+### 处置
+
+给它补上 `}, 20_000)`，与同文件其余 6 条一致——**照搬文件自己的惯例，不是新发明一个数**。
+
+顺手把同类风险扫了一遍（脚本逐个 `test(` 配对到它的收尾，看「函数体里有没有全量扫描」与
+「有没有超时实参」两件事）：**全文件只有这一条漏网**，补完为零。
+
+### 记一条判法
+
+「同一个 `--shard=N/M` 就是同一批用例」是**错的**。要复现某个分片的红，不能只对齐 shard 号与 seed；
+可靠的做法是**直接跑那个文件**（或从 CI 日志里取出该分片实际装载的文件列表）。
+本轮正是靠「时长 6762ms vs 邻居 70ms」这条线索定位的，而不是靠复现——
+**当复现不出来时，先看那一格的耗时**。

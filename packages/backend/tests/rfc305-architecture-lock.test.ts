@@ -416,7 +416,12 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/ws/registry.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/ws/server.ts -> @/modules/identity-access/public/participants',
     ])
-  })
+    // RFC-359（plan §5hc）：给它一个显式超时，与本文件其余 6 条同 scan 面的用例一致。
+    // 它扫整棵 `packages/backend/src` 并逐文件解析字符串字面量，耗时随仓库增长；
+    // CI 的 macOS runner 上实测 6762ms，撞穿 bun 的 5s 默认超时——**不是断言失败**
+    // （同一条判据本地单跑 1 pass，整份文件 15 pass）。邻居们早就写着 `}, 20_000)`，
+    // 这一条是漏网的。
+  }, 20_000)
 
   test('role/grants/revision/audit retain a single production writer', () => {
     // RFC-359 W4-D8：identity-access 的持久化只剩一份中立实现，授权与审计不再有裸 SQL 写者——
