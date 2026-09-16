@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1775,
+    "backendFiles": 1777,
     "frontendFiles": 622,
     "legacyFiles": 595,
-    "moduleFiles": 1180,
-    "productionFiles": 2552,
+    "moduleFiles": 1182,
+    "productionFiles": 2554,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24708
+    "symbolsIncludingFileRoots": 24710
   },
   "entries": [
     {
@@ -4472,30 +4472,6 @@
       "status": "legacy-target",
       "symbol": "PostgresqlProviderRuntime",
       "targetContext": "runtime-management",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#WORKGROUP_HOST_WORKFLOW_ID",
-      "removeAfterWave": "W4-C",
-      "status": "legacy-target",
-      "symbol": "WORKGROUP_HOST_WORKFLOW_ID",
-      "targetContext": "resource-catalog",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#WORKGROUP_HOST_WORKFLOW_NAME",
-      "removeAfterWave": "W4-C",
-      "status": "legacy-target",
-      "symbol": "WORKGROUP_HOST_WORKFLOW_NAME",
-      "targetContext": "resource-catalog",
       "targetLayer": "inbound"
     },
     {
@@ -119247,6 +119223,30 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts#composeWorkgroupLaunchResourceOperations",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeWorkgroupLaunchResourceOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/workgroupTaskRoomTask.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/workgroupTaskRoomTask.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -133052,6 +133052,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "WorkgroupHostLedgerConflict",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts#createWorkgroupLaunchResourceOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createWorkgroupLaunchResourceOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -297173,5 +297197,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bd05d43973169c99872f67c47b4b128f92c16605dd4af09428f23487687494b0"
+  "sourceDigest": "sha256:f7c72884a48d9c9bbd1f268dffc61f28235f9c54517384676604e1db884d8941"
 }

@@ -16,7 +16,11 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 const EXPECTED_WRITERS = {
   insert: {
-    'cli/postgresqlDaemonApplication.ts': 1,
+    // RFC-359 AC-1（plan §5hn 批次二 ①）：`cli/postgresqlDaemonApplication.ts` **销账**。
+    // 它此前自己内联了一份工作组宿主锚行的 INSERT（第四份同形 host seed）；工作组启动的
+    // 资源面收成两个 provider 唯一的一份之后，那段懒种改由
+    // `modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#ensureWorkgroupHostWorkflow`
+    // 独家负责——写点少一个，序列化器仍是同一个。
     // RFC-304: the code-round host anchor seed. Same shape as the other two
     // host seeds — a builtin, empty-definition FK anchor written through
     // serializeWorkflowDefinitionStorageV1, never a user-visible workflow.
@@ -165,7 +169,6 @@ describe('RFC-199 workflow writer inventory', () => {
 
   test('every production insert stores a canonically serialized definition', () => {
     const canonicalMarkerByWriter: Record<string, string> = {
-      'cli/postgresqlDaemonApplication.ts': 'serializeWorkflowDefinitionStorageV1(',
       'modules/knowledge-evolution/infrastructure/fusionRepository.ts':
         'repairFusionWorkflowDefinition(',
       'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts':
@@ -187,8 +190,10 @@ describe('RFC-199 workflow writer inventory', () => {
     }
     // RFC-359 W4-B2：演示种子的两份 provider 持久化合成一份（14 → 13）；
     // RFC-359 W4-D5：融合仓库的两份 provider 实现合成一份（13 → 12）；
-    // RFC-359 AC-1（plan §5ge）：agent 启动资源的两份合成一份（12 → 11）。
-    expect(inventory.insertValueArgs).toHaveLength(11)
+    // RFC-359 AC-1（plan §5ge）：agent 启动资源的两份合成一份（12 → 11）；
+    // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组宿主锚行的懒种同样合成一份（11 → 10）
+    // ——PG daemon 那份内联 INSERT 退役，只剩 `legacy/workgroup/launch.ts` 一处写点。
+    expect(inventory.insertValueArgs).toHaveLength(10)
     expect(Object.keys(inventory.insert).sort()).toEqual(
       Object.keys(canonicalMarkerByWriter).sort(),
     )

@@ -15,19 +15,12 @@ import {
 } from './postgresqlTaskRouteWorkspaceParticipant'
 import { resolveUploadLimits } from '@/services/launchMultipart'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
-import { ensureWorkgroupHostWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
 export interface SqliteTaskRouteLaunchDependencies
   extends
     Omit<AgentRouteLaunchDependencies, 'db' | 'workspace'>,
-    Omit<WorkgroupRouteLaunchDependencies, 'db' | 'workspace' | 'workgroup'> {
+    Omit<WorkgroupRouteLaunchDependencies, 'db' | 'workspace'> {
   readonly db: DbClient
-  /**
-   * 工作组资源面。`ensureHostWorkflow`（懒种内置宿主锚行）由**模块自己**补上——
-   * 组合根不许 import `resource-catalog/infrastructure/`（`rfc310-architecture-lock` 的源码锁），
-   * 而 PG daemon 那一侧是把同一段 insert 内联在自己文件里的。让模块提供它，两个根都干净。
-   */
-  readonly workgroup: Omit<WorkgroupRouteLaunchDependencies['workgroup'], 'ensureHostWorkflow'>
   /**
    * 与 PostgreSQL 那一支同形（`providerRuntime.ts` 的 `routeWorkspace`）：装配方交
    * **物化输入**，参与者由模块自己造。组合根因此不必深挖 `infrastructure/`
@@ -50,13 +43,7 @@ export function createSqliteTaskRouteLaunchOperations(
     }),
   }
   const launchAgent = createAgentRouteLaunch(withWorkspace)
-  const launchWorkgroup = createWorkgroupRouteLaunch({
-    ...withWorkspace,
-    workgroup: {
-      ...input.workgroup,
-      ensureHostWorkflow: () => ensureWorkgroupHostWorkflow(input.db),
-    },
-  })
+  const launchWorkgroup = createWorkgroupRouteLaunch(withWorkspace)
   const assertReplayVisible = async (
     actor: Parameters<AgentRouteTaskLaunchOperations['assertReplayVisible']>[0],
     sourceTaskId: string,

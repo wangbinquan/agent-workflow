@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 847,
+    "consumers": 849,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1041,
@@ -41220,8 +41220,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:6787ba2dbfc23fb62998",
-            "import:cfd66f0f538d39a5be7a"
+            "import:6787ba2dbfc23fb62998"
           ],
           "name": "insert",
           "signatureDigest": "sha256:e0fc3d2b07cdcf68db4fe441c1e807caa19e111588022a3834c049763846ea2f"
@@ -55623,9 +55622,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadBuiltinWorkflowId.$parameter:seed.description",
           "type": "string"
         },
@@ -55774,9 +55771,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillAccess.$return.$variant:0.skill.description",
           "type": "string"
         },
@@ -55842,9 +55837,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillIdentity.$return.$variant:0.description",
           "type": "string"
         },
@@ -55954,9 +55947,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:seedResources.$parameter:seed.agent.description",
           "type": "string"
         },
@@ -56002,9 +55993,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:seedResources.$parameter:seed.workflow.description",
           "type": "string"
         },
@@ -58290,9 +58279,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadBuiltinWorkflowId.$parameter:seed.description",
           "type": "string"
         },
@@ -58446,9 +58433,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillAccess.$return.$variant:0.skill.description",
           "type": "string"
         },
@@ -58516,9 +58501,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillIdentity.$return.$variant:0.description",
           "type": "string"
         },
@@ -58633,9 +58616,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:seedResources.$parameter:seed.agent.description",
           "type": "string"
         },
@@ -58684,9 +58665,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:seedResources.$parameter:seed.workflow.description",
           "type": "string"
         },
@@ -60032,9 +60011,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadBuiltinWorkflowId.$parameter:seed.description",
           "type": "string"
         },
@@ -60183,9 +60160,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillAccess.$return.$variant:0.skill.description",
           "type": "string"
         },
@@ -60251,9 +60226,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillIdentity.$return.$variant:0.description",
           "type": "string"
         },
@@ -60363,9 +60336,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:seedResources.$parameter:seed.agent.description",
           "type": "string"
         },
@@ -60411,9 +60382,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:seedResources.$parameter:seed.workflow.description",
           "type": "string"
         },
@@ -61466,9 +61435,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadBuiltinWorkflowId.$parameter:seed.description",
           "type": "string"
         },
@@ -61617,9 +61584,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillAccess.$return.$variant:0.skill.description",
           "type": "string"
         },
@@ -61685,9 +61650,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillIdentity.$return.$variant:0.description",
           "type": "string"
         },
@@ -61797,9 +61760,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:seedResources.$parameter:seed.agent.description",
           "type": "string"
         },
@@ -61845,9 +61806,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:seedResources.$parameter:seed.workflow.description",
           "type": "string"
         },
@@ -62903,9 +62862,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadBuiltinWorkflowId.$parameter:seed.description",
           "type": "string"
         },
@@ -63054,9 +63011,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillAccess.$return.$variant:0.skill.description",
           "type": "string"
         },
@@ -63122,9 +63077,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillIdentity.$return.$variant:0.description",
           "type": "string"
         },
@@ -63234,9 +63187,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:seedResources.$parameter:seed.agent.description",
           "type": "string"
         },
@@ -63282,9 +63233,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:seedResources.$parameter:seed.workflow.description",
           "type": "string"
         },
@@ -65227,9 +65176,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadBuiltinWorkflowId.$parameter:seed.description",
           "type": "string"
         },
@@ -65378,9 +65325,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillAccess.$return.$variant:0.skill.description",
           "type": "string"
         },
@@ -65446,9 +65391,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillIdentity.$return.$variant:0.description",
           "type": "string"
         },
@@ -65558,9 +65501,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:seedResources.$parameter:seed.agent.description",
           "type": "string"
         },
@@ -65606,9 +65547,7 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:a1a49dee8c1f4b59cfc7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:seedResources.$parameter:seed.workflow.description",
           "type": "string"
         },
@@ -98020,9 +97959,11 @@
       },
       "consumerEdgeIds": [
         "import:094310af10dafa636874",
+        "import:3b3f93b0eaac09288cdd",
         "import:523be4dc38479c9b1844",
         "import:64bd93c7a02b214b4eb3",
-        "import:c455a417e109065601c3"
+        "import:c455a417e109065601c3",
+        "import:f5fa653da3465d788d75"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -98070,6 +98011,12 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#$file"
         },
         {
+          "context": "task-execution",
+          "edgeId": "import:3b3f93b0eaac09288cdd",
+          "file": "packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts#$file"
+        },
+        {
           "context": "legacy",
           "edgeId": "import:523be4dc38479c9b1844",
           "file": "packages/backend/src/services/execution/executor.ts",
@@ -98086,6 +98033,12 @@
           "edgeId": "import:c455a417e109065601c3",
           "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:f5fa653da3465d788d75",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -159702,7 +159655,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bd05d43973169c99872f67c47b4b128f92c16605dd4af09428f23487687494b0",
+  "sourceDigest": "sha256:f7c72884a48d9c9bbd1f268dffc61f28235f9c54517384676604e1db884d8941",
   "targetContexts": [
     "collaboration",
     "development-automation",

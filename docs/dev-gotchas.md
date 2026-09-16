@@ -540,6 +540,28 @@ git diff --name-only HEAD | grep '^packages/backend/src/' | xargs -n1 basename
 `task.ts` 这种通用 basename 会把命中面撑到 100+ 文件（本次 127 个，跑一遍三分钟）。
 仍然照跑——它比再红一次便宜。
 
+**第四种盲区：账本由「扫 `src/` 的整棵树」自己算出来的守卫（2026-09-17 实撞，又推红一次）。**
+前三种盲区的共同前提是「守卫文件里写着你改的那个文件的名字」——所以 basename 扫法能捞到。
+还有一类守卫**一个文件名都不写**：它自己 `readdirSync` 整个 `src/`，把符合某形状的边算出来，
+再和一份 exact 账本比。`rfc328-architecture-guards` 的 `crossContextProviderBridges` 就是这种
+（`const corpus = backendUnits(REPO_ROOT)` → 正则扫所有 `@/modules/<ctx>/<layer>/...` import）。
+**你新加一条跨 context 的 import，它就红——而你改的文件名在它源码里一次也没出现过。**
+
+实撞：`sqliteTaskRouteLaunchOperations.ts` 新 import 了一行
+`@/modules/resource-catalog/infrastructure/legacy/workgroup/launch`，133 个文件的 basename
+半径全绿，CI 的 backend 两个 shard 同时红。
+
+**补一步（便宜，一定要做）**：架构守卫不止 `tests/architecture/` 一个目录，
+`tests/` 根下还有九个 `*architecture*.test.ts`（`rfc217` / `rfc294-preflight` / `rfc301` /
+`rfc303` / `rfc305` / `rfc310` / `rfc310-digital-employee-os` / `rfc328` / `rfc338`）。
+**改了 `src/` 就把两处一起跑**：
+
+```
+bun test tests/architecture/ tests/*architecture*.test.ts
+```
+
+约一分钟、无需数据库以外的任何准备，罩住的正是「写不出文件名、只能靠跑」的那一类。
+
 ## `rfc359-w5-t19d` 的引用数**连注释里的提及也算**（2026-09-16 实测）
 
 那条「成对适配器覆盖对等」账本里的 `refs`，数的是「提到该实现任一**导出符号**（或其 basename）

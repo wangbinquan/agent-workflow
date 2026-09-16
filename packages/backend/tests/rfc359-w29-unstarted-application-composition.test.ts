@@ -525,8 +525,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `createPostgresqlTaskDriverLifecyclePort` → `createTaskDriverLifecyclePort`（两个引擎一份），
     // 并多一行 `claim:` 绑定（认领方式是唯一按引擎不同的那一格，由装配方交闭包）。
     // **语句数仍是 160、顺序未变**——上面那条 `toHaveLength(160)` 没红。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①）：摘要随**两处启动资源面改用共用实现**更新——
+    // `agentLaunchResources` 不再注入 `agents.get`（那份把 actor 投影成 direct authority
+    // 再查资源目录，认不出定时 / webhook 的委派 actor，PG 上定时启动代理任务当场 500），
+    // `workgroupLaunchResources` 从一整段手写对象字面量换成
+    // `composeWorkgroupLaunchResourceOperations({ db, integrity })`。
+    // **语句数仍是 160**：两处都是 `const … = …`，换的是右手边。
     expect(digest(restored, pg)).toBe(
-      '4ea94193a3fc6417aa5094168a5555bd0735f2cc2158b186d477c498fe3ce91f',
+      '6ce93f2f84a9549c8139985c1d7aaa1d5f42c482575f170184e12f08e5b221f2',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -612,8 +618,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （470 行、直接读库），现在与 PostgreSQL 共用 `createWorkgroupRouteLaunch`。
     // 同一批里这一段还**净减**一格：两条臂都不再经遗留执行器之后，`executionFor`
     // （`buildStartTaskDeps(...)` + `agentLaunchResources` 的那块展开）在这里彻底退役。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①）：`workgroup` 那格从一整段手写对象
+    // 字面量（loadVisible / loadExistingAgentIds / integrity）换成一次
+    // `composeWorkgroupLaunchResourceOperations({ db, integrity })` 调用——两个组合根与
+    // PG 守护进程根共用同一份实现，手拼的那三份一起消失。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '455b9b00ee11cfb712161d2ac98620cebd6df0f4f61d4386d5739f2f97cea898',
+      '532f6131c94c336d5538a69a3686fcf5a6a145029359983c213c49331fe479da',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

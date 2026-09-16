@@ -317,6 +317,7 @@ import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-exe
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
@@ -2759,24 +2760,12 @@ function composeSqliteApiRouteMounts(
           authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
           resources: identityAccess.taskExecutionResources,
         }),
-      // RFC-359 AC-1（plan §5hn 批次二 ③）：工作组臂的资源面，逐项对齐 PG daemon 那份。
-      workgroup: Object.freeze({
-        // **用请求者自己的鉴权句柄**：用 daemon 身份会让「看不见某工作组的用户」也能启动它。
-        loadVisible: (actor: Actor, workgroupId: string) =>
-          workgroupCatalog.queries.get(
-            directOperationAuthority(identityAccess.directAuthority, actor),
-            { id: workgroupId },
-          ),
-        // 名册成员的存在性按系统身份查（PG 那份也是）：问的是「agent 还在不在」，
-        // 不是「请求者看不看得见」——后者已由 loadVisible 的 ACL-404 挡在前面。
-        async loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]> {
-          const identity = await admitDaemonIdentity(identityAccess)
-          if (identity === null) throw new Error('workgroup-launch-authority-not-admitted')
-          const rows = await Promise.all(
-            agentIds.map((id) => agentCatalog.queries.get(identity.actor, { id })),
-          )
-          return rows.flatMap((row) => (row === null ? [] : [row.id]))
-        },
+      // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组臂的资源面，两个根共用**同一份**
+      // （`composeWorkgroupLaunchResourceOperations`）。别在这里手拼 ACL 读法——
+      // 第一版按 PG daemon 抄成了「把 actor 投影成 direct authority 再查目录」，
+      // 那条路认不出定时 / webhook 的**委派** actor，PG 上当场 500。
+      workgroup: composeWorkgroupLaunchResourceOperations({
+        db: deps.db,
         integrity: agentResourceIntegrity.launch,
       }),
       coordinator: createTaskDriveCoordinator({

@@ -2,9 +2,46 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 48，**定时启动基线照出一处 PostgreSQL 专属 500，已修**）
+>
+> 本段待推：§5hn 批次二 ① 的基线 + 启动资源面合一。
+> ⚠️ 上一笔 `653e693fb` **推红过 main**（`rfc328-architecture-guards`），本段一并修好。
+>
+> **最该带走的一句：PostgreSQL 上「定时启动单代理 / 工作组任务」一直是 HTTP 500，
+> SQLite 上一切正常——这正是 AC-1 要消灭的那种分叉，基线第一次跑就把它照出来了。**
+>
+> 成因：PG 守护进程根给这两条臂注入的资源面是「把 actor 投影成 **direct** authority
+> 再查资源目录」，而 `directOperationAuthority` 按对象同一性反查，只认凭据边缘铸出来的
+> 那一个投影。定时 / webhook / 子任务拿到的是**委派** actor，投影表里没有它 ⇒
+> `foreign-legacy-actor-projection`。同一个参与者里 workflow 那条臂没事——它收的是
+> `RequestAuthority` 基类型。**三条臂对 authority 的要求不一致，这才是缺陷的形状。**
+>
+> 处置照 §5ge 的处方：新增 `workgroupLaunchResourceOperations.ts` +
+> `composition/workgroupLaunchResources.ts`（读库 + `canViewResource`，与 agent 那份逐格对称），
+> **三个组合根手拼的那三份一起删**，PG 根也不再注入 `agentLaunchResources.agents`。
+> ACL 判据一格没动：两条路本来就是同一个 application 方法的两个入口
+> （`composition/resourceAcl.ts:116`），区别只在投影要不要求「铸造出身」。
+>
+> **另一处红是时间不是引擎**：`status` 在 `pending` / `running` 之间取决于调度器几时接手。
+> 摘出相等面、换成各 lane 断言它落在启动早期——不拿 flaky 当判据。
+>
+> **一条新的半径盲区（这次的红就是它）**：`rfc328-architecture-guards` 的账本
+> **不写任何文件名**，自己 `readdirSync` 整个 `src/` 算跨 context 边。133 文件的 basename
+> 半径全绿、CI 两个 shard 同时红。定式补成：改了 `src/` 就加跑
+> `bun test tests/architecture/ tests/*architecture*.test.ts`（`tests/` 根下另有九个
+> `*architecture*.test.ts`）。已落 `docs/dev-gotchas.md` 第四种盲区。
+>
+> 顺带销账：工作流 INSERT 写点 **11 → 10**（PG daemon 的第四份 host seed 退役）。
+>
+> 证据：定时启动基线 **6/6 双引擎绿**（修前 PG 三条全红）；架构守卫全量 **796/796**；
+> basename 半径 + 架构全量 **205 文件 2423/2423**。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ①（上）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 47，**工作组启动的路由路径也合一；顺手退役 `executionFor`**）
 >
-> 本段待推：§5hn 批次二 ③ 的路由段。
+> 已推：`653e693fb`。**CI 红过一次**（`rfc328-architecture-guards` 的跨 context 桥接债缺一行），
+> 由续 48 那一笔一并修好——红因见续 48 的「新的半径盲区」。
 >
 > **最该带走的一句：预先写成「反向断言」的那处已知差异，按剧本红了——合并把它关掉了。**
 > `POST /api/workgroups/:id/tasks` 此前 SQLite 转 `startExecution` → `startWorkgroupTask`

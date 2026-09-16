@@ -15068,3 +15068,88 @@ ACL-404 那层直接废掉。改成 `directOperationAuthority(identityAccess.dir
 - 架构守卫全量 **706/706**（4 skip，本机 PG 已配置，`describeEachProvider` 的 PG 支全跑）
 - 改动文件 basename 半径 **104 文件 1250/1250**（含 `rfc164-workgroup-engine` 全家、
   `rfc349-rest-launch-ownership` 双引擎、`rfc310-architecture-lock`）
+
+## §5hn 批次二 ①（上）　定时启动的双引擎基线——**一上来就照出一处 PostgreSQL 专属 500**
+
+批次一 / 批次二 ③ 只统一了**路由**那两条启动路。剩下的入口（定时 / webhook / 子任务 /
+multipart）在 SQLite 上仍走 `startExecution`。合并那个三分支 switch 之前，照例先立基线。
+
+`rfc359-w5hn-scheduled-launch-provider-parity`：走
+`POST /api/scheduled-tasks/:id/run-now` → `fireSchedule` → `createBuildScheduleLaunch`
+→ **触发器参与者** → 启动参与者，一条路同时覆盖批次二的 ①（启动参与者）与 ②（触发器参与者），
+三个 kind（workflow / agent / workgroup）各一条用例，判据仍是**拒绝清单 + 整行比对**。
+
+### 第一次跑就红了两处，其中一处是真缺陷
+
+```
+sqlite      3/3 绿
+postgresql  workflow 绿（但有一格不等），agent / workgroup → HTTP 500
+```
+
+**① `status` 那格不等（`running` vs `pending`）——不是引擎差异，是时间。**
+调度器异步接手，读回来时任务可能已经翻到 `running`。拿它做相等断言等于把一条 flaky
+写进守卫（本仓硬规则：「绝不允许重跑就过了」）。处置：从相等面摘掉，换成各 lane 断言
+它落在启动早期的两个合法状态之一。
+
+**② PostgreSQL 上定时启动单代理 / 工作组任务当场 500——这是真缺陷。**
+
+```
+Error: foreign-legacy-actor-projection
+  at directAuthorityForProjection (identity-access/application/operationContext.ts:144)
+  at directOperationAuthority        (routes/operationAuthority.ts:19)
+  at get / loadVisible               (cli/postgresqlDaemonApplication.ts:909 / 919)
+  at launchAgent / launchWorkgroup   (postgresqlTaskRouteLaunchOperations.ts:1008 / 1138)
+  at launch                          (composition/triggerExecution.ts:78)
+  at fireSchedule                    (services/scheduledTasks.ts:944)
+```
+
+**成因**：PG 守护进程根给 agent / workgroup 的启动资源面注入的实现是
+「把 actor 投影成 **direct** authority 再查资源目录」。而 `directOperationAuthority`
+按**对象同一性**反查——只认凭据边缘 `mintDirectAuthority` 铸出来的那一个投影。
+定时 / webhook / 子任务拿到的是 `delegatedRequests.forSchedule(...)` 铸的**委派** actor，
+投影表里根本没有它，于是当场抛。SQLite 那半在 `startAgentTask` / `startWorkgroupTask`
+体内直接 `getAgentById` / `getWorkgroupById` + `canViewResource(db, actor, …)`，
+对两种 actor 都成立，所以一切正常。
+
+**为什么 workflow 那一格没事**：工作流臂走的是
+`input.resources.resources.loadAuthorized(input.resources, …)`——它收的是
+`ResourceRequestContext`（= `RequestAuthority` 基类型），直连与委派都满足。
+**同一个参与者里，三条臂对 authority 的要求不一致**，这才是缺陷的形状。
+
+### 处置：把资源面收成两个 provider 唯一的一份（agent 那份 §5ge 的同一处方）
+
+- 新增 `infrastructure/workgroupLaunchResourceOperations.ts` +
+  `composition/workgroupLaunchResources.ts`，与 `agentLaunchResourceOperations.ts` 逐格对称：
+  `loadVisible` = `getWorkgroupById` + `canViewResource`，`loadExistingAgentIds` = 一条
+  `select agents.id where in (…)`（同 `startWorkgroupTask` 原文），`ensureHostWorkflow` =
+  中立的 `ensureWorkgroupHostWorkflow(db)`，`integrity` 仍由装配方交。
+- **三个组合根手拼的那三份一起删**：`server.ts` / `cli/start.ts`（批次二 ③ 刚写的那两份）
+  与 `cli/postgresqlDaemonApplication.ts`（连同它自己内联的第四份工作组宿主锚行 INSERT）。
+- PG 根也不再注入 `agentLaunchResources.agents`——缺省实现同样对两种 actor 成立。
+
+**ACL 判据一格没动**：`canViewResource(db, actor, …)` 与资源目录的
+`authorization.canViewResource(authority, …)` 是**同一个 application 方法**的两个入口
+（`composition/resourceAcl.ts:116`），区别只在传进去的投影要不要求「铸造出身」。
+收成读库那半不改变任何可见性判定，只是不再拒绝非直连 actor。
+
+### 顺带销掉的账
+
+- `rfc199-workflow-writer-inventory`：工作流 INSERT 写点 **11 → 10**，
+  `cli/postgresqlDaemonApplication.ts` 从清单里消失（第四份 host seed 退役）。
+- `rfc328-architecture-guards` 的跨 context 桥接债：新文件三行（与 agent 那三行逐字对称），
+  换掉的是三个根各自的手拼实现 + SQLite 路由启动为补 `ensureHostWorkflow` 而开的那条
+  legacy import。
+
+### 一条**新的**半径盲区（这一刀实际把 main 推红了一次，值得单独记）
+
+`rfc328-architecture-guards` 的账本**不写任何文件名**——它 `readdirSync` 整个 `src/`
+自己算跨 context 边。于是：133 个文件的 basename 半径全绿，CI 两个 backend shard 同时红。
+`docs/dev-gotchas.md` 已补成第四种盲区，处置是固定加跑
+`bun test tests/architecture/ tests/*architecture*.test.ts`（`tests/` 根下另有九个
+`*architecture*.test.ts`，只跑 `tests/architecture/` 罩不住）。
+
+### 证据
+
+- `rfc359-w5hn-scheduled-launch-provider-parity` **6/6 双引擎绿**（修前：PG 三条全红）
+- 全部架构守卫（`tests/architecture/` + `tests/*architecture*.test.ts`）**796/796**
+- 改动文件 basename 半径 + 架构全量：**205 文件 2423/2423**（4 skip）

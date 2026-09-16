@@ -231,6 +231,15 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowPersistence.ts',
   'resource-catalog/infrastructure/legacy/workflow.validator: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
+  // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组启动的资源面收成两个 provider 唯一的一份，
+  // 形状与紧邻的 `agentLaunchResourceOperations.ts` 三条**逐字对称**（同一处置、同一层）。
+  // 净账是减：此前 SQLite 那半在 `startWorkgroupTask`（470 行）里读库、PG 那半在守护进程根里
+  // 注入一份走资源目录的实现，三个组合根各自拼一遍；现在只剩这一个文件碰 legacy 资源读法。
+  // 换掉 PG 那份是**功能修复**而不是整理：它把 actor 投影成 direct authority 再查目录，
+  // 认不出定时 / webhook 的委派 actor，PostgreSQL 上定时启动代理 / 工作组任务当场 500。
+  'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
+  'resource-catalog/infrastructure/legacy/workgroup/launch: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
+  'resource-catalog/infrastructure/legacy/workgroups: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts',

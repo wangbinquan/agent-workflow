@@ -43,6 +43,7 @@ import type { TaskDriveCoordinator } from '@/modules/task-execution/public/comma
 import { createTaskDriveCoordinator } from '@/services/task'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
   composeSqliteTaskExecutionProviderRuntime,
@@ -1902,28 +1903,12 @@ async function composeSqliteProviderSession(
             authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
             resources: taskExecutionResources,
           }),
-        // RFC-359 AC-1（plan §5hn 批次二 ③）：工作组臂的资源面，逐项对齐 PG daemon 那份。
-        // 这里全是箭头，取值发生在**调用时**——`workgroupCatalog` 在本作用域后面才造出来，
-        // 与协调器转发面同一个词法闭环手法。
-        workgroup: Object.freeze({
-          // **必须用请求者自己的鉴权句柄**（与 PG daemon 的 `authorityFor(actor)` 逐字同形）。
-          // 用 daemon 身份会让「看不见某工作组的用户」也能启动它——ACL-404 那层就废了。
-          loadVisible: (actor: Actor, workgroupId: string) =>
-            workgroupCatalog.queries.get(
-              directOperationAuthority(identityAccess.directAuthority, actor),
-              { id: workgroupId },
-            ),
-          // 名册成员的存在性检查按**系统身份**查——PG daemon 那份也是
-          // `authorityFor(systemActor)`：这一步问的是「这个 agent 还在不在」，
-          // 不是「请求者看不看得见它」，后者已由 `loadVisible` 的 ACL-404 挡在前面。
-          async loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]> {
-            const identity = await admitDaemonIdentity(identityAccess)
-            if (identity === null) throw new Error('workgroup-launch-authority-not-admitted')
-            const rows = await Promise.all(
-              agentIds.map((id) => agentCatalog.queries.get(identity.actor, { id })),
-            )
-            return rows.flatMap((row) => (row === null ? [] : [row.id]))
-          },
+        // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组臂的资源面，两个根共用**同一份**
+        // （`composeWorkgroupLaunchResourceOperations`）。它读库 + `canViewResource`，
+        // 因此定时 / webhook 的**委派** actor 也能用——把 actor 投影成 direct authority
+        // 再查资源目录的那种写法认不出委派 actor（`foreign-legacy-actor-projection`）。
+        workgroup: composeWorkgroupLaunchResourceOperations({
+          db,
           integrity: agentResourceIntegrity.launch,
         }),
         // 协调器↔`schedulerDriver` 的环打在**词法作用域**上，与 PostgreSQL daemon

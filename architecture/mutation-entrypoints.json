@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1684,
+    "entries": 1685,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27386,6 +27386,30 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts#createWorkgroupLaunchResourceOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts#createWorkgroupLaunchResourceOperations",
+      "symbol": "createWorkgroupLaunchResourceOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
@@ -40235,7 +40259,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bd05d43973169c99872f67c47b4b128f92c16605dd4af09428f23487687494b0",
+  "sourceDigest": "sha256:f7c72884a48d9c9bbd1f268dffc61f28235f9c54517384676604e1db884d8941",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

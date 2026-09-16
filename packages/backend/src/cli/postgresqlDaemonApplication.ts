@@ -21,11 +21,7 @@ import {
 } from '@/modules/task-execution/composition/bootRecovery'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
-import {
-  WORKFLOW_SCHEMA_VERSION,
-  serializeWorkflowDefinitionStorageV1,
-  type Config,
-} from '@agent-workflow/shared'
+import type { Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { eq } from 'drizzle-orm'
@@ -85,7 +81,6 @@ import {
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
-import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
@@ -95,10 +90,11 @@ import {
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
-import { tasks, workflows } from '@/db/schema'
+import { tasks } from '@/db/schema'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import {
   composePostgresqlTaskExecutionProviderRuntime,
   type SelectedPostgresqlTaskExecutionProviderRuntime,
@@ -333,9 +329,6 @@ import {
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 const log = createLogger('postgresql-daemon-application')
-
-const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
-const WORKGROUP_HOST_WORKFLOW_NAME = '__workgroup_host__'
 
 function isDigitalEmployeeAclType(type: string): type is DigitalEmployeeAclResourceType {
   return (
@@ -902,47 +895,25 @@ export async function composePostgresqlApplication(
       }
     },
   })
+  // RFC-359 AC-1（plan §5hn 批次二 ①）：**不要**再往 `agents` 那格注入
+  // 「把 actor 投影成 direct authority 再查资源目录」的实现。`directOperationAuthority`
+  // 只认凭据边缘铸出来的那一个投影，而定时 / webhook / 子任务拿到的是**委派** actor
+  // ——那条路在 PostgreSQL 上让定时单代理启动当场 500（`foreign-legacy-actor-projection`），
+  // SQLite 一切正常。缺省实现读库 + `canViewResource`，判据同一套、对两种 actor 都成立。
   const agentLaunchResources = composeAgentLaunchResourceOperations({
     db: input.db,
-    agents: {
-      get: (actor, agentId) =>
-        classicCatalogs.agent.queries.get(authorityFor(actor), { id: agentId }),
-    },
     workflowValidation: {
       async validate(definition) {
         return validateWorkflowDef(definition, await validationContext.load())
       },
     },
   })
-  const workgroupLaunchResources = Object.freeze({
-    loadVisible: (actor: Actor, workgroupId: string) =>
-      workgroupCatalog.queries.get(authorityFor(actor), { id: workgroupId }),
-    async loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]> {
-      const authority = authorityFor(systemActor)
-      const rows = await Promise.all(
-        agentIds.map((id) => classicCatalogs.agent.queries.get(authority, { id })),
-      )
-      return rows.flatMap((row) => (row === null ? [] : [row.id]))
-    },
-    async ensureHostWorkflow(): Promise<void> {
-      await input.db
-        .insert(workflows)
-        .values({
-          id: WORKGROUP_HOST_WORKFLOW_ID,
-          name: WORKGROUP_HOST_WORKFLOW_NAME,
-          description: 'RFC-164 workgroup host anchor — do not launch directly',
-          definition: serializeWorkflowDefinitionStorageV1({
-            $schema_version: WORKFLOW_SCHEMA_VERSION,
-            inputs: [],
-            nodes: [],
-            edges: [],
-          }),
-          ...initialBuiltinResourceAcl(null),
-          builtin: true,
-        })
-        .onConflictDoNothing({ target: workflows.id })
-        .run()
-    },
+  // RFC-359 AC-1（plan §5hn 批次二 ①）：与 agent 臂同一处置——两个根共用
+  // `composeWorkgroupLaunchResourceOperations`（读库 + `canViewResource` + 中立的
+  // 宿主锚行懒种）。此前这份注入实现同样把 actor 投影成 direct authority，
+  // 定时启动工作组任务在 PostgreSQL 上因此 500。
+  const workgroupLaunchResources = composeWorkgroupLaunchResourceOperations({
+    db: input.db,
     integrity: classicCatalogs.agentResourceIntegrity.launch,
   })
 
