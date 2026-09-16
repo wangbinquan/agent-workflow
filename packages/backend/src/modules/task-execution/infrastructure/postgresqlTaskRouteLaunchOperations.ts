@@ -296,13 +296,18 @@ export interface PostgresqlRootTaskLaunchDependencies {
  *
  * 从 `PostgresqlTaskRouteLaunchDependencies` 里拆出来，是为了让 SQLite 那一侧能接同一份
  * 实现而**不必编造一份用不到的 workgroup 资源面**：agent 臂的函数体只碰
- * `agent.resources` / `agent.integrity` / `resourceAuthorityFor` 与根内核，
- * 工作组那格它一次都没读过。让类型说真话，比让调用方塞个占位对象好。
+ * `agent.resources` / `agent.integrity` 与根内核，工作组那格它一次都没读过。
+ * 让类型说真话，比让调用方塞个占位对象好。
+ *
+ * RFC-359 AC-1（plan §5hn 批次二 ①②，同一条判据的第二次应用）：`resourceAuthorityFor`
+ * 也从这里挪走了——它只被**路由包装**读（`createPostgresqlTaskRouteLaunchOperations` 的
+ * 两个 `launch(actor, command)`），臂与启动参与者收的都是请求上带来的 `resources`。
+ * 留着它的代价不是多一行：定时 / webhook 拿到的是**委派** actor，而典型实现是
+ * `authorityForLegacyProjection(actor)`——非直连 actor 会当场抛。让一个用不到的必填项
+ * 逼调用方去编一个「反正不会被调用」的实现，正是这一轮在消灭的形状。
  */
 export interface AgentRouteLaunchDependencies extends PostgresqlRootTaskLaunchDependencies {
   readonly configPath: string
-  /** Bind the admitted actor to the exact provider Resource Catalog authority. */
-  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   readonly agent: Readonly<{
     resources: AgentLaunchResourceOperations
     integrity: AgentLaunchResourceIntegrityParticipant
@@ -316,12 +321,20 @@ export interface AgentRouteLaunchDependencies extends PostgresqlRootTaskLaunchDe
  */
 export interface WorkgroupRouteLaunchDependencies extends PostgresqlRootTaskLaunchDependencies {
   readonly configPath: string
-  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   readonly workgroup: PostgresqlWorkgroupRouteLaunchResources
 }
 
-export interface PostgresqlTaskRouteLaunchDependencies
+/**
+ * 启动参与者（定时 / webhook / 子任务那条路）真正需要的：两条臂的并集，**不含**
+ * `resourceAuthorityFor`——它收的是请求上带来的 `resources`。
+ */
+export interface TaskExecutionLaunchParticipantDependencies
   extends AgentRouteLaunchDependencies, WorkgroupRouteLaunchDependencies {}
+
+/** 路由面额外要一格：把 admitted actor 绑成 provider 的资源目录鉴权句柄。 */
+export interface PostgresqlTaskRouteLaunchDependencies extends TaskExecutionLaunchParticipantDependencies {
+  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+}
 
 export interface PostgresqlRootTaskLaunchSubject {
   readonly workflowId: string
@@ -1357,10 +1370,13 @@ function triggerDefersRepositoryPreparation(invoker: ExecutionInvoker): boolean 
 }
 
 export function createPostgresqlTaskExecutionLaunchParticipant(
-  dependencies: PostgresqlTaskRouteLaunchDependencies,
+  dependencies: TaskExecutionLaunchParticipantDependencies,
 ): PostgresqlTaskExecutionLaunchParticipant {
   const launchRoot = createPostgresqlRootTaskLaunchKernel(dependencies).launch
-  const arms = createPostgresqlTaskLaunchArms(dependencies)
+  const arms = Object.freeze({
+    launchAgent: createAgentRouteLaunch(dependencies),
+    launchWorkgroup: createWorkgroupRouteLaunch(dependencies),
+  })
   return Object.freeze({
     async launch(input: Parameters<PostgresqlTaskExecutionLaunchParticipant['launch']>[0]) {
       const deferRepoPreparation =

@@ -342,7 +342,7 @@
       "id": "rfc349-provider-specific-business-dependencies",
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
-      "baseline": 25,
+      "baseline": 24,
       "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。 RFC-357 PR-1：`services/taskOperations.ts` 整文件删除，它对 `legacySqliteTransportMechanisms` 的那条具名依赖随之出账，68 → 67。 RFC-359 W1-T2a：`services/questionDispatchComposition.ts` facade 改指 provider-中立的 `questionDispatchCommand`，67 → 66。 RFC-359 W1-T2b：`services/clarifyDecisionComposition.ts` facade 改指 provider-中立的 `clarifyDecisionCommand`，66 → 65。 RFC-359 W1-T2c：`services/reviewDecisionComposition.ts` facade 改指 provider-中立的 `reviewDecisionCommand`，`services/reviewMutationCoordinator.ts` 改依赖中立的 `reviewMutationScope`，65 → 63。 RFC-359 W4-B1 批 1：services/task.ts → branchTraceSnapshotReader 不再 provider 专属，63 → 62。 RFC-359 W4-B4 批 c：identity-access 公共面改为只导出中立的 DrizzleOidcProviderRepository，public → provider 适配器的两条债与 services/oidcProviders 那条随之还清，58 → 55。 RFC-359 W4-D24：`services/startTaskDeps.ts` 的租约依赖不再是 provider 专属，50→49。 RFC-359 W4-D26：`SqliteHumanGateOperationStore` 随手工提问写面合一整份退役，`humanGateComposition` 对它的 provider 具名依赖随之消失，49 → 48。 RFC-359 W4-D27：任务执行资源快照绑定合一，`services/execution/taskExecutionResources.ts` 对两份 provider 绑定的具名依赖并成一条中立导出，48 → 46。 RFC-359 W4-D28b：同步 owned-mutation 网关（`composition/sqliteOwnedTaskMutation`）整体退役，`public/operations.ts` 与 `public/participants.ts` 对它的两条具名依赖随之出账，46 → 44。。RFC-359（2026-09-13）28 → 27：退役 `services/bundle/postgresqlApply.ts` —— 一条 4 行的 `export *` 兼容门面，全 src 零 importer（plan §5du）。RFC-359（plan §5dy）27 → 25：通用 bundle 引擎的 legacy 依赖表随引擎退役，它名下那两条 provider 专属业务依赖（`createSqliteCapabilityTemplatePackageCommitSync` / `getAclResourceOwnerInTx`）一并销账"
     },
     {
@@ -839,11 +839,8 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5115,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①②）：SQLite 的**启动参与者 + 触发器参与者**改用与 PostgreSQL 同一份实现。此前 SQLite 那半自己调 `services/execution/executor.ts#startExecution`——那是同一个 workflow / agent / workgroup 三分支 switch 的第二份写法；触发器那一对因此塌成一份（PG 那半本来就只是八行转发）。两本跨 context 账各净增两条（新导出 `createSqliteTaskExecutionLaunchParticipant` 与组合根接它的边），换来的是：`createSqliteTaskExecutionTriggerParticipant` 与 `trigger.executionFor` 双双退役、`services/scheduleLaunch.ts#buildScheduleLaunch`（同一 switch 的第三份写法）在生产上零调用点，符号归属账因此**净降一条**。"
-      }
+      "baseline": 5114,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -863,17 +860,14 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4600,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①②）：SQLite 的**启动参与者 + 触发器参与者**改用与 PostgreSQL 同一份实现。此前 SQLite 那半自己调 `services/execution/executor.ts#startExecution`——那是同一个 workflow / agent / workgroup 三分支 switch 的第二份写法；触发器那一对因此塌成一份（PG 那半本来就只是八行转发）。两本跨 context 账各净增两条（新导出 `createSqliteTaskExecutionLaunchParticipant` 与组合根接它的边），换来的是：`createSqliteTaskExecutionTriggerParticipant` 与 `trigger.executionFor` 双双退役、`services/scheduleLaunch.ts#buildScheduleLaunch`（同一 switch 的第三份写法）在生产上零调用点，符号归属账因此**净降一条**。"
-      }
+      "baseline": 4598,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 317,
+      "baseline": 316,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
@@ -901,12 +895,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24716,
+      "baseline": 24715,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f088d4c69e838f4f4fb16cdba23ca44adc52333f1fd3ba9c0dbf4d864fe2972b",
+    "sourceDigest": "sha256:d5e2df1e5f0ca36125001f3ac1c3afe765508d7f42e24c62813649cf9b5d87af",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -919,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "128e17e0b1192881194b83d38a3bdbf7719dec2a",
-    "contentDigest": "sha256:da5b191e8f3f3b61f3c9f48cf48d020d35413019ff770033236eda23b69fb1cb",
+    "currentSnapshotSha": "20d4a6ce5b35641f1bd77a92b229819c8b5d34e1",
+    "contentDigest": "sha256:4a353de375ac1ef94e15b533d12e680a4a09a0a5f6fc0de71bcdd9fd0c1668bb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -322,7 +322,6 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const startTaskDeps = read('packages/backend/src/services/startTaskDeps.ts')
     const cli = read('packages/backend/src/cli/start.ts')
     const taskRoutes = read('packages/backend/src/routes/tasks.ts')
-    const scheduleLaunch = read('packages/backend/src/services/scheduleLaunch.ts')
     const providerRuntime = read(
       'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
     )
@@ -340,8 +339,10 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(startTaskDeps).not.toContain('createLegacyTaskExecutionTopology')
     expect(taskRoutes).toContain('readonly operations: TaskRouteOperations')
     expect(taskRoutes).not.toMatch(/RepositoryPublicationTransport|SchedulerDriverPort/)
-    expect(scheduleLaunch).toContain('schedulerDriver: SchedulerDriverPort')
-    expect(scheduleLaunch).not.toContain('TaskRepositoryPublicationTransport')
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
+    // ——它是 `startExecution` 三分支 switch 的第三份写法，定时启动改走与路由同一份编排。
+    // 这两条断言的意图（定时启动不得自己重建发布 transport）由 `startTaskDeps` 与
+    // `providerRuntime` 上的同名断言继续守着。
     expect(webhookDispatch).toContain(
       "readonly taskExecutions: WebhookExecutionRuntimeDependencies['taskExecutions']",
     )

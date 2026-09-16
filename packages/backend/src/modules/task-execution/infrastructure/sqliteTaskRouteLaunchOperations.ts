@@ -1,4 +1,6 @@
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type {
   AgentRouteTaskLaunchOperations,
   WorkgroupRouteTaskLaunchOperations,
@@ -29,6 +31,11 @@ export interface SqliteTaskRouteLaunchDependencies
    * ——RFC-331 的分层判据会逐条抓出那种 deep import（本刀实撞过一次）。
    */
   readonly routeWorkspace: Omit<PostgresqlTaskRouteWorkspaceDependencies, 'db'>
+  /**
+   * 路由面独有的那一格（见 `PostgresqlTaskRouteLaunchDependencies`）：把 admitted actor
+   * 绑成资源目录鉴权句柄。臂与启动参与者都不读它——它们收的是请求上带来的 `resources`。
+   */
+  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
 }
 
 export function createSqliteTaskRouteLaunchOperations(

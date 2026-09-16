@@ -15383,3 +15383,41 @@ G7 判据当场红在「准备失败必须把任务落成 failed，收到 done�
 - 四份启动等价性基线（agent / workgroup / scheduled / deferred-prep）**全绿**
 - 全部架构守卫 **796/796**
 - 改动文件 basename 半径 **110 文件 1283/1283**
+
+## §5hn 批次二 ①②（收尾）　删掉 `services/scheduleLaunch.ts`，并让类型停止撒谎
+
+### 删除
+
+上一节之后它在生产上零调用点。两个测试消费者迁到生产同一份编排
+（`rfc165-scheduled-kinds` 的 `buildRealScheduleLaunch`、`rfc287-t13-deferred-prep` 的
+G7 定时用例），判据面**一字未动**——迁的是夹具，不是断言。第三份写法至此消失。
+
+覆盖账当场给出正向信号：`rfc359-w5-t19d` 的 `TaskRouteLaunchOperations` 一对
+从 `sqlite 3/1` 变成 `sqlite 5/3`，倒挂差额 8 → 6。**这次是真的覆盖变好**：
+那两个夹具现在**值 import** 了 `createSqliteTaskExecutionLaunchParticipant`。
+
+### 顺带：`resourceAuthorityFor` 从臂和启动参与者的依赖面挪走
+
+迁 `rfc165` 的夹具时撞到一件事：为了构造启动参与者，测试得交一个
+`resourceAuthorityFor`——而这条路上的 actor 是**委派**的，典型实现
+（`authorityForLegacyProjection(actor)`）对它会当场抛。也就是说，类型在逼调用方
+编一个「反正不会被调用」的实现。
+
+查证：`resourceAuthorityFor` 全文件只有两处消费点，都在
+`createPostgresqlTaskRouteLaunchOperations` 的路由包装里（`launch(actor, command)`）。
+两条臂与启动参与者读的都是**请求上带来的** `resources`。于是：
+
+- `AgentRouteLaunchDependencies` / `WorkgroupRouteLaunchDependencies` 去掉这一格；
+- 新增 `TaskExecutionLaunchParticipantDependencies`（两条臂的并集，不含它）；
+- `PostgresqlTaskRouteLaunchDependencies` 在它之上加这一格——**路由面独有**。
+
+**判据：一个必填依赖如果只有某一类调用方会用，它就不属于共享的那层。**
+留着的代价不是多一行，是逼每个不用它的调用方编一个假的——而假的那个，
+在委派 actor 上恰好是会抛的那种。
+
+### 账本
+
+- `rfc349-provider-specific-business-dependencies` 25 → 24（`scheduleLaunch.ts -> LegacySqliteTaskDatabase` 销账）
+- `rfc294-facades` 317 → 316、`rfc294-module-symbol-owners` 少一（文件没了）
+- 两处源码锁改口径：`rfc243-executor-facade` 的 call-face 清单、
+  `rfc048` 的 `buildStartTaskDeps` 装配面

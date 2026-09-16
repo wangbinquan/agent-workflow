@@ -976,7 +976,20 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
   test('定时触发的准备失败也留下任务行 + __repo_prep__ 失败行（而不是什么都不留）', async () => {
     const { createScheduledTask, fireSchedule, getScheduledTaskRow } =
       await import('@/services/scheduledTasks')
-    const { buildScheduleLaunch } = await import('@/services/scheduleLaunch')
+    // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
+    // ——它是 `startExecution` 三分支 switch 的第三份写法。定时启动改走与路由同一份编排，
+    // 本条的判据面（「失败也留任务行 + `__repo_prep__` 失败行」）一字未动。
+    const { createSqliteTaskExecutionLaunchParticipant } =
+      await import('@/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations')
+    const { createBuildScheduleLaunch, createTaskExecutionTriggerParticipant } =
+      await import('@/modules/task-execution/composition/triggerExecution')
+    const { composeWorkgroupLaunchResourceOperations } =
+      await import('@/modules/task-execution/composition/workgroupLaunchResources')
+    const { composeDeferredRepositoryPreparation } =
+      await import('@/modules/task-execution/composition/deferredRepositoryPreparation')
+    const { composeSqliteRepositoryWorkspaceStore } =
+      await import('@/modules/source-control/composition')
+    const { createTaskDriveCoordinator } = await import('@/services/task')
     const { buildActor } = await import('../src/auth/actor')
 
     const db2 = createInMemoryDb(MIGRATIONS)
@@ -1025,21 +1038,52 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
       db: db2,
       authorization: resourceCatalog.authorization,
     })
+    const identityAccess2 = createIdentityAccessRuntime({ db: db2 })
+    const schedulerDriver2 = createTaskExecutionTestTopology({
+      db: db2,
+      driver: 'real',
+    }).schedulerDriver
+    const scheduleLaunch = createBuildScheduleLaunch(
+      createTaskExecutionTriggerParticipant({
+        launches: createSqliteTaskExecutionLaunchParticipant({
+          db: db2,
+          configPath: cfgPath,
+          gitCommitIdentity: identityAccess2.getUserGitCommitIdentity,
+          agent: Object.freeze({
+            resources: composeAgentLaunchResourceOperations({ db: db2 }),
+            integrity: agentIntegrity.launch,
+          }),
+          workgroup: composeWorkgroupLaunchResourceOperations({
+            db: db2,
+            integrity: agentIntegrity.launch,
+          }),
+          routeWorkspace: { appHome: home },
+          resourceAuthorityFor: () => {
+            throw new Error('scheduled launch uses the delegated resources from fireSchedule')
+          },
+          coordinator: createTaskDriveCoordinator({
+            deps: { db: db2, schedulerDriver: schedulerDriver2, configPath: cfgPath },
+            appHome: home,
+            repositoryPreparation: composeDeferredRepositoryPreparation({
+              db: db2,
+              appHome: home,
+              repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db2),
+              gitBaselineSyncWindowMs: 0,
+              cloneTimeoutMs: 3000,
+            }),
+            engineFailureMessage: 'rfc287 G7 scheduled drive threw',
+            failureReporter: { report: () => undefined },
+          }),
+        }),
+        cancellation: Object.freeze({ cancel: async () => undefined }),
+      }),
+    )
     const { taskId } = await fireSchedule(
       scheduledTaskRuntime(db2).operations,
       row,
-      buildScheduleLaunch(
-        db2,
-        createTaskExecutionTestTopology({ db: db2, driver: 'real' }).schedulerDriver,
-        cfgPath,
-        createIdentityAccessRuntime({ db: db2 }),
-        {
-          resources: composeAgentLaunchResourceOperations({ db: db2 }),
-          integrity: agentIntegrity.launch,
-        },
-      ),
+      scheduleLaunch,
       Date.now(),
-      withIntegrationTriggerResources(db2, createIdentityAccessRuntime({ db: db2 })),
+      withIntegrationTriggerResources(db2, identityAccess2),
       { kind: 'manual' },
     )
     expect(taskId).toBeTruthy()

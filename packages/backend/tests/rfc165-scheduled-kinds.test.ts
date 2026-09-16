@@ -32,7 +32,15 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, scheduledTasks, tasks, users } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
-import { buildScheduleLaunch } from '../src/services/scheduleLaunch'
+import { createSqliteTaskExecutionLaunchParticipant } from '../src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations'
+import {
+  createBuildScheduleLaunch,
+  createTaskExecutionTriggerParticipant,
+} from '../src/modules/task-execution/composition/triggerExecution'
+import { composeWorkgroupLaunchResourceOperations } from '../src/modules/task-execution/composition/workgroupLaunchResources'
+import { composeDeferredRepositoryPreparation } from '../src/modules/task-execution/composition/deferredRepositoryPreparation'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
+import { createTaskDriveCoordinator } from '../src/services/task'
 import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { fireSchedule, getScheduledTaskRow } from './helpers/integrationTriggerResourceBinding'
 import {
@@ -61,21 +69,53 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
-function buildRealScheduleLaunch(db: DbClient, configPath: string) {
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ①②）：改用**生产同一份**启动编排。
+ *
+ * 此前这里是 `services/scheduleLaunch.ts#buildScheduleLaunch`——`startExecution` 那个
+ * 三分支 switch 的第三份写法，随本批一并退役。现在走
+ * `createBuildScheduleLaunch(createTaskExecutionTriggerParticipant({ launches, cancellation }))`，
+ * 与 `server.ts` / provider runtime 的后台 tick 是同一条路。
+ */
+function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: string) {
   const catalog = composeResourceCatalogFor({ db })
   const integrity = composeDatabaseAgentResourceIntegrity({
     db,
     authorization: catalog.authorization,
   })
-  return buildScheduleLaunch(
+  const identityAccess = createIdentityAccessRuntime({ db })
+  const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
+  const launches = createSqliteTaskExecutionLaunchParticipant({
     db,
-    createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
     configPath,
-    createIdentityAccessRuntime({ db }),
-    {
-      resources: composeAgentLaunchResourceOperations({ db: db }),
+    gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+    agent: Object.freeze({
+      resources: composeAgentLaunchResourceOperations({ db }),
       integrity: integrity.launch,
+    }),
+    workgroup: composeWorkgroupLaunchResourceOperations({ db, integrity: integrity.launch }),
+    routeWorkspace: { appHome },
+    // 路由面才读它；定时这条路交的是 `fireSchedule` 带来的委派 `resources`。
+    resourceAuthorityFor: () => {
+      throw new Error('scheduled launch must use the delegated resources from fireSchedule')
     },
+    coordinator: createTaskDriveCoordinator({
+      deps: { db, schedulerDriver, configPath },
+      appHome,
+      repositoryPreparation: composeDeferredRepositoryPreparation({
+        db,
+        appHome,
+        repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
+      }),
+      engineFailureMessage: 'rfc165 scheduled kinds drive threw',
+      failureReporter: { report: () => undefined },
+    }),
+  })
+  return createBuildScheduleLaunch(
+    createTaskExecutionTriggerParticipant({
+      launches,
+      cancellation: Object.freeze({ cancel: async () => undefined }),
+    }),
   )
 }
 
@@ -463,7 +503,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
     const { taskId } = await fireSchedule(
       db,
       row,
-      buildRealScheduleLaunch(db, join(appHome, 'config.json')),
+      buildRealScheduleLaunch(db, appHome, join(appHome, 'config.json')),
       Date.now(),
       withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
       { kind: 'manual' },
@@ -511,7 +551,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       fireSchedule(
         db,
         (await getScheduledTaskRow(db, created.id))!,
-        buildRealScheduleLaunch(db, join(appHome, 'config.json')),
+        buildRealScheduleLaunch(db, appHome, join(appHome, 'config.json')),
         Date.now(),
         withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
         { kind: 'manual' },
@@ -562,7 +602,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
     const { taskId } = await fireSchedule(
       db,
       row,
-      buildRealScheduleLaunch(db, join(appHome, 'config.json')),
+      buildRealScheduleLaunch(db, appHome, join(appHome, 'config.json')),
       Date.now(),
       withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
       { kind: 'manual' },

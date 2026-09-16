@@ -40260,7 +40260,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f088d4c69e838f4f4fb16cdba23ca44adc52333f1fd3ba9c0dbf4d864fe2972b",
+  "sourceDigest": "sha256:d5e2df1e5f0ca36125001f3ac1c3afe765508d7f42e24c62813649cf9b5d87af",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41458,8 +41458,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#813:tasks",
-        "line": 813,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#826:tasks",
+        "line": 826,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -41474,8 +41474,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#898:taskExecutionIntents",
-        "line": 898,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#911:taskExecutionIntents",
+        "line": 911,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 317,
+    "serviceFiles": 316,
     "thinFacades": 67
   },
   "entries": [
@@ -4603,22 +4603,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:87d1ccd8f09aeeb9e2c0",
-        "import:fa7f42a4e5f943296975"
-      ],
-      "exportedSymbols": [
-        "buildScheduleLaunch"
-      ],
-      "file": "packages/backend/src/services/scheduleLaunch.ts",
-      "id": "facade:packages/backend/src/services/scheduleLaunch.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/scheduleLaunch.ts#$file",
-      "removeAfterWave": "W4-B",
-      "status": "legacy-implementation",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:059db0d841a2f75e2314",
         "import:066c853fca987668f726",
         "import:1e1e92bf881073062336",
@@ -6630,5 +6614,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f088d4c69e838f4f4fb16cdba23ca44adc52333f1fd3ba9c0dbf4d864fe2972b"
+  "sourceDigest": "sha256:d5e2df1e5f0ca36125001f3ac1c3afe765508d7f42e24c62813649cf9b5d87af"
 }

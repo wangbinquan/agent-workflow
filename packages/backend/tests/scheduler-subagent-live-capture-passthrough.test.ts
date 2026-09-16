@@ -80,11 +80,9 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     const deps = read('packages/backend/src/services/startTaskDeps.ts')
     expect(deps).toContain('function resolveSubagentLiveCapture(')
     expect(deps).toContain('...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {})')
-    const assembly = [
-      'packages/backend/src/services/scheduleLaunch.ts',
-      'packages/backend/src/server.ts',
-      'packages/backend/src/cli/start.ts',
-    ]
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除；
+    // 两个组合根仍各自 `buildStartTaskDeps(...)`，本条判据面不变。
+    const assembly = ['packages/backend/src/server.ts', 'packages/backend/src/cli/start.ts']
       .map(read)
       .join('\n')
     expect(assembly).toContain('buildStartTaskDeps(')

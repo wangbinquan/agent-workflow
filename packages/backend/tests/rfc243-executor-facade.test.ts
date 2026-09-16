@@ -49,7 +49,9 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
     'routes/tasks.ts',
     'routes/agents.ts',
     'routes/workgroups.ts',
-    'services/scheduleLaunch.ts',
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
+    // ——定时启动改走与路由同一份编排（启动参与者 → 根内核），本条锁的「不得直调
+    // start* 服务」由那条路自己的形状保证：参与者里压根没有那三个函数的 import。
     // RFC-257 (design gate F-7): the webhook fan-out is a launch call face —
     // this list is hand-maintained, new faces MUST be registered here.
     'modules/integration/infrastructure/webhookDispatchRuntime.ts',

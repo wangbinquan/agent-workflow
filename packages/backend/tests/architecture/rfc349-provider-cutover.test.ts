@@ -39,7 +39,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/runtime/opencode/sessionCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
   'packages/backend/src/services/runtime/opencode/sessionWalk.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase',
   'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
-  'packages/backend/src/services/scheduleLaunch.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
+  // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除，这条债随之销账。
   'packages/backend/src/services/startTaskDeps.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
   'packages/backend/src/services/startTaskDeps.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
   'packages/backend/src/services/task.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
