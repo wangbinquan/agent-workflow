@@ -112,30 +112,25 @@ describeEachProviderHttpApplication(
         snapshotNodeIds: (snapshot?.nodes ?? []).map((node) => node['id']).sort(),
         snapshotNodeKinds: (snapshot?.nodes ?? []).map((node) => node['kind']).sort(),
         snapshotEdgeCount: (snapshot?.edges ?? []).length,
+        snapshotEveryNodePositioned: (snapshot?.nodes ?? []).every(
+          (node) => node['position'] !== undefined,
+        ),
       }
-      // **已知差异，单独钉住**（plan §5hn 批次一实测）：内置宿主快照的**规范排版**
-      // 在 SQLite 上是**写时冻结**的（`services/task.ts` 的 `startTask` 对
-      // `workflow.builtin === true` 走 `layoutBuiltinWorkflowSnapshotJson`），
-      // 而启动内核直接 `JSON.stringify(subject.workflowSnapshot)` 落库、
-      // 靠**读时**投影补排版（`postgresqlTaskRouteOperations.ts` 的
-      // `projectWorkflowSnapshotForRead`）。于是**启动响应体**与库里那一行在两个引擎上不同。
+      // **已销账**（plan §5hn 批次一）：内置宿主快照的规范排版，此前 SQLite 是**写时冻结**
+      // （`services/task.ts` 的 `startTask` 对 `workflow.builtin === true`），
+      // 启动内核却直接 stringify 落库、只靠**读时**投影补——于是启动响应体与库里那一行
+      // 在两个引擎上不同。现在内核也在**入口规范化一次**（`subject.builtin` 决定），
+      // 落库与返回投影用同一份，两个引擎因此都为 true。
       //
-      // 它不进上面那个相等面，是因为这条用例要守的是「其余十一步的实参也一样」——
-      // 把这一格混进去只会让整条红成一团、盖住别的漂移。
-      // **这一格自己的守法是反向的**：下面钉的是**今天的**状态，
-      // §5hn 批次一把两份编排合一、内核也改成写时冻结之后，这条会红并要求改成相等——
-      // 那正是销账的时刻。
-      const everyNodePositioned = (snapshot?.nodes ?? []).every(
-        (node) => node['position'] !== undefined,
-      )
+      // 这一格于是**回到相等面**：它不再是「已知差异」，而是两侧共同的正向判据。
       expect(
-        everyNodePositioned,
-        `${scope.harness.capabilities.provider}：内置宿主快照的写时排版状态变了。` +
-          'SQLite 应为 true（startTask 写时冻结）、PostgreSQL 应为 false（内核不排版，读时投影补）。' +
-          '若 PostgreSQL 变成 true，说明 §5hn 的合并把这处差异关掉了——把这条改成相等断言并在 plan 里销账。',
-      ).toBe(scope.harness.capabilities.provider === 'sqlite')
+        (snapshot?.nodes ?? []).every((node) => node['position'] !== undefined),
+        `${scope.harness.capabilities.provider}：平台自有的合成宿主快照必须**写时**冻结规范排版。` +
+          '读时投影补得了页面，补不了导出与直接读库的下游（plan §5hn）。',
+      ).toBe(true)
 
-      // 先钉住这一侧本身确实是「单代理启动」落出来的，避免两边**同样地错**也叫对等。
+      // 先钉住这一侧**本身**确实是「单代理启动」落出来的——否则两个引擎**同样地错**
+      // 也会让下面那条相等断言绿掉（相等只证明「一致」，不证明「对」）。
       expect(comparable.workflowId, '单代理启动必须挂在 __agent_host__ 锚上').toBe(
         AGENT_HOST_WORKFLOW_ID,
       )

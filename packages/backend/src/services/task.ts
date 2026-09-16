@@ -2822,7 +2822,7 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
  * left untouched so the established validation/runtime error remains the
  * authoritative failure instead of being masked by a layout exception.
  */
-function layoutBuiltinWorkflowSnapshot<T>(snapshot: T): T {
+export function layoutBuiltinWorkflowSnapshot<T>(snapshot: T): T {
   const parsed = WorkflowDefinitionSchema.safeParse(snapshot)
   if (!parsed.success) return snapshot
   // Validation is the authority, but layout the raw document when it already

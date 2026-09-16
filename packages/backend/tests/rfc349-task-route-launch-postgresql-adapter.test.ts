@@ -867,6 +867,8 @@ function gitMetadataHarness(
     subject: {
       workflowId: workflow.id,
       workflowName: workflow.name,
+      // 同上：普通工作流行。
+      builtin: false,
       workflowVersion: workflow.version,
       workflowSnapshot: workflow.definition,
     },

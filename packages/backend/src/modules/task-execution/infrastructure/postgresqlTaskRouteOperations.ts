@@ -950,6 +950,8 @@ async function launchMultipart(
       workflowId: workflow.id,
       workflowName: workflow.name,
       workflowVersion: workflow.version,
+      // 同上：这条路的冻结快照必定不是内置工作流，保留作者几何。
+      builtin: false,
       workflowSnapshot: workflow.definition,
     },
     uploads: {

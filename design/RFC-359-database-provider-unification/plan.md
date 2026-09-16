@@ -14719,3 +14719,39 @@ catalogVisibility / 快照节点 id 与种类 / 边数），也就是 §5hn 那�
 
 **顺带补上一个 AC-6 缺口**：`rfc165-agent-launch.test.ts` 是 SQLite 单引擎的
 （`createInMemoryDb`），PG 侧那份约 200 行的 `launchAgent` 编排此前**零行为用例**。
+
+### §5hn 批次一（下）：那处排版差异**已关闭**——并且第一版修法是错的
+
+按上面定的方向做完了：**内核也在写时冻结**。
+
+`PostgresqlRootTaskLaunchSubject` 新增 **必填** 的 `builtin: boolean`。
+故意必填而非可选：可选会让「装配漏了一步」编译通过，而漏掉的后果是那条任务
+从此存着一份没有几何的快照。必填之后 tsc 当场把**全部 6 个 subject 生产者**列了出来，
+逐个按事实填：
+
+| 生产者 | 值 | 依据 |
+| --- | --- | --- |
+| 数字员工宿主（`actionExecutionEnvironment` / `digitalEmployeeExecution`） | `true` | 平台合成宿主 |
+| 数字员工选定的既有工作流 | `false` | 用户工作流，保留作者几何 |
+| 单代理宿主 / 工作组宿主 | `true` | 平台合成宿主 |
+| 工作流启动面（路由 + launch participant） | `false` | **这条路按定义拿不到内置工作流**——冻结资源快照那一步就 `assertNotBuiltin` 挡住了（`taskExecutionResourceSnapshots.ts:142`） |
+
+### 第一版修法制造了一个更糟的不一致，测试没抓住、我自己抓住的
+
+第一版只改了 **insert**：`workflowSnapshot: subject.builtin ? layout(...) : ...`。
+跑出来测试**照绿**——因为返回给 HTTP 的 `Task` 投影用的是
+`input.subject.workflowSnapshot` **原值**（`postgresqlTaskRouteLaunchOperations.ts:507`），
+根本不经过 insert。于是那一版把「两个引擎不一致」换成了
+**「同一个引擎里，库里那行与启动响应体不一致」**——更糟，而且更难发现。
+
+正解是**在入口规范化一次**：`createRootLaunch` 进门按 `subject.builtin` 把 subject
+整体换成排好版的那份，之后落库与返回投影用的是**同一份**。
+「同一个值算两遍」这种形状本身就是 bug 温床，规范化点只能有一个。
+
+### 判据随之从「反向钉住」回到相等面
+
+用例里那条反向断言（sqlite=true / postgresql=false）在修完之后**当场变红**——
+正是它被设计成要红的时刻。改成两侧共同的正向判据
+（`every(node => node.position !== undefined)` 必须为 true），
+并把这一格放回相等面。**先红后绿闭环**：
+缺口 → 反向钉住 → 修 → 反向断言红 → 转正向 → 绿。

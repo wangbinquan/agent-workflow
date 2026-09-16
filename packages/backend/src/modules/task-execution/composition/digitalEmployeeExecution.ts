@@ -470,6 +470,8 @@ export function composeDigitalEmployeeExecution(
           workflowName: workflow.name,
           workflowVersion: workflow.version,
           workflowSnapshot: workflow.definition,
+          // 用户选定的既有工作流：保留作者几何，不重排（plan §5hn）。
+          builtin: false,
         }
       } else {
         let snapshot: WorkflowDefinition
@@ -554,6 +556,8 @@ export function composeDigitalEmployeeExecution(
           workflowName: '__digital_employee_host__',
           workflowVersion: 1,
           workflowSnapshot: snapshot,
+          // 合成的宿主快照：写时冻结规范排版（plan §5hn）。
+          builtin: true,
         }
       }
 

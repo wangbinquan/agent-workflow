@@ -839,8 +839,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5094,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5095,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次一）+1：启动内核改为在入口按 `subject.builtin` 规范化宿主快照排版，因此 import 了 `services/task` 的 `layoutBuiltinWorkflowSnapshot`（与 `startTask` 用的是同一条策略，不是另造一份）。这条 import 关掉的是一处**用户可见**差异：此前启动响应体与库里那一行在两个引擎上不同，而读时投影补得了页面、补不了导出与直接读库的下游。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,8 +863,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4582,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4583,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次一）+1：启动内核改为在入口按 `subject.builtin` 规范化宿主快照排版，因此 import 了 `services/task` 的 `layoutBuiltinWorkflowSnapshot`（与 `startTask` 用的是同一条策略，不是另造一份）。这条 import 关掉的是一处**用户可见**差异：此前启动响应体与库里那一行在两个引擎上不同，而读时投影补得了页面、补不了导出与直接读库的下游。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -900,7 +906,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:dbdcb17d6642a77d570c12e10431fcc2771b99a60fbf3d01d247a8ac86ee2e9c",
+    "sourceDigest": "sha256:a9ae1e519f9066da2a16501a9491de2a496cd3b2e2433175d11cccec08209d64",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +919,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b1f6ec4524b99497990414bf6beb1dd6bf062053",
-    "contentDigest": "sha256:a19ed3438b3af2c9ec366633b45c504d2f386c18f986a793db35a57f56ae78b3",
+    "currentSnapshotSha": "5a1a98d29b3c831b725522941ce21740a45d0af1",
+    "contentDigest": "sha256:de4f36a30b69c89d1758df5d68f96f4267e3634288d861b9794cdf40bf59ef4c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -64,6 +64,7 @@ import {
   triggerSourceFromContext,
 } from '@/services/execution/triggerPreflight'
 import { assertNotBuiltin } from '@/services/systemResources'
+import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
 import type { WorkspaceCleanupReport } from '@/services/task'
 import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
 import {
@@ -301,6 +302,20 @@ export interface PostgresqlRootTaskLaunchSubject {
   readonly workflowName: string
   readonly workflowVersion: number
   readonly workflowSnapshot: WorkflowDefinition
+  /**
+   * RFC-359 AC-1（plan §5hn 批次一）：这份快照是不是**平台自有的合成宿主**。
+   *
+   * 它决定要不要在**写时**冻结规范排版——`services/task.ts` 的 `startTask` 对
+   * `workflow.builtin === true` 一直是这么做的，而启动内核此前直接
+   * `JSON.stringify(subject.workflowSnapshot)` 落库、只靠**读时**投影补，
+   * 于是启动响应体与库里那一行在两个引擎上不同
+   * （`rfc359-w5hn-agent-launch-provider-parity` 照出来的）。
+   *
+   * **故意声明成必填**：可选会让「装配漏了一步」编译通过，而漏掉的后果是那条任务
+   * 从此存着一份没有几何的快照——读时投影补得了页面，补不了导出与直接读库的下游。
+   * 必填之后，任何新的启动路都要在类型层先回答这个问题。
+   */
+  readonly builtin: boolean
   readonly sourceAgent?: Readonly<{ id: string; name: string }>
   readonly workgroup?: Readonly<{
     id: string
@@ -616,7 +631,22 @@ function createRootLaunch(
 ): (input: PostgresqlRootTaskLaunchRequest) => Promise<Task> {
   const nextId = dependencies.id ?? ulid
   const now = dependencies.now ?? Date.now
-  return async (input: PostgresqlRootTaskLaunchRequest): Promise<Task> => {
+  return async (request: PostgresqlRootTaskLaunchRequest): Promise<Task> => {
+    // RFC-359 AC-1（plan §5hn 批次一）：平台自有的合成宿主快照**在入口规范化一次**，
+    // 之后落库与返回投影用的是**同一份**。
+    //
+    // 分两处各排一次是错的：库里那行与启动响应体会不一致（我第一版就是那么写的，
+    // 只改了 insert，响应体照旧是没几何的那份——把「两个引擎不一致」换成了
+    // 「同一个引擎里行与响应不一致」，更糟）。
+    const input: PostgresqlRootTaskLaunchRequest = request.subject.builtin
+      ? {
+          ...request,
+          subject: {
+            ...request.subject,
+            workflowSnapshot: layoutBuiltinWorkflowSnapshot(request.subject.workflowSnapshot),
+          },
+        }
+      : request
     const guard = input.guard
     let workspace: PostgresqlTaskRoutePreparedWorkspace | undefined
     let databaseCommitted = false
@@ -738,6 +768,7 @@ function createRootLaunch(
           id: taskId,
           name: input.task.name,
           workflowId: input.subject.workflowId,
+          // 入口已按 `subject.builtin` 规范化过排版，这里落的就是返回投影用的同一份。
           workflowSnapshot: JSON.stringify(input.subject.workflowSnapshot),
           workflowVersion: input.subject.workflowVersion,
           repoPath: preparedWorkspace.repoPath,
@@ -1038,6 +1069,8 @@ function createPostgresqlTaskLaunchArms(
           subject: {
             workflowId: AGENT_HOST_WORKFLOW_ID,
             workflowName: AGENT_HOST_WORKFLOW_NAME,
+            // 合成的单代理宿主：写时冻结规范排版（plan §5hn）。
+            builtin: true,
             workflowVersion: 1,
             workflowSnapshot: snapshot,
             sourceAgent: { id: recheck.id, name: recheck.name },
@@ -1158,6 +1191,8 @@ function createPostgresqlTaskLaunchArms(
         subject: {
           workflowId: WORKGROUP_HOST_WORKFLOW_ID,
           workflowName: WORKGROUP_HOST_WORKFLOW_NAME,
+          // 合成的工作组宿主：写时冻结规范排版（plan §5hn）。
+          builtin: true,
           workflowVersion: 1,
           workflowSnapshot: snapshot,
           workgroup: {
@@ -1287,6 +1322,9 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
               workflowName: snapshot.workflow.name,
               workflowVersion: snapshot.workflow.version,
               workflowSnapshot: snapshot.workflow.definition,
+              // 工作流启动面按定义拿不到内置工作流——冻结资源快照那一步就
+              // `assertNotBuiltin` 挡住了（`taskExecutionResourceSnapshots.ts:142`）。
+              builtin: false,
             },
           })
         }

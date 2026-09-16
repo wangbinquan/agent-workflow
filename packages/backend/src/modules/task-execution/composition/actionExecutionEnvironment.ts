@@ -112,6 +112,8 @@ export function createActionExecutionEnvironment(
           workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
           workflowName: '__digital_employee_host__',
           workflowVersion: 1,
+          // 平台自有的合成宿主：写时冻结规范排版（plan §5hn）。
+          builtin: true,
           workflowSnapshot: WorkflowDefinitionSchema.parse(input.snapshot),
         },
         internal: {

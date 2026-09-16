@@ -450,6 +450,8 @@ export async function createEachProviderTaskExecution(
         subject: {
           workflowId: workflow.id,
           workflowName: workflow.name,
+          // fixture 用的是普通工作流行，不是平台合成宿主。
+          builtin: false,
           workflowVersion: workflow.version,
           workflowSnapshot: WorkflowDefinitionSchema.parse(JSON.parse(workflow.definition)),
         },
