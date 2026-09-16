@@ -2,6 +2,35 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 49，**RFC-287 G7 的「延后仓库准备」在 PostgreSQL 上根本没实现**）
+>
+> 本段待推：把这处落差钉住的双引擎用例 + 落档。**修还没做，下一刀。**
+>
+> **最该带走的一句：同一个「远端拉不动」的场景，SQLite 用户看到一行可重试的任务，
+> PostgreSQL 用户什么都看不到——而且它落在 `POST /api/tasks` 这条最主要的启动路上。**
+>
+> | | JSON `POST /api/tasks` | 定时 run-now |
+> | --- | --- | --- |
+> | SQLite | **201**，`tasks` 一行 `pending`（可重试） | **201**，一行 `pending` |
+> | PostgreSQL | **400 `repo-clone-failed`**，**零行** | **400**，零行 |
+>
+> 成因：`grep -rln deferRepoPreparation src` 交出的四个文件**全在 SQLite 那一侧**；
+> 根启动内核在插入任务行之前无条件全量物化，没有延后分支。RFC-287 G7 是**已定的产品行为**
+> （`services/task.ts` 原文：「失败**不留任何记录**……任务列表里什么都没有」），
+> PG 上等于没实现。
+>
+> 怎么找到的：准备合并 `startExecution` 那个三分支 switch 时逐格对账
+> `services/scheduleLaunch.ts` 与 `createBuildScheduleLaunch`，前者多一格
+> `deferRepoPreparation: true`。**对账两份孪生的字段差，是这轮最有产出的动作。**
+>
+> 已钉住：`rfc359-w5hn-deferred-repo-preparation-parity`（4 条双引擎）按 provider 分叉
+> 断言今天的形状，并写明**钉的是缺陷不是契约**——销账时它自己会红（同 `spaceNodes` 先例）。
+> 用 `http://127.0.0.1:1/nope.git` 而非公网地址，判据不依赖 CI 出网能力。
+>
+> 销账路线：端口早就中立（`RepositoryPreparationStep`，PG 侧一律传 `skipRepositoryPreparation`），
+> 要做的是 ①内核按与 `services/task.ts` 相同的判据造占位工作区（含先解析 `cachedRepoId` 身份，
+> 那是 AC-11 重试能找回来源的前提）②PG 根换成真正的准备步骤。细节见 plan §5hn 批次二 ①（中）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 48，**定时启动基线照出一处 PostgreSQL 专属 500，已修**）
 >
 > 本段待推：§5hn 批次二 ① 的基线 + 启动资源面合一。

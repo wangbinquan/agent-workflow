@@ -15177,3 +15177,66 @@ Error: foreign-legacy-actor-projection
 **值得记的一句**：这条规律早就写在 `auth/session.ts:289-305` 的注释里——
 「hand-built actors fail with `foreign-legacy-actor-projection`」。**知识在，装配还是踩了**。
 注释挡不住第二个人在另一个组合根里重写一遍；能挡住的只有一条会红的用例。
+
+## §5hn 批次二 ①（中）　**RFC-287 G7 的「延后仓库准备」在 PostgreSQL 上根本没实现**
+
+准备合并 `startExecution` 那个三分支 switch 时，逐格对账 `services/scheduleLaunch.ts`
+（SQLite 那条定时启动闭包）与 `createBuildScheduleLaunch`（PG 那条）发现一处不对称：
+前者给启动依赖加了 `deferRepoPreparation: true`，后者没有这个概念。顺着查下去——
+
+```
+$ grep -rln deferRepoPreparation packages/backend/src
+src/cli/start.ts
+src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts
+src/services/scheduleLaunch.ts
+src/services/task.ts
+```
+
+**四个文件全在 SQLite 那一侧。** 根启动内核在插入任务行**之前**无条件
+`workspace.prepare(...)` 全量物化，没有任何延后分支。
+
+### 实测（两条启动路各一次，远端 `http://127.0.0.1:1/nope.git`）
+
+| | JSON `POST /api/tasks` | `POST /api/scheduled-tasks/:id/run-now` |
+| --- | --- | --- |
+| SQLite | **201**，`tasks` 一行 `pending`（可重试） | **201**，`tasks` 一行 `pending` |
+| PostgreSQL | **400 `repo-clone-failed`**，`tasks` **零行** | **400 `repo-clone-failed`**，零行 |
+
+### 为什么这是缺陷而不是「两种合理设计」
+
+RFC-287 G7 是**已定的产品行为**，`services/task.ts` 那条分支的原文写得很清楚：
+
+> 今天物化在落行之前，于是「克隆超时 / 远端不可达」这类失败**不留任何记录**
+> ——用户点了启动，转半天圈，最后得到一个 HTTP 错误，任务列表里什么都没有。
+
+`scheduleLaunch.ts` 里那段更点名了代价：「一次拉不动远端的定时触发压根不铸任务行——
+用户在任务列表里什么都看不到，只能去翻触发历史里的一句错误，**也没有任何可重试的对象
+（AC-11 的重试作用面为空）**」。
+
+也就是说：**同一个「远端拉不动」的场景，SQLite 用户看到一行可重试的任务，
+PostgreSQL 用户什么都看不到**，而且它落在 `POST /api/tasks` 这条最主要的启动路上。
+这是本 RFC 迄今找到的最大一处「一个好一个不好」。
+
+### 已钉住：`rfc359-w5hn-deferred-repo-preparation-parity`（4 条，双引擎）
+
+按 `spaceNodes` 那条的先例处置——**钉住当前形状，并写明它钉的是缺陷不是契约**：
+用例按 provider 分叉断言今天的 201/1 行 与 400/0 行，销账（把延后准备接进内核）时
+这两条会自己红，改成两侧相等即可。
+
+用的是 `http://127.0.0.1:1/nope.git` 而不是公网地址：要的是「克隆失败」这个确定分支，
+不是 DNS / TLS 的某种超时，更不该让判据依赖 CI runner 的出网能力。
+
+### 销账路线（下一刀）
+
+好消息是**端口早就中立**：`RepositoryPreparationStep` 定义在
+`application/drive/taskDriveCoordinator.ts`，PG 的几个根 / 参与者现在一律传
+`skipRepositoryPreparation`，而 SQLite 那条在延后时传
+`createPersistedRepositoryPreparationStep({ deps, appHome })`。所以要做的是两件：
+
+1. 根启动内核按与 `services/task.ts` **相同的判据**（JSON body、非 scratch、
+   非 `sourceTaskId` 重放、非 multipart / preCreated）造**占位工作区**
+   （空 `worktreePath` / `branch`，但先把 `cachedRepoId` 身份解析出来——
+   那是 AC-11 重试能找回来源的前提）；
+2. PG 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。
+
+判据现成：上面那条用例销账即证明。
