@@ -144,13 +144,6 @@ export function createIdentityAccessRuntime(
   return buildIdentityAccessRuntime(input, neutralPersistence(input.db), false)
 }
 
-/** RFC-349 期的 PostgreSQL 入口名；与中立入口同一实现。 */
-export function createPostgresqlIdentityAccessRuntime(
-  input: CreateIdentityAccessRuntimeInput,
-): IdentityAccessRuntime {
-  return createIdentityAccessRuntime(input)
-}
-
 function buildIdentityAccessRuntime(
   input: Omit<CreateIdentityAccessRuntimeInput, 'db'>,
   persistence: IdentityAccessPersistence,

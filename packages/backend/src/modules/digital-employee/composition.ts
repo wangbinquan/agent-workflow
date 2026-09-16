@@ -121,7 +121,7 @@ export function composeDigitalEmployeeWriterCutoverFor(
 }
 
 /** RFC-349 期的 PostgreSQL 入口名，与中立入口同一实现。 */
-export const composePostgresqlDigitalEmployeeWriterCutover = composeDigitalEmployeeWriterCutoverFor
+export const composeDigitalEmployeeWriterCutover = composeDigitalEmployeeWriterCutoverFor
 
 /** Bootstrap projection owned by Digital Employee; consumers never read its tables directly. */
 export async function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
@@ -465,14 +465,13 @@ interface DigitalEmployeePersistenceBundle {
 // RFC-359 AC-6：形参放宽到中立客户端。它与下面那个 PG 孪生的函数体**逐字相同**（都只是把 db
 // 转交给中立的 `createReactionRoundQueries`），所以放宽是纯向后兼容；两个名字暂时都留着，
 // 合并与否是 RFC-349「provider-selected composition」那条线自己的决定，不该作为一次测试迁移的副作用。
+/**
+ * RFC-359 AC-1（plan §5ga）—— 两个 provider 唯一的一份。旁边那个
+ * `createPostgresqlEmployeeReactionRoundQueries` 的函数体与这里**逐字节相同**
+ * （都只是 `createReactionRoundQueries(db)`），只差形参上一个更窄的标注，已退役。
+ */
 export function createEmployeeReactionRoundQueries(
   db: ProviderNeutralDatabase,
-): EmployeeReactionRoundQueryPort {
-  return createReactionRoundQueries(db)
-}
-
-export function createPostgresqlEmployeeReactionRoundQueries(
-  db: PostgresqlDatabaseClient,
 ): EmployeeReactionRoundQueryPort {
   return createReactionRoundQueries(db)
 }
@@ -1110,19 +1109,6 @@ export function composeDigitalEmployee(
     inputUploads: createEmployeeInputUploadPersistence(options.db),
     migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
   })
-}
-
-/** RFC-349 期的 PostgreSQL 入口名；与中立入口同一实现。 */
-export function composePostgresqlDigitalEmployee(
-  options: ComposePostgresqlDigitalEmployeeOptions & DigitalEmployeeRuntimeBinding,
-): DigitalEmployeeModuleWithRuntime
-export function composePostgresqlDigitalEmployee(
-  options: ComposePostgresqlDigitalEmployeeOptions,
-): DigitalEmployeeModule
-export function composePostgresqlDigitalEmployee(
-  options: ComposePostgresqlDigitalEmployeeOptions,
-): DigitalEmployeeModule {
-  return composeDigitalEmployee(options)
 }
 
 export { createDigitalEmployeeResourceCatalogAclProviders } from './composition/resourceCatalogAcl'

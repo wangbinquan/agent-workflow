@@ -7,7 +7,7 @@ import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import {
   composeDigitalEmployeeMaintenanceCommands,
-  composePostgresqlDigitalEmployeeWriterCutover,
+  composeDigitalEmployeeWriterCutover,
 } from '@/modules/digital-employee/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -166,7 +166,7 @@ describe('RFC-349 Digital/Development PostgreSQL maintenance owners', () => {
 
   test('writer cutover locks, counts, fences and updates in one PostgreSQL transaction', async () => {
     const fake = writerFixture()
-    const writer = composePostgresqlDigitalEmployeeWriterCutover(fake.db)
+    const writer = composeDigitalEmployeeWriterCutover(fake.db)
 
     await expect(writer.activate({ now: 2_000, legacyAdmissionsEnabled: false })).resolves.toEqual({
       activeGeneration: 1,

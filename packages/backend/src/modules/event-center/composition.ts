@@ -26,7 +26,6 @@ import type { EventCenterParticipant, EventObserverControlParticipant } from './
 import type { EventCenterCatalogQueryPort, EventCenterOperationsQueryPort } from './public/queries'
 import type { CommittedEventDeliveryPersistencePort } from '@/platform/events/committed/persistence'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   CommittedEventDeliveryPage,
   CommittedEventDeliveryState,
@@ -478,25 +477,19 @@ export async function composeEventCenterWithPorts(
   }
 }
 
+/**
+ * RFC-359 AC-1（plan §5fz）—— **两个 provider 唯一的一份**。
+ *
+ * 合一前旁边还有一个 `composePostgresqlEventCenter`，两份函数体**逐字节相同**，
+ * 唯一的差别是形参上那个更窄的 `db: PostgresqlDatabaseClient` 标注——而
+ * `ComposeEventCenterOptions.db` 本来就是 `ProviderNeutralDatabase`，
+ * 四个 store 也早就都是中立的。**纯编译期的品牌标注，零运行期含义**（同 §5fl 的形状）。
+ *
+ * 为什么 `rfc359-w5-identical-provider-twins` 没咬住它：那条判据只配**两个都带品牌名**的函数，
+ * 而这一对是「中立名 + 品牌名」。这正是 §5fs 那份同文件账本要补的另一半。
+ */
 export async function composeEventCenter(
   options: ComposeEventCenterOptions,
-): Promise<EventCenterModule> {
-  const { db, ...shared } = options
-  return await composeEventCenterWithPorts({
-    ...shared,
-    persistence: {
-      events: createEventStore(db),
-      customSources: createCustomEventSourceStore(db),
-      responseRules: createEventResponseRuleStore(db),
-      committedEvents: createCommittedEventDeliveryPersistence(db),
-    },
-  })
-}
-
-export async function composePostgresqlEventCenter(
-  options: Omit<ComposeEventCenterOptions, 'db'> & {
-    readonly db: PostgresqlDatabaseClient
-  },
 ): Promise<EventCenterModule> {
   const { db, ...shared } = options
   return await composeEventCenterWithPorts({

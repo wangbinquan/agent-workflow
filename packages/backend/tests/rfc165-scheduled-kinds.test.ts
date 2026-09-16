@@ -44,7 +44,7 @@ import { createWorkflow } from '../src/services/workflow'
 import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 
@@ -72,7 +72,7 @@ function buildRealScheduleLaunch(db: DbClient, configPath: string) {
     configPath,
     createIdentityAccessRuntime({ db }),
     {
-      resources: composeSqliteAgentLaunchResourceOperations(db),
+      resources: composeAgentLaunchResourceOperations({ db: db }),
       integrity: integrity.launch,
     },
   )

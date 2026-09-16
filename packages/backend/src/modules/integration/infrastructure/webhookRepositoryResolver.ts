@@ -73,16 +73,13 @@ async function resolveWithLookup(
  * PostgreSQL 的是 Promise，而 `.get()` 两个客户端都有。所以按 PG 那份的异步形状收成一份即可——
  * 在 SQLite 上 `await` 一个非 Promise 是 no-op，行为一格不动。
  *
- * **没有起第三个名字**：正典就用原来的 `createSqliteWebhookRepositoryResolver`（形参已放宽），
- * PG 那个名字变成指向它的别名。这样导出符号数不增不减——新增一个导出符号会让
- * `rfc294-module-symbol-owners` / `rfc294-mutation-entrypoints` 两本账同时涨一格（实测），
- * 而这次合一本身并没有引入任何新东西。名字里的 Sqlite 是历史残留，两个 bootstrap 的装配入口与
- * `rfc349-provider-cutover` 那几条守卫都按它认，改名要连账本一起动。
+ * **名字也已经收干净**（RFC-359 AC-1，plan §5fw）：合一那一轮为了不让导出符号数变动，
+ * 正典沿用了 `createSqliteWebhookRepositoryResolver`、PG 那个名字做别名——于是一份**中立实现**
+ * 顶着一个 `Sqlite` 的名字，同文件孪生账本据此把它记成「还有一对没合」。
+ * 现在改名成中立的 `createWebhookRepositoryResolver` 并删掉别名：**是改名不是新增**，
+ * 导出符号数从 2 降到 1，`rfc294-*` 那两本账只降不升。
  */
-export function createSqliteWebhookRepositoryResolver(
-  db: ProviderNeutralDatabase,
-  secretBox: SecretBox,
-) {
+export function createWebhookRepositoryResolver(db: ProviderNeutralDatabase, secretBox: SecretBox) {
   return async (
     event: CodeHostEvent,
     endpoint: Pick<WebhookEndpointRow, 'preferredCloneProtocol'>,
@@ -101,5 +98,3 @@ export function createSqliteWebhookRepositoryResolver(
       autoRegister,
     )
 }
-
-export const createPostgresqlWebhookRepositoryResolver = createSqliteWebhookRepositoryResolver

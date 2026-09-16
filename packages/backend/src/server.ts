@@ -70,7 +70,6 @@ import {
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import {
   createIdentityAccessRuntime,
-  createPostgresqlIdentityAccessRuntime,
   type IdentityAccessModule,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
@@ -312,7 +311,7 @@ import { createTaskExecutionResourceBinding } from '@/modules/task-execution/inf
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
@@ -393,7 +392,8 @@ import {
   composeScheduledTaskRuntimeFor,
 } from '@/modules/integration/composition/scheduledTasks'
 import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
-import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integration/composition/webhookDispatch'
+import { composeWebhookTriggerServiceDependenciesFor } from '@/modules/integration/composition/webhookDispatch'
+import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
 import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
@@ -625,7 +625,7 @@ export function composePostgresqlDaemonProviderCore(
     onCredentialRevoked: input.onCredentialRevoked,
     sourceWriteWindow,
   })
-  const identityAccess = createPostgresqlIdentityAccessRuntime({
+  const identityAccess = createIdentityAccessRuntime({
     db: input.db,
     ...daemonIdentityOptions(input),
   })
@@ -2620,7 +2620,7 @@ function composeSqliteApiRouteMounts(
   })
   const memoryCatalog = deps.memoryOperations.catalog ?? composedMemoryCatalog
   const agentLaunchResources = Object.freeze({
-    resources: composeSqliteAgentLaunchResourceOperations(deps.db),
+    resources: composeAgentLaunchResourceOperations({ db: deps.db }),
     integrity: agentResourceIntegrity.launch,
   })
   const taskRouteLaunch =
@@ -2711,10 +2711,11 @@ function composeSqliteApiRouteMounts(
           configPath: deps.configPath,
           secretBox: deps.secretBox,
         })
-  const webhookTriggerService = composeSqliteWebhookTriggerServiceDependencies(
+  // RFC-359 AC-1（plan §5gb）：触发器服务依赖的装配收成一份后，`validateSaveable` 由**调用方**
+  // 提供（PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
+  const webhookTriggerService = composeWebhookTriggerServiceDependenciesFor(
     deps.db,
-    deps.configPath,
-    scheduledTaskRuntime.operations,
+    composeWebhookTriggerValidation(scheduledTaskRuntime.operations, deps.configPath),
   )
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(deps.db)
   const capabilityTemplatePersistence = createCapabilityTemplatePersistence(deps.db)

@@ -15,7 +15,7 @@ import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { tasks, users, workflows } from '@/db/schema'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
-import { composePostgresqlDigitalEmployee } from '@/modules/digital-employee/composition'
+import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import {
@@ -119,7 +119,7 @@ async function seedTerminalTask(db: ProviderNeutralDatabase, taskId: string): Pr
 describeEachProvider('RFC-359 W7 —— digital-employee 组合根', (harness) => {
   test('数字员工模块：启动屏障就绪后类型包可见，输入上传清扫是真事务', async () => {
     const appHome = tmpRoot('aw-rfc359-w7-de-')
-    const module = composePostgresqlDigitalEmployee({
+    const module = composeDigitalEmployee({
       db: asPostgresql(harness.db),
       appHome,
       typePackages: [developmentEmployeeTypePackage],

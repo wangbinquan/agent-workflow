@@ -7,7 +7,6 @@ import {
 import { createCodeHostEventResponseDirectory } from './infrastructure/codeHostEventResponseDirectory'
 import type { CodeHostEventContinuationPort } from './application/ports/codeHostEventResponse'
 import type { CodeHostEventResponseDirectoryPort } from './application/ports/codeHostEventResponse'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
 export {
   createRepositoryEndpointDiscovery,
@@ -15,11 +14,15 @@ export {
   type RepositoryEndpointFetch,
 } from './application/repositoryEndpointDiscovery'
 
+/** RFC-359 AC-1（plan §5gc）—— 同上，两个 provider 唯一的一份，走 `…WithPersistence` 那层。 */
 export function createCodeHostWebhookRoutingDirectory(
   db: ProviderNeutralDatabase,
   continuation?: CodeHostEventContinuationPort,
 ) {
-  return createCodeHostEventRoutingAdapter(createCodeHostEventResponseDirectory(db), continuation)
+  return createCodeHostWebhookRoutingDirectoryWithPersistence(
+    createCodeHostEventResponseDirectory(db),
+    continuation,
+  )
 }
 
 export function createCodeHostWebhookRoutingDirectoryWithPersistence(
@@ -29,26 +32,20 @@ export function createCodeHostWebhookRoutingDirectoryWithPersistence(
   return createCodeHostEventRoutingAdapter(directory, continuation)
 }
 
-export function createPostgresqlCodeHostWebhookRoutingDirectory(
-  db: PostgresqlDatabaseClient,
-  continuation?: CodeHostEventContinuationPort,
-) {
-  return createCodeHostWebhookRoutingDirectoryWithPersistence(
-    createCodeHostEventResponseDirectory(db),
-    continuation,
-  )
-}
-
+/**
+ * RFC-359 AC-1（plan §5gc）—— 两个 provider 唯一的一份。
+ * 旁边那个 `createPostgresqlCodeHostWebhookDeliveryConsumer` 与这里**算的是同一件事**，
+ * 只是它走 `…WithPersistence` 那层、而这里把同样三行**又抄了一遍**。
+ * 现在这一份也改走那层：一处实现、一个名字。
+ */
 export function createCodeHostWebhookDeliveryConsumer(
   db: ProviderNeutralDatabase,
   dispatcher: EventCenterCodeHostDeliveryDispatcher,
   continuation?: CodeHostEventContinuationPort,
 ) {
-  return createCodeHostEventDeliveryAdapter(
+  return createCodeHostWebhookDeliveryConsumerWithPersistence(
     createCodeHostEventResponseDirectory(db),
-    {
-      dispatch: (input) => dispatcher.dispatchSubscription(input),
-    },
+    dispatcher,
     continuation,
   )
 }
@@ -61,18 +58,6 @@ export function createCodeHostWebhookDeliveryConsumerWithPersistence(
   return createCodeHostEventDeliveryAdapter(
     directory,
     { dispatch: (input) => dispatcher.dispatchSubscription(input) },
-    continuation,
-  )
-}
-
-export function createPostgresqlCodeHostWebhookDeliveryConsumer(
-  db: PostgresqlDatabaseClient,
-  dispatcher: EventCenterCodeHostDeliveryDispatcher,
-  continuation?: CodeHostEventContinuationPort,
-) {
-  return createCodeHostWebhookDeliveryConsumerWithPersistence(
-    createCodeHostEventResponseDirectory(db),
-    dispatcher,
     continuation,
   )
 }

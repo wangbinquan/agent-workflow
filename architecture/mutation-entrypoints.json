@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1691,
+    "entries": 1683,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -3268,30 +3268,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#createCollaborationCommandContextFromPersistence",
       "symbol": "createCollaborationCommandContextFromPersistence",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/composition/commandContext.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/composition/commandContext.ts#createPostgresqlCollaborationCommandContext",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#createPostgresqlCollaborationCommandContext",
-      "symbol": "createPostgresqlCollaborationCommandContext",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -8515,31 +8491,6 @@
       },
       "file": "packages/backend/src/modules/digital-employee/composition.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/composition.ts#createPostgresqlEmployeeReactionRoundQueries",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#createPostgresqlEmployeeReactionRoundQueries",
-      "symbol": "createPostgresqlEmployeeReactionRoundQueries",
-      "targetContext": "digital-employee",
-      "targetLayer": "composition"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/digital-employee/composition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/digital-employee/composition.ts#runtimePackageOf",
       "missingControls": [
         "audit",
@@ -9820,30 +9771,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/identity-access/composition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/composition.ts#createPostgresqlIdentityAccessRuntime",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#createPostgresqlIdentityAccessRuntime",
-      "symbol": "createPostgresqlIdentityAccessRuntime",
-      "targetContext": "identity-access",
-      "targetLayer": "composition"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": false
@@ -10708,54 +10635,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/composition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/composition.ts#createPostgresqlCodeHostWebhookDeliveryConsumer",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition.ts#createPostgresqlCodeHostWebhookDeliveryConsumer",
-      "symbol": "createPostgresqlCodeHostWebhookDeliveryConsumer",
-      "targetContext": "integration",
-      "targetLayer": "composition"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/composition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/composition.ts#createPostgresqlCodeHostWebhookRoutingDirectory",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition.ts#createPostgresqlCodeHostWebhookRoutingDirectory",
-      "symbol": "createPostgresqlCodeHostWebhookRoutingDirectory",
-      "targetContext": "integration",
-      "targetLayer": "composition"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -11526,31 +11405,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts#createSqliteWebhookTriggerValidation",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts#createSqliteWebhookTriggerValidation",
-      "symbol": "createSqliteWebhookTriggerValidation",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -11785,38 +11639,13 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createPostgresqlWebhookRepositoryResolver",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createPostgresqlWebhookRepositoryResolver",
-      "symbol": "createPostgresqlWebhookRepositoryResolver",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createSqliteWebhookRepositoryResolver",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createWebhookRepositoryResolver",
       "missingControls": [
         "audit",
         "authority",
@@ -11824,8 +11653,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createSqliteWebhookRepositoryResolver",
-      "symbol": "createSqliteWebhookRepositoryResolver",
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createWebhookRepositoryResolver",
+      "symbol": "createWebhookRepositoryResolver",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -24752,38 +24581,15 @@
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts#createPostgresqlAgentLaunchResourceOperations",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts#createAgentLaunchResourceOperations",
       "missingControls": [
         "audit",
         "authority",
         "event",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts#createPostgresqlAgentLaunchResourceOperations",
-      "symbol": "createPostgresqlAgentLaunchResourceOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts#createSqliteAgentLaunchResourceOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts#createSqliteAgentLaunchResourceOperations",
-      "symbol": "createSqliteAgentLaunchResourceOperations",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts#createAgentLaunchResourceOperations",
+      "symbol": "createAgentLaunchResourceOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -40404,7 +40210,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d2031849b93724af401aa9a03d7d364ae6f3ad9065f2fc5c09db22b09bf353e7",
+  "sourceDigest": "sha256:586cd8df03118bdadb985b3306df0b2aa35383e75fa8c3f6952c51544cbbfcdb",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

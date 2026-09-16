@@ -3,19 +3,14 @@
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
 import { eventRecords, eventTypeCatalog } from '@/db/schema'
-import {
-  composeEventCenter,
-  composePostgresqlEventCenter,
-} from '@/modules/event-center/composition'
+import { composeEventCenter } from '@/modules/event-center/composition'
 import {
   TASK_LIFECYCLE_SOURCE_REF,
   TASK_STATUS_CHANGED_EVENT_REF,
   taskLifecycleEventCatalogJson,
   taskLifecycleObservation,
 } from '@/modules/task-execution/public/events'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const subject = { typeId: 'platform.task', subjectRef: 'composition-task' }
@@ -24,12 +19,9 @@ const secondSubscriber = { kind: 'system' as const, subscriberRef: 'second-consu
 
 async function compose(harness: ProviderHarness) {
   const options = { typePackageDescriptorJsons: [taskLifecycleEventCatalogJson] }
-  return harness.capabilities.isolation === 'exclusive'
-    ? await composeEventCenter({ ...options, db: harness.db as DbClient })
-    : await composePostgresqlEventCenter({
-        ...options,
-        db: harness.db as PostgresqlDatabaseClient,
-      })
+  // RFC-359 AC-1（plan §5fz）：两个 provider 同一个装配入口，`db` 收中立句柄——
+  // 原来的三元（两臂只差一个 cast）与两个 cast 一起消失。
+  return await composeEventCenter({ ...options, db: harness.db })
 }
 
 function observation(revision = 1) {

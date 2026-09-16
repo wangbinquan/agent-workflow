@@ -1,7 +1,7 @@
 // RFC-359 —— 数字员工「计划人审」闸门：同一个 executionRef，两个引擎给出同一个状态。
 //
 // 为什么这条测试存在：`inspectHumanReview` 此前是**同步**端口，只有 SQLite 那侧的 composition
-// 提供——`composePostgresqlDigitalEmployeeExecution` 根本没有实现它。于是在 PostgreSQL 上闸门状态
+// 提供——`composeDigitalEmployeeExecution` 根本没有实现它。于是在 PostgreSQL 上闸门状态
 // 只能退回按 round 状态推断（`planning` / `approved` / `failed`），**永远报不出 `waiting`**：
 // 同一个案子在 SQLite 上显示「等待人审」、在 PG 上显示「规划中」。那是用户可见的行为分叉，
 // 也正是本 RFC 要消灭的形态。

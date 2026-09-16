@@ -217,7 +217,7 @@ describe('RFC-349 daemon provider core', () => {
     expect(source).not.toMatch(/\bopenDb\b|createInMemoryDb|deasync/)
     expect(source).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient/)
     expect(pg).toContain('createPostgresqlAuthRuntime')
-    expect(pg).toContain('createPostgresqlIdentityAccessRuntime')
+    expect(pg).toContain('createIdentityAccessRuntime')
     expect(pg).toContain('composeRealtimeRuntimeFor')
     expect(pg).toContain('composePostgresqlSystemOperations')
     expect(pg).toContain(

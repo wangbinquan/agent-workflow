@@ -43,10 +43,7 @@ export {
   createCollaborationRouteOperations,
   type CreateCollaborationRouteOperationsInput,
 } from './infrastructure/collaborationRouteOperations'
-export {
-  createCollaborationCommandContext,
-  createPostgresqlCollaborationCommandContext,
-} from './composition/commandContext'
+export { createCollaborationCommandContext } from './composition/commandContext'
 export {
   composeWorkgroupTaskRoomClarifyParticipantFactory,
   type WorkgroupTaskRoomClarifyParticipantFactory,

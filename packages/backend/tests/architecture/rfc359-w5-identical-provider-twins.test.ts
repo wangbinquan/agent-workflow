@@ -120,7 +120,26 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       REAL_FUNCTIONS.length,
       'provider 命名的函数一个都没扫到 ⇒ 命名匹配器塌了',
       // RFC-359 AC-1（2026-09-15，plan §5ft）：111 → 108。工具连接目录那一对合一，四个 provider 命名的函数（store 两个 + catalog 两个）退出分母。
-    ).toBeGreaterThanOrEqual(108)
+      // RFC-359 AC-1（2026-09-15，plan §5fw）：108 → 107。`webhookRepositoryResolver` 的
+      // 品牌名收干净（一份中立实现改叫中立名、别名删除），分母少一个。
+      // RFC-359 AC-1（2026-09-15，plan §5fx）：107 → 106。`sqliteWebhookTriggerValidation.ts`
+      // 整个删除（只原样转交、不碰数据库的间接层），它那两个 provider 命名的导出退出分母。
+      // RFC-359 AC-1（2026-09-15，plan §5fy）：106 → 105。MR 终端控制那一对合一
+      // （`taskTermination` 改由装配者提供），`composePostgresqlMrTerminalControl` 退出分母。
+      // RFC-359 AC-1（2026-09-16，plan §5fz）：105 → 104。`composePostgresqlEventCenter` 退役
+      // ——它与中立那份**函数体逐字节相同**，只差形参上一个更窄的标注。
+      // RFC-359 AC-1（2026-09-16，plan §5ga）：104 → 102。又两对「中立名 + 品牌名、体逐字节相同」
+      // 退役（`createPostgresqlCollaborationCommandContext` / `createPostgresqlEmployeeReactionRoundQueries`）。
+      // RFC-359 AC-1（2026-09-16，plan §5gb）：102 → 99。webhookDispatch 的两对品牌入口合一
+      // （触发器服务依赖 + dispatch 持久化），它们的 provider 命名导出退出分母。
+      // RFC-359 AC-1（2026-09-16，plan §5gc）：99 → 97。两条 code-host webhook 装配合一
+      // （中立那份原本把 `…WithPersistence` 的三行又抄了一遍，PG 那份走的才是那层）。
+      // RFC-359 AC-1（2026-09-16，plan §5ge）：97 → 93。agent 启动资源那两层（infrastructure +
+      // composition）各自合一，四个 provider 命名的导出退出分母。
+      // RFC-359 AC-1（2026-09-16，plan §5gf）：93 → 91。两个**转交式函数别名**退役
+      // （`createPostgresqlIdentityAccessRuntime` / `composePostgresqlDigitalEmployee`，
+      // 体就是 `return 中立那份(input)`）。
+    ).toBeGreaterThanOrEqual(91)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

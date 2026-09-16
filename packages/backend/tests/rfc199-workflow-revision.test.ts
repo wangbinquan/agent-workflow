@@ -19,7 +19,7 @@ import { buildActor } from '../src/auth/actor'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, tasks, users, workflows } from '../src/db/schema'
 import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
-import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -518,7 +518,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
   })
 })
 
-// RFC-359 AC-6 例外：单引擎。`composeSqliteAgentLaunchResourceOperations(db)` 与它的 PG 孪生
+// RFC-359 AC-6 例外：单引擎。`composeAgentLaunchResourceOperations({ db: db })` 与它的 PG 孪生
 // **入参形状不同**——PG 那份还要 `agents` / `workflowValidation` 两个端口（SQLite 那份在内部自建），
 // 所以这条不是「换个 harness」能迁的，得先把那两个组合根的装配签名对齐。留在账本上。
 describeEachProvider(
@@ -526,7 +526,7 @@ describeEachProvider(
   (harness) => {
     test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
       const db = harness.db
-      await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
+      await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
       await ensureWorkgroupHostWorkflow(db)
 
       const rows = await db

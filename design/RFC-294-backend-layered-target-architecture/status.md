@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d2031849b93724af401aa9a03d7d364ae6f3ad9065f2fc5c09db22b09bf353e7`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:586cd8df03118bdadb985b3306df0b2aa35383e75fa8c3f6952c51544cbbfcdb`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1776 |
+| backend production TS 文件 | 1775 |
 | `services/` 文件 | 317 |
-| `modules/**` 文件 / 非空 context | 1181 / 17 |
+| `modules/**` 文件 / 非空 context | 1180 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4599 |
+| `architectureExceptions` | 4587 |
 | `backgroundJobs` | 333 |
-| `crossContextImports` | 5112 |
+| `crossContextImports` | 5100 |
 | `facades` | 317 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24723 |
-| `mutationEntrypoints` | 1691 |
+| `moduleSymbolOwners` | 24708 |
+| `mutationEntrypoints` | 1683 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 959 |
 | `transactionExternalEffects` | 252 |
@@ -61,7 +61,7 @@
 | task-execution / domain | 31 |
 | intent / application | 25 |
 | identity-access / application | 24 |
-| integration / infrastructure | 23 |
+| integration / infrastructure | 22 |
 | code-capability / application | 20 |
 | integration / application | 20 |
 | task-execution / engine | 20 |
@@ -200,12 +200,12 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3056 |
-| legacy-inbound | 1355 |
+| legacy-outbound | 3044 |
+| legacy-inbound | 1356 |
 | infrastructure-external | 270 |
 | offered-consumption | 157 |
-| temporary-internal-debt | 89 |
 | off-dag-offered | 88 |
+| temporary-internal-debt | 88 |
 | authority-type-only | 58 |
 | required-implementation | 22 |
 | provider-mirror | 14 |
@@ -215,10 +215,10 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3056 |
-| legacy-inbound | 1355 |
-| temporary-internal-debt | 89 |
+| legacy-outbound | 3044 |
+| legacy-inbound | 1356 |
 | off-dag-offered | 88 |
+| temporary-internal-debt | 88 |
 | no-circular | 6 |
 | external-layer-debt | 3 |
 | no-util-to-upper | 2 |
@@ -227,12 +227,12 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2326 |
-| W4-E1 | 813 |
+| W9 | 2319 |
+| W4-E1 | 814 |
 | W4-C | 331 |
-| W4-E0 | 214 |
+| W4-E0 | 211 |
 | W4 | 193 |
-| W4-B | 184 |
+| W4-B | 181 |
 | W5 | 152 |
 | W4-E8 | 110 |
 | W4-E9 | 60 |

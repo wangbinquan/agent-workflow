@@ -7402,3 +7402,22 @@ SHA 有多个 workflow 时会返回多行，取 run id 要加 `select(.workflowN
 **任意一个**，就把 `rfc359-w29-unstarted-application-composition.test.ts` 无条件加进半径
 ——它一个文件里钉着**四段**装配体的摘要（PG daemon 段、SQLite applicationDeps 段、
 SQLite apiRouteMounts 段等），是这三个文件的改动最集中的落点。
+
+### 批量改符号名要**带词边界**：`composePostgresqlDigitalEmployee` 是 `…DigitalEmployeeExecution` 的前缀
+
+2026-09-16 实撞。退役一个转交式别名时做全仓 `s.replace(alias, target)`，而
+
+    composePostgresqlDigitalEmployee            ← 要改的
+    composePostgresqlDigitalEmployeeExecution   ← **另一个东西**，恰好以它开头
+
+于是后者被一起改名，撞上同文件里已存在的 `composeDigitalEmployeeExecution`，
+`Cannot redeclare exported variable` + `Duplicate function implementation`，
+连带把**账本里那一行的文本**也改坏（账本记的是符号名，所以它也在替换范围里）。
+
+**处置**：批量改名一律用词边界正则，别用裸 `str.replace`：
+
+    re.sub(rf'\b{re.escape(alias)}\b', target, s)
+
+并且改完立刻 `grep -rn "<target>\b" | grep -v "<已知合法用法>"` 扫一眼有没有多改。
+这次是 typecheck 当场咬住才没漏出去——**但账本那一行 typecheck 看不见**，
+是 `rfc359-w5-same-file-provider-pairs` 的逐条相等判据把它揪出来的。

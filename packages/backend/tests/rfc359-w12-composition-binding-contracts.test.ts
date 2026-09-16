@@ -9,7 +9,6 @@ import { join } from 'node:path'
 
 import {
   composeDigitalEmployee,
-  composePostgresqlDigitalEmployee,
   type ComposeDigitalEmployeeOptions,
   type ComposePostgresqlDigitalEmployeeOptions,
   type DigitalEmployeeCompositionOptions,
@@ -137,7 +136,7 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
     await neutral.maintenance.ready()
     // The historical PG name delegates to the same provider-neutral implementation. As in the
     // W7 composition fixtures, exercise that name on both harness clients as well.
-    const historical: DigitalEmployeeModuleWithRuntime = composePostgresqlDigitalEmployee({
+    const historical: DigitalEmployeeModuleWithRuntime = composeDigitalEmployee({
       ...options,
       db: harness.db as PostgresqlDatabaseClient,
     })
@@ -170,7 +169,7 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
       ...options,
       db: harness.db as PostgresqlDatabaseClient,
     }
-    const historical = composePostgresqlDigitalEmployee(historicalInput)
+    const historical = composeDigitalEmployee(historicalInput)
     await historical.maintenance.ready()
     // @ts-expect-error An omitted runtime does not promise the runtime capability.
     const omittedAsComplete: DigitalEmployeeModuleWithRuntime = omitted

@@ -59,7 +59,7 @@ describe('RFC-359 W12 —— WorkStart is complete at construction', () => {
   test('PostgreSQL resolves its one completed employee directly without a binding step', () => {
     const postgresql = source('cli/postgresqlDaemonApplication.ts')
     const portAt = postgresql.indexOf('const digitalEmployeeWorkStart = Object.freeze<')
-    const ownerAt = postgresql.indexOf('const digitalEmployee = composePostgresqlDigitalEmployee(')
+    const ownerAt = postgresql.indexOf('const digitalEmployee = composeDigitalEmployee(')
     expect(portAt).toBeGreaterThan(0)
     expect(ownerAt).toBeGreaterThan(portAt)
     const port = postgresql.slice(

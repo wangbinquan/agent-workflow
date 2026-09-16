@@ -29,6 +29,7 @@ import {
   webhookTriggers,
 } from '../src/db/schema'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
 import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
@@ -519,7 +520,10 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     },
   })
 
-  const terminalControl = composeMrTerminalControl(db)
+  const terminalControl = composeMrTerminalControl({
+    db,
+    taskTermination: composeTaskSourceTermination(db),
+  })
   await terminalControl.reconcileOnBoot()
   const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
     db,

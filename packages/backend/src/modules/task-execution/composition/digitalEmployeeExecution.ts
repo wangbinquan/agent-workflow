@@ -238,7 +238,7 @@ export function buildDigitalEmployeePlanPrompt(
  * 数字员工「计划人审」闸门的对外状态。
  *
  * RFC-359：这一条曾经是**同步**的、且只有 SQLite 那侧的 composition 提供——
- * `composePostgresqlDigitalEmployeeExecution` 根本没有实现 `inspectHumanReview`，于是
+ * `composeDigitalEmployeeExecution` 根本没有实现 `inspectHumanReview`，于是
  * PostgreSQL 上这个闸门永远退回按 round 状态推断，**报不出 `waiting`**：同一个案子在 SQLite 上
  * 显示「等待人审」，在 PG 上显示「规划中」。这是用户可见的行为分叉，也正是本 RFC 要消灭的形态。
  * 现在改成 async 的一份中立实现（查的是 `tasks` + `nodeRuns`，本来就没有方言），两侧 composition

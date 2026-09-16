@@ -2,6 +2,62 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## ⛔ 2026-09-16 —— **本机 git 被 Xcode 许可门卡死，13 段工作已完成但未提交**
+>
+> `git --version` 本身就报 `You have not agreed to the Xcode license agreements`。
+> `/usr/bin/git` 是本机唯一的 git（无 homebrew git、无 isomorphic-git、`xcrun` 同样被卡），
+> 因此 **commit / push / census 全部不可执行**。解法只有一条，需要人来跑：
+>
+> ```
+> sudo xcodebuild -license accept
+> ```
+>
+> **最后推上去的是 `66013c86e`（main 绿）。** 其后 §5fw–§5gh 共 13 段**只在工作树里**。
+>
+> ### 已验证到什么程度
+>
+> typecheck / eslint 全干净；按「改了哪些符号」算的 107 文件半径分 4 片跑
+> **1316 pass / 46 fail**——46 格里 **2 格是我的**（`rfc359-w29` 的装配体摘要，
+> 因为又动了组合根；已修，该文件 8/8），**44 格全是 git 门**
+> （逐个确认过错误里带 `Xcode ... license`：`gitHttpRemote` / fusion worktree /
+> scratch repo / 延后准备）。**没有别的红。**
+>
+> ### git 恢复后的提交计划（按此拆，别一笔闷进去）
+>
+> 1. `refactor(provider)`：§5fw 名字收干净 + §5fx 删转交层 + §5fu 剩余（webhookRepositoryResolver /
+>    sqliteWebhookTriggerValidation）
+> 2. `refactor(provider)`：§5fy + §5gb + §5ge（「装配者提供答案」三条：MR 终端控制 /
+>    webhookDispatch 两对 / agent 启动资源两层）
+> 3. `refactor(provider)`：§5fz + §5ga + §5gf（体逐字节相同的中立+品牌，含转交式函数别名）
+> 4. `refactor(integration)`：§5gc（code-host webhook 两条，抄了一遍的那种）
+> 5. `test(architecture)`：§5gd（AC-6 首条通用 sanctioned 判据 `frozen-migration-revision`）
+> 6. `docs(rfc-359)`：§5gg + §5gh（把 blocker 写准；AC-6 甲类 7 条一簇的结论）
+>
+> 每笔都要：`bun run scripts/architecture-census.ts --write --snapshot-sha HEAD` →
+> 架构守卫 → 按路径 `git add` + `git commit -F <msg> -- <paths>` →
+> push → **按 exact SHA 查 CI**。`packages/system-mocks/src/cli.ts` 是别人的，**别 add**。
+>
+> ⚠️ **census 与 amend 不能混**：census 把 provenance 钉成当时的 HEAD，
+> 之后 `--amend` 会让那个 SHA 变成孤儿、CI 两格红（本轮实撞，已落 gotchas）。
+>
+> ### 账本现状（工作树里，未提交）
+>
+> | 账本 | 起 | 现 |
+> | --- | --- | --- |
+> | AC-1 同文件孪生 | 48 | **19**（9 条已裁决为引擎固有，10 条 drift） |
+> | AC-6 open migration | 24 | **23** |
+> | provider 命名文件 | 39 | **38** |
+>
+> ### 剩下的是两个架构波次，不是一堆零碎
+>
+> - **组合根签名对齐**：`createApp` 的 `db` 写死 `DbClient`，两个组合根装配签名不对称
+>   → 挡住 AC-6 甲类 7 条 + AC-1 的 `server.ts` 两条（见 plan §5gh / §5bg）；
+> - **启动面合一**：`services/task` 的 legacy `startExecution`（12 处同步游标）
+>   vs `PostgresqlRootTaskLaunchKernel` → 挡住 AC-1 的 5 条 + AC-6 的 `start-task-deps`。
+>
+> 两个都是跨两个 bootstrap 的千行级改动，**必须有 CI 才动**。
+> AC-8 / AC-9 / AC-11 要的是**收口 SHA 上的取证**，按定义得等这些落地之后。
+
 > ## 📌 RFC-359 最新一段（2026-09-15 续 37，**AC-1 的规模一直被数错：同文件孪生 48 对，此前一个都没数到**）
 >
 > 续 36 给 AC-1 定了完成线（§5fq：一对必须合，除非差异**源于引擎本身**——只有 ①独有原语 /

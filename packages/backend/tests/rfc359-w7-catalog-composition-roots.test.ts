@@ -20,7 +20,7 @@ import type { Actor } from '@/auth/actor'
 import { createPostgresqlAuthRuntime } from '@/auth/composition'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, users, workflows } from '@/db/schema'
-import { createPostgresqlIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
@@ -253,7 +253,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
 describeEachProvider('RFC-359 W7 —— Identity Access / Auth / Memory 组合根', (harness) => {
   test('身份访问运行时：用户目录 / 档案 / 授权解析都读真库', async () => {
     const actor = await seedActor(harness.db, 'admin')
-    const runtime = createPostgresqlIdentityAccessRuntime({ db: harness.db })
+    const runtime = createIdentityAccessRuntime({ db: harness.db })
     try {
       expect(await runtime.userDirectory.findByUsername(actor.user.username)).toMatchObject({
         id: actor.user.id,

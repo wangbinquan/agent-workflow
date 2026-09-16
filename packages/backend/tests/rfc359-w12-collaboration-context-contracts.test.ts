@@ -13,7 +13,6 @@ import { collaborationGateOperations, taskQuestions, tasks } from '@/db/schema'
 import {
   createCollaborationCommandContext,
   createCollaborationCommandContextFromPersistence,
-  createPostgresqlCollaborationCommandContext,
   requireClarifyDecisionCommand,
   requireCollaborationTaskExecutionReadModels,
   requireQuestionDispatchCommand,
@@ -275,16 +274,16 @@ function constructionTypeContracts(
   const undefinedReview: ReviewContext = undefinedPort
   void [optionalFull, conditionalFull, undefinedReview]
 
-  const pgFull: CollaborationRouteContext = createPostgresqlCollaborationCommandContext({
+  const pgFull: CollaborationRouteContext = createCollaborationCommandContext({
     db: pgDb,
     ...capabilities,
   })
   const pgOptionalInput: PostgresqlCollaborationCommandContextInput = { db: pgDb, ...capabilities }
-  const pgOptional = createPostgresqlCollaborationCommandContext(pgOptionalInput)
-  const pgConditional = createPostgresqlCollaborationCommandContext(
+  const pgOptional = createCollaborationCommandContext(pgOptionalInput)
+  const pgConditional = createCollaborationCommandContext(
     condition ? { db: pgDb, ...capabilities } : { db: pgDb },
   )
-  const pgUndefined = createPostgresqlCollaborationCommandContext({
+  const pgUndefined = createCollaborationCommandContext({
     db: pgDb,
     ...capabilities,
     reviewDecisions: undefined,

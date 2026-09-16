@@ -46,9 +46,8 @@ import { composeScheduledTaskRuntimeFor } from '@/modules/integration/compositio
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import {
-  composePostgresqlWebhookDispatchPersistence,
-  composePostgresqlWebhookTriggerServiceDependencies,
-  composeSqliteWebhookTriggerServiceDependencies,
+  composeWebhookDispatchPersistenceFor,
+  composeWebhookTriggerServiceDependenciesFor,
 } from '@/modules/integration/composition/webhookDispatch'
 import { createWebhookTriggerAdministration } from '@/modules/integration/infrastructure/webhookTriggerAdministration'
 import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
@@ -57,7 +56,8 @@ import {
   composeWebhookDeliveryRuntimeFor,
   composeWebhookIngressPersistenceFor,
 } from '@/modules/integration/composition/webhookIngress'
-import { composePostgresqlMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
+import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
+import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composePostgresqlTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -270,7 +270,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     expect(updated).toMatchObject({ id: record.id, enabled: false })
 
     // SQLite 别名同样是摆设；派发持久化只剩 PostgreSQL 这一个具名装配别名。
-    const dispatchPostgresql = composePostgresqlWebhookDispatchPersistence(asPostgresql(harness.db))
+    const dispatchPostgresql = composeWebhookDispatchPersistenceFor(asPostgresql(harness.db))
     expect(await dispatchPostgresql.triggerEnabled(record.id)).toBe(false)
     expect(await dispatchPostgresql.triggerEnabled('wt_missing')).toBeNull()
     expect((await dispatchPostgresql.getTrigger(record.id))?.name).toBe(record.name)
@@ -315,7 +315,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     expect(await administration.get(record.id)).toBeNull()
   })
 
-  test('webhookDispatch 触发器服务依赖：两个别名装出的 administration / dispatchPersistence 都能读写', async () => {
+  test('webhookDispatch 触发器服务依赖：装出的 administration / dispatchPersistence 都能读写', async () => {
     const owner = await seedUser(harness.db)
     const endpointId = await seedEndpoint(harness.db)
     // 定时任务运行时同时是本轮要还的另一条债（scheduledTasks.ts#composeScheduledTaskRuntimeFor）。
@@ -328,22 +328,21 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
       },
       resourceAclChanged: () => {},
     })
-    const sqlite = composeSqliteWebhookTriggerServiceDependencies(
-      asSqlite(harness.db),
-      '/tmp/aw-rfc359-w7.json',
-      scheduled.operations,
-    )
-    const postgresql = composePostgresqlWebhookTriggerServiceDependencies(
-      asPostgresql(harness.db),
-      sqlite.validateSaveable,
+    // RFC-359 AC-1（plan §5gb）：这里原来装两份（两个品牌别名各一份）再互相对读，
+    // 用来证明「两个别名装出来的是同一个东西」。合一之后**只有一份**，那个判据自然消失；
+    // 判据换成它自己的读写闭环——而 `describeEachProvider` 已让它在两个引擎上各跑一遍，
+    // 「两个 provider 装出来的一致」由此得到的是比对读更强的证据。
+    const deps = composeWebhookTriggerServiceDependenciesFor(
+      harness.db,
+      composeWebhookTriggerValidation(scheduled.operations, '/tmp/aw-rfc359-w7.json'),
     )
 
     const record = triggerRecord(endpointId, owner.id)
-    await sqlite.administration.create(record)
-    expect((await postgresql.administration.get(record.id))?.name).toBe(record.name)
-    expect(await postgresql.dispatchPersistence.triggerEnabled(record.id)).toBe(true)
-    expect(await sqlite.dispatchPersistence.getDeliveryMrFact('wd_missing')).toBeNull()
-    expect(typeof postgresql.validateSaveable).toBe('function')
+    await deps.administration.create(record)
+    expect((await deps.administration.get(record.id))?.name).toBe(record.name)
+    expect(await deps.dispatchPersistence.triggerEnabled(record.id)).toBe(true)
+    expect(await deps.dispatchPersistence.getDeliveryMrFact('wd_missing')).toBeNull()
+    expect(typeof deps.validateSaveable).toBe('function')
   })
 
   test('scheduledTasks 运行时：持久化面可列举，overview 按权限点决定是否给数', async () => {
@@ -536,7 +535,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
     // 任务终止参与者也是本轮要还的债；PostgreSQL 侧的事务体只在 wake/drain 时才走，
     // 这里驱动的是预留路径（中立持久化 + 引擎的 advisory lock）。
     const taskTermination = composePostgresqlTaskSourceTermination(asPostgresql(harness.db))
-    const control = composePostgresqlMrTerminalControl({
+    const control = composeMrTerminalControl({
       db: asPostgresql(harness.db),
       taskTermination,
     })
@@ -726,17 +725,18 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
     composeWebhookTerminalWorkspacePrunePolicy,
     composeWebhookDeliveryPersistenceFor,
     composeWebhookDeliveryPersistenceFor,
-    composePostgresqlWebhookDispatchPersistence,
-    composePostgresqlWebhookTriggerServiceDependencies,
-    composeSqliteWebhookTriggerServiceDependencies,
+    composeWebhookDispatchPersistenceFor,
+    composeWebhookTriggerServiceDependenciesFor,
     composeWebhookEndpointServiceDependencies,
     composeWebhookEndpointServiceDependencies,
     composeWebhookDeliveryRuntimeFor,
     composeWebhookIngressPersistenceFor,
     composeWebhookDeliveryRuntimeFor,
-    composePostgresqlMrTerminalControl,
+    composeMrTerminalControl,
     composePostgresqlTaskSourceTermination,
   ]
-  expect(roots.length).toBe(19)
+  // RFC-359 AC-1（plan §5gb）：19 → 18。`composeSqlite/PostgresqlWebhookTriggerServiceDependencies`
+  // 两个品牌入口合成一个 `composeWebhookTriggerServiceDependenciesFor`，清单里两条变一条。
+  expect(roots.length).toBe(18)
   expect(roots.filter((root) => typeof root === 'function').length).toBe(roots.length)
 })

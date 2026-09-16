@@ -469,7 +469,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // 本来就收中立客户端——不是两台机器，是同一台机器抄了两遍名字，收成一份（plan §5dr）。
   //
   // RFC-359（2026-09-13）：语句条数**不变**（160），摘要变了——
-  // `composePostgresqlDigitalEmployeeExecution({...})` 的实参多了一项
+  // `composeDigitalEmployeeExecution({...})` 的实参多了一项
   // `humanReview: { inspect: (ref) => inspectDigitalEmployeeHumanReviewState(input.db, ref) }`。
   // 那是在补一处**用户可见的引擎分叉**：PG 侧的 composition 此前根本没有 `inspectHumanReview`，
   // 于是计划人审闸门在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、
@@ -511,7 +511,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
     // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
     expect(digest(restored, pg)).toBe(
-      'ff545123ef38687ec8598e2fe039dcbbe8cb824b7f695cd460eb2dbabdb55956',
+      '465d04e357a5a29946a2f4c06a1c82deee0d10398d542f3de886dfec11c50051',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -576,7 +576,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // 别名（`composeSqliteX` / `composePostgresqlX`）本来就指着同一个函数，去掉品牌前缀后
     // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '80925a2d786a10c56973c51ea3e372f6ed6dad90a2dbfad5ff8849a3ca5c9049',
+      '78c1097916ce13fc80ca6b5ec8d236b3ff457a84d326080ba89e3149e13bf903',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

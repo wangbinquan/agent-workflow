@@ -63,7 +63,7 @@ import {
   buildAgentHostSnapshot,
   startAgentTask,
 } from '../src/services/agentLaunch'
-import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
@@ -236,7 +236,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   test('A3 happy path (scratch): anchor row + sourceAgentName + frozen synthesized snapshot', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const task = await startAgentTask(
-      composeSqliteAgentLaunchResourceOperations(db),
+      composeAgentLaunchResourceOperations({ db: db }),
       daemonActor(),
       solo.id,
       BODY(),
@@ -274,7 +274,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
       startAgentTask(
-        composeSqliteAgentLaunchResourceOperations(db),
+        composeAgentLaunchResourceOperations({ db: db }),
         daemonActor(),
         'solo',
         BODY(),
@@ -323,7 +323,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
     await expect(
       startAgentTask(
-        composeSqliteAgentLaunchResourceOperations(db),
+        composeAgentLaunchResourceOperations({ db: db }),
         strangerActor,
         'no-such-id',
         BODY(),
@@ -339,7 +339,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     await expect(
       startAgentTask(
-        composeSqliteAgentLaunchResourceOperations(db),
+        composeAgentLaunchResourceOperations({ db: db }),
         strangerActor,
         privateAgent.id,
         BODY(),
@@ -373,7 +373,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     })
     await expect(
       startAgentTask(
-        composeSqliteAgentLaunchResourceOperations(db),
+        composeAgentLaunchResourceOperations({ db: db }),
         daemonActor(),
         builtinId,
         BODY(),
@@ -391,7 +391,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
       startAgentTask(
-        composeSqliteAgentLaunchResourceOperations(db),
+        composeAgentLaunchResourceOperations({ db: db }),
         daemonActor(),
         solo.id,
         StartAgentTaskSchema.parse({ name: 't', description: 'd' }),
@@ -409,7 +409,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
   test('A5 F17: agent deleted between gate and insert → launch fails atomically', async () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
+    await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
     // Simulate the race by handing startTask an agentLaunch whose agent no
     // longer exists at transaction time (the outer service gate already
     // passed in the real interleaving; here we call startTask directly the
@@ -440,7 +440,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
   test('A8 delete: live task 409s; display rename is id-stable; terminal delete proceeds', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
+    await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
     const liveId = ulid()
     await db.insert(tasks).values({
       id: liveId,
@@ -539,7 +539,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   }
 
   test('A6 lifecycle guards: agent host passes builtin lock; workgroup host stays 403; both sync 422', async () => {
-    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
+    await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
     const { ensureWorkgroupHostWorkflow, WORKGROUP_HOST_WORKFLOW_ID } =
       await import('../src/services/workgroup/launch')
     await ensureWorkgroupHostWorkflow(db)
@@ -854,7 +854,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
 
     // Baseline launch stamps the stable id onto the task.
     const t1 = await startAgentTask(
-      composeSqliteAgentLaunchResourceOperations(db),
+      composeAgentLaunchResourceOperations({ db: db }),
       daemonActor(),
       agentId,
       BODY(),
@@ -871,7 +871,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
 
     // Relaunch carrying the CORRECT expected id succeeds.
     const t2 = await startAgentTask(
-      composeSqliteAgentLaunchResourceOperations(db),
+      composeAgentLaunchResourceOperations({ db: db }),
       daemonActor(),
       agentId,
       BODY({ expectedAgentId: agentId }),
@@ -890,7 +890,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     // exists to close) → 409, and no ghost task row is minted.
     await expect(
       startAgentTask(
-        composeSqliteAgentLaunchResourceOperations(db),
+        composeAgentLaunchResourceOperations({ db: db }),
         daemonActor(),
         agentId,
         BODY({ expectedAgentId: 'stale-other-id' }),

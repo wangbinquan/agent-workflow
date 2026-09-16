@@ -10,10 +10,7 @@ import { buildActor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
 import { workflows } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import {
-  composePostgresqlAgentLaunchResourceOperations,
-  composeSqliteAgentLaunchResourceOperations,
-} from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -127,7 +124,7 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
 
   test('SQLite agent-launch and dynamic-workflow adapters perform real durable reads and writes', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const agentLaunch = composeSqliteAgentLaunchResourceOperations(db)
+    const agentLaunch = composeAgentLaunchResourceOperations({ db: db })
     const dynamicWorkflow = composeDynamicWorkflowPersistence(db)
 
     await agentLaunch.ensureHostWorkflow()
@@ -163,7 +160,7 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
       },
       source: 'session',
     })
-    const operations = composePostgresqlAgentLaunchResourceOperations({
+    const operations = composeAgentLaunchResourceOperations({
       db: fixture.db,
       agents: {
         async get(authority, agentId) {

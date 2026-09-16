@@ -542,6 +542,27 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
       /from\s*'(@\/|(\.\.\/)+src\/)services\/task'/.test(code),
   },
   {
+    /**
+     * RFC-359 AC-6（2026-09-16，plan §5gd）—— **在某条迁移之前冻住的 schema** 上跑的判据。
+     *
+     * 为什么它该是 sanctioned 而不是债：这类用例测的是**迁移自己的回填口径**
+     * （「0095 之前的行，回填之后应该长什么样」），所以它必须把库停在那一条迁移**之前**。
+     * 迁移链是**两套各自落盘的工件**（§5fq ②，与 `util/migrationsFolder.ts` / `embed.ts`
+     * 同一条理由），SQLite 那条链上的第 N 条回填，按定义只能在 SQLite 的链上验。
+     *
+     * 为什么原来的 `migration-chain` 判据漏了它：那一条按**文件名**匹配
+     * （`migration-\d` / `rfc\d+-migration-\d`），而这个文件叫 `rfc189-wg-round.test.ts`
+     * ——它**做的是**迁移回填对账，名字里却没有 `migration`。按文件名分类，
+     * 分到的是「谁起的名字好」，不是「它在测什么」。这一条改按**call shape** 认：
+     * 建库时喂的不是那份规范迁移目录，而是一份被截断 / 冻结过的副本。
+     */
+    id: 'frozen-migration-revision',
+    holds: (_rel, code) =>
+      /createInMemoryDb\s*\(\s*partial\b/.test(code) ||
+      code.includes('partialMigrationsDir') ||
+      /_journal\.json/.test(code),
+  },
+  {
     id: 'real-file-database',
     holds: (_rel, code) => /(?<![A-Za-z0-9_.])new\s+Database\s*\(/.test(code),
   },
@@ -644,7 +665,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'architecture/rfc329-mcp-surface-guard.test.ts',
   'execution-contract-platform.test.ts',
   'helpers/rfc310Pr3Fixture.ts',
-  'rfc189-wg-round.test.ts',
   'rfc221-login-policy-routes.test.ts',
   'rfc257-webhook-error-codes.test.ts',
   'rfc268-webhook-scratch-launch.test.ts',

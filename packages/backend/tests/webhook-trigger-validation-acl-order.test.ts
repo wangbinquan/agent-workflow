@@ -24,7 +24,7 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { workflows } from '../src/db/schema'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { assertSqliteWebhookTriggerSaveable } from '../src/modules/integration/infrastructure/sqliteWebhookTriggerValidation'
+import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
 import { createUser } from '../src/services/users'
 import { NotFoundError, ValidationError } from '../src/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -36,7 +36,7 @@ import {
 /** workflow 的输入结构 —— 这些字面量就是「不得泄漏给不可见者」的内容。 */
 const SECRET_INPUT_KEYS = ['classified_prompt', 'classified_ref', 'classified_mode'] as const
 
-// RFC-359 AC-6：`assertSqliteWebhookTriggerSaveable` 的三个实参（ScheduledTaskOperations /
+// RFC-359 AC-6：`assertWebhookTriggerSaveable` 的三个实参（ScheduledTaskOperations /
 // Actor / IntegrationTriggerResourceAuthority）本来就是中立面，夹具只差一个中立的库句柄。
 async function seedFixture(providerHarness: ProviderHarness): Promise<{
   db: ProviderNeutralDatabase
@@ -123,7 +123,7 @@ describeEachProvider('webhook 触发器保存期 · ACL 顺序（双引擎）', 
       const h = await seedFixture(harness)
       let thrown: unknown
       try {
-        await assertSqliteWebhookTriggerSaveable(
+        await assertWebhookTriggerSaveable(
           scheduledTaskRuntime(h.db).operations,
           h.outsider,
           integrationTriggerResourceAuthority(h.db, h.outsider),
@@ -151,7 +151,7 @@ describeEachProvider('webhook 触发器保存期 · ACL 顺序（双引擎）', 
       const h = await seedFixture(harness)
       let thrown: unknown
       try {
-        await assertSqliteWebhookTriggerSaveable(
+        await assertWebhookTriggerSaveable(
           scheduledTaskRuntime(h.db).operations,
           h.outsider,
           integrationTriggerResourceAuthority(h.db, h.outsider),
@@ -169,7 +169,7 @@ describeEachProvider('webhook 触发器保存期 · ACL 顺序（双引擎）', 
       const h = await seedFixture(harness)
       let thrown: unknown
       try {
-        await assertSqliteWebhookTriggerSaveable(
+        await assertWebhookTriggerSaveable(
           scheduledTaskRuntime(h.db).operations,
           h.owner,
           integrationTriggerResourceAuthority(h.db, h.owner),

@@ -12630,3 +12630,345 @@ PG 那半走 `PostgresqlRootTaskLaunchKernel`，**是两套启动架构**，
 所以下一波的入口不是「再挑几条漂移待合」，而是**从第二层挑一个孪生做掉，
 看它一次带塌几条 composition**——`sourceTermination`（两个参与者、PG 多一个可选形参）
 体量最小，是验证这条链路的合适起点。
+
+## §5fw —— 一份中立实现顶着 `Sqlite` 的名字：`webhookRepositoryResolver` 收名
+
+账本里 `webhookRepositoryResolver` 记着「还有一对没合」，可翻开源码它**早就只有一份实现**了：
+
+```ts
+export function createSqliteWebhookRepositoryResolver(db: ProviderNeutralDatabase, …) { … }
+export const createPostgresqlWebhookRepositoryResolver = createSqliteWebhookRepositoryResolver
+```
+
+合一那一轮的注释写明了为什么留着这个名字：
+
+> **没有起第三个名字**：正典就用原来的 `createSqliteWebhookRepositoryResolver`（形参已放宽），
+> PG 那个名字变成指向它的别名。这样导出符号数不增不减——新增一个导出符号会让
+> `rfc294-module-symbol-owners` / `rfc294-mutation-entrypoints` 两本账同时涨一格（实测）。
+
+**那个顾虑是对的，但它解错了方程**：怕的是「**新增**一个符号」，而把正典改名成中立名
+是**改名不是新增**——两个品牌导出变成一个中立导出，符号数 2 → 1，那两本账**只降不升**。
+
+代价是真实存在的：一份 provider 中立的函数顶着 `Sqlite` 的名字，**读代码的人、账本、
+和按名字派生组合根的那条判据都会以为这里有两份实现**。这正是 §5fu 那 14 对别名的同一个毛病，
+只是它藏在「已经合过一次」的外壳下面。
+
+改名 + 删别名，两个调用点改用本名。账本 32 → **31**；identical-twins 与
+adapter-production-consumer 两条语料下限各降 1。
+
+## §5fx —— 删掉一整层「只转交、还不碰数据库」的 provider 命名文件
+
+`modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts`（34 行）两个导出：
+
+```ts
+export async function assertSqliteWebhookTriggerSaveable(…5 个实参) {
+  await assertWebhookTriggerSaveable(…同样 5 个实参)      // 原样转交
+}
+export function createSqliteWebhookTriggerValidation(operations, configPath) {
+  return composeWebhookTriggerValidation(operations, configPath)   // 原样转交
+}
+```
+
+**两个函数都不收数据库句柄**，名字里的 `sqlite` 因此连「说明它跑在哪个引擎上」都谈不上——
+纯噪音。整个文件删除，三个消费者（一个装配 + 两条测试）改用
+`composition/webhookAdmission` 里的本体。
+
+两本账同时降：`PROVIDER_NAMED_FILE_DEBT` 39 → **38**（这一条记的正是
+「还落在 `platform/persistence/` 之外的 provider 命名文件」），
+identical-twins 107 → 106、adapter-production-consumer 106 → 105。
+同文件孪生账本里 `webhookDispatch` 那条的 blocker 清单也少掉一个。
+
+**这一条的普遍教训**：`§5fs` 的判别式扫的是「导出名带不带品牌」，
+于是它既扫得出「两份真实现」，也扫得出这种「**一层多余的转交**」。
+后者的修法不是合一，是**删层**——转交层被删掉之后，那两个品牌名自然一起消失。
+
+## §5fy —— 「谁提供 taskTermination」不是引擎差异：MR 终端控制收成一份
+
+`webhookTerminalControl.ts` 里本来就已经有一份中立的 `composeMrTerminalControlWithPorts`，
+两个品牌入口只是它的两种喂法：
+
+```ts
+composeMrTerminalControl(db: DbClient)                     // 自己 composeTaskSourceTermination(db)
+composePostgresqlMrTerminalControl({ db, taskTermination }) // 要求调用方注入
+```
+
+两个持久化端口（`createMrLaunchGuardPersistence` / `createMrTerminalEffectPersistence`）
+**本来就是中立的**，都只吃一个 `db`。所以整对的差别只有一处：**谁来提供 `taskTermination`。**
+
+「自己造」与「让人注入」不是引擎差异，是**装配责任放在了不同的地方**——按 §5fq 三条判据
+一条都不命中。处方就是 AC-10 用过的那条「**装配者提供答案**」：两边都由调用方注入。
+
+**值得记的一点：这一条不必等下层先合。** `sourceTermination` 那对孪生
+（§5fv 判过：锁边界与谁做终态清理**确有语义差异**，且 SQLite 那半还挂在 `services/task` 上）
+仍然开着——但这一层只是把 participant **原样转交**给 worker，
+它不关心那个 participant 是怎么造出来的。所以「挡在下层」这个标注**不总是真的挡住**：
+要看这一层是**消费**下层的差异，还是只是**搬运**它。搬运的那种，把搬运责任上提即可当场合一。
+
+SQLite bootstrap（`cli/start.ts`）与那条 e2e 用例于是各自先调一次
+`composeTaskSourceTermination(db)` 再传进来，与 PostgreSQL bootstrap 现在是同一个姿势。
+
+账本 31 → **30**；identical-twins 106 → 105、adapter-production-consumer 105 → 104。
+
+## §5fz —— 「中立名 + 品牌名」这一半，`identical-provider-twins` 按定义看不见
+
+`composeEventCenter` 与 `composePostgresqlEventCenter` 的函数体**逐字节相同**：
+
+```ts
+const { db, ...shared } = options
+return await composeEventCenterWithPorts({
+  ...shared,
+  persistence: {
+    events: createEventStore(db),
+    customSources: createCustomEventSourceStore(db),
+    responseRules: createEventResponseRuleStore(db),
+    committedEvents: createCommittedEventDeliveryPersistence(db),
+  },
+})
+```
+
+唯一差别是形参上那个更窄的 `db: PostgresqlDatabaseClient` 标注——而
+`ComposeEventCenterOptions.db` **本来就是** `ProviderNeutralDatabase`，四个 store 也早就中立。
+**纯编译期的品牌标注，零运行期含义**（与 §5fl 的 `freezeCallClosure(db: DbClient)` 同形）。
+
+### 为什么本仓的「零孪生」守卫一直没咬住它
+
+`rfc359-w5-identical-provider-twins` 的判据是「**两个 provider 命名的函数**体逐字相同」。
+这一对里有一个叫 `composeEventCenter`——**不带品牌名**，于是那条判据根本不把它们配成一对。
+
+**这正是 §5fs 那份同文件账本要补的另一半**：一个「逐字节相同」的孪生，
+在「零孪生」守卫下安然活了很久，因为它的另一半已经改成中立名了。
+「已经有一个中立名」看起来像合一完成的标志，实际上可能只是**合了一半**——
+把品牌那份留在旁边，比两个都带品牌更难发现。
+
+删掉 PG 那份，四个调用点改用本名。连带两处测试里的 `provider === 'sqlite' ? … : …` 三元
+（两臂只差一个 cast）与四个 cast 一起消失。
+
+账本 30 → **29**；identical-twins 105 → 104、adapter-production-consumer 104 → 103。
+
+## §5ga —— 把 §5fz 的判别式拿去扫一遍：又两对「体逐字节相同」的中立 + 品牌
+
+§5fz 发现的形状——**中立名 + 品牌名、函数体逐字节相同、只差形参标注**——不是孤例。
+把它写成判别式（两个成员的体归一化后相等）扫剩下的 `漂移待合`，又中两条：
+
+| 条目 | 品牌那份的全部内容 |
+| --- | --- |
+| `createPostgresqlCollaborationCommandContext` | 与中立那份逐字节相同；只差它收 `PostgresqlCollaborationCommandContextInput`（= 把 `db` 收窄成 `PostgresqlDatabaseClient`）。而 PG 客户端本来就可赋值给 `ProviderNeutralDatabase` |
+| `createPostgresqlEmployeeReactionRoundQueries` | 体就是一行 `return createReactionRoundQueries(db)`，与中立那份一字不差 |
+
+两条一并退役，消费者改用本名；连带两处 `provider === 'sqlite' ? … : …` 三元
+（两臂只差 cast）与四个 cast 消失。
+
+**这三条（§5fz + 本节两条）合起来说明一件事**：本仓「零孪生」守卫
+（`rfc359-w5-identical-provider-twins`）按定义只配**两个都带品牌名**的函数，
+于是「合了一半」——把一份改成中立名、另一份留着品牌名——的那种，
+**它一个都看不见**，而这种恰恰比两个都带品牌更难用肉眼发现：
+读的人看见一个中立名，会以为这里已经收干净了。
+
+账本 29 → **27**；identical-twins 104 → 102、adapter-production-consumer 103 → 100。
+
+## §5gb —— webhookDispatch 的两对：一对是 §5fy 同形，另一对根本不是「一对」
+
+`webhookDispatch.ts` 在账本里占两条，拆开看是两件不同的事。
+
+**第一对（`composeWebhookTriggerServiceDependencies` 一族）** 与 §5fy 的 MR 终端控制逐字同形：
+两份的 `administration` / `dispatchPersistence` 用的是**同两个中立构造器**，差别只有
+**谁提供 `validateSaveable`**——SQLite 那份自己
+`composeWebhookTriggerValidation(scheduledTasks, configPath)`，PG 那份要求注入。
+按「装配者提供答案」收成一份，SQLite bootstrap（`server.ts`）自己先造一次再传进来。
+
+**第二对（`composeWebhookDispatchPersistence` 一族）根本不是一对 provider 实现**：
+
+```ts
+export function composeWebhookDispatchPersistence(p: WebhookDispatchPersistencePort) {
+  return p                                   // ← 恒等函数，收端口、原样返回
+}
+export function composePostgresqlWebhookDispatchPersistence(db: PostgresqlDatabaseClient) {
+  return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db))
+}
+```
+
+一个收**端口**、一个收**数据库**——它们是同一族的**两层**，不是同一层的两个 provider 版本。
+账本把它们配成一对，是因为判别式只看「名字去掉品牌后是否相同」。
+处方不是「合一」，是给造端口那一层一个**不带品牌的名字**（`…For`），
+于是「中立层 + 造层」两个名字各归各位。
+
+**这一条给判别式补了一个已知限度**（写进 §5fs 的账本注释）：
+名字相同 ≠ 同一层。判别式负责**把可疑的对捞出来**，是不是真的一对仍要人读一眼。
+
+连带：`rfc359-w7` 里那条「两个别名装出的东西都能读写」的用例——它的判据本来是
+「两个别名装出来的是同一个东西」，合一后**那个判据自然消失**，改成单份的读写闭环；
+「两个 provider 装出来的一致」由 `describeEachProvider` 两个引擎各跑一遍来证明，
+比原来的互相对读更强。组合根清单 19 → 18。
+
+账本 27 → **25**；identical-twins 102 → 99、adapter-production-consumer 100 → 97。
+
+## §5gc —— 同一件事写了两遍：code-host webhook 的两条装配
+
+`modules/integration/composition.ts` 在账本里占两条，形状一样：
+
+```ts
+// 中立那份：把三行抄在自己体内
+export function createCodeHostWebhookDeliveryConsumer(db: ProviderNeutralDatabase, …) {
+  return createCodeHostEventDeliveryAdapter(createCodeHostEventResponseDirectory(db), {…}, cont)
+}
+// PG 那份：走已有的那层
+export function createPostgresqlCodeHostWebhookDeliveryConsumer(db: PostgresqlDatabaseClient, …) {
+  return createCodeHostWebhookDeliveryConsumerWithPersistence(
+    createCodeHostEventResponseDirectory(db), dispatcher, cont)
+}
+```
+
+而 `…WithPersistence` 的函数体**正是中立那份抄的那三行**。所以这一对不是「两种 provider 行为」，
+是**同一件事在同一个文件里写了两遍**，其中一遍顺手挂了个 provider 名字。
+
+处方：中立那份也改走 `…WithPersistence` 那层（一处实现），PG 那份退役。
+路由目录那一条完全同形，一并处理。
+
+**这一条与 §5gb 的第二对互为镜像**，值得并排记：
+- §5gb：两个名字是同一族的**两层**（一个收端口、一个收 db）——判别式**误配**；
+- §5gc：两个名字确实是同一层，但**其中一个把下层的实现抄了一遍**——判别式**配对配得对**，
+  而修法不是「二选一」，是让抄的那份改去调它抄的东西。
+
+账本 25 → **23**；identical-twins 99 → 97、adapter-production-consumer 97 → 95。
+
+## §5gd —— AC-6 的第一条**通用** sanctioned 判据：按 call shape 认，不按文件名认
+
+AC-6 的 24 条 `OPEN_MIGRATION_DEBT` 一直卡在一个问题上：其中几条**有**正当理由，
+只是写在注释里、而 `SANCTIONED_SINGLE_ENGINE` 的机械判据认不出来。
+前几段一直说「要一条**通用**判据、不逐文件开豁免」——这是第一条。
+
+逐条读那 24 个文件，`rfc189-wg-round.test.ts` 的那一格是这样的：
+
+```ts
+const partial = partialMigrationsDir()   // 把 journal 截断到 0095 之前
+const db = createInMemoryDb(partial)     // 「0095 尚未应用」的库
+```
+
+它测的是**迁移 0095 自己的回填口径**（「0095 之前的行，回填之后该长什么样」），
+所以必须把库停在那条迁移**之前**。迁移链是两套各自落盘的工件（§5fq ②，
+与 `util/migrationsFolder.ts` / `embed.ts` 同一条理由），SQLite 那条链上的第 N 条回填，
+**按定义只能在 SQLite 的链上验**。
+
+### 为什么原来的判据漏了它
+
+`migration-chain` 判据按**文件名**匹配：`/(^|\/)migration-\d/` 或 `/rfc\d+-migration-\d/`。
+而这个文件叫 `rfc189-wg-round.test.ts`——**它做的是迁移回填对账，名字里却没有 `migration`**。
+
+**按文件名分类，分到的是「谁起的名字好」，不是「它在测什么」。**
+
+### 新判据
+
+`frozen-migration-revision`：建库时喂的**不是那份规范迁移目录**，而是一份被截断 / 冻结过的副本
+（`partialMigrationsDir` / `createInMemoryDb(partial…` / 体内出现 `_journal.json`）。
+这是 call shape，不是命名习惯。
+
+实测只有这一个文件命中（其余 23 个都是 `createInMemoryDb(MIGRATIONS)`），
+所以它**没有顺手把别的文件也洗白**——`OPEN_MIGRATION_DEBT` 24 → **23**，
+而 `TEST_ENGINE_HARDCODING_DEBT` 仍是 330：那一格**没有消失**，只是从「债」挪到了「有理由」。
+两个数字的差别正是这份账本当初拆成两条的意义。
+
+## §5ge —— 「自己造 vs 让人注入」的第三次，这次用**缺省实参**收口
+
+`agentLaunchResourceOperations`（infrastructure）与 `agentLaunchResources`（composition）
+在账本里各占一条，是同一件事的两层。拆开看，三件事里两件是老形状：
+
+| | SQLite 那份 | PostgreSQL 那份 |
+| --- | --- | --- |
+| `loadVisibleAgent` | 体内 `getAgentById` + `canViewResource` | 转交注入的 `input.agents.get` |
+| `validateHostWorkflow` | 体内 `validateWorkflowDef(def, await loadWorkflowValidationContext(db))` | 转交注入的 `input.workflowValidation.validate` |
+| `ensureHostWorkflow` | 同一条 upsert | 同一条 upsert，**只多写了个 `.run()`** |
+
+第三行那个 `.run()` 是 §5ft 的老朋友：中立句柄上 `await` 就够，两个引擎都成立。
+
+前两行又是 §5fy / §5gb 的「装配责任放在了不同的地方」。但这一次没有照搬「两边都由调用方注入」
+——那会让 SQLite 的两个 bootstrap 调用点都得凭空写两个适配器。改用**可选实参**：
+
+```ts
+createAgentLaunchResourceOperations({ db, agents?, workflowValidation? })
+// 不给 ⇒ 用建立在 db 上的缺省实现（原 SQLite 体内那两段）
+```
+
+于是 SQLite 侧调用点只从 `f(db)` 变成 `f({ db })`，语义一格不动；
+PG 侧照旧把自己的两份传进来。**同一条处方有两种收口姿势，挑哪种看「谁的调用点更多」。**
+
+账本 23 → **21**；identical-twins 97 → 93、adapter-production-consumer 95 → 91。
+
+（本节验证时 `rfc165-agent-launch` 等三格红，追下去是 `helpers/gitHttpRemote.ts` 起真 git 远端
+——本机 git 被 Xcode 许可门卡住所致，与本次改动无关。）
+
+## §5gf —— 转交式**函数**别名：§5fu 的判别式漏掉的另一半
+
+§5fu 一次退役 14 对纯装配别名，判别式是 `export const <brand> = <neutral>`。
+可同一件事还有另一种写法：
+
+```ts
+export function createPostgresqlIdentityAccessRuntime(
+  input: CreateIdentityAccessRuntimeInput,
+): IdentityAccessRuntime {
+  return createIdentityAccessRuntime(input)      // ← 函数体只有这一行
+}
+```
+
+`export const` 认得出，`export function ... { return 中立那份(input) }` 认不出——
+**同一件事、两种语法，判别式只写了一种。** 补上之后扫出三处，其中两处是真别名
+（identity-access 运行时、digital-employee 装配），一并退役。
+
+第三处是 `server.ts` 的 `composeSqlite/PostgresqlAppDeps`——它**不是**别名：
+两臂转交给的是**不同的**目标（`composeProviderAppDeps` vs `composeSqliteApplicationDeps`），
+是真的两套装配，留着。**判别式捞出来的仍然只是嫌疑，是不是别名要看转交目标一不一样。**
+
+账本 21 → **19**。
+
+### 一次自伤，记在这里
+
+退役 `composePostgresqlDigitalEmployee` 时做了全仓裸 `str.replace`，而
+`composePostgresqlDigitalEmployee` **是** `composePostgresqlDigitalEmployeeExecution` 的前缀，
+于是后者被一起改名、撞上同文件已有的 `composeDigitalEmployeeExecution`。
+typecheck 当场咬住了代码那部分；**但它还把账本里那一行的文本也改坏了**
+（账本记的就是符号名，自然在替换范围内），而那一行 typecheck 看不见——
+是 `rfc359-w5-same-file-provider-pairs` 的逐条相等判据把它揪出来的。
+批量改名一律走词边界正则，已落 `docs/dev-gotchas.md`。
+
+## §5gg —— 两条「不该由本轮顺手定」的，把 blocker 写准
+
+继续扫剩下的 drift，两条确认**不是**能顺手合的：
+
+- `triggerExecution`：SQLite 那份自己拼 `StartExecutionRequest` 再走
+  `startExecution(db, actor, …)`（legacy 启动路径），PG 那份转交注入的
+  `launches.launch(request)`（kernel 启动路径）。**又是那两套启动架构**，
+  与 `actionExecutionEnvironment` / `digitalEmployeeExecution` 同一个第三层 blocker。
+- `resourcePackageMaintenance`：`db` 两边都已中立，差别有二——「谁提供 activity 登记表」
+  （§5fy 老形状，可用缺省实参收口）；以及 **legacy 工件回收链**：SQLite 那份串了
+  「当前格式 → 旧格式」两级回收，PG 那份只读当前格式。
+  **第二点不是引擎差异，是版本兼容尾巴**——它绑的是「这台机器升级前跑过旧版本」，
+  不是「这台机器用哪种数据库」。合一之前得先回答「那条回落还要留多久、能不能改成一次性迁移」，
+  **这个问题不该由本轮顺手定**，所以留在账本里，把理由写准。
+
+## §5gh —— AC-6 的甲类量出来了：23 条里 7 条是同一个根因，而我**没有**给它开通用判据
+
+§5gd 立了第一条通用 sanctioned 判据（`frozen-migration-revision`，按 call shape 认）。
+顺手把剩下 23 条按同样方式量了一遍，发现**7 条共用一个形状**：
+
+| | |
+| --- | --- |
+| `architecture/rfc329-mcp-surface-guard` · `rfc221-login-policy-routes` · `rfc257-webhook-error-codes` · `rfc305-architecture-lock` · `rfc310-pr7b-handover` · `rfc349-daemon-provider-core` · `rfc359-execution-contract-resource-adapter` | 那处 `createInMemoryDb` 是喂给 `createApp`（或 `composeSqlite*` 组合根）的 |
+
+写一条「被测物是 SQLite 组合根」的判据很容易，**一次就能把 23 压到 16**。我没有写，理由是：
+
+**那条判据分不出「组合根就是被测物」与「组合根只是顺手的脚手架」。**
+`rfc329-mcp-surface-guard` 数的是**那个根挂了哪些路由**——根确实是被测物；
+可 `rfc257-webhook-error-codes` 断言的是 webhook 的错误码，那是**与 provider 无关的行为**，
+`createApp` 只是它借来起应用的架子。前者 sanctioned 是对的，后者 sanctioned 就是
+**把一处真实的覆盖缺口洗成绿数字**——而这正是本 RFC 存在的理由。
+
+两者的差别**没法机械判**（都长成 `createApp({ …, db })`）。所以这 7 条留在债里，
+并在这里记清它们是**一簇、一个根因**：
+
+> `createApp` 的 `db` 形参写死 `DbClient`，而 `cli/start.ts` 在**选 provider 之前**
+> 就把 secretBox 等都备齐了——两个组合根的**装配签名不对称**，不是「PG 缺了 SQLite 有的能力」。
+> 正解是把 SQLite 根的签名与 PG 根对齐（`rfc221` 的注释早就指到 plan §5bg），
+> 那之后这 7 条里「根就是被测物」的几条会自然消失，剩下的才是真正该转双引擎的。
+
+**记这一条的意义**：AC-6 剩下的 23 不是 23 件事，是「7 条等根合一 + 16 条各自的事」。
+把它写出来，下一个人不用再把这 7 条挨个读一遍才发现它们是同一件事——
+也不会因为「一条判据能压 7 条」就顺手把它写了。

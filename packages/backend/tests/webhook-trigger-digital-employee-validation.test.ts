@@ -9,7 +9,7 @@ import {
   employeeDefinitions,
   employeeTypePackages,
 } from '../src/db/schema'
-import { assertSqliteWebhookTriggerSaveable } from '../src/modules/integration/infrastructure/sqliteWebhookTriggerValidation'
+import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
 import { createUser } from '../src/services/users'
 import { ValidationError } from '../src/util/errors'
 import {
@@ -80,7 +80,7 @@ describeEachProvider('Webhook Digital Employee trigger validation', (harness) =>
     }
 
     await expect(
-      assertSqliteWebhookTriggerSaveable(
+      assertWebhookTriggerSaveable(
         scheduledTaskRuntime(db).operations,
         actor,
         integrationTriggerResourceAuthority(db, actor),
@@ -103,7 +103,7 @@ describeEachProvider('Webhook Digital Employee trigger validation', (harness) =>
 
     let thrown: unknown
     try {
-      await assertSqliteWebhookTriggerSaveable(
+      await assertWebhookTriggerSaveable(
         scheduledTaskRuntime(db).operations,
         actor,
         integrationTriggerResourceAuthority(db, actor),

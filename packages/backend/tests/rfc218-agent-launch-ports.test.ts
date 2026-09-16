@@ -44,7 +44,7 @@ import {
   startAgentTask,
   validateAgentLaunchShape,
 } from '../src/services/agentLaunch'
-import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
@@ -336,7 +336,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       scratch: true,
     })
     const task = await startAgentTask(
-      composeSqliteAgentLaunchResourceOperations(db),
+      composeAgentLaunchResourceOperations({ db: db }),
       daemonActor(),
       ported.id,
       body,
@@ -365,7 +365,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
     const appHome = makeTempDir('aw-rfc218-b4z-')
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const task = await startAgentTask(
-      composeSqliteAgentLaunchResourceOperations(db),
+      composeAgentLaunchResourceOperations({ db: db }),
       daemonActor(),
       solo.id,
       StartAgentTaskSchema.parse({ name: 't', description: 'fix it', scratch: true }),

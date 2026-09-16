@@ -39,7 +39,7 @@ import {
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
-import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
   composeSqliteTaskExecutionProviderRuntime,
@@ -154,6 +154,7 @@ import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { startMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
+import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
@@ -1837,7 +1838,7 @@ async function composeSqliteProviderSession(
       identityAccess,
     ),
     agentLaunchResources: Object.freeze({
-      resources: composeSqliteAgentLaunchResourceOperations(db),
+      resources: composeAgentLaunchResourceOperations({ db }),
       integrity: agentResourceIntegrity.launch,
     }),
   })
@@ -2336,7 +2337,12 @@ async function composeSqliteProviderSession(
   // RFC-303: orphan process/session repair above is the release proof for the
   // previous daemon. Reconcile durable launch barriers/effects before HTTP or
   // auto-resume can attach a new task driver.
-  const webhookTerminalControl = composeMrTerminalControl(db)
+  // RFC-359 AC-1（plan §5fy）：终端控制的装配收成一份后，`taskTermination` 由**调用方**提供
+  // （PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
+  const webhookTerminalControl = composeMrTerminalControl({
+    db,
+    taskTermination: composeTaskSourceTermination(db),
+  })
   await webhookTerminalControl.reconcileOnBoot()
   const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)
   const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)

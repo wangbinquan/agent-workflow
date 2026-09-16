@@ -98,7 +98,7 @@ import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/reso
 import { tasks, workflows } from '@/db/schema'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { composePostgresqlAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import {
   composePostgresqlTaskExecutionProviderRuntime,
   type SelectedPostgresqlTaskExecutionProviderRuntime,
@@ -120,7 +120,7 @@ import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-executio
 import {
   composeWorkgroupTaskRoomClarifyParticipantFactory,
   createCollaborationRuntimeMechanics,
-  createPostgresqlCollaborationCommandContext,
+  createCollaborationCommandContext,
 } from '@/modules/collaboration/composition'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import {
@@ -138,12 +138,12 @@ import {
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployeeTaskCatalogSource,
-  composePostgresqlDigitalEmployee,
+  composeDigitalEmployee,
   composeDigitalEmployeeBootstrapReadsFor,
   composeDigitalEmployeeWriterCutoverFor,
   createDigitalEmployeeResourceCatalogAclProviders,
   createEmployeeInputArtifactStore,
-  createPostgresqlEmployeeReactionRoundQueries,
+  createEmployeeReactionRoundQueries,
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
@@ -224,8 +224,8 @@ import {
 } from '@/modules/integration/composition/webhookAdmission'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import {
-  composePostgresqlWebhookDispatchPersistence,
-  composePostgresqlWebhookTriggerServiceDependencies,
+  composeWebhookDispatchPersistenceFor,
+  composeWebhookTriggerServiceDependenciesFor,
   createPostgresqlWebhookExecutionRuntime,
 } from '@/modules/integration/composition/webhookDispatch'
 import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
@@ -234,11 +234,11 @@ import {
   composeWebhookIngressPersistenceFor,
 } from '@/modules/integration/composition/webhookIngress'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
-import { composePostgresqlMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import { createPostgresqlWebhookRepositoryResolver } from '@/modules/integration/infrastructure/webhookRepositoryResolver'
+import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
+import { createWebhookRepositoryResolver } from '@/modules/integration/infrastructure/webhookRepositoryResolver'
 import {
-  createPostgresqlCodeHostWebhookDeliveryConsumer,
-  createPostgresqlCodeHostWebhookRoutingDirectory,
+  createCodeHostWebhookDeliveryConsumer,
+  createCodeHostWebhookRoutingDirectory,
 } from '@/modules/integration/composition'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import {
@@ -247,7 +247,7 @@ import {
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
 import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import { composePostgresqlEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from '@/modules/event-center/composition'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
@@ -459,13 +459,13 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly memory: ReturnType<typeof composePostgresqlMemoryOperations>
   readonly developmentAutomation: ReturnType<typeof composeDevelopmentAutomation>
   readonly digitalEmployee: DigitalEmployeeModuleWithRuntime
-  readonly eventCenter: Awaited<ReturnType<typeof composePostgresqlEventCenter>>
+  readonly eventCenter: Awaited<ReturnType<typeof composeEventCenter>>
   readonly fusion: ReturnType<typeof composePostgresqlFusionOperations>
   readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
   /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
   readonly mcpRuntimeTests: ReturnType<typeof getMcpRuntimeTestService>
-  readonly webhookTerminalControl: ReturnType<typeof composePostgresqlMrTerminalControl>
+  readonly webhookTerminalControl: ReturnType<typeof composeMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
   readonly intentMaintenance: ReturnType<typeof composeIntentMaintenanceSnapshotQueriesFor>
   readonly resourcePackageActivity: Pick<
@@ -854,18 +854,17 @@ export async function composePostgresqlApplication(
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
   const collaborationRuntime = createCollaborationRuntimeMechanics(input.db)
-  const boundCollaborationContext: CollaborationRouteContext =
-    createPostgresqlCollaborationCommandContext({
-      db: input.db,
-      appHome: input.appHome,
-      taskExecutionReadModels: taskExecutionPersistence.reads,
-      // RFC-359 W1-T2a：问题派发命令端口与 SQLite 是同一份实现；此前这里从未注入，路由必 500。
-      questionDispatches: createQuestionDispatchCommand(input.db),
-      // RFC-359 W1-T2b：快速澄清决定同样是一份实现；蒸馏入队走 PG 侧的 memory 命令面。
-      clarifyDecisions: createClarifyDecisionCommand(input.db, memoryOperations.distillCommands),
-      // RFC-359 W1-T2c：评审决定同样是一份实现（决定 / 评论 / 选择五个事务体跑在 DatabaseSession 上）。
-      reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
-    })
+  const boundCollaborationContext: CollaborationRouteContext = createCollaborationCommandContext({
+    db: input.db,
+    appHome: input.appHome,
+    taskExecutionReadModels: taskExecutionPersistence.reads,
+    // RFC-359 W1-T2a：问题派发命令端口与 SQLite 是同一份实现；此前这里从未注入，路由必 500。
+    questionDispatches: createQuestionDispatchCommand(input.db),
+    // RFC-359 W1-T2b：快速澄清决定同样是一份实现；蒸馏入队走 PG 侧的 memory 命令面。
+    clarifyDecisions: createClarifyDecisionCommand(input.db, memoryOperations.distillCommands),
+    // RFC-359 W1-T2c：评审决定同样是一份实现（决定 / 评论 / 选择五个事务体跑在 DatabaseSession 上）。
+    reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
+  })
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
   const workgroupTurns = composeWorkgroupTurnsOperations(
     input.db,
@@ -903,7 +902,7 @@ export async function composePostgresqlApplication(
       }
     },
   })
-  const agentLaunchResources = composePostgresqlAgentLaunchResourceOperations({
+  const agentLaunchResources = composeAgentLaunchResourceOperations({
     db: input.db,
     agents: {
       get: (actor, agentId) =>
@@ -1256,7 +1255,7 @@ export async function composePostgresqlApplication(
     },
   })
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
-  const webhookTerminalControl = composePostgresqlMrTerminalControl({
+  const webhookTerminalControl = composeMrTerminalControl({
     db: input.db,
     taskTermination: composePostgresqlTaskSourceTermination(input.db),
   })
@@ -1288,7 +1287,7 @@ export async function composePostgresqlApplication(
     }
   }
   const composedWebhookDispatcher = createWebhookDispatcher({
-    persistence: composePostgresqlWebhookDispatchPersistence(input.db),
+    persistence: composeWebhookDispatchPersistenceFor(input.db),
     deliveryPersistence: composeWebhookDeliveryPersistenceFor(input.db),
     identityAccess: integrationIdentityAccess,
     async resolveEventTargetAuthority(userId) {
@@ -1304,7 +1303,7 @@ export async function composePostgresqlApplication(
       taskExecutions: taskExecutionProvider.trigger.taskExecutions,
       digitalEmployeeWorkStart,
     }),
-    resolveRepo: createPostgresqlWebhookRepositoryResolver(input.db, input.secretBox),
+    resolveRepo: createWebhookRepositoryResolver(input.db, input.secretBox),
     admitLaunch: composeWebhookLaunchAdmission(scheduledTaskRuntime.operations),
     terminalControl: webhookTerminalControl,
   })
@@ -1316,7 +1315,7 @@ export async function composePostgresqlApplication(
   const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
   const developmentApprovalGateway = composeApprovalGatewayRunnerFor(input.db)
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
-  const eventCenter = await composePostgresqlEventCenter({
+  const eventCenter = await composeEventCenter({
     db: input.db,
     typePackageDescriptorJsons: [
       developmentEmployeeTypePackage.descriptorJson,
@@ -1332,10 +1331,7 @@ export async function composePostgresqlApplication(
       }),
       approval: composeDevelopmentApprovalEventObserver({ gateway: developmentApprovalGateway }),
     }),
-    routingSubscriptions: createPostgresqlCodeHostWebhookRoutingDirectory(
-      input.db,
-      missionEventContinuation,
-    ),
+    routingSubscriptions: createCodeHostWebhookRoutingDirectory(input.db, missionEventContinuation),
     // RFC-359 AC-6 —— 与 SQLite 根逐字同构的**能力探测**接线。
     // 两个根对 dispatcher 的所有权本来就不同（SQLite 当可选依赖收、PG 自己构造），
     // 所以这里不是简单 `??`：覆盖件只有部分能力时（测试桩通常只有
@@ -1356,7 +1352,7 @@ export async function composePostgresqlApplication(
     // `codeHostDeliveryDispatcher === null ? [] : [...]` 逐字同构。
     deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher)
       ? [
-          createPostgresqlCodeHostWebhookDeliveryConsumer(
+          createCodeHostWebhookDeliveryConsumer(
             input.db,
             webhookDispatcher,
             missionEventContinuation,
@@ -1373,7 +1369,7 @@ export async function composePostgresqlApplication(
       },
     },
   })
-  const webhookTriggerService = composePostgresqlWebhookTriggerServiceDependencies(
+  const webhookTriggerService = composeWebhookTriggerServiceDependenciesFor(
     input.db,
     composeWebhookTriggerValidation(scheduledTaskRuntime.operations, input.configPath),
   )
@@ -1408,7 +1404,7 @@ export async function composePostgresqlApplication(
   const employeeInputArtifacts = createEmployeeInputArtifactStore(
     join(input.appHome, 'artifacts', 'employee-inputs'),
   )
-  const employeeReactionRounds = createPostgresqlEmployeeReactionRoundQueries(input.db)
+  const employeeReactionRounds = createEmployeeReactionRoundQueries(input.db)
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
     db: input.db,
     appHome: input.appHome,
@@ -1500,7 +1496,7 @@ export async function composePostgresqlApplication(
   const persistedTypePackages = await composeDigitalEmployeeBootstrapReadsFor(
     input.db,
   ).listTypePackageDescriptorJsons()
-  const digitalEmployee = composePostgresqlDigitalEmployee({
+  const digitalEmployee = composeDigitalEmployee({
     db: input.db,
     appHome: input.appHome,
     typePackages: [developmentEmployeeTypePackage],

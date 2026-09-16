@@ -35,7 +35,6 @@ const PROVIDER_NAMED = /^(sqlite|postgresql|legacySqlite|legacyPostgresql)/
 export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'cli/postgresqlDaemonApplication.ts',
   'modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts',
-  'modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts',
   // ┌─ RFC-359 W10 —— resource-catalog 这 13 条**逐个核过**的分类。落在这里是因为 W9 已经证明
   // │  「这个数不等于分叉数」，而每一刀都在重新推导同一份分类；把结论钉在账本旁边，下一刀直接接。
   // │  分类判据：**看这份实现在生产里跑在什么句柄上、它的孪生在哪**，不看文件名。

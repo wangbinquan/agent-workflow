@@ -89,43 +89,18 @@ export type PostgresqlCollaborationCommandContextInput = Omit<
   readonly db: PostgresqlDatabaseClient
 }
 
+/**
+ * RFC-359 AC-1（plan §5ga）—— 两个 provider 唯一的一份。旁边那个
+ * `createPostgresqlCollaborationCommandContext` 的函数体与这里**逐字节相同**，
+ * 只差它收的是 `PostgresqlCollaborationCommandContextInput`（= 本输入把 `db` 收窄成
+ * `PostgresqlDatabaseClient`）。而 PG 客户端本来就可赋值给 `ProviderNeutralDatabase`，
+ * 所以这一份直接收得下 PG 的输入，品牌那份已退役。
+ */
 export function createCollaborationCommandContext<I extends CollaborationCommandContextInput>(
   input: I,
 ): CollaborationCommandContext<ProvidedCollaborationCapabilities<I>>
 export function createCollaborationCommandContext(
   input: CollaborationCommandContextInput,
-): CollaborationCommandContext {
-  return createCollaborationCommandContextFromPersistence({
-    ...input,
-    taskAccess: createCollaborationTaskAccessPort(input.db),
-    reviewTaskAccess: createReviewTaskAccessPort(input.db),
-    persistence: {
-      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
-      clarifyQuestions: new DatabaseClarifyQuestionSnapshotReader(input.db),
-      manualQuestions: new DatabaseManualQuestionOpenWriter(
-        input.db,
-        new DatabaseHumanGateOperationJournal(),
-      ),
-      reviewers: new DrizzleReviewNodeReviewerStore(input.db),
-      feedback: new DrizzleTaskFeedbackStore(input.db),
-      clarifyDirectives: createClarifyDirectiveStore(input.db),
-      ...(input.appHome === undefined
-        ? {}
-        : {
-            committedArtifacts: new DatabaseCommittedReviewArtifactReader(input.db, input.appHome),
-          }),
-    },
-    ...(input.appHome === undefined
-      ? {}
-      : { artifacts: new FsHumanGateArtifactStore(input.appHome) }),
-  })
-}
-
-export function createPostgresqlCollaborationCommandContext<
-  I extends PostgresqlCollaborationCommandContextInput,
->(input: I): CollaborationCommandContext<ProvidedCollaborationCapabilities<I>>
-export function createPostgresqlCollaborationCommandContext(
-  input: PostgresqlCollaborationCommandContextInput,
 ): CollaborationCommandContext {
   return createCollaborationCommandContextFromPersistence({
     ...input,

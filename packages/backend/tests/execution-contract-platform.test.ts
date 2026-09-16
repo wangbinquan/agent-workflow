@@ -1043,7 +1043,7 @@ process.stdout.write(JSON.stringify({
  * `composeDigitalEmployeeExecution`（`src/modules/task-execution/composition/digitalEmployeeExecution.ts:291`）
  * 的 `deps.db` 声明成 `DbClient`，它的 `inspect`（同文件 :534-545）用的是 bun:sqlite 的**同步**
  * `.get()`。PostgreSQL 的对等物是另一支 composition —— 同文件 :766 的
- * `composePostgresqlDigitalEmployeeExecution`（装配点 `src/cli/postgresqlDaemonApplication.ts:1459`），
+ * `composeDigitalEmployeeExecution`（装配点 `src/cli/postgresqlDaemonApplication.ts:1459`），
  * 依赖形状也不同。把这两条丢进双引擎跑不是「在 PG 上验同一段生产代码」，而是让 PG 去跑一份
  * 它在生产里根本不会装的实现：`.get()` 返回未 await 的 Promise，`inspect` 于是一律退回
  * `kind: 'pending'`，断言空转。要让它们真的双跑，得先把那两支 composition 的读点收敛成一份

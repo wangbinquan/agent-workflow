@@ -13,7 +13,6 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   AgentLaunchResourceOperations,
   AgentLaunchVisibleAgentQuery,
@@ -39,15 +38,42 @@ function hostWorkflowRow() {
   } as const
 }
 
-export function createSqliteAgentLaunchResourceOperations(
-  db: ProviderNeutralDatabase,
-): AgentLaunchResourceOperations {
-  return Object.freeze({
-    async loadVisibleAgent(actor: Actor, agentId: string) {
+/**
+ * RFC-359 AC-1（plan §5ge）—— **两个 provider 唯一的一份**。
+ *
+ * 合一前一对孪生，三件事里两件的差别都是「**自己造** vs **让人注入**」：
+ *   · `loadVisibleAgent`：SQLite 那份体内 `getAgentById` + `canViewResource`，
+ *     PG 那份转交给注入的 `input.agents.get`；
+ *   · `validateHostWorkflow`：SQLite 那份体内 `validateWorkflowDef(def, await loadWorkflowValidationContext(db))`，
+ *     PG 那份转交给注入的 `input.workflowValidation.validate`。
+ * 第三件 `ensureHostWorkflow` 本来就一样，只差 PG 那份多写了个 `.run()`——
+ * 中立句柄上 `await` 就够（§5ft 同一条）。
+ *
+ * 按 §5fq 三条判据一条都不命中：这不是引擎差异，是**装配责任放在了不同的地方**。
+ * 处方仍是「装配者提供答案」，但这里用**缺省实参**收口：两个口子都可选，
+ * 不给就用建立在 `db` 上的那份缺省实现——于是 SQLite 的两个 bootstrap 调用点一个字都不用改，
+ * PG bootstrap 照旧传自己的那两份。
+ */
+export function createAgentLaunchResourceOperations(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly agents?: AgentLaunchVisibleAgentQuery
+  readonly workflowValidation?: AgentLaunchWorkflowValidation
+}): AgentLaunchResourceOperations {
+  const { db } = input
+  const agents: AgentLaunchVisibleAgentQuery = input.agents ?? {
+    async get(actor: Actor, agentId: string) {
       const agent = await getAgentById(db, agentId)
       if (agent === null || !(await canViewResource(db, actor, 'agent', agent))) return null
       return agent
     },
+  }
+  const workflowValidation: AgentLaunchWorkflowValidation = input.workflowValidation ?? {
+    async validate(definition) {
+      return validateWorkflowDef(definition, await loadWorkflowValidationContext(db))
+    },
+  }
+  return Object.freeze({
+    loadVisibleAgent: (actor: Actor, agentId: string) => agents.get(actor, agentId),
     async ensureHostWorkflow() {
       await db
         .insert(workflows)
@@ -57,29 +83,7 @@ export function createSqliteAgentLaunchResourceOperations(
     async validateHostWorkflow(
       definition: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[0],
     ) {
-      return validateWorkflowDef(definition, await loadWorkflowValidationContext(db))
-    },
-  })
-}
-
-export function createPostgresqlAgentLaunchResourceOperations(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly agents: AgentLaunchVisibleAgentQuery
-  readonly workflowValidation: AgentLaunchWorkflowValidation
-}): AgentLaunchResourceOperations {
-  return Object.freeze({
-    loadVisibleAgent: (actor: Actor, agentId: string) => input.agents.get(actor, agentId),
-    async ensureHostWorkflow() {
-      await input.db
-        .insert(workflows)
-        .values(hostWorkflowRow())
-        .onConflictDoNothing({ target: workflows.id })
-        .run()
-    },
-    async validateHostWorkflow(
-      definition: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[0],
-    ) {
-      return input.workflowValidation.validate(definition)
+      return workflowValidation.validate(definition)
     },
   })
 }

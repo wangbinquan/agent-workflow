@@ -36,7 +36,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 
@@ -1034,7 +1034,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
         cfgPath,
         createIdentityAccessRuntime({ db: db2 }),
         {
-          resources: composeSqliteAgentLaunchResourceOperations(db2),
+          resources: composeAgentLaunchResourceOperations({ db: db2 }),
           integrity: agentIntegrity.launch,
         },
       ),
