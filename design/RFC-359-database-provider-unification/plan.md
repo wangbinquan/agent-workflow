@@ -13308,3 +13308,61 @@ A 组（按行数降序）：`rfc349-task-route-launch-postgresql-adapter`(971) 
 
 逐个过，不一刀切；每迁一个都要求给出**变异验证**（迁移前只红一格、迁移后两格都红），
 否则只是把假池换成了真库而没有换来覆盖。
+
+---
+
+## §5go　第二刀：把一处 PostgreSQL 目录查询从「假池 + 字符串匹配」换成真库
+
+§5gn 留了处置原则：不一刀切，逐个判。这一节是按那条原则做的第二刀，也顺带量清了
+**组合根层**到底还欠多少。
+
+### 先把「欠多少」量准
+
+§5gn 的 17 个文件是按 `function postgresqlFixture` 数的**文件**。换个更有意义的口径
+——按 `src/**/composition*` 下的 `composePostgresql*` **组合根**数，用
+`rfc359-w5-provider-runtime-exercised` 同一套 AST 判据（值级 import 绑定 + callee 位置调用）
+统计每个根被哪些测试构造、那些测试是不是真库：
+
+| | 个数 |
+| --- | --- |
+| `composePostgresql*` 组合根总数 | 13 |
+| 跑过真 PostgreSQL | 10 |
+| 只在假池文件里构造 | 2 |
+| 从未构造 | 0 |
+
+（第一版量出 3 个，其中 `composePostgresqlTaskExecutionProviderRuntime` 是**误判**：
+它在 `helpers/eachProviderTaskExecution.ts` 里被构造，那个 helper 收的就是 `ProviderHarness`，
+只是写成 `const { db } = harness` 解构，我那条「文本里有没有 `harness.db`」的启发式没认出来。
+量之前先验样本，别信一条没校准过的启发式。）
+
+**所以组合根这一层基本还完了**（`rfc359-w5-provider-runtime-exercised` 的账本已经是空的）。
+§5gn 那 17 个文件欠的是**更下面一层**：端口 / 适配器上的假池。两件事不要混为一谈。
+
+### 这一刀：`rfc349-maintenance-disk-provider`
+
+PostgreSQL 那格原来喂假池，回一组罐头的 `{ database_bytes: '4096', reclaimable_bytes: '512' }`，
+然后断言「发出的 SQL 文本里出现过 `pg_stat_user_tables`」。
+
+改成在真库上跑：`harness.applicationBinding` 在 PG 那侧**直接交出真的**
+`InstrumentedPostgresqlDatabaseRuntime`，正是 `composePostgresqlMaintenanceDiskOperations` 要的入参。
+
+**没有**把 SQLite 那格并进来：两侧**资源形态**不同（§5fq ②）——SQLite 的 freelist / 文件字节数
+要一个真文件库才有意义（那格用的就是 `new Database(<file>)`，本来就落在 `real-file-database` 判据里），
+PostgreSQL 问的是服务端目录统计。同一个被测面在两个引擎上问的是两件不同的事，
+不该硬塞进一组断言。断言也跟着换形态：字节数随实例而变，能钉的是「**真的问出来了**」
+——是有限数、非负、`dbFileBytes > 0`。
+
+**变异验证（这一刀的价值证据，也是最能说明假池问题的一个例子）**：
+把生产里的 `pg_catalog.pg_stat_user_tables` 改成 `pg_stat_user_tables_MUTANT` ⇒
+新用例红在 `PostgresError: relation "pg_catalog.pg_stat_user_tables_mutant" does not exist`。
+**而原来那条断言会照过**——`toContain('pg_stat_user_tables')` 在
+`pg_stat_user_tables_MUTANT` 上是 true。假池不只是「弱一点」：
+它在这个具体例子里对「表名写错」这类错误是**完全失明**的。
+
+### 顺手又踩一个坑：改测试标题会撞到按名字钉死的账本
+
+`tests/helpers/rfc349FunctionalEvidence.ts` 给每条验收组挂 `{ testFile, testName }`，
+守卫拿 `testName` 去目标文件里 `toContain("test('<名字>'")`。于是**只改标题**就会红，
+而且红在**另一个文件**上，报错里看不出是重命名干的。
+跟「按文件名钉死的 digest 守卫」同一个家族：跨文件、按字符串做外键、编译器管不着。
+已落 `docs/dev-gotchas.md`（定式：改了标题就 grep 一遍提到这个文件名的测试，一起跑）。

@@ -214,7 +214,8 @@ export const RFC349_T10_FUNCTIONAL_EVIDENCE = Object.freeze([
       {
         lane: 'backend-main',
         testFile: 'packages/backend/tests/rfc349-maintenance-disk-provider.test.ts',
-        testName: 'PostgreSQL reports catalog storage and never emits SQLite mechanisms',
+        // RFC-359 AC-6（plan §5go）：这一格从假池改成真 PostgreSQL 目录查询后重命名。
+        testName: 'PostgreSQL 在真目录上报出存储用量，且不掺任何 SQLite 机制',
       },
       {
         lane: 'frontend-main',
