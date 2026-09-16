@@ -481,6 +481,20 @@ grep -rln "<被改文件的 basename 去掉 .test.ts>" packages/backend/tests --
 
 ## 本地自查要跑**仓库自己的脚本**，别手搓文件清单（2026-09-14 连撞两次）
 
+**2026-09-16 第三次，这次的代价是把 main 推红**（RFC-359 §5gu）：改了 `src/server.ts` 之后，
+我没跑 `scripts/tests-referencing.sh`，而是手写了一个「找 `readFileSync` 且提到该文件名的测试」的
+过滤器拿到 50 个文件，**又把它窄成只跑 `tests/architecture/` 一个目录**——理由是「架构守卫都在那儿」。
+那条咬住我的 SHA-256 摘要守卫（`rfc359-w29-unstarted-application-composition`）在 `tests/` 下，
+不在那个目录里。**判据放在哪个目录是历史，不是分类。**
+
+实测对照：`scripts/tests-referencing.sh server.ts oidc-auth.ts` 交出 **68** 个文件、
+包含那条摘要守卫，跑完 728 例全绿。仓库的工具一次就罩住了，手搓的两次都没有。
+
+**定式**：改了 `src/` 下任何文件，提交前跑
+`bun test $(scripts/tests-referencing.sh <改过的文件名…> | sed 's|^packages/backend/||')`
+（`$( )` 是必须的，zsh 不对裸 `$VAR` 分词——见本文件那条）。
+
+
 两次主干红，同一个根因：自查命令**看上去绿，实际什么都没查**。
 
 1. **lint**：`git status --porcelain | awk '{print $NF}' | xargs eslint` 只覆盖**当前未提交**的

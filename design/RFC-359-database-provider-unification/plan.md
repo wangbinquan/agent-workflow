@@ -13635,21 +13635,31 @@ CI 现在是绿的说明分片没把它们排到一起——又一颗埋着的�
 ### 为什么半径没罩住它
 
 本 session 早先就记过这条教训（摘要守卫里**一个符号名都没有**，按符号名找依赖必然漏），
-处置也写过：**按「改动的源文件名」找那些 `readFileSync` 的测试**。
+处置也写过：**按「改动的源文件名」找依赖**——而仓库里正好有一条现成命令干这件事
+（`scripts/tests-referencing.sh`，见下）。
 
 这次我做的是 `bun test packages/backend/tests/architecture/` ——**把「架构守卫」默认等同于
 「`tests/architecture/` 目录」**。而这条摘要守卫在 `tests/`，不在那个目录下。
 判据放在哪个目录是**历史**，不是分类；按目录猜半径，等于把「我以为守卫都在哪」当成了事实。
 
-正确的半径命令（这次实跑 50 个文件、467 例全绿）：
+正确的半径命令**仓库里早就有**，这才是这一条真正的教训：
 
 ```bash
-# 改了 src/server.ts 与 src/routes/oidc-auth.ts
-python3 - <<'PY'   # 列出所有 readFileSync 且提到这两个文件名的测试
-...
-PY
-bun test $(cat list.txt)     # 注意：zsh 下必须用 $(cat …) 或 ${=VAR}
+scripts/tests-referencing.sh server.ts oidc-auth.ts        # 列出按文本引用了这些路径/符号的后端测试
+bun test $(cat list.txt)                                    # zsh 下必须 $(cat …) 或 ${=VAR}，裸 $VAR 不分词
 ```
+
+`scripts/tests-referencing.sh` 的头注释写着它就是为这件事存在的：
+「改文件名 / 删文件的刀，本地批次要按这个清单选，而不是按 RFC 号」，
+后面还记着两次因为不按它选而漏掉账本的事故（2026-09-05 D18 / D19a）。
+
+**实测它能罩住这次的红**：`scripts/tests-referencing.sh server.ts oidc-auth.ts` 交出 **68** 个文件，
+`rfc359-w29-unstarted-application-composition` 就在里面。跑完 **728 例全绿**。
+
+所以这条不是「半径该怎么算」——仓库已经给出答案了。是**我没用仓库的工具，自己手搓了一个更窄的**
+（先手写 `readFileSync` 过滤拿到 50 个，再把它窄成 `tests/architecture/` 一个目录）。
+`docs/dev-gotchas.md` 里那条「本地自查要跑**仓库自己的脚本**，别手搓文件清单（2026-09-14 连撞两次）」
+说的就是这件事，这是第三次。
 
 ### 同一条命令里又踩了一次 zsh 分词
 
