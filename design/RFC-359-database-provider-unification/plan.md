@@ -13787,3 +13787,56 @@ SQLite 专属启动面上」。AC-6 剩下的 14 条里 `start-task-deps` 也指
 
 验证：`tsc` / `eslint --max-warnings 0` / prettier 干净；半径 51 文件 585 例全绿；
 `tests/architecture/` 706 全绿；census 重跑后 highwater 无增长。
+
+---
+
+## §5gx　更正 §5gv 的第 ② 步：那批 `Postgresql*` 名**不该现在改**
+
+§5gv 把启动面合一拆成四步，第 ② 步写的是「`PostgresqlTaskRouteWorkspaceParticipant` 中立化（待测）」。
+测完了，**结论是反的：不该做。**
+
+### 测了什么
+
+那一带是一整族名字，全部零 SQLite 孪生：
+
+| 符号 | 带 `Postgresql` 的文件数 | 带 `Sqlite` 的 |
+| --- | --- | --- |
+| `…TaskRouteWorkspaceParticipant` | 6 | **0** |
+| `…TaskRouteWorkspaceRepository` | 4 | **0** |
+| `…WorkgroupRouteLaunchResources` | 2 | **0** |
+| `…TaskWorkspaceMaterializer` | 5 | **0** |
+| `…TaskWorkspacePreparation` | 3 | **0** |
+| `…TaskRouteWorkspaceDependencies` | 4 | **0** |
+
+按 §5gw 那条「无孪生 ⇒ 命名债 ⇒ 改名」的判据，六个都该改。**但那条判据在这里用错了地方。**
+
+### 为什么不该改：`proposal.md` AC-1 第三款自己划了这条线
+
+第三款把 provider 命名分成两类，处方不同——而且明确写了**哪一类要保留前缀**：
+
+> **登记在册的真分叉保留其 provider 名**，因为改成中立名反而会掩盖
+> 「这份实现只服务一个引擎」这个必须一眼可见的事实。
+
+`withPostgresqlSerializableTaskExecution`（§5gw 改掉的那个）属于**命名债**：
+它的函数体就是转交给一个**两个引擎都实现了**的中立能力，前缀不指向任何区分。
+
+这一族不是。它们是**启动内核那条路的类型面**，而那条路**今天确实只有 PostgreSQL 在走**
+（SQLite 侧走 legacy `startTask`，见 §5gv 的对照表）。把 `Postgresql` 去掉，
+读代码的人就再也看不出「这条启动路只服务一个引擎」——**那正是本 RFC 最想让人一眼看见的事实**。
+
+### 所以第 ② 步作废，四步变三步
+
+启动面合一的实际形状修正为：
+
+1. 内核换用 `DatabaseSession.serializable` + `db` 放宽（§5gw 已做完前半的改名；放宽等到真有调用方需要）；
+2. ~~workspace participant 中立化~~ —— **取消**：它的前缀是准确的，等第 3 步之后再谈；
+3. 把 SQLite 侧调用方从 legacy `startTask` 迁到内核（**大头**，产品行为面的真改动）；
+4. 退役 `services/task` 的 legacy 启动面。
+
+**改名这件事的次序是：先合实现，再改名。** 反过来做，中间那段时间里名字在撒谎。
+
+### 记一条判据使用规则
+
+「无孪生 ⇒ 命名债 ⇒ 改名」这条判据**只在被测物本身是中立实现时成立**。
+被测物真的只服务一个引擎时，同样的「无孪生」指向的是相反的处方——**保留前缀**。
+判据给的是嫌疑，不是裁决；这已经是本 RFC 第 N 次在同一件事上摔跤（§5gb / §5gc / §5gf / §5gh → §5gi）。
