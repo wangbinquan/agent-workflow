@@ -15153,3 +15153,27 @@ Error: foreign-legacy-actor-projection
 - `rfc359-w5hn-scheduled-launch-provider-parity` **6/6 双引擎绿**（修前：PG 三条全红）
 - 全部架构守卫（`tests/architecture/` + `tests/*architecture*.test.ts`）**796/796**
 - 改动文件 basename 半径 + 架构全量：**205 文件 2423/2423**（4 skip）
+
+### 补：把缺陷**这一类**钉在端口上，而不只是钉在那条启动路上
+
+上一节的基线走的是定时启动那条路。但缺陷的根在**端口契约**，不在某条路：
+启动资源面收的是 `Actor`，那它就必须对**每一种**能合法出现在这个位置的 actor 成立。
+而生产上能走到这里的 actor 有两类出身：凭据边缘 `mintDirectAuthority` 铸的（直连 HTTP），
+和 `delegatedRequests.forXxx(...)` 铸的（定时 / webhook / 子任务调用 / 任务执行）。
+**类型面把两类抹成了同一个 `Actor`**，所以只能由行为判据来守。
+
+`rfc359-w5hn-launch-resources-delegated-authority`（`describeEachProvider`，8 条）：
+四种委派入口各铸一个 actor，逐个喂给单代理 / 工作组的可见性查询，两个引擎都必须取得到。
+另带两条控制项——
+
+- **变异证据**：同一个委派 actor 交给**曾经的生产写法**
+  （`directOperationAuthority(identityAccess.directAuthority, actor)`）当场抛
+  `foreign-legacy-actor-projection`；
+- **反同义反复**：`admitDaemonIdentity` 铸的直连 actor 仍可被投影，
+  证明上一条不是「这个函数永远抛」。
+
+实做变异（把 `loadVisible` 换成直接抛）**两个引擎同时红**，判据确实咬得住。
+
+**值得记的一句**：这条规律早就写在 `auth/session.ts:289-305` 的注释里——
+「hand-built actors fail with `foreign-legacy-actor-projection`」。**知识在，装配还是踩了**。
+注释挡不住第二个人在另一个组合根里重写一遍；能挡住的只有一条会红的用例。

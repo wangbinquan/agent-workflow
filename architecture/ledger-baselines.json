@@ -294,10 +294,7 @@
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
       "baseline": 16,
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**修一处 PostgreSQL 专属功能缺陷**）：工作组启动的资源面收成两个 provider 唯一的一份（`infrastructure/workgroupLaunchResourceOperations.ts`，与 agent 那份 §5ge 同形），它是本条债唯一新增的三行——与紧邻的 `agentLaunchResourceOperations.ts` 三行逐字对称。换来的是三个组合根（`server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts`）各自那份手拼实现全部删除，以及 `sqliteTaskRouteLaunchOperations.ts` 不再为补 `ensureHostWorkflow` 去 import legacy 工作组启动（该行同批销账）。为什么必须做：PG 根注入的实现把 actor 投影成 direct authority 再查资源目录，而 `directOperationAuthority` 只认凭据边缘铸出来的那一个投影；定时 / webhook / 子任务拿到的是**委派** actor，于是 PostgreSQL 上定时启动单代理 / 工作组任务**当场 500**（`foreign-legacy-actor-projection`），SQLite 上一切正常。新基线 `rfc359-w5hn-scheduled-launch-provider-parity` 先红后绿地锁住这条。"
-      }
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
     },
     {
       "id": "rfc329-mcp-surface-exemptions",
@@ -808,10 +805,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1685,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**修一处 PostgreSQL 专属功能缺陷**）：工作组启动的资源面收成两个 provider 唯一的一份（`infrastructure/workgroupLaunchResourceOperations.ts`，与 agent 那份 §5ge 同形），它是本条债唯一新增的三行——与紧邻的 `agentLaunchResourceOperations.ts` 三行逐字对称。换来的是三个组合根（`server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts`）各自那份手拼实现全部删除，以及 `sqliteTaskRouteLaunchOperations.ts` 不再为补 `ensureHostWorkflow` 去 import legacy 工作组启动（该行同批销账）。为什么必须做：PG 根注入的实现把 actor 投影成 direct authority 再查资源目录，而 `directOperationAuthority` 只认凭据边缘铸出来的那一个投影；定时 / webhook / 子任务拿到的是**委派** actor，于是 PostgreSQL 上定时启动单代理 / 工作组任务**当场 500**（`foreign-legacy-actor-projection`），SQLite 上一切正常。新基线 `rfc359-w5hn-scheduled-launch-provider-parity` 先红后绿地锁住这条。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5106,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**修一处 PostgreSQL 专属功能缺陷**）：工作组启动的资源面收成两个 provider 唯一的一份（`infrastructure/workgroupLaunchResourceOperations.ts`，与 agent 那份 §5ge 同形），它是本条债唯一新增的三行——与紧邻的 `agentLaunchResourceOperations.ts` 三行逐字对称。换来的是三个组合根（`server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts`）各自那份手拼实现全部删除，以及 `sqliteTaskRouteLaunchOperations.ts` 不再为补 `ensureHostWorkflow` 去 import legacy 工作组启动（该行同批销账）。为什么必须做：PG 根注入的实现把 actor 投影成 direct authority 再查资源目录，而 `directOperationAuthority` 只认凭据边缘铸出来的那一个投影；定时 / webhook / 子任务拿到的是**委派** actor，于是 PostgreSQL 上定时启动单代理 / 工作组任务**当场 500**（`foreign-legacy-actor-projection`），SQLite 上一切正常。新基线 `rfc359-w5hn-scheduled-launch-provider-parity` 先红后绿地锁住这条。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -870,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4591,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**修一处 PostgreSQL 专属功能缺陷**）：工作组启动的资源面收成两个 provider 唯一的一份（`infrastructure/workgroupLaunchResourceOperations.ts`，与 agent 那份 §5ge 同形），它是本条债唯一新增的三行——与紧邻的 `agentLaunchResourceOperations.ts` 三行逐字对称。换来的是三个组合根（`server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts`）各自那份手拼实现全部删除，以及 `sqliteTaskRouteLaunchOperations.ts` 不再为补 `ensureHostWorkflow` 去 import legacy 工作组启动（该行同批销账）。为什么必须做：PG 根注入的实现把 actor 投影成 direct authority 再查资源目录，而 `directOperationAuthority` 只认凭据边缘铸出来的那一个投影；定时 / webhook / 子任务拿到的是**委派** actor，于是 PostgreSQL 上定时启动单代理 / 工作组任务**当场 500**（`foreign-legacy-actor-projection`），SQLite 上一切正常。新基线 `rfc359-w5hn-scheduled-launch-provider-parity` 先红后绿地锁住这条。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -908,10 +896,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24710,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**修一处 PostgreSQL 专属功能缺陷**）：工作组启动的资源面收成两个 provider 唯一的一份（`infrastructure/workgroupLaunchResourceOperations.ts`，与 agent 那份 §5ge 同形），它是本条债唯一新增的三行——与紧邻的 `agentLaunchResourceOperations.ts` 三行逐字对称。换来的是三个组合根（`server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts`）各自那份手拼实现全部删除，以及 `sqliteTaskRouteLaunchOperations.ts` 不再为补 `ensureHostWorkflow` 去 import legacy 工作组启动（该行同批销账）。为什么必须做：PG 根注入的实现把 actor 投影成 direct authority 再查资源目录，而 `directOperationAuthority` 只认凭据边缘铸出来的那一个投影；定时 / webhook / 子任务拿到的是**委派** actor，于是 PostgreSQL 上定时启动单代理 / 工作组任务**当场 500**（`foreign-legacy-actor-projection`），SQLite 上一切正常。新基线 `rfc359-w5hn-scheduled-launch-provider-parity` 先红后绿地锁住这条。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -928,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "653e693fb9bbaf9368322fd24ad05fa1ea8a2db3",
-    "contentDigest": "sha256:61f3e8736e0127ca2948c4100b2b261448a5f05401a24d2f6685cbab653fc413",
+    "currentSnapshotSha": "981b2f89048315a14fc8c7fe810699c2bfd5ec77",
+    "contentDigest": "sha256:690e434d85788b899bcd554641e766af3b25fb658a36b8bdc720d1d362b9dccc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
