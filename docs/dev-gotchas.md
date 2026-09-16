@@ -431,6 +431,33 @@ EOF
 **挑读点**：把断言前那次读的 `await` 去掉，PG 道立刻拿 `Promise {}` 去比而失败，
 SQLite 道不受影响。这才是「PG 道确实在执行判据」的可靠探针。
 
+## PG 道特有：fire-and-forget 的后台活会在连接池关掉后回来，报 `Connection closed`（RFC-359 §5gj 实测，2026-09-16）
+
+把一份 HTTP 面测试迁到双引擎后，PG 那遍冒出 SQLite 那遍**零次**的告警：
+
+```
+WARN [development-missions] mission drive after route mutation failed
+err="Failed query: select … from "agent_workflow"."development_feedback_ledger" where …"
+```
+
+**别按表名去查 schema**：这个告警**每次跑报的表还不一样**（这次 feedback_ledger、
+下次 development_effects）——一看就该想到是生命周期竞态，不是哪张表的定义问题。
+真因要沿 `error.cause` 链才看得见（drizzle 把它包成 `Failed query: …`）：
+**`PostgresError: Connection closed`**。
+
+成因是一个**两个引擎都有、但只有 PG 会显形**的形状：路由里 fire-and-forget 地起后台活
+（`void doSomething().then().catch()`，路由不 await 它）。
+bun:sqlite 是**同步**驱动，这条链不让出事件循环就跑完了；
+PG 要真走 I/O，于是可能在应用关闭、连接池随之关掉之后才回来。
+
+两条用得上的结论：
+
+1. **这类告警本身多半是测试噪声**，不是产品缺陷——生产里连接池不会在路由刚返回就关。
+   先确认它落在 `catch` 里、用例全绿，再判。
+2. **但不要在 PG 道写依赖「后台活已经跑完」的断言**。SQLite 道因为驱动同步会**稳定通过**，
+   PG 道则取决于连接池什么时候关。这是「同一份判据、两个引擎结论不同」的隐蔽来源，
+   而且它的失败长得像 flaky，很容易被「重跑就过了」糊过去（那是被明令禁止的通过依据）。
+
 ## 本地自查要跑**仓库自己的脚本**，别手搓文件清单（2026-09-14 连撞两次）
 
 两次主干红，同一个根因：自查命令**看上去绿，实际什么都没查**。

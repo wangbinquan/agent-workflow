@@ -12972,3 +12972,107 @@ typecheck 当场咬住了代码那部分；**但它还把账本里那一行的�
 **记这一条的意义**：AC-6 剩下的 23 不是 23 件事，是「7 条等根合一 + 16 条各自的事」。
 把它写出来，下一个人不用再把这 7 条挨个读一遍才发现它们是同一件事——
 也不会因为「一条判据能压 7 条」就顺手把它写了。
+
+
+## §5gi —— 更正 §5gh：那 7 条**不是一簇**，而且「挡在组合根签名」这个判断是错的
+
+§5gh 说 AC-6 剩下 23 条里有 7 条共用一个根因（`createInMemoryDb` 喂给 `createApp`），
+并推断它们挡在「两个组合根的装配签名不对称」上、要等 §5bg 的签名对齐。
+**这两句都得改。**
+
+### 错在哪（一）：`createApp` 不是「一个可以放宽的形参」，是 SQLite 组合根的大门
+
+```ts
+export function createApp(deps: AppDeps | ComposedAppDeps): Hono {
+  return createComposedApp('apiRoutes' in deps ? deps : composeSqliteAppDeps(deps))
+}
+```
+
+给它一个裸 `db`，它就去跑 `composeSqliteAppDeps` 整棵树。所以「把 `db` 放宽成中立句柄」
+根本不是这条路——PostgreSQL 侧的对应物是 `composePostgresqlApplication`，
+**入参形状完全不同**（要 runtime、schema 合同、generation 指针）。
+「组合根签名对齐」因此不是一次放宽，是**两套应用装配的合并**，比 §5gh 写的重得多。
+
+### 错在哪（二）：双引擎应用 harness 早就存在，而且 113 个文件在用
+
+`describeEachProviderHttpApplication` / `createProviderHttpApplication` 按所选 provider
+装一个**真应用**。全仓 **113** 个测试文件已经在用它。
+所以「测试要拿到双引擎的 app」这件事**不需要等任何签名对齐**。
+
+### 那 7 条到底是什么
+
+逐个读下来，它们**不是一簇**：
+
+| 条目 | 实情 |
+| --- | --- |
+| `rfc257-webhook-error-codes` | **已正确裁决**：文件里写着「缺 dispatcher 是**测试独有**的装配形态」——SQLite 根把它当可选依赖、PG 根自建、生产两侧必有；注释还特意提醒塞进 provider 作用域会在 `[postgresql]` 那遍炸。而且该文件**主体早就在用双引擎 harness**，只有这一格是单引擎 |
+| `rfc221-login-policy-routes` | 同类：无 secretBox 的装配在**两个引擎的生产部署里都不存在**，已详细写明 |
+| `rfc359-execution-contract-resource-adapter` | 本轮自己写的，被测物就是 `createApp` 这个 SQLite 组合根 |
+| `rfc310-pr7b-handover` | 文件里**已有 4 处 `describeEachProvider`**，那一格 `createApp` 是残留 |
+| `rfc329-mcp-surface-guard` / `rfc305-architecture-lock` / `rfc349-daemon-provider-core` | 没有就近说明，得逐个读 |
+
+**教训**：§5gh 是靠一条机械信号（`createInMemoryDb` 喂给 `createApp`）聚出来的「簇」，
+而**「共用一个语法形状」不等于「共用一个根因」**——这跟 §5gb / §5gc / §5gf 三次判别式失误
+是同一个毛病，只是这次栽在我自己新造的那条信号上。
+§5gh 拒绝为这 7 条写通用 sanctioned 判据是**对的**（理由也仍然成立：分不出
+「组合根是被测物」与「组合根只是脚手架」）；错的是把它们说成一簇、并给了一个错误的 blocker。
+
+**修正后的待办**：这 7 条里 3 条已裁决、1 条是残留可直接迁、3 条待读。
+与「两个应用装配合并」那件大事**没有依赖关系**。
+
+---
+
+## §5gj　AC-6：把 §5gi 认出的那一条残留真迁掉（`rfc310-pr7b-handover`）
+
+§5gi 把 §5gh 的「7 条一簇 + 一个共同 blocker」修正成「3 条已裁决、1 条残留、3 条待读」。
+这一节把其中**残留**那条做完——它是四类里唯一「不需要任何判断、直接迁」的。
+
+### 做了什么
+
+`rfc310-pr7b-handover.test.ts` 的 HTTP 面原来是 `createApp({ db: createInMemoryDb(MIGRATIONS) })`。
+`createApp` 不是「形参放宽就能双跑」的入口（§5gi 的修正要点：它就是 SQLite 组合根的大门），
+但仓里**早有**现成答案：`describeEachProviderHttpApplication`——两个引擎各装一个**真应用**，
+全仓 113 个文件在用。改用它即可，零生产改动。
+
+同文件上半部**本来就有 4 处 `describeEachProvider`**，所以这一格从来不是「被根挡住」，
+是**迁移时漏掉的一格**。4 例 → 8 例（`[sqlite]` / `[postgresql]` 各一遍，junit 两条 classname 均在）。
+
+账本同步：`rfc359-w5-t19f` 的两张名单各退役一行（逐文件调用点数 330 → 329、
+`OPEN_MIGRATION_DEBT` 23 → 22），`architecture/ledger-baselines.json` 的两条高水位一并改小。
+
+### 迁完立刻显出来的东西：一条只在 PostgreSQL 上出现的告警
+
+迁完第一次跑，PG 那遍冒出 SQLite 那遍**零次**的告警：
+
+```
+WARN [development-missions] mission drive after route mutation failed
+err="Failed query: select … from "agent_workflow"."development_feedback_ledger" where …"
+```
+
+查证过程与结论：
+
+1. **不是 schema 漂移**——`development_feedback_ledger` 在 `postgresql-migrations/0000_rfc349_baseline.sql`
+   与 `src/db/schema.ts` 里都是同样 12 列，逐列对齐。
+2. **表名每次还不一样**（这次 `development_feedback_ledger`、下次 `development_effects`），
+   指向生命周期竞态而不是某张表的定义问题。
+3. 临时把 `error.cause` 链打出来，真因是 **`PostgresError: Connection closed`**。
+4. 代码形状对上了：`missionOperations.ts` 的 `fireReconcile` 是 **fire-and-forget**
+   （`void automation.drive(missionId).then(...).catch(...)`），路由不 await 它。
+   SQLite 驱动是**同步**的，这条链不让出事件循环就跑完了；PG 要真的走 I/O，
+   于是可能在应用关闭、连接池随之关掉之后才回来。
+
+**裁决：不是产品缺陷，也不是本次迁移引入的**——`fireReconcile` 不被 await 是既有设计，
+告警本来就在 `catch` 里、被降级成 warn，两个引擎 8 例全绿。它是**测试生命周期**的噪声。
+
+但有一件事值得记下来，因为它对后来人是真的坑：**在 PG 那遍，不要写依赖「后台 drive 已经跑完」
+的断言**——SQLite 那遍因为驱动同步会稳定通过，PG 那遍则取决于连接池什么时候关。
+这类断言是「两个引擎同一份判据、结论却不同」的隐蔽来源。已落 `docs/dev-gotchas.md`。
+
+### 顺带挡下的一次双 OS 红
+
+迁移删掉了最后一处 `createApp` / `createInMemoryDb` 用法，于是 `Hono` / `DbClient` /
+`createApp` / `createInMemoryDb` / `MIGRATIONS` / `resolve` **6 个符号全成了死导入**。
+本地那条秒级自查（只对改动文件跑 `bunx eslint --max-warnings 0`）当场报 5 条 warning——
+按 RFC-140 的老账，这会在两个 OS 上各红一格。删干净后 eslint exit=0。
+**记一笔**：凡「迁移 = 把某个构造方式换掉」的改动，删完调用点必定留死导入，
+这条自查不是可选的。

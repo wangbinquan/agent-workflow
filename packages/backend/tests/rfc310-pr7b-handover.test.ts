@@ -11,12 +11,8 @@
 // 三新点 + typed 错误码。命令层多断言收单 test 防 --randomize。
 
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { Hono } from 'hono'
-
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   attachMergeRequest,
   handoffMission,
@@ -28,15 +24,13 @@ import type {
 } from '../src/modules/development-automation/application/ports/missionStore'
 import type { MrEffectsPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
-import { createApp } from '../src/server'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 setDefaultTimeout(120_000)
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function seedMission(
   store: MissionPersistence,
@@ -357,68 +351,78 @@ describe('rfc310 pr7b — resume command', () => {
   })
 })
 
-describe('rfc310 pr7b — HTTP face', () => {
-  test('three endpoints enforce their permission points and surface typed codes', async () => {
-    const db: DbClient = createInMemoryDb(MIGRATIONS)
-    const fx = await buildPr3Fixture({ db })
-    const app: Hono = createApp({
-      token: 'a'.repeat(64),
-      configPath: '/tmp/aw-pr7b-config-never-used.json',
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
-    const admin = await createUser(db, {
-      username: 'admin-pr7b',
-      displayName: 'Admin',
-      role: 'admin',
-      password: 'longEnoughPassword',
-    })
-    const token = (await createSession({ db, userId: admin.id })).token
-    const post = async (path: string, body: unknown = {}): Promise<Response> =>
-      app.request(path, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify(body),
+// RFC-359 AC-6（plan §5gj）：这一格原来用 `createApp({ db: createInMemoryDb(...) })`
+// ——那是 SQLite 组合根的大门，于是 HTTP 面只在一个引擎上验过。
+// 本文件上半部**早就有四处 `describeEachProvider`**，所以这一格是残留而不是「挡住了」。
+// 改用仓里既有的双引擎应用作用域（全仓 113 个文件在用），两个引擎各装一个真应用各跑一遍。
+// 于是本文件再无直接建库调用点，`rfc359-w5-t19f` 的两张账本（逐文件调用点数、
+// `OPEN_MIGRATION_DEBT`）各退役一行。
+describeEachProviderHttpApplication(
+  'rfc310 pr7b — HTTP face',
+  {
+    token: 'a'.repeat(64),
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    tempPrefix: 'aw-rfc310-pr7b-',
+  } as const,
+  (scope) => {
+    test('three endpoints enforce their permission points and surface typed codes', async () => {
+      const db = scope.harness.db
+      const opened = await scope.open()
+      const fx = await buildPr3Fixture({ db })
+      const app = opened.app
+      const admin = await createUser(db, {
+        username: `admin-pr7b-${ulid().toLowerCase()}`,
+        displayName: 'Admin',
+        role: 'admin',
+        password: 'longEnoughPassword',
+      })
+      const token = (await createSession({ db, userId: admin.id })).token
+      const post = async (path: string, body: unknown = {}): Promise<Response> =>
+        app.request(path, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+
+      // handoff：happy path（干净 mission 直接 tracking-only）。
+      const m1 = await seedMission(fx.store)
+      const handedOff = await post(`/api/code/missions/${m1}/handoff`, { reason: 'take over' })
+      expect(handedOff.status).toBe(200)
+      expect((await handedOff.json()) as object).toMatchObject({
+        automationMode: 'tracking-only',
+        pending: false,
       })
 
-    // handoff：happy path（干净 mission 直接 tracking-only）。
-    const m1 = await seedMission(fx.store)
-    const handedOff = await post(`/api/code/missions/${m1}/handoff`, { reason: 'take over' })
-    expect(handedOff.status).toBe(200)
-    expect((await handedOff.json()) as object).toMatchObject({
-      automationMode: 'tracking-only',
-      pending: false,
+      // resume：happy path（刚交接的 mission 拉回 active）。
+      const resumed = await post(`/api/code/missions/${m1}/resume`)
+      expect(resumed.status).toBe(200)
+      expect((await resumed.json()) as object).toMatchObject({ automationMode: 'active' })
+
+      // attach：真 binder 无 code-host connection → typed 409 mr-observe-unavailable。
+      const m2 = await seedMission(fx.store, { automationMode: 'tracking-only' })
+      const attach = await post(`/api/code/missions/${m2}/attach-mr`, { mrIid: '7' })
+      expect(attach.status).toBe(409)
+      expect(((await attach.json()) as { code: string }).code).toBe('mr-observe-unavailable')
+
+      // 命令准入失败也是 typed 409（route-error-code coverage 点名）：
+      // mission-command-not-tracking-only / mission-command-already-tracking-only /
+      // mission-command-attach-requires-tracking-only / mission-command-mr-already-bound /
+      // mission-effects-unsettled / mr-binding-unresolved / mr-owned-by-another-mission。
+      const m3 = await seedMission(fx.store)
+      const refuse = await post(`/api/code/missions/${m3}/resume`)
+      expect(refuse.status).toBe(409)
+      expect(((await refuse.json()) as { code: string }).code).toBe(
+        'mission-command-not-tracking-only',
+      )
+
+      // 404：不存在的 mission。
+      const missing = await post(`/api/code/missions/does-not-exist/handoff`)
+      expect(missing.status).toBe(404)
+      expect(((await missing.json()) as { code: string }).code).toBe('mission-not-found')
     })
-
-    // resume：happy path（刚交接的 mission 拉回 active）。
-    const resumed = await post(`/api/code/missions/${m1}/resume`)
-    expect(resumed.status).toBe(200)
-    expect((await resumed.json()) as object).toMatchObject({ automationMode: 'active' })
-
-    // attach：真 binder 无 code-host connection → typed 409 mr-observe-unavailable。
-    const m2 = await seedMission(fx.store, { automationMode: 'tracking-only' })
-    const attach = await post(`/api/code/missions/${m2}/attach-mr`, { mrIid: '7' })
-    expect(attach.status).toBe(409)
-    expect(((await attach.json()) as { code: string }).code).toBe('mr-observe-unavailable')
-
-    // 命令准入失败也是 typed 409（route-error-code coverage 点名）：
-    // mission-command-not-tracking-only / mission-command-already-tracking-only /
-    // mission-command-attach-requires-tracking-only / mission-command-mr-already-bound /
-    // mission-effects-unsettled / mr-binding-unresolved / mr-owned-by-another-mission。
-    const m3 = await seedMission(fx.store)
-    const refuse = await post(`/api/code/missions/${m3}/resume`)
-    expect(refuse.status).toBe(409)
-    expect(((await refuse.json()) as { code: string }).code).toBe(
-      'mission-command-not-tracking-only',
-    )
-
-    // 404：不存在的 mission。
-    const missing = await post(`/api/code/missions/does-not-exist/handoff`)
-    expect(missing.status).toBe(404)
-    expect(((await missing.json()) as { code: string }).code).toBe('mission-not-found')
-  })
-})
+  },
+)
