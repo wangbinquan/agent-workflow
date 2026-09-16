@@ -28,7 +28,7 @@ import { createAgent } from '../src/services/agent'
 import { cancelExecution } from '../src/services/execution/executor'
 import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
 import {
   integrationTriggerWebhookAuthorityDependencies,
@@ -211,7 +211,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     )
     const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
     const dispatcher = createWebhookDispatcher({
-      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
       ...createWebhookDispatchOrchestrationRuntime({
         taskExecutions: createSqliteWebhookTaskExecutionParticipant({
           db,

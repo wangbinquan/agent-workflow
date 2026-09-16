@@ -29,7 +29,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
@@ -126,7 +126,7 @@ async function harness(): Promise<Harness> {
   const canceled: string[] = []
   const launchError: Harness['launchError'] = { current: null }
   const deps: WebhookDispatchDeps = {
-    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     getDefaultRuntime: async () => null,
     launch: async (actor, rendered, invoker) => {

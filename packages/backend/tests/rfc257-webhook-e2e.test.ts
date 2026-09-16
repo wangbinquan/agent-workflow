@@ -32,7 +32,7 @@ import {
   renderedLaunchPayload,
 } from '../src/services/webhook/webhookDispatch'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
 import {
   integrationTriggerWebhookAuthorityDependencies,
@@ -145,7 +145,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
   // 真 dispatcher；只在 launch/cancel 处注入（fake launch 落真 tasks 行，
   // 让归属列与 supersede 走真实查询面）。
   const dispatcher = createWebhookDispatcher({
-    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     getDefaultRuntime: async () => null,
     terminalControl,

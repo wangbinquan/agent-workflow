@@ -13513,3 +13513,54 @@ zsh 不对未加引号的变量分词，于是 `$1` 是整串、`$2` **恒为空
 **按变量名找「另一侧有没有做同一件事」是坏判据**——两个根本来就不共享局部变量命名。
 正确的问法是「同一个**消费点**（这里是 `composeDigitalEmployee({ platformTools })`）
 两侧是不是都喂到了」。
+
+---
+
+## §5gs　AC-1 命名债：`composeSqliteWebhookDispatchCore` 改名（无孪生，前缀纯属历史）
+
+`proposal.md` AC-1 第三款把 provider 命名文件 / 符号分成两类：**死代码**（删）与**命名债**
+（provider 命名、但根本没有孪生实现——它就是那件事的唯一实现，前缀是历史遗留，处方是**改名**）。
+这一条是后者，而且是个干净的样本。
+
+### 认定
+
+`composeSqliteWebhookDispatchCore`：
+
+- 形参**早就是** `ProviderNeutralDatabase`（函数上方注释写着是哪一轮放宽的，但名字没跟上）；
+- 全仓**没有** `composePostgresqlWebhookDispatchCore`，也没有任何别的孪生；
+- 它转交的四件（dispatch / delivery 持久化、仓库解析、启动准入）形参全部中立。
+
+也就是说它是**唯一实现**，`Sqlite` 前缀不指向任何区分。
+
+### 留着的实际代价（不是不好看）
+
+全仓有好几处判据按 `composeSqlite*` 这个**形状**找「provider 专属实现」。一个没有孪生的中立函数
+顶着这个前缀，会让那些判据把它数成「还有一份 SQLite 专属实现」。§5gl 里我拒绝把
+`provider-pair-covered-by-name` 放宽成「出现任意 `composeSqlite*(`」，理由之一正是这个——
+那条放宽会一口气划掉 6 个债务文件，而其中多数的 `composeSqlite*` 是**上游装配**、不是被测物。
+名字修干净，这类误判的来源就少一个。
+
+### 改动
+
+21 处（10 个文件：1 个生产 `cli/start.ts`、1 个定义处、8 个测试）。
+**词边界正则**——§5gf 的教训：`composePostgresqlDigitalEmployee` 是 `…Execution` 的前缀，
+当时一次 blanket replace 把两个符号一起改坏、连账本文本都改坏了。这次先查前缀碰撞（无），再改。
+
+### 三条「语料非空」下限各减一
+
+`rfc359-w5-identical-provider-twins`（91 → 90）、`rfc359-w5-adapter-production-consumer`（87 → 86）、
+`rfc359-w5-provider-runtime-exercised`（19 → 18）。三条都按**名字**派生分母，改名即退出分母——
+**退的是命名债，不是覆盖**。三处各留了署名理由（与它们此前几次下调同一格式）。
+
+### 验证
+
+`tsc` / `eslint --max-warnings 0` / prettier 干净；`tests/architecture/` 706 全绿；
+改动触及的 8 个 webhook / e2e 测试两批跑完 64 + 36 全绿。
+
+### 顺带澄清一件不是我干的事
+
+改完跑 prettier 时，`git diff` 里冒出 `packages/system-mocks/src/cli.ts` 的一处 **mode change**
+（644 → 755，内容零差异）。那是别人的在制品文件，我先怀疑是自己的 `prettier --write` 带的。
+**实测排除**：拿一个 644 的临时文件跑 `prettier --write`（改写与「unchanged」两种路径都试），
+mode 一动不动。所以那是并发 session 自己 chmod 的（给 CLI 入口加可执行位很合理），
+按多人协作规矩**原样留着、不进暂存区**。

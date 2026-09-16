@@ -71,7 +71,7 @@ import { staticCachedRepositoryPreparation } from './helpers/staticCachedReposit
 import { createDevelopmentAdapterStore } from '@/modules/integration/infrastructure/developmentAdapterStore'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
-import { composeSqliteWebhookDispatchCore } from '@/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '@/modules/integration/composition/webhookDispatch'
 import { composeWebhookIngressPersistenceFor } from '@/modules/integration/composition/webhookIngress'
 import { createWebhookDispatchExecutionRuntime } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
@@ -306,11 +306,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
         createIdentityAccessRuntime({ db }),
       )
       const webhookDispatcher = createWebhookDispatcher({
-        ...composeSqliteWebhookDispatchCore(
-          db,
-          webhookSecretBox,
-          scheduledTaskRuntime(db).operations,
-        ),
+        ...composeWebhookDispatchCore(db, webhookSecretBox, scheduledTaskRuntime(db).operations),
         ...createWebhookDispatchExecutionRuntime({
           taskExecutions: {
             launch: async () => {

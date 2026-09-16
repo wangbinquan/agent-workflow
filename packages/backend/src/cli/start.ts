@@ -14,7 +14,7 @@ import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import {
-  composeSqliteWebhookDispatchCore,
+  composeWebhookDispatchCore,
   createSqliteWebhookExecutionRuntime,
 } from '@/modules/integration/composition/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
@@ -2358,7 +2358,7 @@ async function composeSqliteProviderSession(
   })
   const webhookTaskExecutions = taskExecutionProvider.trigger.taskExecutions
   const webhookDispatcher = createWebhookDispatcher({
-    ...composeSqliteWebhookDispatchCore(db, secretBox, scheduledTaskRuntime.operations),
+    ...composeWebhookDispatchCore(db, secretBox, scheduledTaskRuntime.operations),
     identityAccess: integrationIdentityAccess,
     resolveEventTargetAuthority: async (userId) => {
       const admitted = await identityAccess.localOperator.forLegacyHttpUser(userId)

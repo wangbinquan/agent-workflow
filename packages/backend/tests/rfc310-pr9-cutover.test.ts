@@ -52,7 +52,7 @@ import { createCutoverStore } from '../src/modules/development-automation/infras
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import type { MrEffectsPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
@@ -271,7 +271,7 @@ describeEachProviderHttpApplication(
           repoPath: event.repoPath,
         })
         const dispatcher = createWebhookDispatcher({
-          ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+          ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
           ...integrationTriggerWebhookAuthorityDependencies(
             db,
             createIdentityAccessRuntime({ db }),

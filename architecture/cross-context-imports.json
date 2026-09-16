@@ -25928,6 +25928,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:549e756767b56cc5f63d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDispatch.ts#composeWebhookDispatchCore",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookDispatch.ts",
+      "toSymbol": "composeWebhookDispatchCore",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/referenceUsability.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/referenceUsability.ts",
       "fromSymbol": "$file",
@@ -60076,23 +60093,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeExecutionPersistence.ts#NodeExecutionEventWrite",
       "toPath": "packages/backend/src/modules/task-execution/application/ports/nodeExecutionPersistence.ts",
       "toSymbol": "NodeExecutionEventWrite",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c6cce3b719ad44c1f0d7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDispatch.ts#composeSqliteWebhookDispatchCore",
-      "toPath": "packages/backend/src/modules/integration/composition/webhookDispatch.ts",
-      "toSymbol": "composeSqliteWebhookDispatchCore",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -104921,6 +104921,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:549e756767b56cc5f63d",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookDispatch",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookDispatchCore",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookDispatch.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDispatch.ts#composeWebhookDispatchCore"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/referenceUsability.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/referenceUsability.ts#$file",
@@ -140874,22 +140890,6 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:c6cce3b719ad44c1f0d7",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/composition/webhookDispatch",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteWebhookDispatchCore",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/composition/webhookDispatch.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDispatch.ts#composeSqliteWebhookDispatchCore"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/runner.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "id": "import:c6d83040f9bf48f345f9",
@@ -160129,7 +160129,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:586cd8df03118bdadb985b3306df0b2aa35383e75fa8c3f6952c51544cbbfcdb",
+  "sourceDigest": "sha256:f199535aa319eb53db7ad0fbea96492e1aec876259e29b1e6c065b89e001623a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -45,7 +45,7 @@ import type { DirectAuthenticatedAuthority } from '../src/modules/identity-acces
 import type { ResourceRequestContext } from '../src/modules/resource-catalog/public/participants'
 import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
 import {
   integrationTriggerWebhookAuthorityDependencies,
@@ -261,7 +261,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       }),
     })
     const dispatcher = createWebhookDispatcher({
-      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
       ...createWebhookDispatchOrchestrationRuntime({
         taskExecutions: createSqliteWebhookTaskExecutionParticipant({
           db,
@@ -465,7 +465,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     )
     const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
     const dispatcher = createWebhookDispatcher({
-      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
       ...createWebhookDispatchOrchestrationRuntime({
         taskExecutions: createSqliteWebhookTaskExecutionParticipant({
           db,

@@ -386,7 +386,10 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
       // RFC-359 AC-1（2026-09-16，plan §5fw–§5gf）：31 → 19。本轮又退役一批 provider 命名的
       // 装配入口（别名 / 转交层 / 体逐字节相同的中立+品牌 / 装配责任上提），
       // 这条判据按**名字**派生组合根，分母跟着掉。掉的是重复计数与已消失的品牌名，不是覆盖。
-      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(19)
+      // RFC-359 AC-1（2026-09-16，plan §5gs）：19 → 18。`composeSqliteWebhookDispatchCore` 改名成
+      // 中立的 `composeWebhookDispatchCore`（无 PostgreSQL 孪生、形参早已中立，前缀纯属历史）。
+      // 这条判据按**名字**派生组合根，改名即退出分母——退的是命名债，不是覆盖。
+      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(18)
       // 架构账本排除必须是**真的排除**：该目录确实在语料里（本文件就躺在里面），
       // 才谈得上把它从「现状」证据里摘出去。目录改名会让这条当场红。
       expect(

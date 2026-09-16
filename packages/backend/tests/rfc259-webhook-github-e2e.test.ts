@@ -25,7 +25,7 @@ import {
   renderedLaunchPayload,
 } from '../src/services/webhook/webhookDispatch'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
 import {
   integrationTriggerWebhookAuthorityDependencies,
@@ -96,7 +96,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
   })
   const canceled: string[] = []
   const dispatcher = createWebhookDispatcher({
-    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     getDefaultRuntime: async () => null,
     launch: async (actor, rendered, invoker) => {

@@ -393,7 +393,10 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // RFC-359 AC-1（2026-09-16，plan §5gf）：91 → 87。两个**转交式函数别名**退役
       // （`createPostgresqlIdentityAccessRuntime` / `composePostgresqlDigitalEmployee`，
       // 体就是 `return 中立那份(input)`）。
-    ).toBeGreaterThanOrEqual(87)
+      // RFC-359 AC-1（2026-09-16，plan §5gs）：87 → 86。`composeSqliteWebhookDispatchCore` 改名成中立的
+      // `composeWebhookDispatchCore`——它**没有 PostgreSQL 孪生**，形参早就是 `ProviderNeutralDatabase`，
+      // 前缀纯属历史（proposal.md AC-1 第三款的「命名债」）。**是改名不是删实现**，分母因此少一。
+    ).toBeGreaterThanOrEqual(86)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

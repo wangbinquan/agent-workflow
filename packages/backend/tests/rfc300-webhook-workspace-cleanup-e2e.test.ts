@@ -30,7 +30,7 @@ import {
 } from '../src/db/schema'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
 import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
-import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
@@ -273,7 +273,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   )
   const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
   const dispatcher = createWebhookDispatcher({
-    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...createWebhookDispatchOrchestrationRuntime({
       taskExecutions: createSqliteWebhookTaskExecutionParticipant({
         db,
@@ -531,7 +531,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   )
   const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
   const dispatcher = createWebhookDispatcher({
-    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...composeWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...createWebhookDispatchOrchestrationRuntime({
       taskExecutions: createSqliteWebhookTaskExecutionParticipant({
         db,
