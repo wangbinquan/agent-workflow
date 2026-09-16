@@ -14755,3 +14755,48 @@ catalogVisibility / 快照节点 id 与种类 / 边数），也就是 §5hn 那�
 （`every(node => node.position !== undefined)` 必须为 true），
 并把这一格放回相等面。**先红后绿闭环**：
 缺口 → 反向钉住 → 修 → 反向断言红 → 转正向 → 绿。
+
+### §5hn 批次一（余下）：两份编排怎么合——**不是「抽公共前置 + 两个终端」**
+
+排版那处差异关掉之后，两份编排已经**行为等价**（`rfc359-w5hn-agent-launch-provider-parity`
+17 条断言作证）。合并的形状有两种，选后者：
+
+**① 抽公共前置 + 各自终端**（诱人但错）：把十二步里前十一步抽成
+`prepareAgentLaunch(...)`，两边各自接 `startTask` / 内核。
+**问题**：孪生数不降——账本数的是「同文件里按 provider 分叉的一对导出」，
+抽完仍是两个导出各调一次公共函数；而且「两个终端」正是这一整轮要消灭的形状
+（§5hi / §5hl / §5hm 三刀都是把终端统一到内核，不是把前置抽出来）。
+
+**② SQLite 也走内核，编排只剩一份**（正解）：
+`launchAgent`（`postgresqlTaskRouteLaunchOperations.ts`）成为**唯一**实现，
+`services/agentLaunch.ts` 只留 `buildAgentHostSnapshot` + 几个常量
+（PG 侧本来就从这里 import 它们）。
+
+### ② 的前置条件：SQLite 的 `routeLaunch` 得长出 agent 臂
+
+这正是 §5hk 记的那块债的一部分——`providerRuntime.ts` 基类上
+`routeLaunch.workflow?: PostgresqlRootTaskLaunchKernel` 至今是可选的，
+`createSqliteTaskRouteLaunchOperations` 只给了 `agent` / `workgroup` 的
+`executionFor` 桩，没有内核。要做的：
+
+1. `composeSqliteTaskExecutionProviderRuntime` 的 `routeLaunch` 依赖补齐
+   `gitCommitIdentity` / `coordinator` / `routeWorkspace`，内部用
+   `composeHostTaskLaunchKernel`（§5hi 已经造好）装出内核；
+   协调器↔schedulerDriver 的环照抄 PG 的同作用域转发面
+   （`postgresqlDaemonApplication.ts:953` 的 `taskDriveCoordinator`）。
+2. `routeLaunch.workflow` 与新的 `routeLaunch.agent` 在基类上收成**必填**——
+   「一个引擎有、另一个没有」当前是写在类型里的，收掉它才算真合一。
+3. `routes/agents.ts` 改为经 provider 的 `routeLaunch.agent` 分发，
+   两个引擎同一条；`startAgentTask` 退役。
+
+### 判据与顺序（下一刀照做）
+
+- **每一步都跑** `rfc359-w5hn-agent-launch-provider-parity`：它是这次重构的**等价性基线**，
+  17 条断言覆盖 status / workflowId / spaceKind / inputs / scratch / catalogVisibility /
+  快照形状 / 排版 / 来源 agent 名 / 宿主输入端口。任何一步让它红，就是行为动了。
+- `rfc165-agent-launch.test.ts`（SQLite 单引擎、A1–A9 九组）**必须全程绿**——
+  它锁的是这条路的既有契约，包括 F15 权限豁免与 agent 删除 409 那些边。
+  退役 `startAgentTask` 时它会大面积红（直接调那个函数），
+  **那是迁移动作不是回归**：逐条改成经 provider 路由启动，断言一个字不改。
+- 上传（multipart）那一支单独验：SQLite 现在走 `materializeSpace` + `applyUploadsToWorktree`，
+  内核走 `uploads` 参数。两条路的落点必须逐字相同，**先补一条带上传的双引擎用例再动**。
