@@ -14555,3 +14555,58 @@ PG 有自己的 `createPostgresqlTaskDriverLifecyclePort`。这是 §5ha 排序�
 按 §5fq 三条判据，这处差异一条都不命中——它不是引擎原语差异，是 PG 那份当初照抄时漏了。
 合并 PR 必须带一条**双引擎**用例：attach 与 cancel 并发，评审行状态在两个引擎上一致；
 先让它在 PG 上红（证明缺口真实存在），再合。
+
+## §5hm 落地　驱动生命周期端口合一 —— 顺手关掉 PG 上一个**真的**功能缺口
+
+按上一节勘察的做法做完了。
+
+### 先红后绿：缺口是被照出来的，不是推断的
+
+新用例 `rfc359-w5hm-attach-review-lock-parity`（`describeEachProvider`）。判据走 attach 的
+**提前返回**那条路（任务已终态 ⇒ `not-attached`）：它在 SQLite 上位于锁内、在 PG 上位于锁外，
+所以不必真认领任务就能把顺序差异照出来。
+
+合一**之前**实测：
+
+```
+[sqlite]     绿
+[postgresql] 红 —— 实际顺序：review-enter → attach → review-released → review-exit
+```
+
+也就是说 attach 确实插进了评审临界区。合一之后两个引擎都绿。
+
+判据不靠 sleep 赛跑：那 200ms 只用来给 attach **充分**机会跑完、让违规交错可被观察；
+合规那一侧由锁本身保证，等多久都不会变。断言的是顺序（`attach` 必须在 `review-exit` 之后），
+不是时长。
+
+### 合一后的形状
+
+`taskDriverLifecycle.ts` 是唯一实现，`postgresqlTaskDriverLifecycle.ts` **删除**。
+端口依赖里唯一按引擎不同的是**认领方式**，由装配方交一个闭包决定：
+
+- PG：`claim: (intentId) => module.claimPersisted({ intentId })`
+- SQLite：`claim: (intentId) => taskExecutionModule.claim({ db, intentId })`
+
+两者函数体本来就逐字相同，只差归属持久化从哪来（`this.persistence.ownership`
+vs `this.ownershipFor(db)`，而后者的体就是 `new DrizzleTaskOwnershipPersistence(db)`）。
+
+其余四项差异按中立那半收口：状态读改成 `(await db.select(…).limit(1))[0]`
+（`.all()` 那种「一边是数组、一边是 Promise」的写法只服务一个引擎）；
+心跳走 `persistence.ownership`；执行上下文用 `application/taskExecutionContext` 那份中立实现，
+SQLite 的 `legacyConnection` / `compatibility.db` 由装配方按需要交进来
+（那是 `services/task` 启动路未退役的残留，见 §5hn）。
+
+便利构造 `createDatabaseTaskDriverLifecyclePort(db, log, finalizeWorkspace)` 留给
+`services/task` 那条只有 `db`、拿不到模块实例的老路；它随 §5hn 一起消失。
+
+### 顺带兑现：协调器的 `db` 收成中立句柄
+
+`TaskDriveCoordinatorDependencies.db` 此前是从 `StartTaskDeps` Pick 来的
+`LegacySqliteTaskDatabase`——**不是因为协调器真要 SQLite**，而是它装的生命周期端口
+当年只有 SQLite 一份。端口合一后这个约束没了：协调器这一路上读 `db` 的三处
+（生命周期端口、闸门继续前置、工作区清理）全是中立实现，于是收成
+`LegacyProviderNeutralDatabase`。`StartTaskDeps` 仍满足这个更宽的类型，
+既有构造点一个字都不用改。**这是 §5ha 排序里第 ① 步「内核换中立 session」的最后一块。**
+
+可见的兑付：`rfc359-w12-digital-employee-execution` 里那个
+`db: harness.db as unknown as DbClient` 的 cast 删掉了。

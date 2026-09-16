@@ -2,6 +2,41 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-16 续 43，**驱动生命周期端口合一，顺手关掉 PG 上一个真缺口**）
+>
+> 已推并 CI 绿：`bc4a1d33d`（§5hi）· `5bc74c468`。`c932bc8e8`（§5hl）与 `e2c813b76` 推红各一次，
+> 都已修（见下）。本段第三刀 §5hm 本地全绿、待推。
+>
+> **最该带走的一句：这一刀第一次把「一个引擎有判据、另一个没有」当场照了出来，而不是靠读代码推断。**
+> SQLite 的 `attachTaskDriver` 整个包在 `withTaskReviewMutationLock` 里，PG 那份**一句都没有**——
+> 新用例 `rfc359-w5hm-attach-review-lock-parity` 合一前实测：sqlite 绿、**postgresql 红**，
+> 实际顺序 `review-enter → attach → review-released → review-exit`，attach 确实插进了评审临界区。
+> 合一后两个引擎都绿。判据不靠 sleep 赛跑：那 200ms 只用来让**违规的交错**可被观察，
+> 合规那一侧由锁本身保证，等多久都不会变。
+>
+> **先做勘察再动手是值的**：注释里点名的重入风险（「把每个 setTaskStatus 都包起来会让评审路径
+> 重入自己的锁」）我逐条量过——最强的证据是 **SQLite 自己**：两个引擎共用的那批 submit 调用点
+> 在 SQLite 上天天跑，有谁已持锁现在就会死锁。六条 PG 专属路径 `ReviewMutationLock` 出现次数全为 0。
+> 重入面是空的，所以锁两侧都加。
+>
+> **`postgresqlTaskDriverLifecycle.ts` 删除**，端口只剩一份；唯一按引擎不同的是**认领方式**，
+> 由装配方交一个 `claim` 闭包（PG 绑 `claimPersisted`、SQLite 绑 `claim({db,intentId})`）——
+> 两者函数体本来就逐字相同。顺带兑现：`TaskDriveCoordinatorDependencies.db` 收成中立句柄，
+> **这是 §5ha 排序里第 ① 步「内核换中立 session」的最后一块**。
+>
+> **两次推红，同一族根因的第三、第四种形状**（都已落 `docs/dev-gotchas.md`）：
+> ①`rfc310-*` 那两条守卫用 `resolve(..., 'composition', 'digitalEmployeeExecution.ts')`
+> 按**路径段**拼路径——连续路径 grep 一条都抓不到，要按 **basename** 扫；
+> ②`e2c813b76` 那笔只改了一个测试文件就推，**没重跑 census**——`allowGrowth` 是一次性的，
+> 下一个不涨的 commit 就判它过期。**改动再小，只要动了会被账本清点的东西就要重跑 census。**
+>
+> **一个待查项**：`e2c813b76` 的 Playwright `rfc294-human-gate-restart`（SIGKILL 后评审门恢复）
+> 红了一格，日志带 `SQLITE_BUSY` 写争用。那笔只删了一行测试账本，**不可能**是它引入的；
+> 上一个绿点 `5bc74c468` 该用例是过的，所以要么是 `c932bc8e8` 引入、要么是 flake。
+> §5hl 没碰人审继续驱动那条路，倾向 flake——**但没有结论前不算通过**，下一段必须查实。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hm。
+
 > ## 📌 RFC-359 最新一段（2026-09-16 续 42，**AC-1 同文件孪生 19 → 15：启动面合一连下两城**）
 >
 > 已推并 CI 绿：`bc4a1d33d`（§5hi）· `5bc74c468`（补销 rfc301 账本，修 bc4a1d33d 推的红）。

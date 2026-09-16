@@ -354,27 +354,6 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle",
-      "specifier": "@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:3965adc5e83724df2fff"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#createPostgresqlTaskDriverLifecyclePort"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery",
       "specifier": "@/modules/task-execution/infrastructure/taskDeleteRecovery",
       "edgeKind": "value",
@@ -390,6 +369,27 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle",
+      "specifier": "@/modules/task-execution/infrastructure/taskDriverLifecycle",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 AC-1（plan §5hm）：这条边**不是新增的债，是同一条债换了目标文件**——驱动生命周期端口两个引擎合成一份，PG daemon 此前指向 `postgresqlTaskDriverLifecycle`（同规则、同 findingId 的旧条目随文件退役一并删除），现在指向合一后的唯一实现。清偿方式与旧条目一致：收敛到 owner 的 public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:fbb17a47de79a2c7d31d"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createTaskDriverLifecyclePort"
       ],
       "canonicalFacadeIds": []
     },
@@ -663,6 +663,70 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#ResourcePackageExecutionAdapter"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition",
+      "specifier": "@/modules/task-execution/infrastructure/nodeRunLifecycleTransition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 W8 三层下沉：`taskLifecycle.ts` 的两处 `withOwnedTaskTx` 转成中立异步事务，必须取用中立孪生 `setNodeRunStatusTx` / `transitionNodeRunStatusTx`；同步事务面因此 4 → 2。孪生今天住在 `modules/task-execution/infrastructure/`，而 `platform/` 取它就构成这条 inbound 边。**没有物理搬移它**的原因是：它的两个 importer 当时在别人手上，且 4 份 `architecture/*.json` 按路径钉着它；抽叶子（`nodeRunLifecycleCore.ts`）已足够达成无环，搬移零额外收益。",
+      "introducedByRFC": "RFC-359 W8",
+      "removeAfterWave": "RFC-359 W9：把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 两个中立孪生迁进 `platform/persistence/`（届时这条边消失），或经 task-execution 的 exact public 合同取用",
+      "canonicalImportEdgeIds": [
+        "import:02c962a09bda3d923a6e",
+        "import:d3aa8d08c19efda0c393"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#setNodeRunStatusTx",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#transitionNodeRunStatusTx"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
+      "specifier": "@/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 W16 的原 native 同步任务生命周期入口委托共享物理写入序列，保留公开同步返回、CAS 错误和 companion 发布边界。这条兼容入口仍直接消费 task-execution 内部的共享函数或类型，必须如实保留该入边，不能以算法合一声称旧公共 API 已迁移。",
+      "introducedByRFC": "RFC-359 W16",
+      "removeAfterWave": "RFC-359 W12：完成公共 setTaskStatus 的同步 companion 调用迁移后退役 native 兼容入口及该入边",
+      "canonicalImportEdgeIds": [
+        "import:f15b35ffea1ef3860a82",
+        "import:fa0ae241ddff7878ff46"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteExtra",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteInput"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
+      "specifier": "@/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 W16 的原 native 同步任务生命周期入口委托共享物理写入序列，保留公开同步返回、CAS 错误和 companion 发布边界。这条兼容入口仍直接消费 task-execution 内部的共享函数或类型，必须如实保留该入边，不能以算法合一声称旧公共 API 已迁移。",
+      "introducedByRFC": "RFC-359 W16",
+      "removeAfterWave": "RFC-359 W12：完成公共 setTaskStatus 的同步 companion 调用迁移后退役 native 兼容入口及该入边",
+      "canonicalImportEdgeIds": [
+        "import:0befdb32e75273bb438d"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#taskLifecycleWriteSequence"
       ],
       "canonicalFacadeIds": []
     },
@@ -1624,6 +1688,167 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/changeNarrative.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/clarify/autoDispatch.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch",
+      "specifier": "@/modules/collaboration/infrastructure/clarify/autoDispatch",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:131784d3ea32ff70d97e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/autoDispatch.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/clarify/autoDispatch.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/clarify/queue.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/queue",
+      "specifier": "@/modules/collaboration/infrastructure/clarify/queue",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:e3d02e672e65a31d5503"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/queue.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/clarify/queue.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/clarify/rerunLedger.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/rerunLedger",
+      "specifier": "@/modules/collaboration/infrastructure/clarify/rerunLedger",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:946ddb4e215e0a81a5ff"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rerunLedger.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/rerunLedger.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/clarify/rerunLedger.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/clarify/rounds.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds",
+      "specifier": "@/modules/collaboration/infrastructure/clarifyRounds",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:84e9f2fb6dba3ae8f27a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rounds.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/clarify/rounds.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/clarify/seal.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal",
+      "specifier": "@/modules/collaboration/infrastructure/clarify/seal",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0b76042bc52dcd93814b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/clarify/seal.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/clarify/service.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/service",
+      "specifier": "@/modules/collaboration/infrastructure/clarify/service",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9c230dafc9c857f6eba1"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/service.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/clarify/service.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/clarifyDecision.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision",
+      "specifier": "@/modules/collaboration/infrastructure/clarifyDecision",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:463af4002cb04feb0842"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/clarifyDecision.ts"
       ]
     },
     {
@@ -2639,6 +2864,226 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/application/prepareWorkspaceRollbackPlan",
+      "specifier": "@/modules/collaboration/application/prepareWorkspaceRollbackPlan",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:0597b8f799a048db847b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/application/prepareWorkspaceRollbackPlan.ts#prepareWorkspaceRollbackPlan"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/composition/commandContext",
+      "specifier": "@/modules/collaboration/composition/commandContext",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:a6fb29466922acb140fb"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#createCollaborationCommandContext"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/domain/canonicalGateRequest",
+      "specifier": "@/modules/collaboration/domain/canonicalGateRequest",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:4bef31ad6fc6dfc264c9",
+        "import:588adb4bd97ecc841ada",
+        "import:f10c28a99aae008bd8a9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/domain/canonicalGateRequest.ts#canonicalHumanGateRequestHash",
+        "owner:packages/backend/src/modules/collaboration/domain/canonicalGateRequest.ts#canonicalHumanGateValueJson",
+        "owner:packages/backend/src/modules/collaboration/domain/canonicalGateRequest.ts#deriveHumanGateCompatibilityKey"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/domain/clarifyDecision",
+      "specifier": "@/modules/collaboration/domain/clarifyDecision",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:0845d95bcea27d2f47d7",
+        "import:ee8ff02d31b79c21b21b",
+        "import:f5801c035004c8c704c8",
+        "import:fa3a3e2fe4c96d074832"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#decodeClarifyDecisionManifest",
+        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#decodeClarifyDecisionReceipt",
+        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#encodeClarifyDecisionManifest",
+        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#encodeClarifyDecisionReceipt"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/domain/collaborationCommittedEvent",
+      "specifier": "@/modules/collaboration/domain/collaborationCommittedEvent",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:2b5527139e693cc02602"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/domain/collaborationCommittedEvent.ts#decodeCollaborationCommittedEvent"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/domain/gateReceipt",
+      "specifier": "@/modules/collaboration/domain/gateReceipt",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:72267875e5c685fddc56"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/domain/gateReceipt.ts#gateDecisionReceipt"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/domain/questionDispatchDecision",
+      "specifier": "@/modules/collaboration/domain/questionDispatchDecision",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:2253032b8cbf89c3e554",
+        "import:32cfb50a4882cf6ae543",
+        "import:40790cfbca1b449884df",
+        "import:9c00f40f59476cc5c353"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#decodeQuestionDispatchManifest",
+        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#decodeQuestionDispatchReceipt",
+        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#encodeQuestionDispatchManifest",
+        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#encodeQuestionDispatchReceipt"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/domain/reviewDecision",
+      "specifier": "@/modules/collaboration/domain/reviewDecision",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:49746881a328452b412d",
+        "import:634c9ffe1f6bf8543c14",
+        "import:80e3f5c0e2aaf628e121",
+        "import:d28b461e2355d9f997a9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#decodeReviewDecisionManifest",
+        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#decodeReviewDecisionReceipt",
+        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#encodeReviewDecisionManifest",
+        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#encodeReviewDecisionReceipt"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/humanGateComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector",
+      "specifier": "@/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "collaboration",
+      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
+      "introducedByRFC": "RFC-359 W8（方案 E）",
+      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
+      "canonicalImportEdgeIds": [
+        "import:acc3961448df8b2eabe6"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector.ts#GitWorkspaceRollbackSnapshotInspector"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/humanGateComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/humanGateContinuationEffects.ts",
       "to": "packages/backend/src/modules/collaboration/application/ports/clarifyContinuationConvergence",
       "specifier": "@/modules/collaboration/application/ports/clarifyContinuationConvergence",
@@ -2895,6 +3340,54 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRollbackQueries.ts#TaskRollbackQueries"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/nodeRollback.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/nodeRollback.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "specifier": "@/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d28779cca316098b7600"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#NodeRollbackDatabase"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/nodeRollback.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/nodeRollback.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "specifier": "@/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2d2f5d3d9b8adb8c0c95",
+        "import:a11dc495c174c3dd4863"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#createNodeRollbackEffectObserver",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#loadNodeRollbackTarget"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/nodeRollback.ts"
@@ -3599,6 +4092,29 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceRefs.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/review.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/review",
+      "specifier": "@/modules/collaboration/infrastructure/review",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:fb030ff3342ef90b9ddc"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/review.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/review.ts"
       ]
     },
     {
@@ -4718,6 +5234,62 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskClarifyDirective.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective",
+      "specifier": "@/modules/collaboration/infrastructure/taskClarifyDirective",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:1ec2bded2975d5aa8797",
+        "import:2bc44eb66d701cd6ea84",
+        "import:5cc49056a76dec58869d",
+        "import:62756ed9820ba91d63e1",
+        "import:bbcbafdbaf594ac2befe",
+        "import:fab68cb5dbb481641952"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskClarifyDirective.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#getNodeClarifyDirective",
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#getNodeClarifyDirectiveRow",
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#isAskingNodeInSnapshot",
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#listNodeClarifyDirectives",
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirective",
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirectiveTx"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskClarifyDirective.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskCollab.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/taskCollab",
+      "specifier": "@/modules/collaboration/infrastructure/taskCollab",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:5b3e497b08867a624a12"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskCollab.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskCollab.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/taskDelete.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
@@ -4822,6 +5394,75 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskLaunchGate.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。RFC-359 AC-6：形参放宽到中立客户端后，这条边从 `legacySqliteTaskDatabase#LegacySqliteTaskDatabase` 换成 legacy transport 已有的 `LegacyProviderNeutralDatabase`（与 `services/taskArchive.ts` 同形），边数与符号数都不增不减。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b1e61d311b223d7764b9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskLaunchGate.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskQuestionDispatch.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch",
+      "specifier": "@/modules/collaboration/infrastructure/taskQuestionDispatch",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9774f9eba1f617b0b6d6"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskQuestionDispatch.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskQuestions.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions",
+      "specifier": "@/modules/collaboration/infrastructure/taskQuestions",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9e4961d0157ccb6e2a1c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskQuestions.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/taskWorkspacePhase.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations",
       "specifier": "@/modules/task-execution/application/ports/taskRecoveryOperations",
@@ -4889,6 +5530,29 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/userIdentities.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/users.ts",
+      "to": "packages/backend/src/modules/identity-access/composition/legacyUserService",
+      "specifier": "@/modules/identity-access/composition/legacyUserService",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "identity-access",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:507e67635d962917f4c9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/users.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/identity-access/composition/legacyUserService.ts#legacyUserService"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/users.ts"
       ]
     },
     {
@@ -6166,670 +6830,6 @@
         "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun"
       ],
       "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/application/prepareWorkspaceRollbackPlan",
-      "specifier": "@/modules/collaboration/application/prepareWorkspaceRollbackPlan",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:0597b8f799a048db847b"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/application/prepareWorkspaceRollbackPlan.ts#prepareWorkspaceRollbackPlan"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/composition/commandContext",
-      "specifier": "@/modules/collaboration/composition/commandContext",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:a6fb29466922acb140fb"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#createCollaborationCommandContext"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/domain/canonicalGateRequest",
-      "specifier": "@/modules/collaboration/domain/canonicalGateRequest",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:4bef31ad6fc6dfc264c9",
-        "import:588adb4bd97ecc841ada",
-        "import:f10c28a99aae008bd8a9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/domain/canonicalGateRequest.ts#canonicalHumanGateRequestHash",
-        "owner:packages/backend/src/modules/collaboration/domain/canonicalGateRequest.ts#canonicalHumanGateValueJson",
-        "owner:packages/backend/src/modules/collaboration/domain/canonicalGateRequest.ts#deriveHumanGateCompatibilityKey"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/domain/clarifyDecision",
-      "specifier": "@/modules/collaboration/domain/clarifyDecision",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:0845d95bcea27d2f47d7",
-        "import:ee8ff02d31b79c21b21b",
-        "import:f5801c035004c8c704c8",
-        "import:fa3a3e2fe4c96d074832"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#decodeClarifyDecisionManifest",
-        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#decodeClarifyDecisionReceipt",
-        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#encodeClarifyDecisionManifest",
-        "owner:packages/backend/src/modules/collaboration/domain/clarifyDecision.ts#encodeClarifyDecisionReceipt"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/domain/collaborationCommittedEvent",
-      "specifier": "@/modules/collaboration/domain/collaborationCommittedEvent",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:2b5527139e693cc02602"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/domain/collaborationCommittedEvent.ts#decodeCollaborationCommittedEvent"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/domain/gateReceipt",
-      "specifier": "@/modules/collaboration/domain/gateReceipt",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:72267875e5c685fddc56"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/domain/gateReceipt.ts#gateDecisionReceipt"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/domain/questionDispatchDecision",
-      "specifier": "@/modules/collaboration/domain/questionDispatchDecision",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:2253032b8cbf89c3e554",
-        "import:32cfb50a4882cf6ae543",
-        "import:40790cfbca1b449884df",
-        "import:9c00f40f59476cc5c353"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#decodeQuestionDispatchManifest",
-        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#decodeQuestionDispatchReceipt",
-        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#encodeQuestionDispatchManifest",
-        "owner:packages/backend/src/modules/collaboration/domain/questionDispatchDecision.ts#encodeQuestionDispatchReceipt"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/domain/reviewDecision",
-      "specifier": "@/modules/collaboration/domain/reviewDecision",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:49746881a328452b412d",
-        "import:634c9ffe1f6bf8543c14",
-        "import:80e3f5c0e2aaf628e121",
-        "import:d28b461e2355d9f997a9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#decodeReviewDecisionManifest",
-        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#decodeReviewDecisionReceipt",
-        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#encodeReviewDecisionManifest",
-        "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#encodeReviewDecisionReceipt"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/humanGateComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector",
-      "specifier": "@/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "collaboration",
-      "why": "RFC-359 W8 方案 E 的**代价面**，如实登记：为消掉 W7 合一后新出现的一族循环依赖（barrel `modules/collaboration/composition.ts` → 新建的合一文件 → legacy 站点 → `services/` → barrel），把本文件从「走 barrel」改成「直取定义处」。**这是一笔交换，不是净胜**：`depcheck` 存量循环依赖 17 → 8（9 条真消失），代价是这里从 1 条粗粒度越界（barrel）变成 9 条细粒度越界（模块内部）。两种写法**都**违反 R1；换句话说本条不是新债种类，是同一笔债被摊开了。正解是让这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——实测 9 个符号里只有 2 个（`canonicalHumanGateRequestHash` / `gateDecisionReceipt`）已在 public 露出，其余 7 族约 15 个符号要不要进公共面是一次真设计决定（尤其 `GitWorkspaceRollbackSnapshotInspector` 住在 infrastructure，经 public 暴露 infrastructure 本身就可能违反目标架构），不适合在落盘时顺手做。",
-      "introducedByRFC": "RFC-359 W8（方案 E）",
-      "removeAfterWave": "RFC-294 W4-E（collaboration 的 vertical slice）：把这个 legacy 兼容门面改走 `modules/collaboration/public/{commands,events}` 的 exact 合同——需先裁决其余 7 族约 15 个符号（含 infrastructure 类 `GitWorkspaceRollbackSnapshotInspector`）要不要进公共面",
-      "canonicalImportEdgeIds": [
-        "import:acc3961448df8b2eabe6"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector.ts#GitWorkspaceRollbackSnapshotInspector"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/humanGateComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition",
-      "specifier": "@/modules/task-execution/infrastructure/nodeRunLifecycleTransition",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 W8 三层下沉：`taskLifecycle.ts` 的两处 `withOwnedTaskTx` 转成中立异步事务，必须取用中立孪生 `setNodeRunStatusTx` / `transitionNodeRunStatusTx`；同步事务面因此 4 → 2。孪生今天住在 `modules/task-execution/infrastructure/`，而 `platform/` 取它就构成这条 inbound 边。**没有物理搬移它**的原因是：它的两个 importer 当时在别人手上，且 4 份 `architecture/*.json` 按路径钉着它；抽叶子（`nodeRunLifecycleCore.ts`）已足够达成无环，搬移零额外收益。",
-      "introducedByRFC": "RFC-359 W8",
-      "removeAfterWave": "RFC-359 W9：把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 两个中立孪生迁进 `platform/persistence/`（届时这条边消失），或经 task-execution 的 exact public 合同取用",
-      "canonicalImportEdgeIds": [
-        "import:02c962a09bda3d923a6e",
-        "import:d3aa8d08c19efda0c393"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#setNodeRunStatusTx",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#transitionNodeRunStatusTx"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "specifier": "@/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 W16 的原 native 同步任务生命周期入口委托共享物理写入序列，保留公开同步返回、CAS 错误和 companion 发布边界。这条兼容入口仍直接消费 task-execution 内部的共享函数或类型，必须如实保留该入边，不能以算法合一声称旧公共 API 已迁移。",
-      "introducedByRFC": "RFC-359 W16",
-      "removeAfterWave": "RFC-359 W12：完成公共 setTaskStatus 的同步 companion 调用迁移后退役 native 兼容入口及该入边",
-      "canonicalImportEdgeIds": [
-        "import:f15b35ffea1ef3860a82",
-        "import:fa0ae241ddff7878ff46"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteExtra",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteInput"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "specifier": "@/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 W16 的原 native 同步任务生命周期入口委托共享物理写入序列，保留公开同步返回、CAS 错误和 companion 发布边界。这条兼容入口仍直接消费 task-execution 内部的共享函数或类型，必须如实保留该入边，不能以算法合一声称旧公共 API 已迁移。",
-      "introducedByRFC": "RFC-359 W16",
-      "removeAfterWave": "RFC-359 W12：完成公共 setTaskStatus 的同步 companion 调用迁移后退役 native 兼容入口及该入边",
-      "canonicalImportEdgeIds": [
-        "import:0befdb32e75273bb438d"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#taskLifecycleWriteSequence"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/autoDispatch.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch",
-      "specifier": "@/modules/collaboration/infrastructure/clarify/autoDispatch",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:131784d3ea32ff70d97e"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/autoDispatch.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/autoDispatch.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/queue.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/queue",
-      "specifier": "@/modules/collaboration/infrastructure/clarify/queue",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:e3d02e672e65a31d5503"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/queue.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/queue.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/rerunLedger.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/rerunLedger",
-      "specifier": "@/modules/collaboration/infrastructure/clarify/rerunLedger",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:946ddb4e215e0a81a5ff"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rerunLedger.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/rerunLedger.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/rerunLedger.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/rounds.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds",
-      "specifier": "@/modules/collaboration/infrastructure/clarifyRounds",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:84e9f2fb6dba3ae8f27a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rounds.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/rounds.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/seal.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal",
-      "specifier": "@/modules/collaboration/infrastructure/clarify/seal",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:0b76042bc52dcd93814b"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/seal.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/service.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/clarify/service",
-      "specifier": "@/modules/collaboration/infrastructure/clarify/service",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9c230dafc9c857f6eba1"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/service.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/service.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarifyDecision.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision",
-      "specifier": "@/modules/collaboration/infrastructure/clarifyDecision",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:463af4002cb04feb0842"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarifyDecision.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/review.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/review",
-      "specifier": "@/modules/collaboration/infrastructure/review",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:fb030ff3342ef90b9ddc"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/review.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/review.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskClarifyDirective.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective",
-      "specifier": "@/modules/collaboration/infrastructure/taskClarifyDirective",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:1ec2bded2975d5aa8797",
-        "import:2bc44eb66d701cd6ea84",
-        "import:5cc49056a76dec58869d",
-        "import:62756ed9820ba91d63e1",
-        "import:bbcbafdbaf594ac2befe",
-        "import:fab68cb5dbb481641952"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskClarifyDirective.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#getNodeClarifyDirective",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#getNodeClarifyDirectiveRow",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#isAskingNodeInSnapshot",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#listNodeClarifyDirectives",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirective",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirectiveTx"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskClarifyDirective.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskCollab.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/taskCollab",
-      "specifier": "@/modules/collaboration/infrastructure/taskCollab",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:5b3e497b08867a624a12"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskCollab.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskCollab.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskLaunchGate.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。RFC-359 AC-6：形参放宽到中立客户端后，这条边从 `legacySqliteTaskDatabase#LegacySqliteTaskDatabase` 换成 legacy transport 已有的 `LegacyProviderNeutralDatabase`（与 `services/taskArchive.ts` 同形），边数与符号数都不增不减。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b1e61d311b223d7764b9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskLaunchGate.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskQuestionDispatch.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch",
-      "specifier": "@/modules/collaboration/infrastructure/taskQuestionDispatch",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9774f9eba1f617b0b6d6"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskQuestionDispatch.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskQuestions.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions",
-      "specifier": "@/modules/collaboration/infrastructure/taskQuestions",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9e4961d0157ccb6e2a1c"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskQuestions.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/users.ts",
-      "to": "packages/backend/src/modules/identity-access/composition/legacyUserService",
-      "specifier": "@/modules/identity-access/composition/legacyUserService",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "identity-access",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:507e67635d962917f4c9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/users.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/identity-access/composition/legacyUserService.ts#legacyUserService"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/users.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/nodeRollback.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence",
-      "specifier": "@/modules/task-execution/infrastructure/nodeRollbackPersistence",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:d28779cca316098b7600"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#NodeRollbackDatabase"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/nodeRollback.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/nodeRollback.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence",
-      "specifier": "@/modules/task-execution/infrastructure/nodeRollbackPersistence",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2d2f5d3d9b8adb8c0c95",
-        "import:a11dc495c174c3dd4863"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#createNodeRollbackEffectObserver",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#loadNodeRollbackTarget"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/nodeRollback.ts"
-      ]
     }
   ],
   "registeredFindings": [
@@ -8010,15 +8010,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:25bab3e2ac00cc474c66449833c2db39b424ff4eca1b63ca04bf12bceea480cd",
+    "sourceDigest": "sha256:dbdcb17d6642a77d570c12e10431fcc2771b99a60fbf3d01d247a8ac86ee2e9c",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "5bc74c468c3477da5d1259cccab6a5b431e0469c",
-    "contentDigest": "sha256:95e493d988e73e2a5c922d0f897a5a38e3d4d4cb913bb182f4fc1aea2b3a6f42",
+    "currentSnapshotSha": "e2c813b7650a0fe93d63db96c5c2b87002bfff2e",
+    "contentDigest": "sha256:1c0aa0001936bcfa36854e4f6d98b32f200854b37911949264f382b37bea3d20",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

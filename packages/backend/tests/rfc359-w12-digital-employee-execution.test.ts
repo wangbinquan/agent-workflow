@@ -234,10 +234,9 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
                     appHome,
                     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
                     coordinatorDeps: {
-                      // 协调器的驱动生命周期端口目前仍是 SQLite 专属
-                      // （PG 有自己的 `createPostgresqlTaskDriverLifecyclePort`）——
-                      // 这是下一层的孪生，不在本刀范围内（plan §5hm）。这条分支上它确实是 SQLite。
-                      db: harness.db as unknown as DbClient,
+                      // RFC-359 AC-1（plan §5hm）：协调器的 `db` 已经是中立句柄——
+                      // 驱动生命周期端口两个引擎共用一份之后，这里不再需要 SQLite 的品牌类型。
+                      db: harness.db,
                       ...runConfig,
                       schedulerDriver: provider.runtime.schedulerDriver,
                     },

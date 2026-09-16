@@ -148,7 +148,10 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // `composePostgresqlScriptActionExecution`。**是合一不是删覆盖**，分母因此少四。
       // RFC-359 AC-1（2026-09-16，plan §5hl）：86 → 85。数字员工执行的两份 composer 合一，
       // 退役 `composePostgresqlDigitalEmployeeExecution`。**是合一不是删覆盖**，分母少一。
-    ).toBeGreaterThanOrEqual(85)
+      // RFC-359 AC-1（2026-09-16，plan §5hm）：85 → 84。驱动生命周期端口两个引擎合成一份，
+      // 退役 `createPostgresqlTaskDriverLifecyclePort`（连同整个 `postgresqlTaskDriverLifecycle.ts`）。
+      // **是合一不是删覆盖**，分母少一。
+    ).toBeGreaterThanOrEqual(84)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

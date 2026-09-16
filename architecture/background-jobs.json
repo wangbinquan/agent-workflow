@@ -5454,11 +5454,11 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 8,
-    "entries": 333,
+    "entries": 331,
     "executionLocal": 40,
-    "longRunning": 77,
+    "longRunning": 76,
     "managed": 11,
-    "periodic": 208
+    "periodic": 207
   },
   "entries": [
     {
@@ -8643,50 +8643,6 @@
     },
     {
       "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#$setInterval:48",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": true,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setInterval:48",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#OWNER_HEARTBEAT_MS",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": true,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#OWNER_HEARTBEAT_MS",
-      "phase": "unknown",
-      "symbol": "OWNER_HEARTBEAT_MS",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
         "db"
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts",
@@ -8737,7 +8693,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:98",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:136",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8751,7 +8707,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:98",
+      "symbol": "$setInterval:136",
       "targetContext": "task-execution"
     },
     {
@@ -12255,7 +12211,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5676",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5684",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12269,7 +12225,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5676",
+      "symbol": "$setTimeout:5684",
       "targetContext": "task-execution"
     },
     {
@@ -12799,5 +12755,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25bab3e2ac00cc474c66449833c2db39b424ff4eca1b63ca04bf12bceea480cd"
+  "sourceDigest": "sha256:dbdcb17d6642a77d570c12e10431fcc2771b99a60fbf3d01d247a8ac86ee2e9c"
 }

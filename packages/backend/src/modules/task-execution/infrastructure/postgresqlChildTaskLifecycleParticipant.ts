@@ -48,7 +48,7 @@ import type { ProviderTaskExecutionModule } from '../composition'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { taskStopProjection } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
-import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
@@ -679,9 +679,10 @@ async function cancelCascade(
 export function createPostgresqlChildTaskLifecycleParticipant(
   dependencies: PostgresqlChildTaskLifecycleDependencies,
 ): ChildTaskLifecycleParticipant {
-  const lifecycle = createPostgresqlTaskDriverLifecyclePort({
+  const lifecycle = createTaskDriverLifecyclePort({
     db: dependencies.db,
     module: dependencies.executionModule,
+    claim: (intentId) => dependencies.executionModule.claimPersisted({ intentId }),
     persistence: dependencies.persistence,
     log: dependencies.log,
     finalizeWorkspace: dependencies.finalizeWorkspace,

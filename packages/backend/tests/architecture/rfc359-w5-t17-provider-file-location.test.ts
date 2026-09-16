@@ -140,7 +140,8 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
   'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts',
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts',
-  'modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts',
+  // RFC-359 AC-1（plan §5hm）：**删除**——驱动生命周期端口两个引擎合成一份
+  // （`taskDriverLifecycle.ts`），PG 专属那份已退役。少一个 provider 命名文件。
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',

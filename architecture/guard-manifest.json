@@ -2032,6 +2032,18 @@
       "lines": 188
     },
     {
+      "id": "rfc359-w5hm-attach-review-lock-parity",
+      "file": "packages/backend/tests/rfc359-w5hm-attach-review-lock-parity.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 132
+    },
+    {
       "id": "rfc359-w6-node-run-insert-lineage-completeness",
       "file": "packages/backend/tests/architecture/rfc359-w6-node-run-insert-lineage-completeness.test.ts",
       "runner": "bun",
@@ -2537,14 +2549,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:25bab3e2ac00cc474c66449833c2db39b424ff4eca1b63ca04bf12bceea480cd",
+    "sourceDigest": "sha256:dbdcb17d6642a77d570c12e10431fcc2771b99a60fbf3d01d247a8ac86ee2e9c",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "5bc74c468c3477da5d1259cccab6a5b431e0469c",
-    "contentDigest": "sha256:fdc56afa98c0b69886ddb98646643992dacdf6b64c4577a061aa1d2205fa25ec",
+    "currentSnapshotSha": "e2c813b7650a0fe93d63db96c5c2b87002bfff2e",
+    "contentDigest": "sha256:7175a93ea48e6dc078e392ed76deae1ab83b1db1656ebddb5864444beefe03de",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

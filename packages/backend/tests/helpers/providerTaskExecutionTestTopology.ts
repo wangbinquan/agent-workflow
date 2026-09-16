@@ -7,7 +7,7 @@ import {
   skipRepositoryPreparation,
 } from '../../src/modules/task-execution/application/drive/taskDriveCoordinator'
 import { resolveTaskDriveConfig } from '../../src/modules/task-execution/application/drive/taskDriveTypes'
-import { createPostgresqlTaskDriverLifecyclePort } from '../../src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from '../../src/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { createLogger } from '../../src/util/log'
 import type { ProviderDatabaseHarness } from './eachProvider'
 import { createProviderHttpApplication } from './providerHttpApplication'
@@ -89,9 +89,10 @@ export async function createProviderTaskExecutionTestTopology(
         })
         const coordinator = new DefaultTaskDriveCoordinator({
           runtime: resolveTaskDriveConfig(runConfig),
-          lifecycle: createPostgresqlTaskDriverLifecyclePort({
+          lifecycle: createTaskDriverLifecyclePort({
             db: binding.db,
             module: provider.executionModule,
+            claim: (intentId) => provider.executionModule.claimPersisted({ intentId }),
             persistence: provider.persistence,
             log,
             finalizeWorkspace: (id) => selected.workspace.finalizeClaimedWorkspace(id),

@@ -32,7 +32,7 @@ import type {
 import type { ProviderTaskExecutionModule } from '../composition'
 import { sha256Hex } from '../domain/digest'
 import type { OwnershipToken } from '../domain/ownership'
-import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import {
@@ -308,9 +308,11 @@ async function cancelPostgresqlTask(
 export function createPostgresqlFusionEngineTaskOperations(
   dependencies: PostgresqlFusionEngineTaskDependencies,
 ): FusionEngineTaskOperations {
-  const lifecycle = createPostgresqlTaskDriverLifecyclePort({
+  // RFC-359 AC-1（plan §5hm）：与 SQLite 侧同一份端口实现，认领方式在这里绑定。
+  const lifecycle = createTaskDriverLifecyclePort({
     db: dependencies.db,
     module: dependencies.executionModule,
+    claim: (intentId) => dependencies.executionModule.claimPersisted({ intentId }),
     persistence: dependencies.persistence,
     log: dependencies.log,
     finalizeWorkspace: dependencies.finalizeWorkspace,

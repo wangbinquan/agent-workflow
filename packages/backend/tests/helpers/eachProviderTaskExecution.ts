@@ -48,7 +48,7 @@ import {
   type SelectedSqliteTaskExecutionProviderRuntime,
 } from '@/modules/task-execution/composition/providerRuntime'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
-import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
@@ -364,9 +364,10 @@ export async function createEachProviderTaskExecution(
     })
   const coordinator = new DefaultTaskDriveCoordinator({
     runtime: resolveTaskDriveConfig(runConfig),
-    lifecycle: createPostgresqlTaskDriverLifecyclePort({
+    lifecycle: createTaskDriverLifecyclePort({
       db: postgresql,
       module: provider.executionModule,
+      claim: (intentId) => provider.executionModule.claimPersisted({ intentId }),
       persistence,
       log,
       finalizeWorkspace: async () => {},

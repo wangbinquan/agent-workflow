@@ -20,6 +20,6 @@ export {
   activeTaskDriverController,
   awaitTaskDriverIdle,
   clearTaskDriverLifecycleForTesting,
-  createTaskDriverLifecyclePort,
+  createDatabaseTaskDriverLifecyclePort,
   isTaskDriverActive,
 } from '../infrastructure/taskDriverLifecycle'

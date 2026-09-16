@@ -254,7 +254,7 @@ const {
   activeTaskDriverController,
   awaitTaskDriverIdle,
   clearTaskDriverLifecycleForTesting,
-  createTaskDriverLifecyclePort,
+  createDatabaseTaskDriverLifecyclePort,
   DefaultTaskDriveCoordinator,
   isTaskDriverActive,
   PersistedRepositoryPreparationStep,
@@ -1520,13 +1520,21 @@ const missingMemoryDistillEnqueuer: MemoryDistillEnqueuer = Object.freeze({
 export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOpts>[0] &
   Pick<
     StartTaskDeps,
-    | 'db'
     | 'schedulerDriver'
     | 'binaryOverride'
     | 'configPath'
     | 'subagentLiveCapture'
     | 'memoryDistillEnqueuer'
-  >
+  > & {
+    /**
+     * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `StartTaskDeps` Pick 来的
+     * `LegacySqliteTaskDatabase`——**不是因为协调器真要 SQLite**，而是它装的驱动生命周期端口
+     * 当年只有 SQLite 一份（要 `DbClient`）。端口合一之后那个约束没了：
+     * 协调器这一路上读 `db` 的三处（生命周期端口、闸门继续前置、工作区清理）全是中立实现。
+     * `StartTaskDeps` 仍然满足这个更宽的类型，所以本文件内既有构造点一个字都不用改。
+     */
+    readonly db: LegacyProviderNeutralDatabase
+  }
 
 export function createTaskDriveCoordinator(input: {
   readonly deps: TaskDriveCoordinatorDependencies
@@ -1553,7 +1561,7 @@ export function createTaskDriveCoordinator(input: {
   })
   return new DefaultTaskDriveCoordinator({
     runtime,
-    lifecycle: createTaskDriverLifecyclePort({
+    lifecycle: createDatabaseTaskDriverLifecyclePort({
       db: input.deps.db,
       log,
       finalizeWorkspace: async (taskId) => {

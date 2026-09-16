@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1776,
+    "backendFiles": 1775,
     "frontendFiles": 622,
     "legacyFiles": 595,
-    "moduleFiles": 1181,
-    "productionFiles": 2553,
+    "moduleFiles": 1180,
+    "productionFiles": 2552,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24708
+    "symbolsIncludingFileRoots": 24704
   },
   "entries": [
     {
@@ -127371,66 +127371,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#createPostgresqlTaskDriverLifecyclePort",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlTaskDriverLifecyclePort",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#OWNER_HEARTBEAT_MS",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "OWNER_HEARTBEAT_MS",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#OWNER_LEASE_MS",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "OWNER_LEASE_MS",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#PostgresqlTaskDriverLifecycleOptions",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlTaskDriverLifecycleOptions",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#$file",
       "removeAfterWave": null,
@@ -130648,6 +130588,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createDatabaseTaskDriverLifecyclePort",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createTaskDriverLifecyclePort",
       "removeAfterWave": null,
       "status": "current-module",
@@ -130720,10 +130672,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#TaskDriverLifecycleAdapterOptions",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#TaskDriverLifecycleDependencies",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "TaskDriverLifecycleAdapterOptions",
+      "symbol": "TaskDriverLifecycleDependencies",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -185898,6 +185850,18 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/task.ts",
+      "id": "owner:packages/backend/src/services/task.ts#createDatabaseTaskDriverLifecyclePort",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "createDatabaseTaskDriverLifecyclePort",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#createMaterializedSpaceCleanup",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -185928,18 +185892,6 @@
       "symbol": "createTaskDriveCoordinator",
       "targetContext": "task-execution",
       "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#createTaskDriverLifecyclePort",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "createTaskDriverLifecyclePort",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
     },
     {
       "currentContext": "legacy",
@@ -297173,5 +297125,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25bab3e2ac00cc474c66449833c2db39b424ff4eca1b63ca04bf12bceea480cd"
+  "sourceDigest": "sha256:dbdcb17d6642a77d570c12e10431fcc2771b99a60fbf3d01d247a8ac86ee2e9c"
 }

@@ -524,6 +524,24 @@ grep -rln "digitalEmployeeExecution\.ts\|actionExecutionEnvironment\.ts" package
 ```
 
 这一网同时罩住两种写法，代价是命中面偏大（本次 67 个文件，跑一遍两分钟）——值。
+实测这一网当场又捞出第三种：`edge('services/agent.ts', 'modules/.../digitalEmployeeExecution.ts', …)`
+这种把两端路径当**账本键的两个字段**写的。basename 扫法一并罩住。
+
+## `allowGrowth` 是**一次性**的：改动再小，动了被清点的东西就要重跑 census（2026-09-16 又撞）
+
+`architecture/ledger-baselines.json` 里的 `allowGrowth` 只对**声明它的那个 commit**有效——
+下一个「没让该账本继续涨」的 commit 会判它过期并红在
+`RFC-317 T17 > allowGrowth 无过期条目`。
+
+这次的形状值得记，因为它看起来完全无害：一笔**只改了一个测试文件**（删掉一行已还清的
+兼容账本）的修红提交，我没重跑 `scripts/architecture-census.ts` 就推了。结果两件事一起红：
+①那一行本身让 `rfc345-resource-acl-facade-compatibility` 的条目数 40 → 39，基线没跟着改小；
+②上一笔留下的 `allowGrowth` 因为这一笔没涨而过期。
+
+**定式**：只要改动触及「会被账本清点的东西」——源码导出、跨上下文 import、守卫文件、
+账本数组本身——提交前都要 `bun run scripts/architecture-census.ts --write --snapshot-sha HEAD`
+再跑一遍 `tests/architecture/`。**「只改了一个测试文件」不是豁免理由**，
+账本清点的恰恰就是测试文件里的那些数组。
 
 删文件 / 改文件名时同理（见本文件「删文件要连着账本一起删」那条）。
 **注意方向**：这类账本红的时候往往是**好事**——「少一个未受审调用点」「少一条 deep import」

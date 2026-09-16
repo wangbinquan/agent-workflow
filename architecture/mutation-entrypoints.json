@@ -25470,29 +25470,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "effect",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#createPostgresqlTaskDriverLifecyclePort",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts#createPostgresqlTaskDriverLifecyclePort",
-      "symbol": "createPostgresqlTaskDriverLifecyclePort",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": false,
@@ -26742,6 +26719,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#attachTaskDriver",
       "symbol": "attachTaskDriver",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort",
+      "symbol": "createDatabaseTaskDriverLifecyclePort",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -37368,6 +37369,31 @@
       },
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/task.ts#createDatabaseTaskDriverLifecyclePort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#createDatabaseTaskDriverLifecyclePort",
+      "symbol": "createDatabaseTaskDriverLifecyclePort",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/task.ts#createMaterializedSpaceCleanup",
       "missingControls": [
         "audit",
@@ -37427,31 +37453,6 @@
       "symbol": "createTaskDriveCoordinator",
       "targetContext": "task-execution",
       "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/task.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/task.ts#createTaskDriverLifecyclePort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/task.ts#createTaskDriverLifecyclePort",
-      "symbol": "createTaskDriverLifecyclePort",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
     },
     {
       "controls": {
@@ -40186,7 +40187,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25bab3e2ac00cc474c66449833c2db39b424ff4eca1b63ca04bf12bceea480cd",
+  "sourceDigest": "sha256:dbdcb17d6642a77d570c12e10431fcc2771b99a60fbf3d01d247a8ac86ee2e9c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41144,8 +41145,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#547:tasks",
-        "line": 547,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#548:tasks",
+        "line": 548,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#launchPreparedChild",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -41160,8 +41161,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#647:taskExecutionIntents",
-        "line": 647,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#648:taskExecutionIntents",
+        "line": 648,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#launchPreparedChild",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -41176,8 +41177,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#691:tasks",
-        "line": 691,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#692:tasks",
+        "line": 692,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#launchPreparedChild",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42728,8 +42729,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3530:tasks",
-        "line": 3530,
+        "id": "task-authority:packages/backend/src/services/task.ts#3538:tasks",
+        "line": 3538,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -42744,8 +42745,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3658:taskExecutionIntents",
-        "line": 3658,
+        "id": "task-authority:packages/backend/src/services/task.ts#3666:taskExecutionIntents",
+        "line": 3666,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -42760,8 +42761,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3716:tasks",
-        "line": 3716,
+        "id": "task-authority:packages/backend/src/services/task.ts#3724:tasks",
+        "line": 3724,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -42776,8 +42777,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4305:tasks",
-        "line": 4305,
+        "id": "task-authority:packages/backend/src/services/task.ts#4313:tasks",
+        "line": 4313,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -42792,8 +42793,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5909:tasks",
-        "line": 5909,
+        "id": "task-authority:packages/backend/src/services/task.ts#5917:tasks",
+        "line": 5917,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

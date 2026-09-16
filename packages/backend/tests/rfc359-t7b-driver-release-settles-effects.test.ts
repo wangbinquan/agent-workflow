@@ -9,7 +9,7 @@
 
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
@@ -521,12 +521,19 @@ test('源码锁：两个 provider 的 driver lifecycle 都委托同一份释放�
     'task-execution',
     'infrastructure',
   )
-  for (const file of ['taskDriverLifecycle.ts', 'postgresqlTaskDriverLifecycle.ts']) {
-    const source = readFileSync(resolve(infrastructure, file), 'utf8')
-    expect(source).toContain("from './taskDriverRelease'")
-    expect(source).not.toContain('releaseAfterStop(')
-    expect(source).not.toContain('markRecoveryRequired(')
-  }
+  // RFC-359 AC-1（plan §5hm）：driver lifecycle 那一对**已经合成一份**，
+  // 所以「两份都委托同一个释放序列」升级成更强的事实：**只有一份**。
+  // PG 那份必须不存在——否则有人又开了第二个副本，这条就该红。
+  expect(
+    existsSync(resolve(infrastructure, 'postgresqlTaskDriverLifecycle.ts')),
+    'driver lifecycle 不该再有 provider 专属副本（plan §5hm 已合一）',
+  ).toBe(false)
+  const lifecycleSource = readFileSync(resolve(infrastructure, 'taskDriverLifecycle.ts'), 'utf8')
+  expect(lifecycleSource).toContain("from './taskDriverRelease'")
+  expect(lifecycleSource).not.toContain('releaseAfterStop(')
+  expect(lifecycleSource).not.toContain('markRecoveryRequired(')
+  // 认领方式是唯一按引擎不同的那一格，由装配方交闭包决定；实现本身不许再问引擎。
+  expect(lifecycleSource).not.toContain("provider === '")
   // RFC-359 W8：恢复实现本身也合一了（此前 sqlite/postgresqlTaskExecutionRecovery.ts 一对），
   // 清算全部经 effectQuiescence.ts，恢复模块里不再有任何 provider 私有的清算副本。
   const recovery = readFileSync(resolve(infrastructure, 'taskExecutionRecovery.ts'), 'utf8')

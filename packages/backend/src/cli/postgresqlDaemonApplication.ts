@@ -116,7 +116,7 @@ import {
 } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
 import type { TaskDriveCoordinator } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
-import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import {
   composeWorkgroupTaskRoomClarifyParticipantFactory,
   createCollaborationRuntimeMechanics,
@@ -1060,9 +1060,12 @@ export async function composePostgresqlApplication(
     fusion: { appHome: input.appHome },
     workgroupTaskRoom: { collaboration: workgroupClarify },
   })
-  const taskDriverLifecycle = createPostgresqlTaskDriverLifecyclePort({
+  // RFC-359 AC-1（plan §5hm）：驱动生命周期端口两个引擎共用一份。认领方式由这里绑定——
+  // PG 用实例模块的 `claimPersisted`，SQLite 用进程级单例的 `claim({ db, intentId })`。
+  const taskDriverLifecycle = createTaskDriverLifecyclePort({
     db: input.db,
     module: taskExecutionProvider.executionModule,
+    claim: (intentId) => taskExecutionProvider.executionModule.claimPersisted({ intentId }),
     persistence: taskExecutionProvider.persistence,
     log,
     finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),

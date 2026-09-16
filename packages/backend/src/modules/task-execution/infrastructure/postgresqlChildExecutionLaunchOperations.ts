@@ -52,7 +52,7 @@ import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecu
 import type { ProviderTaskExecutionModule } from '../composition'
 import { childLaunchAdmissionIssue } from '../domain/childLaunchAdmission'
 import { sha256Hex } from '../domain/digest'
-import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
+import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import {
   type TaskExecutionTransaction,
   withSerializableTaskExecution,
@@ -367,9 +367,10 @@ function createCoordinator(
   dependencies: PostgresqlChildExecutionLaunchDependencies,
   request: ChildLaunchRequest,
 ) {
-  const lifecycle = createPostgresqlTaskDriverLifecyclePort({
+  const lifecycle = createTaskDriverLifecyclePort({
     db: dependencies.db,
     module: dependencies.executionModule,
+    claim: (intentId) => dependencies.executionModule.claimPersisted({ intentId }),
     persistence: dependencies.persistence,
     log: dependencies.log,
     finalizeWorkspace: dependencies.finalizeWorkspace,
