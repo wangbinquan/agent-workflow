@@ -13937,3 +13937,58 @@ SQLite 专属启动面上」。AC-6 剩下的 14 条里 `start-task-deps` 也指
 
 `tsc` 0 错；`eslint --max-warnings 0` 干净；`tests/architecture/` 706 全绿；
 `scripts/tests-referencing.sh` 半径 21 文件 244 例全绿。
+
+---
+
+## §5ha　启动面合一 Step B 的**确切**卡点：协调器锁在 legacy 单体里
+
+Step A（§5gz）把内核那一叠放宽到中立句柄之后，Step B 是「让 SQLite 组合根造出这台内核」。
+把它需要的东西逐项对到两个 daemon 上，卡点收敛成**一件**。
+
+### 根内核只要四样（比路由级那套小得多）
+
+`createPostgresqlRootTaskLaunchKernel` 的 `PostgresqlRootTaskLaunchDependencies`：
+
+| 依赖 | PostgreSQL daemon 怎么给 | SQLite daemon（`cli/start.ts`）现状 |
+| --- | --- | --- |
+| `db` | 自己的库 | ✅ 有（Step A 后形参已中立） |
+| `gitCommitIdentity` | `identityAccess.getUserGitCommitIdentity`（`postgresqlDaemonApplication.ts:994`） | ✅ **可得**——那是 `modules/identity-access/composition/legacyUserService.ts` 的中立导出，与 provider 无关 |
+| `workspace` | `createPostgresqlTaskRouteWorkspaceParticipant({ db, appHome, … })` | ✅ **可得**——Step A 之后它收中立句柄，`appHome` / `secretBox` start.ts 都有 |
+| `coordinator` | `taskDriveCoordinator`（`postgresqlDaemonApplication.ts:953`，就地 `Object.freeze({…})` 造） | ❌ **没有** |
+
+（注意：路由级的 `PostgresqlTaskRouteLaunchDependencies` 还要 `configPath` / `resourceAuthorityFor` /
+`agent.{resources,integrity}` / `workgroup`——但 `actionExecutionEnvironment` 这类**只要根内核**，
+所以先做根内核这条窄路，不必一上来就补齐路由级那一整套。）
+
+### 卡点：SQLite 侧的协调器是 legacy 单体的私有物
+
+`services/task.ts:1507` 有 `createTaskDriveCoordinator`，但它：
+
+- **不导出**（模块私有），只在 `services/task.ts` 内部 4 处构造（3821 / 4394 / 4807 / 5442）；
+- 入参是 **`StartTaskDeps`**——legacy 启动路的那个大依赖包，而不是几件可独立提供的参与者。
+
+PostgreSQL 侧则是在 daemon 里**就地**造一个 `TaskDriveCoordinator`（953 行），与 `StartTaskDeps` 无关。
+
+所以 Step B 的真实内容是：**把「造协调器」这件事从 legacy 单体里解出来**，
+让它不再以 `StartTaskDeps` 为入参、可由任一 daemon 独立装配。
+这是对 5000+ 行 legacy 文件的一次结构改动，不是接线。
+
+### 排序建议（给下一刀）
+
+1. **先解协调器**：把 `createTaskDriveCoordinator` 的入参从 `StartTaskDeps` 收成它真正用到的那几件
+   （看 1507 起的函数体：`appHome` / `binaryOverride` / `configPath` / `subagentLiveCapture` /
+   `runtimeConfigOpts(deps)` + 几个步骤钩子），导出它。**这一步零行为变更、可独立验证。**
+2. 再让 `cli/start.ts` 用它造一个协调器 + 一个工作区参与者 + 那个中立的 git identity，
+   装出一台**根内核**。
+3. 然后 `createSqliteActionExecutionEnvironment` 改走 `launch.launch(...)`，
+   与 PG 那份合一——AC-1 那 9 条里最底下的一块。
+4. 逐层往上合（agentActionExecution / scriptActionExecution / digitalEmployeeExecution /
+   providerRuntime / sourceTermination / triggerExecution），最后退役 legacy 启动面。
+
+**第 1 步是下一刀的起点**，它的好处是：不碰启动语义、不动用户可见行为，
+却能把「协调器只属于 legacy」这个卡点拆掉。
+
+### 合一时必须一起处理的行为差异（持续登记）
+
+- §5gy：源任务缺 cached mirror id 时，legacy 报计数 + 指引、内核只报一句——**留 legacy 那份措辞**。
+（这张清单在迁移过程中继续加；每条都要在合一的 PR 里点名处置，不能让合一悄悄降级用户可见行为。）
