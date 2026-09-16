@@ -334,7 +334,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-database-operational-adapter.test.ts: 1',
   'rfc349-digital-employee-platform-tools-wiring.test.ts: 1',
   'rfc349-dual-provider-behavior-oracle.test.ts: 3',
-  'rfc349-execution-peripheral-provider.test.ts: 1',
   'rfc349-identity-access-promise-contract.test.ts: 2',
   'rfc349-maintenance-disk-provider.test.ts: 1',
   'rfc349-maintenance-execution-fence.test.ts: 1',
@@ -603,9 +602,18 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
      *
      * `rfc349-daemon-provider-core` 是这形状：一条用例叫「SQLite composes the same closed
      * surface…」驱动 `composeSqliteDaemonProviderCore`，紧挨着的另一条叫「PostgreSQL composes
-     * without SQL/openDb…」驱动 `composePostgresqlDaemonProviderCore`。两个引擎**都**验了，
-     * 只是没写成 `describeEachProvider`——也不该写成：两半断言的是**不同的事**
-     * （谁拥有客户端生命周期），塞进同一个 harness 反而要靠 `capabilities` 分叉回去。
+     * without SQL/openDb…」驱动 `composePostgresqlDaemonProviderCore`。
+     *
+     * 这条判据认的是**那个直建 SQLite 库的调用点有正当理由**：它的被测物是
+     * `composeSqliteX` 这个**只存在于 SQLite 的组合函数**，换个引擎根本没有这个东西可测，
+     * 所以它不是「还没迁的债」。两半断言的也是**不同的事**（谁拥有客户端生命周期），
+     * 塞进一个 `describeEachProvider` 反而要靠 `capabilities` 分叉回去。
+     *
+     * **它不保证另一半跑的是真 PostgreSQL。** 本判据只看「同一对的两半都被驱动了」；
+     * 当前命中的这个文件，PG 那半走的是本地手搓的 `postgresqlFixture()`——一个记录 SQL 文本、
+     * 回罐头行的**假池**。假池的覆盖力弱得多（列名写错、少个 schema 限定、类型不对、
+     * 真约束冲突，它一律照单全收），那是**另一条要还的债**，按文件清点与处置见 plan §5gn。
+     * 两件事分开记：这里记的是「SQLite 那个调用点该不该留」，§5gn 记的是「PG 那半够不够真」。
      *
      * 判据按**配对**认：同一个 X 上 `composeSqliteX(` 与 `composePostgresqlX(` 都出现。
      * 今天它只命中一个文件，但它认的是**结构**而不是某个文件的特征串——此后任何
@@ -749,7 +757,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc269-webhook-code-host-context-e2e.test.ts',
   'rfc349-digital-employee-platform-tools-wiring.test.ts',
   'rfc349-dual-provider-behavior-oracle.test.ts',
-  'rfc349-execution-peripheral-provider.test.ts',
   'rfc349-task-execution-provider-adapters.test.ts',
   'rfc359-execution-contract-resource-adapter.test.ts',
   'rfc359-t19h-logical-backup-restore.test.ts',

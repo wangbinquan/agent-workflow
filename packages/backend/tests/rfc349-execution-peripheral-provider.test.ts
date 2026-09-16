@@ -1,79 +1,17 @@
 // RFC-349 — execution-peripheral services consume closed provider operations;
 // only infrastructure adapters may own database mechanics.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { buildActor } from '@/auth/actor'
-import { createInMemoryDb } from '@/db/client'
 import { workflows } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function sqlRows(
-  values: readonly (readonly unknown[])[] = [],
-  rows: readonly Record<string, unknown>[] = [],
-): SqlRows {
-  return Object.assign(Promise.resolve(rows), {
-    async values() {
-      return values
-    },
-  })
-}
-
-function postgresqlFixture() {
-  const executions: string[] = []
-  const execute = (sql: string) => {
-    executions.push(sql)
-    if (sql.includes('"agent_workflow_meta"."database_generations"')) {
-      return sqlRows(
-        [['dbg_execution_peripheral_pg']],
-        [{ generation_id: 'dbg_execution_peripheral_pg' }],
-      )
-    }
-    return sqlRows()
-  }
-  const connection: PostgresqlReservedConnection = { unsafe: execute, release() {} }
-  const pool: PostgresqlPool = {
-    unsafe: execute,
-    async reserve() {
-      return connection
-    },
-    async close() {},
-  }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'dbg_execution_peripheral_pg',
-    providerPool: () => pool,
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    async close() {},
-  }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
-}
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
+import { describeEachProvider } from './helpers/eachProvider'
 
 describe('RFC-349 execution-peripheral provider boundary', () => {
   test('keeps database mechanisms out of peripheral orchestration services', () => {
@@ -121,34 +59,20 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
     expect(dependencies).toContain('infrastructure/mcpPersistence')
     expect(dependencies).toContain('infrastructure/pluginPersistence')
   })
+})
 
-  test('SQLite agent-launch and dynamic-workflow adapters perform real durable reads and writes', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const agentLaunch = composeAgentLaunchResourceOperations({ db: db })
-    const dynamicWorkflow = composeDynamicWorkflowPersistence(db)
-
-    await agentLaunch.ensureHostWorkflow()
-    await agentLaunch.ensureHostWorkflow()
-
-    expect(
-      db
-        .select({ id: workflows.id, name: workflows.name, builtin: workflows.builtin })
-        .from(workflows)
-        .where(eq(workflows.id, '00000000000000AGENTHOST00'))
-        .get(),
-    ).toEqual({
-      id: '00000000000000AGENTHOST00',
-      name: '__agent_host__',
-      builtin: true,
-    })
-    await expect(dynamicWorkflow.loadTask('missing-task')).resolves.toBeNull()
-    expect(await dynamicWorkflow.countNodeRuns('missing-task', 'missing-node')).toBe(0)
-
-    db.$client.close()
-  })
-
-  test('PostgreSQL agent launch persists its host and requires closed catalog operations', async () => {
-    const fixture = postgresqlFixture()
+// RFC-359 AC-6（plan §5gn）—— 这两格原来是**一真一假**：SQLite 那格用真库、读回行断言内容与幂等；
+// PostgreSQL 那格用本地手搓的 `postgresqlFixture()`（记 SQL 文本、回罐头行的假池），
+// 唯一的断言是「某条 SQL 里出现过 `"agent_workflow"."workflows"`」——它证明不了行真的写进去了、
+// 更证明不了写两次是幂等的。这正是本 RFC 要根除的「一个好一个不好」。
+//
+// 两个 composer 的 `db` 形参本来就是 `ProviderNeutralDatabase`，所以合一**零生产改动**：
+// 两个引擎各跑一遍同一组断言（真库、读回行、幂等、外部依赖注入）。
+// 丢掉的只有那条 SQL 文本断言——净赚：真 PG 上跑通是对「投影带 schema 限定名」强得多的证明
+// （写错当场报错，而假池照单全收）。同 §5gd 对 `rfc349-websocket-provider` 的处置。
+describeEachProvider('RFC-349 execution-peripheral adapters（双引擎真库）', (harness) => {
+  test('agent-launch 与 dynamic-workflow 适配器在真库上读写、且 ensureHostWorkflow 幂等', async () => {
+    const db = harness.db
     const visibleRequests: Array<{ readonly actorId: string; readonly agentId: string }> = []
     const actor = buildActor({
       user: {
@@ -160,8 +84,8 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
       },
       source: 'session',
     })
-    const operations = composeAgentLaunchResourceOperations({
-      db: fixture.db,
+    const agentLaunch = composeAgentLaunchResourceOperations({
+      db,
       agents: {
         async get(authority, agentId) {
           visibleRequests.push({ actorId: authority.user.id, agentId })
@@ -174,16 +98,27 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
         },
       },
     })
+    const dynamicWorkflow = composeDynamicWorkflowPersistence(db)
 
-    await operations.ensureHostWorkflow()
-    await expect(operations.loadVisibleAgent(actor, 'agent-1')).resolves.toBeNull()
+    // 调两次：第二次不得重复插入，也不得抛。
+    await agentLaunch.ensureHostWorkflow()
+    await agentLaunch.ensureHostWorkflow()
+
+    const hosts = await db
+      .select({ id: workflows.id, name: workflows.name, builtin: workflows.builtin })
+      .from(workflows)
+      .where(eq(workflows.id, '00000000000000AGENTHOST00'))
+    expect(hosts).toEqual([
+      { id: '00000000000000AGENTHOST00', name: '__agent_host__', builtin: true },
+    ])
+
+    await expect(agentLaunch.loadVisibleAgent(actor, 'agent-1')).resolves.toBeNull()
+    expect(visibleRequests).toEqual([{ actorId: 'owner-1', agentId: 'agent-1' }])
     await expect(
-      operations.validateHostWorkflow({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+      agentLaunch.validateHostWorkflow({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     ).resolves.toEqual({ ok: true, issues: [] })
 
-    expect(visibleRequests).toEqual([{ actorId: 'owner-1', agentId: 'agent-1' }])
-    expect(fixture.executions.some((sql) => sql.includes('"agent_workflow"."workflows"'))).toBe(
-      true,
-    )
+    await expect(dynamicWorkflow.loadTask('missing-task')).resolves.toBeNull()
+    expect(await dynamicWorkflow.countNodeRuns('missing-task', 'missing-node')).toBe(0)
   })
 })

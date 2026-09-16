@@ -13236,3 +13236,75 @@ PG 上 `.run()` 只返回一个没人 await 的 Promise，改库与随后那次�
 （`= DbClient`，注释自称「provider-private alias for shrinking the legacy SQLite compatibility tail」），
 它属于 **legacy 启动路径**那一刀（`services/task` 的 `startExecution` vs `PostgresqlRootTaskLaunchKernel`），
 不是一次测试迁移能解决的——**留在债里是对的**，不给它造判据。
+
+---
+
+## §5gn　最大的一处「一个好一个不好」：**17 个文件手搓假 PostgreSQL**
+
+§5gm 把 AC-6 剩下的债说成「真迁移量」。往下挖第一铲就挖到了本 RFC 迄今最集中的一处不对称——
+而且它**不在 AC-6 的账本上**，因为账本数的是「直建 SQLite 库的调用点」，
+数不到「PostgreSQL 那半根本没连真库」。
+
+### 先纠正我自己上一节的一句话
+
+§5gl 判 `rfc349-daemon-provider-core` 用的理由写成了「两个引擎**都**验了」。
+**这句话说过头了**：它 PG 那半跑的是本地手搓的 `postgresqlFixture()`——一个记录 SQL 文本、
+回罐头行的**假池**，不是真库。裁决本身仍然成立（那个直建 SQLite 库的调用点，被测物是
+`composeSqliteDaemonProviderCore` 这个只存在于 SQLite 的组合函数，换引擎没有这个东西可测），
+但理由要写准：判据认的是「SQLite 那个调用点该不该留」，**不保证另一半跑的是真 PostgreSQL**。
+判据注释已改。两件事分开记，这一节记的就是后者。
+
+### 清点
+
+按 `function postgresqlFixture` 扫全量测试目录：**17 个文件、5445 行、30 处假池调用**。
+
+| | 文件数 | 行数 |
+| --- | --- | --- |
+| **A. PG 覆盖全靠假池**（文件里零 `describeEachProvider`） | 8 | 3100 |
+| **B. 混合**（既有假池、也有真双引擎格） | 9 | 2345 |
+
+A 组（按行数降序）：`rfc349-task-route-launch-postgresql-adapter`(971) ·
+`rfc349-repository-preparation-postgresql-adapter`(392) · `rfc349-task-execution-provider-adapters`(386) ·
+`rfc349-child-execution-launch-postgresql-adapter`(350) · `rfc349-source-control-provider-adapters`(350) ·
+`rfc349-daemon-provider-core`(257) · `rfc349-resource-limit-provider`(204) ·
+`rfc349-execution-peripheral-provider`(190)。
+
+### 假池弱在哪（不是「弱一点」，是量级差别）
+
+假池的 `unsafe` 把 SQL 收进数组、回一组罐头行。于是它**照单全收**：列名写错、少个 schema 限定、
+类型不对、真约束冲突、迁移链没建那张表——一律照过。断言只能落在「发出的 SQL 文本里有没有某个子串」，
+那是在验**我们自己拼的字符串**，不是验数据库。
+
+### 第一刀：`rfc349-execution-peripheral-provider`（190 行，A 组最小的一个）
+
+迁之前那两格是标准的**一真一假**：
+
+| | SQLite 格 | PostgreSQL 格 |
+| --- | --- | --- |
+| 库 | 真的内存库 | 假池 |
+| `ensureHostWorkflow()` | 调**两次**，验幂等 | 调一次 |
+| 断言 | 读回行，验 `id` / `name` / `builtin` | 「某条 SQL 里出现过 workflows 的 schema 限定名」 |
+
+两个 composer（`composeAgentLaunchResourceOperations` / `composeDynamicWorkflowPersistence`）的 `db`
+形参**本来就是** `ProviderNeutralDatabase`，所以合一是**零生产改动**：一个
+`describeEachProvider`，两个引擎各跑一遍**同一组**断言（真库、读回行、幂等、外部依赖注入）。
+
+丢掉的只有那条 SQL 文本断言——**净赚**，同 §5gd 对 `rfc349-websocket-provider` 的处置：
+真 PG 上跑通，是对「投影带 schema 限定名」强得多的证明（写错当场报错，假池照单全收）。
+
+**变异验证（这才是这一刀的价值证据）**：把期望的 `name` 改错 ⇒ **两个引擎各红一格**。
+迁移前同一处变异**只会红 SQLite 一格**——PG 那格压根没看 `name`。
+
+账本：总账 329 → 328、`OPEN_MIGRATION_DEBT` 16 → 15（这个文件连 `createInMemoryDb` 也一起没了）。
+
+### 剩下 7 个 A 组文件的处置原则
+
+不是所有假池都能换成真库。判据同 §5fq：
+- 断言的是**引擎独有原语的调用形态**（advisory lock、`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`
+  这类）——真库上要改用 `harness.recordStatements()` 断言**实际执行过**的语句，比假池的字符串匹配更强，
+  能迁；
+- 被测物是 `composePostgresqlX` 这类 **PG 专属组合根**且需要真连接才能装起来——按需评估；
+- 断言的是**错误路径**（连接失败、池耗尽）——假池可能仍是唯一造得出该状态的手段，那是正当的。
+
+逐个过，不一刀切；每迁一个都要求给出**变异验证**（迁移前只红一格、迁移后两格都红），
+否则只是把假池换成了真库而没有换来覆盖。
