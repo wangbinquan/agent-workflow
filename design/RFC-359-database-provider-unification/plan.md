@@ -14800,3 +14800,39 @@ catalogVisibility / 快照节点 id 与种类 / 边数），也就是 §5hn 那�
   **那是迁移动作不是回归**：逐条改成经 provider 路由启动，断言一个字不改。
 - 上传（multipart）那一支单独验：SQLite 现在走 `materializeSpace` + `applyUploadsToWorktree`，
   内核走 `uploads` 参数。两条路的落点必须逐字相同，**先补一条带上传的双引擎用例再动**。
+
+### §5hn 实施勘察：路由已共用端口，所以合并点比想象的小——但**不能**走 `startAgentTask` 内部委托
+
+两件实测（只读）：
+
+**① 路由层早就共用了。** `routes/agents.ts` 打的是
+`module.taskLaunch.launch(actor, command)`——即 `AgentRouteTaskLaunchOperations` 这个**共享端口**；
+两个引擎的差别整个在端口**背后**：SQLite 的臂转给 `startExecution` → `startAgentTask` → `startTask`，
+PG 的臂转给 `arms.launchAgent` → 启动内核。
+`createPostgresqlTaskRouteLaunchOperations(deps)` 交出来的正是这一对端口，
+**SQLite 只要能喂出同一份 deps，就能直接用它**——`createSqliteTaskRouteLaunchOperations`
+随之整份退役。合并点因此在 provider 装配层，不在路由层。
+
+**② 曾考虑的捷径不成立**：让 `startAgentTask` 内部改为「造个内核 + 调 `arms.launchAgent`」，
+这样签名不变、`rfc165-agent-launch` 的九组直调用例一条都不用改。**实测否决**：
+内核要的 `secretBox` / `identityAccess` / `launchResources` / `gitCommitIdentity`
+在 `StartTaskDeps` 上**全是可选**（`services/task.ts:456/474/599/671`），
+委托就得对每一项写回退——那正是这一轮反复在消灭的「装配漏一步、类型层合法」形状，
+而且回退路径会在 21 个 fixture 上各走各的。**宁可做大一点的正解**。
+
+### 因此下一刀的实际改动面（4 个文件）
+
+1. `providerRuntime.ts`：`SqliteTaskExecutionProviderRuntimeDependencies.routeLaunch`
+   从 `SqliteTaskRouteLaunchDependencies` 换成 PG 那份的形状；composer 内用
+   `composeHostTaskLaunchKernel` 装内核，协调器↔`schedulerDriver` 的环照抄
+   PG daemon 的同作用域转发面。
+2. `cli/start.ts` / 3. `tests/helpers/eachProviderTaskExecution.ts`：按新形状补
+   `gitCommitIdentity` / `coordinator` / `resourceAuthorityFor` / `agent.{resources,integrity}` /
+   `routeWorkspace`。
+4. `sqliteTaskRouteLaunchOperations.ts`：agent 臂退役（workgroup 臂另批，
+   它与 PG 的 `assertReplayVisible` 是另一对孪生——SQLite 用
+   `assertCanReplaySourceTask`、PG 用 `createTaskAuthorizationQueries`，**先对账再动**）。
+
+安全网已就位且全绿：`rfc359-w5hn-agent-launch-provider-parity` 26 条断言
+（含带上传那一支）＋ `rfc165-agent-launch` 的 A1–A9。这一刀是**有等价性证明的纯重构**：
+任何一步让这两组变红，就是行为动了。
