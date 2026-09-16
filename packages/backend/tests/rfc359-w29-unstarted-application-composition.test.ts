@@ -606,8 +606,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （`gitCommitIdentity` / `agent` / `routeWorkspace` / `resourceAuthorityFor` / `coordinator`）。
     // **装配图确实变了，而且是有意的**：这条路由此前转 `startExecution` → `startAgentTask`
     // → `startTask`（只服务 SQLite 的那半），现在与 PostgreSQL 共用 `createAgentRouteLaunch`。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ③）：摘要随**工作组启动也改走共享编排**更新——
+    // `createSqliteTaskRouteLaunchOperations` 这一段多了工作组臂的资源面（`workgroup`）。
+    // **装配图确实变了，是有意的**：这条路由此前转 `startExecution` → `startWorkgroupTask`
+    // （470 行、直接读库），现在与 PostgreSQL 共用 `createWorkgroupRouteLaunch`。
+    // 同一批里这一段还**净减**一格：两条臂都不再经遗留执行器之后，`executionFor`
+    // （`buildStartTaskDeps(...)` + `agentLaunchResources` 的那块展开）在这里彻底退役。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'cd71778040adfd6ec425cd21006d92642e2852e15cf91adb94b7ff81cc78fdd5',
+      '455b9b00ee11cfb712161d2ac98620cebd6df0f4f61d4386d5739f2f97cea898',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

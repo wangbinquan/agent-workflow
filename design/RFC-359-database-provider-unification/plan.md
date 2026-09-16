@@ -14984,3 +14984,87 @@ PostgresError: could not serialize access due to read/write dependencies among t
 在 CI 那种并发下量一量 40001 的实际重试分布，再决定是加预算、还是把
 `task_execution_maintenance_claims` 那条路从 SERIALIZABLE 降到更弱的隔离 + 显式 CAS。
 两条都属于 AC-11「PostgreSQL 要做到最高性能表现」的管辖面。
+
+## §5hn 批次二 ③ 落地　工作组启动的**路由路径**两个引擎共用一份编排
+
+`POST /api/workgroups/:id/tasks` 此前：SQLite 转 `startExecution(kind:'workgroup')` →
+`startWorkgroupTask`（470 行、直接读库），PostgreSQL 转 `arms.launchWorkgroup` → 根启动内核。
+现在两侧都转 **`createWorkgroupRouteLaunch`**，终端统一为根内核。
+
+### 手法：依赖面按臂拆开，而不是「抽公共前置 + 两个终端」
+
+批次一拆出了 `AgentRouteLaunchDependencies`（agent 臂压根没读过 `workgroup` 那格）；
+这一刀对称地拆出 **`WorkgroupRouteLaunchDependencies`**（workgroup 臂压根没读过 `agent` 那格），
+原来的 `PostgresqlTaskRouteLaunchDependencies` 退化成两者的交集扩展：
+
+```ts
+export interface PostgresqlTaskRouteLaunchDependencies
+  extends AgentRouteLaunchDependencies,
+    WorkgroupRouteLaunchDependencies {}
+```
+
+`createPostgresqlTaskLaunchArms` 因此变成**纯委托**——两条臂各自从共享工厂取，
+PG 自己不再持有第二份编排。**让类型说真话**的收益和批次一一样：
+SQLite 侧不必编造一份用不到的占位对象，而 PG 侧的装配一格没动。
+
+`ensureHostWorkflow`（懒种 `__workgroup_host__` 锚行）交由**模块自己**补：
+组合根不许 import `resource-catalog/infrastructure/`（`rfc310-architecture-lock` 的源码锁），
+而 PG daemon 那侧本来就把同一段 insert 内联在自己文件里。让模块提供它，两个根都干净。
+
+### 销账：`spaceNodes` 那处用户可见差异——**本刀改变了 SQLite 上的响应形状**
+
+基线用例照出的差异（本节上文）随合并**自动关闭**：
+
+```
+合并前  sqlite [{ path: '', origins: [] }]   postgresql []
+合并后  两侧都是 []
+```
+
+这条要写清楚、不能含糊：**它是用户可见的响应形状变化**，不是纯内部重构。
+方向是「变诚实」——scratch 启动没有规划目录，就返回空，而不是由读端
+`minimalNodePaths(repos.map(r => r.mountPath))` 凭空派生出一个 **path 为空**的节点。
+基线里那条反向断言按预先写好的剧本红了，改成 `.toBe(0)` 的相等断言销账。
+
+### 顺手退役：`executionFor` 从**路由启动**这条路彻底消失
+
+两条臂都不再经遗留执行器之后，`SqliteTaskRouteLaunchDependencies.executionFor`
+以及组合根（`server.ts` / `cli/start.ts`）里喂给它的
+`buildStartTaskDeps(...) + agentLaunchResources` 两块展开一并删掉。
+**SQLite 的路由启动至此不依赖 `services/execution/executor` 的任何东西。**
+
+两处 path-string 键的守卫随之要改，都不是「顺手调数字」：
+
+- `rfc349-rest-launch-ownership` 的结构锚点原本是 `expect(routeLaunch).toContain('executionFor')`
+  ——它在那儿是为了保证正则抓到的**真是**那格装配（否则 `not.toMatch(/deferRepoPreparation/)`
+  会在空串上轻松变绿）。锚点改钉这格供给的两条臂（`agent:` / `workgroup:`），
+  正对应守卫标题里的「Agent/Workgroup」。
+- `rfc359-w29` 的 `composeSqliteApiRouteMounts` 摘要**净减**一格，重新钉。
+
+### 范围与账本（仍然别 overclaim）
+
+- `startWorkgroupTask` **没有死**：`startExecution(kind:'workgroup')` 仍转它，
+  而那条路还服务定时启动 / 触发器 / 子任务 / multipart。本刀只统一了**路由这一条**。
+- 同文件孪生账本因此**不降**；降它要等 `startExecution` 的两个分支都迁完（批次二 ①）。
+- `rfc294-cross-context-observed-imports` / `rfc294-architecture-exceptions` 两本
+  **净降一条**（`executionFor` 退役），`rfc294-mutation-entrypoints` /
+  `rfc294-module-symbol-owners` 各净增（新导出 `createWorkgroupRouteLaunch` /
+  `WorkgroupRouteLaunchDependencies` + SQLite 侧新接的工作组资源面），已声明 `allowGrowth`。
+
+### 一处**必须记下**的 ACL 纠错
+
+SQLite 侧 `workgroup.loadVisible` 的第一版写成了 `admitDaemonIdentity(identityAccess)`
+——那是 **daemon 身份**。用它取工作组，会让「看不见某工作组的用户」也能启动它，
+ACL-404 那层直接废掉。改成 `directOperationAuthority(identityAccess.directAuthority, actor)`，
+与 PG daemon 那份 `authorityFor(actor)` 逐字同形。
+
+对照之下 `loadExistingAgentIds` **确实**该用系统身份（PG 那份也是）：
+它问的是「这个 agent 还在不在」，不是「请求者看不看得见它」，
+后者已由 `loadVisible` 的 ACL-404 挡在前面。**两格身份不同不是笔误，是两个不同的问题。**
+
+### 证据
+
+- 等价性基线双引擎全绿：`rfc359-w5hn-workgroup-launch-provider-parity` +
+  `rfc359-w5hn-agent-launch-provider-parity` 合计 **6/6、41 条断言**
+- 架构守卫全量 **706/706**（4 skip，本机 PG 已配置，`describeEachProvider` 的 PG 支全跑）
+- 改动文件 basename 半径 **104 文件 1250/1250**（含 `rfc164-workgroup-engine` 全家、
+  `rfc349-rest-launch-ownership` 双引擎、`rfc310-architecture-lock`）

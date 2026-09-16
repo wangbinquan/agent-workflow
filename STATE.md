@@ -2,9 +2,43 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 47，**工作组启动的路由路径也合一；顺手退役 `executionFor`**）
+>
+> 本段待推：§5hn 批次二 ③ 的路由段。
+>
+> **最该带走的一句：预先写成「反向断言」的那处已知差异，按剧本红了——合并把它关掉了。**
+> `POST /api/workgroups/:id/tasks` 此前 SQLite 转 `startExecution` → `startWorkgroupTask`
+> （470 行、直接读库）、PG 转 `arms.launchWorkgroup` → 启动内核。现在两侧都转
+> `createWorkgroupRouteLaunch`（终端统一为根内核），`createPostgresqlTaskLaunchArms`
+> 退化成纯委托。
+>
+> **有一处用户可见的响应形状变化，必须说清楚**：scratch 启动的 `spaceNodes`
+> 从 `[{ path: '', origins: [] }]` 变成 `[]`。成因是 SQLite 读端在没有冻结行时
+> 兜底派生（`minimalNodePaths`），把 scratch 那个空串挂载点派生成一个**空路径节点**；
+> 内核则如实返回工作区规划的 `nodePaths`。方向是「变诚实」，不是内部重构。
+>
+> **顺手退役 `executionFor`**：两条臂都不经遗留执行器之后，它从 `SqliteTaskRouteLaunchDependencies`
+> 与两个组合根一并删掉——**SQLite 的路由启动至此不依赖 `services/execution/executor`**。
+> 两处 path-string 键守卫随之要改：`rfc349-rest-launch-ownership` 的结构锚点改钉
+> `agent:` / `workgroup:`（它在那儿是防止正则抓空后 `not.toMatch` 轻松变绿），
+> `rfc359-w29` 的 SQLite 装配摘要**净减**一格。
+>
+> **一处 ACL 纠错值得记**：`workgroup.loadVisible` 第一版误用 daemon 身份——那会让
+> 看不见某工作组的用户也能启动它。改成请求者自己的鉴权句柄，与 PG 那份逐字同形；
+> 而隔壁 `loadExistingAgentIds` **确实**该用系统身份（问的是「agent 还在不在」）。
+> 两格身份不同不是笔误。
+>
+> **范围别 overclaim**：`startWorkgroupTask` 没有死——`startExecution(kind:'workgroup')`
+> 仍转它，还服务定时 / 触发器 / 子任务 / multipart。同文件孪生账本因此不降。
+>
+> 证据：两份等价性基线 **6/6、41 条断言**双引擎全绿；架构守卫 **706/706**；
+> 改动文件 basename 半径 **104 文件 1250/1250**。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ③ 落地。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 46，**单代理启动的路由路径两个引擎共用一份编排**）
 >
-> 已推并 CI 绿：…`cc173aa50`·`c0d5abcfb`·`29d444807`。本段待推：§5hn 批次一的路由段。
+> 已推并 CI 绿：…`cc173aa50`·`c0d5abcfb`·`29d444807`·`97667a19f`（批次一路由段）·`a469fd59a`·`eafc71609`。
 >
 > **最该带走的一句：等价性基线做了它被造出来要做的事——SQLite 换了终端之后，26 条断言逐字未变。**
 > `POST /api/agents/:id/tasks` 此前 SQLite 转 `startExecution` → `startAgentTask` → `startTask`、

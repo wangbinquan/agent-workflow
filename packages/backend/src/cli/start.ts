@@ -1902,6 +1902,30 @@ async function composeSqliteProviderSession(
             authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
             resources: taskExecutionResources,
           }),
+        // RFC-359 AC-1（plan §5hn 批次二 ③）：工作组臂的资源面，逐项对齐 PG daemon 那份。
+        // 这里全是箭头，取值发生在**调用时**——`workgroupCatalog` 在本作用域后面才造出来，
+        // 与协调器转发面同一个词法闭环手法。
+        workgroup: Object.freeze({
+          // **必须用请求者自己的鉴权句柄**（与 PG daemon 的 `authorityFor(actor)` 逐字同形）。
+          // 用 daemon 身份会让「看不见某工作组的用户」也能启动它——ACL-404 那层就废了。
+          loadVisible: (actor: Actor, workgroupId: string) =>
+            workgroupCatalog.queries.get(
+              directOperationAuthority(identityAccess.directAuthority, actor),
+              { id: workgroupId },
+            ),
+          // 名册成员的存在性检查按**系统身份**查——PG daemon 那份也是
+          // `authorityFor(systemActor)`：这一步问的是「这个 agent 还在不在」，
+          // 不是「请求者看不看得见它」，后者已由 `loadVisible` 的 ACL-404 挡在前面。
+          async loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]> {
+            const identity = await admitDaemonIdentity(identityAccess)
+            if (identity === null) throw new Error('workgroup-launch-authority-not-admitted')
+            const rows = await Promise.all(
+              agentIds.map((id) => agentCatalog.queries.get(identity.actor, { id })),
+            )
+            return rows.flatMap((row) => (row === null ? [] : [row.id]))
+          },
+          integrity: agentResourceIntegrity.launch,
+        }),
         // 协调器↔`schedulerDriver` 的环打在**词法作用域**上，与 PostgreSQL daemon
         // 那份（`postgresqlDaemonApplication.ts` 的 `taskDriveCoordinator`）同形：
         // 这个转发面只在运行期取值，真协调器是同一作用域里后面那个 `const`。
@@ -1909,14 +1933,6 @@ async function composeSqliteProviderSession(
           submit: (request: Parameters<TaskDriveCoordinator['submit']>[0]) =>
             routeLaunchDriveCoordinator.submit(request),
         }),
-        // No `deferRepoPreparation` here on purpose. RFC-287 G7 defers repo
-        // preparation for the JSON `/api/tasks` launch (see
-        // `sqliteTaskRouteOperations`); the Agent and Workgroup launches kept
-        // the synchronous contract, and the task wizard depends on it: an
-        // unresolvable ref must be refused in the HTTP call with the server's
-        // own message and the available refs, and must not mint a task row that
-        // can only fail later.
-        executionFor: (actor) => Object.freeze({ ...taskStartDepsFor(actor.user.id) }),
       },
       routes: ({ readModels }) => {
         const routeCollaborationContext: CollaborationRouteContext =

@@ -116,8 +116,6 @@ describeEachProviderHttpApplication(
         // `repos[]` 里嵌着同样逐次不同的 baseCommit / repoPath / worktreePath，
         // 顶层的拒绝清单罩不到它——整格摘掉，改由下面的 `repoShape` 比它的**形状**。
         'repos',
-        // **已知差异，单独钉住**（见下）。
-        'spaceNodes',
       ])
       const comparable: Record<string, unknown> = {}
       for (const key of Object.keys(task).sort()) {
@@ -141,21 +139,15 @@ describeEachProviderHttpApplication(
         (repo) => ({ mountPath: repo['mountPath'], scratch: repo['scratch'] }),
       )
 
-      // **已知差异，单独钉住**（plan §5hn 批次二）：`spaceNodes` 在 scratch 启动上两个引擎不同——
-      // SQLite 的读投影在没有冻结的 `task_space_nodes` 行时**兜底派生**
-      // （`services/task.ts` 的 `minimalNodePaths(repos.map(r => r.mountPath))`），
-      // scratch 那一个挂载点是空串，于是派生出**一个 path 为空的节点**；
-      // 启动内核则原样返回工作区真正规划的 `nodePaths`——scratch 上就是空的。
-      // 也就是说 PG 那半更诚实（没有规划目录就是没有），SQLite 那半是兜底派生的产物。
-      //
-      // 不在这一刀里改：那是**用户可见的响应形状**，前端可能依赖它，要单独定夺。
-      // 这里先钉住今天的状态——合并 470 行那一刀把它统一时，这条会红并要求销账。
+      // **已销账**（plan §5hn 批次二 ③）：此前 SQLite 的读投影在没有冻结的 `task_space_nodes`
+      // 行时**兜底派生**（`minimalNodePaths(repos.map(r => r.mountPath))`），scratch 那个挂载点
+      // 是空串，于是派生出一个 path 为空的节点；而启动内核原样返回工作区真正规划的 `nodePaths`。
+      // 工作组启动改走内核之后，两侧都是空——**这是用户可见的响应形状变化，方向是「变诚实」**：
+      // 没有规划目录就返回空，而不是一个凭空派生出来的空路径节点。
       expect(
         (task['spaceNodes'] as readonly unknown[]).length,
-        `${scope.harness.capabilities.provider}：scratch 启动的 spaceNodes 形状变了。` +
-          'SQLite 应为 1（兜底派生出一个空路径节点）、PostgreSQL 应为 0（工作区没规划目录）。' +
-          '若两侧一致了，说明合并把这处差异统一了——把这条改成相等断言并在 plan 里销账。',
-      ).toBe(scope.harness.capabilities.provider === 'sqlite' ? 1 : 0)
+        'scratch 启动没有规划目录，spaceNodes 就该是空的（plan §5hn 批次二 ③）',
+      ).toBe(0)
 
       // 先钉住这一侧**本身**确实是工作组启动落出来的——两个引擎同样地错也会让相等断言绿掉。
       expect(task['workflowId'], '工作组启动必须挂在 __workgroup_host__ 锚上').toBe(

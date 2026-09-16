@@ -2759,6 +2759,26 @@ function composeSqliteApiRouteMounts(
           authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
           resources: identityAccess.taskExecutionResources,
         }),
+      // RFC-359 AC-1（plan §5hn 批次二 ③）：工作组臂的资源面，逐项对齐 PG daemon 那份。
+      workgroup: Object.freeze({
+        // **用请求者自己的鉴权句柄**：用 daemon 身份会让「看不见某工作组的用户」也能启动它。
+        loadVisible: (actor: Actor, workgroupId: string) =>
+          workgroupCatalog.queries.get(
+            directOperationAuthority(identityAccess.directAuthority, actor),
+            { id: workgroupId },
+          ),
+        // 名册成员的存在性按系统身份查（PG 那份也是）：问的是「agent 还在不在」，
+        // 不是「请求者看不看得见」——后者已由 loadVisible 的 ACL-404 挡在前面。
+        async loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]> {
+          const identity = await admitDaemonIdentity(identityAccess)
+          if (identity === null) throw new Error('workgroup-launch-authority-not-admitted')
+          const rows = await Promise.all(
+            agentIds.map((id) => agentCatalog.queries.get(identity.actor, { id })),
+          )
+          return rows.flatMap((row) => (row === null ? [] : [row.id]))
+        },
+        integrity: agentResourceIntegrity.launch,
+      }),
       coordinator: createTaskDriveCoordinator({
         deps: { db: deps.db, schedulerDriver, configPath: deps.configPath },
         appHome,
@@ -2788,17 +2808,6 @@ function composeSqliteApiRouteMounts(
             })
           },
         },
-      }),
-      executionFor: (actor) => ({
-        ...buildStartTaskDeps(
-          deps.db,
-          schedulerDriver,
-          deps.configPath,
-          actor.user.id,
-          deps.secretBox,
-          identityAccess,
-        ),
-        agentLaunchResources,
       }),
     })
   const workgroupTaskRoom = composeWorkgroupTaskRoom({

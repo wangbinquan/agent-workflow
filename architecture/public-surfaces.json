@@ -54080,9 +54080,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:annotateManageRights.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -54187,9 +54185,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:canManage.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -54319,9 +54315,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:canView.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -54451,9 +54445,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:filterVisible.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -54644,9 +54636,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:listPage.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -54793,9 +54783,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:apply.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -54970,9 +54958,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:claimCancellation.$parameter:input.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -55102,9 +55088,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:claimDecision.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -55687,9 +55671,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillAccess.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -56726,10 +56708,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:annotateManageRights.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -56836,10 +56815,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:canManage.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -56971,10 +56947,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:canView.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -57106,10 +57079,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:filterVisible.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -57304,10 +57274,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:listPage.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -57457,10 +57424,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:apply.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -57642,10 +57606,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:claimCancellation.$parameter:input.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -57781,10 +57742,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:claimDecision.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -58382,10 +58340,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillAccess.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -59237,9 +59192,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:apply.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -59414,9 +59367,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:claimCancellation.$parameter:input.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -59546,9 +59497,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:claimDecision.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -60131,9 +60080,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillAccess.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -60676,9 +60623,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:apply.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -60855,9 +60800,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:claimCancellation.$parameter:input.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -60987,9 +60930,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:claimDecision.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -61573,9 +61514,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillAccess.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -62124,9 +62063,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:apply.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -62301,9 +62238,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:claimCancellation.$parameter:input.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -62433,9 +62368,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:claimDecision.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -63018,9 +62951,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:persistence.$method:loadSkillAccess.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -63753,9 +63684,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:annotateManageRights.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -63860,9 +63789,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:canManage.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -63992,9 +63919,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:canView.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -64124,9 +64049,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:filterVisible.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -64317,9 +64240,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.memories.queries.$method:listPage.$parameter:authority.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -64466,9 +64387,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:apply.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -64643,9 +64562,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:claimCancellation.$parameter:input.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -64775,9 +64692,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:claimDecision.$parameter:command.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -65360,9 +65275,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:loadSkillAccess.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -80776,9 +80689,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:a9d66dac04e373fc7662"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "queries.$method:get.$parameter:authority.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -80890,9 +80801,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:a9d66dac04e373fc7662"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "queries.$method:list.$parameter:authority.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -159793,7 +159702,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:81807364d8e992301b61682138d59336eab278cd90996d72bc73b205525a3b0b",
+  "sourceDigest": "sha256:bd05d43973169c99872f67c47b4b128f92c16605dd4af09428f23487687494b0",
   "targetContexts": [
     "collaboration",
     "development-automation",

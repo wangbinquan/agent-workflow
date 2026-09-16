@@ -7585,6 +7585,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1798e83870038282199f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#ensureWorkgroupHostWorkflow",
+      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
+      "toSymbol": "ensureWorkgroupHostWorkflow",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -44354,23 +44371,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:94621848179b8bac43f9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#startExecution",
-      "toPath": "packages/backend/src/services/execution/executor.ts",
-      "toSymbol": "startExecution",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#$file",
@@ -77844,23 +77844,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ffcfee55e1da462238e8",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#StartExecutionDeps",
-      "toPath": "packages/backend/src/services/execution/executor.ts",
-      "toSymbol": "StartExecutionDeps",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
@@ -77930,9 +77913,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4584,
+    "architectureExceptions": 4583,
     "implementationSccs": 0,
-    "observedEdges": 5096,
+    "observedEdges": 5095,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -85667,6 +85650,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#AgentOperationDescriptors"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
+      "id": "import:1798e83870038282199f",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workgroup/launch",
+      "syntax": "static-import",
+      "targetSymbol": "ensureWorkgroupHostWorkflow",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#ensureWorkgroupHostWorkflow"
     },
     {
       "edgeKind": "value",
@@ -124357,22 +124356,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#isTaskActive"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
-      "id": "import:94621848179b8bac43f9",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/execution/executor",
-      "syntax": "static-import",
-      "targetSymbol": "startExecution",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/execution/executor.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#startExecution"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts",
@@ -159381,22 +159364,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#$file"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
-      "id": "import:ffcfee55e1da462238e8",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/execution/executor",
-      "syntax": "static-import",
-      "targetSymbol": "StartExecutionDeps",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/execution/executor.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#StartExecutionDeps"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
@@ -160014,7 +159981,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:81807364d8e992301b61682138d59336eab278cd90996d72bc73b205525a3b0b",
+  "sourceDigest": "sha256:bd05d43973169c99872f67c47b4b128f92c16605dd4af09428f23487687494b0",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

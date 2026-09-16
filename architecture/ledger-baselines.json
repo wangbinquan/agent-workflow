@@ -804,8 +804,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1683,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1684,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ③）：工作组启动的路由路径改走与 PostgreSQL **同一份**编排（`createWorkgroupRouteLaunch`，终端是根启动内核），此前它转 `startExecution` → `startWorkgroupTask`——470 行、直接读库，只服务 SQLite。装配面因此各多记一条：新导出 `createWorkgroupRouteLaunch` / `WorkgroupRouteLaunchDependencies`（把工作组臂真正需要的依赖从 agent 那份里拆出来，免得两侧互相编造用不到的资源面），以及 SQLite 侧新接的工作组资源面。净账方向是减：这次合并同时让 SQLite 路由启动**彻底不再依赖遗留执行器**——`executionFor` 从组合根（`server.ts` / `cli/start.ts`）与路由依赖面一并退役，跨 context observed edge 与例外账本因此各净降一条；并关掉一处用户可见差异（scratch 启动的 `spaceNodes` 不再兜底派生出空路径节点）。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -839,7 +842,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5096,
+      "baseline": 5095,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -860,7 +863,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4584,
+      "baseline": 4583,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -895,12 +898,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24706,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24708,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ③）：工作组启动的路由路径改走与 PostgreSQL **同一份**编排（`createWorkgroupRouteLaunch`，终端是根启动内核），此前它转 `startExecution` → `startWorkgroupTask`——470 行、直接读库，只服务 SQLite。装配面因此各多记一条：新导出 `createWorkgroupRouteLaunch` / `WorkgroupRouteLaunchDependencies`（把工作组臂真正需要的依赖从 agent 那份里拆出来，免得两侧互相编造用不到的资源面），以及 SQLite 侧新接的工作组资源面。净账方向是减：这次合并同时让 SQLite 路由启动**彻底不再依赖遗留执行器**——`executionFor` 从组合根（`server.ts` / `cli/start.ts`）与路由依赖面一并退役，跨 context observed edge 与例外账本因此各净降一条；并关掉一处用户可见差异（scratch 启动的 `spaceNodes` 不再兜底派生出空路径节点）。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:81807364d8e992301b61682138d59336eab278cd90996d72bc73b205525a3b0b",
+    "sourceDigest": "sha256:bd05d43973169c99872f67c47b4b128f92c16605dd4af09428f23487687494b0",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +919,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a469fd59abcaf459710da5428dd7ff498c945f68",
-    "contentDigest": "sha256:fc990b2bc30f4d7df68b9cf4f99b946fc293e3a6eaafd70365907a1a17b9179c",
+    "currentSnapshotSha": "eafc71609a0a03c3183e9c8b3a1912db67696349",
+    "contentDigest": "sha256:50441e20291aca551119e61a7a230add7b495a34c7975a2cf487fcbfa1c9add2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

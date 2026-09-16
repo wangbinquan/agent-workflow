@@ -5,40 +5,35 @@ import type {
 } from '../public/commands'
 import {
   createAgentRouteLaunch,
+  createWorkgroupRouteLaunch,
   type AgentRouteLaunchDependencies,
+  type WorkgroupRouteLaunchDependencies,
 } from './postgresqlTaskRouteLaunchOperations'
 import {
   createPostgresqlTaskRouteWorkspaceParticipant,
   type PostgresqlTaskRouteWorkspaceDependencies,
 } from './postgresqlTaskRouteWorkspaceParticipant'
-import { startExecution, type StartExecutionDeps } from '@/services/execution/executor'
 import { resolveUploadLimits } from '@/services/launchMultipart'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
+import { ensureWorkgroupHostWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
-export interface SqliteTaskRouteLaunchDependencies extends Omit<
-  AgentRouteLaunchDependencies,
-  'db' | 'workspace'
-> {
+export interface SqliteTaskRouteLaunchDependencies
+  extends
+    Omit<AgentRouteLaunchDependencies, 'db' | 'workspace'>,
+    Omit<WorkgroupRouteLaunchDependencies, 'db' | 'workspace' | 'workgroup'> {
   readonly db: DbClient
+  /**
+   * 工作组资源面。`ensureHostWorkflow`（懒种内置宿主锚行）由**模块自己**补上——
+   * 组合根不许 import `resource-catalog/infrastructure/`（`rfc310-architecture-lock` 的源码锁），
+   * 而 PG daemon 那一侧是把同一段 insert 内联在自己文件里的。让模块提供它，两个根都干净。
+   */
+  readonly workgroup: Omit<WorkgroupRouteLaunchDependencies['workgroup'], 'ensureHostWorkflow'>
   /**
    * 与 PostgreSQL 那一支同形（`providerRuntime.ts` 的 `routeWorkspace`）：装配方交
    * **物化输入**，参与者由模块自己造。组合根因此不必深挖 `infrastructure/`
    * ——RFC-331 的分层判据会逐条抓出那种 deep import（本刀实撞过一次）。
    */
   readonly routeWorkspace: Omit<PostgresqlTaskRouteWorkspaceDependencies, 'db'>
-  /**
-   * Actor-scoped launch dependencies. A single frozen `StartExecutionDeps`
-   * cannot serve this seam: `StartTaskDeps.actorUserId` is what `startTask`
-   * writes into `tasks.owner_user_id` (and what RFC-320 reads for the creator's
-   * Git identity), so a bootstrap-frozen `SYSTEM_USER_ID` silently made every
-   * REST agent/workgroup launch ownerless — the launcher then failed their own
-   * `GET /api/tasks/:id` (`task-not-found`) and could not add collaborators.
-   * The bootstrap owns composition; only the actor id varies per request, the
-   * same shape `trigger.executionFor` already uses.
-   */
-  readonly executionFor: (
-    actor: Parameters<AgentRouteTaskLaunchOperations['launch']>[0],
-  ) => StartExecutionDeps
 }
 
 export function createSqliteTaskRouteLaunchOperations(
@@ -47,12 +42,20 @@ export function createSqliteTaskRouteLaunchOperations(
   agent: AgentRouteTaskLaunchOperations
   workgroup: WorkgroupRouteTaskLaunchOperations
 }> {
-  const launchAgent = createAgentRouteLaunch({
+  const withWorkspace = {
     ...input,
     workspace: createPostgresqlTaskRouteWorkspaceParticipant({
       db: input.db,
       ...input.routeWorkspace,
     }),
+  }
+  const launchAgent = createAgentRouteLaunch(withWorkspace)
+  const launchWorkgroup = createWorkgroupRouteLaunch({
+    ...withWorkspace,
+    workgroup: {
+      ...input.workgroup,
+      ensureHostWorkflow: () => ensureWorkgroupHostWorkflow(input.db),
+    },
   })
   const assertReplayVisible = async (
     actor: Parameters<AgentRouteTaskLaunchOperations['assertReplayVisible']>[0],
@@ -85,21 +88,20 @@ export function createSqliteTaskRouteLaunchOperations(
     }),
     workgroup: Object.freeze({
       assertReplayVisible,
+      // RFC-359 AC-1（plan §5hn 批次二 ③）：工作组启动也改走**与 PostgreSQL 同一份**编排
+      // （`createWorkgroupRouteLaunch`，终端是根启动内核）。此前这里转
+      // `startExecution` → `startWorkgroupTask`（470 行、直接读库）。
+      // 等价性由 `rfc359-w5hn-workgroup-launch-provider-parity` 作证（拒绝清单，整行比对）。
       async launch(
         actor: Parameters<WorkgroupRouteTaskLaunchOperations['launch']>[0],
         command: Parameters<WorkgroupRouteTaskLaunchOperations['launch']>[1],
       ) {
-        return await startExecution(
-          input.db,
+        return await launchWorkgroup({
           actor,
-          {
-            kind: 'workgroup',
-            refId: command.workgroupId,
-            invoker: { type: 'user', launchKind: 'direct-json' },
-            payload: command.payload,
-          },
-          input.executionFor(actor),
-        )
+          command,
+          invoker: { type: 'user', launchKind: 'direct-json' },
+          resources: input.resourceAuthorityFor(actor),
+        })
       },
     }),
   })

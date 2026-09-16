@@ -304,9 +304,19 @@ export interface AgentRouteLaunchDependencies extends PostgresqlRootTaskLaunchDe
   }>
 }
 
-export interface PostgresqlTaskRouteLaunchDependencies extends AgentRouteLaunchDependencies {
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ③）—— **工作组**启动臂真正需要的那些依赖。
+ * 同 `AgentRouteLaunchDependencies` 的理由：让 SQLite 那一侧能接同一份实现，
+ * 而不必编造一份用不到的 agent 资源面。
+ */
+export interface WorkgroupRouteLaunchDependencies extends PostgresqlRootTaskLaunchDependencies {
+  readonly configPath: string
+  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   readonly workgroup: PostgresqlWorkgroupRouteLaunchResources
 }
+
+export interface PostgresqlTaskRouteLaunchDependencies
+  extends AgentRouteLaunchDependencies, WorkgroupRouteLaunchDependencies {}
 
 export interface PostgresqlRootTaskLaunchSubject {
   readonly workflowId: string
@@ -1110,128 +1120,144 @@ export function createAgentRouteLaunch(
   }
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ③）—— 工作组启动的**唯一**编排。
+ *
+ * 与 agent 臂同形：路由层本来就打同一个 `WorkgroupRouteTaskLaunchOperations` 端口，
+ * 差别整个在端口背后（SQLite 曾转 `startWorkgroupTask`——470 行、直接读库）。
+ * 现在两侧都转到这里，终端统一为根启动内核。
+ */
+export function createWorkgroupRouteLaunch(
+  dependencies: WorkgroupRouteLaunchDependencies,
+): (input: Parameters<PostgresqlTaskLaunchArms['launchWorkgroup']>[0]) => Promise<Task> {
+  const launchRoot = createPostgresqlRootTaskLaunchKernel(dependencies).launch
+  return async function launchWorkgroup(
+    input: Parameters<PostgresqlTaskLaunchArms['launchWorkgroup']>[0],
+  ): Promise<Task> {
+    const { actor, command } = input
+    const group = await dependencies.workgroup.loadVisible(actor, command.workgroupId)
+    if (group === null) throw new NotFoundError('workgroup-not-found', 'workgroup not found')
+    if (
+      command.payload.expectedWorkgroupId !== undefined &&
+      group.id !== command.payload.expectedWorkgroupId
+    ) {
+      throw new ConflictError(
+        'workgroup-id-mismatch',
+        `workgroup '${group.name}' is not the expected resource`,
+      )
+    }
+    if (
+      command.payload.expectedWorkgroupVersion !== undefined &&
+      group.version !== command.payload.expectedWorkgroupVersion
+    ) {
+      throw staleConflictError(
+        'workgroup',
+        `workgroup '${group.name}' changed during launch (expected v${command.payload.expectedWorkgroupVersion}, now v${group.version})`,
+        {
+          expectedVersion: command.payload.expectedWorkgroupVersion,
+          currentVersion: group.version,
+        },
+      )
+    }
+    const readiness = workgroupLaunchReadiness(group)
+    if (!readiness.ready) {
+      throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
+        reasons: readiness.reasons,
+      })
+    }
+    const agentMembers = group.members.filter((member) => member.memberType === 'agent')
+    const memberAgentIds = agentMembers.flatMap((member) =>
+      typeof member.agentId === 'string' && member.agentId.length > 0 ? [member.agentId] : [],
+    )
+    const existingIds = new Set(
+      await dependencies.workgroup.loadExistingAgentIds([...new Set(memberAgentIds)]),
+    )
+    const missingAgentNames = [
+      ...new Set(
+        agentMembers
+          .filter(
+            (member) => typeof member.agentId !== 'string' || !existingIds.has(member.agentId),
+          )
+          .map((member) => member.agentName ?? '(unnamed)'),
+      ),
+    ]
+    if (missingAgentNames.length > 0) {
+      throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
+        reasons: ['agent-missing'],
+        missingAgentNames,
+      })
+    }
+    await dependencies.workgroup.integrity.assertUsable({ rootAgentIds: memberAgentIds })
+
+    const config = buildWorkgroupRuntimeConfig(group, command.payload.goal)
+    const dynamic = group.mode === 'dynamic_workflow'
+    const snapshot = dynamic
+      ? WorkflowDefinitionSchema.parse(buildDynamicWorkflowGenerateSnapshot())
+      : buildWorkgroupHostSnapshot(config)
+    const collaboratorUserIds = resolveWorkgroupCollaborators(
+      command.payload.collaboratorUserIds,
+      group,
+    )
+    const candidate = applySpaceFields(
+      {
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        name: command.payload.name,
+        inputs: {},
+        ...(collaboratorUserIds.length === 0 ? {} : { collaboratorUserIds }),
+        ...(command.payload.workingBranch === undefined
+          ? {}
+          : { workingBranch: command.payload.workingBranch }),
+        ...(command.payload.autoCommitPush === undefined
+          ? {}
+          : { autoCommitPush: command.payload.autoCommitPush }),
+        ...(command.payload.maxDurationMs === undefined
+          ? {}
+          : { maxDurationMs: command.payload.maxDurationMs }),
+        ...(command.payload.maxTotalTokens === undefined
+          ? {}
+          : { maxTotalTokens: command.payload.maxTotalTokens }),
+      },
+      command.payload,
+    )
+    const parsed = StartTaskSchema.safeParse(candidate)
+    if (!parsed.success) {
+      throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    await dependencies.workgroup.ensureHostWorkflow()
+    return await launchRoot({
+      actor,
+      resourceAuthority: input.resources,
+      invoker: input.invoker,
+      ...(input.guard === undefined ? {} : { guard: input.guard }),
+      task: parsed.data,
+      subject: {
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowName: WORKGROUP_HOST_WORKFLOW_NAME,
+        // 合成的工作组宿主：写时冻结规范排版（plan §5hn）。
+        builtin: true,
+        workflowVersion: 1,
+        workflowSnapshot: snapshot,
+        workgroup: {
+          id: group.id,
+          name: group.name,
+          goal: command.payload.goal,
+          config,
+          dynamicState: dynamic ? initialDwState() : null,
+        },
+      },
+    })
+  }
+}
+
 function createPostgresqlTaskLaunchArms(
   dependencies: PostgresqlTaskRouteLaunchDependencies,
 ): PostgresqlTaskLaunchArms {
-  const launchRoot = createPostgresqlRootTaskLaunchKernel(dependencies).launch
+  // 两个臂都已各自提成独立工厂（plan §5hn 批次一 / 批次二 ③），这里只剩转发。
   return Object.freeze({
     launchAgent: createAgentRouteLaunch(dependencies),
-    async launchWorkgroup(input: Parameters<PostgresqlTaskLaunchArms['launchWorkgroup']>[0]) {
-      const { actor, command } = input
-      const group = await dependencies.workgroup.loadVisible(actor, command.workgroupId)
-      if (group === null) throw new NotFoundError('workgroup-not-found', 'workgroup not found')
-      if (
-        command.payload.expectedWorkgroupId !== undefined &&
-        group.id !== command.payload.expectedWorkgroupId
-      ) {
-        throw new ConflictError(
-          'workgroup-id-mismatch',
-          `workgroup '${group.name}' is not the expected resource`,
-        )
-      }
-      if (
-        command.payload.expectedWorkgroupVersion !== undefined &&
-        group.version !== command.payload.expectedWorkgroupVersion
-      ) {
-        throw staleConflictError(
-          'workgroup',
-          `workgroup '${group.name}' changed during launch (expected v${command.payload.expectedWorkgroupVersion}, now v${group.version})`,
-          {
-            expectedVersion: command.payload.expectedWorkgroupVersion,
-            currentVersion: group.version,
-          },
-        )
-      }
-      const readiness = workgroupLaunchReadiness(group)
-      if (!readiness.ready) {
-        throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
-          reasons: readiness.reasons,
-        })
-      }
-      const agentMembers = group.members.filter((member) => member.memberType === 'agent')
-      const memberAgentIds = agentMembers.flatMap((member) =>
-        typeof member.agentId === 'string' && member.agentId.length > 0 ? [member.agentId] : [],
-      )
-      const existingIds = new Set(
-        await dependencies.workgroup.loadExistingAgentIds([...new Set(memberAgentIds)]),
-      )
-      const missingAgentNames = [
-        ...new Set(
-          agentMembers
-            .filter(
-              (member) => typeof member.agentId !== 'string' || !existingIds.has(member.agentId),
-            )
-            .map((member) => member.agentName ?? '(unnamed)'),
-        ),
-      ]
-      if (missingAgentNames.length > 0) {
-        throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
-          reasons: ['agent-missing'],
-          missingAgentNames,
-        })
-      }
-      await dependencies.workgroup.integrity.assertUsable({ rootAgentIds: memberAgentIds })
-
-      const config = buildWorkgroupRuntimeConfig(group, command.payload.goal)
-      const dynamic = group.mode === 'dynamic_workflow'
-      const snapshot = dynamic
-        ? WorkflowDefinitionSchema.parse(buildDynamicWorkflowGenerateSnapshot())
-        : buildWorkgroupHostSnapshot(config)
-      const collaboratorUserIds = resolveWorkgroupCollaborators(
-        command.payload.collaboratorUserIds,
-        group,
-      )
-      const candidate = applySpaceFields(
-        {
-          workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-          name: command.payload.name,
-          inputs: {},
-          ...(collaboratorUserIds.length === 0 ? {} : { collaboratorUserIds }),
-          ...(command.payload.workingBranch === undefined
-            ? {}
-            : { workingBranch: command.payload.workingBranch }),
-          ...(command.payload.autoCommitPush === undefined
-            ? {}
-            : { autoCommitPush: command.payload.autoCommitPush }),
-          ...(command.payload.maxDurationMs === undefined
-            ? {}
-            : { maxDurationMs: command.payload.maxDurationMs }),
-          ...(command.payload.maxTotalTokens === undefined
-            ? {}
-            : { maxTotalTokens: command.payload.maxTotalTokens }),
-        },
-        command.payload,
-      )
-      const parsed = StartTaskSchema.safeParse(candidate)
-      if (!parsed.success) {
-        throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      await dependencies.workgroup.ensureHostWorkflow()
-      return await launchRoot({
-        actor,
-        resourceAuthority: input.resources,
-        invoker: input.invoker,
-        ...(input.guard === undefined ? {} : { guard: input.guard }),
-        task: parsed.data,
-        subject: {
-          workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-          workflowName: WORKGROUP_HOST_WORKFLOW_NAME,
-          // 合成的工作组宿主：写时冻结规范排版（plan §5hn）。
-          builtin: true,
-          workflowVersion: 1,
-          workflowSnapshot: snapshot,
-          workgroup: {
-            id: group.id,
-            name: group.name,
-            goal: command.payload.goal,
-            config,
-            dynamicState: dynamic ? initialDwState() : null,
-          },
-        },
-      })
-    },
+    launchWorkgroup: createWorkgroupRouteLaunch(dependencies),
   })
 }
 
