@@ -2,6 +2,39 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 50，**RFC-287 G7 补进 PostgreSQL，落差销账**）
+>
+> 本段待推：§5hn 批次二 ①（下）。续 49 钉住的那处落差**已修**。
+>
+> **最该带走的一句：函数体早就是中立的，只有类型把它钉死在 SQLite 那一侧——
+> 而代价是一整条产品行为（G7）在 PostgreSQL 上从未存在过。**
+>
+> 处置是**拆依赖面，不是抄一份**：新增 `DeferredRepositoryPreparationDependencies`
+> （`db` 中立、`repositoryWorkspace` 必填、`loadFrozenSpaceLayout` 收成端口）+
+> `composition/deferredRepositoryPreparation.ts`（组合根唯一入口）；顺手清掉这条路上仅存的
+> 三处 `.all()`，并把循环里的 `materializeSpace` 换成中立面 `materializeSpaceWithProvider`。
+>
+> 内核侧加**占位工作区**（`deferRepoPreparation` + 参与者的 `defer`）。两件事必须在占位时
+> 就落定，否则 AC-11 的「重试准备仓库」是个死按钮：`cachedRepoId`（身份解析是纯 DB 写，
+> 留在同步段）与 `baseBranch`（先存请求里的 `ref`，否则重试静默落到镜像默认分支）。
+>
+> **谁开这个开关**：JSON `POST /api/tasks` 由路由自己声明（它知道自己不是 multipart）；
+> 定时 / webhook / event 由参与者按 invoker 判；multipart 与代理 / 工作组直启不开（G7 明列）。
+>
+> **判据两半都要**：只测失败那半是陷阱——把内核改成「延后之后永远不物化」也能全绿，
+> 而那正是本刀最可能引入的回归（PG 启动从此全卡 `pending`）。所以成功那半也测：
+> 占位期 `worktreePath === ''` 且 `cachedRepoId` 非空 → 第 0 步把工作树建出来 →
+> `__repo_prep__` 落 `done`。
+>
+> **一条记账提醒**：109 文件同跑时 `rfc107-url-upload-multipart` 12 条全红、耗时齐刷刷
+> 卡在 5–6s——那是 bun 默认 5s 超时（它们要经本地 git smart-HTTP 真克隆），不是回归；
+> 单独跑 13/13 绿。**看到一批用例齐刷刷卡在同一个时长上，先量时长再归因。**
+>
+> 证据：G7 双引擎判据 **6/6**（失败 + 成功两半）；架构守卫 **796/796**；
+> basename 半径 **105 文件 1063/1063** + 真克隆那四个文件 **80/80**。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ①（下）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 49，**RFC-287 G7 的「延后仓库准备」在 PostgreSQL 上根本没实现**）
 >
 > 本段待推：把这处落差钉住的双引擎用例 + 落档。**修还没做，下一刀。**

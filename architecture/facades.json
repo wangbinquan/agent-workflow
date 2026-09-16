@@ -1720,6 +1720,7 @@
       "boundaryEdgeIds": [
         "import:22c3108507c832bb72ba",
         "import:5eec16ee0b8a0b6f1ceb",
+        "import:aeff55adb436ff87edff",
         "import:d09d2c76fcd4f64eede0"
       ],
       "exportedSymbols": [
@@ -5480,6 +5481,7 @@
         "import:529ae88c0293f70f5d17",
         "import:52aebe854233bde53a8c",
         "import:560e8cc9efc285b8e2de",
+        "import:5a85810c4e3a60ff016d",
         "import:5ac7c5ed5efc9da11ec5",
         "import:5ae9d5174321e075d5cb",
         "import:5b606183aa8ac08a98fa",
@@ -5515,6 +5517,7 @@
         "import:b20c5073febb0f2fcfbe",
         "import:b44b35f9927ac721190d",
         "import:b5b002f79434bc4ab8c1",
+        "import:b8a3c9d1a95156ea0367",
         "import:bfb39283e479df4d86b1",
         "import:c07d7479e713e86827ac",
         "import:c31b46594670e78f8791",
@@ -5528,6 +5531,7 @@
         "import:d40458411935c8508bf4",
         "import:de17d18a53431aaefb1a",
         "import:e2108a9d295860cd209c",
+        "import:efa7c2c17c36347ae80f",
         "import:f167f8f5ce5b1006318a",
         "import:f3ac5955c9cea167f6b8",
         "import:f4bbeed18f5ade6b0a66",
@@ -5541,6 +5545,7 @@
         "import:ffa4a1eec74d8b9f1819"
       ],
       "exportedSymbols": [
+        "DeferredRepositoryPreparationDependencies",
         "ListTasksFilters",
         "MaterializedSpace",
         "MaterializedSpaceCleanup",
@@ -5566,6 +5571,7 @@
         "cancelTask",
         "cleanupMaterializedSpace",
         "commitMaterializedSpace",
+        "composeDeferredRepositoryPreparationStep",
         "composeHumanGateContinuationDriver",
         "composeWorkgroupTaskRoomContinuationDriver",
         "computeWorkflowSyncPreview",
@@ -6627,5 +6633,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f7c72884a48d9c9bbd1f268dffc61f28235f9c54517384676604e1db884d8941"
+  "sourceDigest": "sha256:ea44f7e952f0f4e68acb85150453834aa05a0e0d9ed429f5e43c199ad0b4e579"
 }

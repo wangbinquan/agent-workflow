@@ -15240,3 +15240,78 @@ PostgreSQL 用户什么都看不到**，而且它落在 `POST /api/tasks` 这条
 2. PG 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。
 
 判据现成：上面那条用例销账即证明。
+
+## §5hn 批次二 ①（下）落地　**RFC-287 G7 补进 PostgreSQL**
+
+上一节钉住的那处落差**已销账**。`rfc359-w5hn-deferred-repo-preparation-parity`
+现在是 6 条**两侧相等**的正向判据（失败那半 + 成功那半），不再按 provider 分叉。
+
+### 手法：把这一步从 `StartTaskDeps` 里拆出中立依赖面——**不是重写一份**
+
+`runDeferredRepoPreparation` 与 `createPersistedRepositoryPreparationStep` 的函数体
+**早就是中立的**（`await db.select(...)` / `setTaskStatus` / `setNodeRunStatus` /
+`mintNodeRun` 收的都已是 `ProviderNeutralDatabase`），只有类型把它们钉死在 SQLite 那侧
+——`StartTaskDeps.db` 是 `DbClient`。所以处置是**拆依赖面**，不是抄一份：
+
+- 新增 `DeferredRepositoryPreparationDependencies`：`db` 中立，
+  `repositoryWorkspace` **必填**（`StartTaskDeps` 那边缺省会回落到
+  `composeSqliteRepositoryWorkspaceStore(db)`，正是本 RFC 在消灭的隐式 provider 绑定），
+  `loadFrozenSpaceLayout` 收成端口（两份实现本来就都在）。
+- 顺手清掉这条路上仅存的三处 bun:sqlite 同步终结符（两处 `.all()[0]` 在 descriptor reader，
+  一处在 `reclaimStalePrepArtifacts`）。
+- 循环里的 `materializeSpace(...)` 换成中立面 `materializeSpaceWithProvider(...)`
+  ——前者是它的 SQLite 适配壳。
+- 新增 `composition/deferredRepositoryPreparation.ts`：组合根取这一步的唯一入口。
+
+### 内核侧：占位工作区
+
+`PostgresqlRootTaskLaunchRequest.deferRepoPreparation` + 工作区参与者的 `defer`：
+为 true 时不做任何克隆 / 抓取 / 建树，只交一份占位工作区
+（空 `worktreePath` / `branch`，`earlyError: null` ⇒ 行落 `pending`）。
+
+两件事**必须在占位时就落定**，否则 AC-11 的「重试准备仓库」是个死按钮：
+
+- `cachedRepoId`——身份解析（canonical hash → 一行 `cached_repos` + URL 密封）是纯 DB 写、
+  几毫秒，留在同步段；`tasks.repo_url` 是脱敏存的，驱动不了重跑；
+- `baseBranch`——先存**请求里的 `ref`**。重试重建启动输入时它不在其中，不存下来就会静默
+  落到镜像默认分支（用户选了 `release/2.1`，重试却在 `main` 上改代码）。
+
+排除判据与 `services/task.ts` 那份逐条相同（scratch / `sourceTaskId` 重放不延后），
+**由参与者自己兜住**——让两条路的语义没有第二个人可以写错。带上传时内核无条件不延后
+（上传物要写进真工作树）。
+
+### 谁开这个开关
+
+| 入口 | 延后 | 理由 |
+| --- | --- | --- |
+| JSON `POST /api/tasks` | ✅ | G7 正题。由**路由自己**声明——它知道自己不是 multipart |
+| 定时 / webhook / event | ✅ | 「定时任务与 webhook 触发同一套语义」（G7 原话），由参与者按 invoker 判 |
+| multipart | ❌ | 上传物要写进真工作树 |
+| 代理 / 工作组直启 | ❌ | G7 明列「保持同步语义」 |
+
+### 判据：失败那半 + **成功那半**
+
+只测失败那半是个陷阱——把内核改成「延后之后永远不物化」也能让它全绿，而那正是
+这一刀最可能引入的回归（所有 PG 启动从此卡在 `pending`）。所以两半都测：
+
+- **失败**（`http://127.0.0.1:1/nope.git`，刻意不走公网）：先落 `pending` →
+  第 0 步转 `failed` → git 原文留在行上 → 留下一条 `__repo_prep__` 合成行落 `failed`；
+- **成功**（真 git smart-HTTP 远端）：占位期 `worktreePath === ''` 且 `cachedRepoId` 非空
+  （先证明它真走了占位那条路，否则只是又测了一遍同步物化）→ 第 0 步把工作树与分支建出来
+  → `__repo_prep__` 落 `done`。
+
+夹具显式关掉 G6 的重试窗口（`gitBaselineSyncWindowMs: 0`）：connection-refused 属于
+可重试的网络类失败，开着窗口这条用例要退避重试整整一分钟，而判据要的是失败之后的**归宿**。
+
+### 一条记账提醒（这轮实撞）
+
+109 文件一起跑时 `rfc107-url-upload-multipart` 的 12 条全红，耗时**齐刷刷卡在 5–6s**
+——那是 bun 的默认 5s 超时，不是回归：它们要经本地 git smart-HTTP 真克隆，并发压满时必然超。
+单独跑 13/13 绿、与三个邻居同跑 79/80 绿（那 1 条是本刀真要改的源码锁）。
+**看到一批同一文件的用例齐刷刷卡在同一个时长上，先量时长再归因。**
+
+### 证据
+
+- `rfc359-w5hn-deferred-repo-preparation-parity` **6/6 双引擎绿**（失败 + 成功两半）
+- 全部架构守卫 **796/796**
+- 改动文件 basename 半径 **105 文件 1063/1063** + 真克隆那四个文件 **80/80**

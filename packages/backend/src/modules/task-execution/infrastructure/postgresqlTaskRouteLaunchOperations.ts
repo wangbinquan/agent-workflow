@@ -263,6 +263,11 @@ export interface PostgresqlTaskRouteWorkspaceParticipant {
       task: StartTask
       gitCommitIdentity: GitCommitIdentity | null
       sourceTerminationSignal?: AbortSignal
+      /**
+       * RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：只交占位工作区，真正的物化
+       * 留给驱动的第 0 步。由启动请求带进来（见 `PostgresqlRootTaskLaunchRequest`）。
+       */
+      defer?: boolean
     }>,
   ): Promise<PostgresqlTaskRoutePreparedWorkspace>
 }
@@ -360,6 +365,16 @@ export interface PostgresqlRootTaskLaunchRequest {
     limits: Parameters<typeof validateUploadPlan>[0]['limits']
   }>
   /**
+   * RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）—— **延后仓库准备**。
+   *
+   * 由启动路各自决定：JSON body 启动与定时 / webhook 触发开（失败要留下一行可重试的
+   * 任务），multipart 与代理 / 工作组直启不开（前者要把上传物写进工作树，后者按 G7
+   * 保持同步语义）。带上传时本标志**一律忽略**——上传物必须落进真工作树。
+   *
+   * 关掉时逐字维持既有行为：物化在落行之前，失败抛给调用方。
+   */
+  readonly deferRepoPreparation?: boolean
+  /**
    * Provider-private facts for non-HTTP launches that still use this exact
    * TaskExecution transaction. The alternate workspace is a real caller-owned
    * lease; TaskExecution remains the sole writer of task and launch-intent rows.
@@ -400,6 +415,12 @@ export interface PostgresqlTaskExecutionLaunchParticipant {
       invoker: ExecutionInvoker
       resources: TaskExecutionResourceAuthority
       guard?: ProtectedMrLaunchGuard
+      /**
+       * RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：调用方**显式**要求延后仓库准备。
+       * 定时 / webhook 由参与者按 invoker 自己判定（`triggerDefersRepositoryPreparation`），
+       * 这一格留给知道自己不是 multipart 的那条 JSON 路由。
+       */
+      deferRepoPreparation?: boolean
     }>,
   ): Promise<Task>
 }
@@ -714,12 +735,16 @@ function createRootLaunch(
         })
       }
 
+      // 带上传时**绝不**延后：上传物要写进真工作树（RFC-287 G7 原文把 multipart 与
+      // preCreated 两条一起排除在外）。这一格由内核自己兜住，调用方不必各自记得。
+      const deferPreparation = input.deferRepoPreparation === true && input.uploads === undefined
       const preparedWorkspace = await (input.internal?.workspace ?? dependencies.workspace).prepare(
         {
           actor: input.actor,
           taskId,
           task: input.task,
           gitCommitIdentity,
+          ...(deferPreparation ? { defer: true } : {}),
           ...(guard === undefined ? {} : { sourceTerminationSignal: guard.signal }),
         },
       )
@@ -977,6 +1002,8 @@ interface PostgresqlTaskLaunchArms {
       invoker: ExecutionInvoker
       resources: TaskExecutionResourceAuthority
       guard?: ProtectedMrLaunchGuard
+      /** RFC-287 G7：定时 / webhook 触发与手动启动同一套语义，直启路由不开。 */
+      deferRepoPreparation?: boolean
     }>,
   ): Promise<Task>
   launchWorkgroup(
@@ -986,6 +1013,8 @@ interface PostgresqlTaskLaunchArms {
       invoker: ExecutionInvoker
       resources: TaskExecutionResourceAuthority
       guard?: ProtectedMrLaunchGuard
+      /** RFC-287 G7：同上。 */
+      deferRepoPreparation?: boolean
     }>,
   ): Promise<Task>
 }
@@ -1094,6 +1123,7 @@ export function createAgentRouteLaunch(
         resourceAuthority: input.resources,
         invoker: input.invoker,
         ...(input.guard === undefined ? {} : { guard: input.guard }),
+        ...(input.deferRepoPreparation === true ? { deferRepoPreparation: true } : {}),
         task: parsed.data,
         subject: {
           workflowId: AGENT_HOST_WORKFLOW_ID,
@@ -1231,6 +1261,7 @@ export function createWorkgroupRouteLaunch(
       resourceAuthority: input.resources,
       invoker: input.invoker,
       ...(input.guard === undefined ? {} : { guard: input.guard }),
+      ...(input.deferRepoPreparation === true ? { deferRepoPreparation: true } : {}),
       task: parsed.data,
       subject: {
         workflowId: WORKGROUP_HOST_WORKFLOW_ID,
@@ -1310,6 +1341,21 @@ export function createPostgresqlTaskRouteLaunchOperations(
   })
 }
 
+/**
+ * RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）—— 哪些入口要**延后仓库准备**。
+ *
+ * G7 原话是「定时任务与 webhook 触发同一套语义」：这两条背后没有等 HTTP 响应的用户，
+ * 而 G7 的另一半收益（**准备失败要留下记录**）恰恰是它们最需要的——不开的话，一次拉不动
+ * 远端的定时触发压根不铸任务行，用户在任务列表里什么都看不到，也没有可重试的对象
+ *（`services/scheduleLaunch.ts` 原文，AC-11 的重试作用面为空）。
+ *
+ * 直启路由（`type:'user'`）不在此列：G7 明列「代理 / 工作组启动保持同步语义」，
+ * 而 JSON `POST /api/tasks` 那条由**路由自己**声明（它知道自己是不是 multipart）。
+ */
+function triggerDefersRepositoryPreparation(invoker: ExecutionInvoker): boolean {
+  return invoker.type === 'scheduled' || invoker.type === 'webhook' || invoker.type === 'event'
+}
+
 export function createPostgresqlTaskExecutionLaunchParticipant(
   dependencies: PostgresqlTaskRouteLaunchDependencies,
 ): PostgresqlTaskExecutionLaunchParticipant {
@@ -1317,6 +1363,8 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
   const arms = createPostgresqlTaskLaunchArms(dependencies)
   return Object.freeze({
     async launch(input: Parameters<PostgresqlTaskExecutionLaunchParticipant['launch']>[0]) {
+      const deferRepoPreparation =
+        input.deferRepoPreparation === true || triggerDefersRepositoryPreparation(input.invoker)
       switch (input.target.kind) {
         case 'workflow': {
           if (input.target.payload.workflowId !== input.target.refId) {
@@ -1369,6 +1417,7 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
             resourceAuthority: input.resources,
             invoker: input.invoker,
             ...(input.guard === undefined ? {} : { guard: input.guard }),
+            ...(deferRepoPreparation ? { deferRepoPreparation: true } : {}),
             task: parsed.data,
             subject: {
               workflowId: snapshot.workflow.id,
@@ -1397,6 +1446,7 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
             invoker: input.invoker,
             resources: input.resources,
             ...(input.guard === undefined ? {} : { guard: input.guard }),
+            ...(deferRepoPreparation ? { deferRepoPreparation: true } : {}),
           })
         }
         case 'workgroup': {
@@ -1413,6 +1463,7 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
             invoker: input.invoker,
             resources: input.resources,
             ...(input.guard === undefined ? {} : { guard: input.guard }),
+            ...(deferRepoPreparation ? { deferRepoPreparation: true } : {}),
           })
         }
         default: {

@@ -806,6 +806,54 @@ export interface WorkspaceMaterializationDependencies extends Pick<
   readonly loadFrozenSpaceLayout: (sourceTaskId: string) => Promise<PlannedSpaceLayout>
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ①）—— **延后仓库准备**这一步真正需要的那些依赖。
+ *
+ * 从 `StartTaskDeps` 里拆出来的理由与 §5ge / §5hn 批次一的几次拆分完全一样：
+ * 这一步的函数体**早就是中立的**（`await db.select(...)` / `setTaskStatus` /
+ * `setNodeRunStatus` / `mintNodeRun` 收的都已是 `ProviderNeutralDatabase`），
+ * 只有类型把它钉死在 SQLite 那一侧——`StartTaskDeps.db` 是 `DbClient`。
+ * 后果不是不好看：**RFC-287 G7 因此在 PostgreSQL 上根本没实现**
+ *（`rfc359-w5hn-deferred-repo-preparation-parity` 钉着那处落差），
+ * 因为 PG 的根拿不到一个它能构造的准备步骤，只能传 `skipRepositoryPreparation`。
+ *
+ * `repositoryWorkspace` 在这里是**必填**：`StartTaskDeps` 那边缺省会回落到
+ * `composeSqliteRepositoryWorkspaceStore(db)`，那正是本 RFC 在消灭的隐式 provider 绑定。
+ * 装配方各自交自己那份（PG 根有 `composePostgresqlRepositoryWorkspaceStore`）。
+ */
+export interface DeferredRepositoryPreparationDependencies extends Pick<
+  StartTaskDeps,
+  | 'secretBox'
+  | 'cloneTimeoutMs'
+  | 'gitBaselineSyncWindowMs'
+  | 'workspaceCleanupHook'
+  // 准备时才知道的那一格：占位行上冻结的提交身份由 descriptor 带回来。
+  | 'gitCommitIdentity'
+> {
+  readonly db: LegacyProviderNeutralDatabase
+  readonly repositoryWorkspace: RepositoryWorkspaceStore
+  /**
+   * 重放（`sourceTaskId`）用的冻结布局读取。SQLite 那份在本文件里是同步 `.all()`，
+   * PostgreSQL 那份在 `postgresqlTaskRouteWorkspaceParticipant.ts` 里是中立异步——
+   * 两份都已存在，让装配方交自己那一份，这一步就不必认识任何一个引擎。
+   */
+  readonly loadFrozenSpaceLayout: (sourceTaskId: string) => Promise<PlannedSpaceLayout>
+}
+
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ①）—— 两个 provider 共用的**延后仓库准备**步骤。
+ *
+ * 交给 `TaskDriveCoordinator` 当 `repositoryPreparation`：任务行先落 `pending`，
+ * 克隆 / 抓取 / 多仓物化 / 建工作树由驱动认领后作为第 0 步推进，失败转 `failed`
+ * 且 git 原文可见（RFC-287 G7）。
+ */
+export function composeDeferredRepositoryPreparationStep(input: {
+  readonly deps: DeferredRepositoryPreparationDependencies
+  readonly appHome: string
+}): taskDriveComposition.PersistedRepositoryPreparationStep {
+  return createPersistedRepositoryPreparationStep(input)
+}
+
 function requireTaskRecoveryOperations(deps: StartTaskDeps): TaskRecoveryOperations {
   if (deps.taskRecoveryOperations === undefined) {
     throw new Error('task-recovery-operations-not-composed')
@@ -1602,32 +1650,35 @@ export function createTaskDriveCoordinator(input: {
 }
 
 function createPersistedRepositoryPreparationStep(input: {
-  readonly deps: StartTaskDeps
+  readonly deps: DeferredRepositoryPreparationDependencies
   readonly appHome: string
 }): taskDriveComposition.PersistedRepositoryPreparationStep {
   const reader: RepositoryPreparationDescriptorReader = {
     async read(taskId) {
-      const row = input.deps.db
-        .select({
-          id: tasks.id,
-          status: tasks.status,
-          workflowId: tasks.workflowId,
-          name: tasks.name,
-          repoGroupId: tasks.repoGroupId,
-          cachedRepoId: tasks.cachedRepoId,
-          workingBranch: tasks.workingBranch,
-          baseBranch: tasks.baseBranch,
-          spaceKind: tasks.spaceKind,
-          gitUserName: tasks.gitUserName,
-          gitUserEmail: tasks.gitUserEmail,
-          worktreePath: tasks.worktreePath,
-          workspacePruningAt: tasks.workspacePruningAt,
-          workspacePrunedAt: tasks.workspacePrunedAt,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-        .all()[0]
+      // RFC-359 AC-1（plan §5ft 同一条）：中立读法。`.all()` 是 bun:sqlite 专属的同步
+      // 终结符，在中立句柄上取到的是 Promise——这两处是本步骤仅存的两条 provider 绑定。
+      const row = (
+        await input.deps.db
+          .select({
+            id: tasks.id,
+            status: tasks.status,
+            workflowId: tasks.workflowId,
+            name: tasks.name,
+            repoGroupId: tasks.repoGroupId,
+            cachedRepoId: tasks.cachedRepoId,
+            workingBranch: tasks.workingBranch,
+            baseBranch: tasks.baseBranch,
+            spaceKind: tasks.spaceKind,
+            gitUserName: tasks.gitUserName,
+            gitUserEmail: tasks.gitUserEmail,
+            worktreePath: tasks.worktreePath,
+            workspacePruningAt: tasks.workspacePruningAt,
+            workspacePrunedAt: tasks.workspacePrunedAt,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .limit(1)
+      )[0]
       if (row === undefined) return { kind: 'terminal-won' }
       if (
         (row.status !== 'pending' && row.status !== 'running') ||
@@ -1637,13 +1688,14 @@ function createPersistedRepositoryPreparationStep(input: {
         return { kind: 'terminal-won' }
       }
       if (row.worktreePath !== '') return { kind: 'ready' }
-      const latestPrep = input.deps.db
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-        .orderBy(desc(nodeRuns.retryIndex), desc(nodeRuns.id))
-        .limit(1)
-        .all()[0]
+      const latestPrep = (
+        await input.deps.db
+          .select({ id: nodeRuns.id })
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+          .orderBy(desc(nodeRuns.retryIndex), desc(nodeRuns.id))
+          .limit(1)
+      )[0]
       const source =
         row.repoGroupId !== null && row.repoGroupId.length > 0
           ? ({ kind: 'repo-group', repoGroupId: row.repoGroupId } as const)
@@ -3848,7 +3900,15 @@ async function startTaskImpl(
   const repositoryPreparation: RepositoryPreparationStep =
     deferredTaskId === null
       ? skipRepositoryPreparation
-      : createPersistedRepositoryPreparationStep({ deps, appHome })
+      : createPersistedRepositoryPreparationStep({
+          deps: {
+            ...deps,
+            repositoryWorkspace: repositoryWorkspaceFor(deps),
+            loadFrozenSpaceLayout: async (sourceTaskId) =>
+              loadFrozenSpaceLayout(deps.db, sourceTaskId),
+          },
+          appHome,
+        })
 
   const coordinator = createTaskDriveCoordinator({
     deps,
@@ -5289,7 +5349,7 @@ async function assertChildTaskDrivable(
  * 选了这条)。全部失败都只记 warn:清理是尽力而为,真正的判据是紧随其后的建树本身。
  */
 async function reclaimStalePrepArtifacts(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   appHome: string,
   task: Task,
 ): Promise<void> {
@@ -5354,7 +5414,8 @@ async function reclaimStalePrepArtifacts(
 
   // ③ 再在每个候选镜像里 prune 注册项 + 删掉按 taskId 派生的隔离分支。
   for (const id of mirrorIds) {
-    const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()[0]
+    // RFC-359 AC-1（plan §5ft 同一条）：中立读法——`.all()` 是 bun:sqlite 专属的同步终结符。
+    const row = (await db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1))[0]
     if (row === undefined || !existsSync(row.localPath)) continue
     try {
       // `prune` 与 `add` / `remove` 一样会改 common-dir registry，必须走同一把
@@ -5468,7 +5529,12 @@ async function retryRepoPreparation(
   })
   const appHome = deps.appHome ?? Paths.root
   const repositoryPreparation = createPersistedRepositoryPreparationStep({
-    deps: { ...deps, db },
+    deps: {
+      ...deps,
+      db,
+      repositoryWorkspace: repositoryWorkspaceFor({ ...deps, db }),
+      loadFrozenSpaceLayout: async (sourceTaskId) => loadFrozenSpaceLayout(db, sourceTaskId),
+    },
     appHome,
   })
   const coordinator = createTaskDriveCoordinator({
@@ -5535,7 +5601,7 @@ export async function retryRepositoryPreparation(
  * 调用方不得再往下走调度。
  */
 async function runDeferredRepoPreparation(args: {
-  deps: StartTaskDeps
+  deps: DeferredRepositoryPreparationDependencies
   input: StartTask
   appHome: string
   signal: AbortSignal
@@ -5643,10 +5709,25 @@ async function runDeferredRepoPreparation(args: {
   let backoffMs = 1_000
   for (;;) {
     try {
-      prepared = await materializeSpace(
+      // RFC-359 AC-1（plan §5hn 批次二 ①）：直接打中立物化面。`materializeSpace` 是它的
+      // SQLite 适配壳（`repositoryWorkspace` 缺省回落到 `composeSqliteRepositoryWorkspaceStore`），
+      // 这一步的装配方**必须**自己交仓库工作区存储，才谈得上两个引擎共用。
+      prepared = await materializeSpaceWithProvider(
         input,
-        { ...deps, sourceTerminationLaunchSignal: signal },
-        appHome,
+        {
+          appHome,
+          repositoryWorkspace: deps.repositoryWorkspace,
+          loadFrozenSpaceLayout: deps.loadFrozenSpaceLayout,
+          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+          ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
+          ...(deps.gitCommitIdentity === undefined
+            ? {}
+            : { gitCommitIdentity: deps.gitCommitIdentity }),
+          ...(deps.workspaceCleanupHook === undefined
+            ? {}
+            : { workspaceCleanupHook: deps.workspaceCleanupHook }),
+          sourceTerminationLaunchSignal: signal,
+        },
         prepTaskId,
       )
     } catch (err) {

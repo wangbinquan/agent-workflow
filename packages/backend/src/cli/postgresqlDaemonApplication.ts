@@ -106,10 +106,8 @@ import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/app
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
-import {
-  DefaultTaskDriveCoordinator,
-  skipRepositoryPreparation,
-} from '@/modules/task-execution/application/drive/taskDriveCoordinator'
+import { DefaultTaskDriveCoordinator } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
+import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import type { TaskDriveCoordinator } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
@@ -1044,7 +1042,21 @@ export async function composePostgresqlApplication(
   const boundTaskDriveCoordinator = new DefaultTaskDriveCoordinator({
     runtime: resolveTaskDriveConfig(runConfig),
     lifecycle: taskDriverLifecycle,
-    repositoryPreparation: skipRepositoryPreparation,
+    // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：真正的**延后仓库准备**步骤。
+    // 此前这里是 `skipRepositoryPreparation`——于是 G7 在 PostgreSQL 上等于没实现：
+    // 远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试。
+    repositoryPreparation: composeDeferredRepositoryPreparation({
+      db: input.db,
+      appHome: input.appHome,
+      repositoryWorkspace: repositoryWorkspaceStore,
+      secretBox: input.secretBox,
+      ...(launchRuntime.cloneTimeoutMs === undefined
+        ? {}
+        : { cloneTimeoutMs: launchRuntime.cloneTimeoutMs }),
+      ...(launchRuntime.gitBaselineSyncWindowMs === undefined
+        ? {}
+        : { gitBaselineSyncWindowMs: launchRuntime.gitBaselineSyncWindowMs }),
+    }),
     engineOrchestrator: {
       async drive(context) {
         // 执行提供者就是上面那个 `const taskExecutionProvider`——下面 `failureReporter`

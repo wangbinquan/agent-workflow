@@ -2078,8 +2078,12 @@ describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功',
     expect(at, '应有窗口重试循环').toBeGreaterThan(-1)
     const loop = src.slice(at, src.indexOf('\n  if (prepared.earlyError !== null', at))
     // ①循环体存在且真的会重跑物化（不是只算一遍）。
+    // RFC-359 AC-1（plan §5hn 批次二 ①）：被调用者改名——`materializeSpace` 是 SQLite 适配壳
+    // （`repositoryWorkspace` 缺省回落到 `composeSqliteRepositoryWorkspaceStore`），
+    // 延后准备这一步收成两个引擎共用之后直接打中立面 `materializeSpaceWithProvider`。
+    // 判据要锁的是「循环里真的会再物化一次」，所以两个名字都接受。
     expect(loop).toMatch(/for \(;;\) \{/)
-    expect(loop).toMatch(/prepared = await materializeSpace\(/)
+    expect(loop).toMatch(/prepared = await materializeSpace(WithProvider)?\(/)
     // ②成功即出（earlyError 为 null 就 break）——否则会白转满窗口。
     expect(loop).toMatch(/if \(prepared\.earlyError === null\) break/)
     // ③**先判可重试、再看窗口**：反过来会让永久失败也白耗一次退避。

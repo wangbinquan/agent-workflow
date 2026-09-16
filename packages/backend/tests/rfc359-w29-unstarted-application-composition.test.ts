@@ -531,8 +531,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `workgroupLaunchResources` 从一整段手写对象字面量换成
     // `composeWorkgroupLaunchResourceOperations({ db, integrity })`。
     // **语句数仍是 160**：两处都是 `const … = …`，换的是右手边。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①）：摘要随**补上 RFC-287 G7** 更新——
+    // 驱动协调器的 `repositoryPreparation` 从 `skipRepositoryPreparation` 换成真正的
+    // `composeDeferredRepositoryPreparation({...})`。此前 PG 上这一格是空操作，
+    // 于是「远端拉不动」时同步抛错、一行任务都不留。**语句数仍是 160**：换的是一个实参。
     expect(digest(restored, pg)).toBe(
-      '6ce93f2f84a9549c8139985c1d7aaa1d5f42c482575f170184e12f08e5b221f2',
+      'aebfc95ac66b73663dc82feaf22ea774eeb17f9e21ece88dd3b8bed05dc75251',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

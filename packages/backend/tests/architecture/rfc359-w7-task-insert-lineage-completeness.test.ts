@@ -63,10 +63,14 @@ const TASK_INSERT_SITES: readonly string[] = [
   // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:548 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:110 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts:788 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 788 → 813——延后仓库准备的判据与注释加在
+  // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
+  'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts:813 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 W10：行号从 3509 挪到 3530——铸行事务从 `dbTxSync` 换成 `withTaskExecutionWrite`
   // 时在事务开头加了注释，站点本身与它写的三列一格未动（正是上面 §改进方向 说的那类无关 diff）。
-  'services/task.ts:3538 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 3538 → 3590——延后准备的依赖面拆成中立形状时
+  // 在本文件上方加了注释与一段类型，站点本身与它写的三列一格未动。
+  'services/task.ts:3590 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

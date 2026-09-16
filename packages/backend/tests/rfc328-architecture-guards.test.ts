@@ -143,7 +143,9 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     [
       {
         callable: 'runDeferredRepoPreparation',
-        actCallees: new Set(['materializeSpace']),
+        // RFC-359 AC-1（plan §5hn 批次二 ①）：这一步收成两个引擎共用之后直接打中立物化面。
+        // `materializeSpace` 是它的 SQLite 适配壳；受观测的「动作」本来就是物化本身。
+        actCallees: new Set(['materializeSpaceWithProvider']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
     ],

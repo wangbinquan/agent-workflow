@@ -2510,6 +2510,10 @@ export function createPostgresqlTaskRouteOperations(
         target: { kind: 'workflow', refId: task.workflowId, payload: task },
         invoker: { type: 'user', launchKind: 'direct-json' },
         resources: authority,
+        // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：**JSON body 启动延后仓库准备**。
+        // 这一格只有路由自己知道——隔壁 `launchMultipart` 走的是同一台内核，但它必须
+        // 保持预物化（上传物要写进真工作树），所以判据不能放在内核里按 invoker 猜。
+        deferRepoPreparation: true,
       })
     },
     launchMultipart: (request, actor) => launchMultipart(dependencies, request, actor),

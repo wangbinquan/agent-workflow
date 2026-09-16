@@ -278,13 +278,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:1e4ad5ffd110e8e049d5",
-        "import:fd376cdfe76823748791"
+        "import:1e4ad5ffd110e8e049d5"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinator.ts#DefaultTaskDriveCoordinator",
-        "owner:packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinator.ts#skipRepositoryPreparation"
+        "owner:packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinator.ts#DefaultTaskDriveCoordinator"
       ],
       "canonicalFacadeIds": []
     },
@@ -7989,15 +7987,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f7c72884a48d9c9bbd1f268dffc61f28235f9c54517384676604e1db884d8941",
+    "sourceDigest": "sha256:ea44f7e952f0f4e68acb85150453834aa05a0e0d9ed429f5e43c199ad0b4e579",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "82c2791a5f66472004db0a8d8bff98856cab3f26",
-    "contentDigest": "sha256:34c6f0df265e6ab3614558a3eea40d467411c612e6c6cfc86c27d841328ee9eb",
+    "currentSnapshotSha": "d75f71252dc814b28111a2ade0321b8b5e71247f",
+    "contentDigest": "sha256:b01434db14c88349a9a2ac6d6d47717f13f688f379dca162fcc996433e3248e0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

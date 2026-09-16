@@ -839,8 +839,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5106,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5113,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**补上 PostgreSQL 从未实现过的 RFC-287 G7**）：延后仓库准备接进根启动内核（占位工作区）+ PostgreSQL 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。为此新增两处装配面：`composition/deferredRepositoryPreparation.ts`（两个引擎唯一的一份）与 `services/task.ts` 的 `DeferredRepositoryPreparationDependencies` / `composeDeferredRepositoryPreparationStep`——把这一步从 `StartTaskDeps`（`db: DbClient`）拆成中立依赖面。函数体本来就是中立的，只有类型把它钉死在 SQLite 那一侧，**后果是 G7 在 PostgreSQL 上根本没实现**：远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试（`rfc359-w5hn-deferred-repo-preparation-parity` 先钉住、本批销账）。新增的边都指向这一份共用实现；换来的是 PG 根不再需要任何 provider 专属的准备实现。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,8 +863,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4591,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4598,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**补上 PostgreSQL 从未实现过的 RFC-287 G7**）：延后仓库准备接进根启动内核（占位工作区）+ PostgreSQL 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。为此新增两处装配面：`composition/deferredRepositoryPreparation.ts`（两个引擎唯一的一份）与 `services/task.ts` 的 `DeferredRepositoryPreparationDependencies` / `composeDeferredRepositoryPreparationStep`——把这一步从 `StartTaskDeps`（`db: DbClient`）拆成中立依赖面。函数体本来就是中立的，只有类型把它钉死在 SQLite 那一侧，**后果是 G7 在 PostgreSQL 上根本没实现**：远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试（`rfc359-w5hn-deferred-repo-preparation-parity` 先钉住、本批销账）。新增的边都指向这一份共用实现；换来的是 PG 根不再需要任何 provider 专属的准备实现。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -895,12 +901,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24710,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24717,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ①，**补上 PostgreSQL 从未实现过的 RFC-287 G7**）：延后仓库准备接进根启动内核（占位工作区）+ PostgreSQL 的根把 `skipRepositoryPreparation` 换成真正的准备步骤。为此新增两处装配面：`composition/deferredRepositoryPreparation.ts`（两个引擎唯一的一份）与 `services/task.ts` 的 `DeferredRepositoryPreparationDependencies` / `composeDeferredRepositoryPreparationStep`——把这一步从 `StartTaskDeps`（`db: DbClient`）拆成中立依赖面。函数体本来就是中立的，只有类型把它钉死在 SQLite 那一侧，**后果是 G7 在 PostgreSQL 上根本没实现**：远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试（`rfc359-w5hn-deferred-repo-preparation-parity` 先钉住、本批销账）。新增的边都指向这一份共用实现；换来的是 PG 根不再需要任何 provider 专属的准备实现。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f7c72884a48d9c9bbd1f268dffc61f28235f9c54517384676604e1db884d8941",
+    "sourceDigest": "sha256:ea44f7e952f0f4e68acb85150453834aa05a0e0d9ed429f5e43c199ad0b4e579",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +922,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "82c2791a5f66472004db0a8d8bff98856cab3f26",
-    "contentDigest": "sha256:690e434d85788b899bcd554641e766af3b25fb658a36b8bdc720d1d362b9dccc",
+    "currentSnapshotSha": "d75f71252dc814b28111a2ade0321b8b5e71247f",
+    "contentDigest": "sha256:7707641970b046a323ab1dc81205ad1a97692e15a05eebefab354be11315e5c6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
