@@ -33,6 +33,7 @@ import {
 } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
+import { createPostgresqlRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
 import type { ActionExecutionEnvironment } from '@/modules/task-execution/composition/actionExecutionRunners'
 import {
   composeAgentActionExecution,
@@ -148,6 +149,57 @@ export async function createEachProviderTaskExecution(
     throw new Error(`execution-chain fixture unexpectedly invoked ${name}`)
   }
 
+  /**
+   * RFC-359 AC-1（plan §5hh）—— **用启动内核启动一次，两个引擎都走这一条**。
+   *
+   * 为什么要有它：下面按引擎分叉的 `launch` 各走各的机制（SQLite = `startTask` +
+   * `preCreatedWorktree`，PostgreSQL = 启动内核 + 借用工作区租约），于是
+   * 「内核 + SQLite 库」这个组合**全仓没有任何地方在跑**（plan §5hg 的表）。
+   * 而把两份 action 执行装配面合一时取的正是内核那半——合并之后**生产 SQLite 就会走它**。
+   * 先让这个组合在测试里真跑起来，合并才从赌变成接线。
+   *
+   * 协调器用记录式桩：本用例要证的是**启动事务本身**在这个引擎上成立
+   * （开事务、插 task 行、借用工作区的租约 commit、返回 id），
+   * 「任务被真正驱动到 done」由 `rfc359-w5-t21b-execution-chain` 覆盖，不在这里重复。
+   */
+  async function launchViaKernel(
+    task: StartTask,
+    workspace: { readonly workspacePath: string; readonly baselineSha: string },
+  ): Promise<{ readonly taskId: string; readonly submitted: readonly string[] }> {
+    const [workflow] = await db
+      .select()
+      .from(workflows)
+      .where(eq(workflows.id, task.workflowId))
+      .limit(1)
+    if (workflow === undefined) throw new Error('kernel-launch fixture workflow missing')
+    const submitted: string[] = []
+    const kernel = createPostgresqlRootTaskLaunchKernel({
+      db,
+      gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+      // 借用工作区的启动走 `internal.workspace`，这个物化面不会被调用到。
+      workspace: { prepare: () => unavailable('kernel workspace.prepare') },
+      coordinator: {
+        async submit(request: { readonly taskId: string }) {
+          submitted.push(request.taskId)
+        },
+      },
+    } as unknown as Parameters<typeof createPostgresqlRootTaskLaunchKernel>[0])
+    const launched = await kernel.launch({
+      actor,
+      resourceAuthority: launchResources,
+      invoker: { type: 'user', launchKind: 'direct-json' },
+      task,
+      internal: { workspace: borrowedPostgresqlWorkspace(workspace) },
+      subject: {
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        workflowVersion: workflow.version,
+        workflowSnapshot: WorkflowDefinitionSchema.parse(JSON.parse(workflow.definition)),
+      },
+    } as unknown as Parameters<typeof kernel.launch>[0])
+    return { taskId: launched.id, submitted }
+  }
+
   if (harness.capabilities.isolation === 'exclusive') {
     const sqlite = db as unknown as DbClient
     const provider: SelectedSqliteTaskExecutionProviderRuntime =
@@ -253,6 +305,7 @@ export async function createEachProviderTaskExecution(
           },
         })
       },
+      launchViaKernel,
       isActive: provider.runtime.schedulerDriver.isTaskActive,
       overview: () => provider.overview.load({ actor, since: 0 }),
       shutdown: () => identityAccess.shutdown(),
@@ -396,6 +449,7 @@ export async function createEachProviderTaskExecution(
         },
       })
     },
+    launchViaKernel,
     isActive: provider.participants.activity.isActive,
     overview: () => provider.overview.load({ actor, since: 0 }),
     shutdown: () => identityAccess.shutdown(),
