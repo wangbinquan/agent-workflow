@@ -15,12 +15,12 @@
 // 而是**把两个根都装出来，直接比**：两条 lane 各自把自己量到的面记进模块级 map，
 // 末尾那个 describe 再做一次逐字比对。失败时打印的是对称差，指名道姓是哪条路由/哪个权限不一样。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import type { WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
 
-import { resolveTestProviders, type TestProvider } from '../helpers/eachProvider'
+import type { TestProvider } from '../helpers/eachProvider'
 import { describeEachProviderHttpApplication } from '../helpers/providerHttpApplicationScope'
 
 /** 两条 lane 各写一格；末尾的 describe 读它。同文件同进程，所以 map 是通的。 */
@@ -67,45 +67,36 @@ describeEachProviderHttpApplication(
     beforeEach(resetRouteMetaRegistry)
     afterEach(resetRouteMetaRegistry)
 
-    test('这个引擎的组合根装出来的路由面被记下来（非空）', async () => {
+    // **谁后跑谁负责比对**——不能把比对放进一个单独的、注册在后面的 `describe`。
+    // CI 跑的是 `bun test --isolate --randomize`（`.github/workflows/ci.yml:228`，
+    // 那个 flag 存在的理由就写在旁边：把「文件内的顺序依赖」暴露出来）。
+    // 第一版正是这么写的：比对写成尾部的 `describe`，本地顺序跑绿、CI 随机序下比对先于记录执行，
+    // 读到空 map 当场红。**跨用例的先后顺序不是可以依赖的东西。**
+    test('记下本引擎的路由面；两条 lane 都到齐时当场逐字比对', async () => {
       await scope.open()
       const surface = surfaceOf()
-      mountedSurfaces.set(scope.harness.capabilities.provider as TestProvider, surface)
       expect(
         surface.length,
         '组合根装完一条路由都没挂上——说明这次量的根本不是真应用的路由面，后面的比对也就没有意义',
       ).toBeGreaterThan(0)
+      mountedSurfaces.set(scope.harness.capabilities.provider as TestProvider, surface)
+
+      // 只有一个引擎在跑（`AW_TEST_PROVIDERS=sqlite`，CI 的非 PostgreSQL 分片就是这样）时
+      // 比不了——**如实跳过**，而不是假装比过了。真 PostgreSQL 那条 job 上两条 lane 都会跑到，
+      // 后跑的那条在这里完成比对。
+      if (mountedSurfaces.size < 2) return
+
+      const sqlite = mountedSurfaces.get('sqlite') ?? []
+      const postgresql = mountedSurfaces.get('postgresql') ?? []
+      const inSqliteOnly = sqlite.filter((entry) => !postgresql.includes(entry))
+      const inPostgresqlOnly = postgresql.filter((entry) => !sqlite.includes(entry))
+      expect(
+        { inSqliteOnly, inPostgresqlOnly },
+        '两个组合根挂出来的路由面不一样。**这正是本 RFC 要根除的那种分叉**：' +
+          '一批只装 `createApp`（SQLite 根）的守卫会把它们量到的那张表当成「框架的路由面」来审，' +
+          '于是只有一侧被钉住。要么把多出来/少掉的那一组补齐，' +
+          '要么说明它为什么天然只属于一个引擎（并让它在两侧都有判据钉着）。',
+      ).toEqual({ inSqliteOnly: [], inPostgresqlOnly: [] })
     })
   },
 )
-
-describe('RFC-359 W5 —— 两个组合根的路由面', () => {
-  test('逐字相等（多挂一组路由、或同一条路由两侧权限不同，都在这里现形）', () => {
-    const selected = resolveTestProviders(process.env)
-    if (selected.length < 2) {
-      // 单引擎模式（`AW_TEST_PROVIDERS=sqlite`）下比不了——**说清楚**而不是假装比过了。
-      expect(
-        mountedSurfaces.size,
-        '单引擎模式下至少要记下所选那一个引擎的面，否则记录这条路径本身就是坏的',
-      ).toBe(1)
-      return
-    }
-
-    const sqlite = mountedSurfaces.get('sqlite')
-    const postgresql = mountedSurfaces.get('postgresql')
-    expect(
-      { sqlite: sqlite !== undefined, postgresql: postgresql !== undefined },
-      '两条 lane 都该跑过并各记一格；缺一格说明那一侧的应用压根没装起来',
-    ).toEqual({ sqlite: true, postgresql: true })
-
-    const inSqliteOnly = (sqlite ?? []).filter((entry) => !(postgresql ?? []).includes(entry))
-    const inPostgresqlOnly = (postgresql ?? []).filter((entry) => !(sqlite ?? []).includes(entry))
-    expect(
-      { inSqliteOnly, inPostgresqlOnly },
-      '两个组合根挂出来的路由面不一样。**这正是本 RFC 要根除的那种分叉**：' +
-        '一批只装 `createApp`（SQLite 根）的守卫会把它们量到的那张表当成「框架的路由面」来审，' +
-        '于是只有一侧被钉住。要么把多出来/少掉的那一组补齐，' +
-        '要么说明它为什么天然只属于一个引擎（并让它在两侧都有判据钉着）。',
-    ).toEqual({ inSqliteOnly: [], inPostgresqlOnly: [] })
-  })
-})
