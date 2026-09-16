@@ -13672,3 +13672,63 @@ zsh 不分词，50 个路径被当成**一个过滤串**，bun 回「10443 files
 （「一份很长的踩坑文档，只有在动手前真的去查才有用」）在这里第二次被兑现。
 可操作的收敛：**改了 `src/` 下任何文件，提交前固定跑一次上面那个 `readFileSync` 半径**，
 别按目录猜、也别用裸变量传路径。
+
+---
+
+## §5gv　给最后一道波次做实地勘察：启动面合一，比账本上看起来近得多
+
+AC-1 的同文件孪生还剩 19 条，其中挂 `漂移待合` 的 10 条里 **9 条的理由是同一句**：
+「挡在下层——下层仍是品牌实现」，而且多数还补了一句「且这条路还挂在 `services/task` 的
+SQLite 专属启动面上」。AC-6 剩下的 14 条里 `start-task-deps` 也指着同一处。
+
+**也就是说：RFC 剩下的硬缺口基本收敛成一道波次——启动面合一。** 这一节把它勘察清楚，
+让下一步是「动手」而不是「再研究一遍」。
+
+### 差异的真身
+
+`actionExecutionEnvironment.ts` 里那一对把问题摆得最清楚：
+
+| | 怎么启动一个 host task |
+| --- | --- |
+| `createSqliteActionExecutionEnvironment` | `await startTask(startInput, { ...deps.startDeps, … })` —— **legacy 启动面** |
+| `createPostgresqlActionExecutionEnvironment` | `await deps.launch.launch({ actor, resourceAuthority, invoker, task, subject, internal })` —— **启动内核** |
+
+这不是「同一件事写了两遍」，是**两套启动机制**。所以这一层合不了——得先让两边走同一条启动路。
+
+### 勘察结果一：内核几乎已经是中立的
+
+`postgresqlTaskRouteLaunchOperations.ts`（1339 行）里 PG 独有原语的计数：
+`$client` / `unsafe(` / `providerPool` / `pg_` / `RETURNING` / `ON CONFLICT` / advisory lock /
+`REPEATABLE READ` / `dbTxSync` —— **全部为 0**。
+
+把 `PostgresqlRootTaskLaunchDependencies.db` 从 `PostgresqlDatabaseClient` 改成
+`ProviderNeutralDatabase` 做类型层 dry run：**整棵树只剩 2 条错误**，而且都在这个文件里。
+也就是说那个品牌标注**基本是编译期的**，与 §5fz / §5ga 合掉的那几对同一形状。
+
+（dry run 已还原，本节不含生产改动。）
+
+### 勘察结果二：唯一那条真耦合，仓库里**已经有中立替身**
+
+2 条错误里实质的那条在第 732 行：`withPostgresqlSerializableTaskExecution(dependencies.db, …)`
+——PG 的可串行化事务包装（带序列化失败重试）。这是 §5fq ① 的真原语，不能硬套。
+
+但 `platform/persistence/databaseTransaction.ts` 里**早就有**中立的 `DatabaseSession.serializable(body)`：
+- 它的注释直说「蓝本：`postgresqlTaskLifecycleTransaction.ts` 的 `withPostgresqlSerializableTaskExecution`」；
+- PG 侧渲染 `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE` + 序列化失败重试；
+- **SQLite 侧已实现**：`serializable: transaction`，注释写明「`BEGIN IMMEDIATE` 下整个库独占，
+  已是最强隔离；serializable 与 transaction 是同一条路」。
+
+**这道波次看起来最硬的一块（事务语义跨引擎等价），其实已经做完了**，只是内核还在用旧的品牌 helper。
+
+### 于是这道波次的实际形状
+
+1. 内核换用 `DatabaseSession.serializable` + `db` 放宽到中立句柄 —— **小**（1 个调用点 + 2 条类型错）；
+2. `PostgresqlTaskRouteWorkspaceParticipant` 中立化 —— 待测；
+3. **把 SQLite 侧的调用方从 legacy `startTask` 迁到内核** —— **这才是大头**；
+4. 退役 `services/task` 的 legacy 启动面。
+
+第 3 步是产品行为面上的真改动（两条启动路的准入、资源授权、事件发布顺序都要对齐），
+不是一次放宽形参能解决的；它也正是 AC-1 那 9 条与 AC-6 的 `start-task-deps` 共同的解锁点。
+
+**本节只做勘察、不含生产改动**：这一刀要退役一整条启动路，属于该由用户点头的方向性决定，
+而勘察做完之后那个决定的成本已经很低——上面四步各自的大小都在这里写着了。
