@@ -239,7 +239,7 @@
 
   注意它扫的是**全部历史**：一旦推上去，改当前文件消不掉，只能按 fingerprint 钉进 `.gitleaksignore`（上面那套定式）。
 
-- **`bun test --randomize` 会打乱同一 describe 内的 test 顺序——journey 式测试的先后步骤必须收在同一个 `test()` 里**（2026-08-18 RFC-310 实锤）：`describe` 里第一个 test launch mission、第二个 test 拿共享 `missionId` 断言下一步，本地裸跑绿、gate 的 shard（强制 `--isolate --randomize`）里第二个先跑 ⇒ `missionId` 是空串、稳定红。定式：跨步骤共享可变状态的用例合并成单个 test；describe 级共享只放**只读**fixture（beforeAll 建好、任何 test 不再推进它）。
+- **`bun test --randomize` 会打乱同一 describe 内的 test 顺序——journey 式测试的先后步骤必须收在同一个 `test()` 里**（2026-08-18 RFC-310 实锤）：`describe` 里第一个 test launch mission、第二个 test 拿共享 `missionId` 断言下一步，本地裸跑绿、gate 的 shard（强制 `--isolate --randomize`）里第二个先跑 ⇒ `missionId` 是空串、稳定红。定式：跨步骤共享可变状态的用例合并成单个 test；describe 级共享只放**只读**fixture（beforeAll 建好、任何 test 不再推进它）。 **2026-09-16 又撞一次，形状变了所以没认出来**（RFC-359 §5gk）：不是 journey 测试，是**架构守卫**——两条 `describeEachProvider` lane 各把自己量到的路由面写进模块级 map，比对写成**尾部另一个 `describe`**。「注册在后面」在默认顺序下确实后跑，本地怎么跑都绿；`--randomize` 下比对先执行、读到空 map，CI 当场红。同一条规矩，只是共享状态的生产者变成了 harness 的两条 lane、消费者变成了另一个 describe。改法也还是那条：把比对并进 lane 用例自己——记完就地判断「两条都到齐了吗」，**谁后跑谁负责比对**。
 - **后台跑门禁时别接 `| tail`（或任何管道）—— 管道的退出码会把门禁的红吞成绿**
   （2026-08-11 实测踩坑）：`bun run gate:local 2>&1 | tail -40` 放后台，收到的完成
   通知是 `exit code 0`，因为 shell 取的是**管道最后一个命令**（`tail`）的退出码，而
@@ -601,6 +601,34 @@ push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推
 值得记的不是这次撞，而是它说明的事：**一份很长的踩坑文档，只有在动手前真的去查才有用**。
 同一天我还三次撞进本文件的「架构账本的联动点：动一次代码要同步 8 处」那张表（第 1/2/4 行各一次），
 每次都是撞了才回来查表——而表就在那儿。
+
+### 第五次，这次是 `set -- $VAR`，而且它**没有任何报错**（2026-09-16，RFC-359）
+
+前四次都至少炸出一条 `did not match`。这次的形状不报错、**静默失效**：
+
+```bash
+RUN=$(gh api ".../actions/runs?head_sha=$SHA" --jq '"\(.id) \(.status) \(.conclusion)"')
+set -- $RUN                        # zsh：$1 = "1234 completed success" 整串，$2 是**空的**
+if [ "$2" = "completed" ]; then …  # ← 永远不成立
+```
+
+我拿这个循环当「推完盯 CI」的后台 watcher，一连起了 5 个。它们**一个都没工作过**：
+`$2` 恒为空，条件永不成立，只能靠跑满 200 轮超时退出。而后台任务「没有输出」的样子，
+和「还在跑」**长得一模一样**——于是我一直以为在盯着，实际一次通知都不会来。
+（真正的 CI 结论是我在前台直接 `gh api` 查出来的，那条路径没有这个 bug，所以结论本身没错。）
+
+危害等级比前四次高：前四次是**吵闹地**失败，这次是**安静地**不工作，
+而它守的恰恰是「推红了要立刻知道」这件事。
+
+**定式**：zsh 下别用 `set -- $VAR` 拆字段。要么 `set -- ${=VAR}`（显式分词），要么每个字段单独取：
+
+```bash
+ST=$(echo "$LINE" | awk '{print $1}')
+CO=$(echo "$LINE" | awk '{print $2}')
+```
+
+更普适的一条：**写完一个「条件满足才动作」的循环，先喂它一个已知满足条件的输入验一遍**。
+这 5 个 watcher 里任何一个，只要拿一个早已 completed 的 SHA 试跑一次，就会当场暴露。
 
 **可操作的结论**：涉及「多个路径 / 多个文件」的命令，别用变量传，**直接用 glob 让 shell 展开**
 （`bun test tests/foo-*.test.ts`、`git add path/a path/b`）。要用变量就写数组
