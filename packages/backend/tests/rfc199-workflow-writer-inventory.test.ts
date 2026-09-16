@@ -24,7 +24,10 @@ const EXPECTED_WRITERS = {
     // seed, same builtin FK-anchor shape (lazy idempotent, synthesized
     // single-node snapshot, never user-visible).
     'modules/task-execution/composition/actionExecutionRunners.ts': 1,
-    'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts': 2,
+    // RFC-359 AC-1（plan §5ge）：2 → 1。agent 启动资源的两个 provider 工厂合成一份
+    // （差别只有「谁解析可见 agent / 谁做工作流校验」，用缺省实参收口），
+    // 那条 host workflow 的 upsert 于是只剩一处。
+    'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts': 1,
     'modules/knowledge-evolution/infrastructure/fusionRepository.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
@@ -183,8 +186,9 @@ describe('RFC-199 workflow writer inventory', () => {
         'serializeWorkflowDefinitionStorageV1(',
     }
     // RFC-359 W4-B2：演示种子的两份 provider 持久化合成一份（14 → 13）；
-    // RFC-359 W4-D5：融合仓库的两份 provider 实现合成一份（13 → 12）。
-    expect(inventory.insertValueArgs).toHaveLength(12)
+    // RFC-359 W4-D5：融合仓库的两份 provider 实现合成一份（13 → 12）；
+    // RFC-359 AC-1（plan §5ge）：agent 启动资源的两份合成一份（12 → 11）。
+    expect(inventory.insertValueArgs).toHaveLength(11)
     expect(Object.keys(inventory.insert).sort()).toEqual(
       Object.keys(canonicalMarkerByWriter).sort(),
     )

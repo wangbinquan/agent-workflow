@@ -1558,7 +1558,10 @@ describe('RFC-294 W0-R target architecture scanner contract', () => {
 // 没有任何地方看得见——每次加一条都只是 diff 里多两行，没有一个数字会变。
 const CROSS_CONTEXT_PILOT_DEBT: string[] = [
   'modules/integration/application/mrTerminalControlWorker.ts -> modules/task-execution/application/sourceTerminationCapability.ts [type:static-import] cross-context internal import',
-  'modules/integration/composition/webhookTerminalControl.ts -> modules/task-execution/composition/sourceTermination.ts [value:static-import] cross-context internal import',
+  // RFC-359 AC-1（plan §5fy）**已消除**：MR 终端控制的两个品牌装配合一时，
+  // `taskTermination` 改由调用方提供，`webhookTerminalControl.ts` 于是不再 import
+  // `task-execution/composition/sourceTermination`——这条跨 context 内部 import 随之消失。
+  // 合一顺带还掉一笔架构债，不是「把债挪走」：那行 import 现在真的不存在了。
   'modules/task-execution/composition/taskEngineApplication.ts -> modules/source-control/composition.ts [value:static-import] cross-context internal import',
 ]
 

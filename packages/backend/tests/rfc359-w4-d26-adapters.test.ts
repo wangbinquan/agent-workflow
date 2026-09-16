@@ -220,9 +220,18 @@ test('源码锁：手工提问写面只剩一份，同步 gate 操作 store 已�
   // 只禁类型位置的同步事务句柄；`DbTxSync` 出现在注释里是有意的（要说清退役的是哪一份）。
   expect(shapes).not.toMatch(/: DbTxSync/)
 
-  // 两条装配路径注入同一份写面。
+  // 装配路径注入同一份写面。
+  //
+  // RFC-359 AC-1（plan §5ga）：这里原来数的是**两处**——当年
+  // `createCollaborationCommandContext` 与 `createPostgresqlCollaborationCommandContext`
+  // 两条装配路径各注入一次。那两份**函数体逐字节相同**、只差形参上一个更窄的标注，
+  // 已合成一份，于是注入点只剩**一处**。
+  //
+  // **判据要锁的东西没有变**：手工提问写面只有一份实现（下面两条 `not.toContain`
+  // 才是这条判据的主语——不许再冒出 `Sqlite…` / `Postgresql…` 的品牌写面）。
+  // 数字从 2 变 1 是「装配路径少了一条」，不是「写面多了一份」。
   const context = read('modules/collaboration/composition/commandContext.ts')
-  expect(context.match(/new DatabaseManualQuestionOpenWriter\(/g)).toHaveLength(2)
+  expect(context.match(/new DatabaseManualQuestionOpenWriter\(/g)).toHaveLength(1)
   expect(context).not.toContain('SqliteManualQuestionOpenWriter')
   expect(context).not.toContain('PostgresqlManualQuestionOpenWriter')
 })

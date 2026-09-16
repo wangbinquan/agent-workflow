@@ -90,8 +90,8 @@
       "id": "rfc294-cross-context-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CROSS_CONTEXT_PILOT_DEBT",
-      "baseline": 3,
-      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0"
+      "baseline": 2,
+      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0 RFC-359 AC-1（plan §5fy）3 → 2：`webhookTerminalControl.ts -> task-execution/composition/sourceTermination.ts` 这条**已消除**——MR 终端控制的两个品牌装配合一时 `taskTermination` 改由调用方提供，那行 import 于是真的不存在了（不是把债挪走）。合一顺带还掉一笔架构债。"
     },
     {
       "id": "rfc294-god-surface-allowlist",
@@ -906,8 +906,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "3c81bd90a79d58fa83efc0f95e13494e5a571f35",
-    "contentDigest": "sha256:e0c6edd67279241ef8b69470421a6873d946b965468cd36c4e93e8d926370235",
+    "currentSnapshotSha": "b38c1c0834a4d24878555e9f6fe02a7c2bf3c7ef",
+    "contentDigest": "sha256:ebd2499fb0cffb3ba8093acf7ce002e201457fad9d85b2fb1cbb47d2780ea0eb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
