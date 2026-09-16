@@ -14956,3 +14956,31 @@ scratch 那一个挂载点是空串，于是派生出一个 **path 为空**的�
 「spaceNodes 兜底派生 vs 如实为空」。**两次都是同一类**：
 SQLite 那半在**读端补**了一点东西，PG 那半**如实返回**。
 合并的方向因此也一致——取如实那半，并把补偿逻辑从读端挪走或删掉。
+
+### 旁证一条：PostgreSQL 的 SSI 重试预算比 SQLite 的写争用重试**短一个量级**
+
+`c4f115dba`（**零 `src/` 改动**，只加了一个测试文件 + 账本注释）把 CI 的 shard 9 推红：
+
+```
+PostgresError: could not serialize access due to read/write dependencies among transactions
+  at transitionTerminalMaintenanceClaimTx (terminalMaintenanceClaim.ts:94)
+```
+
+**不是本次引入**——那笔提交一行运行时代码都没改，改变的只是**分片构成**
+（加一个测试文件就会让 CI 按文件发现顺序重新分片，更多 PG 负载落进了 shard 9）。
+但它照出一个值得记的不对称：
+
+| | 触发条件 | 预算 |
+| --- | --- | --- |
+| SQLite `retrySqliteWrite` | `SQLITE_BUSY` 写锁争用 | 约 3 次，基准 **100ms** 指数退避（总窗口 ~300–700ms） |
+| PostgreSQL `retryPostgresqlSerialization` | `40001` / `40P01` SSI 冲突 | 10 次，上限 **16ms** 随机退避（总窗口 **≲80ms**） |
+
+也就是说：**真正会产生序列化冲突的那个引擎，重试窗口反而短了 5–10 倍。**
+本机复跑（单文件 12/12、与新用例同跑 14/14）都绿，说明它是**负载相关**的，
+不是逻辑错。
+
+**不在本刀处置，也不当成 flake 放过**：短退避对 SSI 是常见设计（冲突方立即重放通常更快收敛），
+所以这不能直接判成缺陷——需要的是一次**带取证的裁决**：
+在 CI 那种并发下量一量 40001 的实际重试分布，再决定是加预算、还是把
+`task_execution_maintenance_claims` 那条路从 SERIALIZABLE 降到更弱的隔离 + 显式 CAS。
+两条都属于 AC-11「PostgreSQL 要做到最高性能表现」的管辖面。
