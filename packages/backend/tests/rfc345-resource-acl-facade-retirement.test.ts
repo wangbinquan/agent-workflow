@@ -330,13 +330,9 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'execution-contract Agent projection',
     REMOVE_OWNERS.executionContractResources,
   ),
-  edge(
-    'services/agent.ts',
-    'modules/task-execution/composition/digitalEmployeeExecution.ts',
-    ['getAgentById'],
-    'digital-employee Agent execution lookup',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
+  // RFC-359 AC-1（plan §5hl）：这条边**销账**——数字员工执行的两份 composer 合一后，
+  // Agent 查询改成由装配方交进来的 `agents` 端口（三个组合根各自绑自己的目录查询面），
+  // composer 自己不再 import `services/agent` 的 `getAgentById`。债是还掉的，不是挪走的。
   edge(
     'services/agentDeps.ts',
     'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
