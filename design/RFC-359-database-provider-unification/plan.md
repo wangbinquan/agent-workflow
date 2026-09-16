@@ -14920,3 +14920,39 @@ PG 用 `createTaskAuthorizationQueries`，是独立的一对。
 **参与者那条路顺带塌掉②、并把三个入口的启动语义收在一处**；
 捷径只修 agent 一格，workgroup / workflow 两格仍是两份。
 先做对的那件事，而不是最省的那件事。
+
+### §5hn 批次二 ③ 的基线：工作组启动——**拒绝清单一上来就照出一处真差异**
+
+`rfc359-w5hn-workgroup-launch-provider-parity`（`describeEachProviderHttpApplication`）：
+同一份 `POST /api/workgroups/:id/tasks` 打到同一条路由，比对两个引擎落出的 task 行。
+
+**判据用拒绝清单，不是允许清单**（这一刀最值得带走的手法）。
+第一版按允许清单只比十来个字段，拿 `workflowName` / `workflowVersion` 做变异**咬不住**——
+允许清单只能保护「我想到的字段」，而这条用例的意义恰恰在于守住**我没想到的**那些。
+改成「把逐次必然不同的那几格摘掉、其余整个任务行都比」之后：
+
+- 变异（PG 侧 `workflowName` 缀 `_MUTANT`）**当场咬住**；
+- 而且**第一次跑就照出一处真差异**——见下。
+
+### 照出来的真差异：`spaceNodes` 在 scratch 启动上两侧不同
+
+```
+sqlite      spaceNodes = [{ path: '', origins: [] }]
+postgresql  spaceNodes = []
+```
+
+**成因**：SQLite 的读投影在没有冻结的 `task_space_nodes` 行时**兜底派生**
+（`services/task.ts` 的 `minimalNodePaths(repos.map(r => r.mountPath))`），
+scratch 那一个挂载点是空串，于是派生出一个 **path 为空**的节点；
+启动内核则原样返回工作区真正规划的 `nodePaths`——scratch 上就是空的。
+
+**判断**：PG 那半更诚实（没有规划目录就是没有），SQLite 那半是兜底派生的产物。
+**但没有在这一刀里改**：这是**用户可见的响应形状**，前端可能依赖它，要单独定夺——
+合并 470 行那一刀把它统一时，这条反向断言会红并要求销账。
+
+### 与批次一的对照
+
+批次一（agent）照出的是「宿主快照排版写时 vs 读时」，批次二（workgroup）照出的是
+「spaceNodes 兜底派生 vs 如实为空」。**两次都是同一类**：
+SQLite 那半在**读端补**了一点东西，PG 那半**如实返回**。
+合并的方向因此也一致——取如实那半，并把补偿逻辑从读端挪走或删掉。
