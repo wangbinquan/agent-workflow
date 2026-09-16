@@ -2,6 +2,51 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-16 续 39，**AC-6 24 → 15；并挖出「17 个文件手搓假 PostgreSQL」**）
+>
+> 已推 `fef2d4e37`（CI 绿）· `e4ed0bde0` · `5ae6a6ae4` · `ddbb016e7` · `91262ef6c`（CI 跑中），
+> 本地待推 `b335a0ec4`。续 38 的「7 条共用一个根因 + 一个共同 blocker」被**证伪并纠正**（§5gi）：
+> `createApp` 不是能放宽形参的入口（它就是 SQLite 组合根的大门），而
+> `describeEachProviderHttpApplication` **早就存在、全仓 113 个文件在用**——那 7 条从来没被根挡着。
+>
+> **本段最该带走的一句：判据「通过了」不等于「因为正确的理由通过」。**
+> `sanctionFor` 喂进判据的是 `codeOnly(text)`——TS scanner 重新 tokenize、**token 间一律补空格**。
+> 于是 `includes('allRouteMeta(')` **仍返回 true**，但命中的是**字符串字面量**里那一份
+> （源码层断言的文本），真正的调用点反而漏掉。隔壁 `new Proxy(` 那条没这么走运、直接不匹配当场红，
+> 这一红才把前一条的假通过暴露出来。**新判据一律写成带 `\s*` 的正则。**
+>
+> **AC-6 24 → 15**：一条真迁移（`rfc310-pr7b` 的 HTTP 面）＋ 六条重判进**新加的通用判据**
+> （`provider-independent-route-registry` / `provider-pair-covered-by-name` /
+> `sqlite-plan-vocabulary` / `sync-client-fault-injection`）＋ 两刀假池换真库。
+> 六条里多数**文件里本来就写明了理由**，只是没有判据认领——那不是迁移量，是分类没跟上。
+>
+> **新守卫 `rfc359-w5-composition-root-route-surface`**：把两个组合根都装出来，
+> 逐字比它们挂载的路由面（连 `tokenAccess` 与权限集合一起比）。结论**相等**——
+> `rfc329` / `rfc305` 那个一直只是「读源码论证过」的前提，从此有判据钉着。两条变异都真红过。
+>
+> **最大的一处没进任何账本的不对称（§5gn）**：按 `function postgresqlFixture` 扫全量测试目录，
+> **17 个文件、5445 行、30 处假池**；其中 8 个文件（3100 行）的 PG 覆盖**全靠假池**。
+> 账本数的是「直建 SQLite 库的调用点」，数不到「PG 那半根本没连真库」。
+> 但按**组合根**口径量（§5go）：13 个 `composePostgresql*` 里 10 个已跑真 PG、2 个只在假池里、
+> 0 个从未构造——**组合根这层基本还完了，欠的是下面的端口/适配器层**，两件事别混。
+>
+> **假池有多弱，有一个决定性例子**：`rfc349-maintenance-disk-provider` 原来断言
+> 「SQL 文本里出现过 `pg_stat_user_tables`」。把生产查询改成 `pg_stat_user_tables_MUTANT`——
+> **旧断言照过**（`toContain` 在 `..._MUTANT` 上为 true），换成真库后红在
+> `PostgresError: relation ... does not exist`。假池不是弱一点，是对「表名写错」**完全失明**。
+>
+> **处置原则（§5gn，已写进 plan）**：不一刀切。断言引擎独有原语调用形态的，改用
+> `harness.recordStatements()`；断言错误路径（连接失败/池耗尽）的，假池可能仍是唯一手段。
+> **每迁一个都要给出变异验证**（迁移前只红一格、迁移后两格都红），否则只是换了个库、没换来覆盖。
+>
+> **顺手拆掉一颗雷**：`rfc099-acl-endpoints-matrix` 之后紧跟 `rfc305-architecture-lock` 必红
+> （`get-database-runtime.v1: declared operation has no mounted binding`）——操作目录是模块级全局态，
+> 两文件单独跑都绿、排进同一分片才红。给 rfc305 补上 `databaseMigration` 即解。
+>
+> **本段新增 gotchas**：PG 道 fire-and-forget 的后台活会在连接池关掉后回来报 `Connection closed`
+> （SQLite 同步驱动不显形；**别在 PG 道写依赖后台活跑完的断言**）；改测试**标题**会撞到按名字钉死的
+> 账本（`rfc349FunctionalEvidence` 的 `testName`），红在**另一个文件**上。
+>
 > ## 📌 RFC-359 最新一段（2026-09-16 续 38，**AC-1 同文件孪生 48 → 19；AC-6 24 → 23**）
 >
 > 已推 `3c81bd90a`（§5fw–§5gh 十三段一笔落地）。**原计划拆六笔，实际没拆**：
