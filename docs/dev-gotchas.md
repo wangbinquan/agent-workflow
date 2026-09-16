@@ -503,11 +503,27 @@ grep -rln "<被改文件的 basename 去掉 .test.ts>" packages/backend/tests --
 实撞：合掉动作执行那三对以后 `actionExecutionEnvironment.ts` 里不再有 `startTask` 调用，
 rfc301 的账本还记着它 1 次，radius 68 个文件全绿，CI 的 ubuntu shard 4/12 红。
 
-**补一步**：跑完脚本给的半径，再按**改动文件的相对路径字符串**grep 一遍测试树：
+**补一步**：跑完脚本给的半径，再按**改动文件的 basename**grep 一遍测试树——
+**不要只 grep 连续路径**。这类守卫有两种写法，连续路径的 grep 只抓得到第一种：
 
 ```
-grep -rn "modules/task-execution/composition/actionExecutionEnvironment.ts" packages/backend/tests/
+# ① 连续路径字面量（rfc301 的启动点账本就是这种）
+'modules/task-execution/composition/actionExecutionEnvironment.ts': 1,
+
+# ② 用 join/resolve 按**路径段**拼出来（rfc310-digital-employee-authoring 是这种）
+resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution',
+        'composition', 'digitalEmployeeExecution.ts')
 ```
+
+②里根本不存在 `composition/digitalEmployeeExecution.ts` 这个连续子串，
+所以按路径 grep **一条都抓不到**。2026-09-16 同一天里两种都撞了一遍，第二种又推红一次。
+**用 basename**：
+
+```
+grep -rln "digitalEmployeeExecution\.ts\|actionExecutionEnvironment\.ts" packages/backend/tests/
+```
+
+这一网同时罩住两种写法，代价是命中面偏大（本次 67 个文件，跑一遍两分钟）——值。
 
 删文件 / 改文件名时同理（见本文件「删文件要连着账本一起删」那条）。
 **注意方向**：这类账本红的时候往往是**好事**——「少一个未受审调用点」「少一条 deep import」

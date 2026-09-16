@@ -14479,3 +14479,79 @@ PG 有自己的 `createPostgresqlTaskDriverLifecyclePort`。这是 §5ha 排序�
 
 **§5hn —— `wakeHumanGateContinuation` 等人审继续驱动的 API 仍吃 `StartTaskDeps`。**
 属于 §5ha 第 ④ 步「退役 legacy 启动面」。
+
+## §5hm　勘察：驱动生命周期端口那一对，以及它里面一处**真的**「一个引擎有、另一个没有」
+
+§5hl 收尾时撞到 `TaskDriveCoordinatorDependencies.db` 收不成 `ProviderNeutralDatabase`——
+根因是协调器里装的 `createTaskDriverLifecyclePort` 要 `DbClient`，而 PG 有自己那份
+`createPostgresqlTaskDriverLifecyclePort`。这一节是**只读勘察**，把这对的形状量清楚，
+下一刀照着做；本节零生产改动。
+
+### 逐项对账
+
+| | `taskDriverLifecycle.ts`（SQLite） | `postgresqlTaskDriverLifecycle.ts` |
+| --- | --- | --- |
+| 认领 | `taskExecutionModule.claim({ db, intentId })`（**进程级单例**） | `options.module.claimPersisted({ intentId })`（实例） |
+| 执行上下文 | `composition/sqliteTaskExecutionContext` | `application/taskExecutionContext` |
+| 心跳 | `startOwnerHeartbeat(db, …)` | `options.persistence.ownership.heartbeat` |
+| 状态读 | `.limit(1).all()[0]`（同步） | `await …limit(1)` 后取 `rows[0]` |
+| **评审变更锁** | **整个 attach 包在 `withTaskReviewMutationLock` 里** | **没有** |
+
+前四项都是同一个故事的第五、第六遍：**同步读 vs await**、**进程单例 vs 实例**。
+而且大半已经是中立的了——`claim` 与 `claimPersisted` 的函数体**逐字相同**，
+只差 ownership 从哪来（`this.ownershipFor(input.db)` vs `this.persistence.ownership`），
+且 `claim` 的 `db` 形参**早就是 `ProviderNeutralDatabase`**；
+`sqliteTaskExecutionContext.createTaskExecutionContext` 也只是中立那份的一层薄包装
+（补 `persistence: createTaskExecutionPersistence(db)` 与 `legacyConnection`）。
+合并的形状因此比较清楚：端口收一个 `claim: (intentId) => Promise<ClaimedTaskExecution>`
+闭包 + `persistence` + `runtimeRegistry`，装配方各自绑定。
+
+### 第五项是真差异，且方向是「PG 更弱」
+
+`withTaskReviewMutationLock` 是**按 task 排队的进程内 FIFO**，用途见
+`services/reviewMutationCoordinator.ts:1-7`：评审决策会改动兄弟评审行，任务取消会经生命周期
+终态钩子封掉所有未决评审行，**两者共用一个临界区**。SQLite 的 `attachTaskDriver` 整个包在
+里面，PostgreSQL 那份**一句都没有**——也就是说 PG 上 attach 可以与「取消正在封评审行」交错，
+而 SQLite 上不会。这是本 RFC 定义的那种缺口：同一件事，一侧有判据、另一侧没有。
+
+**不能直接把锁加到 PG 那份上就算完**，有一条已知的反向风险写在同一个文件的注释里
+（`reviewMutationCoordinator.ts:5-7`）：这个锁**不可重入**，「把每个 `setTaskStatus` 都包起来
+会让评审路径在 resume 任务时重入自己的锁」。attach 是从协调器 `submit` 进来的，
+而 `submit` 有从人审放行继续驱动那条路进来的可能——**先证明那条路上没人已经持锁，再加**。
+
+### 下一刀的做法（按依赖顺序）
+
+1. **先量重入面**：把 PG 的 `submit → attach` 全部调用路径列出来，逐条确认是否已在锁内。
+   这一步是只读的，结论要写进本节。
+2. 两份 attach 合一：端口收 `claim` 闭包 + `persistence` + `runtimeRegistry`，
+   `createTaskExecutionContext` 用中立那份、`legacyConnection` 由装配方按引擎给。
+3. 评审锁按第 1 步的结论**要么两侧都加、要么两侧都不加**——不接受「SQLite 加、PG 不加」
+   这个现状延续。两侧都加时必须补一条双引擎用例：attach 与 cancel 并发，评审行状态一致。
+4. 合完之后 `TaskDriveCoordinatorDependencies.db` 就能收成 `ProviderNeutralDatabase`
+   （这是 §5ha 排序里第 ① 步「内核换中立 session」的最后一块），
+   `providerRuntime.ts` 基类上那个 `executionModule: TaskExecutionModule` 也能一并收成
+   `ProviderTaskExecutionModule`——类型层现在还写着「SQLite 那支可能没装持久化」。
+
+### §5hm 第 1 步的结论：重入面是空的，锁可以两侧都加
+
+按上面第 1 步逐条量过，**没有任何一条生产 `submit` 路径在持有评审锁时进入 attach**：
+
+- **最强的那条证据是 SQLite 自己**：`attachTaskDriver` 早就整个包在锁里，而两个引擎**共用**的
+  那批 submit 调用点（`services/task.ts` 的五处、`approvalGateway`）在 SQLite 上天天跑。
+  这些路上若有谁已持锁，SQLite 现在就会死锁。**共用路径已被现役实现证伪。**
+- **人审放行继续驱动**（注释里点名的那条重入风险）不持锁：它由后台 worker
+  `humanGateContinuationWorker.runCycle` 直接调 `drive(continuation)`，
+  worker 循环自身不进临界区。
+- **评审决策落地后的 resume 在锁外**：`review.ts:22-23` 写明
+  「`resumeTask` is invoked by REST decision handlers to re-enter the scheduler
+  **after a decision lands**」——`dispatchReviewNode` 持锁的范围到
+  `dispatchReviewNodeUnlocked` 返回为止，resume 是它返回之后由 REST handler 发起的。
+- **六条 PG 专属路径**（`postgresqlChildExecutionLaunchOperations` /
+  `postgresqlFusionEngineTaskOperations` / `postgresqlChildTaskLifecycleParticipant` /
+  `postgresqlRepositoryPreparationRetryCommand` / `postgresqlTaskRouteLaunchOperations` /
+  `postgresqlDaemonApplication`）与 `approvalGateway`：`ReviewMutationLock` 出现次数**全为 0**。
+
+**裁决**：合并时锁**两侧都加**（即 PG 补上），不接受「SQLite 加、PG 不加」延续。
+按 §5fq 三条判据，这处差异一条都不命中——它不是引擎原语差异，是 PG 那份当初照抄时漏了。
+合并 PR 必须带一条**双引擎**用例：attach 与 cancel 并发，评审行状态在两个引擎上一致；
+先让它在 PG 上红（证明缺口真实存在），再合。

@@ -3427,8 +3427,12 @@ describeEachProviderHttpApplication(
           ),
           'utf8',
         )
+        // 锁的是「结果按**具名端口**取，不是按硬编码的 `result` 字段」。
+        // RFC-359 AC-1（plan §5hl）：两份 composer 合一后这句的**写法**换了——
+        // 读的是执行结果投影里的输出行（并且多一道 `active` 过滤，SQLite 那份此前没有），
+        // 端口名仍然只认 `DIGITAL_EMPLOYEE_RESULT_PORT`。意图没变，锚点跟着实现走。
         expect(executionSource).toContain(
-          'outcome.outputs[DIGITAL_EMPLOYEE_RESULT_PORT]?.content ?? null',
+          'candidate.active && candidate.portName === DIGITAL_EMPLOYEE_RESULT_PORT',
         )
         expect(executionSource).not.toContain('outcome.outputs.result')
       })

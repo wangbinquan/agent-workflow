@@ -73,9 +73,14 @@ describe('RFC-310 digital employee task source link', () => {
       'utf8',
     )
 
-    // SQLite has workflow + synthesized-host arms; PostgreSQL uses the same
-    // closed launch provenance through its provider-neutral launch port.
-    expect(execution.match(/caseId: plan\.caseRef\.id/g)).toHaveLength(3)
+    // RFC-359 AC-1（plan §5hl）：3 → 1。此前两个 provider 各一份 composer、SQLite 那份又分
+    // workflow / 合成宿主两条 `startTask` 臂，于是同一件事写了三遍。合一后**只有一次启动调用**
+    // （启动内核），Case 冻结也就只有一处——这条判据要的「每条启动路都冻结 Case」因此更强了：
+    // 从「三处都别忘」变成「只有一处，忘不了」。数字变小是收敛，不是覆盖变少。
+    expect(execution.match(/caseId: plan\.caseRef\.id/g)).toHaveLength(1)
+    // 那一处必须确实挂在启动内核的 `internal` 上，而不是飘在别处。
+    expect(execution).toContain('digitalEmployeeLaunch: {')
+    expect(execution).toContain('actionRunId: plan.roundRef,')
     expect(taskService).toContain(
       'digitalEmployeeCaseId: deps.digitalEmployeeLaunch?.caseId ?? null',
     )
