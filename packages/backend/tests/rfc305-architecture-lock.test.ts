@@ -8,10 +8,15 @@ import { relative, resolve } from 'node:path'
 import { PERMISSIONS, SYSTEM_DOMAIN_POINTS } from '@agent-workflow/shared'
 import ts from 'typescript'
 
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
 import { ALL_TOOLS } from '../src/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '../src/routes/registry'
+import { composeDatabaseMigrationModule } from '../src/modules/system-operations/composition/databaseMigration'
 import { createApp } from '../src/server'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -489,6 +494,15 @@ describe('RFC-305 permission catalog architecture', () => {
   afterEach(() => resetRouteMetaRegistry())
 
   test('route and MCP authorization expose a single permission axis', () => {
+    // `databaseMigration` 不是可选装饰：不给它，`mountApiRoutes` 里
+    // `routes.databaseMigration?.(app)` 整组跳过，量到的就是**比生产小一圈**的面
+    // （RFC-329 的守卫当年正是这么读成 440 条而不是 470 条的）。
+    // 更要紧的是它会踩到一颗跨文件的雷：操作目录是模块级全局态，
+    // `rfc099-acl-endpoints-matrix` 先跑过就会把 `system-operations.get-database-runtime.v1`
+    // 的**声明**留在目录里，而本文件装的应用**不挂它的绑定**，于是 `assertOperationCatalogClosed`
+    // 当场抛「declared operation has no mounted binding」——两个文件单独跑都绿、
+    // 排到同一个分片里才红（plan §5gk 实撞）。补上这一组两件事一起解决。
+    const home = mkdtempSync(join(tmpdir(), 'aw-rfc305-lock-'))
     createApp({
       token: 'd'.repeat(64),
       configPath: '',
@@ -496,6 +510,18 @@ describe('RFC-305 permission catalog architecture', () => {
       dbVersion: 162,
       db: createInMemoryDb(MIGRATIONS),
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 30)),
+      databaseMigration: composeDatabaseMigrationModule({
+        sqlitePath: join(home, 'db.sqlite'),
+        operationsRoot: join(home, 'database-migrations'),
+        generationPointerPath: join(home, 'database-generation.json'),
+        configPath: join(home, 'config.json'),
+        admission: {
+          async freezeAndDrain() {},
+          async reopenSqlite() {},
+          async activatePostgresql() {},
+          async openPostgresqlAdmission() {},
+        },
+      }),
     })
 
     for (const route of allRouteMeta()) expect(route).not.toHaveProperty('identity')

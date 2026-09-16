@@ -576,6 +576,53 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
     holds: (_rel, code) => /(?<![A-Za-z0-9_.])readAuthorityFence\s*\(/.test(code),
   },
   {
+    /**
+     * RFC-359 AC-6（2026-09-16，plan §5gk）—— **被测物是模块级路由注册表**的那一类。
+     *
+     * 这类用例装一个应用**只为了**拿到「路由 → 权限」那张声明表，然后审这张表
+     * （`allRouteMeta()`）；库只是让应用能装起来的脚手架，一条断言都不落在库上。
+     *
+     * 为什么它该是 sanctioned：那张表**与引擎无关**——两个组合根都汇进同一个
+     * `createComposedApp` → 同一个 `mountApiRoutes`。而这件事**不再只是读源码论证**：
+     * `rfc359-w5-composition-root-route-surface` 把两个根都装出来逐字比过
+     * （连 `tokenAccess` 与权限集合一起比），结论是相等。拿双引擎跑这类用例，
+     * 量到的是同一张表两遍。
+     *
+     * 判据的边界：它只认「文件里出现 `allRouteMeta(`」。真正让分类站得住的是上面那条
+     * 新守卫——**它红了，这条判据的前提就没了**，届时这一类要跟着重判，而不是接着豁免。
+     */
+    id: 'provider-independent-route-registry',
+    holds: (_rel, code) => code.includes('allRouteMeta('),
+  },
+  {
+    /**
+     * RFC-359 AC-6（2026-09-16，plan §5gk）—— **一对 provider 组合根，两半都按名覆盖**。
+     *
+     * `rfc349-daemon-provider-core` 是这形状：一条用例叫「SQLite composes the same closed
+     * surface…」驱动 `composeSqliteDaemonProviderCore`，紧挨着的另一条叫「PostgreSQL composes
+     * without SQL/openDb…」驱动 `composePostgresqlDaemonProviderCore`。两个引擎**都**验了，
+     * 只是没写成 `describeEachProvider`——也不该写成：两半断言的是**不同的事**
+     * （谁拥有客户端生命周期），塞进同一个 harness 反而要靠 `capabilities` 分叉回去。
+     *
+     * 判据按**配对**认：同一个 X 上 `composeSqliteX(` 与 `composePostgresqlX(` 都出现。
+     * 今天它只命中一个文件，但它认的是**结构**而不是某个文件的特征串——此后任何
+     * 「一对 provider 组合根各验各的」都自动落进来。
+     *
+     * 特意**没有**放宽成「文件里出现任意 `composeSqlite*(`」：那样会一口气把 6 个债务文件
+     * 划成豁免，而其中只有这一个真的两半都覆盖了。§5gi 刚纠正过同一个毛病——
+     * 「共用一个语法形状」不等于「共用一个根因」。
+     */
+    id: 'provider-pair-covered-by-name',
+    holds: (_rel, code) => {
+      const sqlite = new Set(
+        [...code.matchAll(/composeSqlite([A-Za-z]*)(?=\s*\()/g)].map((m) => m[1]),
+      )
+      return [...code.matchAll(/composePostgresql([A-Za-z]*)(?=\s*\()/g)].some((m) =>
+        sqlite.has(m[1]),
+      )
+    },
+  },
+  {
     id: 'sqlite-only-primitive',
     holds: (_rel, code) =>
       // `.$client` 取的是裸 bun:sqlite 句柄。**只关它不算**（§5cm：`$client.close()` 只是收尾，
@@ -661,7 +708,6 @@ function sanctionOf(rel: string): string | null {
  * **不要**为了让数字好看而往 `SANCTIONED_SINGLE_ENGINE` 里加一条只为某个文件量身定做的判据。
  */
 export const OPEN_MIGRATION_DEBT: readonly string[] = [
-  'architecture/rfc329-mcp-surface-guard.test.ts',
   'execution-contract-platform.test.ts',
   'helpers/rfc310Pr3Fixture.ts',
   'rfc221-login-policy-routes.test.ts',
@@ -669,10 +715,8 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'rfc268-webhook-scratch-launch.test.ts',
   'rfc269-webhook-code-host-context-e2e.test.ts',
   'rfc291-unavailable-mount.test.ts',
-  'rfc305-architecture-lock.test.ts',
   'rfc311-repos-page.test.ts',
   'rfc311-task-page-fastpath.test.ts',
-  'rfc349-daemon-provider-core.test.ts',
   'rfc349-digital-employee-platform-tools-wiring.test.ts',
   'rfc349-dual-provider-behavior-oracle.test.ts',
   'rfc349-execution-peripheral-provider.test.ts',

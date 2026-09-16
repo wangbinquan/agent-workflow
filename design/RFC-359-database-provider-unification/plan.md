@@ -13142,3 +13142,48 @@ rfc305 只清了路由注册表、没清操作目录，所以清不掉这个。
 是一颗埋着的雷而不是当前的红。处置随下一节 AC-6 的三条裁决一起做（rfc305 补上
 `databaseMigration` 即可，同 `rfc329` 的做法；它的断言是全称量化的「每条路由都没有 `identity`」，
 多挂几组只会更强）。
+
+---
+
+## §5gl　AC-6：§5gi 留下的三条逐个裁决（22 → 19），外加拆掉那颗雷
+
+有了 §5gk 的新守卫做底，三条都能判了。**都走新加的通用判据，没有一条是量身定做的豁免。**
+
+| 文件 | 判据 | 为什么 |
+| --- | --- | --- |
+| `architecture/rfc329-mcp-surface-guard` | `provider-independent-route-registry` | 装应用只为拿 `allRouteMeta()` 那张「路由 → 权限」表，库是脚手架；那张表与引擎无关这件事现在有 §5gk 的守卫钉着 |
+| `rfc305-architecture-lock` | 同上 | 同形状 |
+| `rfc349-daemon-provider-core` | `provider-pair-covered-by-name` | 一条用例驱动 `composeSqliteDaemonProviderCore`、紧挨着一条驱动 `composePostgresqlDaemonProviderCore`——**两个引擎都验了** |
+
+### 为什么 `rfc349` 不该迁成 `describeEachProvider`
+
+它的两半断言的是**不同的事**（谁拥有客户端生命周期：SQLite 侧自己 `db.$client.close()`，
+PG 侧把生命周期交给外层会话）。塞进同一个 harness 只会逼着用 `capabilities` 再分叉回去——
+那是把「两条各自清楚的用例」换成「一条带 if 的用例」，更差。
+
+判据按**配对**认：同一个 X 上 `composeSqliteX(` 与 `composePostgresqlX(` 都出现。
+今天只命中这一个文件，但认的是**结构**，此后任何「一对 provider 组合根各验各的」都自动落进来。
+
+**特意没有放宽**成「文件里出现任意 `composeSqlite*(`」：那样一口气能划掉 6 个债务文件，
+可其中只有这一个真的两半都覆盖了（其余几个的 `composeSqlite*` 是被测物的**上游装配**，不是被测物）。
+§5gi 刚纠正过同一个毛病——「共用一个语法形状」不等于「共用一个根因」，这次没有再犯。
+
+### 顺手拆掉 §5gk 记下的那颗雷
+
+`rfc305-architecture-lock` 装应用时不给 `databaseMigration`，于是：
+
+1. `mountApiRoutes` 里 `routes.databaseMigration?.(app)` 整组跳过，它量到的面**比生产小一圈**
+   （RFC-329 的守卫当年正是这么读成 440 条而不是 470 条）；
+2. 更要紧的是，操作目录是模块级全局态——`rfc099-acl-endpoints-matrix` 先跑过会把
+   `system-operations.get-database-runtime.v1` 的**声明**留在目录里，而本文件不挂它的绑定，
+   `assertOperationCatalogClosed` 当场抛 `declared operation has no mounted binding`。
+   两个文件单独跑都绿，**排到同一个分片里才红**。
+
+按 `rfc329` 的既有做法补上这一组，两件事一起解决：`rfc099 + rfc305` 从 1 红变 0 红，
+而它的断言是全称量化的「每条路由都没有 `identity`」，多挂几组只会更强。
+
+### 账本
+
+`OPEN_MIGRATION_DEBT` 22 → 19（`ledger-baselines.json` 同步改小）。
+总账 `TEST_ENGINE_HARDCODING_DEBT` **不动**——这三个文件仍然各有一处直建 SQLite 库，
+只是那处从「还没迁的债」重判成「按裁决就该单引擎」。这正是那两张名单要分开数的理由。
