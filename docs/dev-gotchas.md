@@ -527,6 +527,19 @@ grep -rln "digitalEmployeeExecution\.ts\|actionExecutionEnvironment\.ts" package
 实测这一网当场又捞出第三种：`edge('services/agent.ts', 'modules/.../digitalEmployeeExecution.ts', …)`
 这种把两端路径当**账本键的两个字段**写的。basename 扫法一并罩住。
 
+**扫的是「本次改过的每一个文件」，不是「这一刀的主角」（2026-09-16 第三次红）**：
+我按 basename 扫了 `taskDriverLifecycle.ts` / `postgresqlTaskDriverLifecycle.ts` / `task.ts`
+——那是我心里「这一刀是关于什么的」，但同一笔提交还改了 `postgresqlDaemonApplication.ts`，
+它没进扫描名单，于是那条按它取 SHA-256 摘要的守卫（`rfc359-w29`）在 CI 上红。
+**名单要从 `git diff` 来，不要凭印象列**：
+
+```
+git diff --name-only HEAD | grep '^packages/backend/src/' | xargs -n1 basename
+```
+
+`task.ts` 这种通用 basename 会把命中面撑到 100+ 文件（本次 127 个，跑一遍三分钟）。
+仍然照跑——它比再红一次便宜。
+
 ## `allowGrowth` 是**一次性**的：改动再小，动了被清点的东西就要重跑 census（2026-09-16 又撞）
 
 `architecture/ledger-baselines.json` 里的 `allowGrowth` 只对**声明它的那个 commit**有效——

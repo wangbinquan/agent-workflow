@@ -521,8 +521,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （两份合一），`actor: systemActor` → `resolveActor: async () => systemActor`
     // （SQLite 那个组合根是同步函数，取不到 await 的 admit，惰性是两侧都成立的那半）。
     // **语句数仍是 160、顺序未变**。
+    // RFC-359 AC-1（2026-09-16，plan §5hm）：摘要随生命周期端口合一更新——
+    // `createPostgresqlTaskDriverLifecyclePort` → `createTaskDriverLifecyclePort`（两个引擎一份），
+    // 并多一行 `claim:` 绑定（认领方式是唯一按引擎不同的那一格，由装配方交闭包）。
+    // **语句数仍是 160、顺序未变**——上面那条 `toHaveLength(160)` 没红。
     expect(digest(restored, pg)).toBe(
-      '1f534244e48642809afd5bb48172a0e6ccfdefbd983c6f726f86d3e0918d500a',
+      '4ea94193a3fc6417aa5094168a5555bd0735f2cc2158b186d477c498fe3ce91f',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

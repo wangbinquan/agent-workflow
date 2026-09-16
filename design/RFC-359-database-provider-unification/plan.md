@@ -14610,3 +14610,70 @@ SQLite 的 `legacyConnection` / `compatibility.db` 由装配方按需要交进�
 
 可见的兑付：`rfc359-w12-digital-employee-execution` 里那个
 `db: harness.db as unknown as DbClient` 的 cast 删掉了。
+
+## §5hn 勘察　`services/task` 那条 legacy 启动面还剩多少
+
+「启动面合一」这道波次的 ④ 步。本节只读勘察，落地另立一刀。
+
+### 现状：`startTask` 的生产调用点还有 9 处、分三类
+
+| 类 | 调用点 | 说明 |
+| --- | --- | --- |
+| **A 已有内核对照** | `services/agentLaunch.ts` ×3、`services/execution/executor.ts` | PG 侧同一件事走的是启动内核（`routeLaunch.agent` / `.workflow`）。这一类是**真正要迁的**。 |
+| **D 只服务测试** | `services/task.ts:2711` `startTaskWithLocalRepo` | 实测：`src/` 侧**零生产消费者**（唯一一处出现是注释），`tests/` 侧 21 个文件在用。源码注释也自己写着「NOT reachable from any route」。**它随 legacy 启动面一起退役，但不是迁移对象**——迁的是那 21 个 fixture 的启动方式。 |
+| **B 尚无内核对照** | `modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts` ×2 | 工作组启动；PG 侧有 `routeLaunch.workgroup`，但形状与 SQLite 这条差得多，要单独对账。 |
+| **C 机制面** | `modules/task-execution/infrastructure/fusionEngineTaskOperations.ts` | Fusion 引擎的任务启动；PG 侧是 `postgresqlFusionEngineTaskOperations`，仍是一对孪生。 |
+
+`services/task.ts` 现在 7732 行，退役它是**整条现役启动路**的迁移，两套启动语义要逐项对齐——
+不是一刀能做完的，必须按上表分批，每批各自带双引擎用例。
+
+### 已登记的行为差异（迁移时必须逐条处置，不得静默降级）
+
+- §5gy：源任务缺 cached mirror id 时，legacy 报**计数 + 指引**、内核只报一句——**留 legacy 那份措辞**。
+- §5hl 实测的两处（`unmanaged` vs `scratch`、`analysis-plan` 的 `active` 过滤）已在数字员工那一刀
+  处置完毕，形状可作后续批次的范例：**合并取判据更强的那半，并在 plan 里点名**。
+
+### 先做哪一批
+
+**更正（实测后）**：原先想从 `services/task.ts:2711` 起，理由是「本文件内自调用、半径最小」——
+查下来那是 `startTaskWithLocalRepo`，**只服务测试**（src 零消费者，21 个测试文件在用）。
+它不是迁移对象，而是**迁移的产物**：等 fixture 都改走内核，它自然没人用了。
+
+改从 **`services/agentLaunch.ts` 那三处**起：PG 侧 `routeLaunch.agent` 是成熟对照，
+两条路的入参已经很接近，且它是真正的生产启动路——迁完就能真正减少一条 legacy 面。
+`services/execution/executor.ts` 紧随其后。
+B / C 两类各自先补一条**双引擎**对照用例，证明两条路当前行为一致，再动实现。
+
+### §5hn 批次一（`agentLaunch`）的先行对账：**重复的是编排，不是判据**
+
+动手前把两侧的前置链逐项点了一遍（只读）：
+
+| 步骤 | `services/agentLaunch.ts` | PG `launchAgent` |
+| --- | --- | --- |
+| `acquireAgentLaunch` / release | ✓ | ✓ |
+| `assertNotBuiltin` | ✓ | ✓ |
+| `expectedAgentId` 不符即冲突 | ✓（`:309`） | ✓ |
+| 删除竞态 recheck | ✓ | ✓ |
+| `integrity.assertUsable` | ✓ | ✓ |
+| `ensureHostWorkflow` | ✓ | ✓ |
+| `validateAgentLaunchShape` | ✓ | ✓ |
+| 冻结宿主快照 | `buildAgentHostSnapshot` + `migrate(parse(…))` | **同一个** `buildAgentHostSnapshot` + 同两行（包了个 `frozenAgentSnapshot`） |
+| `validateHostWorkflow` + error 过滤 | ✓ | ✓ |
+| `applySpaceFields` | ✓ | ✓ |
+| 上传三步（buffer / validatePlan / applyToWorktree） | ✓ | ✓ |
+| **落库** | `startTask` + `materializeSpace` | 启动内核 |
+
+**结论：这一对没有 §5hl 那样的判据差异**——十二步里十一步逐项对得上，
+连快照构造用的都是**同一个函数**（PG 从 `services/agentLaunch` import `buildAgentHostSnapshot`，
+`frozenAgentSnapshot` 只是它外面包的两行）。唯一的差别还是那一处：**最后怎么落库**。
+
+也就是说 PG 这份约 200 行是把 SQLite 那份的编排**照抄了一遍**，只为了把结尾从
+`startTask` 换成内核。做法因此与 §5hi / §5hl 同一个配方：
+**把前置链抽成一份中立编排，终端那一步（落库）作为参数注入**，
+两个装配方各自绑自己的终端——而这一刀的终端**两侧都已经是内核**（§5hi 起 SQLite 也有内核），
+所以它比前两刀更简单：连注入都可以省掉，直接两侧共用内核。
+
+**开工前仍要补的一件事**：本对账是按「函数名出现与否」点的，
+**不能证明两侧传给同一个函数的实参也一样**。落地前先补一条双引擎用例，
+断言同一份 launch 输入在两个引擎上落出**逐字相同的 task 行 + 快照**，
+再动实现——同 §5hm 的「先红后绿」。
