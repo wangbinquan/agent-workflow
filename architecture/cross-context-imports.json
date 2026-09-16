@@ -61271,6 +61271,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cac37315a1e3b1bf586c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "toSymbol": "TaskDriveCoordinator",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -77913,9 +77930,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4583,
+    "architectureExceptions": 4584,
     "implementationSccs": 0,
-    "observedEdges": 5095,
+    "observedEdges": 5096,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -142038,6 +142055,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:cac37315a1e3b1bf586c",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "TaskDriveCoordinator",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "id": "import:cacc2759edb10195522a",
@@ -159981,7 +160014,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a9ae1e519f9066da2a16501a9491de2a496cd3b2e2433175d11cccec08209d64",
+  "sourceDigest": "sha256:81807364d8e992301b61682138d59336eab278cd90996d72bc73b205525a3b0b",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

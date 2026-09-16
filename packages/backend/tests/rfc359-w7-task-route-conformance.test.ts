@@ -272,11 +272,13 @@ function launchOperations(harness: ProviderHarness): LaunchArms {
       configPath,
     } as never)
   }
+  // RFC-359 AC-1（plan §5hn 批次一）：两侧的 routeLaunch 依赖形状已经对齐——
+  // PG 那一支上面就用 `as never` 只取端口形状，这一支同理（本用例只比端口面，不真启动）。
   return createSqliteTaskRouteLaunchOperations({
     db: harness.db as unknown as DbClient,
     configPath,
     executionFor: () => unusedDependency('executionFor'),
-  })
+  } as never)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

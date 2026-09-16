@@ -601,8 +601,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `db + startDeps` 换成了端口 + 启动内核（`composeHostTaskLaunchKernel`）与
     // 库内缺省端口的展开。**装配图变了是有意的**：少一个 `startTask` 调用点（rfc301 账本同步删行），
     // 这一层不再自己读库。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次一）：摘要随**单代理启动路由改走共享编排**更新——
+    // `createSqliteTaskRouteLaunchOperations` 这一段多了根内核要的几格依赖
+    // （`gitCommitIdentity` / `agent` / `routeWorkspace` / `resourceAuthorityFor` / `coordinator`）。
+    // **装配图确实变了，而且是有意的**：这条路由此前转 `startExecution` → `startAgentTask`
+    // → `startTask`（只服务 SQLite 的那半），现在与 PostgreSQL 共用 `createAgentRouteLaunch`。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '07652df2d0269a9bd45b90ffef7ea964404a086b15913c6164144a8066cf34a0',
+      'cd71778040adfd6ec425cd21006d92642e2852e15cf91adb94b7ff81cc78fdd5',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

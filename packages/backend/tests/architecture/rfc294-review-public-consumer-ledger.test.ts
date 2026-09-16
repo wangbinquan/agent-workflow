@@ -288,7 +288,9 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   // 整个文件一并删除。**注意**：本文件只读 committed 的 `architecture/public-surfaces.json`，
   // 那份缓存要等一次 `bun run architecture:write` 才会跟上——在那之前这条断言会红一次。
   { id: 'public:task-execution:commands:TaskCancellationCommand', removeAfterWave: 'W4-E1' },
-  { id: 'public:task-execution:commands:TaskDriveCoordinator', removeAfterWave: 'W4-E1' },
+  // RFC-359 AC-1（plan §5hn 批次一）：**销账**——`TaskDriveCoordinator` 不再是零 consumer 的
+  // public 符号了。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 要按这个类型
+  // 给根内核搭一个转发面协调器（环打在词法作用域上），于是它有了第一个生产消费者。
   { id: 'public:task-execution:commands:TaskRouteMultipartFilePart', removeAfterWave: 'W4-E1' },
   {
     id: 'public:task-execution:commands:WorkgroupTaskRoomHostRunSnapshot',

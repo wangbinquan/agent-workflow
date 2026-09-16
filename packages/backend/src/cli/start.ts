@@ -39,6 +39,7 @@ import {
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
+import type { TaskDriveCoordinator } from '@/modules/task-execution/public/commands'
 import { createTaskDriveCoordinator } from '@/services/task'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
@@ -1887,6 +1888,27 @@ async function composeSqliteProviderSession(
       },
       routeLaunch: {
         configPath: Paths.config,
+        // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL **同一份**编排
+        // （`createAgentRouteLaunch`，终端是根启动内核）。下面这几格就是那份编排要的依赖。
+        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+        agent: Object.freeze({
+          resources: composeAgentLaunchResourceOperations({ db }),
+          integrity: agentResourceIntegrity.launch,
+        }),
+        routeWorkspace: { appHome: Paths.root, secretBox },
+        resourceAuthorityFor: (actor) =>
+          Object.freeze({
+            actor,
+            authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+            resources: taskExecutionResources,
+          }),
+        // 协调器↔`schedulerDriver` 的环打在**词法作用域**上，与 PostgreSQL daemon
+        // 那份（`postgresqlDaemonApplication.ts` 的 `taskDriveCoordinator`）同形：
+        // 这个转发面只在运行期取值，真协调器是同一作用域里后面那个 `const`。
+        coordinator: Object.freeze({
+          submit: (request: Parameters<TaskDriveCoordinator['submit']>[0]) =>
+            routeLaunchDriveCoordinator.submit(request),
+        }),
         // No `deferRepoPreparation` here on purpose. RFC-287 G7 defers repo
         // preparation for the JSON `/api/tasks` launch (see
         // `sqliteTaskRouteOperations`); the Agent and Workgroup launches kept
@@ -1961,6 +1983,43 @@ async function composeSqliteProviderSession(
     })
   const taskExecutionPersistence = taskExecutionProvider.persistence
   const taskExecutionRuntime = taskExecutionProvider.runtime
+  // RFC-359 AC-1（plan §5hn 批次一）：单代理启动内核用的真协调器。上面 `routeLaunch.coordinator`
+  // 那个转发面闭包引用它——环打在词法作用域上，删掉这一行 tsc 立刻报「Cannot find name」，
+  // 而不是留下一个编译通过、运行期才炸的空槽（同 PostgreSQL daemon 的 `boundTaskDriveCoordinator`）。
+  const routeLaunchDriveCoordinator = createTaskDriveCoordinator({
+    deps: {
+      db,
+      schedulerDriver: taskExecutionRuntime.schedulerDriver,
+      configPath: Paths.config,
+    },
+    appHome: Paths.root,
+    engineFailureMessage: 'agent route task drive threw',
+    failureReporter: {
+      async report({ taskId, error, execution }) {
+        const now = Date.now()
+        await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
+          taskId,
+          to: 'failed',
+          allowedFrom: ['pending', 'running'],
+          extra: {
+            finishedAt: now,
+            errorSummary: 'task drive failed',
+            errorMessage: error instanceof Error ? error.message : String(error),
+          },
+          executionContext: execution,
+          now,
+          reason: 'task-drive',
+        })
+        await taskExecutionProvider.persistence.intentTerminalization.terminalize({
+          taskId,
+          state: 'failed',
+          failureCode: 'task-drive-failed',
+          now,
+          claimedOwnerEpoch: execution.token.epoch,
+        })
+      },
+    },
+  })
   const collaborationContext = taskExecutionProvider.collaboration
   const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db,

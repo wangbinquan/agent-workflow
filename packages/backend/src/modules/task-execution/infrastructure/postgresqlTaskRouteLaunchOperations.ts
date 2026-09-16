@@ -286,7 +286,15 @@ export interface PostgresqlRootTaskLaunchDependencies {
   readonly now?: () => number
 }
 
-export interface PostgresqlTaskRouteLaunchDependencies extends PostgresqlRootTaskLaunchDependencies {
+/**
+ * RFC-359 AC-1（plan §5hn 批次一）—— **单代理**启动臂真正需要的那些依赖。
+ *
+ * 从 `PostgresqlTaskRouteLaunchDependencies` 里拆出来，是为了让 SQLite 那一侧能接同一份
+ * 实现而**不必编造一份用不到的 workgroup 资源面**：agent 臂的函数体只碰
+ * `agent.resources` / `agent.integrity` / `resourceAuthorityFor` 与根内核，
+ * 工作组那格它一次都没读过。让类型说真话，比让调用方塞个占位对象好。
+ */
+export interface AgentRouteLaunchDependencies extends PostgresqlRootTaskLaunchDependencies {
   readonly configPath: string
   /** Bind the admitted actor to the exact provider Resource Catalog authority. */
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
@@ -294,6 +302,9 @@ export interface PostgresqlTaskRouteLaunchDependencies extends PostgresqlRootTas
     resources: AgentLaunchResourceOperations
     integrity: AgentLaunchResourceIntegrityParticipant
   }>
+}
+
+export interface PostgresqlTaskRouteLaunchDependencies extends AgentRouteLaunchDependencies {
   readonly workgroup: PostgresqlWorkgroupRouteLaunchResources
 }
 
@@ -969,126 +980,142 @@ interface PostgresqlTaskLaunchArms {
   ): Promise<Task>
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 批次一）—— 单代理启动的**唯一**编排。
+ *
+ * 两个引擎共用这一份：路由层本来就打同一个 `AgentRouteTaskLaunchOperations` 端口，
+ * 差别整个在端口背后（SQLite 曾转 `startExecution` → `startAgentTask` → `startTask`）。
+ * 现在两侧都转到这里，终端统一为根启动内核。
+ */
+export function createAgentRouteLaunch(
+  dependencies: AgentRouteLaunchDependencies,
+): (input: Parameters<PostgresqlTaskLaunchArms['launchAgent']>[0]) => Promise<Task> {
+  const launchRoot = createPostgresqlRootTaskLaunchKernel(dependencies).launch
+  return async function launchAgent(
+    input: Parameters<PostgresqlTaskLaunchArms['launchAgent']>[0],
+  ): Promise<Task> {
+    const { actor, command } = input
+    const agent = await dependencies.agent.resources.loadVisibleAgent(actor, command.agentId)
+    if (agent === null) throw new NotFoundError('agent-not-found', 'agent not found')
+    assertNotBuiltin('agent', agent)
+    if (
+      command.payload.expectedAgentId !== undefined &&
+      agent.id !== command.payload.expectedAgentId
+    ) {
+      throw new ConflictError(
+        'agent-id-mismatch',
+        `agent '${agent.name}' is not the expected agent`,
+      )
+    }
+
+    acquireAgentLaunch(agent.id)
+    try {
+      const recheck = await dependencies.agent.resources.loadVisibleAgent(actor, agent.id)
+      if (recheck === null) {
+        throw new ConflictError(
+          'agent-id-mismatch',
+          `agent '${agent.name}' was deleted during launch`,
+        )
+      }
+      await dependencies.agent.integrity.assertUsable({ rootAgentIds: [recheck.id] })
+      await dependencies.agent.resources.ensureHostWorkflow()
+      const form = validateAgentLaunchShape(recheck.inputs, command.payload, {
+        multipart: command.uploads !== undefined,
+      })
+      const snapshot = frozenAgentSnapshot(recheck, command.payload.allowClarify)
+      const validation = await dependencies.agent.resources.validateHostWorkflow(snapshot)
+      const errors = validation.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
+      if (!validation.ok && errors.length > 0) {
+        throw new ValidationError(
+          'workflow-invalid',
+          `agent '${recheck.name}' cannot launch (${errors.length} error${errors.length === 1 ? '' : 's'} in its host snapshot)`,
+          { issues: validation.issues },
+        )
+      }
+
+      const taskInputs: Record<string, string> = {}
+      if (form === null) {
+        taskInputs[AGENT_HOST_INPUT_KEY] = command.payload.description ?? ''
+      } else {
+        const definitions = new Map(form.inputs.map((definition) => [definition.key, definition]))
+        for (const [key, value] of Object.entries(command.payload.inputs ?? {})) {
+          const definition = definitions.get(key)
+          if (
+            definition !== undefined &&
+            definition.kind !== 'upload' &&
+            typeof value === 'string'
+          ) {
+            taskInputs[key] = value
+          }
+        }
+      }
+      const candidate = applySpaceFields(
+        {
+          workflowId: AGENT_HOST_WORKFLOW_ID,
+          name: command.payload.name,
+          inputs: taskInputs,
+          ...(command.payload.collaboratorUserIds !== undefined &&
+          command.payload.collaboratorUserIds.length > 0
+            ? { collaboratorUserIds: command.payload.collaboratorUserIds }
+            : {}),
+          ...(command.payload.workingBranch === undefined
+            ? {}
+            : { workingBranch: command.payload.workingBranch }),
+          ...(command.payload.autoCommitPush === undefined
+            ? {}
+            : { autoCommitPush: command.payload.autoCommitPush }),
+          ...(command.payload.maxDurationMs === undefined
+            ? {}
+            : { maxDurationMs: command.payload.maxDurationMs }),
+          ...(command.payload.maxTotalTokens === undefined
+            ? {}
+            : { maxTotalTokens: command.payload.maxTotalTokens }),
+        },
+        command.payload,
+      )
+      const parsed = StartTaskSchema.safeParse(candidate)
+      if (!parsed.success) {
+        throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      return await launchRoot({
+        actor,
+        resourceAuthority: input.resources,
+        invoker: input.invoker,
+        ...(input.guard === undefined ? {} : { guard: input.guard }),
+        task: parsed.data,
+        subject: {
+          workflowId: AGENT_HOST_WORKFLOW_ID,
+          workflowName: AGENT_HOST_WORKFLOW_NAME,
+          // 合成的单代理宿主：写时冻结规范排版（plan §5hn）。
+          builtin: true,
+          workflowVersion: 1,
+          workflowSnapshot: snapshot,
+          sourceAgent: { id: recheck.id, name: recheck.name },
+        },
+        ...(command.uploads === undefined
+          ? {}
+          : {
+              uploads: {
+                parts: command.uploads.parts,
+                definitions: collectUploadInputDefs(form?.inputs ?? []),
+                limits: command.uploads.limits,
+              },
+            }),
+      })
+    } finally {
+      releaseAgentLaunch(agent.id)
+    }
+  }
+}
+
 function createPostgresqlTaskLaunchArms(
   dependencies: PostgresqlTaskRouteLaunchDependencies,
 ): PostgresqlTaskLaunchArms {
   const launchRoot = createPostgresqlRootTaskLaunchKernel(dependencies).launch
   return Object.freeze({
-    async launchAgent(input: Parameters<PostgresqlTaskLaunchArms['launchAgent']>[0]) {
-      const { actor, command } = input
-      const agent = await dependencies.agent.resources.loadVisibleAgent(actor, command.agentId)
-      if (agent === null) throw new NotFoundError('agent-not-found', 'agent not found')
-      assertNotBuiltin('agent', agent)
-      if (
-        command.payload.expectedAgentId !== undefined &&
-        agent.id !== command.payload.expectedAgentId
-      ) {
-        throw new ConflictError(
-          'agent-id-mismatch',
-          `agent '${agent.name}' is not the expected agent`,
-        )
-      }
-
-      acquireAgentLaunch(agent.id)
-      try {
-        const recheck = await dependencies.agent.resources.loadVisibleAgent(actor, agent.id)
-        if (recheck === null) {
-          throw new ConflictError(
-            'agent-id-mismatch',
-            `agent '${agent.name}' was deleted during launch`,
-          )
-        }
-        await dependencies.agent.integrity.assertUsable({ rootAgentIds: [recheck.id] })
-        await dependencies.agent.resources.ensureHostWorkflow()
-        const form = validateAgentLaunchShape(recheck.inputs, command.payload, {
-          multipart: command.uploads !== undefined,
-        })
-        const snapshot = frozenAgentSnapshot(recheck, command.payload.allowClarify)
-        const validation = await dependencies.agent.resources.validateHostWorkflow(snapshot)
-        const errors = validation.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
-        if (!validation.ok && errors.length > 0) {
-          throw new ValidationError(
-            'workflow-invalid',
-            `agent '${recheck.name}' cannot launch (${errors.length} error${errors.length === 1 ? '' : 's'} in its host snapshot)`,
-            { issues: validation.issues },
-          )
-        }
-
-        const taskInputs: Record<string, string> = {}
-        if (form === null) {
-          taskInputs[AGENT_HOST_INPUT_KEY] = command.payload.description ?? ''
-        } else {
-          const definitions = new Map(form.inputs.map((definition) => [definition.key, definition]))
-          for (const [key, value] of Object.entries(command.payload.inputs ?? {})) {
-            const definition = definitions.get(key)
-            if (
-              definition !== undefined &&
-              definition.kind !== 'upload' &&
-              typeof value === 'string'
-            ) {
-              taskInputs[key] = value
-            }
-          }
-        }
-        const candidate = applySpaceFields(
-          {
-            workflowId: AGENT_HOST_WORKFLOW_ID,
-            name: command.payload.name,
-            inputs: taskInputs,
-            ...(command.payload.collaboratorUserIds !== undefined &&
-            command.payload.collaboratorUserIds.length > 0
-              ? { collaboratorUserIds: command.payload.collaboratorUserIds }
-              : {}),
-            ...(command.payload.workingBranch === undefined
-              ? {}
-              : { workingBranch: command.payload.workingBranch }),
-            ...(command.payload.autoCommitPush === undefined
-              ? {}
-              : { autoCommitPush: command.payload.autoCommitPush }),
-            ...(command.payload.maxDurationMs === undefined
-              ? {}
-              : { maxDurationMs: command.payload.maxDurationMs }),
-            ...(command.payload.maxTotalTokens === undefined
-              ? {}
-              : { maxTotalTokens: command.payload.maxTotalTokens }),
-          },
-          command.payload,
-        )
-        const parsed = StartTaskSchema.safeParse(candidate)
-        if (!parsed.success) {
-          throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
-            issues: parsed.error.issues,
-          })
-        }
-        return await launchRoot({
-          actor,
-          resourceAuthority: input.resources,
-          invoker: input.invoker,
-          ...(input.guard === undefined ? {} : { guard: input.guard }),
-          task: parsed.data,
-          subject: {
-            workflowId: AGENT_HOST_WORKFLOW_ID,
-            workflowName: AGENT_HOST_WORKFLOW_NAME,
-            // 合成的单代理宿主：写时冻结规范排版（plan §5hn）。
-            builtin: true,
-            workflowVersion: 1,
-            workflowSnapshot: snapshot,
-            sourceAgent: { id: recheck.id, name: recheck.name },
-          },
-          ...(command.uploads === undefined
-            ? {}
-            : {
-                uploads: {
-                  parts: command.uploads.parts,
-                  definitions: collectUploadInputDefs(form?.inputs ?? []),
-                  limits: command.uploads.limits,
-                },
-              }),
-        })
-      } finally {
-        releaseAgentLaunch(agent.id)
-      }
-    },
+    launchAgent: createAgentRouteLaunch(dependencies),
     async launchWorkgroup(input: Parameters<PostgresqlTaskLaunchArms['launchWorkgroup']>[0]) {
       const { actor, command } = input
       const group = await dependencies.workgroup.loadVisible(actor, command.workgroupId)

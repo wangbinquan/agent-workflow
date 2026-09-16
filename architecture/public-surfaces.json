@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 846,
+    "consumers": 847,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1041,
@@ -135701,7 +135701,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:cac37315a1e3b1bf586c"
+      ],
       "context": "task-execution",
       "dataClass": "metadata",
       "direction": "offered",
@@ -135723,37 +135725,51 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "fieldPath": "$method:submit.$parameter:input.taskId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "fieldPath": "$method:submit.$return.$variant:0.kind",
           "type": "'accepted'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "fieldPath": "$method:submit.$return.$variant:0.taskId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "fieldPath": "$method:submit.$return.$variant:1.kind",
           "type": "'settled'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "fieldPath": "$method:submit.$return.$variant:1.taskId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "fieldPath": "$method:submit.$return.$variant:2.kind",
           "type": "'not-attached'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "fieldPath": "$method:submit.$return.$variant:2.taskId",
           "type": "string"
         }
@@ -135763,13 +135779,22 @@
       "members": [],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:cac37315a1e3b1bf586c"
+          ],
           "name": "submit",
           "signatureDigest": "sha256:25aafa73dfeb77277129782b8266437a5a16d0fdbcb831d828a2e5a325665628"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:cac37315a1e3b1bf586c",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -159768,7 +159793,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a9ae1e519f9066da2a16501a9491de2a496cd3b2e2433175d11cccec08209d64",
+  "sourceDigest": "sha256:81807364d8e992301b61682138d59336eab278cd90996d72bc73b205525a3b0b",
   "targetContexts": [
     "collaboration",
     "development-automation",

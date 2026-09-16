@@ -2749,6 +2749,46 @@ function composeSqliteApiRouteMounts(
     createSqliteTaskRouteLaunchOperations({
       db: deps.db,
       configPath: deps.configPath,
+      // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL 同一份编排。
+      gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+      agent: agentLaunchResources,
+      routeWorkspace: { appHome, secretBox: deps.secretBox },
+      resourceAuthorityFor: (actor) =>
+        Object.freeze({
+          actor,
+          authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+          resources: identityAccess.taskExecutionResources,
+        }),
+      coordinator: createTaskDriveCoordinator({
+        deps: { db: deps.db, schedulerDriver, configPath: deps.configPath },
+        appHome,
+        engineFailureMessage: 'agent route task drive threw',
+        failureReporter: {
+          async report({ taskId, error, execution }) {
+            const now = Date.now()
+            await taskExecutionPersistence.runtimeLifecycle.trySet({
+              taskId,
+              to: 'failed',
+              allowedFrom: ['pending', 'running'],
+              extra: {
+                finishedAt: now,
+                errorSummary: 'task drive failed',
+                errorMessage: error instanceof Error ? error.message : String(error),
+              },
+              executionContext: execution,
+              now,
+              reason: 'task-drive',
+            })
+            await taskExecutionPersistence.intentTerminalization.terminalize({
+              taskId,
+              state: 'failed',
+              failureCode: 'task-drive-failed',
+              now,
+              claimedOwnerEpoch: execution.token.epoch,
+            })
+          },
+        },
+      }),
       executionFor: (actor) => ({
         ...buildStartTaskDeps(
           deps.db,

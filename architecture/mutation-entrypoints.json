@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1682,
+    "entries": 1683,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -25494,6 +25494,29 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#createAgentRouteLaunch",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#createAgentRouteLaunch",
+      "symbol": "createAgentRouteLaunch",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -40187,7 +40210,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a9ae1e519f9066da2a16501a9491de2a496cd3b2e2433175d11cccec08209d64",
+  "sourceDigest": "sha256:81807364d8e992301b61682138d59336eab278cd90996d72bc73b205525a3b0b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41385,8 +41408,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#767:tasks",
-        "line": 767,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#778:tasks",
+        "line": 778,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -41401,8 +41424,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#852:taskExecutionIntents",
-        "line": 852,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#863:taskExecutionIntents",
+        "line": 863,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

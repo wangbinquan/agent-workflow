@@ -213,6 +213,17 @@ export async function createEachProviderTaskExecution(
         routeLaunch: {
           configPath,
           executionFor: () => unavailable('agent/workgroup route launch'),
+          // RFC-359 AC-1（plan §5hn 批次一）：单代理启动臂现在也要根内核的那套依赖。
+          // 本 harness 不经路由启动 agent（它直接用 `launch` / `launchViaKernel`），
+          // 所以这几格给到不会被调用到的最小形状——真被调用会当场炸，而不是静默走假路径。
+          gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+          agent: {
+            resources: unusedCapability('agent route launch resources'),
+            integrity: unusedCapability('agent route launch integrity'),
+          },
+          routeWorkspace: { appHome },
+          resourceAuthorityFor: () => launchResources,
+          coordinator: { submit: () => unavailable('agent route coordinator') },
         },
         routes: () => ({
           collaboration: unusedCapability('collaboration route'),

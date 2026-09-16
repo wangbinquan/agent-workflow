@@ -6,7 +6,7 @@
     "moduleFiles": 1180,
     "productionFiles": 2552,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24704
+    "symbolsIncludingFileRoots": 24706
   },
   "entries": [
     {
@@ -127502,6 +127502,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#AgentRouteLaunchDependencies",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentRouteLaunchDependencies",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#assertProtectedLaunchGuard",
@@ -127520,6 +127532,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "buildWorkgroupHostSnapshot",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#createAgentRouteLaunch",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createAgentRouteLaunch",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -297125,5 +297149,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a9ae1e519f9066da2a16501a9491de2a496cd3b2e2433175d11cccec08209d64"
+  "sourceDigest": "sha256:81807364d8e992301b61682138d59336eab278cd90996d72bc73b205525a3b0b"
 }

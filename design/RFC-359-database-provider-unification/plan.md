@@ -14836,3 +14836,46 @@ PG 的臂转给 `arms.launchAgent` → 启动内核。
 安全网已就位且全绿：`rfc359-w5hn-agent-launch-provider-parity` 26 条断言
 （含带上传那一支）＋ `rfc165-agent-launch` 的 A1–A9。这一刀是**有等价性证明的纯重构**：
 任何一步让这两组变红，就是行为动了。
+
+## §5hn 批次一落地　单代理启动的**路由路径**两个引擎共用一份编排
+
+按上一节定的形状（②：SQLite 也走内核，不抽公共前置）做完了路由这一段。
+
+### 做法
+
+1. 从 `PostgresqlTaskRouteLaunchDependencies` 里拆出 **`AgentRouteLaunchDependencies`**——
+   agent 臂的函数体只碰 `agent.resources` / `agent.integrity` / `resourceAuthorityFor` 与根内核，
+   工作组那格一次都没读过。**让类型说真话**，SQLite 侧因此不必编造一份用不到的
+   workgroup 资源面（那种占位对象正是这轮在消灭的形状）。
+2. 把 agent 臂提成独立工厂 **`createAgentRouteLaunch`**，
+   `createPostgresqlTaskLaunchArms` 改为转调它（零行为改动，等价性基线当场复验通过）。
+3. `sqliteTaskRouteLaunchOperations` 的 agent 臂改为转调同一个工厂——
+   此前它转 `startExecution` → `startAgentTask` → `startTask`。
+4. 两个组合根按新形状补依赖。协调器↔`schedulerDriver` 的环照抄 PG daemon 的
+   **同作用域转发面**：`cli/start.ts` 里 `routeLaunch.coordinator` 闭包引用后面那个
+   `const routeLaunchDriveCoordinator`——删掉那行 tsc 立刻报「Cannot find name」，
+   而不是留下一个编译通过、运行期才炸的空槽。
+
+### 分层判据当场抓了一次，没有登记新债
+
+第一版在组合根里直接 import 了 `infrastructure/postgresqlTaskRouteWorkspaceParticipant`
+与 `application/drive/taskDriveTypes`，`rfc331` 逐条抓出。两条都按**既有先例**改掉：
+- 工作区参与者改成 PG 那一支早就用的 **`routeWorkspace`**（装配方交物化输入，参与者由模块自己造）；
+- `TaskDriveCoordinator` 改从模块 **public 面**（`public/commands`）取——它本来就在那儿导出，
+  只是此前零 consumer，所以还挂在 `rfc294` 的「零 consumer public symbol」账本上，这次一并销账。
+
+### 范围要说清楚：**只统一了路由这一条**
+
+`startAgentTask` **没有死**——`services/execution/executor.ts` 的 `startExecution(kind:'agent')`
+仍然转它，而 `startExecution` 还服务定时启动 / 触发器 / 子任务 / multipart 等入口。
+所以本刀的准确表述是：**`POST /api/agents/:id/tasks` 这条用户主启动路已经两个引擎共用一份编排**；
+其余入口在 SQLite 上仍走 legacy 那份。同文件孪生账本因此**不降**——降它要等
+`startExecution` 的 agent 分支也迁完（下一批）。
+
+### 证据
+
+- 等价性基线 `rfc359-w5hn-agent-launch-provider-parity` **26 条断言两个引擎全绿**
+  ——这正是它被造出来的用途：SQLite 换了终端之后，落库结果逐字未变（含带上传那一支）。
+- `rfc165-agent-launch`（A1–A9）+ `rfc218-agent-launch-ports` **32/32 绿**。
+  它们直调 `startAgentTask`，本刀没动那个函数，所以既有契约原样成立。
+- 120 文件影响半径 1357/1360，三处红全是账本/守卫更新（rfc331 分层、w29 摘要、血缘 file:line）。

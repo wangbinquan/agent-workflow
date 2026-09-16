@@ -2,6 +2,34 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 46，**单代理启动的路由路径两个引擎共用一份编排**）
+>
+> 已推并 CI 绿：…`cc173aa50`·`c0d5abcfb`·`29d444807`。本段待推：§5hn 批次一的路由段。
+>
+> **最该带走的一句：等价性基线做了它被造出来要做的事——SQLite 换了终端之后，26 条断言逐字未变。**
+> `POST /api/agents/:id/tasks` 此前 SQLite 转 `startExecution` → `startAgentTask` → `startTask`、
+> PG 转 `arms.launchAgent` → 启动内核，两份各约 200 行。现在两侧都转
+> `createAgentRouteLaunch`（终端统一为根内核）。
+>
+> **范围要说清楚，别 overclaim**：`startAgentTask` **没有死**——`startExecution(kind:'agent')`
+> 仍转它，而那条路还服务定时启动 / 触发器 / 子任务 / multipart。本刀只统一了**路由这一条**，
+> **同文件孪生账本因此不降**；降它要等 `startExecution` 的 agent 分支也迁完（下一批）。
+>
+> **类型拆分是这一刀的关键手法**：从 `PostgresqlTaskRouteLaunchDependencies` 里拆出
+> `AgentRouteLaunchDependencies`——agent 臂压根没读过工作组那格。**让类型说真话**，
+> SQLite 侧就不必编造一份用不到的 workgroup 占位对象（那正是这轮在消灭的形状）。
+>
+> **rfc331 分层判据当场抓了一次，但没登记新债**：第一版组合根直接 import 了
+> `infrastructure/postgresqlTaskRouteWorkspaceParticipant` 与 `application/drive/taskDriveTypes`。
+> 两条都按**既有先例**改掉——前者换成 PG 早就在用的 `routeWorkspace`（装配方交物化输入、
+> 参与者模块自己造），后者改从 `public/commands` 取。后者本来就导出在那儿、只是零 consumer，
+> 所以还挂在 rfc294「零 consumer public symbol」账本上，这次一并销账。
+>
+> 证据：等价性基线 26 条双引擎全绿（含带上传那一支）；`rfc165`(A1–A9) + `rfc218` 32/32 绿
+> （它们直调 `startAgentTask`，本刀没动那个函数）；120 文件半径 **1360/1360**。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次一落地。
+
 > ## 📌 RFC-359 最新一段（2026-09-16 续 45，**那处排版差异已关闭；第一版修法是错的，值得记**）
 >
 > 已推并 CI 绿：…`46a5126ea`（§5hm）·`b1f6ec452`·`5a1a98d29`（§5hn 基线，attempt 2 绿——
