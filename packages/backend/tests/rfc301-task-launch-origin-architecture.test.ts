@@ -97,8 +97,10 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // for step — anchor seed + synthesized snapshot + StartTaskSchema
       // funnel; provenance comes from the injected startDeps (SYSTEM user at
       // both assembly sites), never invented here.
-      // RFC-359 W1-T3：agent / script 动作的宿主任务启动合一到 actionExecutionEnvironment.ts（SQLite 侧 startTask）。
-      'modules/task-execution/composition/actionExecutionEnvironment.ts': 1,
+      // RFC-359 AC-1（plan §5hi）：这一行**删除**——agent / script 动作的宿主任务启动
+      // 从 `startTask` 改走启动内核（`createPostgresqlRootTaskLaunchKernel`），
+      // 两个 provider 共用一份 composer，`actionExecutionEnvironment.ts` 里已无 startTask 调用。
+      // 少一个 startTask 调用点就是这条棘轮要的方向。
       // RFC-310 PR-11: the digital-employee *program* host launch adapter. Same
       // adapter shape as agentActionExecution above (synthesized immutable host
       // snapshot + borrowed worktree + StartTaskSchema funnel); provenance again
