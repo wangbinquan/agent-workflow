@@ -13840,3 +13840,54 @@ SQLite 专属启动面上」。AC-6 剩下的 14 条里 `start-task-deps` 也指
 「无孪生 ⇒ 命名债 ⇒ 改名」这条判据**只在被测物本身是中立实现时成立**。
 被测物真的只服务一个引擎时，同样的「无孪生」指向的是相反的处方——**保留前缀**。
 判据给的是嫌疑，不是裁决；这已经是本 RFC 第 N 次在同一件事上摔跤（§5gb / §5gc / §5gf / §5gh → §5gi）。
+
+---
+
+## §5gy　启动面合一的第一份**用户可见**证据：同一个失败，两条路的文案不一样
+
+§5gv / §5gx 把启动面合一的理由写成了「AC-1 的 9 条挂在这里」——那是**账本视角**的理由。
+这一节补上一条**用户视角**的：同一个失败原因，换个数据库跑，用户读到的话不同。
+
+### 怎么撞上的（含一次我判错的过程，照实记）
+
+放宽 `PostgresqlTaskRouteWorkspaceDependencies.db` 时 `tsc` 指到一处调用，顺着看见
+`services/task.ts` 的 `loadFrozenSpaceLayout` 是**同步**函数、用 `.all()`。
+本轮 probe 实测：同一句 `.all()` 在 SQLite 上交回**数组**、在 PostgreSQL 上交回 **Promise**
+（`length` 为 `undefined`）。据此我判断 PG 上那条「源任务没有冻结快照」的校验会被跳过、
+随后 `rows.filter(...)` 抛 TypeError——一个真缺陷。
+
+**判断是错的，写了用例才发现**：`postgresqlTaskRouteWorkspaceParticipant.ts` 有**自己的**
+`async loadFrozenSpaceLayout`（同文件第 66 行），压根没用 `services/task.ts` 那份。两个引擎跑下来
+都是同一个 `source-task-not-replayable`。**幸亏是先写用例再下结论**——这条要是照着推断报出去，
+就是一个凭空的「PostgreSQL 缺陷」。
+
+### 真正的发现
+
+同一段逻辑**写了两遍**，而两遍的用户可见文案不同：
+
+| 走哪条启动路 | 源任务的仓缺 cached mirror id 时，用户读到 |
+| --- | --- |
+| legacy（`services/task.ts`，**SQLite 在用**） | `has N repo(s) with no cached mirror id; … (relaunch by picking a repo or repo group instead)` —— 报计数，并告诉你改用「挑一个仓 / 仓库组」 |
+| 内核（PG participant 自带那份，**PostgreSQL 在用**） | `has a repo with no cached mirror id; …` —— 没有计数，也没有那句指引 |
+
+两份还各有各的写法：legacy 先 `filter` 再一次性报总数，内核在循环里遇到第一个就抛。
+**同一个失败原因，换个数据库跑，用户得到的帮助不一样**——SQLite 上那句「改用挑仓或仓库组」
+是可操作的指引，PostgreSQL 上没有。
+
+这是 AC-8（用户可见行为逐字不变）意义上的**真差异**，也是启动面合一第一条不靠账本、
+直接对着用户说得清的理由。
+
+### 顺带补了一条这条路此前没有的覆盖
+
+`rfc359-w5-frozen-space-layout-provider-parity`：两个引擎各跑一遍「重放一个没有冻结仓快照的源任务」，
+断言拒绝的**种类**一致（并显式挡住 `is not a function` 那种把 Promise 当数组用的结局）。
+
+为什么此前没有：这条路唯一的 PostgreSQL 覆盖
+（`rfc349-repository-preparation-postgresql-adapter`）用的是**手搓假池**，而且喂 `scratch: true`
+的任务——那条路径走不到 `loadFrozenSpaceLayout`。**假池 + 绕开的路径**，正是 §5gn 清点的那类缺口，
+这里又见到一个实例。
+
+### 对波次的影响
+
+合一时**必须挑一份文案留下**，而不是让两份各自活着：按「取强的那半」（§5fq 的一贯处方），
+留 legacy 那份带计数与指引的措辞。这条要写进迁移清单——否则合一会悄悄把用户的帮助文案降级。
