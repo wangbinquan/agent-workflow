@@ -14227,3 +14227,52 @@ PG 走 `launch.launch`）**没有任何行为覆盖**。
 原判「零覆盖路径上的产品行为变更」**不成立**：两条机制的等价性已由 21 例双引擎测试在跑。
 Step C 回到正常难度——仍需 Step B②（`cli/start.ts` 造出根内核）先落地，
 因为生产 SQLite 侧目前没有内核可用；但那是接线，不是赌。
+
+---
+
+## §5hg　Step C 实做了一遍，卡在一个**具体**的地方：`内核 + SQLite 库`这个组合零覆盖
+
+不再只做分析——这一节记的是**实际改了一遍、又退回来**的过程与它买到的确定性。
+
+### 改到了哪一步（全部已回退，工作树干净）
+
+1. `actionExecutionEnvironment.ts`：两份合成一份 `createActionExecutionEnvironment`，
+   `db` 收中立句柄；`actor` 收成**惰性** `resolveActor: () => Promise<Actor>`
+   ——因为 `server.ts` 的 `composeFallbackDevelopmentAutomation` 是**同步**函数，
+   拿不到 `await admitDaemonIdentity(...)`，而两个根都只在 `launchHostTask` 里用到 actor。
+   （这一步是真正的「取强的那半」：惰性在两侧都成立。）
+2. `agentActionExecution.ts` / `scriptActionExecution.ts`：各自两份装配面合成一份。
+3. `cli/postgresqlDaemonApplication.ts`：改用合并后的名字，`actor: systemActor` →
+   `resolveActor: async () => systemActor`。
+
+改完 `tsc` 只剩 6 处：两个 SQLite 生产调用点（`cli/start.ts` ×2、`server.ts` ×2）与 4 处测试。
+**也就是说这三对的合并本身是通的**，差的只是 SQLite 侧要造出一台内核。
+
+### 卡在哪：`内核 + SQLite 库` 这个组合**目前零覆盖**
+
+合并取的是内核那半，于是合并后**生产 SQLite 会改走内核**。而查下来：
+
+| 组合 | 谁在跑 |
+| --- | --- |
+| 内核 + PostgreSQL 库 | PG daemon（生产）、`tasks.test.ts` 的 PG lane、`eachProviderTaskExecution` 的 PG 分支 |
+| `startTask` + SQLite 库 | SQLite daemon（生产）、`tasks.test.ts` 的 SQLite lane、helper 的 SQLite 分支 |
+| **内核 + SQLite 库** | **没有任何地方** |
+
+§5hf 说「等价性已由 21 例双引擎用例跑着」——那句话**对，但不够**：
+它证明的是「两条机制各自在自己的引擎上都对」，**不是**「内核这条机制在 SQLite 库上也对」。
+合并要做的恰恰是后者。**这两句话的差别，是我这一轮最该记住的东西。**
+
+已探的一步：内核在两个引擎上都能**构造**出来（probe 实测 `kernel.launch` 都是 function）。
+但构造 ≠ 能跑——`launch()` 里有事务、插行、工作区物化与 git。
+
+### 于是 ③a 的范围被钉死了（这次是真的小而具体）
+
+**写一条「用启动内核在两个引擎上各真启动一次」的用例**：真库、真工作区租约，
+断言任务行落库、返回 id 与查询一致、回滚路径干净。它一旦绿，
+上面那三对的合并就只剩把 60 行内核装配从 PG daemon 抄进 `cli/start.ts` 与 `server.ts`。
+
+### 为什么退回来而不是硬推
+
+合并后**默认部署（SQLite）的数字员工启动路会换一条机制**，而那条组合今天没有任何用例跑过。
+这不是「谨慎」，是它确实没被验证过——真出问题的形态会是「数字员工动作卡住不失败」，
+要等有人在真机上跑才发现。先把 ③a 那条用例写出来，合并就从赌变成接线。
