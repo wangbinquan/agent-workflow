@@ -23,8 +23,7 @@
       "boundaryEdgeIds": [
         "import:110028091270f0f04df0",
         "import:1c67086598d7bdb3102d",
-        "import:27c7dced4b9c333cf59a",
-        "import:582010bd11a8e1414cf8"
+        "import:27c7dced4b9c333cf59a"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/agent.ts",
@@ -1266,7 +1265,6 @@
     {
       "boundaryEdgeIds": [
         "import:135f4f8e487a851f5903",
-        "import:37c4ae6beece5deb9634",
         "import:3ee83e2601cbca632c69",
         "import:523be4dc38479c9b1844",
         "import:682ad93a13b2c3daa19e",
@@ -5483,7 +5481,6 @@
         "import:519c37546cf4d1f5cb2f",
         "import:52aebe854233bde53a8c",
         "import:560e8cc9efc285b8e2de",
-        "import:56a205b7e3d20934c03e",
         "import:5ac7c5ed5efc9da11ec5",
         "import:5ae9d5174321e075d5cb",
         "import:5b606183aa8ac08a98fa",
@@ -5494,6 +5491,7 @@
         "import:65e97c8a6f12eaa82b01",
         "import:6695adac0aea33d43c69",
         "import:6bf62bbba05495414805",
+        "import:6f0e6af36866e33dc3b3",
         "import:704d1fd2d3d305b188e0",
         "import:70e2c384abc62cae8ab5",
         "import:78bda158c8e1258eea34",
@@ -5526,7 +5524,6 @@
         "import:c85c6809159c9f65d090",
         "import:c920441e58d6c83f5086",
         "import:cf5f570227949209b5ec",
-        "import:d07907c42947e6c5855e",
         "import:d0fe58770dbe785de5b4",
         "import:d3878ef3405d8ba0d432",
         "import:d40458411935c8508bf4",
@@ -6630,5 +6627,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:31ac38df13466c5f90b4aa0ddcdcfe52d5c2a7c29a1cd1074453605f12790b32"
+  "sourceDigest": "sha256:25bab3e2ac00cc474c66449833c2db39b424ff4eca1b63ca04bf12bceea480cd"
 }

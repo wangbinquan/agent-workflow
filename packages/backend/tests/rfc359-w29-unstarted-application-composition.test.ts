@@ -516,8 +516,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // 两份 composer 合成一对，两个引擎共用）。另加一处实参改名：动作执行环境的 `actor`
     // 换成惰性的 `resolveActor`（SQLite 那个组合根是同步函数，取不到 `await admit…`）。
     // **语句数仍是 160、顺序未变**——上面那条 `toHaveLength(160)` 没红。
+    // RFC-359 AC-1（2026-09-16，plan §5hl）：摘要随数字员工执行 composer 的**改名 + 一处实参**
+    // 更新——`composePostgresqlDigitalEmployeeExecution` → `composeDigitalEmployeeExecution`
+    // （两份合一），`actor: systemActor` → `resolveActor: async () => systemActor`
+    // （SQLite 那个组合根是同步函数，取不到 await 的 admit，惰性是两侧都成立的那半）。
+    // **语句数仍是 160、顺序未变**。
     expect(digest(restored, pg)).toBe(
-      '16a2750b7a8864ccbd290572fefc2fbbcf536367d7584f012bc45454a4b21b40',
+      '1f534244e48642809afd5bb48172a0e6ccfdefbd983c6f726f86d3e0918d500a',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -588,8 +593,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // 这几段装配体的**文本**变了，**装配图一条没动**（上面的语句数断言没红）。
     // RFC-359 AC-1（2026-09-16，plan §5gt）：同上一处，随 secretBox 收成必填而更新——
     // 这一段里去掉的是 `multipart` 与 employee 工作区那两处条件展开。
+    // RFC-359 AC-1（2026-09-16，plan §5hl）：数字员工执行合成一份后，这一段把
+    // `db + startDeps` 换成了端口 + 启动内核（`composeHostTaskLaunchKernel`）与
+    // 库内缺省端口的展开。**装配图变了是有意的**：少一个 `startTask` 调用点（rfc301 账本同步删行），
+    // 这一层不再自己读库。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'e104b889d1b3e56484af373d5c4a49653925afb96d0c033c3ae168c6b4d3bbcc',
+      '07652df2d0269a9bd45b90ffef7ea964404a086b15913c6164144a8066cf34a0',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

@@ -3,7 +3,6 @@ import type { Actor } from '@/auth/actor'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
-import { ulid } from 'ulid'
 import { z } from 'zod'
 
 import {
@@ -13,9 +12,8 @@ import {
   type WorkflowDefinition,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
+import { nodeRuns, tasks } from '@/db/schema'
 import type {
   DigitalEmployeeExecutionMetering,
   DigitalEmployeeExecutionParticipant,
@@ -30,9 +28,8 @@ import {
   type ExecutionContractProjectionParticipant,
   type ExecutionContractRuntimeView,
 } from '@/modules/execution-contract/public/types'
-import { getAgentById } from '@/services/agent'
-import { getExecutionOutcome } from '@/services/execution/executor'
-import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
+import { cancelTask, getTask } from '@/services/task'
+import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { readTaskResourceUsage } from '@/services/limits'
 import { sha256Hex } from '@/util/hash'
 import {
@@ -46,7 +43,6 @@ import {
   synthesizeReviewedDigitalEmployeeHostSnapshot,
   synthesizeDigitalEmployeeScriptHostSnapshot,
 } from '../domain/digitalEmployeeHost'
-import { ensureDigitalEmployeeHostWorkflow } from './agentActionExecution'
 import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
 import type { DigitalEmployeeWorkspacePort } from './required-ports'
 import type {
@@ -288,405 +284,15 @@ export async function inspectDigitalEmployeeHumanReviewState(
   return 'planning'
 }
 
-export function composeDigitalEmployeeExecution(deps: {
-  readonly db: DbClient
+export interface DigitalEmployeeExecutionDependencies {
   readonly appHome: string
-  readonly startDeps: StartTaskDeps
-  readonly workspace?: DigitalEmployeeWorkspacePort
-  readonly executionContracts: ExecutionContractParticipant & ExecutionContractProjectionParticipant
-}): DigitalEmployeeExecutionParticipant {
-  return {
-    async launch(planJson, attemptJson) {
-      const plan = planSchema.parse(JSON.parse(planJson) as unknown)
-      const attempt = attemptSchema.parse(JSON.parse(attemptJson) as unknown)
-      const implementation = executionContractImplementationSchema.parse(
-        JSON.parse(plan.implementationJson) as unknown,
-      )
-      if (implementation.kind !== plan.implementationKind) {
-        throw new Error('reaction plan implementation kind mismatch')
-      }
-      const envelope = inputEnvelopeSchema.parse(JSON.parse(plan.inputEnvelopeJson) as unknown)
-      const environment = environmentSchema.parse(
-        JSON.parse(envelope.executionEnvironmentJson) as unknown,
-      )
-      const scene =
-        deps.workspace === undefined
-          ? ({ kind: 'unmanaged' } as const)
-          : await deps.workspace.prepare({ planJson: JSON.stringify(plan), attemptJson })
-      const taskId = ulid()
-      const sourceFields =
-        scene.kind === 'repository'
-          ? {}
-          : environment.kind === 'scratch'
-            ? { scratch: true as const }
-            : environment.kind === 'cached-repository'
-              ? { cachedRepoId: environment.cachedRepoId }
-              : { repoGroupId: environment.repoGroupId }
-      const sceneDeps =
-        scene.kind !== 'repository'
-          ? {}
-          : {
-              internalSource: {
-                kind: 'local-path' as const,
-                repoPath: scene.workspacePath,
-                baseBranch: scene.baselineSha,
-              },
-              platformInputPaths: scene.platformInputPaths,
-              preCreatedWorktree: {
-                taskId,
-                worktreePath: scene.workspacePath,
-                branch: '',
-                baseCommit: scene.baselineSha,
-                cleanup: { kind: 'borrowed' as const },
-              },
-            }
-      const guide = deps.executionContracts.get(plan.workContractRef)
-      const toolInputJson =
-        deps.executionContracts.projectInput?.({
-          contractRef: plan.workContractRef,
-          roundRef: plan.roundRef,
-          executionNonce: plan.executionNonce,
-          inputEnvelopeJson: plan.inputEnvelopeJson,
-          projectionJson: scene.kind === 'repository' ? scene.contractProjectionJson : null,
-        }) ?? plan.inputEnvelopeJson
-      const prompt = buildDigitalEmployeeFixedPrompt(
-        { ...plan, inputEnvelopeJson: toolInputJson },
-        attempt,
-        guide,
-      )
-      const reviewedExecution = envelope.humanReview
-      if (reviewedExecution && implementation.kind !== 'agent') {
-        throw new Error('implementation plan review requires an Agent implementation')
-      }
-      const planPrompt = reviewedExecution
-        ? (() => {
-            const planningGuide = deps.executionContracts.get(
-              reviewedExecution.planningTool.workContractRef,
-            )
-            return buildDigitalEmployeePlanPrompt(
-              {
-                ...plan,
-                inputEnvelopeJson:
-                  deps.executionContracts.projectInput?.({
-                    contractRef: reviewedExecution.planningTool.workContractRef,
-                    roundRef: plan.roundRef,
-                    executionNonce: plan.executionNonce,
-                    inputEnvelopeJson: plan.inputEnvelopeJson,
-                  }) ?? plan.inputEnvelopeJson,
-              },
-              attempt,
-              reviewedExecution.documentPath,
-              planningGuide.inputMode,
-            )
-          })()
-        : null
-      const startInput: StartTask = {
-        workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-        name: `employee:${plan.roundRef}`.slice(0, 255),
-        inputs:
-          implementation.kind === 'program'
-            ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: toolInputJson }
-            : reviewedExecution
-              ? {
-                  [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt,
-                  [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: planPrompt!,
-                }
-              : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
-        maxDurationMs: plan.roundBudgetMs,
-        ...(plan.maxTotalTokens === null ? {} : { maxTotalTokens: plan.maxTotalTokens }),
-        ...sourceFields,
-      }
-      let snapshotJson: string
-      if (implementation.kind === 'agent') {
-        const agent = await getAgentById(deps.db, implementation.agentRef.id)
-        if (agent === null || agent.updatedAt !== implementation.agentRef.revision) {
-          throw new Error(
-            `exact agent unavailable: ${implementation.agentRef.id}@${implementation.agentRef.revision}`,
-          )
-        }
-        if (!agent.outputs.includes(DIGITAL_EMPLOYEE_RESULT_PORT)) {
-          throw new Error(`agent must expose ${DIGITAL_EMPLOYEE_RESULT_PORT}`)
-        }
-        if (reviewedExecution === null) {
-          snapshotJson = JSON.stringify(
-            synthesizeDigitalEmployeeHostSnapshot({ agentId: agent.id, agentName: agent.name }),
-          )
-        } else {
-          const planAgentRef = reviewedExecution.planningTool.implementation.agentRef
-          const planAgent = await getAgentById(deps.db, planAgentRef.id)
-          if (planAgent === null || planAgent.updatedAt !== planAgentRef.revision) {
-            throw new Error(
-              `exact implementation plan Agent unavailable: ${planAgentRef.id}@${planAgentRef.revision}`,
-            )
-          }
-          if (!planAgent.outputs.includes(reviewedExecution.artifactPort)) {
-            throw new Error(
-              `implementation plan Agent must expose ${reviewedExecution.artifactPort}`,
-            )
-          }
-          snapshotJson = JSON.stringify(
-            synthesizeReviewedDigitalEmployeeHostSnapshot({
-              planAgentId: planAgent.id,
-              planAgentName: planAgent.name,
-              implementationAgentId: agent.id,
-              implementationAgentName: agent.name,
-              artifactPort: reviewedExecution.artifactPort,
-              documentPath: reviewedExecution.documentPath,
-              reviewTitle: reviewedExecution.title,
-              reviewDescription: reviewedExecution.description,
-            }),
-          )
-        }
-      } else if (implementation.kind === 'program') {
-        const artifactPath = containedArtifact(deps.appHome, implementation.executableArtifactRef)
-        if (artifactPath === null || !existsSync(artifactPath)) {
-          throw new Error('program executable artifact is unavailable')
-        }
-        const source = readFileSync(artifactPath, 'utf8')
-        if (sha256Hex(source) !== implementation.executableDigest) {
-          throw new Error('program executable artifact digest mismatch')
-        }
-        let parametersJson = '{}'
-        if (implementation.parameterValuesRef !== null) {
-          const parameterPath = containedArtifact(deps.appHome, implementation.parameterValuesRef)
-          if (parameterPath === null || !existsSync(parameterPath)) {
-            throw new Error('program parameter artifact is unavailable')
-          }
-          const parsedParameters = programParametersSchema.parse(
-            JSON.parse(readFileSync(parameterPath, 'utf8')) as unknown,
-          )
-          parametersJson = JSON.stringify(parsedParameters)
-        }
-        snapshotJson = JSON.stringify(
-          synthesizeDigitalEmployeeScriptHostSnapshot({
-            inputPort: EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
-            language: implementation.runtimeKind,
-            script: source,
-            dependencies: [],
-            env: {
-              DIGITAL_EMPLOYEE_TOOL_PARAMETERS_JSON: parametersJson,
-              DIGITAL_EMPLOYEE_TOOL_CONNECTION_REF_JSON: JSON.stringify(plan.connectionRef),
-              DIGITAL_EMPLOYEE_TOOL_SLOT: plan.toolSlotRef,
-            },
-            readonly: false,
-          }),
-        )
-      } else {
-        const workflow = deps.db
-          .select({ id: workflows.id, version: workflows.version })
-          .from(workflows)
-          .where(eq(workflows.id, implementation.workflowRef.id))
-          .get()
-        if (workflow === undefined || workflow.version !== implementation.workflowRef.revision) {
-          throw new Error(
-            `exact workflow unavailable: ${implementation.workflowRef.id}@${implementation.workflowRef.revision}`,
-          )
-        }
-        const workflowInput: StartTask = {
-          ...startInput,
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          inputs: { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
-        }
-        const task = await startTask(workflowInput, {
-          ...deps.startDeps,
-          catalogVisibility: 'internal',
-          digitalEmployeeLaunch: {
-            actionRunId: plan.roundRef,
-            caseId: plan.caseRef.id,
-          },
-          ...sceneDeps,
-          ...(deps.startDeps.launchProvenance === undefined &&
-          deps.startDeps.callLaunch === undefined
-            ? {
-                launchProvenance: {
-                  kind: 'direct-json' as const,
-                  initiator: 'api' as const,
-                },
-              }
-            : {}),
-        })
-        return { executionRef: task.id }
-      }
-
-      await ensureDigitalEmployeeHostWorkflow(deps.db)
-      const task = await startTask(startInput, {
-        ...deps.startDeps,
-        catalogVisibility: 'internal',
-        digitalEmployeeLaunch: {
-          actionRunId: plan.roundRef,
-          caseId: plan.caseRef.id,
-          snapshotJson,
-        },
-        ...sceneDeps,
-        ...(deps.startDeps.launchProvenance === undefined && deps.startDeps.callLaunch === undefined
-          ? {
-              launchProvenance: {
-                kind: 'direct-json' as const,
-                initiator: 'api' as const,
-              },
-            }
-          : {}),
-      })
-      return { executionRef: task.id }
-    },
-
-    async inspect(executionRef) {
-      const task = deps.db
-        .select({
-          status: tasks.status,
-          roundRef: tasks.digitalEmployeeRoundId,
-          inputs: tasks.inputs,
-          errorSummary: tasks.errorSummary,
-          autoRecoverySuspended: tasks.autoRecoverySuspended,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, executionRef))
-        .get()
-      if (task === undefined) {
-        return resultFailure(
-          executionRef,
-          'infrastructure',
-          'execution-not-found',
-          'TaskEngine execution is missing',
-          { sourceRef: `task:${executionRef}`, durationMs: 0, totalTokens: 0 },
-        )
-      }
-      // A daemon restart is a recoverable TaskEngine transport interruption,
-      // not a business result. Boot auto-resume reclaims the same task after
-      // reaping it, so publishing a permanent employee failure in this brief
-      // interrupted window blocks the Case while that very task is running
-      // again. Keep the round pending until recovery either completes or the
-      // circuit breaker explicitly suspends further automatic attempts.
-      if (
-        task.status === 'interrupted' &&
-        task.errorSummary === DAEMON_RESTART_ERROR_SUMMARY &&
-        !task.autoRecoverySuspended
-      ) {
-        return { kind: 'pending', executionRef }
-      }
-      if (!isTerminalTaskStatus(task.status)) return { kind: 'pending', executionRef }
-      const usage = (await readTaskResourceUsage(deps.db, executionRef)) ?? {
-        effectiveRunningMs: 0,
-        totalTokens: 0,
-      }
-      const metering: DigitalEmployeeExecutionMetering = {
-        sourceRef: `task:${executionRef}`,
-        durationMs: usage.effectiveRunningMs,
-        totalTokens: usage.totalTokens,
-      }
-      const outcome = await getExecutionOutcome(deps.db, executionRef)
-      const output = outcome.outputs[DIGITAL_EMPLOYEE_RESULT_PORT]?.content ?? null
-      // Contract/output validation is meaningful only after a successful
-      // execution. Running it first masks the actual TaskEngine failure (for
-      // example a pre-spawn prompt error) as a missing or mismatched derived
-      // artifact, which sends both the Case and the user toward the wrong fix.
-      if (task.status !== 'done') {
-        return resultFailure(
-          executionRef,
-          'infrastructure',
-          `execution-${task.status}`,
-          outcome.error?.message ?? outcome.error?.summary ?? `task ended as ${task.status}`,
-          metering,
-        )
-      }
-      const parsedInputs = z
-        .record(z.string(), z.unknown())
-        .parse(JSON.parse(task.inputs) as unknown)
-      const planPrompt = parsedInputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
-      if (typeof planPrompt === 'string') {
-        const legacyExpectedMatch =
-          /EXPECTED_ANALYSIS_PLAN_PATH_JSON\n("[^"\\]*(?:\\.[^"\\]*)*")/.exec(planPrompt)
-        const directInputMarker = '\n\nINPUT_JSON\n\n'
-        const directInputStart = planPrompt.lastIndexOf(directInputMarker)
-        const directInput =
-          directInputStart < 0
-            ? null
-            : z
-                .object({ outputFile: z.string().min(1) })
-                .passthrough()
-                .safeParse(
-                  JSON.parse(
-                    planPrompt.slice(directInputStart + directInputMarker.length),
-                  ) as unknown,
-                )
-        const expectedPath =
-          directInput?.success === true
-            ? directInput.data.outputFile
-            : legacyExpectedMatch?.[1] === undefined
-              ? null
-              : z.string().parse(JSON.parse(legacyExpectedMatch[1]) as unknown)
-        const planOutput = deps.db
-          .select({ content: nodeRunOutputs.content })
-          .from(nodeRunOutputs)
-          .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))
-          .where(
-            and(
-              eq(nodeRuns.taskId, executionRef),
-              eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID),
-              eq(nodeRuns.status, 'done'),
-              eq(nodeRunOutputs.portName, 'analysis-plan'),
-            ),
-          )
-          .orderBy(desc(nodeRuns.id))
-          .get()
-        if (expectedPath === null || planOutput?.content.trim() !== expectedPath) {
-          return resultFailure(
-            executionRef,
-            'semantic',
-            'implementation-plan-path-mismatch',
-            `analysis-plan must publish the exact platform path ${expectedPath ?? '<missing>'}`,
-            metering,
-          )
-        }
-      }
-      if (deps.workspace !== undefined && task.roundRef !== null) {
-        const validation = await deps.workspace.validate({
-          roundRef: task.roundRef,
-          taskStatus: task.status,
-          outputJson: output,
-        })
-        if (!validation.ok) {
-          return resultFailure(
-            executionRef,
-            validation.errorClass,
-            validation.errorCode,
-            validation.errorDetail,
-            metering,
-          )
-        }
-      }
-      if (output === null) {
-        return resultFailure(
-          executionRef,
-          'semantic',
-          'execution-output-missing',
-          `task did not publish ${DIGITAL_EMPLOYEE_RESULT_PORT}`,
-          metering,
-        )
-      }
-      return { kind: 'completed', executionRef, outputJson: output, metering }
-    },
-
-    async inspectHumanReview(executionRef) {
-      return await inspectDigitalEmployeeHumanReviewState(deps.db, executionRef)
-    },
-
-    async cancel(executionRef) {
-      const task = deps.db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, executionRef))
-        .get()
-      if (task === undefined || isTerminalTaskStatus(task.status)) return
-      await cancelTask(deps.db, executionRef)
-    },
-  }
-}
-
-export interface PostgresqlDigitalEmployeeExecutionDependencies {
-  readonly appHome: string
-  readonly actor: Actor
+  /**
+   * **惰性**取 actor：只有 `launch` 用得到它，而 SQLite 那个组合根
+   * （`server.ts` 的 `composeSqliteApiRouteMounts`）是**同步**函数，
+   * 取不到 `await admitDaemonIdentity(...)`。惰性是两个组合根都成立的那半
+   * （同 `actionExecutionEnvironment.ts` 的 `resolveActor`，plan §5hi）。
+   */
+  readonly resolveActor: () => Promise<Actor>
   readonly resourceAuthorityFor: (
     actor: Actor,
   ) => Parameters<PostgresqlRootTaskLaunchKernel['launch']>[0]['resourceAuthority']
@@ -760,11 +366,17 @@ function parsedPlanOutputPath(planPrompt: string): string | null {
 }
 
 /**
- * PostgreSQL Digital Employee execution on the exact provider-selected root
- * launch kernel. It neither reopens SQLite nor owns a second task writer.
+ * Digital Employee execution on the provider-selected root launch kernel.
+ * It neither reopens a second database handle nor owns a second task writer.
+ *
+ * RFC-359 AC-1（plan §5hl）：此前这里有**两份**——SQLite 那份在函数体里直接读库、
+ * 用 `startTask` + `preCreatedWorktree` 启动（按定义只服务 SQLite），
+ * PostgreSQL 那份收端口、走启动内核。合一取端口 + 内核那半：
+ * 内核在两个引擎上都真启动过（`rfc359-w5-kernel-launch-provider-parity`），
+ * 库内缺省端口见下面的 `composeDatabaseDigitalEmployeeExecutionPorts`。
  */
-export function composePostgresqlDigitalEmployeeExecution(
-  deps: PostgresqlDigitalEmployeeExecutionDependencies,
+export function composeDigitalEmployeeExecution(
+  deps: DigitalEmployeeExecutionDependencies,
 ): DigitalEmployeeExecutionParticipant {
   const participant: DigitalEmployeeExecutionParticipant = {
     async launch(planJson: string, attemptJson: string) {
@@ -945,9 +557,10 @@ export function composePostgresqlDigitalEmployeeExecution(
         }
       }
 
+      const launchActor = await deps.resolveActor()
       const launched = await deps.launch.launch({
-        actor: deps.actor,
-        resourceAuthority: deps.resourceAuthorityFor(deps.actor),
+        actor: launchActor,
+        resourceAuthority: deps.resourceAuthorityFor(launchActor),
         invoker: { type: 'user', launchKind: 'direct-json' },
         task,
         subject,
@@ -1091,4 +704,47 @@ export function composePostgresqlDigitalEmployeeExecution(
     },
   }
   return Object.freeze(participant)
+}
+
+/**
+ * RFC-359 AC-1（plan §5hl）—— 三个端口的**库内缺省实现**。
+ *
+ * 合一前 SQLite 那份 composer 在函数体里直接读库（`deps.db.select(...).get()`），
+ * PostgreSQL 那份把同样三件事收成端口。合一取端口那半——它是两个引擎都成立的那种形状
+ * （`.get()` 在 PG 上返回 Promise，在 SQLite 上返回值，直接读库的写法按定义只服务一个引擎）。
+ * 但端口化不该让每个组合根各抄一遍同样的三段库读，所以缺省实现放在这里，
+ * 装配方只在确有更好来源时（例如 PG daemon 的 `resourceLimitOperations`）覆盖它。
+ */
+export function composeDatabaseDigitalEmployeeExecutionPorts(
+  db: ProviderNeutralDatabase,
+): Pick<
+  DigitalEmployeeExecutionDependencies,
+  'tasks' | 'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview'
+> {
+  return Object.freeze({
+    tasks: {
+      get: (taskId: string) => getTask(db, taskId),
+      cancel: (taskId: string) => cancelTask(db, taskId),
+    },
+    readModels: createTaskExecutionReadModels(db),
+    resourceUsage: {
+      read: (taskId: string) => readTaskResourceUsage(db, taskId),
+    },
+    executionMetadata: {
+      async load(taskId: string) {
+        const row = await db
+          .select({
+            roundRef: tasks.digitalEmployeeRoundId,
+            autoRecoverySuspended: tasks.autoRecoverySuspended,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .get()
+        return row ?? null
+      },
+    },
+    humanReview: {
+      inspect: (executionRef: string) => inspectDigitalEmployeeHumanReviewState(db, executionRef),
+    },
+  })
 }

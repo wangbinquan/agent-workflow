@@ -494,6 +494,25 @@ grep -rln "<被改文件的 basename 去掉 .test.ts>" packages/backend/tests --
 `bun test $(scripts/tests-referencing.sh <改过的文件名…> | sed 's|^packages/backend/||')`
 （`$( )` 是必须的，zsh 不对裸 `$VAR` 分词——见本文件那条）。
 
+**但这条定式有一个已知盲区：按「文件路径字符串」记账的守卫（2026-09-16 实撞，又推红一次）。**
+`tests-referencing.sh` 按**符号 / import 引用**派生影响面。仓里还有另一类守卫，账本键是
+**源文件的相对路径字符串**（`rfc301-task-launch-origin-architecture` 的受审 `startTask` 调用点清单、
+`rfc331` 的 legacy deep-import 清单、`rfc317` 的若干 exact 账本都是这个形状）——它们既不 import
+你改的文件、也不提它的符号，脚本因此**一个都交不出来**。
+
+实撞：合掉动作执行那三对以后 `actionExecutionEnvironment.ts` 里不再有 `startTask` 调用，
+rfc301 的账本还记着它 1 次，radius 68 个文件全绿，CI 的 ubuntu shard 4/12 红。
+
+**补一步**：跑完脚本给的半径，再按**改动文件的相对路径字符串**grep 一遍测试树：
+
+```
+grep -rn "modules/task-execution/composition/actionExecutionEnvironment.ts" packages/backend/tests/
+```
+
+删文件 / 改文件名时同理（见本文件「删文件要连着账本一起删」那条）。
+**注意方向**：这类账本红的时候往往是**好事**——「少一个未受审调用点」「少一条 deep import」
+正是棘轮要的方向，处置是**删行销账**，不是放宽判据。
+
 
 两次主干红，同一个根因：自查命令**看上去绿，实际什么都没查**。
 

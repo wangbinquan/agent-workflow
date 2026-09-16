@@ -146,7 +146,9 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // 退役四个 provider 命名的导出：`createPostgresqlActionExecutionEnvironment` /
       // `createSqliteActionExecutionEnvironment` / `composePostgresqlAgentActionExecution` /
       // `composePostgresqlScriptActionExecution`。**是合一不是删覆盖**，分母因此少四。
-    ).toBeGreaterThanOrEqual(86)
+      // RFC-359 AC-1（2026-09-16，plan §5hl）：86 → 85。数字员工执行的两份 composer 合一，
+      // 退役 `composePostgresqlDigitalEmployeeExecution`。**是合一不是删覆盖**，分母少一。
+    ).toBeGreaterThanOrEqual(85)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

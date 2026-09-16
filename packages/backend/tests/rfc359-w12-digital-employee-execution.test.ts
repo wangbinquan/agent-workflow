@@ -29,11 +29,9 @@ import {
   createExecutionContractResourceAdapter,
 } from '@/modules/execution-contract/composition'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
-import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
+  composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecution,
-  composePostgresqlDigitalEmployeeExecution,
-  inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import type { DigitalEmployeeWorkspacePort } from '@/modules/task-execution/composition/required-ports'
 import {
@@ -44,10 +42,10 @@ import {
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { DigitalEmployeeExecutionResult } from '@/modules/task-execution/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { readTaskResourceUsage } from '@/services/limits'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
+import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const CONTRACT = { contractId: 'development.analyze-implement', version: 1 }
@@ -219,49 +217,40 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
                 appHome,
                 registrations: developmentExecutionContractRegistrations,
               })
-        const compose = () => {
-          if (provider.provider === 'sqlite') {
-            const db = harness.db as unknown as DbClient
-            return composeDigitalEmployeeExecution({
-              db,
-              appHome,
-              executionContracts,
-              workspace,
-              startDeps: {
-                db,
-                ...runConfig,
-                schedulerDriver: provider.runtime.schedulerDriver,
-                taskRecoveryOperations: provider.recovery,
-                identityAccess,
-                launchResources,
-                actorUserId: actor.user.id,
-                awaitScheduler: true,
-              },
-            })
-          }
-          const db = harness.db as unknown as PostgresqlDatabaseClient
-          const limits = composePostgresqlResourceLimitOperations({
-            db,
-            cancelTask: (taskId) =>
-              provider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
-          })
-          return composePostgresqlDigitalEmployeeExecution({
+        // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，所以这里也只剩**一个**装配形状。
+        // 两个引擎的差别缩到两处、且都不是 composer 的：`executionContracts` 的资源面
+        // （上面那段）与启动内核从哪来（PG 的 provider runtime 自带、SQLite 这条测试自己装
+        // 一台同形的）。库内三个端口取缺省实现——生产两个 SQLite 组合根用的是同一个。
+        const compose = () =>
+          composeDigitalEmployeeExecution({
             appHome,
-            actor,
+            resolveActor: async () => actor,
             resourceAuthorityFor: () => launchResources,
-            launch: provider.routeLaunch.workflow,
+            launch:
+              provider.provider === 'postgresql'
+                ? provider.routeLaunch.workflow
+                : createTestHostTaskLaunchKernel({
+                    db: harness.db,
+                    appHome,
+                    gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+                    coordinatorDeps: {
+                      // 协调器的驱动生命周期端口目前仍是 SQLite 专属
+                      // （PG 有自己的 `createPostgresqlTaskDriverLifecyclePort`）——
+                      // 这是下一层的孪生，不在本刀范围内（plan §5hm）。这条分支上它确实是 SQLite。
+                      db: harness.db as unknown as DbClient,
+                      ...runConfig,
+                      schedulerDriver: provider.runtime.schedulerDriver,
+                    },
+                    persistence: provider.persistence,
+                    completionMode: 'await-settle',
+                  }),
+            ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
             tasks: provider.routes.tasks,
             readModels: provider.readModels,
-            resourceUsage: { read: (taskId) => readTaskResourceUsage(limits, taskId) },
-            // RFC-359：PG 侧此前**根本没有** `inspectHumanReview`，闸门在 PG 上报不出 `waiting`。
-            // 现在装的是与 SQLite 侧同一个中立实现。
-            humanReview: {
-              inspect: (executionRef) => inspectDigitalEmployeeHumanReviewState(db, executionRef),
-            },
             agents: {
               async get(id) {
                 const row = (
-                  await db
+                  await harness.db
                     .select({
                       id: agents.id,
                       name: agents.name,
@@ -280,7 +269,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
             workflows: {
               async get(id) {
                 const row = (
-                  await db
+                  await harness.db
                     .select({
                       id: workflows.id,
                       name: workflows.name,
@@ -299,26 +288,9 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
                     }
               },
             },
-            executionMetadata: {
-              async load(taskId) {
-                return (
-                  (
-                    await db
-                      .select({
-                        roundRef: tasks.digitalEmployeeRoundId,
-                        autoRecoverySuspended: tasks.autoRecoverySuspended,
-                      })
-                      .from(tasks)
-                      .where(eq(tasks.id, taskId))
-                      .limit(1)
-                  )[0] ?? null
-                )
-              },
-            },
             executionContracts,
             workspace,
           })
-        }
         const plan = {
           schemaVersion: 1,
           caseRef: { id: caseId, revision: 1 },

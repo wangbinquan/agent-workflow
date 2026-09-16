@@ -6,7 +6,7 @@
     "moduleFiles": 1181,
     "productionFiles": 2553,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24707
+    "symbolsIncludingFileRoots": 24708
   },
   "entries": [
     {
@@ -116932,10 +116932,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDatabaseDigitalEmployeeExecutionPorts",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
-      "symbol": "composeDigitalEmployeeExecution",
+      "symbol": "composeDatabaseDigitalEmployeeExecutionPorts",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -116944,10 +116944,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composePostgresqlDigitalEmployeeExecution",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
-      "symbol": "composePostgresqlDigitalEmployeeExecution",
+      "symbol": "composeDigitalEmployeeExecution",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -116960,6 +116960,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "containedArtifact",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#DigitalEmployeeExecutionDependencies",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "DigitalEmployeeExecutionDependencies",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -117044,18 +117056,6 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "planSchema",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#PostgresqlDigitalEmployeeExecutionDependencies",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "PostgresqlDigitalEmployeeExecutionDependencies",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -117260,6 +117260,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "composeHostTaskLaunchKernel",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/hostTaskLaunch.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/hostTaskLaunch.ts#HostTaskLaunchKernelDependencies",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "HostTaskLaunchKernelDependencies",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -297161,5 +297173,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:31ac38df13466c5f90b4aa0ddcdcfe52d5c2a7c29a1cd1074453605f12790b32"
+  "sourceDigest": "sha256:25bab3e2ac00cc474c66449833c2db39b424ff4eca1b63ca04bf12bceea480cd"
 }

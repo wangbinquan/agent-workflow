@@ -303,7 +303,10 @@ import {
   deferEventCenterModule,
   type EventCenterModule,
 } from '@/modules/event-center/composition'
-import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import {
+  composeDatabaseDigitalEmployeeExecutionPorts,
+  composeDigitalEmployeeExecution,
+} from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import {
   composeTaskClarifyDirectiveRouteOperations,
   composeTaskExecutionRuntime,
@@ -2606,16 +2609,79 @@ function composeSqliteApiRouteMounts(
           : [deps.digitalEmployeeCaseDetailProjection],
       execution: createReactionExecutionAdapter(
         composeDigitalEmployeeExecution({
-          db: deps.db,
+          // RFC-359 AC-1（plan §5hl）：数字员工执行合成一份——端口 + 启动内核，
+          // 与 PostgreSQL daemon 同一条路。此前这一侧在 composer 函数体里直接读库、
+          // 用 `startTask` + `preCreatedWorktree` 启动（按定义只服务 SQLite）。
           appHome,
-          startDeps: buildStartTaskDeps(
-            deps.db,
-            schedulerDriver,
-            deps.configPath,
-            SYSTEM_USER_ID,
-            deps.secretBox,
-            deps.identityAccess,
-          ),
+          resolveActor: async () => {
+            const identity = await admitDaemonIdentity(identityAccess)
+            if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
+            return actorOfDirectAuthority(identity)
+          },
+          resourceAuthorityFor: (actor) => ({
+            actor,
+            authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+            resources: identityAccess.taskExecutionResources,
+          }),
+          launch: composeHostTaskLaunchKernel({
+            db: deps.db,
+            appHome,
+            secretBox: deps.secretBox,
+            gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+            coordinator: createTaskDriveCoordinator({
+              deps: {
+                db: deps.db,
+                schedulerDriver,
+                configPath: deps.configPath,
+              },
+              appHome,
+              engineFailureMessage: 'digital employee execution task drive threw',
+              failureReporter: {
+                async report({ taskId, error, execution }) {
+                  const now = Date.now()
+                  await taskExecutionPersistence.runtimeLifecycle.trySet({
+                    taskId,
+                    to: 'failed',
+                    allowedFrom: ['pending', 'running'],
+                    extra: {
+                      finishedAt: now,
+                      errorSummary: 'task drive failed',
+                      errorMessage: error instanceof Error ? error.message : String(error),
+                    },
+                    executionContext: execution,
+                    now,
+                    reason: 'task-drive',
+                  })
+                  await taskExecutionPersistence.intentTerminalization.terminalize({
+                    taskId,
+                    state: 'failed',
+                    failureCode: 'task-drive-failed',
+                    now,
+                    claimedOwnerEpoch: execution.token.epoch,
+                  })
+                },
+              },
+            }),
+          }),
+          ...composeDatabaseDigitalEmployeeExecutionPorts(deps.db),
+          tasks: taskRouteOperations,
+          readModels: deps.taskExecutionReadModels,
+          agents: {
+            get: async (id) => {
+              const identity = await admitDaemonIdentity(identityAccess)
+              if (identity === null)
+                throw new Error('digital-employee-catalog-authority-not-admitted')
+              return agentCatalog.queries.get(identity.actor, { id })
+            },
+          },
+          workflows: {
+            get: async (id) => {
+              const identity = await admitDaemonIdentity(identityAccess)
+              if (identity === null)
+                throw new Error('digital-employee-catalog-authority-not-admitted')
+              return workflowCatalog.queries.get(identity.actor, { id })
+            },
+          },
           workspace: developmentWorkspace,
           executionContracts,
         }),

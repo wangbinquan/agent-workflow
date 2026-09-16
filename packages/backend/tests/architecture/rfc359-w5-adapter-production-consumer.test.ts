@@ -400,7 +400,9 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // 退役四个 provider 命名的导出：`createPostgresqlActionExecutionEnvironment` /
       // `createSqliteActionExecutionEnvironment` / `composePostgresqlAgentActionExecution` /
       // `composePostgresqlScriptActionExecution`。**是合一不是删覆盖**，分母因此少四。
-    ).toBeGreaterThanOrEqual(82)
+      // RFC-359 AC-1（2026-09-16，plan §5hl）：82 → 81。数字员工执行的两份 composer 合一，
+      // 退役 `composePostgresqlDigitalEmployeeExecution`。**是合一不是删覆盖**，分母少一。
+    ).toBeGreaterThanOrEqual(81)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

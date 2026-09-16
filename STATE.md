@@ -2,6 +2,51 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-16 续 42，**AC-1 同文件孪生 19 → 15：启动面合一连下两城**）
+>
+> 已推并 CI 绿：`bc4a1d33d`（§5hi）· `5bc74c468`（补销 rfc301 账本，修 bc4a1d33d 推的红）。
+> 本段第二刀 §5hl 在本地全绿、待推。
+>
+> **最该带走的一句：「启动面合一」那道波次不再是勘察，是在落地——而且落在真跑子进程的执行链上。**
+> §5hi 合掉 agent / script 动作执行的三对（19 → 16），§5hl 合掉数字员工执行那一对（16 → 15）。
+> 后者的「漂移待合」理由整句写的是「挡在下层 + 挂在 `services/task` 的 SQLite 专属启动面上」，
+> 而 §5hi 正好把这两个前提一起拿掉——所以第二刀是**按账本当初写的那样**塌掉它，不是新开判断。
+>
+> **两刀共同的形状**：两份的差别永远是同一个故事——SQLite 那份在函数体里直接读库
+> （`.get()` 在 PG 上返回 Promise、在 SQLite 上返回值）+ `startTask` + `preCreatedWorktree`；
+> PG 那份收端口 + 启动内核。**合并一律取端口 + 内核那半**，因为直接读库 / `startTask` 按定义
+> 只服务一个引擎。新增模块组合入口 `composition/hostTaskLaunch.ts` 与库内缺省端口
+> `composeDatabaseDigitalEmployeeExecutionPorts`，让三个组合根（PG daemon + 两个 SQLite 根）
+> 装同一份，不必各抄一遍。
+>
+> **证据都是真执行**：`rfc359-w14-legacy-mission-execution`（双引擎真子进程驱到终态）、
+> `rfc310-pr4-execution-host`（真子进程 8 条）、`rfc359-w12-digital-employee-execution`（双引擎真执行）、
+> `rfc310-digital-employee-human-review-system-mock-e2e`（真子进程 + 人审多轮）全绿。
+> `w12` 那条的 `compose()` 此前是 `if (provider === 'sqlite') {...} else {...}` 两段，**现在是一段**。
+>
+> **合并顺带消掉两处真差异**：①`workspace` 未给时 SQLite 报 `unmanaged`、PG 报 `scratch`；
+> ②取 `analysis-plan` 输出时 PG 带 `active` 过滤、SQLite（SQL join）没有。都按 PG 那半统一。
+>
+> **一次推红，根因是个新盲区（已落 `docs/dev-gotchas.md`）**：`rfc301` 的「受审 `startTask` 调用点」
+> 账本拿**文件路径字符串**当键——它既不 import 被改的文件、也不提它的符号，
+> `scripts/tests-referencing.sh` 因此**一个都交不出来**。半径 12 文件全绿，CI ubuntu shard 4/12 红。
+> **新定式**：跑完脚本半径，再按改动文件的**相对路径字符串**grep 一遍测试树；
+> 本段第二刀照做，当场多捞出 rfc301（又 2 条）+ rfc345 + rfc310-pr4-profile-identity + rfc294 一批。
+> **方向要认清**：这类账本红往往是**好事**——「少一个未受审 startTask 调用点」正是棘轮要的方向，
+> 处置是删行销账，不是放宽判据。
+>
+> **另一处自己给自己挖的坑**：把库内缺省端口用 `...spread` 放在真端口**之后**，
+> 缺省会静默盖掉真的——`tsc` 的 `TS2783` 当场点名（「specified more than once」）。
+> 展开永远放在覆盖项**之前**。
+>
+> **下一刀写死在 plan §5hm / §5hn**：①协调器的驱动生命周期端口仍是 SQLite 专属
+> （`createTaskDriverLifecyclePort` 要 `DbClient`，PG 有自己那份）——这是 §5ha 排序里第 ① 步的剩余，
+> 也是 `TaskDriveCoordinatorDependencies.db` 至今收不成中立类型的原因；
+> ②`wakeHumanGateContinuation` 等人审继续驱动的 API 仍吃 `StartTaskDeps`（第 ④ 步「退役 legacy 启动面」）。
+> 另有 §5hj（内核的命名债）/ §5hk（SQLite 的 `routeLaunch.workflow` 仍是可选）。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hi / §5hl。
+
 > ## 📌 RFC-359 最新一段（2026-09-16 续 41，**AC-1 同文件孪生 19 → 16：数字员工动作执行的三层一次合齐**）
 >
 > **最该带走的一句：「启动面合一」这道波次开张了，而且开在最硬的那一层——真跑子进程的执行链上。**

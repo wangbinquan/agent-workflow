@@ -45,6 +45,7 @@ import {
 import {
   buildDigitalEmployeeFixedPrompt,
   buildDigitalEmployeePlanPrompt,
+  composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecution,
   inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
@@ -1077,9 +1078,16 @@ describe('platform execution contracts — SQLite composition only', () => {
       failedNodeId: '__de_agent__',
     })
     const execution = composeDigitalEmployeeExecution({
-      db,
+      // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，库读收成端口。
+      // 这条用例只走 `inspect`，所以启动面给 never、库内端口取缺省实现
+      // （生产的两个 SQLite 组合根用的是同一个 `composeDatabaseDigitalEmployeeExecutionPorts`）。
       appHome: '/tmp',
-      startDeps: null as never,
+      resolveActor: null as never,
+      resourceAuthorityFor: null as never,
+      launch: null as never,
+      agents: null as never,
+      workflows: null as never,
+      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
       executionContracts: null as never,
     })
 
@@ -1119,9 +1127,16 @@ describe('platform execution contracts — SQLite composition only', () => {
       autoRecoverySuspended: false,
     })
     const execution = composeDigitalEmployeeExecution({
-      db,
+      // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，库读收成端口。
+      // 这条用例只走 `inspect`，所以启动面给 never、库内端口取缺省实现
+      // （生产的两个 SQLite 组合根用的是同一个 `composeDatabaseDigitalEmployeeExecutionPorts`）。
       appHome: '/tmp',
-      startDeps: null as never,
+      resolveActor: null as never,
+      resourceAuthorityFor: null as never,
+      launch: null as never,
+      agents: null as never,
+      workflows: null as never,
+      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
       executionContracts: null as never,
     })
 

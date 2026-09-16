@@ -114,7 +114,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // **倒挂数字变大 = 覆盖变好**。它现在已经没有 provider 语义了（两个引擎共用一台），
   // 按 proposal AC-1 第三款是**命名债**，该改成中立名——那一刀连着整个文件的
   // 路由级 PG 类型，单独立一批做（plan §5hj）。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 7/3',
+  // RFC-359 AC-1（plan §5hl）：`7/3 → 7/2`。测试侧的内核装配助手改成**转调生产那个组合入口**
+  // （`composeHostTaskLaunchKernel`），不再直呼带品牌名的 `createPostgresqlRootTaskLaunchKernel`——
+  // 于是直接驱动这个品牌符号的地方少一处，引用数不变。**这是收敛，不是覆盖变少**：
+  // 同一批用例现在驱动的是生产那台内核的装配路径。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 7/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。

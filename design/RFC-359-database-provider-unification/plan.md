@@ -14398,3 +14398,84 @@ PG 专属类型（`PostgresqlTaskRouteLaunchDependencies` 等），
 而协调器又要 `provider.runtime.schedulerDriver`（PG 用同作用域 `const` 转发面破环，
 SQLite 可照抄）。做完这一刀，两个 SQLite 组合根就能和 PG 一样直接读
 `taskExecutionProvider.routeLaunch.workflow`，`hostTaskLaunch.ts` 这个入口也可以退役。
+
+## §5hl —— 数字员工执行合一：端口 + 内核，两份 ~350 行塌成一份
+
+§5hi 之后，`digitalEmployeeExecution.ts` 那一对的「漂移待合」理由整句失效了——
+账本上写的是「**挡在下层**：下层仍是品牌实现；且这条路还挂在 `services/task` 的
+SQLite 专属启动面上」，而 §5hi 正好把这两个前提一起拿掉。所以这一刀是**按账本当初写的那样**
+把它塌掉，不是新开一个判断。
+
+### 两份的差别是同一个故事，讲了两遍
+
+| | SQLite 那份 | PostgreSQL 那份 |
+| --- | --- | --- |
+| 启动 | `startTask` + `internalSource` + `preCreatedWorktree` | 启动内核 + `borrowedPostgresqlWorkspace` |
+| 读库 | 函数体里直接 `deps.db.select(...).get()` | 端口（`tasks` / `readModels` / `agents` / `workflows` / …） |
+| 计划人审 | 直接拿 db 调中立实现 | `humanReview` 端口 |
+
+合并取**端口 + 内核**那半。直接读库那半按定义只服务一个引擎——`.get()` 在 PG 上返回
+Promise、在 SQLite 上返回值，这是本 RFC 反复撞到的那条分界。
+
+端口化不该让每个组合根各抄一遍同样的库读，所以新增
+`composeDatabaseDigitalEmployeeExecutionPorts(db)`：`tasks` / `readModels` /
+`resourceUsage` / `executionMetadata` / `humanReview` 五个端口的**库内缺省实现**，
+三个组合根都装它，确有更好来源时（PG daemon 的 `resourceLimitOperations`、
+两个根的真 `routes.tasks`）就地覆盖。
+
+`actor` 同 §5hi 收成惰性的 `resolveActor`——`server.ts` 的
+`composeSqliteApiRouteMounts` 是同步函数，取不到 `await admitDaemonIdentity(...)`。
+
+### 合并顺带消掉的两处真差异
+
+1. `deps.workspace === undefined` 时，SQLite 那份给 `{ kind: 'unmanaged' }`、PG 那份给
+   `{ kind: 'scratch' }`。两者后续走同一个 `sourceFields` 分支，差别只在谁物化工作区；
+   合一后统一由内核的工作区参与者物化。
+2. 取 `analysis-plan` 输出时 PG 那份带 `candidate.active` 过滤，SQLite 那份（SQL join）
+   **没有**。合一后两个引擎都带上。
+
+### 证据
+
+- `rfc359-w12-digital-employee-execution`（`describeEachProvider`，真执行）**两个引擎全绿**。
+  它的 `compose()` 此前是 `if (provider === 'sqlite') {...} else {...}` 两段，
+  现在是**一段**——两个引擎只剩两处差别，且都不是 composer 的：
+  `executionContracts` 的资源面，与启动内核从哪来（PG 的 provider runtime 自带、
+  SQLite 这条测试用 `createTestHostTaskLaunchKernel` 装一台同形的）。
+- `rfc310-digital-employee-human-review-system-mock-e2e`（真子进程 + 人审多轮）绿。
+  它**真的要物化工作区**，于是揭出测试助手里那个「工作区参与者用不到」的假设是错的——
+  助手改成**转调生产那个组合入口** `composeHostTaskLaunchKernel`，
+  「测试装的内核」与「生产装的内核」从此按构造同一台。
+- `rfc359-w12-digital-employee-human-review-parity` 的装配锁改写：两份变一份后
+  「两侧都要交出 `inspectHumanReview`」退化成一句废话，改成锁
+  **库内缺省端口读出来的答案与中立实现逐字相同**，并把用例种到 `waiting` 那一格
+  ——正是 PG 侧当年报不出来的那一格，桩答不出它。
+
+### 账本连动
+
+同文件孪生 16 → **15**；`identical-provider-twins` 下限 86 → 85、
+`provider-runtime-exercised` 18 → 15（两刀累计）、`adapter-production-consumer` 82 → 81；
+`t19d` 的 `TaskRouteLaunchOperations` drive 3 → 2（测试助手改走组合入口，不再直呼品牌名——
+**收敛，不是覆盖变少**）；`rfc359-w29` 两相摘要都更新，其中 **SQLite 相的装配图是真的变了**
+（这一层不再自己读库），已在行上写明。三份普查账本各 +1（多一条 import、多一个导出符号），
+按 `allowGrowth` 显式声明并写清净账是减。
+
+### 这一刀推红过一次，值得记
+
+`rfc301` 的「受审 `startTask` 调用点」exact 账本记着
+`actionExecutionEnvironment.ts: 1`，而 §5hi 把那唯一一次 `startTask` 换成了内核。
+`scripts/tests-referencing.sh` 交出的 12 个文件里**没有它**——那条守卫既不 import
+被改的文件、也不提它的符号，它拿**文件路径字符串**当账本键。已补进
+`docs/dev-gotchas.md`：跑完脚本半径后，再按改动文件的**相对路径字符串**grep 一遍测试树。
+本刀按这条新定式做了，当场多捞出 rfc301（又 2 条）、`rfc345-resource-acl-facade-retirement`、
+`rfc310-pr4-profile-identity`、`rfc294-review-offered-edge-dag` 等一批路径键守卫。
+
+### 留下的债
+
+**§5hm —— 协调器的驱动生命周期端口仍是 SQLite 专属。**
+`createTaskDriveCoordinator` 里装的是 `createTaskDriverLifecyclePort`，它要 `DbClient`；
+PG 有自己的 `createPostgresqlTaskDriverLifecyclePort`。这是 §5ha 排序里的第 ① 步
+「内核换中立 session」的剩余部分，也是 `TaskDriveCoordinatorDependencies.db`
+至今不能收成 `ProviderNeutralDatabase` 的原因。
+
+**§5hn —— `wakeHumanGateContinuation` 等人审继续驱动的 API 仍吃 `StartTaskDeps`。**
+属于 §5ha 第 ④ 步「退役 legacy 启动面」。

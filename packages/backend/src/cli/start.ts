@@ -205,7 +205,10 @@ import {
   createRepositoryEndpointDiscovery,
 } from '@/modules/integration/composition'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
-import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import {
+  composeDatabaseDigitalEmployeeExecutionPorts,
+  composeDigitalEmployeeExecution,
+} from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
@@ -3174,16 +3177,32 @@ async function composeSqliteProviderSession(
       detailProjectionParticipants: [employeeCaseDetailProjection],
       execution: createReactionExecutionAdapter(
         composeDigitalEmployeeExecution({
-          db,
+          // RFC-359 AC-1（plan §5hl）：数字员工执行也合成一份——端口 + 启动内核，
+          // 与 PostgreSQL daemon 同一条路。启动内核与身份面复用上面那个
+          // `hostActionEnvironment`（同一作用域的 `const`），三个库内端口取缺省实现。
           appHome: Paths.root,
-          startDeps: buildStartTaskDeps(
-            db,
-            taskExecutionRuntime.schedulerDriver,
-            Paths.config,
-            SYSTEM_USER_ID,
-            secretBox,
-            identityAccess,
-          ),
+          resolveActor: hostActionEnvironment.resolveActor,
+          resourceAuthorityFor: hostActionEnvironment.resourceAuthorityFor,
+          ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+          launch: hostActionEnvironment.launch,
+          tasks: taskExecutionProvider.routes.tasks,
+          readModels: taskExecutionProvider.readModels,
+          agents: {
+            get: async (id) => {
+              const identity = await admitDaemonIdentity(identityAccess)
+              if (identity === null)
+                throw new Error('digital-employee-catalog-authority-not-admitted')
+              return agentCatalog.queries.get(identity.actor, { id })
+            },
+          },
+          workflows: {
+            get: async (id) => {
+              const identity = await admitDaemonIdentity(identityAccess)
+              if (identity === null)
+                throw new Error('digital-employee-catalog-authority-not-admitted')
+              return workflowCatalog.queries.get(identity.actor, { id })
+            },
+          },
           workspace: employeeWorkspace,
           executionContracts: employeeExecutionContracts,
         }),

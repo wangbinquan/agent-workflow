@@ -393,7 +393,9 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
       // 退役四个 provider 命名的导出：`createPostgresqlActionExecutionEnvironment` /
       // `createSqliteActionExecutionEnvironment` / `composePostgresqlAgentActionExecution` /
       // `composePostgresqlScriptActionExecution`。**是合一不是删覆盖**，分母因此少四。
-      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(16)
+      // RFC-359 AC-1（2026-09-16，plan §5hl）：16 → 15。数字员工执行的两份 composer 合一，
+      // 退役 `composePostgresqlDigitalEmployeeExecution`。**是合一不是删覆盖**，分母少一。
+      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(15)
       // 架构账本排除必须是**真的排除**：该目录确实在语料里（本文件就躺在里面），
       // 才谈得上把它从「现状」证据里摘出去。目录改名会让这条当场红。
       expect(

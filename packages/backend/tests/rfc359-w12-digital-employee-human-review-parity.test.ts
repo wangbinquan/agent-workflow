@@ -16,12 +16,11 @@
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, workflows } from '@/db/schema'
 import {
+  composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecution,
-  composePostgresqlDigitalEmployeeExecution,
   inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import {
@@ -113,37 +112,39 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
     },
   )
 
-  test('装配锁：两侧 composition 都必须交出 `inspectHumanReview`', () => {
-    // 只看端口在不在——别的依赖一个都不碰，所以全给 never。分叉的源头正是「PG 侧少了这一个方法」。
-    const sqlite = composeDigitalEmployeeExecution({
-      db: harness.db as unknown as DbClient,
+  test('装配锁：唯一那份 composition 交出 `inspectHumanReview`，且库内缺省端口不是桩', async () => {
+    // RFC-359 AC-1（plan §5hl）：两份 composition 已合成一份，所以「两侧都要交出这个方法」
+    // 退化成「这一份交出它」。**分叉的源头换了形状但没消失**：现在的风险是装配方
+    // 忘了给 `humanReview` 端口、或给了个桩。所以这条同时锁住库内缺省实现
+    // （`composeDatabaseDigitalEmployeeExecutionPorts`）读出来的答案与中立实现逐字相同。
+    const db = harness.db
+    const taskId = await seedExecution(db, { planPrompt: true })
+    // 种成 `waiting` 那一格——正是 PG 侧此前报不出来的那一格。桩会答不出它。
+    await seedReviewRun(db, taskId, 'awaiting_review')
+    const ports = composeDatabaseDigitalEmployeeExecutionPorts(db)
+    const execution = composeDigitalEmployeeExecution({
+      // 只看端口在不在 / 通不通——别的依赖一个都不碰，所以全给 never。
       appHome: '/tmp/rfc359-human-review',
-      startDeps: null as never,
-      executionContracts: null as never,
-    })
-    const postgresql = composePostgresqlDigitalEmployeeExecution({
-      appHome: '/tmp/rfc359-human-review',
-      actor: null as never,
+      resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
-      tasks: null as never,
-      readModels: null as never,
-      resourceUsage: null as never,
+      ...ports,
       agents: null as never,
       workflows: null as never,
-      executionMetadata: null as never,
-      humanReview: { inspect: () => Promise.resolve('waiting' as const) },
       executionContracts: null as never,
     })
-    expect(typeof sqlite.inspectHumanReview).toBe('function')
-    expect(typeof postgresql.inspectHumanReview).toBe('function')
+    expect(typeof execution.inspectHumanReview).toBe('function')
+    expect(await execution.inspectHumanReview!(taskId)).toBe(
+      await inspectDigitalEmployeeHumanReviewState(db, taskId),
+    )
+    expect(await execution.inspectHumanReview!(taskId)).toBe('waiting')
   })
 
-  test('PG 侧的端口确实被转交（装什么就读到什么）', async () => {
+  test('端口确实被转交（装什么就读到什么）', async () => {
     const calls: string[] = []
-    const postgresql = composePostgresqlDigitalEmployeeExecution({
+    const execution = composeDigitalEmployeeExecution({
       appHome: '/tmp/rfc359-human-review',
-      actor: null as never,
+      resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
       tasks: null as never,
@@ -160,7 +161,7 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
       },
       executionContracts: null as never,
     })
-    expect(await postgresql.inspectHumanReview!('exec-ref')).toBe('waiting')
+    expect(await execution.inspectHumanReview!('exec-ref')).toBe('waiting')
     expect(calls).toEqual(['exec-ref'])
   })
 })

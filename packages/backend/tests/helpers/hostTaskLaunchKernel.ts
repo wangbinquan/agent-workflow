@@ -11,30 +11,17 @@ import type {
   TaskDriveCoordinator,
 } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import {
-  createPostgresqlRootTaskLaunchKernel,
-  type PostgresqlRootTaskLaunchKernel,
-  type PostgresqlTaskRouteWorkspaceParticipant,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+  composeHostTaskLaunchKernel,
+  type HostTaskLaunchKernelDependencies,
+} from '@/modules/task-execution/composition/hostTaskLaunch'
+import type { PostgresqlRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import { createTaskDriveCoordinator, type TaskDriveCoordinatorDependencies } from '@/services/task'
-
-/**
- * 借用工作区由 action 执行环境自己交进 `internal.workspace`（见
- * `actionExecutionEnvironment.ts` 的 `borrowedPostgresqlWorkspace`），
- * 所以内核自带的物化面在这条路上不会被调用到。
- */
-const unusedWorkspace: PostgresqlTaskRouteWorkspaceParticipant = Object.freeze({
-  prepare(): never {
-    throw new Error('host-task-launch fixture unexpectedly materialized a workspace')
-  },
-})
 
 export function createTestHostTaskLaunchKernel(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
-  readonly gitCommitIdentity: Parameters<
-    typeof createPostgresqlRootTaskLaunchKernel
-  >[0]['gitCommitIdentity']
+  readonly gitCommitIdentity: HostTaskLaunchKernelDependencies['gitCommitIdentity']
   readonly coordinatorDeps: TaskDriveCoordinatorDependencies
   readonly persistence: Pick<TaskExecutionPersistence, 'runtimeLifecycle'>
   readonly completionMode: TaskDriveCompletionMode
@@ -65,10 +52,12 @@ export function createTestHostTaskLaunchKernel(input: {
   const coordinator: TaskDriveCoordinator = {
     submit: (request) => drive.submit({ ...request, completionMode: input.completionMode }),
   }
-  return createPostgresqlRootTaskLaunchKernel({
+  // 走的是生产那一个装配入口（两个 SQLite 组合根用的也是它），
+  // 所以「测试装出来的内核」与「生产装出来的内核」按构造就是同一台。
+  return composeHostTaskLaunchKernel({
     db: input.db,
+    appHome: input.appHome,
     gitCommitIdentity: input.gitCommitIdentity,
-    workspace: unusedWorkspace,
     coordinator,
   })
 }

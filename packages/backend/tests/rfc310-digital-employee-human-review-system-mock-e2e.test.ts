@@ -11,7 +11,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { createInMemoryDb } from '@/db/client'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { getAgentById } from '@/services/agent'
 import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import {
   developmentEmployeeRuntimeCodec,
@@ -19,6 +26,7 @@ import {
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import {
+  composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecution,
   inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
@@ -42,6 +50,7 @@ import {
 } from '@/services/task'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
@@ -258,6 +267,8 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         },
       })
       const processMock = makeAgentProcessMock(root)
+      // `wakeHumanGateContinuation`（人审放行的继续驱动）仍是 legacy 启动面的 API，
+      // 还吃 `StartTaskDeps`——退役它是 plan §5hn 的活，不在本刀范围内。
       const startDeps = {
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
@@ -267,10 +278,39 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         defaultPerNodeTimeoutMs: 20_000,
         defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
       }
+      // RFC-359 AC-1（plan §5hl）：宿主任务启动合一到启动内核——组合根怎么取身份，
+      // 这条 e2e 就怎么取（`admitDaemonIdentity` → `__system__`），装配与
+      // `cli/start.ts` / `server.ts` 同形。
+      const identityAccess = createIdentityAccessRuntime({ db })
+      const admitted = await admitDaemonIdentity(identityAccess)
+      if (admitted === null) throw new Error('human-review e2e daemon identity unavailable')
+      const actor = actorOfDirectAuthority(admitted)
       const execution = composeDigitalEmployeeExecution({
-        db,
         appHome,
-        startDeps,
+        resolveActor: async () => actor,
+        resourceAuthorityFor: () => ({
+          actor,
+          authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+          resources: createTaskExecutionResourceBinding(
+            db,
+            composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
+          ),
+        }),
+        launch: createTestHostTaskLaunchKernel({
+          db,
+          appHome,
+          gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+          coordinatorDeps: startDeps,
+          persistence: createTaskExecutionPersistence(db),
+          completionMode: 'await-settle',
+        }),
+        agents: { get: async (id) => getAgentById(db, id) },
+        workflows: {
+          get: async () => {
+            throw new Error('human-review e2e does not launch a selected workflow')
+          },
+        },
+        ...composeDatabaseDigitalEmployeeExecutionPorts(db),
         executionContracts,
       })
       const plan = {

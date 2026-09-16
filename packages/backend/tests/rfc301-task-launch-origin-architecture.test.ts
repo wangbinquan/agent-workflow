@@ -101,16 +101,10 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // 从 `startTask` 改走启动内核（`createPostgresqlRootTaskLaunchKernel`），
       // 两个 provider 共用一份 composer，`actionExecutionEnvironment.ts` 里已无 startTask 调用。
       // 少一个 startTask 调用点就是这条棘轮要的方向。
-      // RFC-310 PR-11: the digital-employee *program* host launch adapter. Same
-      // adapter shape as agentActionExecution above (synthesized immutable host
-      // snapshot + borrowed worktree + StartTaskSchema funnel); provenance again
-      // comes from the injected startDeps and is only defaulted when the caller
-      // supplied none, so a program step cannot claim an origin of its own.
-      // RFC-310 OS: one reviewed adapter owns both legal TaskEngine launches:
-      // a selected existing Workflow, or the synthesized exact Agent/Program
-      // host. Both freeze the employee round id and forward injected provenance;
-      // neither route nor Agent can call startTask directly.
-      'modules/task-execution/composition/digitalEmployeeExecution.ts': 2,
+      // RFC-359 AC-1（plan §5hl）：这一行**删除**——数字员工执行的两份 composer 合成一份，
+      // 启动从 `startTask` 改走启动内核。两条合法启动（选定的既有 Workflow / 合成的
+      // Agent·Program 宿主）仍由这**一个**受审适配器拥有，只是它现在经内核落库。
+      // 又少两个 startTask 调用点，正是这条棘轮要的方向。
       'services/execution/executor.ts': 1,
       'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts': 1,
       'services/task.ts': 1,

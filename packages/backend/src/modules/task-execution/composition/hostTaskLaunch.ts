@@ -19,20 +19,28 @@ import {
 } from '../infrastructure/postgresqlTaskRouteLaunchOperations'
 import { createPostgresqlTaskRouteWorkspaceParticipant } from '../infrastructure/postgresqlTaskRouteWorkspaceParticipant'
 
-export function composeHostTaskLaunchKernel(input: {
+export interface HostTaskLaunchKernelDependencies {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
-  readonly secretBox: SecretBox
+  /**
+   * 解封 `cached_repos.url_enc` 用（按 id 复用仓库的启动路）。生产两个组合根都有；
+   * 只走 scratch / 借用工作区的测试装配可以不给——底层参与者本来就把它声明成可选。
+   */
+  readonly secretBox?: SecretBox
   readonly gitCommitIdentity: PostgresqlRootTaskLaunchDependencies['gitCommitIdentity']
   readonly coordinator: TaskDriveCoordinator
-}): PostgresqlRootTaskLaunchKernel {
+}
+
+export function composeHostTaskLaunchKernel(
+  input: HostTaskLaunchKernelDependencies,
+): PostgresqlRootTaskLaunchKernel {
   return createPostgresqlRootTaskLaunchKernel({
     db: input.db,
     gitCommitIdentity: input.gitCommitIdentity,
     workspace: createPostgresqlTaskRouteWorkspaceParticipant({
       db: input.db,
       appHome: input.appHome,
-      secretBox: input.secretBox,
+      ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
     }),
     coordinator: input.coordinator,
   })

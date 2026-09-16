@@ -148,7 +148,7 @@ import {
 } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import {
-  composePostgresqlDigitalEmployeeExecution,
+  composeDigitalEmployeeExecution,
   inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
@@ -1452,9 +1452,9 @@ export async function composePostgresqlApplication(
     cancelTask: (taskId) =>
       taskExecutionProvider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
   })
-  const employeeExecution = composePostgresqlDigitalEmployeeExecution({
+  const employeeExecution = composeDigitalEmployeeExecution({
     appHome: input.appHome,
-    actor: systemActor,
+    resolveActor: async () => systemActor,
     resourceAuthorityFor: (actor) => ({
       actor,
       authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
