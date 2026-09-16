@@ -840,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5095,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次一）+1：启动内核改为在入口按 `subject.builtin` 规范化宿主快照排版，因此 import 了 `services/task` 的 `layoutBuiltinWorkflowSnapshot`（与 `startTask` 用的是同一条策略，不是另造一份）。这条 import 关掉的是一处**用户可见**差异：此前启动响应体与库里那一行在两个引擎上不同，而读时投影补得了页面、补不了导出与直接读库的下游。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -864,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4583,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次一）+1：启动内核改为在入口按 `subject.builtin` 规范化宿主快照排版，因此 import 了 `services/task` 的 `layoutBuiltinWorkflowSnapshot`（与 `startTask` 用的是同一条策略，不是另造一份）。这条 import 关掉的是一处**用户可见**差异：此前启动响应体与库里那一行在两个引擎上不同，而读时投影补得了页面、补不了导出与直接读库的下游。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -919,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5a1a98d29b3c831b725522941ce21740a45d0af1",
-    "contentDigest": "sha256:de4f36a30b69c89d1758df5d68f96f4267e3634288d861b9794cdf40bf59ef4c",
+    "currentSnapshotSha": "0bfdf5baf0e387db056f541e58b787132b11c5c8",
+    "contentDigest": "sha256:f9108457c84b4f8b02888cd804d42aa1918588be3b8059b937da4344639cd0f8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

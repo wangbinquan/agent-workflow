@@ -57,6 +57,17 @@ function agentPayload(name: string): Record<string, unknown> {
  * 比较那条先跑，看到空账本直接绿）。比较折进 lane 用例本身，谁最后到齐谁做比较。
  */
 const launched = new Map<string, Record<string, unknown>>()
+/** 带上传那一支单独记一份：两条路的落点（packed 路径）必须逐字相同。 */
+const uploaded = new Map<string, Record<string, unknown>>()
+
+function multipartLaunch(payload: object, files: Array<[string, string, string]>): FormData {
+  const form = new FormData()
+  form.set('payload', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
+  for (const [inputKey, filename, body] of files) {
+    form.append(`files[${inputKey}][]`, new Blob([body]), filename)
+  }
+  return form
+}
 
 describeEachProviderHttpApplication(
   'RFC-359 AC-1 —— 单代理启动的两个引擎落库对等',
@@ -156,6 +167,65 @@ describeEachProviderHttpApplication(
         postgresql,
         '两个引擎的单代理启动落库结果不一致——合并两份编排前必须先解释清楚这处差异（plan §5hn）',
       ).toEqual(sqlite)
+    })
+
+    // plan §5hn 判据三：上传那一支两条路的实现不同——SQLite 走
+    // `materializeSpace` + `applyUploadsToWorktree` 再交给 `startTask`，
+    // 内核走 `uploads` 参数在事务内落。**落点必须逐字相同**，所以动实现之前先把它钉住。
+    test('带上传的单代理启动：两个引擎落出的 packed 路径逐字相同', async () => {
+      const name = `parity-up-${ulid().slice(-8).toLowerCase()}`
+      const created = await req(app, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...agentPayload(name),
+          // 声明一个 path<ext> 端口：这类端口只能经 multipart 绑定文件（RFC-218）。
+          inputs: [{ name: 'doc', kind: 'path<md>' }],
+        }),
+      })
+      expect(created.status, await created.clone().text()).toBe(201)
+      const agent = (await created.json()) as { id: string }
+
+      const form = multipartLaunch(
+        { name: 'rfc359 parity upload', scratch: true, allowClarify: false, inputs: {} },
+        [['doc', 'note.md', 'rfc359 upload payload']],
+      )
+      const response = await app.request(`/api/agents/${agent.id}/tasks`, {
+        method: 'POST',
+        body: form,
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      })
+      expect(response.status, await response.clone().text()).toBe(201)
+      const task = (await response.json()) as Record<string, unknown>
+
+      const inputs = (task['inputs'] ?? {}) as Record<string, string>
+      const packed = inputs['doc'] ?? ''
+      // 落点按**相对工作区的完整路径**比。绝对前缀含 taskId / 临时目录、逐次不同，
+      // 所以减掉 worktree 前缀——但**剩下的每一段都要比**：
+      // 只比最后一两段会漏掉「多插了一层 inputs 子目录」这类差异（第一版就是这么写的，
+      // 拿 `inputsSubdir` 做变异**咬不住**，改成相对全路径后立刻咬住）。
+      const worktree = String(task['worktreePath'] ?? '')
+      const comparable = {
+        packedLineCount: packed.length === 0 ? 0 : packed.split('\n').length,
+        packedRelative: packed
+          .split('\n')
+          .map((line) =>
+            worktree.length > 0 && line.startsWith(worktree) ? line.slice(worktree.length) : line,
+          ),
+        spaceKind: task['spaceKind'],
+        status: task['status'],
+      }
+      expect(
+        worktree.length,
+        '拿不到 worktreePath ⇒ 相对化失效，比较面会退化成绝对路径',
+      ).toBeGreaterThan(0)
+      expect(comparable.packedLineCount, '上传物必须落下来（packed 为空 ⇒ 判据失效）').toBe(1)
+
+      uploaded.set(scope.harness.capabilities.provider, comparable)
+      if (uploaded.size < 2) return
+      expect(
+        uploaded.get('postgresql'),
+        '两个引擎的上传落点不一致——合并前必须先解释清楚（plan §5hn 判据三）',
+      ).toEqual(uploaded.get('sqlite'))
     })
   },
 )
