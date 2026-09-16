@@ -14111,3 +14111,66 @@ B 不需要碰账本、不需要碰代码，只要「没继续涨」就会红。
 - 加过 `allowGrowth` 就把「下一个 commit 删掉它」挂成待办；
 - 更省事：**尽量在同一个 commit 里把涨的那件事做完**，别让 `allowGrowth` 跨 commit 存活；
 - push 前问一句：「上一个 commit 有没有留 allowGrowth？」——有就先删。
+
+---
+
+## §5he　Step C 的**硬前置**：两条启动路没有可对拍的面，合并前必须先建 e2e 对拍
+
+Step B① 之后四件入参齐了，我本想直接做 Step C（把 `createSqliteActionExecutionEnvironment`
+切到内核、合掉 AC-1 最底下那一对）。查覆盖时撞上两条硬事实，**结论是这一刀不能这么做**。
+
+### 事实一：那一对唯一的差异点，现有测试把它**桩掉**了
+
+`rfc359-t3-action-execution-runners` 是这条路上唯一的双引擎用例（4 处 `describeEachProvider`），
+但它在第 96 行自己实现了一个 `async launchHostTask(input) { … }` 桩——
+也就是说它测的是**runner**（校验 → 宿主快照合成 → 终态观察），
+而两份环境实现**唯一真正不同的那个方法**（`launchHostTask`：SQLite 走 `startTask`、
+PG 走 `launch.launch`）**没有任何行为覆盖**。
+
+往一条零覆盖的路径上做行为变更，正是本 RFC 反复强调不许做的事。
+
+### 事实二：上一波已经评估过，这一对「驱不动」
+
+`rfc359-w7-task-route-conformance` 的 C 段注释写着（原文）：
+
+> 这一对的 `launch` **驱不动**：它两侧各自要一整台启动机器（SQLite = `startExecution` →
+> `startTask` / `startAgentTask` / `startWorkgroupTask` 加工作区物化 + git worktree；
+> PG = `createPostgresqlRootTaskLaunchKernel` 的 `createRootLaunch`），落到磁盘和 git 上，
+> **不是一个对拍能覆盖的面**。端口上判据型的两个方法可以，而它们恰好就是这一对唯一自带判据的部分。
+
+所以「用端口级 oracle 证明两条启动路等价」这条路**上一波就试过并否掉了**。
+
+### 还有一处机制差异，不是接线能抹平的
+
+两侧「借用一个已存在的工作区」用的**不是同一种机制**：
+
+- SQLite：`startTask(..., { internalSource: { kind: 'local-path', repoPath, baseBranch },
+  preCreatedWorktree: { taskId, … } })`
+- PG：`launch.launch(..., { internal: { workspace: borrowedPostgresqlWorkspace({ workspacePath,
+  baselineSha }) } })` —— 一个带 `commit()` / `rollback()` 的**租约对象**
+
+合并意味着 SQLite 侧改用租约语义。那是**产品行为面**的改动（工作区归属、回滚时谁清理），
+必须逐条验，不能靠类型对齐糊过去。
+
+### 于是 Step C 的前置被显式加进波次
+
+原计划：①内核中立化（已完成）→ ②（已取消，§5gx）→ ③迁调用方 → ④退役 legacy。
+
+**修正为**：
+
+- **③a（新增，硬前置）**：给启动面建**真 e2e 对拍**——真磁盘、真 git worktree，
+  两个引擎各跑一遍同一组启动场景（普通启动 / 借用工作区 / 回滚 / 取消），
+  断言用户可见结果与落库行一致。这是上一波说「驱不动」的那一面，
+  现在它是合并的**前置条件**而不是可选项。
+- ③b：有了对拍再切调用方；每切一层用对拍证明等价。
+- ④：legacy 退役。
+
+### 为什么写下来而不是硬做
+
+我在这条线上连续三次把 main 推红（§5gu 摘要守卫 / §5hc 超时 / §5hd allowGrowth），
+三次都是**收尾检查**出的问题，不是判断错。但接下来这一步不一样：
+它是**零覆盖路径上的产品行为变更**，红不红要等到有人在真机上跑数字员工才知道。
+这种改动没有对拍就动手，是拿用户的运行时换我的进度条。
+
+**③a 本身是一件可独立交付的事**（建 e2e 对拍、把「驱不动」那面覆盖上），
+它不改任何生产行为，却把 ③b/④ 从「赌」变成「可验证」。下一刀从它开始。
