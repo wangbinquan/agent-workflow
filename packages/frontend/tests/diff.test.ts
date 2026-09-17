@@ -141,9 +141,22 @@ diff --git a/readme.md b/readme.md
   // Cross-package lock: the frontend parser and the backend emitter must agree
   // on the marker format. If either side changes the literal, this fails loudly
   // instead of silently un-grouping every multi-repo diff.
-  test('parser format matches the backend getTaskDiff emitter', () => {
+  //
+  // RFC-359 AC-1：发射点搬了家。多仓 diff 的拼装此前住在 `services/task.ts#getTaskDiff`，
+  // 纯读三件两个引擎合一之后它是 `taskDiffProjection`，住在
+  // `modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`
+  //（那个文件名是待还的命名债，见 RFC-359 plan §5hj——它现在是两个引擎共用的实现）。
+  // **这条锁按文件路径读源码**，所以搬家必须同步改锚，否则它会以「格式变了」的名义红，
+  // 而真实原因是「文件不在那儿了」。
+  test('parser format matches the backend task diff emitter', () => {
     const here = path.dirname(fileURLToPath(import.meta.url))
-    const backend = readFileSync(path.resolve(here, '../../backend/src/services/task.ts'), 'utf8')
+    const backend = readFileSync(
+      path.resolve(
+        here,
+        '../../backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+      ),
+      'utf8',
+    )
     // Backend builds: `# === Repo: ${<expr>} ===` — robust to variable renames.
     expect(backend).toMatch(/# === Repo: \$\{[^}]+\} ===/)
     // And the frontend groups a diff that uses that exact shape.
