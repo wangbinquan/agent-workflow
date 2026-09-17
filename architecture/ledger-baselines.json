@@ -875,10 +875,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 960,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）959 → 960：`ActiveTaskExecutionParticipant` 这个端口类型出到 task-execution 的 public 面。两个引擎共用的 `services/taskDelete.ts` 的 `task-active` 门要读它（不再读模块级全局 `isTaskActive`），而 legacy 层不得 import 模块内部（`rfc317-t22` 的 inbound 越界账本）。**这是一次有意的合同外放，不是新增耦合**：实现仍由组合根装配后注入，public 面只出类型。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -916,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ec8f93be5a90b231f44838b82d5d557b6e56baf9",
-    "contentDigest": "sha256:5be2912b8f36a104d80f9e49afc4b5867458b909ee3c12e26dd32c52bc28676a",
+    "currentSnapshotSha": "395dd3180dd8162da67c27b7a339d5e0d924b1bb",
+    "contentDigest": "sha256:68e79a2bcb97793f99f17aef6ca196bf4898c185c99c8304f3a9eae8d1c4b584",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

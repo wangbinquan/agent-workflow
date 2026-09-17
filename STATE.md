@@ -2,6 +2,25 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 69，**CI 全绿；W18 那条本地红已裁决**）
+>
+> `395dd3180` **整条 CI 绿**——五刀（`node-runs` / 纯读三件 / 列表三件 / 访问门+成员四件 / `delete`）
+> 连同沿途修的红全部落定。
+>
+> **挂了三刀的那条观察已裁决**：`rfc359-w18` 的 `[postgresql] > old and indexed count reads …`
+> 在 CI 的 PostgreSQL lane 上实测 `(pass)`。判定成立——本机 macOS + docker 的驱动层差异
+>（事务体按预期抛错后 `rollback` 这条语句本身失败，固定 ~5.1s），不是产品缺陷，不立项。
+> 已写进 `docs/dev-gotchas.md`，并附一句：**本地遇到它可以按环境跳过，但每次都要按 CI 的同名
+> 结果复核**——它和真缺陷长得一模一样，唯一的区别就是 CI 那一格的颜色。
+>
+> 顺带退役上一提的一次性 `allowGrowth`（`rfc294-public-surfaces` 959 → 960 的那条，
+> 理由并进主 `why`）。
+>
+> **下一刀**：⑥`workflowSyncPreview` / `syncWorkflow`。已对读：PG 那份组织得更展开
+>（非工作流任务 / 内置工作流 / `awaitReleasedSettled` + `isActive` / call 闭包冻结 / 宿主校验
+> 各一段），SQLite 那份 12 行转给 `computeWorkflowSyncPreview` 一个函数——**两边判据都全**，
+> 是组织方式不同，不是一侧弱（W58 的注释已说明）。合并是把两种组织收成一份。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 68，**`delete` 合一；修 a889b978c 推的 S-14**）
 >
 > **先说红**：`a889b978c` / `ec8f93be5` 在两个分片上红同一条——`scheduler-audit-s14` 的

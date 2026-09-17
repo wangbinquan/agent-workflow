@@ -16444,6 +16444,11 @@ empty, boundary and rollback states` 在**本机** macOS + docker PostgreSQL 上
 CI 的 Linux 服务容器上不触发。**权威门禁是 CI，由它裁决**；若 CI 上也红则另立一刀查
 驱动侧的 rollback 路径。
 
+**已裁决（2026-09-17，`395dd3180` 全绿）**：这条用例在 CI 的 PostgreSQL lane 上
+`(pass)`，整条 CI 无红。判定成立——本机 macOS + docker 的驱动层差异，不是产品缺陷，
+不立项。留这段记录是为了下一个在本地撞到它的人不必重查一遍：**本地这一条红可以按环境跳过，
+但每次都要按 CI 的同名结果复核，不得默认它是环境问题**。
+
 ### 剩余（承前，④起）
 
 ④`cancel` / `delete` ⑤`resume` / `retry` ⑥`workflowSyncPreview` / `syncWorkflow`

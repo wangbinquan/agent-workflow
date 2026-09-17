@@ -7952,3 +7952,16 @@ for g in /tmp/rt-*; do bun test $(sed 's|^|tests/|' $g | tr '\n' ' ') 2>&1 | gre
 
 整份跑一遍几分钟。**凡是删函数 / 搬家 / 改装配图的改动，提交前把这份清单整份跑一遍**
 ——比推上去等 11 个分片红了再逐个 grep CI 日志便宜得多。
+
+### 本机 macOS + docker 的 PostgreSQL：事务 `rollback` 会在 ~5.1s 后自己失败
+
+（RFC-359 第 5 刀期间实撞并裁决。）`rfc359-w18-task-count-index-conformance` 的
+`[postgresql] > old and indexed count reads …` 在**本机**稳定红：事务体按预期抛错之后，
+驱动发出的 `rollback` 这条语句本身失败（`postgresqlDatabaseClient.ts` → `bun:sql`），
+耗时固定在 ~5.1 秒——像本地某处的 5 秒超时。
+
+已排除的三种可能：重启容器（不是连接残留）、**换一个全新建的空库**（不是累积的库状态）、
+本轮 diff 不触及它读的任何东西。同一条用例在 CI 的 Linux 服务容器上 `(pass)`。
+
+**处置**：本地遇到这一条可以按环境跳过，但**每次都要按 CI 的同名结果复核**，
+不得默认「又是那个环境问题」——它和真缺陷长得一模一样，唯一的区别就是 CI 那一格的颜色。
