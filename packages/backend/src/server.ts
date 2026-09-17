@@ -2526,15 +2526,6 @@ function composeSqliteApiRouteMounts(
         deps.secretBox,
         identityAccess,
       ),
-    multipart: {
-      secretBox: deps.secretBox,
-      configPath: deps.configPath,
-      schedulerDriver,
-      identityAccess: Object.freeze({
-        directAuthority: identityAccess.directAuthority,
-        taskExecutionResources: identityAccess.taskExecutionResources,
-      }),
-    },
     resourceAuthorityFor: (actor) =>
       Object.freeze({
         actor,

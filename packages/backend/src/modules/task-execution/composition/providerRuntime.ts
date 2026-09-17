@@ -321,9 +321,7 @@ export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
   readonly routeLaunch: Omit<PostgresqlTaskRouteLaunchDependencies, 'db' | 'workspace'>
   readonly routeWorkspace: Omit<PostgresqlTaskRouteWorkspaceDependencies, 'db'>
-  readonly routes: (
-    context: TaskExecutionProviderRouteContext,
-  ) => Omit<
+  readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     PostgresqlTaskRouteOperationsDependencies,
     | 'db'
     | 'persistence'
@@ -333,6 +331,9 @@ export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
     | 'resumeRuntimeFor'
     | 'repositoryPreparationRetry'
     | 'launch'
+    // RFC-359 AC-1（plan §5hn 批次二 ⑥）：启动参与者由本组合根装配后交进去，
+    // 与 `launch` 同源——multipart 路由从此走它，不再手拼第二份编排。
+    | 'launches'
     | 'repair'
   >
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
@@ -371,6 +372,8 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     ...taskRouteLaunchDependencies,
   }
   const routeLaunch = createPostgresqlTaskRouteLaunchOperations(routeLaunchDependencies)
+  // RFC-359 AC-1（plan §5hn 批次二 ⑥）：装配一次，路由（JSON / multipart）与触发器三处共用。
+  const launches = createPostgresqlTaskExecutionLaunchParticipant(routeLaunchDependencies)
   const repositoryPreparationRetry = createPostgresqlRepositoryPreparationRetryCommand({
     db,
     appHome: dependencies.routeWorkspace.appHome,
@@ -393,6 +396,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     resumeRuntimeFor: (_actor, taskId) => dependencies.rootResumeRuntime(taskId),
     repositoryPreparationRetry,
     launch: taskRouteLaunchDependencies,
+    launches,
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,
       clarify: createPostgresqlClarifyRepairParticipant(db),
@@ -402,7 +406,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   })
   const cancellation = cancellationCommand(participants)
   const taskExecutions = createTaskExecutionTriggerParticipant({
-    launches: createPostgresqlTaskExecutionLaunchParticipant(routeLaunchDependencies),
+    launches,
     cancellation,
   })
   const resume = Object.freeze({

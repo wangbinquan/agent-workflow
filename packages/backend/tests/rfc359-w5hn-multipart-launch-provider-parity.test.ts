@@ -220,18 +220,16 @@ describeEachProviderHttpApplication(
         '作者自绘的坐标必须原样冻结进快照',
       ).toEqual(['{"x":31,"y":617}', '{"x":409,"y":128}'])
 
-      // **合并前的已知差异，钉住它**（合并后这条会自己红，届时改成相等断言销账）：
-      // SQLite 的读投影在没有冻结的 `task_space_nodes` 行时**兜底派生**
-      // `minimalNodePaths(repos.map(r => r.mountPath))`，scratch 那个挂载点是空串，
-      // 于是派生出一个 **path 为空**的节点；根启动内核则原样返回工作区真正规划的 `nodePaths`。
-      // 这是同一处兜底派生的**第三次**出现（前两次：工作组路由 §5hn 批次二 ③、
-      // 工作流 JSON 路由 §5hn 批次二 ④），两次的处置都是「变诚实」——没有规划目录就返回空。
+      // **已销账**（plan §5hn 批次二 ⑥）：此前 SQLite 的读投影在没有冻结的 `task_space_nodes`
+      // 行时**兜底派生** `minimalNodePaths(repos.map(r => r.mountPath))`，scratch 那个挂载点是
+      // 空串，于是派生出一个 **path 为空**的节点；根启动内核则原样返回工作区真正规划的
+      // `nodePaths`。multipart 路由改走同一台内核之后两侧都是空——**这是用户可见的响应形状
+      // 变化，方向是「变诚实」**：没有规划目录就返回空，而不是一个凭空派生出来的空路径节点。
+      // 这是同一处兜底派生的**第三次也是最后一次**销账（前两次：工作组路由 ③、工作流 JSON 路由 ④）。
       expect(
         (task['spaceNodes'] as readonly unknown[]).length,
-        scope.harness.capabilities.provider === 'sqlite'
-          ? 'SQLite 此刻仍在兜底派生一个空路径节点（合并后应为 0）'
-          : 'PostgreSQL 返回工作区真正规划的 nodePaths（scratch 没有规划目录 ⇒ 0）',
-      ).toBe(scope.harness.capabilities.provider === 'sqlite' ? 1 : 0)
+        'scratch 启动没有规划目录，spaceNodes 就该是空的（plan §5hn 批次二 ⑥）',
+      ).toBe(0)
 
       // **落库那一行**也要比：响应体是 `taskProjection(...)` 现算的投影，不是回读。
       const row = (
@@ -243,11 +241,8 @@ describeEachProviderHttpApplication(
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
       persisted.set(scope.harness.capabilities.provider, comparableTaskRow(row))
-      const comparable = comparableTask(task)
-      // 合并之前把这一格摘掉——它是**已知且已钉住**的那处差异（见上面的 `spaceNodes` 断言），
-      // 留在相等面里只会让整条判据红在一个已经写清楚的地方，挡住别的差异被看见。
-      delete comparable['spaceNodes']
-      launched.set(scope.harness.capabilities.provider, comparable)
+      // 合并之后 `spaceNodes` 回到相等面里一起比（销账，见上面那条断言）。
+      launched.set(scope.harness.capabilities.provider, comparableTask(task))
       if (launched.size < 2) return
       expect(
         persisted.get('postgresql'),

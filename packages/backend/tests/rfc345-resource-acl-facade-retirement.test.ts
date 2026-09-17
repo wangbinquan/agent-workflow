@@ -549,13 +549,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflowLaunchInputs.ts',
-    'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
-    ['assertWorkflowLaunchInputs'],
-    'PostgreSQL task launch input validation',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflowLaunchInputs.ts',
     'services/multipartTaskStart.ts',
     ['assertWorkflowLaunchInputs'],
     'multipart task launch input validation',

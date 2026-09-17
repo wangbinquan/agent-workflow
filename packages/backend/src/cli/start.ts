@@ -1934,15 +1934,6 @@ async function composeSqliteProviderSession(
         return {
           collaboration: routeCollaborationContext,
           startDepsFor: (actor) => taskStartDepsFor(actor.user.id),
-          multipart: {
-            secretBox,
-            configPath: Paths.config,
-            schedulerDriver: schedulerDriver,
-            identityAccess: Object.freeze({
-              directAuthority: identityAccess.directAuthority,
-              taskExecutionResources,
-            }),
-          },
           resourceAuthorityFor: (actor) =>
             Object.freeze({
               actor,

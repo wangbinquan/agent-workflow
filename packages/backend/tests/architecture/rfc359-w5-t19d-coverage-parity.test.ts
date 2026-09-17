@@ -176,7 +176,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // JSON `POST /api/tasks`，按符号名归到 SQLite 一侧（它的头注释点名了那条仍走
   // `startExecution → startTask` 的路）。**倒挂差额 3 → 2，跌破阈值**，这一对因此
   // 退出下面的观察名单。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 11/2',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑥）：PG 侧 `11 → 10`，**倒挂收敛**（差 2 → 1）。
+  // multipart 路由改走共用的启动参与者之后，`postgresqlTaskRouteOperations.ts` 不再自己跑
+  // 启动输入契约，`rfc345` 兼容债账本里那条点名它的边随之出账——少的是一条**记账提及**，
+  // 而它对应的是一处真实的编排合并。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 10/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four

@@ -11,8 +11,7 @@ import type { CollaborationCommandContext } from '@/modules/collaboration/public
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
 import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
-import type { MultipartLaunchDeps } from '@/services/multipartTaskStart'
-import { handleMultipartTaskStart } from '@/services/multipartTaskStart'
+import { launchMultipartTask } from './postgresqlTaskRouteOperations'
 import {
   assertCanReplaySourceTask,
   canViewTask,
@@ -53,7 +52,6 @@ export interface SqliteTaskRouteOperationsDependencies {
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
   readonly recovery: TaskRecoveryOperations
   readonly startDepsFor: (actor: Actor) => StartTaskDeps
-  readonly multipart: Omit<MultipartLaunchDeps, 'db'>
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动的**唯一编排**，与 PostgreSQL 同一份。
@@ -172,8 +170,19 @@ export function createSqliteTaskRouteOperations(
         deferRepoPreparation: true,
       })
     },
+    // RFC-359 AC-1（plan §5hn 批次二 ⑥）：multipart 启动与 PostgreSQL 共用**同一条编排**。
+    // 此前这里转 `services/multipartTaskStart.ts` → `startExecution` → `startTaskImpl`，
+    // 那是 `startExecution` 在生产上的**最后一条**调用路。
     launchMultipart: (request, actor) =>
-      handleMultipartTaskStart(request, { db, ...dependencies.multipart }, actor),
+      launchMultipartTask(
+        {
+          db,
+          launches: dependencies.launches,
+          resourceAuthorityFor: dependencies.resourceAuthorityFor,
+        },
+        request,
+        actor,
+      ),
     cancel: (taskId) => cancelTask(db, taskId),
     delete: (taskId) => deleteTask(db, taskId),
     async resume({ actor, taskId }) {

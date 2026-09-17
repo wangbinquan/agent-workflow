@@ -47,6 +47,8 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import {
   clarifyRounds,
   docVersions,
@@ -96,8 +98,8 @@ import { DrizzleBranchTraceSnapshotReader } from './branchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
 import {
-  createPostgresqlRootTaskLaunchKernel,
   createPostgresqlTaskExecutionLaunchParticipant,
+  type PostgresqlTaskExecutionLaunchParticipant,
   type PostgresqlTaskRouteLaunchDependencies,
 } from './postgresqlTaskRouteLaunchOperations'
 import {
@@ -120,15 +122,12 @@ function lacksMaterializedWorkspace(path: string): boolean {
 }
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import {
-  collectUploadInputDefs,
   parseMultipartLaunch,
-  resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
@@ -206,6 +205,13 @@ export interface PostgresqlTaskRouteOperationsDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
   readonly launch: Omit<PostgresqlTaskRouteLaunchDependencies, 'db'>
+  /**
+   * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
+   * multipart 路由从此只解析表单 + 跑路由级门，「冻结快照 → 版本围栏 → 静态校验 →
+   * 启动输入契约 → 根内核」那一串交给参与者——SQLite 的 JSON 路由（批次二 ④）
+   * 已经是这个形状，这里让 multipart 也接上去，两条路由因此共用同一份编排。
+   */
+  readonly launches: PostgresqlTaskExecutionLaunchParticipant
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
@@ -860,8 +866,20 @@ function workflowLaunchSnapshot(snapshots: readonly FrozenTaskExecutionResourceS
   return snapshot.workflow
 }
 
-async function launchMultipart(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ⑥）—— multipart `POST /api/tasks` 的**唯一编排**，两个引擎共用。
+ *
+ * 形参刻意收窄到它真正用的三格（库句柄、启动参与者、鉴权句柄工厂），而不是整个路由依赖束：
+ * SQLite 的路由依赖是另一个类型，收窄之后两侧都交得起，不必为了共用而把类型硬凑成一个。
+ */
+export interface TaskRouteMultipartLaunchDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly launches: PostgresqlTaskExecutionLaunchParticipant
+  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+}
+
+export async function launchMultipartTask(
+  dependencies: TaskRouteMultipartLaunchDependencies,
   request: Request,
   actor: Actor,
 ): Promise<Task> {
@@ -893,7 +911,6 @@ async function launchMultipart(
       issues: task.error.issues,
     })
   }
-  const authority = dependencies.launch.resourceAuthorityFor(actor)
   if (task.data.sourceTaskId !== undefined) {
     const visible = await createTaskAuthorizationQueries(dependencies.db).canViewTask({
       subject: {
@@ -906,66 +923,21 @@ async function launchMultipart(
       throw new NotFoundError('task-not-found', `task ${task.data.sourceTaskId} not found`)
     }
   }
-  const workflow = workflowLaunchSnapshot(
-    await authority.resources.loadAuthorized(authority, [
-      { kind: 'workflow-launch', workflowId: task.data.workflowId },
-    ]),
-  )
-  if (
-    task.data.expectedWorkflowVersion !== undefined &&
-    workflow.version !== task.data.expectedWorkflowVersion
-  ) {
-    throw new ConflictError(
-      'workflow-version-mismatch',
-      `workflow '${workflow.id}' changed during launch`,
-      {
-        expectedVersion: task.data.expectedWorkflowVersion,
-        currentVersion: workflow.version,
-      },
-    )
-  }
-  // RFC-359 AC-1（plan §5hn 批次二 ⑥）：**带上候选上下文**——与工作流 JSON 路由那一格
-  // （批次二 ④（上））是同一条缺陷的 multipart 面。不带它，`loadWorkflowValidationContext`
-  // 不填 `callWorkflows` / `currentWorkflow`，call-node 规则就不在这道门上判：引用悬空要等到
-  // 冻结调用闭包时才被另一个组件以 `workflow-call-ref-missing` 拒掉（而且不带 `issues[]`，
-  // 工作流编辑器的校验面板指不到出错节点）。SQLite 的 multipart 路（`services/multipartTaskStart.ts`）
-  // 一直是带候选的，两侧因此在同一道门上以同一个契约拒掉。
-  const validation = await dependencies.launch.agent.resources.validateHostWorkflow(
-    workflow.definition,
-    { definition: workflow.definition, currentWorkflow: { id: workflow.id, name: workflow.name } },
-  )
-  const errors = validation.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
-  if (!validation.ok && errors.length > 0) {
-    throw new ValidationError(
-      'workflow-invalid',
-      `workflow '${workflow.id}' failed static validation`,
-      { issues: validation.issues },
-    )
-  }
-  assertWorkflowLaunchInputs(workflow.definition.inputs, task.data.inputs, {
-    ignoreUploadInputs: true,
-  })
-  return await createPostgresqlRootTaskLaunchKernel({
-    db: dependencies.db,
-    ...dependencies.launch,
-  }).launch({
+  // RFC-359 AC-1（plan §5hn 批次二 ⑥）：**两个引擎共用这一条 multipart 路**。
+  //
+  // 此前这里手拼了一遍「冻结快照 → 版本围栏 → 静态校验 → 启动输入契约 → 根内核」，
+  // 而那正是启动参与者工作流臂**逐字在做**的事——同一件事的第二份写法，
+  // 于是每补一道门就要记得补两处（批次二 ④ 的启动输入契约、批次二 ⑥ 的候选上下文，
+  // 两次都是只补了一处才被基线照出来）。现在这条路只负责**解析 multipart 与路由级门**
+  //（`assignments` / 退役键 / `sourceTaskId` 可见性），其余交给参与者。
+  //
+  // 上传分片只交 `parts`：上传声明与体积上限由参与者从**冻结快照** + `configPath` 派生。
+  return await dependencies.launches.launch({
     actor,
-    resourceAuthority: authority,
+    target: { kind: 'workflow', refId: task.data.workflowId, payload: task.data },
     invoker: { type: 'user', launchKind: 'direct-multipart' },
-    task: task.data,
-    subject: {
-      workflowId: workflow.id,
-      workflowName: workflow.name,
-      workflowVersion: workflow.version,
-      // 同上：这条路的冻结快照必定不是内置工作流，保留作者几何。
-      builtin: false,
-      workflowSnapshot: workflow.definition,
-    },
-    uploads: {
-      parts: parsedMultipart.parts,
-      definitions: collectUploadInputDefs(workflow.definition.inputs),
-      limits: resolveUploadLimits(dependencies.launch.configPath),
-    },
+    resources: dependencies.resourceAuthorityFor(actor),
+    uploads: { parts: parsedMultipart.parts },
   })
 }
 
@@ -2523,7 +2495,16 @@ export function createPostgresqlTaskRouteOperations(
         deferRepoPreparation: true,
       })
     },
-    launchMultipart: (request, actor) => launchMultipart(dependencies, request, actor),
+    launchMultipart: (request, actor) =>
+      launchMultipartTask(
+        {
+          db: dependencies.db,
+          launches: dependencies.launches,
+          resourceAuthorityFor: dependencies.launch.resourceAuthorityFor,
+        },
+        request,
+        actor,
+      ),
     async cancel(taskId) {
       await dependencies.children.cancel({ taskId, cause: { kind: 'user' } })
       const task = await loadTask(dependencies.db, taskId)

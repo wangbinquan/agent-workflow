@@ -183,7 +183,6 @@ function sqliteOperations(
         appHome: APP_HOME,
         binaryOverride: ['/usr/bin/env', 'true'],
       }) as never,
-    multipart: {} as never,
     resourceAuthorityFor: () => ({}) as never,
     // RFC-359 AC-1（plan §5hn 批次二 ④）：同上——本对拍不驱动工作流 JSON 启动。
     launches: { launch: async () => ({}) } as never,

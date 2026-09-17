@@ -149,7 +149,6 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     // SQLite 壳在调用 `retryNode` / `resumeTask` **之前**就展开这个对象，所以它不能抛；
     // 本对拍只驱动到前置门为止，门后的驱动依赖一个都用不到。
     startDepsFor: () => ({ db }) as never,
-    multipart: {} as never,
     // 同上：壳在进入服务之前就展开依赖，所以这里给空对象而不是抛。
     resourceAuthorityFor: () => ({}) as never,
     // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动改走共用参与者，路由不再自己持有

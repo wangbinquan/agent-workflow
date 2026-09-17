@@ -430,6 +430,15 @@ export interface PostgresqlTaskExecutionLaunchParticipant {
       resources: TaskExecutionResourceAuthority
       guard?: ProtectedMrLaunchGuard
       /**
+       * RFC-359 AC-1（plan §5hn 批次二 ⑥）—— multipart 启动交进来的**已解析文件分片**。
+       *
+       * 只交 `parts`：上传声明与体积上限都从参与者手上**已经有的**东西派生
+       * （`collectUploadInputDefs(冻结快照.inputs)` 与 `resolveUploadLimits(configPath)`）。
+       * 路由不必为了算这两样而把工作流再读一遍——那正是合并前两条 multipart 路各自
+       * 重复做过的事。
+       */
+      uploads?: Readonly<{ parts: readonly TaskRouteMultipartFilePart[] }>
+      /**
        * RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：调用方**显式**要求延后仓库准备。
        * 定时 / webhook 由参与者按 invoker 自己判定（`triggerDefersRepositoryPreparation`），
        * 这一格留给知道自己不是 multipart 的那条 JSON 路由。
@@ -1445,13 +1454,31 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
           // SQLite 的 JSON 路由改走内核之后当场照出来（e2e `workflow-matrix` 的
           // 「missing required」期望 422，实际放行）。
           // 这一格放在**工作流臂**而不是内核：内核也服务合成宿主，那几类不适用本契约。
-          assertWorkflowLaunchInputs(snapshot.workflow.definition.inputs, parsed.data.inputs)
+          //
+          // RFC-359 AC-1（plan §5hn 批次二 ⑥）：带上传时**忽略 upload 键**——那几个键的值
+          // 是服务端写完文件后才回填的仓内路径，此刻本来就还是空串。SQLite 的 multipart 路
+          // （`services/multipartTaskStart.ts`）一直是这个口径。
+          assertWorkflowLaunchInputs(
+            snapshot.workflow.definition.inputs,
+            parsed.data.inputs,
+            input.uploads === undefined ? {} : { ignoreUploadInputs: true },
+          )
           return await launchRoot({
             actor: input.actor,
             resourceAuthority: input.resources,
             invoker: input.invoker,
             ...(input.guard === undefined ? {} : { guard: input.guard }),
             ...(deferRepoPreparation ? { deferRepoPreparation: true } : {}),
+            ...(input.uploads === undefined
+              ? {}
+              : {
+                  uploads: {
+                    parts: input.uploads.parts,
+                    // 上传声明取自**冻结快照**——与落库的那一份同源，路由读到的另一份不算数。
+                    definitions: collectUploadInputDefs(snapshot.workflow.definition.inputs),
+                    limits: resolveUploadLimits(dependencies.configPath),
+                  },
+                }),
             task: parsed.data,
             subject: {
               workflowId: snapshot.workflow.id,

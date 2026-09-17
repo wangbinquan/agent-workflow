@@ -15911,3 +15911,68 @@ PG 把 `uploads: {parts, definitions, limits}` 整包交给根内核，由内核
 让内核做它已经在做的事。要逐条比对的是 SQLite 那侧在内核之外多做的几步：
 `prepareWorkflowTriggerLaunch`（冻结 + 扫描 root/call 闭包）、`resolveUploadLimits` 的取处、
 以及 `space.earlyError !== null` 那条「落一行 failed 任务」的分支。
+
+## §5hn 批次二 ⑥（下）落地　multipart 路由两个引擎共用一份编排
+
+`startExecution` 的**最后一条**生产调用路合掉了。两条 multipart 路由现在都只做三件事：
+解析表单、跑路由级门（`assignments` / 退役键 / `sourceTaskId` 可见性）、把已解析的分片
+交给启动参与者。
+
+### 支点：参与者收 `uploads.parts`，其余从**冻结快照**派生
+
+参与者的 launch 输入加一格 `uploads?: { parts }`。上传声明与体积上限**不由路由交**——
+它们从参与者手上已经有的东西派生：`collectUploadInputDefs(冻结快照.inputs)` 与
+`resolveUploadLimits(configPath)`。合并前两条 multipart 路各自为了算这两样把工作流再读一遍，
+那是同一件事的第二份写法。
+
+启动输入契约在带上传时用 `ignoreUploadInputs: true`——upload 键的值是服务端写完文件后才
+回填的仓内路径，此刻本来就还是空串。SQLite 的 `multipartTaskStart.ts` 一直是这个口径。
+
+### PG 那条路由原本也手拼了第二份编排
+
+`launchMultipart` 此前手写了一遍「冻结快照 → 版本围栏 → 静态校验 → 启动输入契约 → 根内核」，
+而那正是参与者工作流臂**逐字在做**的事。代价是**每补一道门就得记得补两处**，实测两次都没补上：
+
+| 门 | 补进参与者的时间 | multipart 那份 |
+| --- | --- | --- |
+| 启动输入契约 | 批次二 ④（修 627290a94 的红） | 一直有（它自己那份） |
+| 静态校验的**候选上下文** | 批次二 ④（上） | **一直没有**，批次二 ⑥ 基线照出来才补 |
+
+现在这条路只剩路由级门，编排交给参与者——第三份写法不会再出现。
+
+### 销账：`spaceNodes` 兜底派生（第三次，也是最后一次）
+
+```
+合并前  sqlite [{ path: '', origins: [] }]   postgresql []
+合并后  两侧都是 []
+```
+
+与批次二 ③（工作组路由）、④（工作流 JSON 路由）关掉的是**同一处**读端 `minimalNodePaths`
+兜底派生。预先写好的反向断言按剧本红了，改成 `.toBe(0)` 销账，`spaceNodes` 同时回到相等面里。
+
+### 装配面
+
+`PostgresqlTaskRouteOperationsDependencies` 加一格 `launches`（与 SQLite 那侧同名同形，
+批次二 ④ 已经加过），由组合根装配一次供 JSON 路由 / multipart 路由 / 触发器三处共用；
+`SqliteTaskRouteOperationsDependencies` 的 `multipart` 那一整格退役，两个组合根
+（`server.ts` 与 `cli/start.ts`）各删掉一段 `MultipartLaunchDeps` 的手拼。
+
+共用入口 `launchMultipartTask` 的形参**刻意收窄到它真正用的三格**（库句柄、启动参与者、
+鉴权句柄工厂），而不是整个路由依赖束——SQLite 的路由依赖是另一个类型，收窄之后两侧都交得起，
+不必为了共用而把类型硬凑成一个。
+
+### 账本
+
+| 账本 | 变化 |
+| --- | --- |
+| `rfc345-resource-acl-facade-compatibility` | 39 → 38（`postgresqlTaskRouteOperations.ts` 不再自己跑启动输入契约） |
+| `rfc294-module-symbol-owners` | 24712 → 24713（`launchMultipartTask` + 收窄的依赖类型替掉一个私有函数，净 +1；**一次性 allowGrowth**，下一笔删 `multipartTaskStart.ts` 即退役） |
+| `rfc359-w7` 的 INSERT 站点行号 | `:827` → `:836` |
+
+### 下一刀：`startExecution` 与 `services/multipartTaskStart.ts` 退役
+
+`services/multipartTaskStart.ts` 此刻**生产零消费者**，而它是 `startExecution` 在生产上的
+最后一个调用方——删掉它，`startExecution` 就此从生产退役。两件事一并做，同时要给三处
+**源码文本锁**改锚（它们都指着 `multipartTaskStart.ts`：`rfc103-launch-config-passthrough`
+的启动配置透传、`rfc107` 的 source anchors、`rfc287-t13-preset-task-id`），
+并把 `startExecution` / `cancelExecution` 的**测试**消费者迁到参与者上。

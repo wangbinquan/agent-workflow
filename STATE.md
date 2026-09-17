@@ -2,6 +2,41 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 59，**multipart 合一——`startExecution` 生产上只剩一个待删的调用方**）
+>
+> 本段待推：§5hn 批次二 ⑥（下）。**CI 在 `63a1493ba` 已绿**。
+>
+> `startExecution` 的**最后一条**生产调用路合掉了。两条 multipart 路由现在都只做三件事：
+> 解析表单、跑路由级门（`assignments` / 退役键 / `sourceTaskId` 可见性），把已解析的分片
+> 交给启动参与者。
+>
+> **支点**：参与者的 launch 输入加一格 `uploads?: { parts }`——上传声明与体积上限**不由路由交**，
+> 从参与者手上已经有的东西派生（`collectUploadInputDefs(冻结快照.inputs)` +
+> `resolveUploadLimits(configPath)`）。合并前两条路各自为了算这两样把工作流再读一遍。
+>
+> **PG 那条路由原本也手拼了第二份编排**（冻结快照 → 版本围栏 → 静态校验 → 启动输入契约 →
+> 根内核），代价是**每补一道门要记得补两处**，实测两次都没补上：启动输入契约（批次二 ④ 补的）
+> 与静态校验的候选上下文（批次二 ⑥ 基线才照出来）。现在编排只剩一份。
+>
+> **`spaceNodes` 兜底派生第三次也是最后一次销账**：`[{path:'',origins:[]}]` → `[]`，
+> 预先写好的反向断言按剧本红了。
+>
+> 装配面：`PostgresqlTaskRouteOperationsDependencies` 加 `launches`（与 SQLite 同形），组合根
+> 装配一次供 JSON / multipart / 触发器三处共用；`SqliteTaskRouteOperationsDependencies` 的
+> `multipart` 整格退役，两个组合根各删一段手拼。共用入口 `launchMultipartTask` 的形参**收窄**
+> 到真正用的三格，两侧都交得起，不必为共用把类型硬凑成一个。
+>
+> **下一刀**：`services/multipartTaskStart.ts` 此刻**生产零消费者**，而它是 `startExecution`
+> 在生产上的最后一个调用方——删掉它，`startExecution` 就此从生产退役。同时要给三处源码文本锁
+> 改锚（都指着 `multipartTaskStart.ts`），并把 `startExecution` / `cancelExecution` 的**测试**
+> 消费者迁到参与者上。
+>
+> 证据：multipart 基线 **4/4 双引擎**（含行级比对与错误契约）；`tasks-multipart` 20/20、
+> `rfc107-url-upload-multipart` 13/13；路由半径 49 个文件分片跑完全绿；
+> 架构守卫 + 九个根目录守卫 **781/781**；tsc 0 / eslint 0。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ⑥（下）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 58，**multipart 基线立好；顺修 8a3036d41 推的红**）
 >
 > 本段待推：§5hn 批次二 ⑥（上）。
