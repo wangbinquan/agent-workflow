@@ -787,6 +787,30 @@ git fetch origin main; git merge --ff-only origin/main; git push origin main   #
 push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推；③别指望 `set -o shwordsplit`——
 每个 Bash 调用都是新 shell。
 
+### 第五次复发：`set -- $R` 把整串塞进 `$1`，于是**所有 CI 守候都是空转**（2026-09-18）
+
+这次不在 `git add` 上，而在一个后台轮询脚本里——同一个分词坑，换了个壳：
+
+```bash
+R=$(gh run list … -q '"\(.databaseId) \(.status) \(.conclusion)"' | head -1)
+set -- $R                      # ← zsh：$1 = "35286009346 completed success"，$2 为空
+if [ "$2" = "completed" ]; then … break; fi
+sleep 45
+```
+
+`$2` 恒空 ⇒ 条件永不成立 ⇒ 循环一直轮到 150 次（约 112 分钟）跑满才吐一句 `WATCH_END`。
+**危害不是慢，是它看起来在工作**：守候「还在跑」与「CI 还没完」长得一模一样，
+而我每次其实都是自己另跑一条 `gh run list` 拿到的结论——**bug 被我的人工查询长期盖住**，
+一连起了七八个这样的守候都没发现。用户问「CI 都结束了你的 shell 怎么还卡着」才暴露。
+
+判据：守候进程还在（`ps` 看得到 `sleep 45`），但 `gh run list` 直查已是 `completed`。
+
+定式（任选其一，别再用 `set -- $unquoted`）：
+- **根本上别拆串**：只查你要的那一个字段，直接比较——
+  `S=$(gh run list … -q '.[] | select(.headSha=="'"$SHA"'") | .status' | head -1); [ "$S" = completed ] && …`
+- 真要拆：zsh 的显式分词 `set -- ${=R}`，或 `read -r id status conclusion <<< "$R"`。
+- **给守候加自证**：循环里每 N 轮 `echo` 一次心跳，长时间零输出本身就该可疑。
+
 ### 第四次复发的记录，与它说明的事（2026-09-07）
 
 `FILES=$(ls tests/rfc359-w8-*.test.ts | tr '\n' ' '); bun test --isolate $FILES` —— 19 个路径被当成
