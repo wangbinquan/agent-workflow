@@ -637,8 +637,15 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （`...resolveLaunchRuntimeConfig(deps.configPath)`）。20d4a6ce5 把 webhook 启动挪到这台
     // 协调器上时漏了它——`runtimeConfigOpts(deps)` 于是读到十七个 undefined，驱动退回编译期缺省，
     // e2e 当场红在「故意崩溃的 runtime 节点被重试 8 次」（判据要 1 次）。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ④）：摘要随**工作流 JSON 路由也改走共享编排**
+    // 更新——`assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(deps.db, …)`
+    // 换成 `launches` **转发面**（真参与者是同一作用域后面那个 const，它依赖的
+    // `taskRouteLaunchDependencies` 在本函数更下方才装配得起来，与协调器转发面同一个词法闭环手法）。
+    // **装配图确实变了，是有意的**：这条路由此前转 `startExecution` → `startTask`
+    //（三千行的老启动器），现在与 PostgreSQL 共用同一台根启动内核；那道
+    // `assertWorkflowLaunchable` 是参与者已经做过的同一次静态校验，留着就是做两遍。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'ece3e4adf98b3d924a8c8c7f280a0ffeb57b481a542582f9f849de09d30aaae4',
+      '941867a3aa2ef400021dbda6ac6337216cb329a4d853f12318d7d230485c9ee8',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',
