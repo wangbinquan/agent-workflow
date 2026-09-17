@@ -7852,3 +7852,18 @@ bun test tests/rfc359-w29-unstarted-application-composition.test.ts
              → （若碰了 server.ts / cli/start.ts）bun test tests/rfc359-w29-...
              → git add / commit
 ```
+
+## 删函数时，半径要按「谁读这个**文件**」算，不能只按「谁提这个**符号**」（2026-09-17 推红一次）
+
+删 `startWorkgroupTask` 时我按符号名扫了半径，把所有提到 `startWorkgroupTask` 的测试都跑过了。
+CI 仍然红一格：`rfc165-contract-v2` 的一条源码锁**读的是那个文件**，断言的却是**另一个符号**
+（「`.../workgroup/launch.ts` 里必须出现 `applySpaceFields(`」）。函数删掉后那句话不再成立，
+而它整条断言里没有 `startWorkgroupTask` 这几个字。
+
+**判据**：删除 / 大改一个函数时，半径至少要取两条的并集：
+
+1. `grep -rn "<符号名>" tests/`（谁提到这个符号）；
+2. `grep -rln "<文件名>" tests/`（谁把这个**文件**当文本读——它可能在断言里面的任何一段）。
+
+第 2 条正是上面几条「路径字符串键 / 行号键 / 整树扫描」盲区的同一家族：
+**源码文本锁的断言内容与它读的文件是两回事**，只按符号扫会漏掉「文件还在、那句话不成立了」这一类。

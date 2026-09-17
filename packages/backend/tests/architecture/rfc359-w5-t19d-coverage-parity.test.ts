@@ -169,7 +169,10 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 同一笔里 PG 侧再 +1：`rfc287-t13-preset-task-id` 的源码锁改锚到内核的
   // `workspace.prepare(...)`（`materializeSpace` 的 agent / multipart 两个调用点都随函数删除了）。
   // 仍是**命名债的读数**——共用实现还叫 `postgresql*`（§5hj）。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 7/3, postgresql 18/3',
+  // 再 +1（同一笔）：`rfc165-contract-v2` 的 `applySpaceFields` 源码锁也改锚到了启动参与者的
+  // 两条臂——`startWorkgroupTask` 删除后，原来那句「`workgroup/launch.ts` 里必须有
+  // `applySpaceFields(`」不再成立，同一个不变量的新家就在共用实现里。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 7/3, postgresql 19/3',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
@@ -239,7 +242,7 @@ export const INVERTED_PAIRS: readonly string[] = [
   // 多出来的那一条引用是兼容债账本里的一次文件名提及（见上一格的注释），不是新判据。
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：5 vs 12 → 6 vs 16，来源见上（命名债的读数）。
   // RFC-359 AC-1（plan §5hn 批次二 ⑧）：6 vs 16 → 7 vs 17，**差额不变**（两侧同步 +1）。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 7 vs 18',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 7 vs 19',
   // 新入名单，同样是命名债的读数：共用的那条 multipart 编排（`launchMultipartTask`）住在
   // `postgresqlTaskRouteOperations.ts` 里，改锚过去的几条源码锁都提到了它。
   'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 14',

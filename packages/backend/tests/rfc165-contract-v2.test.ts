@@ -215,25 +215,28 @@ describe('RFC-165 T1 — applySpaceFields shared assembly point', () => {
     if (r.success) expect(r.data.scratch).toBe(true)
   })
 
-  test('source lock: workgroupLaunch composes its candidate via applySpaceFields', () => {
+  test('source lock: 两条启动臂都用 applySpaceFields 组装候选', () => {
     // Anti-regression for design F2: a hand-rolled spread here is exactly how
     // RFC-125-style silent field drops happen. If this lock reds, wire the
     // candidate through applySpaceFields instead of deleting the assertion.
+    //
+    // **RFC-359 AC-1（plan §5hn 批次二 ⑧）改锚**：原来指着
+    // `.../legacy/workgroup/launch.ts` 的 `startWorkgroupTask`——那个函数已整份删除
+    //（门面退役后生产零消费者）。同一件事现在由**启动参与者的两条臂**（单代理 / 工作组）做，
+    // 两处各一次 `applySpaceFields(`，锁的不变量一个字没变。
     const src = readFileSync(
       join(
         import.meta.dir,
         '..',
         'src',
         'modules',
-        'resource-catalog',
+        'task-execution',
         'infrastructure',
-        'legacy',
-        'workgroup',
-        'launch.ts',
+        'postgresqlTaskRouteLaunchOperations.ts',
       ),
       'utf8',
     )
-    expect(src.includes('applySpaceFields(')).toBe(true)
+    expect((src.match(/applySpaceFields\(/g) ?? []).length).toBe(2)
     expect(src.includes('...(input.repoUrl !== undefined ? { repoUrl: input.repoUrl } : {})')).toBe(
       false,
     )

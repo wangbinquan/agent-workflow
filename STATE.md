@@ -2,6 +2,31 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 62，**`node-runs` 投影合一；修 2e8140cf4 推的红**）
+>
+> 本段待推：盘点后的第 1 刀。
+>
+> **先说红**：`2e8140cf4` 红一格——`rfc165-contract-v2` 的
+> 「`workgroup/launch.ts` 里必须出现 `applySpaceFields(`」。删 `startWorkgroupTask` 时我按
+> **符号名**扫半径，而这条锁**读那个文件、断言另一个符号**，整条断言里没有那个符号名。
+> 改锚到启动参与者的两条臂。**已抽成通用踩坑**：删函数的半径要取
+> 「谁提这个符号」∪「谁把这个文件当文本读」。
+>
+> **正题**：启动面全合之后，`TaskRouteOperations` 这一对剩下的是任务路由的其余动词
+> （SQLite 276 行薄壳 vs PostgreSQL 2555 行原生）。plan 里已按「差异面小 → 大」排好七组，
+> **按动词一刀一刀来**，每刀照本 RFC 验证过的次序（基线 → 变异 → 合并 → 销账）。
+>
+> 第 1 刀是 `node-runs` 投影。基线把 `node_runs` / `doc_versions` / `clarify_rounds` 播成确定
+> 形状（PG 独有的评审轮次计时 / clarify / nav kind 全点亮），**第一跑两侧就逐字相同**——
+> 这一格本来没有分叉，基线证明的是「合并安全」。变异实证：PG 单侧把 `reviewNavKind` 置空当场红。
+> 合并后 `taskNodeRunsProjection` 是唯一实现；顺带把 `loadTask` / `taskProjection` /
+> `failedCode` / `workflowIdentities` 四个形参放宽到中立句柄（体内全是普通 drizzle 查询）。
+>
+> 证据：读投影基线 2/2 双引擎；`tasks` 60/60；60 个相关文件分八片全绿；
+> 架构守卫 + 九个根目录守卫 + W29 **789/789**；tsc 0 / eslint 0。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` 盘点后的第 1 刀。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 61，**legacy 启动服务清零**）
 >
 > 本段待推：§5hn 批次二 ⑧。**CI 在 `ffca0d63a` 已绿**（含续 60 的 `startExecution` 退役）。

@@ -11,7 +11,7 @@ import type { CollaborationCommandContext } from '@/modules/collaboration/public
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
 import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
-import { launchMultipartTask } from './postgresqlTaskRouteOperations'
+import { launchMultipartTask, taskNodeRunsProjection } from './postgresqlTaskRouteOperations'
 import {
   assertCanReplaySourceTask,
   canViewTask,
@@ -28,7 +28,6 @@ import {
   getNodeRunStdout,
   getTask,
   getTaskDiff,
-  getTaskNodeRuns,
   listTaskItems,
   listTasks,
   resumeTask,
@@ -202,7 +201,11 @@ export function createSqliteTaskRouteOperations(
         },
       })
     },
-    nodeRuns: (taskId) => getTaskNodeRuns(db, taskId),
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 1 刀）：node-runs 投影与 PostgreSQL 共用**同一份**。
+    // 等价性由 `rfc359-w5hn-task-read-route-provider-parity` 作证（同一批
+    // `node_runs` / `doc_versions` / `clarify_rounds` 播种下两侧响应体逐字相同，
+    // 单侧变异当场红），合并前后行为不变。
+    nodeRuns: (taskId) => taskNodeRunsProjection({ db }, taskId),
     diff: (taskId) => getTaskDiff(db, taskId),
     stdout: (taskId, nodeRunId) => getNodeRunStdout(db, taskId, nodeRunId),
     events: (taskId, nodeRunId, options) => getNodeRunEvents(db, taskId, nodeRunId, { ...options }),

@@ -319,7 +319,7 @@ function fallbackRepo(row: TaskRow): TaskRepo {
 }
 
 async function failedCode(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   task: Pick<TaskRow, 'id' | 'status' | 'failedNodeId'>,
 ): Promise<string | null | undefined> {
   if (task.status !== 'failed' || task.failedNodeId === null) return undefined
@@ -346,7 +346,7 @@ async function failedCode(
  * 详情页照常渲染悬空引用。
  */
 async function workflowIdentities(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   workflowIds: readonly string[],
 ): Promise<ReadonlyMap<string, Readonly<{ name: string; builtin: boolean; version: number }>>> {
   const wanted = [...new Set(workflowIds)]
@@ -385,7 +385,7 @@ async function builtinCandidateWorkflow(
   return (await workflowIdentities(db, [workflowId])).get(workflowId) ?? null
 }
 
-async function taskProjection(db: PostgresqlDatabaseClient, row: TaskRow): Promise<Task> {
+async function taskProjection(db: ProviderNeutralDatabase, row: TaskRow): Promise<Task> {
   const [repoRows, nodeRows, failureCode, identities] = await Promise.all([
     db
       .select()
@@ -470,7 +470,7 @@ async function taskProjection(db: PostgresqlDatabaseClient, row: TaskRow): Promi
   })
 }
 
-async function loadTask(db: PostgresqlDatabaseClient, taskId: string): Promise<Task | null> {
+async function loadTask(db: ProviderNeutralDatabase, taskId: string): Promise<Task | null> {
   const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   return rows[0] === undefined ? null : await taskProjection(db, rows[0])
 }
@@ -945,8 +945,18 @@ function commitPush(raw: string | null) {
   return parsed.success ? parsed.data : null
 }
 
-async function taskNodeRuns(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 1 刀）—— **任务 node-runs 投影的唯一实现**，两个引擎共用。
+ *
+ * 形参收窄到它真正用的那一格（库句柄），而不是整个路由依赖束：SQLite 的路由依赖是另一个类型，
+ * 收窄之后两侧都交得起，不必为了共用而把类型硬凑成一个（与 `launchMultipartTask` 同一条判据）。
+ *
+ * 合并前的等价性由 `rfc359-w5hn-task-read-route-provider-parity` 作证：同一批
+ * `node_runs` / `doc_versions` / `clarify_rounds` 播种下，两个引擎投影出的响应体逐字相同
+ * （变异实证：把 PG 侧 `reviewNavKind = 'awaiting'` 改成 `null`，当场红）。
+ */
+export async function taskNodeRunsProjection(
+  dependencies: Readonly<{ db: ProviderNeutralDatabase }>,
   taskId: string,
 ) {
   const task = await loadTask(dependencies.db, taskId)
@@ -2520,7 +2530,7 @@ export function createPostgresqlTaskRouteOperations(
       return task
     },
     retry: (input) => retryNode(dependencies, input),
-    nodeRuns: (taskId) => taskNodeRuns(dependencies, taskId),
+    nodeRuns: (taskId) => taskNodeRunsProjection(dependencies, taskId),
     diff: (taskId) => taskDiff(dependencies, taskId),
     stdout: (taskId, nodeRunId) => nodeRunStdout(dependencies, taskId, nodeRunId),
     events: (taskId, nodeRunId, options) =>

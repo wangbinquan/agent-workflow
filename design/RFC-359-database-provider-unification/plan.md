@@ -16131,3 +16131,87 @@ ACL 门、删除竞态）。正确做法是**把调用点迁到参与者**：加
 | `rfc301` 的 `startTask` 调用点 | `services/agentLaunch.ts`(3) 与 `workgroup/launch.ts`(1) **两行整行出账** |
 | `rfc217` G5 的 `mode === '` 散射面 | `launch.ts` 1 → **整行出账**（一个分支都没有了） |
 | `rfc359-w5-t19d` | 两侧各 +1（新 helper 提到两侧模块名，差额不变），PG 侧再 +1（`rfc287-t13` 源码锁改锚到内核）——仍是**命名债的读数** |
+
+## §5hn 之后：AC-1 还剩什么（批次二 ⑧ 收工时的盘点）
+
+`rfc359-w5-provider-pair-conformance` 记着 **7 对**共存适配器，按「还要不要合」分三类：
+
+| 对 | 判定 | 理由 |
+| --- | --- | --- |
+| `platform/persistence/LogicalSource` | **不合** | 引擎本征差异②：SQLite 是一个**文件**，PostgreSQL 是一台**服务器** |
+| `platform/persistence/Migrator` | **不合** | 同上 |
+| `resource-catalog/.../ResourcePackageMaintenance` | **不合** | 两套落盘工件格式，已由 `rfc359-w5-artifact-format-portability` 的 12 格矩阵钉住 |
+| `task-execution/.../SourceTerminationParticipant` | 待评估 | 尚未做过等价性基线 |
+| `task-execution/.../TaskExecutionRuntimeParticipants` | **只差命名 / 装配** | SQLite 那半现在是薄壳：`drive` 与 `childLaunch` 都是共用实现，差别只剩装配方交进去的端口 |
+| `task-execution/.../TaskRouteLaunchOperations` | **只差命名** | SQLite 那份 124 行全是把依赖翻译过去的委托壳（§5hj 命名债） |
+| `task-execution/.../TaskRouteOperations` | **真的还没合** | 见下 |
+
+### 最大的一块：`TaskRouteOperations`（276 行薄壳 vs 2555 行原生）
+
+启动面已经全合（批次一 / 二 ①–⑧）。剩下的是**任务路由的其余动词**——SQLite 那 276 行
+全是把调用转给 `services/task.ts` / `taskDelete` / `taskCollab` / `lifecycleRepair`
+的薄壳，PostgreSQL 那 2555 行是原生实现：
+
+| 动词 | SQLite 转给 |
+| --- | --- |
+| `list` / `listItems` / `get` | `services/task.ts` 的 `listTasks` / `listTaskItems` / `getTask` |
+| `assertVisible` / `requireOperator` / `assertReplayVisible` | `resourceAcl` / `taskCollab` |
+| `getMembers` / `replaceMembers` / `getReviewers` / `replaceReviewers` | `taskCollab` |
+| `cancel` / `delete` | `services/task.ts#cancelTask` / `taskDelete` |
+| `resume` / `retry` | `services/task.ts#resumeTask` / `retryNode` |
+| `nodeRuns` / `diff` / `stdout` / `events` | `services/task.ts` 的四个读 |
+| `workflowSyncPreview` / `syncWorkflow` | `services/task.ts#syncTaskWorkflow` + 域判据 |
+| `repairOptions` / `applyRepair` | `lifecycleRepair` |
+
+**按动词一刀一刀来**，每刀照本 RFC 一路验证过的次序：立双引擎等价性基线（响应体 **+ 行级**）
+→ 变异实证 → 合并 → 把钉住的差异改成相等断言销账。**不要一次合整片**——
+这几个动词各有各的失败模式（读投影 / ACL / 生命周期 CAS / 修复态机），
+一次合掉等于把它们的差异搅在一起，出了红没法归因。
+
+建议顺序（按「差异面小 → 大」）：
+1. 纯读四件（`nodeRuns` / `diff` / `stdout` / `events`）——只有投影形状；
+2. 列表三件（`list` / `listItems` / `get`）——RFC-357 的授权三态已双引擎，投影仍分叉；
+3. 成员 / 评审四件——`taskCollab` 那套已是中立实现，多半只是接线；
+4. `cancel` / `delete`；
+5. `resume` / `retry`——生命周期 CAS + 回滚快照，差异面最大；
+6. `workflowSyncPreview` / `syncWorkflow`（W58 已合过预览的域判据）；
+7. `repairOptions` / `applyRepair`。
+
+### 命名债（§5hj）现在是**账本级**问题，不再只是美观
+
+`rfc359-w5-t19d` 与 `rfc359-w5-inverted-pairs` 已经连着三提读出假信号——共用实现还叫
+`postgresql*`，每有一条源码锁改锚过去，「PG 侧引用数」就涨一格，而那涨的是**共用实现被
+引用的次数**。plan 与账本注释每次都要写一段「这是命名债的读数，不是倾斜」。
+改中立名是一刀纯改名（`postgresqlTaskRouteLaunchOperations.ts` /
+`postgresqlChildExecutionLaunchOperations.ts` / `createPostgresqlRootTaskLaunchKernel` /
+`createPostgresqlTaskExecutionLaunchParticipant` 等），收益是让那两份账本重新说真话。
+`postgresqlTaskRouteOperations.ts` 要等上面那片合完再改——它此刻仍是 PG 专属实现 +
+一个共用出口（`launchMultipartTask`），改名前应先把那个出口提到自己的中立文件里。
+
+## 盘点后的第 1 刀落地　`node-runs` 投影两个引擎共用一份（并修 2e8140cf4 推的红）
+
+### 先修红：源码锁的半径要按「谁读这个**文件**」算
+
+`2e8140cf4` 的 CI 红一格：`rfc165-contract-v2` 的
+「`.../workgroup/launch.ts` 里必须出现 `applySpaceFields(`」。删 `startWorkgroupTask` 时我按
+**符号名**扫了半径，而这条锁**读那个文件、断言另一个符号**——整条断言里没有
+`startWorkgroupTask` 这几个字。改锚到启动参与者的两条臂（同一个不变量的新家，两处各一次）。
+**已抽成通用踩坑**：删函数时半径要取「谁提这个符号」∪「谁把这个文件当文本读」。
+
+### 第 1 刀本身
+
+`TaskRouteOperations` 这一对的第一格：`GET /api/tasks/:id/node-runs` 的投影。
+
+**先立基线**：`rfc359-w5hn-task-read-route-provider-parity`——把
+`node_runs`（未开始 / 跑完 / 等人审三条）+ `doc_versions` + `clarify_rounds` 播种成确定形状，
+读的就是投影本身；PG 那侧独有的派生（评审轮次计时、clarify 状态、nav kind）全部点亮。
+**第一跑两侧就逐字相同**——这一格本来就没有分叉，基线证明的是「合并安全」。
+变异实证：PG 单侧把 `reviewNavKind = 'awaiting'` 改成 `null`，当场红。
+
+**再合并**：`taskNodeRuns` 提成 `taskNodeRunsProjection`，形参收窄到它真正用的那一格
+（库句柄），SQLite 路由改调它（此前转 `services/task.ts#getTaskNodeRuns`）。
+顺带把 `loadTask` / `taskProjection` / `failedCode` / `workflowIdentities` 四个形参从
+`PostgresqlDatabaseClient` 放宽到中立句柄——它们体内全是普通 drizzle 查询，没有引擎判断。
+
+`services/task.ts#getTaskNodeRuns` 仍有测试消费者（`api-task-review-round-start` 等），
+**暂不删**：它现在是「legacy 投影的读回侧」，下一刀把那几个套件迁到路由投影之后再退役。
