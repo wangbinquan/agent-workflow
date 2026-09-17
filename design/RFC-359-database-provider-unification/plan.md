@@ -16707,3 +16707,48 @@ SQLite 路由不再自己判工作流可见性。`rfc345` 兼容边账本 37 →
 
 `resume` / `retry`（连同 `syncWorkflow` 的主体与那套准入链）、`repairOptions` / `applyRepair`、
 `ChildTaskLifecycleParticipant` 那一对（`cancel` 的真实两份实现），最后命名债收尾（§5hj）。
+
+## 第 8 刀的勘察　`repairOptions` / `applyRepair`　——**并报一处守卫盲区**
+
+### 发现：手动修复这一对，双引擎零对拍
+
+- SQLite 侧：`platform/persistence/sqlite/taskLifecycleRepair.ts`（513 行），
+  由 **13 个** `lifecycle-repair-*.test.ts` 覆盖——**没有一个是 `describeEachProvider`**。
+- PostgreSQL 侧：`modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts`
+  （1546 行）。它**有**覆盖，但只覆盖 `automaticRepair`（`rfc359-w8-auto-repair-conformance`
+  的 11 条，且那份也是单引擎）。**手动的两个路由动词 `repairOptions` / `applyRepair`
+  在 PostgreSQL 上零行为覆盖。**
+
+这正是 `dual-provider-parity-audit-2026-09-04` 里 12 条 P0 的孵化形态：一侧被十几个套件天天跑，
+另一侧一条行为判据都没有，于是它可以长期比另一侧弱而没有任何东西转红。
+
+### 守卫盲区：t19d 的配对是**按文件名前缀**的，看不见这一对
+
+`rfc359-w5-t19d` 靠 `sqliteFoo.ts` / `postgresqlFoo.ts` 这种自述式文件名配对。这一对叫
+`taskLifecycleRepair.ts`（而且它靠的是**目录** `platform/persistence/sqlite/`，不是文件名前缀）
+对 `postgresqlTaskRouteRepairOperations.ts`——**基名根本对不上，`classify()` 配不出这一对**，
+于是这处倒挂从来没进过账本。
+
+**这是账本自己的缺口，不是记账错误**：按名字配对与按名字筛棘轮是同一类脆弱性
+（本轮已因后者连推红三次，见 `docs/dev-gotchas.md`）。合并这一对时**一并修守卫**——
+给 t19d 加一份显式的「手工配对」表，收容基名对不上的成对适配器。
+
+### 门序两侧一致，差异面在注册表
+
+逐条对读下来，两侧的前置门**同位同序**：载入告警 → 已解决 → 载入任务 → 选项归属的规则 →
+规则不匹配 → 选项未实现 → TURN-ENGINE 工作组不可复活 → preflight。
+真正可能分叉的是**修复选项注册表**（`REPAIR_OPTIONS` vs `REPAIR_OPTION_IDS` +
+`OPTION_DEFINITIONS`）与各自的 preflight 实现：选项集合、标签 key、`available` 判据、
+`previewSteps`、`autoApplyEligible` / `revivesExecution` 标记是否逐条相同，**目前没有任何
+东西在盯**。
+
+### 因此第 8 刀的次序
+
+1. **先立基线**（这一步本身就是 PG 手动修复路径的第一份行为覆盖，即使不合并也值得做）：
+   同一条告警下比两侧 `repairOptions` 的**整份选项清单**（id / rule / labelKey / risk /
+   destructive / available / unavailableReasonKey / previewSteps / 两个标记），
+   以及 `applyRepair` 的六个错误码（`alert-not-found` / `alert-not-on-task` /
+   `alert-already-resolved` / `unknown-repair-option` / `repair-option-rule-mismatch` /
+   `workgroup-repair-unsupported`）。这些全是纯门判据，不需要真跑任务。
+2. 变异实证 → 合并 → 销账。
+3. **同一刀里修 t19d 的配对盲区**，把这一对显式收进账本。

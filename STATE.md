@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 72，**第 8 刀勘察：手动修复零对拍 + 一处守卫盲区**）
+>
+> `d6922cd34`（第 7 刀）CI 全绿。下一刀勘察 `repairOptions` / `applyRepair`，**挖出两件事**：
+>
+> ①**手动修复这一对双引擎零对拍**。SQLite 侧 513 行由 **13 个** `lifecycle-repair-*.test.ts`
+> 覆盖（没有一个是 `describeEachProvider`）；PG 侧 1546 行**有**覆盖，但只覆盖 `automaticRepair`
+>（11 条，也是单引擎）——**手动的两个路由动词在 PostgreSQL 上零行为覆盖**。
+> 这正是 `dual-provider-parity-audit-2026-09-04` 那 12 条 P0 的孵化形态。
+>
+> ②**t19d 看不见这处倒挂**。它按 `sqliteFoo.ts` / `postgresqlFoo.ts` 的文件名前缀配对，
+> 而这一对是 `taskLifecycleRepair.ts`（靠目录 `platform/persistence/sqlite/`，不是文件名前缀）
+> 对 `postgresqlTaskRouteRepairOperations.ts`——**基名对不上，`classify()` 配不出**，
+> 于是这处倒挂从来没进过账本。**这是账本自己的缺口**，与「按名字筛棘轮」是同一类脆弱性
+>（本轮已因后者连推红三次）。合并这一对时**一并修守卫**：给 t19d 加一份显式手工配对表。
+>
+> 门序两侧逐条一致；差异面在**修复选项注册表**与各自的 preflight——选项集合 / 标签 key /
+> `available` 判据 / `previewSteps` / 两个标记是否逐条相同，**目前没有任何东西在盯**。
+>
+> 第 8 刀次序：先立基线（这一步本身就是 PG 手动修复路径的第一份行为覆盖，即使不合并也值得做）
+> → 变异 → 合并 → 销账 → 同刀修 t19d 的配对盲区。细节见 plan「第 8 刀的勘察」。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 71，**`syncWorkflow` 前置门合一**）
 >
 > 按续 70 的勘察实施：**只合前置门**（七道，一份 `assertTaskWorkflowSyncable`），主体仍各自一份
