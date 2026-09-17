@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4567 |
+| `architectureExceptions` | 4564 |
 | `backgroundJobs` | 331 |
-| `crossContextImports` | 5083 |
+| `crossContextImports` | 5081 |
 | `facades` | 313 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24687 |
-| `mutationEntrypoints` | 1677 |
+| `moduleSymbolOwners` | 24683 |
+| `mutationEntrypoints` | 1675 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 959 |
+| `publicSurfaces` | 960 |
 | `transactionExternalEffects` | 252 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -200,23 +200,23 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3019 |
-| legacy-inbound | 1357 |
+| legacy-outbound | 3014 |
+| legacy-inbound | 1359 |
 | infrastructure-external | 269 |
 | offered-consumption | 159 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 88 |
 | authority-type-only | 58 |
 | required-implementation | 22 |
-| provider-mirror | 16 |
+| provider-mirror | 17 |
 | external-layer-debt | 3 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3019 |
-| legacy-inbound | 1357 |
+| legacy-outbound | 3014 |
+| legacy-inbound | 1359 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 88 |
 | no-circular | 6 |
@@ -227,13 +227,13 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2315 |
-| W4-E1 | 797 |
+| W9 | 2312 |
+| W4-E1 | 799 |
 | W4-C | 327 |
 | W4-E0 | 213 |
 | W4 | 193 |
 | W4-B | 180 |
-| W5 | 156 |
+| W5 | 154 |
 | W4-E8 | 110 |
 | W4-E9 | 60 |
 | W4-E4a | 50 |
@@ -253,7 +253,7 @@
 | context | 数量 |
 | --- | --- |
 | resource-catalog | 225 |
-| task-execution | 212 |
+| task-execution | 213 |
 | collaboration | 122 |
 | identity-access | 62 |
 | system-operations | 62 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 959）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 960）
 
 | context | 数量 |
 | --- | --- |

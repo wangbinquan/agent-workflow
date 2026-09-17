@@ -64,10 +64,12 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts': 1,
-  // RFC-359 W8：+1 —— 删除时沿父链重算 `branch_started_at`（RFC-311 P1-6，与 SQLite 的
-  // `services/taskDelete.ts` 那一处逐字同形）。只写这一列、不翻状态：被删子树的时间戳
-  // 不重算的话，父行的物化排序列会永久停在那儿，默认视图与过滤视图从此行序不同。
-  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 2,
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 / 5 刀）：`postgresqlTaskRouteOperations.ts`
+  // **整行销账**（2 → 1 → 0）。第 4 刀删掉 PG 内联的 `replaceTaskMembers`（那处
+  // `update(tasks).set({ownerUserId})` 随成员替换走共用的 `updateTaskMembersLocked`）；
+  // 第 5 刀删掉 PG 内联的 `deleteTask`，它那处沿父链重算 `branch_started_at`
+  //（RFC-311 P1-6）随之并入共用的 `services/taskDelete.ts`——那一份本来就有逐字同形的同一段。
+  // 这个文件现在一处非状态 `update(tasks)` 都没有了。
   'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 1,
   // RFC-359 W12：来源终止的伴随列写从两个宿主收敛到同一任务执行 atom（SQLite 4 + PG 2 → 1）。

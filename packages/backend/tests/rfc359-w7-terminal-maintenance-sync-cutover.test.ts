@@ -189,7 +189,9 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
       createdAt: NOW,
     })
 
-    const result = await deleteTask(legacy(db), childId)
+    const result = await deleteTask(legacy(db), childId, {
+      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+    })
     expect(result).toEqual({ taskId: childId, cleanup: 'done' })
 
     // ① 写真的落库了。
@@ -232,7 +234,9 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
 
     // 卡住每任务写锁：`deleteTask` 会先铸认领 + 推进到 io-complete，然后阻塞在这把锁上。
     const release = await getTaskWriteSem(taskId).acquire()
-    const pending = deleteTask(legacy(db), taskId)
+    const pending = deleteTask(legacy(db), taskId, {
+      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+    })
     // 认领推进到 io-complete 之后，紧接着就是 acquire()——等到这一步再动任务行。
     for (let attempt = 0; attempt < 200; attempt += 1) {
       const rows = await db

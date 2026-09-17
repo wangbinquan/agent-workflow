@@ -541,8 +541,10 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-1（2026-09-17，plan §5hn 之后的盘点第 4 刀）：摘要随 `membershipEvents`
     // 端口**退役**更新——访问门 + 成员四件两个引擎合一之后，成员变更的 WS 重校验与列表广播
     // 由共用的 `updateTaskMembersLocked` 自己做，这一格转发面零调用方。语句数减少一格。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 之后的盘点第 5 刀）：`deletionEvents` 端口同样退役
+    // ——`delete` 两个引擎共用 `services/taskDelete.ts` 之后，提交后的列表广播由共用实现自己做。
     expect(digest(restored, pg)).toBe(
-      '5351cb2724e4c6d4b2ba4dd10265e50d89a49d82ef84136d2fdf18b9b3aad9f0',
+      '87e0e380068015b3e755f65ca5ffcadc9c46ffbd073123d071e2976c2b8e50e6',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -664,8 +666,10 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-1（2026-09-17，plan §5hn 之后的盘点第 3 刀）：摘要随 SQLite 任务路由新增
     // `owners`（列表行的 owner 身份投影，由组合根装配后注入）更新——与 PostgreSQL 那一侧同形，
     // infrastructure 不再自己去 compose 别的 context。
+    // RFC-359 AC-1（2026-09-17，第 5 刀）：再新增 `activity`——`delete` 的 `task-active` 门
+    // 读注入的参与者而不是模块级全局，这条路不装配完整 runtime，所以直接取那个唯一装配点。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '5ede8eddb727267afcacb552d5fc883a541d50c2b3e8292ae239c0705c8a89ca',
+      'ed9df8c099f61b83443e0b5f2b22daad562f6572d5ba9e9c25d7ba98d4e8b2f1',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

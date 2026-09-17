@@ -8,7 +8,10 @@ import type { RuntimeSessionLeaseOperations } from '../application/ports/runtime
 import { cancelTask, isTaskActive, resumeTask } from '@/services/task'
 import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
-import type { TaskExecutionRuntimeParticipants } from '../application/ports/taskExecutionRuntimeParticipants'
+import type {
+  ActiveTaskExecutionParticipant,
+  TaskExecutionRuntimeParticipants,
+} from '../application/ports/taskExecutionRuntimeParticipants'
 import type {
   ChildTaskLifecycleParticipant,
   TaskExecutionDriveParticipant,
@@ -155,9 +158,22 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
   return Object.freeze({
     drive,
     children,
-    activity: Object.freeze({
-      isActive: isTaskActive,
-      awaitReleasedSettled: awaitTaskDriverReleasedSettled,
-    }),
+    activity: composeLegacyTaskActivityParticipant(),
+  })
+}
+
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：进程内活跃度参与者的**唯一装配点**。
+ *
+ * 它包的就是 legacy 的进程内注册表（`isTaskActive` / `awaitTaskDriverReleasedSettled`），
+ * 行为与直呼那两个全局一模一样；价值在**边界**：路由与 `delete` 现在读的是注入的端口，
+ * 于是两个引擎上都能把 `task-active` 那道门喂出来（此前 SQLite 侧驱不动模块全局，
+ * W7 的 A19 因此一直缺这一格）。`server.ts` 那条不装配完整 runtime 的路也用它，
+ * 免得同一个包装在仓里出现第二份。
+ */
+export function composeLegacyTaskActivityParticipant(): ActiveTaskExecutionParticipant {
+  return Object.freeze({
+    isActive: isTaskActive,
+    awaitReleasedSettled: awaitTaskDriverReleasedSettled,
   })
 }

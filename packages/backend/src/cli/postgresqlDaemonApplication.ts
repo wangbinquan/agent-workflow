@@ -973,21 +973,6 @@ export async function composePostgresqlApplication(
       collaboration: boundCollaborationContext,
       users: identityAccess.userDirectory,
       owners: composeOwnerIdentityQueries(input.db),
-      deletionEvents: {
-        async committed(change) {
-          for (const taskId of change.taskIds) {
-            tasksListBroadcaster.broadcast(
-              TASKS_LIST_CHANNEL,
-              { type: 'task.deleted', taskId },
-              {
-                kind: 'task.deleted-audience',
-                taskId,
-                visibleUserIds: change.visibleUserIdsByTask.get(taskId) ?? new Set<string>(),
-              },
-            )
-          }
-        },
-      },
       appHome: input.appHome,
     }),
     lifecycleRepair: {

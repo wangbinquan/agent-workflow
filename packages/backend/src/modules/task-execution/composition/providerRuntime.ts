@@ -196,7 +196,9 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     SqliteTaskRouteOperationsDependencies,
-    'db' | 'recovery' | 'collaboration' | 'launches'
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：`activity` 与 `recovery` / `launches` 同档
+    // ——它是**运行时装配出来的参与者**，由本函数直接交给路由，不劳调用方的 routes 回调再拼一遍。
+    'db' | 'recovery' | 'collaboration' | 'launches' | 'activity'
   > & {
     readonly collaboration: C
   }
@@ -241,6 +243,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
     db,
     recovery: persistence.recoveryAdministration,
     launches,
+    activity: participants.activity,
     ...routeDependencies,
   })
   const cancellation = cancellationCommand(participants)

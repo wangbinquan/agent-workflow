@@ -55,9 +55,9 @@ import {
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import { isTaskActive } from '@/services/task'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
+import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/public/participants'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
@@ -83,9 +83,19 @@ export interface DeleteTaskResult {
  * Hard-delete a terminal task. Throws NotFoundError (404) if absent, or
  * ConflictError (409) for a non-terminal / active / fusion-internal task.
  */
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：`delete` 两个引擎共用这一份。
+ *
+ * `activity` 是**注入的**进程内活跃度参与者，不再是模块级全局 `isTaskActive`。
+ * 那个端口的文档原话就是「runtime 绝不 import legacy 注册表」；更要紧的是，
+ * 只有注入版本才能在两个引擎上被测——W7 的 A19 至今没有 `task-active` 那一格，
+ * 正是因为 SQLite 侧驱不动模块全局。**不给默认值**：全可选的依赖面会静默降级
+ *（`docs/dev-gotchas.md` 有这条），少接一格就等于这道门在那条路上不存在。
+ */
 export async function deleteTask(
   db: LegacyProviderNeutralDatabase,
   taskId: string,
+  options: Readonly<{ activity: ActiveTaskExecutionParticipant }>,
 ): Promise<DeleteTaskResult> {
   const rows = await db
     .select({
@@ -113,16 +123,21 @@ export async function deleteTask(
       },
     )
   }
-  if (isTaskActive(taskId)) {
-    throw new ConflictError(
-      'task-active',
-      `task '${taskId}' still has an active process; cancel it first`,
-    )
-  }
+  // RFC-359 AC-1（第 5 刀）：**先报永久性的主因，再报暂时性的次因**。
+  // 合并前 SQLite 是 `active → internal`、PostgreSQL 是 `internal → active`，于是一个
+  // 「既是框架内部、又有活进程」的任务两侧回不同的 code。取 PG 那一档：`task-internal`
+  // 是「这个任务永远不能直接删」，`task-active` 是「先取消再来」——把用户引向一条死路
+  // 比引向一次重试更糟。与 `diff` 的 409/410 次序同一条判据。
   if (row.spaceKind === 'internal') {
     throw new ConflictError(
       'task-internal',
       `task '${taskId}' is a framework-internal (fusion) task and cannot be deleted directly`,
+    )
+  }
+  if (options.activity.isActive(taskId)) {
+    throw new ConflictError(
+      'task-active',
+      `task '${taskId}' still has an active process; cancel it first`,
     )
   }
   // RFC-243 §4.4 — two-way parent/child gates.
@@ -162,7 +177,7 @@ export async function deleteTask(
   const terminalMaintenance = createTerminalMaintenanceStore(db)
   const maintenanceMembers = await terminalMaintenance.snapshotTree(taskId)
   for (const member of maintenanceMembers) {
-    if (isTaskActive(member.taskId)) {
+    if (options.activity.isActive(member.taskId)) {
       throw new ConflictError(
         'task-active',
         `task '${member.taskId}' still has an active process; cancel it first`,

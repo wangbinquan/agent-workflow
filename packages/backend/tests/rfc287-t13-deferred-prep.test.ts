@@ -2209,7 +2209,9 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     const { deleteTask } = await import('@/services/taskDelete')
     let code = ''
     try {
-      await deleteTask(db, task.id)
+      await deleteTask(db, task.id, {
+        activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+      })
     } catch (err) {
       code = (err as { code?: string }).code ?? String(err)
     }

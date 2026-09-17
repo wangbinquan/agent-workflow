@@ -137,6 +137,9 @@ const STRANGER = 'u_stranger'
 // 两个引擎各自装配它自己的生产实现（合一之前只能这么对拍）
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** A19 用它把「有活进程」喂进去；默认空集，用例按需 add / clear。 */
+const activeTaskIds = new Set<string>()
+
 function unusedDependency(name: string): never {
   throw new Error(`rfc359-w7 对拍不驱动 ${name}`)
 }
@@ -147,6 +150,12 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     collaboration: {} as never,
     recovery: {} as never,
     owners: composeOwnerIdentityQueries(db as unknown as DbClient),
+    // RFC-359 AC-1（第 5 刀）：活跃度是**注入的参与者**了，于是 A19 终于能在两个引擎上
+    // 把 `task-active` 那道门喂出来——合并前 SQLite 侧读模块全局，对拍驱不动。
+    activity: {
+      isActive: (taskId: string) => activeTaskIds.has(taskId),
+      awaitReleasedSettled: async () => {},
+    },
     // SQLite 壳在调用 `retryNode` / `resumeTask` **之前**就展开这个对象，所以它不能抛；
     // 本对拍只驱动到前置门为止，门后的驱动依赖一个都用不到。
     startDepsFor: () => ({ db }) as never,
@@ -216,8 +225,10 @@ function postgresqlOperations(db: ProviderNeutralDatabase): TaskRouteOperations 
     },
     persistence: {} as never,
     children: {} as never,
+    // RFC-359 AC-1（第 5 刀）：与 SQLite 侧同一个可控集合——A19b 要在**两个引擎**上
+    // 把 `task-active` 那道门喂出来。
     activity: {
-      isActive: () => false,
+      isActive: (taskId: string) => activeTaskIds.has(taskId),
       awaitReleasedSettled: async () => {},
     },
     topology: {} as never,
@@ -840,6 +851,29 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
     const liveParent = await seedTask(harness.db, { status: 'running' })
     const child = await seedTask(harness.db, { parentTaskId: liveParent })
     expect(await code(ops.delete(child))).toBe('task-parent-active')
+  })
+
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：**合并解锁的两格覆盖**。
+  // 合并前 SQLite 的活跃度读的是模块级全局 `isTaskActive`，对拍驱不动，所以 A19 一直
+  // 只有四道门；`delete` 两个引擎共用一份、活跃度改成注入的参与者之后才喂得出来。
+  test('A19b delete：task-active 门，且它排在 task-internal 之后（两门同时失败时报 internal）', async () => {
+    const ops = operations(harness)
+    activeTaskIds.clear()
+
+    const active = await seedTask(harness.db)
+    activeTaskIds.add(active)
+    expect(await code(ops.delete(active)), '终态但仍有活进程 → 先取消').toBe('task-active')
+
+    // **两门同时失败**——这是唯一能观测到次序的那一格（没有它，把两道门对调的变异会
+    // 静静绿过去；`diff` 那一刀实撞过同样的事）。判据：先报永久性的主因。
+    const internalAndActive = await seedTask(harness.db, { spaceKind: 'internal' })
+    activeTaskIds.add(internalAndActive)
+    expect(
+      await code(ops.delete(internalAndActive)),
+      '框架内部是「永远不能直接删」，活进程只是「先取消再来」——先报前者',
+    ).toBe('task-internal')
+
+    activeTaskIds.clear()
   })
 
   test('A20 events：缺省 500 条 / 上限 1000 条（弱侧抬齐）', async () => {

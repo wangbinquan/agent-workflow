@@ -1402,10 +1402,12 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:0b3335580ba7f7b3cadd"
+        "import:0b3335580ba7f7b3cadd",
+        "import:b3d6391162516ccd1632"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#composeLegacyTaskActivityParticipant",
         "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#createSqliteTaskExecutionRuntimeParticipants"
       ],
       "canonicalFacadeIds": []
@@ -7866,15 +7868,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc",
+    "sourceDigest": "sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "a889b978cdaef28cd54576b148854a30d2b9ff67",
-    "contentDigest": "sha256:aa08b603da3458cb6840b2c3b55304bd972e4c01060fc5487b86a70d5ab29090",
+    "currentSnapshotSha": "ec8f93be5a90b231f44838b82d5d557b6e56baf9",
+    "contentDigest": "sha256:20b2f3192c8c2a6507e347ed0af5c6aebfd31733d3322188f9fd4f7b488a79f5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

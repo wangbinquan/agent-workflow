@@ -26,6 +26,7 @@ import {
   taskNodeRunsProjection,
 } from './postgresqlTaskRouteOperations'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
+import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -67,6 +68,12 @@ export interface SqliteTaskRouteOperationsDependencies {
    *（`rfc305-architecture-lock` 的已审消费者账本盯的正是这条边）。
    */
   readonly owners: OwnerIdentityQueries
+  /**
+   * RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：进程内活跃度参与者。`delete` 的
+   * `task-active` 门读它，而不是模块级全局 `isTaskActive`——那个端口的文档原话就是
+   * 「runtime 绝不 import legacy 注册表」，而且只有注入版本才能在两个引擎上被测。
+   */
+  readonly activity: ActiveTaskExecutionParticipant
   readonly appHome?: string
 }
 
@@ -171,7 +178,10 @@ export function createSqliteTaskRouteOperations(
         actor,
       ),
     cancel: (taskId) => cancelTask(db, taskId),
-    delete: (taskId) => deleteTask(db, taskId),
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：`delete` 与 PostgreSQL 共用**同一份**
+    //（PG 那侧 184 行的内联实现已删除）。合并同时统一了前置门次序——`task-internal`
+    // 先于 `task-active`，先报永久性的主因再报暂时性的次因。
+    delete: (taskId) => deleteTask(db, taskId, { activity: dependencies.activity }),
     async resume({ actor, taskId }) {
       return await resumeTask(db, taskId, {
         ...dependencies.startDepsFor(actor),

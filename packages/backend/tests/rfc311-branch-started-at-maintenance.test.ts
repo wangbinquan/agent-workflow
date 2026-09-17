@@ -167,7 +167,9 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         .set({ status: 'done', finishedAt: Date.now() })
         .where(eq(tasks.id, parentId))
       __setActiveTaskForTesting(undefined)
-      await deleteTask(db, childId)
+      await deleteTask(db, childId, {
+        activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+      })
       expect(await branchStartedAt(db, parentId)).toBe(parentStartedAt)
     } finally {
       rmSync(childRoot, { recursive: true, force: true })

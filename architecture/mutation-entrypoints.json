@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1677,
+    "entries": 1675,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -25609,52 +25609,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
-      "symbol": "deleteTask",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#DeleteWorktreeTarget",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#DeleteWorktreeTarget",
-      "symbol": "DeleteWorktreeTarget",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -40065,7 +40019,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc",
+  "sourceDigest": "sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -40177,7 +40131,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 158,
+      "durableWriterSites": 156,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -41295,8 +41249,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1782:tasks",
-        "line": 1782,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1758:tasks",
+        "line": 1758,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -41311,44 +41265,12 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2023:tasks",
-        "line": 2023,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1999:tasks",
+        "line": 1999,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "retryNode"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "deleteTask",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2388:tasks",
-        "line": 2388,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "deleteTask"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "deleteTask",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2413:tasks",
-        "line": 2413,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "deleteTask"
       },
       {
         "allowedTables": [
@@ -42687,8 +42609,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#313:tasks",
-        "line": 313,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#328:tasks",
+        "line": 328,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -42703,8 +42625,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#349:tasks",
-        "line": 349,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#364:tasks",
+        "line": 364,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",

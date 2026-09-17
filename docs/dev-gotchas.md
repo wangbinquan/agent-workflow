@@ -7939,10 +7939,16 @@ const sliceBetween = (source: string, from: string, to: string): string => {
 可用的做法是按**文件名**建一份清单再分片跑（本地一次跑太多文件会造假红，见上面的条目）：
 
 ```
-ls tests/*.test.ts | grep -iE "architecture|-lock|ratchet|guard|source-text|conformance|parity|contracts|boundary|cutover|highwater|census" > /tmp/ratchets.txt
+ls tests/*.test.ts | grep -iE "architecture|-lock|ratchet|guard|source-text|conformance|parity|contracts|boundary|cutover|highwater|census|audit|inventory|snapshot|allowlist|debt|surface|retired|invariant" > /tmp/ratchets.txt
 split -l 8 /tmp/ratchets.txt /tmp/rt-
 for g in /tmp/rt-*; do bun test $(sed 's|^|tests/|' $g | tr '\n' ' ') 2>&1 | grep -E "^\s*\(fail\)|[0-9]+ fail$"; done
 ```
 
-当前是 208 个文件、26 片，整份跑一遍几分钟。**凡是删函数 / 搬家 / 改装配图的改动，
-提交前把这份清单整份跑一遍**——比推上去等 11 个分片红了再逐个 grep CI 日志便宜得多。
+**过滤词要够宽**：第一版只用了前 12 个词，结果漏掉
+`scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts`——它的文件名里
+一个词都不含，于是又推红一格（非状态 `update(tasks)` 的每文件计数棘轮）。
+补上 `audit|inventory|snapshot|allowlist|debt|surface|retired|invariant` 之后是 267 个文件、34 片。
+判断标准不是「名字里有没有 lock」，而是「它是不是拿着一份**清单 / 计数 / 摘要**跟源码逐字比」。
+
+整份跑一遍几分钟。**凡是删函数 / 搬家 / 改装配图的改动，提交前把这份清单整份跑一遍**
+——比推上去等 11 个分片红了再逐个 grep CI 日志便宜得多。

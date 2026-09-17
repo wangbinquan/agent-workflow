@@ -12,7 +12,6 @@ import {
   diffWorkflowForSync,
   isHumanReviewConclusion,
   isTerminalNodeRunStatus,
-  isTerminalTaskStatus,
   isTurnEngineWorkgroupTask,
   isWrapperKind,
   isWorkgroupTask,
@@ -41,8 +40,6 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
-import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
@@ -55,9 +52,6 @@ import {
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
-  taskCollaborators,
-  taskFeedback,
-  taskExecutionMaintenanceMembers,
   taskRepos,
   taskSpaceNodes,
   tasks,
@@ -115,10 +109,7 @@ import {
   createPostgresqlTaskRouteRepairOperations,
   type PostgresqlTaskRepairOperations,
 } from './postgresqlTaskRouteRepairOperations'
-import {
-  withSerializableTaskExecution,
-  type TaskExecutionTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
   appendTaskNodeStatusesCommittedEvent,
@@ -130,6 +121,7 @@ function lacksMaterializedWorkspace(path: string): boolean {
 }
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import { parseMultipartLaunch } from '@/services/launchMultipart'
+import { deleteTask } from '@/services/taskDelete'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
@@ -147,13 +139,7 @@ import { selectSyncRollbackTargets } from '@/services/task'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { killStaleRunProcessTree } from '@/util/process'
-import {
-  deleteSnapshotRefs,
-  gitDiffSnapshot,
-  isGitWorkTree,
-  removeWorktree,
-  worktreeDiff,
-} from '@/util/git'
+import { gitDiffSnapshot, isGitWorkTree, worktreeDiff } from '@/util/git'
 import { Paths } from '@/util/paths'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import {
@@ -187,15 +173,6 @@ export interface TaskRouteUserDirectory {
   lookup(ids: readonly string[]): Promise<readonly UserPublic[]>
 }
 
-export interface TaskRouteDeletionEvents {
-  committed(
-    input: Readonly<{
-      taskIds: readonly string[]
-      visibleUserIdsByTask: ReadonlyMap<string, ReadonlySet<string>>
-    }>,
-  ): Promise<void>
-}
-
 export interface PostgresqlTaskRouteOperationsDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
@@ -215,7 +192,6 @@ export interface PostgresqlTaskRouteOperationsDependencies {
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
   readonly users: TaskRouteUserDirectory
   readonly owners: OwnerIdentityQueries
-  readonly deletionEvents: TaskRouteDeletionEvents
   /** Closed Collaboration facts used by the TaskExecution-owned repair engine. */
   readonly repair: Readonly<{
     readonly collaborationRuntime: CollaborationRuntimeMechanics
@@ -2181,259 +2157,9 @@ async function retryNode(
   return updated
 }
 
-interface DeleteWorktreeTarget {
-  readonly taskId: string
-  readonly repoPath: string
-  readonly worktreePath: string
-}
-
 // 两个调用点：一个传客户端本身，一个传事务句柄。RFC-359 W5-T18 之后事务句柄是中立的
 // `DatabaseTransaction`，客户端仍是 PG 客户端——取二者共同的读面（`ProviderNeutralDatabase`
 // 是两个 provider 客户端的公共基类型，见 `db/query.ts`）。
-async function taskTreeIds(
-  db: Pick<TaskExecutionTransaction, 'select'>,
-  rootTaskId: string,
-): Promise<readonly string[]> {
-  const seen = new Set([rootTaskId])
-  let frontier = [rootTaskId]
-  while (frontier.length > 0) {
-    const children = await db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(inArray(tasks.parentTaskId, frontier))
-    frontier = []
-    for (const child of children) {
-      if (seen.has(child.id)) continue
-      seen.add(child.id)
-      frontier.push(child.id)
-    }
-  }
-  return [...seen]
-}
-
-async function cleanupDeletedTask(
-  taskIds: readonly string[],
-  worktrees: readonly DeleteWorktreeTarget[],
-  appHome: string,
-): Promise<'done' | 'pending'> {
-  let complete = true
-  for (const worktree of worktrees) {
-    try {
-      await removeWorktree({ ...worktree, force: true })
-    } catch {
-      complete = false
-      try {
-        await rm(worktree.worktreePath, { recursive: true, force: true })
-      } catch {
-        complete = false
-      }
-    }
-    try {
-      await deleteSnapshotRefs(worktree.repoPath, worktree.taskId)
-    } catch {
-      complete = false
-    }
-  }
-  for (const taskId of taskIds) {
-    for (const directory of [
-      join(appHome, 'runs', taskId),
-      join(appHome, 'logs', taskId),
-      join(appHome, 'scratch', taskId),
-    ]) {
-      try {
-        await rm(directory, { recursive: true, force: true })
-      } catch {
-        complete = false
-      }
-    }
-  }
-  return complete ? 'done' : 'pending'
-}
-
-async function deleteTask(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
-  taskId: string,
-): Promise<{ taskId: string; cleanup: 'done' | 'pending' }> {
-  const root = await requireTaskRow(dependencies.db, taskId)
-  if (!isTerminalTaskStatus(root.status as TaskStatus)) {
-    throw new ConflictError('task-not-terminal', `task '${taskId}' is ${root.status}`)
-  }
-  if (root.spaceKind === 'internal') {
-    throw new ConflictError(
-      'task-internal',
-      `task '${taskId}' is framework-internal and cannot be deleted directly`,
-    )
-  }
-  const taskIds = await taskTreeIds(dependencies.db, taskId)
-  const treeRows = await dependencies.db
-    .select({
-      id: tasks.id,
-      status: tasks.status,
-      spaceKind: tasks.spaceKind,
-      repoPath: tasks.repoPath,
-      worktreePath: tasks.worktreePath,
-      ownerUserId: tasks.ownerUserId,
-    })
-    .from(tasks)
-    .where(inArray(tasks.id, taskIds))
-  for (const row of treeRows) {
-    if (!isTerminalTaskStatus(row.status as TaskStatus)) {
-      throw new ConflictError(
-        'task-has-active-children',
-        `task '${taskId}' has non-terminal child '${row.id}'`,
-      )
-    }
-    if (dependencies.activity.isActive(row.id)) {
-      throw new ConflictError('task-active', `task '${row.id}' still has an active process`)
-    }
-  }
-  if (root.parentTaskId !== null) {
-    const parentRows = await dependencies.db
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, root.parentTaskId))
-      .limit(1)
-    if (parentRows[0] !== undefined && !isTerminalTaskStatus(parentRows[0].status as TaskStatus)) {
-      throw new ConflictError(
-        'task-parent-active',
-        `parent task '${root.parentTaskId}' must settle before deleting '${taskId}'`,
-      )
-    }
-  }
-  const [repoRows, memberRows, maintenanceMembers] = await Promise.all([
-    dependencies.db
-      .select({
-        taskId: taskRepos.taskId,
-        repoPath: taskRepos.repoPath,
-        worktreePath: taskRepos.worktreePath,
-      })
-      .from(taskRepos)
-      .where(inArray(taskRepos.taskId, taskIds)),
-    dependencies.db
-      .select({ taskId: taskCollaborators.taskId, userId: taskCollaborators.userId })
-      .from(taskCollaborators)
-      .where(inArray(taskCollaborators.taskId, taskIds)),
-    dependencies.persistence.terminalMaintenance.snapshotTree(taskId),
-  ])
-  const worktrees = [
-    ...new Map(
-      treeRows
-        .filter((row) => row.spaceKind !== 'inherited')
-        .flatMap((row) => {
-          const owned = repoRows.filter((repo) => repo.taskId === row.id)
-          return owned.length > 0
-            ? owned.map((repo) => ({
-                taskId: row.id,
-                repoPath: repo.repoPath,
-                worktreePath: repo.worktreePath,
-              }))
-            : [{ taskId: row.id, repoPath: row.repoPath, worktreePath: row.worktreePath }]
-        })
-        .filter((row) => row.repoPath !== '' && row.worktreePath !== '')
-        .map((row) => [`${row.repoPath}\u0000${row.worktreePath}`, row] as const),
-    ).values(),
-  ]
-  const visibleUserIdsByTask = new Map<string, ReadonlySet<string>>()
-  for (const row of treeRows) {
-    const visible = new Set<string>()
-    if (row.ownerUserId !== null) visible.add(row.ownerUserId)
-    for (const member of memberRows) {
-      if (member.taskId === row.id) visible.add(member.userId)
-    }
-    visibleUserIdsByTask.set(row.id, visible)
-  }
-  let claim = await dependencies.persistence.terminalMaintenance.claim({
-    rootTaskId: taskId,
-    operation: 'delete',
-    members: maintenanceMembers,
-    cleanupPlanJson: JSON.stringify({ v: 1, taskId, taskIds, worktrees }),
-  })
-  claim = await dependencies.persistence.terminalMaintenance.transition({
-    claim,
-    to: 'io-complete',
-  })
-  await withSerializableTaskExecution(dependencies.db, async (tx) => {
-    const claimedRows = await tx
-      .select({ taskId: taskExecutionMaintenanceMembers.taskId })
-      .from(taskExecutionMaintenanceMembers)
-      .where(
-        and(
-          eq(taskExecutionMaintenanceMembers.claimId, claim.claimId),
-          isNull(taskExecutionMaintenanceMembers.releasedAt),
-        ),
-      )
-    const currentIds = await taskTreeIds(tx, taskId)
-    const expected = maintenanceMembers.map((member) => member.taskId).sort()
-    if (
-      JSON.stringify(claimedRows.map((row) => row.taskId).sort()) !== JSON.stringify(expected) ||
-      JSON.stringify([...currentIds].sort()) !== JSON.stringify(expected)
-    ) {
-      throw new ConflictError(
-        'task-terminal-maintenance-conflict',
-        `task tree '${taskId}' changed after delete claim`,
-      )
-    }
-    const fresh = await tx
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-    if (fresh[0] === undefined || !isTerminalTaskStatus(fresh[0].status as TaskStatus)) {
-      throw new ConflictError(
-        'task-terminal-maintenance-conflict',
-        `task '${taskId}' changed after delete claim`,
-      )
-    }
-    await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, expected)).run()
-    await tx.delete(tasks).where(eq(tasks.id, taskId)).run()
-
-    // RFC-311 实现门 P1-6 / P2-3（RFC-359 W8 抬齐到 PG）：`branch_started_at` 是「子树
-    // max(started_at)」的**物化**值，只有铸行点向上单调 MAX 推进过它。删掉一棵子树之后没人
-    // 把它拉回来，父行就**永久**停在被删子树的时间戳上——同一份数据在默认视图（快路径按
-    // 物化列排序）与任一过滤视图（旧管线现算）之间行序不同且永不收敛。
-    // 删除是低频操作，在同一事务里沿父链重算即可闭合（链长同 MAX_TREE_DEPTH）。
-    // 与 SQLite 的 `services/taskDelete.ts` 同形；`coalesce(max(...), 0)` 是聚合，两个方言
-    // 同名同义（两参数的 `MAX(a,b)` 是 SQLite 独有的，这里没有用到）。
-    let cursor: string | null = root.parentTaskId
-    for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
-      const parent = (
-        await tx
-          .select({ id: tasks.id, parentTaskId: tasks.parentTaskId, startedAt: tasks.startedAt })
-          .from(tasks)
-          .where(eq(tasks.id, cursor))
-          .limit(1)
-      )[0]
-      if (parent === undefined) break
-      const childMax = (
-        await tx
-          .select({ v: sql<number>`coalesce(max(${tasks.branchStartedAt}), 0)`.mapWith(Number) })
-          .from(tasks)
-          .where(eq(tasks.parentTaskId, parent.id))
-      )[0]
-      await tx
-        .update(tasks)
-        .set({ branchStartedAt: Math.max(parent.startedAt ?? 0, childMax?.v ?? 0) })
-        .where(eq(tasks.id, parent.id))
-        .run()
-      cursor = parent.parentTaskId
-    }
-  })
-  claim = await dependencies.persistence.terminalMaintenance.transition({
-    claim,
-    to: 'db-finalized',
-  })
-  await dependencies.deletionEvents.committed({ taskIds, visibleUserIdsByTask })
-  const cleanup = await cleanupDeletedTask(taskIds, worktrees, dependencies.appHome ?? Paths.root)
-  if (cleanup === 'done') {
-    await dependencies.persistence.terminalMaintenance.complete({ claim })
-  } else {
-    await dependencies.persistence.terminalMaintenance.transition({
-      claim,
-      to: 'cleanup-pending',
-    })
-  }
-  return { taskId, cleanup }
-}
 
 /** Complete PostgreSQL binding for the classic `/api/tasks` surface. */
 export function createPostgresqlTaskRouteOperations(
@@ -2506,7 +2232,11 @@ export function createPostgresqlTaskRouteOperations(
       if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       return task
     },
-    delete: (taskId) => deleteTask(dependencies, taskId),
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：`delete` 与 SQLite 共用**同一份**
+    //（`services/taskDelete.ts`，上一提刚把它从 bun:sqlite 专有句柄中立化）。本文件里那份
+    // 184 行的内联实现随之退役；提交后的 WS 广播由共用实现自己做，`deletionEvents`
+    // 这个转发端口与它在组合根里的绑定一并删除（与第 4 刀的 `membershipEvents` 同形）。
+    delete: (taskId) => deleteTask(dependencies.db, taskId, { activity: dependencies.activity }),
     async resume({ actor, taskId }) {
       await dependencies.children.resume(
         { taskId, runtime: dependencies.resumeRuntimeFor(actor, taskId) },

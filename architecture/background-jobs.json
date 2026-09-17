@@ -5349,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3435",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3439",
       "kind": "register-call",
-      "line": 3435,
+      "line": 3439,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5360,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1372",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1373",
       "kind": "register-call",
-      "line": 1372,
+      "line": 1373,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3232",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3236",
       "kind": "register-call",
-      "line": 3232,
+      "line": 3236,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3502",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3506",
       "kind": "register-call",
-      "line": 3502,
+      "line": 3506,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -12755,5 +12755,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc"
+  "sourceDigest": "sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3"
 }

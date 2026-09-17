@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 844,
+    "consumers": 846,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1041,
+    "methods": 1043,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20303,
-    "symbols": 959
+    "recursiveFields": 20307,
+    "symbols": 960
   },
   "entries": [
     {
@@ -73431,7 +73431,9 @@
           "signatureDigest": "sha256:89c739ec08428e02e69a838558ba116cd2d99847e4a5e47afc98d9b0a0d26be1"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:82867d7d706f853a6771"
+          ],
           "name": "delete",
           "signatureDigest": "sha256:8705c6f0800f36128a4c4de23d11b7b8fcbac6a3bd6ab0f397b7dc57c66f60ca"
         },
@@ -90138,7 +90140,9 @@
           "signatureDigest": "sha256:703650213f97213730b29c875074a0a3fe0f8475c000e919508dc3e349ad581c"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:9bca27b2bc79494e3986"
+          ],
           "name": "delete",
           "signatureDigest": "sha256:9e58dc492bfa349ed6a2a01797154f771aa9edf61af78cd691dac09c4c169134"
         },
@@ -142888,6 +142892,86 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
+        "import:ebfc57149d6e7daac3b6"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:awaitReleasedSettled.$parameter:taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:awaitReleasedSettled.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isActive.$parameter:taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isActive.$return",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:ActiveTaskExecutionParticipant",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "awaitReleasedSettled",
+          "signatureDigest": "sha256:a066e6ad63071c7ccfc1c721647e1060ab6e5abc88eaa412be392cb53527323d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ebfc57149d6e7daac3b6"
+          ],
+          "name": "isActive",
+          "signatureDigest": "sha256:6112b257f26ebcf0317aa327143df6e2a5939be69a77366b82bee66b01d9a75b"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:ebfc57149d6e7daac3b6",
+          "file": "packages/backend/src/services/taskDelete.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:725de69bd08cb90bf211cbe5be3604e3d3347f46846a6d94be2274f45114b341",
+      "status": "target-context-current-surface",
+      "symbol": "ActiveTaskExecutionParticipant",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
         "import:9b52076344e4d0aad288"
       ],
       "context": "task-execution",
@@ -159656,7 +159740,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc",
+  "sourceDigest": "sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3",
   "targetContexts": [
     "collaboration",
     "development-automation",

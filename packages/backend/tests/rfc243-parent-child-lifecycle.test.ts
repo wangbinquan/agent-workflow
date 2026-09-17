@@ -233,7 +233,11 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
     const parent = await seedTask(db, wf, { status: 'done' })
     const child = await seedTask(db, wf, { status: 'done', parentTaskId: parent })
     await seedTask(db, wf, { status: 'running', parentTaskId: child })
-    await expect(deleteTask(db, parent)).rejects.toMatchObject({
+    await expect(
+      deleteTask(db, parent, {
+        activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+      }),
+    ).rejects.toMatchObject({
       code: 'task-has-active-children',
     })
   })
@@ -243,7 +247,11 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'done', parentTaskId: parent })
-    await expect(deleteTask(db, child)).rejects.toMatchObject({ code: 'task-parent-active' })
+    await expect(
+      deleteTask(db, child, {
+        activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+      }),
+    ).rejects.toMatchObject({ code: 'task-parent-active' })
   })
 
   test("an inherited child's delete never removes the (parent-owned) workspace dir", async () => {
@@ -258,7 +266,9 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
       spaceKind: 'inherited',
       worktreePath: isoDir,
     })
-    const result = await deleteTask(db, child)
+    const result = await deleteTask(db, child, {
+      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+    })
     expect(result.taskId).toBe(child)
     expect(existsSync(isoDir)).toBe(true) // parent's iso survives the child delete
   })

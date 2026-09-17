@@ -2,6 +2,40 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 68，**`delete` 合一；修 a889b978c 推的 S-14**）
+>
+> **先说红**：`a889b978c` / `ec8f93be5` 在两个分片上红同一条——`scheduler-audit-s14` 的
+> 非状态 `update(tasks)` 每文件计数。原因是**收敛**（第 4 刀删掉 PG 内联的 `replaceTaskMembers`，
+> 它那处 `update(tasks).set({ownerUserId})` 随之消失），棘轮只降不升，改小。
+> **为什么上一轮整份扫描没扫到**：我那份棘轮清单的过滤词只有 12 个，而这个文件叫
+> `scheduler-audit-s14-…-inventory.test.ts`，一个词都不含。补上
+> `audit|inventory|snapshot|allowlist|debt|surface|retired|invariant` 后清单从 208 涨到 267 个文件。
+> 判断标准不是「名字里有没有 lock」，而是**「它是不是拿着一份清单 / 计数 / 摘要跟源码逐字比」**。
+>
+> **第 5 刀正题**：`delete` 两个引擎共用 `services/taskDelete.ts`，PG 那侧 184 行内联实现退役。
+> 三处分叉三个判据：①前置门次序取 PG（`task-internal` 先于 `task-active`——「永远不能删」
+> 是主因，「先取消再来」是次因，与 `diff` 的 409/410 同一条判据）；②活跃度改成**注入的参与者**
+>（装配点收成一个 `composeLegacyTaskActivityParticipant`，行为不变）；③提交后广播由共用实现自己做，
+> `deletionEvents` 端口与它 15 行的绑定一并删除。
+>
+> **合并解锁了两格覆盖**：A19 原来缺 `task-active`（SQLite 侧读模块全局、对拍驱不动）。
+> 现在补上它本身，外加**两门同时失败**（内部 + 活跃）的次序格——把两道门对调的变异**两个引擎同时红**。
+>
+> 一处边界修正：`taskDelete.ts` 起初直接 import 了模块的 application port，`rfc317-t22` 当场红；
+> 改成从 `public/participants` 出类型，`rfc294-public-surfaces` 959 → 960 并写了 `allowGrowth`
+> 点名本 RFC——有意的合同外放，实现仍由组合根注入。
+>
+> 账本连带：`scheduler-audit-s14` 里 `postgresqlTaskRouteOperations.ts` **整行销账**（2→1→0，
+> 两刀各带走一处非状态 `update(tasks)`），`ledger-baselines` 对应基线 15 → 14。
+>
+> 证据：W7 对拍 58/58 双引擎（含新增 A19b）；delete 面 273/273；267 个棘轮 34 片；
+> 架构守卫 + W29 714/714；tsc 0 / eslint 0 / prettier 干净。
+>
+> **下一刀**：⑤`resume` / `retry`（差异面最大）。`cancel` 那一格的真实两份实现在
+> `ChildTaskLifecycleParticipant` 这一对上，是另一刀。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` 盘点后的第 5 刀。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 67，**第 5 刀的前置：`taskDelete` 中立化 + 分叉勘察**）
 >
 > `services/taskDelete.ts` 的库句柄从 bun:sqlite 专有类型放宽到中立别名。卡住它的只有**五处 `.get()`**

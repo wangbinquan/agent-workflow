@@ -176,6 +176,8 @@ function sqliteOperations(
     collaboration: {} as never,
     recovery,
     owners: composeOwnerIdentityQueries(client),
+    // RFC-359 AC-1（第 5 刀）：本对拍不驱动活跃度，给一个恒空的参与者。
+    activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     startDepsFor: () =>
       ({
         db: client,

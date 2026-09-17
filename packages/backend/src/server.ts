@@ -166,6 +166,7 @@ import {
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
+import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
 import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
@@ -2518,6 +2519,9 @@ function composeSqliteApiRouteMounts(
     collaboration: deps.collaborationContext,
     // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。
     owners: composeOwnerIdentityQueries(deps.db),
+    // RFC-359 AC-1（第 5 刀）：`delete` 的 `task-active` 门读注入的参与者，不再读模块全局。
+    // 这条路不装配完整 runtime，所以直接取那个唯一装配点。
+    activity: composeLegacyTaskActivityParticipant(),
     recovery: taskExecutionPersistence.recoveryAdministration,
     startDepsFor: (actor) =>
       buildStartTaskDeps(

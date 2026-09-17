@@ -692,8 +692,8 @@
       "id": "s14-non-status-tasks-update-snapshot",
       "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
       "symbol": "NON_STATUS_UPDATE_TASKS_SNAPSHOT",
-      "baseline": 15,
-      "why": "S-14：不经 setTaskStatus、直接 update(tasks) 写非状态列的站点清单（按文件计数）。每一条都是一处绕开生命周期 CAS 的直写面，新增一条就要人复核它确实不碰 status。RFC-359 W7 第二波按判据 C 补入网。 RFC-359 W8：PG 侧 `postgresqlTaskRouteOperations.ts` 新增一处非 status 写点，15→16。它是 delete 路径沿父链重算 `branch_started_at` 的那笔 UPDATE——SQLite 侧 `services/taskDelete.ts` 一直有、PG 侧一直没有，导致父任务的物化排序列永久停在已删子树的时间戳上。补齐它就必然多一个非 status 写点；这是抬齐两个引擎的代价，不是新债。"
+      "baseline": 14,
+      "why": "S-14：不经 setTaskStatus、直接 update(tasks) 写非状态列的站点清单（按文件计数）。每一条都是一处绕开生命周期 CAS 的直写面，新增一条就要人复核它确实不碰 status。RFC-359 W7 第二波按判据 C 补入网。 RFC-359 W8：PG 侧 `postgresqlTaskRouteOperations.ts` 新增一处非 status 写点，15→16。它是 delete 路径沿父链重算 `branch_started_at` 的那笔 UPDATE——SQLite 侧 `services/taskDelete.ts` 一直有、PG 侧一直没有，导致父任务的物化排序列永久停在已删子树的时间戳上。补齐它就必然多一个非 status 写点；这是抬齐两个引擎的代价，不是新债。。RFC-359 AC-1（plan §5hn 之后的盘点，第 4 / 5 刀）15 → 14：`postgresqlTaskRouteOperations.ts` 整行销账——第 4 刀删掉 PG 内联的 `replaceTaskMembers`，第 5 刀删掉 PG 内联的 `deleteTask`，两处非状态 `update(tasks)` 分别并入共用的 `updateTaskMembersLocked` 与 `services/taskDelete.ts`"
     },
     {
       "id": "rfc310-composition-consumers",
@@ -804,7 +804,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1677,
+      "baseline": 1675,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -839,7 +839,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5083,
+      "baseline": 5081,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -860,7 +860,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4567,
+      "baseline": 4564,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -874,8 +874,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 959,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 960,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）959 → 960：`ActiveTaskExecutionParticipant` 这个端口类型出到 task-execution 的 public 面。两个引擎共用的 `services/taskDelete.ts` 的 `task-active` 门要读它（不再读模块级全局 `isTaskActive`），而 legacy 层不得 import 模块内部（`rfc317-t22` 的 inbound 越界账本）。**这是一次有意的合同外放，不是新增耦合**：实现仍由组合根装配后注入，public 面只出类型。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -895,12 +898,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24687,
+      "baseline": 24683,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc",
+    "sourceDigest": "sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +916,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a889b978cdaef28cd54576b148854a30d2b9ff67",
-    "contentDigest": "sha256:974a20f5d097b900f116a96c8a6f0d8a736b9141201d33ddfa07ba7b48bb1c48",
+    "currentSnapshotSha": "ec8f93be5a90b231f44838b82d5d557b6e56baf9",
+    "contentDigest": "sha256:5be2912b8f36a104d80f9e49afc4b5867458b909ee3c12e26dd32c52bc28676a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

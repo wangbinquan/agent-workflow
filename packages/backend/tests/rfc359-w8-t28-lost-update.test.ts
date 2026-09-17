@@ -640,8 +640,12 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     // 它们之间没有任何串行化），让认领链先走完，之后才进事务。
     const releaseFirst = await getTaskWriteSem(firstChild).acquire()
     const releaseSecond = await getTaskWriteSem(secondChild).acquire()
-    const deletingFirst = deleteTask(legacy(db), firstChild)
-    const deletingSecond = deleteTask(legacy(db), secondChild)
+    const deletingFirst = deleteTask(legacy(db), firstChild, {
+      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+    })
+    const deletingSecond = deleteTask(legacy(db), secondChild, {
+      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+    })
     // 两笔删除各自走完认领链之后会停在自己的每任务写锁上——等**那件事**发生，
     // 而不是等 20 个 tick（见 `waitForQueued` 的注释）。
     await waitForQueued(getTaskWriteSem(firstChild), 1, '第一笔删除停到自己的写锁上')

@@ -374,3 +374,12 @@ export interface DigitalEmployeeExecutionParticipant {
   inspectHumanReview?(executionRef: string): Promise<DigitalEmployeeHumanReviewState | null>
   cancel(executionRef: string): Promise<void>
 }
+
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：进程内活跃度参与者的**公共合同**。
+ *
+ * `services/taskDelete.ts`（两个引擎共用的删除实现）的 `task-active` 门读它而不是模块级全局
+ * `isTaskActive`。legacy 层不得 import 模块内部（`rfc317-t22` 的 inbound 越界账本盯这条），
+ * 所以那个端口类型从这里出去。实现仍由组合根装配后注入。
+ */
+export type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'

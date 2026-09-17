@@ -16489,3 +16489,55 @@ PG 的注释里就写着「与 SQLite 的 `services/taskDelete.ts` 同形」）�
 A19 现在只有四道门。合并注入 `activity` 之后补两格：`task-active` 本身，
 以及**两门同时失败**（内部 + 活跃）的次序格——后者正是「检查次序类判据要让两道门同时失败」
 那条踩坑的又一处应用。
+
+## 盘点后的第 5 刀落地　`delete` 合一
+
+`TaskRouteOperations` 这一对的第四组。PostgreSQL 那侧 184 行的内联实现退役，两个引擎共用
+`services/taskDelete.ts`（上一提刚把它从 bun:sqlite 专有句柄中立化）。
+
+### 三处分叉，三个判据
+
+1. **前置门次序**——取 PG 那一档：`task-internal` 先于 `task-active`。
+   `task-internal` 是「这个任务永远不能直接删」，`task-active` 是「先取消再来」；
+   把用户引向一条死路比引向一次重试更糟。**与 `diff` 的 409/410 次序同一条判据**。
+2. **活跃度从哪里读**——取 PG 那一档：注入的 `ActiveTaskExecutionParticipant`，
+   不再是模块级全局 `isTaskActive`。装配点收成一个（`composeLegacyTaskActivityParticipant`，
+   包的就是那两个全局，行为一模一样），三条路各取一次：`providerRuntime`（从
+   `participants.activity` 直接给）、`server.ts`（不装配完整 runtime，直呼装配点）、
+   W7/W8 对拍（可控桩）。
+3. **提交后通知**——共用实现自己广播，PG 的 `deletionEvents` 端口与它在组合根里的 15 行绑定
+   一并删除（与第 4 刀的 `membershipEvents` 同形）。
+
+### 合并解锁的两格覆盖（A19b）
+
+A19 原来只有四道门，**缺 `task-active`**——因为合并前 SQLite 侧读模块全局，对拍驱不动。
+活跃度改成注入之后补两格：
+
+- `task-active` 本身（终态但仍有活进程）；
+- **两门同时失败**（框架内部 + 活进程）→ 必须报 `task-internal`。
+  这是唯一能观测到次序的那一格；变异实证：把两道门对调，**两个引擎同时红**。
+
+### 一处边界修正
+
+`services/taskDelete.ts` 起初直接 import 了 task-execution 的 application port——
+`rfc317-t22` 的 inbound 越界账本当场红（legacy 层不得 import 模块内部）。改成从
+`public/participants` 出这个类型，`rfc294-public-surfaces` 基线 959 → 960 并写了
+`allowGrowth` 点名本 RFC：**这是一次有意的合同外放，不是新增耦合**——实现仍由组合根注入，
+public 面只出类型。
+
+### 账本连带
+
+`scheduler-audit-s14` 的非状态 `update(tasks)` 每文件快照里，
+`postgresqlTaskRouteOperations.ts` **整行销账**（2 → 1 → 0）：第 4 刀带走 `replaceTaskMembers`
+那处 `update(tasks).set({ownerUserId})`，第 5 刀带走内联 `deleteTask` 那处 `branch_started_at`
+沿父链重算——两处都并进了共用实现里本来就逐字同形的那一段。`ledger-baselines` 的
+`s14-non-status-tasks-update-snapshot` 基线 15 → 14。
+
+### 剩余（承前，⑤起）
+
+⑤`resume` / `retry`（生命周期 CAS + 回滚快照，差异面最大）⑥`workflowSyncPreview` /
+`syncWorkflow` ⑦`repairOptions` / `applyRepair`，然后是命名债收尾（§5hj）。
+`cancel` 这一格单独说明：两侧的路由动词都已经很薄（SQLite 直呼 `cancelTask`，PG 转
+`children.cancel`），真正的两份实现在 **`ChildTaskLifecycleParticipant`** 这一对上
+（SQLite 那半转 `cancelTask`，PG 那半是 `postgresqlChildTaskLifecycleParticipant` 的原生实现），
+那是另一对适配器、另一刀。
