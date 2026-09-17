@@ -16925,3 +16925,36 @@ classic 不在事务里写，崩完库里躺着一个只有 `approved_doc` 的�
 `rfc359-w8b-repair-{option-registry,preflight,admission}-parity` 在合并后只会拿一份实现和自己比，
 随本刀删除。它们的账已经销在上面那张表里，而行为面由 184 条双引擎断言接管——
 远强于三条纯门对拍。
+
+## 第 9 刀的勘察　`resume` / `retry`　——两侧**各有一道对方没有的门**
+
+盘点剩下最大的一组。逐个 gate 对读（去掉注释行后按调用点数）：
+
+| 前置门 | SQLite 的 `retryNode`（`services/task.ts`，485 行） | PG 的 `retryNode`（`postgresqlTaskRouteOperations.ts`，259 行） |
+| --- | --- | --- |
+| `assertChildTaskDrivable` | ✅ | **❌** |
+| `assertNotSourceTerminated` | **❌** | ✅ |
+| `assertRollbackBaselinesPresent` | **❌** | ✅ |
+| `assertFrozenTaskTriggerPreflight` | ✅ | ✅ |
+
+**这正是本轮反复记下的那类盲区**：A/B 结构的对拍里，「一侧有、另一侧没有」的门**两个 section 都不在**
+——A 段（共有行为）不含它，B 段（钉住的分叉）也没人登记它，于是它可以长期零覆盖。
+第 6 / 7 刀各咬到一处，这里一次咬到**三处**。
+
+三处的用户可见面各不相同，合并前要逐条定方向（不是简单「取并集」）：
+
+- `assertChildTaskDrivable`（SQLite 独有）：子任务在父调用行已终结时不可再驱动。
+  PG 侧缺它 ⇒ 一个父调用已经收场的子任务仍能被 retry 拉起来跑。
+  注：`rfc359-w7-task-route-conformance` 的 **A18** 已经在盯这条（判据缺口账本 02）。
+- `assertNotSourceTerminated`（PG 独有）：来源已终止的任务不可重试。
+- `assertRollbackBaselinesPresent`（PG 独有）：回滚基线缺失时不可重试
+  ——少了它，retry 会把节点回滚到一个不存在的 `pre_snapshot` 上。
+
+`resume` 那一半的形状不同：SQLite 走 `resumeTask(db, taskId, deps)`（`services/task.ts`），
+PG 走 `children.resume({ taskId, runtime }, topology)` 参与者。第 8 刀已经把**修复**这条路上的
+复活收成一个 `resumeTaskAs(actor, taskId)` 端口，两个组合根各自实现；这一刀要处理的是
+路由动词本身的那两份。
+
+**次序（沿用前八刀的配方）**：①先立两侧 retry 的**准入门对拍**基线（六个错误码 + 上面三道门的
+有无），把三处「各有一道」钉成显式分叉；②把 `retryNode` 的行为套件（34 个文件引用它）中与路由
+动词直接相关的那批迁到共用入口上跑，取证；③合并 + 销账。
