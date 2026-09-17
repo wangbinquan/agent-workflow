@@ -17090,3 +17090,20 @@ nodeRunId 会把已完成的任务打成「没有调度器的 pending 僵尸」�
 （证明错误码那一半也在被断言）。
 
 至此 retry 的对拍面 7 格、14 条（两个引擎），**没有查到任何用户可见的分叉**。
+
+### 第 9 刀第 1 步第三收口　级联的 **kind 矩阵**也进对拍——共 **8 格 / 16 条**
+
+`retry-cascade-kind-matrix.test.ts`（645 行、12 种 NodeKind）此前只跑 SQLite。
+把它的**节点形状 switch 抽成共享夹具** `tests/helpers/nodeKindFixtures.ts`（两处共用，免得漂），
+然后在 w9 加一格**由共享表驱动**的双引擎矩阵：
+
+- 决策的单一事实源是 `NODE_KIND_BEHAVIORS[kind].retryCascade`——SQLite 直接读它，
+  PG 经 `nodeKindParticipatesInRetryCascade` 读它。
+- 所以这一格验的不是「表对不对」（`node-kind-behavior-table` 在验那个），
+  而是**两份实现有没有都去查那张表、并按它办事**。
+- 12 种可构造的 kind（`code-round` 由 `startCodeRoundTask` 合成、不可能作下游，夹具显式抛错）
+  在两个引擎上的铸/跳判断**逐项与表一致**。
+
+变异实证：让 PG 那份忽略共享表（级联时不再按 kind 跳过）⇒ 本格当场红。
+
+至此 retry 的对拍面 **8 格 / 16 条**，仍然没有查到任何用户可见的分叉。

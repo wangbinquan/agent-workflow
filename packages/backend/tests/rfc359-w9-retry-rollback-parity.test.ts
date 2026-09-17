@@ -32,13 +32,20 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  NODE_KIND_BEHAVIORS,
+  nodeKindParticipatesInRetryCascade,
+  type NodeKind,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, users, workflows } from '@/db/schema'
 import { runGit } from '@/util/git'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
+import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 
@@ -520,5 +527,77 @@ describeEachProvider('RFC-359 W9 —— retry 的 nodeRunId 归属门早于 CAS'
       mine: 'done',
       theirs: 'failed',
     })
+  })
+})
+
+// RFC-052 / RFC-053 T1d 的级联矩阵：**每种 NodeKind 在上游被重试时，要不要给它铸占位行**。
+//
+// 决策的单一事实源是 shared 的 `NODE_KIND_BEHAVIORS[kind].retryCascade`——SQLite 那份直接读它，
+// PG 那份经 `nodeKindParticipatesInRetryCascade` 读它。所以这里要验的不是「表对不对」
+//（`node-kind-behavior-table` 已经在验），而是**两份实现有没有都去查那张表、并按它办事**。
+// `retry-cascade-kind-matrix.test.ts` 在 SQLite 侧逐 kind 锁着这件事；这一格是两个引擎的对拍，
+// 节点形状与它共用 `tests/helpers/nodeKindFixtures.ts` 的同一份夹具，免得两边漂。
+// 变异实证：让 PG 那份忽略共享表（级联时不再按 kind 跳过）⇒ 本格当场红。
+describeEachProvider('RFC-359 W9 —— retry 级联的 kind 矩阵', (harness) => {
+  const fixtures: Fixture[] = []
+  afterEach(() => {
+    for (const item of fixtures) item.cleanup()
+    fixtures.length = 0
+  })
+
+  test('每种可构造的 NodeKind，两个引擎的铸/跳判断都与共享表一致', async () => {
+    // `code-round` 由 `startCodeRoundTask` 合成、校验器拒绝出现在用户定义里，
+    // 不可能是某个下游节点——夹具对它显式抛错，这里跳过。
+    const kinds = (Object.keys(NODE_KIND_BEHAVIORS) as NodeKind[]).filter(
+      (kind) => kind !== 'code-round',
+    )
+    expect(kinds.length, '矩阵抽空了 ⇒ 本格零预言力').toBeGreaterThanOrEqual(10)
+
+    const observed: string[] = []
+    const expected: string[] = []
+    for (const kind of kinds) {
+      const downId = `down_${kind.replace(/-/g, '_')}`
+      const definition = {
+        $schema_version: 5,
+        inputs: [],
+        nodes: [
+          { id: 'agent_a', kind: 'agent-single', agentName: 'a', promptTemplate: '' },
+          minimalNodeOfKind(downId, kind, 'agent_a'),
+        ],
+        edges: [
+          {
+            id: `agent_a-${downId}`,
+            source: { nodeId: 'agent_a', portName: 'out' },
+            target: { nodeId: downId, portName: 'in' },
+          },
+        ],
+      } as unknown as WorkflowDefinition
+      const fixture = await seedFixture(harness.db, {
+        definition,
+        status: 'failed',
+        runs: [
+          { nodeId: 'agent_a', status: 'failed' },
+          { nodeId: downId, status: 'done' },
+        ],
+      })
+      fixtures.push(fixture)
+      const execution = await executionFor(harness, fixture)
+      await execution.provider.routes.tasks.retry({
+        actor: execution.actor,
+        taskId: fixture.taskId,
+        nodeRunId: fixture.nodeRunId,
+        cascade: true,
+      })
+      const minted = (
+        await harness.db
+          .select({ nodeId: nodeRuns.nodeId, retryIndex: nodeRuns.retryIndex })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.taskId, fixture.taskId))
+      ).some((row) => row.nodeId === downId && row.retryIndex === 1)
+      observed.push(`${kind}:${minted ? 'mint' : 'skip'}`)
+      expected.push(`${kind}:${nodeKindParticipatesInRetryCascade(kind) ? 'mint' : 'skip'}`)
+    }
+
+    expect(observed, '某一侧的级联判断没有按共享表办事').toEqual(expected)
   })
 })
