@@ -37,6 +37,18 @@
 > 「为了构造参与者得交一个反正不会被调用的实现」，而委派 actor 上那个典型实现恰好会抛。
 > **判据：一个必填依赖如果只有某一类调用方会用，它就不属于共享的那层。**
 >
+> **⚠️ `20d4a6ce5` 推红过 e2e（六分片），同段第三笔修好**：`createTaskDriveCoordinator` 内部的
+> `runtimeConfigOpts(input.deps)` 从 `deps` 上读**十七个**运行期旋钮，而路由那台协调器一直只拿到
+> `{db, schedulerDriver, configPath}`——那十七个全是 undefined（类型上完全合法，它们都可选），
+> 驱动退回编译期缺省。webhook 一挪过来就照出来：故意崩溃的 runtime 节点被重试 **8 次**。
+> 三个组合根的三台协调器全部补上 `...resolveLaunchRuntimeConfig(configPath)`。
+> 新增守卫 `rfc359-w5hn-drive-coordinator-runtime-config` 扫每一处字面量 deps——
+> **它当场找出了第三台我没改到的协调器**（数字员工执行那条路）。写判据比逐个回忆调用点可靠。
+>
+> 顺带修一条真 flake（先量再改，不靠重跑）：定时启动对等用例的 PG 两条偶发红，成因是
+> `decorateTaskName` 的 ` · YYYY-MM-DD HH:MM` 是**分钟粒度**，两个 lane 跨分钟边界就不等。
+> `name` 进拒绝清单 + 逐 lane 断言装饰仍在（变异实证）。
+>
 > 账本：`triggerExecution.ts` 的同文件孪生销账；孪生分母 84→83；适配器分母 80→79；
 > 能力归属债 19→18；`rfc349-provider-specific-business-dependencies` 25→24。
 >

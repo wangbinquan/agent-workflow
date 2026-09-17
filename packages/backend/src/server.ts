@@ -2637,10 +2637,13 @@ function composeSqliteApiRouteMounts(
             secretBox: deps.secretBox,
             gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
             coordinator: createTaskDriveCoordinator({
+              // 同下面那台路由协调器：`runtimeConfigOpts(deps)` 读的十七个旋钮必须从配置漏斗取，
+              // 否则数字员工执行这条路也在用编译期缺省跑（RFC-359 AC-1，plan §5hn 批次二 ①②）。
               deps: {
                 db: deps.db,
                 schedulerDriver,
                 configPath: deps.configPath,
+                ...resolveLaunchRuntimeConfig(deps.configPath),
               },
               appHome,
               engineFailureMessage: 'digital employee execution task drive threw',
@@ -2785,7 +2788,19 @@ function composeSqliteApiRouteMounts(
       integrity: agentResourceIntegrity.launch,
     }),
     coordinator: createTaskDriveCoordinator({
-      deps: { db: deps.db, schedulerDriver, configPath: deps.configPath },
+      // RFC-359 AC-1（plan §5hn 批次二 ①②，**修 20d4a6ce5 推的 e2e 红**）：运行期配置必须与
+      // `buildStartTaskDeps` 取自同一处——`createTaskDriveCoordinator` 里的
+      // `runtimeConfigOpts(input.deps)` 从 `deps` 上读十七个旋钮（`defaultNodeRetries` /
+      // `defaultPerNodeTimeoutMs` / `commitPush` / `mergeAgent` / 各类并发上限…），
+      // 只给 `{db, schedulerDriver, configPath}` 时它们**全是 undefined**，驱动退回编译期缺省。
+      // webhook 启动改走这台协调器之后当场照出来：`webhook-mr-runtime-races` 里那个故意崩溃
+      // 的 runtime 节点被重试到 **8 次**（判据要 1 次），因为 `defaultNodeRetries` 丢了。
+      deps: {
+        db: deps.db,
+        schedulerDriver,
+        configPath: deps.configPath,
+        ...resolveLaunchRuntimeConfig(deps.configPath),
+      },
       appHome,
       engineFailureMessage: 'agent route task drive threw',
       failureReporter: {

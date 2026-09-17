@@ -58,12 +58,25 @@ const VOLATILE = new Set([
   'sourceAgentName',
   'scheduledTaskId',
   'repos',
+  // **时间相关，间歇性不等**（本轮实撞：18 文件同跑时 PG 那两条偶发红）。
+  // `decorateTaskName` 给定时任务名追加 ` · YYYY-MM-DD HH:MM`（`scheduledTasks.ts:843`，
+  // **分钟粒度**）。两个 lane 相隔几秒跑，只要跨过一次分钟边界这一格就不等。
+  // 摘掉它、改由 `assertScheduledName` 逐 lane 断言装饰确实加上了——
+  // 相等面不该由墙钟决定，但「有没有装饰」仍然必须守住。
+  'name',
   // **时间相关，不是引擎差异**：调度器是异步接手的，读回来时任务可能已经从
   // `pending` 翻到 `running`。拿它做相等断言等于把一条 flaky 写进守卫
   //（本仓硬规则：「绝不允许重跑就过了」）。改为各自 lane 断言它落在启动早期的
   // 两个合法状态之一——见下面的 `assertEarlyLifecycle`。
   'status',
 ])
+
+/** 定时任务名必须带上 `decorateTaskName` 的分钟级装饰——相等面摘掉它之后由这条守。 */
+function assertScheduledName(task: Record<string, unknown>, base: string): void {
+  expect(String(task['name']), '定时启动的任务名必须保留基名并追加 ` · YYYY-MM-DD HH:MM`').toMatch(
+    new RegExp(`^${base} \u00b7 \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$`),
+  )
+}
 
 /** `status` 从相等面摘掉之后仍要证明它没跑飞：启动刚完成只能是这两个状态。 */
 function assertEarlyLifecycle(task: Record<string, unknown>): void {
@@ -194,6 +207,7 @@ describeEachProviderHttpApplication(
 
       // 先钉住这一侧**本身**确实是定时启动落出来的——两个引擎同样地错也会让相等断言绿掉。
       assertEarlyLifecycle(task)
+      assertScheduledName(task, 'rfc359 scheduled workflow')
       expect(task['scheduledTaskId'], '定时启动必须把定时行 id 盖进任务').toBe(scheduleId)
       expect(task['workflowId'], '工作流定时必须挂在被选中的工作流上').toBe(workflow.id)
 
@@ -219,6 +233,7 @@ describeEachProviderHttpApplication(
       })
 
       assertEarlyLifecycle(task)
+      assertScheduledName(task, 'rfc359 scheduled agent')
       expect(task['scheduledTaskId'], '定时启动必须把定时行 id 盖进任务').toBe(scheduleId)
       expect(task['sourceAgentId'], '单代理定时必须记下发起它的 agent').toBe(agent.id)
 
@@ -259,6 +274,7 @@ describeEachProviderHttpApplication(
       })
 
       assertEarlyLifecycle(task)
+      assertScheduledName(task, 'rfc359 scheduled workgroup')
       expect(task['scheduledTaskId'], '定时启动必须把定时行 id 盖进任务').toBe(scheduleId)
       expect(task['workgroupId'], '工作组定时必须记下发起它的工作组').toBe(group.id)
       expect(task['workflowId'], '工作组启动必须挂在 __workgroup_host__ 锚上').toBe(

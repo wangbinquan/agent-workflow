@@ -1989,6 +1989,15 @@ async function composeSqliteProviderSession(
       db,
       schedulerDriver: taskExecutionRuntime.schedulerDriver,
       configPath: Paths.config,
+      // RFC-359 AC-1（plan §5hn 批次二 ①②，**修 20d4a6ce5 推的 e2e 红**）：
+      // 这台协调器的运行期配置必须和 `buildStartTaskDeps` 取自同一处。
+      // `createTaskDriveCoordinator` 里的 `runtimeConfigOpts(input.deps)` 从 `deps` 上读
+      // 十七个旋钮（`defaultNodeRetries` / `defaultPerNodeTimeoutMs` / `commitPush` /
+      // `mergeAgent` / 各类并发上限…）；只给 `{db, schedulerDriver, configPath}` 时它们**全是
+      // undefined**，驱动于是退回编译期缺省。webhook 启动改走这台协调器之后当场照出来：
+      // `webhook-mr-runtime-races` 里那个故意崩溃的 runtime 节点被重试到 **8 次**
+      //（判据要 1 次），因为 `defaultNodeRetries` 丢了。
+      ...launchRuntimeConfig,
     },
     appHome: Paths.root,
     // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：这台协调器同时驱动**定时 / webhook

@@ -630,8 +630,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `buildScheduleLaunch(db, …)`（`startExecution` 三分支 switch 的第三份写法）换成
     // `createBuildScheduleLaunch(createTaskExecutionTriggerParticipant({ launches, cancellation }))`，
     // 路由启动的依赖束提成具名 const 供两处复用，并给那台协调器补上延后仓库准备的第 0 步。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①② 收尾）：摘要随**协调器补回运行期配置**更新
+    // （`...resolveLaunchRuntimeConfig(deps.configPath)`）。20d4a6ce5 把 webhook 启动挪到这台
+    // 协调器上时漏了它——`runtimeConfigOpts(deps)` 于是读到十七个 undefined，驱动退回编译期缺省，
+    // e2e 当场红在「故意崩溃的 runtime 节点被重试 8 次」（判据要 1 次）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '435dfd31a2debf80b12acf088da97540ae763c1391c45177ccaed70fb3d9270e',
+      'ece3e4adf98b3d924a8c8c7f280a0ffeb57b481a542582f9f849de09d30aaae4',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

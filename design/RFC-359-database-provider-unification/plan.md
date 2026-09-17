@@ -15421,3 +15421,41 @@ G7 定时用例），判据面**一字未动**——迁的是夹具，不是断�
 - `rfc294-facades` 317 → 316、`rfc294-module-symbol-owners` 少一（文件没了）
 - 两处源码锁改口径：`rfc243-executor-facade` 的 call-face 清单、
   `rfc048` 的 `buildStartTaskDeps` 装配面
+
+## §5hn 批次二 ①②（修红）　协调器的运行期配置不能只交三格
+
+`20d4a6ce5` 把 webhook / 定时启动挪到路由那台 `TaskDriveCoordinator` 上之后，
+**Playwright e2e 六个分片同时红**：`webhook-mr-runtime-races` 里那个故意崩溃的 runtime 节点
+被重试到 **8 次**（判据要 1 次）。
+
+### 成因：一个「全可选」的依赖面把配置吞了
+
+`createTaskDriveCoordinator` 内部是 `runtimeConfigOpts(input.deps)`——它从 `deps` 上读
+**十七个**运行期旋钮（`defaultNodeRetries` / `defaultPerNodeTimeoutMs` / `commitPush` /
+`mergeAgent` / `maxConcurrentNodes` / `sessionRestartBudget` / 各类并发与超时上限…）。
+路由那台协调器一直只拿到 `{ db, schedulerDriver, configPath }`，那十七个于是**全是 undefined**
+——类型上完全合法（它们都可选），运行时驱动退回编译期缺省。
+
+此前没暴露，是因为走这台协调器的只有代理 / 工作组**直启**，而 e2e 里没有一条用例在那条路上
+验节点重试。webhook 一挪过来就当场照出来。
+
+**判据：`buildStartTaskDeps` 用 `...resolveLaunchRuntimeConfig(configPath)` 一次把十七格喂满，
+任何自己拼 `deps` 的调用点都必须做同一件事。** 三个组合根的三台协调器全部补上。
+
+### 新增守卫：`rfc359-w5hn-drive-coordinator-runtime-config`
+
+扫三个组合根里**每一处** `createTaskDriveCoordinator({ deps: … })`：字面量 deps 必须 spread
+一份 launch runtime config；整体交一个已构造好的 `StartTaskDeps`（裸标识符）天然合格。
+带语料非空断言与变异证据。
+
+**这条守卫当场找出了第三台我没改到的协调器**（数字员工执行那条路）——它和路由那台一样只拿三格。
+写判据比逐个回忆调用点可靠。
+
+### 顺带修一条真 flake（先量再改，不靠重跑）
+
+18 文件同跑时 `rfc359-w5hn-scheduled-launch-provider-parity` 的 PG 两条偶发红，单跑必绿。
+查到成因而不是重跑放过：`decorateTaskName` 给定时任务名追加 ` · YYYY-MM-DD HH:MM`
+（`scheduledTasks.ts:843`，**分钟粒度**），两个 lane 相隔几秒跑，跨过一次分钟边界这一格就不等。
+处置：`name` 进拒绝清单，另加 `assertScheduledName` 逐 lane 断言装饰确实加上了
+（变异实证：把基名改成 `MUTANT-BASE`，两个 lane 同时红）。
+**相等面不该由墙钟决定，但「有没有装饰」仍然必须守住。**
