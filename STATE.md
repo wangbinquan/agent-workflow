@@ -23,6 +23,15 @@
 >
 > 覆盖账正向信号：`TaskRouteOperations` 一对差额 3 → 2 跌破阈值，**退出观察名单**。
 >
+> **另记一处勘察（源码已确证、行为未复现，不按缺陷记账）**：两个引擎在「启动期静态校验」上
+> 喂进去的上下文不同——SQLite 走 `assertWorkflowSnapshotLaunchable` 带 candidate，
+> PG 的参与者走 `validateHostWorkflow(definition)` 不带。差的 candidate 正是
+> `ctx.callWorkflows` / `callWorkgroupNames` / `currentWorkflow` 的来源，也就是**所有 call-node
+> 规则**在 PG 启动期不参与判定。但最自然的触发路径（删掉 callee 再启动 caller）走不通——
+> 两个引擎都在删除处 409 `workflow-in-use`。合并批次二 ④ 之前要回答：还有没有别的路径能让
+> call 目标在运行期不可用；如果没有，那 SQLite 那侧的 candidate 也只是多一次闭包查询，
+> 两边该收敛到同一个口径。
+
 > 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ④ 的基线。
 
 > ## 📌 RFC-359 最新一段（2026-09-17 续 51，**`startExecution` 的三分支 switch 退出 SQLite 启动路**）

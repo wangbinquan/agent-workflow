@@ -15495,3 +15495,30 @@ postgresql  spaceNodes = []
 响应体的一致是另一件事（也值得比，两者都留着）——它证明**用户看到的**一样，
 不证明**存下来的**一样。RFC-359 恰恰有一整类缺陷活在这两者的缝里
 （`spaceNodes` 就是：库里没有行，响应里却被派生出一个）。
+
+### 批次二 ④ 勘察：合并前必须先回答的**一处校验口径差**（源码已确证，行为未复现）
+
+`sqliteTaskRouteOperations.launchWorkflow` 与 PG 的启动参与者在「启动期静态校验」上**喂进去的
+上下文不一样**：
+
+| | 启动期校验 | 上下文 |
+| --- | --- | --- |
+| SQLite JSON 路由 | `assertWorkflowSnapshotLaunchable(db, wf)` | `loadWorkflowValidationContext(db, { definition, currentWorkflow })` |
+| PostgreSQL 启动参与者 | `agent.resources.validateHostWorkflow(definition)` | `validationContext.load()`（只有 agents / skills / mcps / plugins） |
+
+差的是 `candidate`。`loadWorkflowValidationContext` 只在拿到 candidate 时才填
+`ctx.callWorkflows` / `ctx.callWorkgroupNames` / `ctx.currentWorkflow`
+（`workflow.validator.ts:212-229`）。也就是说**所有 call-node 规则**（调用目标存在性、
+环检测、调用闭包的端口接线）在 PostgreSQL 的启动期**不参与判定**——而
+`taskLaunchGate.ts` 的注释把这件事写成了硬要求：
+「launch is the ENFORCEMENT point of the call-node rules — thread the candidate so 4f/4g
+… actually gate here, not only in unit tests」。
+
+**但行为上没能复现**：最自然的触发路径（建 callee → 建带 call 节点的 caller → 删 callee →
+启动 caller）走不通——两个引擎都在删除处 409 `workflow-in-use`（引用完整性守卫挡住了）。
+所以这处差异**目前找不到可达的用户可见后果**，不能按「缺陷」记账。
+
+**合并批次二 ④ 之前要回答的问题**（合了就自动统一，但得知道统一到哪一侧）：
+① 还有没有别的路径能让 call 目标在运行期变得不可用（改名？版本推进？call-workgroup？）；
+② 如果没有，PG 那侧缺 candidate 是不是**本来就无所谓**——那 SQLite 那侧的 candidate 也就
+只是多花一次闭包查询，两边都该收敛到同一个口径，而不是各留各的。
