@@ -14,6 +14,7 @@ import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecyc
 import {
   assertTaskVisibleProjection,
   launchMultipartTask,
+  taskWorkflowSyncPreviewProjection,
   loadTaskProjection,
   replaceTaskMembersProjection,
   requireTaskOperatorProjection,
@@ -32,7 +33,6 @@ import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import {
   cancelTask,
-  computeWorkflowSyncPreview,
   getTask,
   resumeTask,
   retryNode,
@@ -48,7 +48,6 @@ import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOp
 import type { TaskRouteOperations } from '../public/taskRoutes'
 import type { PostgresqlTaskExecutionLaunchParticipant } from './postgresqlTaskRouteLaunchOperations'
 import { tasks as taskRows, type LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
-import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
 
 export interface SqliteTaskRouteOperationsDependencies {
   readonly db: LegacySqliteTaskDatabase
@@ -213,20 +212,20 @@ export function createSqliteTaskRouteOperations(
     events: (taskId, nodeRunId, options) =>
       nodeRunEventsProjection({ db }, taskId, nodeRunId, { ...options }),
     assertManualExecutionAllowed: (_actor, taskId) => assertManualExecutionAllowed(db, taskId),
-    async workflowSyncPreview(actor, taskId) {
-      const task = await requiredTask(db, taskId)
-      const workflow = await getWorkflow(db, task.workflowId)
-      if (workflow === null) return notSyncableWorkflowPreview(task, 'workflow-deleted')
-      if (!(await canViewResource(db, actor, 'workflow', workflow))) {
-        return notSyncableWorkflowPreview(task, 'workflow-not-visible')
-      }
-      return await computeWorkflowSyncPreview(
-        db,
-        task,
-        workflow,
-        dependencies.resourceAuthorityFor(actor),
-      )
-    },
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：预览与 PostgreSQL 共用**同一份**。
+    // 授权路径就是这一侧原来的**可见性**；合并同时抬进 PG 那侧更强的两道门——
+    // 非工作流任务不给同步横幅，以及进程内仍在跑时报 `task-active`
+    //（此前这一侧只看状态 + 工作树，刚重启守护进程的任务会预览成可同步、点下去 409）。
+    workflowSyncPreview: (actor, taskId) =>
+      taskWorkflowSyncPreviewProjection(
+        {
+          db,
+          activity: dependencies.activity,
+          resourceAuthorityFor: dependencies.resourceAuthorityFor,
+        },
+        actor,
+        taskId,
+      ),
     async syncWorkflow({ actor, taskId, expectedVersion }) {
       const task = await assertTaskSyncable(db, taskId)
       const workflow = await getWorkflow(db, task.workflowId)

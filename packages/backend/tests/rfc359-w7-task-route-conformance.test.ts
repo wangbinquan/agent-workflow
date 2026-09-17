@@ -366,6 +366,8 @@ interface SeedTaskOptions {
   readonly baseCommit?: string | null
   readonly repoCount?: number
   readonly name?: string
+  /** RFC-359 第 6 刀：`taskExecutionKind` 的判别列——置上它就是一个 agent 任务，不是工作流任务。 */
+  readonly sourceAgentName?: string
 }
 
 async function seedTask(
@@ -394,6 +396,7 @@ async function seedTask(
     spaceKind: (options.spaceKind ?? 'local') as 'local',
     parentTaskId: options.parentTaskId ?? null,
     parentNodeRunId: options.parentNodeRunId ?? null,
+    sourceAgentName: options.sourceAgentName ?? null,
     executionLineageId: id,
   })
   return id
@@ -856,6 +859,36 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：**合并解锁的两格覆盖**。
   // 合并前 SQLite 的活跃度读的是模块级全局 `isTaskActive`，对拍驱不动，所以 A19 一直
   // 只有四道门；`delete` 两个引擎共用一份、活跃度改成注入的参与者之后才喂得出来。
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：预览的 `task-active` 门此前**零覆盖**——
+  // 把它变异掉（`if (false)`）一条用例都不红。它原本是 PG 独有的，合并之后落到两个引擎的
+  // 共用路径上，按「改动自带测试」补上。判据：进程内还在跑时横幅必须说不可同步，
+  // 否则用户点下去稳定 409（这正是当初给 PG 加这道门的理由）。
+  test('A21 workflowSyncPreview：进程内仍在跑 → task-active，不给出可同步横幅', async () => {
+    const ops = operations(harness)
+    activeTaskIds.clear()
+    const workflowId = await seedWorkflow(harness.db)
+    const taskId = await seedTask(harness.db, { workflowId })
+
+    activeTaskIds.add(taskId)
+    const active = await ops.workflowSyncPreview(actorOf(OWNER), taskId)
+    expect(active.reason, '进程内活跃 ⇒ 不可同步').toBe('task-active')
+    expect(active.syncable).toBe(false)
+
+    activeTaskIds.clear()
+    const settled = await ops.workflowSyncPreview(actorOf(OWNER), taskId)
+    expect(settled.reason, '进程退出后这道门必须让开——否则横幅永远不可同步').not.toBe('task-active')
+  })
+
+  // 同上：非工作流任务那道门此前也是零覆盖（变异掉不红）。
+  test('A22 workflowSyncPreview：非工作流任务（agent）不给同步横幅', async () => {
+    const ops = operations(harness)
+    activeTaskIds.clear()
+    const agentTask = await seedTask(harness.db, { sourceAgentName: 'reviewer' })
+    const preview = await ops.workflowSyncPreview(actorOf(OWNER), agentTask)
+    expect(preview.reason, 'agent 任务没有可同步的工作流定义').toBe('workflow-deleted')
+    expect(preview.syncable).toBe(false)
+  })
+
   test('A19b delete：task-active 门，且它排在 task-internal 之后（两门同时失败时报 internal）', async () => {
     const ops = operations(harness)
     activeTaskIds.clear()

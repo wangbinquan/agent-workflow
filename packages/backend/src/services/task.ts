@@ -5154,7 +5154,7 @@ export async function syncTaskWorkflow(
  * definition currently fails static validation.
  */
 export async function computeWorkflowSyncPreview(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   task: Task,
   workflow: Workflow,
   resourceAuthority: TaskExecutionResourceAuthority,

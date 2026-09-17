@@ -16588,3 +16588,76 @@ PG 那份展开成若干段——**两边判据都全，是组织方式不同，
 W7 的 A17（内置工作流 sync → 403）与 B3 / B4 已经把这一对的关键格钉住；合并后 B3 应自己红
 （PG 额外要求「工作流当前可见/仍在」这一条会随授权路径的统一而消失或转成相等断言），
 B4 按 §5u 的登记保持为**已知差异**，不在本刀范围。
+
+## 盘后第 6 刀落地　`workflowSyncPreview` 合一
+
+按上一节的勘察实施。预览两个引擎共用 `taskWorkflowSyncPreviewProjection` 一份，
+授权路径统一成**可见性**，PG 那份 91 行的内联实现退役。
+
+### 三处收敛
+
+1. **授权路径**取可见性（原 SQLite 那一档），理由见上一节——PG 用可启动性时不得不补一道
+   内置工作流前置门去绕，换成可见性后那道门自然不需要。
+2. **非工作流任务**（agent / workgroup / code-round）不给同步横幅——原 PG 独有，抬进共用。
+3. **`task-active`**——原 PG 独有，抬进共用。此前 SQLite 的预览只看状态 + 工作树，
+   一个刚重启守护进程、库里状态还没落定的任务会预览成可同步、点下去稳定 409。
+
+`computeWorkflowSyncPreview` 的库句柄一并放宽到中立（它本来就全是普通 drizzle 查询）。
+`loadVisibleWorkflow` / `builtinCandidateWorkflow` **不退役**——上一节说它们会随预览一起消失，
+那是判断错了：`syncWorkflow`（写侧）与 `assertManualExecutionAllowed` 还在用它们，
+它们随写侧那一刀走。
+
+### 抬进来的两道门此前**零覆盖**，按「改动自带测试」补上
+
+把它们各自变异成 `if (false)`，**一条用例都不红**——它们原本是 PG 独有的判据，而 W7 的 A 段
+只收「两侧同义的公共子集」，B 段只收「架构不同」，这种「一侧有、另一侧没有」的门两边都不进。
+合并把它们落到共用路径上，于是必须补：
+
+- **A21**：进程内仍在跑 → `task-active`，且进程退出后这道门必须让开
+  （只断言前半会让「永远不可同步」这种反向缺陷绿过去）；
+- **A22**：agent 任务 → `workflow-deleted`，不给同步横幅。
+
+补完之后两条变异都在**两个引擎上同时红**。
+
+### 两把锁改锚
+
+- `rfc359-w58` 的源码锁原来锁「**两侧**各自都接上那两条共用判据」，预览合一后「两侧」不存在了。
+  换成等价但更强的一条：唯一那份预览必须委托 `computeWorkflowSyncPreview`、且走
+  `canViewResource`（不得回退成可启动性）；内联回去的负向锁原样保留。
+- `rfc359-converged-twins` 里 `notSyncableWorkflowPreview` 的消费者白名单从两个收成一个。
+
+### 一处过渡态的账本增长（已声明 allowGrowth）
+
+`rfc294-cross-context-observed-imports` 5081 → 5083：共用实现住在
+`postgresqlTaskRouteOperations.ts` 里，于是 `getWorkflow` / `canViewResource` 两条边在那个文件上
+新出现，而 SQLite 那一侧**没有减少**（它的 `syncWorkflow` 与 `assertManualExecutionAllowed`
+还在用同两个）。**随写侧那一刀一起回落。**
+
+### 第 7 刀的勘察　`syncWorkflow`（写侧）
+
+与预览不同，这一对**两边都是完整实现**，不是「薄壳 + 原生」：
+
+- SQLite：路由做三道门（`assertTaskSyncable` / 工作流存在 / 可见性），主体转
+  `services/task.ts#syncTaskWorkflow`；
+- PostgreSQL：`syncWorkflow()` 一整段——非工作流任务拒绝、内置身份（判据缺口账本 01b，
+  同位同序）、`awaitReleasedSettled` + `isActive`、状态转移表 `allowedFromForTaskEvent`、
+  工作树（**含 `workspacePrunedAt`**，即 B4）、可见装载、闭包冻结、宿主校验、差异计算、
+  被取消写节点的回滚（复用 SQLite 的权威选择器 `selectSyncRollbackTargets`）、准入 CAS、
+  `children.resume`。
+
+**已经共用的**：`diffWorkflowForSync`、`selectSyncRollbackTargets`、
+`assertFrozenTaskTriggerPreflight`（W8 收的）。**分叉**集中在两处：
+
+1. **B4**：`workspace_pruned_at` —— PG 的门认它，SQLite 的 `syncTaskWorkflow` 不认。
+   §5u 已登记为既有差异。合并时必须定档：一个工作区已被回收（pruned）但路径还在的任务，
+   sync 应当在前置门 409 `worktree-missing`（PG），还是穿过去到 resumeKick 才撞上（SQLite）。
+   **倾向取 PG**：与 `delete` 那一刀同一条判据——先报永久性的主因；工作区已回收是确定的
+   「这条路走不通」，让它往下走到 resumeKick 才报，错误来得更晚、现场更难读。
+2. **准入链的形状**：SQLite 走 `syncTaskWorkflow` 内部的 CAS + `resumeKick`，
+   PG 走 `withSerializableTaskExecution` + `children.resume`。这一格与 `resume` / `retry`
+   是同一套准入机制，**应当与它们同一刀处理**，不要在这里单独动。
+
+因此第 7 刀的合理范围是**只合前置门**（把 PG 那串门抬成共用的 `assertTaskSyncable`，
+B4 按上面的判据定档），主体留给 `resume` / `retry` 那一刀连同准入链一起收。
+这样上一刀那笔 `cross-context-observed-imports` 的 allowGrowth 也能按预期回落——
+门合一之后 SQLite 路由文件不再需要 `getWorkflow` / `canViewResource`。

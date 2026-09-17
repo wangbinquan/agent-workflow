@@ -76,26 +76,36 @@ describe('RFC-359 W58 —— 内置工作流的预览投影（纯函数）', () 
   })
 })
 
-describe('RFC-359 W58 —— 两个 provider 都从共用判据取（源代码层兜底）', () => {
+describe('RFC-359 W58 —— 预览只有一份，且它从共用判据取（源代码层兜底）', () => {
   const read = (relative: string): string =>
     readFileSync(resolve(import.meta.dir, '..', 'src', relative), 'utf8')
-  const postgresql = read('modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts')
+  const routes = read('modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts')
   const sqlite = read('services/task.ts')
 
-  test('PostgreSQL 的预览接了两条共用判据', () => {
-    expect(
-      postgresql,
-      'PG 的预览又不看 `workflows.builtin` 了 ⇒ 内置工作流的任务会拿到 workflow-deleted。',
-    ).toContain('builtinWorkflowSyncPreview(')
-    expect(postgresql, 'PG 的预览又只看进程内活跃表了 ⇒ 横幅说能同步、按钮必然 409。').toContain(
-      'workflowSyncGateReason(',
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：**这条锁的形状被合并超越了**。
+  // 它原来锁「两侧各自都接上那两条共用判据、谁都别再内联一份」；预览合成一份之后，
+  // 「两侧」已经不存在——两个组合根调的是同一个 `taskWorkflowSyncPreviewProjection`。
+  // 判据换成等价但更强的一条：**唯一那份预览必须委托给 `computeWorkflowSyncPreview`**，
+  // 而后者必须从共用判据取。内联回去的负向锁原样保留。
+  test('唯一那份预览委托给共用实现，没有第二份自己算的', () => {
+    expect(routes, '路由层又自己算预览了 ⇒ 两份实现必然再次漂移（这正是合并前的形状）。').toContain(
+      'computeWorkflowSyncPreview(',
     )
+    expect(
+      routes,
+      '预览又走可启动性授权了 ⇒ 内置工作流会被 loadAuthorized 挡住、横幅内容直接是错的。',
+    ).toContain("canViewResource(dependencies.db, actor, 'workflow', workflow)")
   })
 
-  test('SQLite 的预览接的是同两条（不是又抄了一份）', () => {
-    expect(sqlite).toContain('builtinWorkflowSyncPreview(')
-    expect(sqlite).toContain('workflowSyncGateReason(')
-    expect(sqlite, 'SQLite 侧又把可同步判据内联回去了：两份实现必然再次漂移。').not.toMatch(
+  test('共用实现接的是那两条判据（不是又抄了一份）', () => {
+    expect(
+      sqlite,
+      '共用预览又不看 `workflows.builtin` 了 ⇒ 内置工作流的任务会拿到 workflow-deleted。',
+    ).toContain('builtinWorkflowSyncPreview(')
+    expect(sqlite, '共用预览又只看进程内活跃表了 ⇒ 横幅说能同步、按钮必然 409。').toContain(
+      'workflowSyncGateReason(',
+    )
+    expect(sqlite, '可同步判据又被内联回去了：与 domain 那一份必然漂移。').not.toMatch(
       /const\s+statusSyncable\s*=/,
     )
   })

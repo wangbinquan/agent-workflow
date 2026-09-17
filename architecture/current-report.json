@@ -4,7 +4,7 @@
     "ambientWiring": 494,
     "architectureExceptions": 4564,
     "backgroundJobs": 331,
-    "crossContextImports": 5081,
+    "crossContextImports": 5083,
     "facades": 313,
     "governedFieldSurfaces": 5,
     "moduleSymbolOwners": 24683,
@@ -157,5 +157,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3"
+  "sourceDigest": "sha256:38ef1cb2450faef7711499a3ec4610ae0c7ca7559911645b2613cd2d6cd64abc"
 }

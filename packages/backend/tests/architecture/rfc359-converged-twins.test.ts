@@ -144,10 +144,10 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: '「这个任务同步不了」的预览投影：理由是唯一变量，其余字段是该形态的常量',
     fn: 'notSyncableWorkflowPreview',
     definedIn: `${B}modules/task-execution/domain/workflowSyncPreview.ts`,
-    consumers: [
-      `${B}modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts`,
-      `${B}modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`,
-    ],
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：消费者从两个收成一个——预览合一之后
+    // 只有 `taskWorkflowSyncPreviewProjection` 调它，SQLite 路由那一侧改成转调共用实现。
+    // 白名单只降不升，这是一次收敛。
+    consumers: [`${B}modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`],
     forkedFrom: [
       `${B}modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts`,
       `${B}modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`,

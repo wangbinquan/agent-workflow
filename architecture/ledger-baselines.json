@@ -839,8 +839,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5081,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5083,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）5081 → 5083：`workflowSyncPreview` 两个引擎合一之后，共用实现住在 `postgresqlTaskRouteOperations.ts` 里，于是 `@/services/workflow#getWorkflow` 与 `@/services/resourceAcl#canViewResource` 两条边在那个文件上**新出现**。SQLite 那一侧**没有减少**——它的 `syncWorkflow`（写侧）与 `assertManualExecutionAllowed` 还在用同两个。**这是过渡态的净增 2，随写侧那一刀一起回落**：`syncWorkflow` 合一后 SQLite 路由文件对这两条边的依赖会一起消失。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -900,7 +903,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:950f385dd9cbeefe8ac286bf51ada2813dc9efc92e4b1dd42d49bf1e342f4ed3",
+    "sourceDigest": "sha256:38ef1cb2450faef7711499a3ec4610ae0c7ca7559911645b2613cd2d6cd64abc",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +916,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "395dd3180dd8162da67c27b7a339d5e0d924b1bb",
-    "contentDigest": "sha256:68e79a2bcb97793f99f17aef6ca196bf4898c185c99c8304f3a9eae8d1c4b584",
+    "currentSnapshotSha": "97ea95423c5c6b2854d0b036087453d735a01bd4",
+    "contentDigest": "sha256:918f56ff6a8a511afda1f6d3c4aa40d84597bd4a3b50f52ac134aeb891e2c6b6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

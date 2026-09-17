@@ -2,6 +2,39 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 70，**`workflowSyncPreview` 合一**）
+>
+> 按续 69 的勘察实施：预览两个引擎共用一份，授权路径统一成**可见性**，PG 那份 91 行内联实现退役。
+> 另外两道原 PG 独有的门抬进共用：非工作流任务不给横幅、进程内仍在跑报 `task-active`。
+>
+> **最值钱的发现**：抬进来的这两道门此前**零覆盖**——各自变异成 `if (false)`，一条用例都不红。
+> 原因是它们本来只有一侧有，而 W7 的 A 段只收「两侧同义的公共子集」、B 段只收「架构不同」，
+> **「一侧有、另一侧没有」的门两边都不进**。合并把它们落到共用路径上才第一次被要求覆盖。
+> 补了 A21 / A22 之后两条变异在两个引擎上同时红。
+>
+> 两把锁改锚：`rfc359-w58` 原来锁「两侧各自接上共用判据」，合一后「两侧」不存在，换成
+> 「唯一那份预览必须委托共用实现、且不得回退成可启动性」；`converged-twins` 的消费者白名单两个收成一个。
+>
+> 一处过渡态增长已声明 allowGrowth：`cross-context-observed-imports` 5081 → 5083
+>（共用实现住在 PG 命名的文件里，两条边新出现，而 SQLite 侧因 `syncWorkflow` 还在用故没减少），
+> **随写侧那一刀回落**。
+>
+> `loadVisibleWorkflow` / `builtinCandidateWorkflow` **不退役**——续 69 判断错了，
+> `syncWorkflow` 与 `assertManualExecutionAllowed` 还在用它们。
+>
+> 证据：W7 对拍 62/62 双引擎；sync 面 104/104；架构守卫 + W29 714/714。
+>
+> **下一刀**：⑦`syncWorkflow`（写侧），**勘察已做完**。与预览不同，这一对**两边都是完整实现**。
+> 已共用的是 `diffWorkflowForSync` / `selectSyncRollbackTargets` / `assertFrozenTaskTriggerPreflight`；
+> 分叉集中在两处：①**B4**（`workspace_pruned_at`，PG 的门认、SQLite 不认，§5u 登记的既有差异，
+> 倾向取 PG——与 `delete` 同一条判据：先报永久性主因，工作区已回收就是「这条路走不通」，
+> 让它走到 resumeKick 才报，错误来得更晚、现场更难读）；②**准入链的形状**
+>（SQLite 的 CAS + resumeKick vs PG 的 `withSerializableTaskExecution` + `children.resume`）
+> ——这一格与 `resume` / `retry` 是同一套机制，**应当与它们同一刀处理**。
+>
+> 所以第 7 刀的合理范围是**只合前置门**，主体留给 `resume` / `retry` 那一刀。
+> 门一合，上一刀那笔 `cross-context-observed-imports` 的 allowGrowth 也随之回落。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 69，**CI 全绿；W18 那条本地红已裁决**）
 >
 > `395dd3180` **整条 CI 绿**——五刀（`node-runs` / 纯读三件 / 列表三件 / 访问门+成员四件 / `delete`）

@@ -122,6 +122,9 @@ function lacksMaterializedWorkspace(path: string): boolean {
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import { parseMultipartLaunch } from '@/services/launchMultipart'
 import { deleteTask } from '@/services/taskDelete'
+import { computeWorkflowSyncPreview } from '@/services/task'
+import { canViewResource } from '@/services/resourceAcl'
+import { getWorkflow } from '@/services/workflow'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
@@ -142,11 +145,7 @@ import { killStaleRunProcessTree } from '@/util/process'
 import { gitDiffSnapshot, isGitWorkTree, worktreeDiff } from '@/util/git'
 import { Paths } from '@/util/paths'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
-import {
-  builtinWorkflowSyncPreview,
-  notSyncableWorkflowPreview,
-  workflowSyncGateReason,
-} from '../domain/workflowSyncPreview'
+import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
 
 const log = createLogger('task-execution.postgresql-task-routes')
 
@@ -1359,96 +1358,54 @@ async function loadVisibleWorkflow(
   }
 }
 
-async function workflowSyncPreview(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）—— `GET /api/tasks/:id/workflow-sync` 的预览，
+ * 两个引擎共用一份。
+ *
+ * 域判据早就是共用的（`workflowSyncGateReason` / `diffWorkflowForSync` / 两个横幅构造器，W58 收的），
+ * 分叉在**外层这几行**：合并前 SQLite 走可见性（`getWorkflow` + `canViewResource`），
+ * PostgreSQL 走可启动性（`loadAuthorized({kind:'workflow-launch'})`）。
+ *
+ * **取可见性**——理由是 PG 那份自己的注释给的：它不得不在装载**之前**插一道内置工作流预检，
+ * 因为「内置工作流在那里就被挡住，异常被下面的 catch 兜成 `workflow-deleted`——横幅内容
+ * 直接是错的」。一个**预览**回答的是「同步会发生什么」，不是「我现在能不能启动它」；
+ * 用可启动性去问这个问题，答案对内置工作流就是错的，只能再补一道前置门去绕。换成可见性之后
+ * 那道门自然不需要——`computeWorkflowSyncPreview` 第一件事就是判 `workflow.builtin`。
+ *
+ * 另外两条门是 PostgreSQL 更强、合并时抬进来的：非工作流任务不给同步横幅，
+ * 以及**进程内仍在跑**时报 `task-active`（此前 SQLite 的预览只看状态 + 工作树，
+ * 一个刚重启守护进程、库里状态还没落定的任务会预览成可同步，点下去 409）。
+ */
+export async function taskWorkflowSyncPreviewProjection(
+  dependencies: Readonly<{
+    readonly db: ProviderNeutralDatabase
+    readonly activity: ActiveTaskExecutionParticipant
+    readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+  }>,
   actor: Actor,
   taskId: string,
 ): Promise<WorkflowSyncPreview> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  // 非工作流任务（agent / workgroup / code-round）没有可同步的工作流定义。
   if (taskExecutionKind(task) !== 'workflow') {
     return notSyncableWorkflowPreview(task, 'workflow-deleted')
   }
-  // 判据缺口 —— 内置工作流的预览必须是 `builtin-workflow`（RFC-104：它永远不可被手动 sync）。
-  // 这一步要在可见性装载**之前**：`loadVisibleWorkflow` 走的是可启动性授权，内置工作流在那里
-  // 就被挡住，异常被下面的 catch 兜成 `workflow-deleted` —— 横幅内容直接是错的。
-  const builtinCandidate = await builtinCandidateWorkflow(dependencies.db, task.workflowId)
-  if (builtinCandidate?.builtin === true) {
-    return builtinWorkflowSyncPreview(task, builtinCandidate.version)
-  }
   await dependencies.activity.awaitReleasedSettled(taskId)
-  if (dependencies.activity.isActive(taskId)) return notSyncableWorkflowPreview(task, 'task-active')
-  let loaded: Awaited<ReturnType<typeof loadVisibleWorkflow>>
-  try {
-    loaded = await loadVisibleWorkflow(dependencies, actor, task.workflowId)
-  } catch (error) {
-    const code =
-      error !== null && typeof error === 'object' && 'code' in error
-        ? Reflect.get(error, 'code')
-        : null
-    return notSyncableWorkflowPreview(
-      task,
-      typeof code === 'string' && code.includes('forbidden')
-        ? 'workflow-not-visible'
-        : 'workflow-deleted',
-    )
+  if (dependencies.activity.isActive(taskId)) {
+    return notSyncableWorkflowPreview(task, 'task-active')
   }
-  const closureIssues: { code: string; message: string }[] = []
-  try {
-    await loaded.authority.resources.freezeCallClosure(loaded.authority, {
-      id: loaded.workflow.id,
-      definition: loaded.workflow.definition,
-    })
-  } catch (error) {
-    closureIssues.push({
-      code:
-        error !== null && typeof error === 'object' && 'code' in error
-          ? String(Reflect.get(error, 'code'))
-          : 'workflow-call-ref-missing',
-      message: error instanceof Error ? error.message : String(error),
-    })
+  const workflow = await getWorkflow(dependencies.db, task.workflowId)
+  if (workflow === null) return notSyncableWorkflowPreview(task, 'workflow-deleted')
+  if (!(await canViewResource(dependencies.db, actor, 'workflow', workflow))) {
+    return notSyncableWorkflowPreview(task, 'workflow-not-visible')
   }
-  const [runSummary, validation] = await Promise.all([
-    syncRunSummary(dependencies.db, taskId),
-    dependencies.launch.agent.resources.validateHostWorkflow(loaded.workflow.definition),
-  ])
-  const invalidIssues = [
-    ...validation.issues
-      .filter((issue) => (issue.severity ?? 'error') === 'error')
-      .map((issue) => ({
-        code: typeof issue['code'] === 'string' ? issue['code'] : 'workflow-invalid',
-        message: issue.message,
-      })),
-    ...closureIssues,
-  ]
-  const diff = diffWorkflowForSync(
-    definitionOf(task.workflowSnapshot),
-    loaded.workflow.definition,
-    runSummary,
+  return await computeWorkflowSyncPreview(
+    dependencies.db,
+    task,
+    workflow,
+    dependencies.resourceAuthorityFor(actor),
   )
-  // 判据缺口 —— 可同步与否此前在 PG 侧只看**进程内**活跃表，于是一个持久化状态就是 `running`
-  // 的任务（守护进程刚重启、或由别的进程在跑）预览成 `syncable: true`，而 `syncWorkflow` 用的是
-  // 状态 + 工作树判据，点下去稳定 409。两边现在共用 `workflowSyncGateReason`。
-  const reason = workflowSyncGateReason({
-    status: task.status,
-    // 工作树判据与 SQLite 侧**逐字相同**（空路径即没有工作树）。PG 的 `syncWorkflow` 另有一条
-    // `workspacePrunedAt !== null`，SQLite 的 `syncTaskWorkflow` 没有——那条差异是既有的，
-    // 不在本次收敛范围内（见 RFC-359 plan §5u）；这里不擅自把它带进预览，否则预览与 SQLite
-    // 又分叉一次。
-    worktreeMissing: task.worktreePath === '',
-  })
-  return {
-    syncable: reason === 'ok',
-    reason,
-    workflowId: task.workflowId,
-    workflowName: loaded.workflow.name,
-    currentVersion: task.workflowVersion,
-    latestVersion: loaded.workflow.version,
-    differs: diff.differs,
-    invalid: !validation.ok || closureIssues.length > 0,
-    invalidIssues,
-    diff,
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2273,7 +2230,20 @@ export function createPostgresqlTaskRouteOperations(
       if (candidate !== null) assertNotBuiltin('workflow', candidate)
       await loadVisibleWorkflow(dependencies, actor, task.workflowId)
     },
-    workflowSyncPreview: (actor, taskId) => workflowSyncPreview(dependencies, actor, taskId),
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：预览与 SQLite 共用**同一份**。
+    // 授权路径统一成**可见性**（原 SQLite 那一档）——预览回答的是「同步会发生什么」，
+    // 不是「我现在能不能启动它」；本文件原来那份走可启动性，于是不得不给内置工作流补一道
+    // 前置门去绕，换成可见性之后那道门自然不需要。
+    workflowSyncPreview: (actor, taskId) =>
+      taskWorkflowSyncPreviewProjection(
+        {
+          db: dependencies.db,
+          activity: dependencies.activity,
+          resourceAuthorityFor: dependencies.launch.resourceAuthorityFor,
+        },
+        actor,
+        taskId,
+      ),
     syncWorkflow: (input) => syncWorkflow(dependencies, input),
     repairOptions: (input) => repairs.repairOptions(input),
     applyRepair: (input) => repairs.applyRepair(input),
