@@ -16958,3 +16958,31 @@ PG 走 `children.resume({ taskId, runtime }, topology)` 参与者。第 8 刀已
 **次序（沿用前八刀的配方）**：①先立两侧 retry 的**准入门对拍**基线（六个错误码 + 上面三道门的
 有无），把三处「各有一道」钉成显式分叉；②把 `retryNode` 的行为套件（34 个文件引用它）中与路由
 动词直接相关的那批迁到共用入口上跑，取证；③合并 + 销账。
+
+### 更正上一节的勘察表——**按函数名比对，结论是错的**
+
+上一节那张表（「两侧各有一道对方没有的门」）是按**辅助函数名**数出来的，按行为逐条核实之后**不成立**。
+这正是本轮已经记过两次的那类错误（按名字配对 / 按名字筛棘轮），这次栽在自己写的勘察上：
+
+- `assertChildTaskDrivable`（我记成 SQLite 独有）：PG 侧有**同一道门**，只是叫
+  `finalizedParentCallRowStatus`，错误码同为 `call-row-finalized`。
+  `rfc359-w7` 的 **A18 早就在锁两侧同答案**——它在 A 段（共有契约），本来就说明两侧都有。
+  该函数上方那段注释写着「PG 侧 retry 没有这道门」，**注释本身已经过期**（门后来补上了，注释没改）。
+- `assertNotSourceTerminated`（我记成 PG 独有）：SQLite 侧由准入 CAS（`setTaskStatus`）抛出同样的码
+  并原样上抛——PG 的 CAS 是裸条件 UPDATE，栅栏不在谓词里，所以才要显式补一句。两侧都有，机制不同。
+
+**真正的分叉在「门相对准入 CAS 的位置」，不在有无**：
+
+| | SQLite `retryNode` | PG `retryNode` |
+| --- | --- | --- |
+| RFC-292 触发溯源预检 | CAS **之前** | CAS **之前** |
+| 回滚基线缺失（`pre_snapshot` 没了） | CAS **之后**：先把任务 CAS 成 `pending`，再由 `escalateSnapshotLost` 升级成**任务 failed** + 409 | CAS **之前**：`assertRollbackBaselinesPresent` 当场拒，任务**一个字段都没动** |
+
+用户可见后果：同一个「基线已丢」的重试，在一个部署上**把任务推成 failed**（原来可能是 `canceled`
+或 `done`），另一个部署上任务原样不动、只收到一个 409。前者等于「点了一下重试，任务状态被改坏了」。
+
+这一格才是第 9 刀要定方向的那个产品判断；`assertChildTaskDrivable` / `assertNotSourceTerminated`
+两格**没有缺口**，勿按上一节那张表去「补门」。
+
+**记账**：勘察阶段的比对必须**按行为**（构造状态、驱动两侧、比错误码与落库结果），
+按辅助函数名数只能用来**找候选**，不能用来下结论——同一道门在两侧叫不同名字是常态。
