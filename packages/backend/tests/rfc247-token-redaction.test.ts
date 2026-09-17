@@ -190,11 +190,20 @@ describe('RFC-247 — every redactor has an outlet', () => {
     expect(read('services/tokenRedaction.ts')).toContain('return shouldRedactFor(source)')
   })
 
-  test('redactRepoUrl reaches rowToTask (AC-38)', () => {
+  test('redactRepoUrl reaches every task row projection (AC-38)', () => {
     // AC-38 is explicitly ALL channels, not token-only: a repo URL with an
     // embedded credential has no reader who benefits from seeing it.
-    const task = read('services/task.ts')
-    expect(task.split('redactGitUrl(row.repoUrl)').length - 1).toBeGreaterThanOrEqual(4)
+    //
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 / 3 刀）：任务行的投影**搬了家**——纯读三件
+    // 与列表三件两个引擎合一之后，`rowToSummary` 已删除，详情 / 列表 / 仓库三处投影都住在
+    // 共用实现里。本条锁的不变量没变（每个吐 `repoUrl` 的投影点都得过 `redactGitUrl`），
+    // 所以把两份源码**合起来**数，总数只增不减：`services/task.ts` 剩 3 处
+    //（`rowToTask` 及其仓库分支），共用那份 4 处（详情 / 列表 / 仓库 / 冻结布局）。
+    const total = [
+      read('services/task.ts'),
+      read('modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts'),
+    ].reduce((sum, source) => sum + source.split('redactGitUrl(row.repoUrl)').length - 1, 0)
+    expect(total).toBeGreaterThanOrEqual(7)
   })
 
   test('no redactor in tokenRedaction.ts is left with zero callers', () => {

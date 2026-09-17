@@ -114,42 +114,36 @@ describe('RFC-349 single-aggregate task transaction', () => {
     ).rejects.toThrow('body failed')
   })
 
-  test('member replacement uses it, and the shared serializable helper is still there for the rest', () => {
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 刀）：成员替换搬了家——两个引擎共用
+  // `taskCollab.ts#updateTaskMembersLocked`（PG 那份内联重写已删除）。**判据一字未变**，
+  // 只是换了个断言对象：那里必须是「聚合根行锁 + 普通事务」，绝不能是 SERIALIZABLE。
+  // 上面几条仍由 `withPostgresqlTaskAggregateTransaction` 自己作证——它的函数体与共用路径
+  // 逐字相同（同一对原语），生产调用方为零之后它是这条技术的**锁定参照**，
+  // 随 `postgresqlTaskLifecycleTransaction` 自己那一刀一起退役。
+  test('member replacement locks the aggregate root and never raises the isolation level', () => {
     const source = readFileSync(
+      resolve(backendRoot, 'src/modules/collaboration/infrastructure/taskCollab.ts'),
+      'utf8',
+    )
+    const start = source.indexOf('async function updateTaskMembersLocked(')
+    expect(start, 'updateTaskMembersLocked 不见了——本条锁必须跟着搬').toBeGreaterThanOrEqual(0)
+    const end = source.indexOf('\nexport function buildLaunchCollabRows(', start + 1)
+    expect(end, '结束锚点不见了').toBeGreaterThan(start)
+    const body = source.slice(start, end)
+
+    expect(body, '没有聚合根行锁就没有任何互斥').toContain('lockAggregateRoot(')
+    expect(body, '成员替换又回到 SERIALIZABLE ⇒ 托管上那 31 个 500 会一起回来').not.toContain(
+      'withSerializableTaskExecution',
+    )
+    // 跨聚合不变量仍然必须留在 SERIALIZABLE 上；别把这次替换扩大成全面降级。
+    const routes = readFileSync(
       resolve(
         backendRoot,
         'src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
       ),
       'utf8',
     )
-    const replaceMembers = source.slice(source.indexOf('async function replaceTaskMembers'))
-    const body = replaceMembers.slice(
-      0,
-      replaceMembers.indexOf('\nfunction workflowLaunchSnapshot'),
-    )
-
-    expect(body).toContain('withPostgresqlTaskAggregateTransaction')
-    expect(body, '成员替换又回到 SERIALIZABLE ⇒ 托管上那 31 个 500 会一起回来').not.toContain(
-      'withSerializableTaskExecution',
-    )
-    // 跨聚合不变量仍然必须留在 SERIALIZABLE 上；别把这次替换扩大成全面降级。
-    expect(source).toContain('withSerializableTaskExecution(')
-  })
-
-  test('the helper documents when it may be used at all', () => {
-    const source = readFileSync(
-      resolve(
-        backendRoot,
-        'src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
-      ),
-      'utf8',
-    )
-    const doc = source.slice(
-      0,
-      source.indexOf('export async function withPostgresqlTaskAggregateTransaction'),
-    )
-    expect(doc).toContain('同一个聚合根')
-    expect(doc).toContain('withSerializableTaskExecution')
+    expect(routes).toContain('withSerializableTaskExecution(')
   })
 })
 

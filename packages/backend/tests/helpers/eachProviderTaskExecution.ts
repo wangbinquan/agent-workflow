@@ -4,6 +4,7 @@
 // the same production lease used by development-automation host tasks.
 
 import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { eq } from 'drizzle-orm'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
@@ -230,6 +231,7 @@ export async function createEachProviderTaskExecution(
           startDepsFor: () => unavailable('task route launch'),
           multipart: unusedCapability('multipart upload'),
           resourceAuthorityFor: () => launchResources,
+          owners: composeOwnerIdentityQueries(db),
           assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
           appHome,
         }),

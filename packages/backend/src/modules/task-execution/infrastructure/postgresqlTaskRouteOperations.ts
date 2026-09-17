@@ -26,7 +26,6 @@ import {
   taskExecutionKind,
   taskListOriginMatches,
   webhookTaskSourceLinkOf,
-  type AssignableTaskMemberRole,
   type NodeRun,
   type NodeRunStatus,
   type Task,
@@ -46,7 +45,7 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import {
@@ -65,6 +64,16 @@ import {
   workflows,
 } from '@/db/schema'
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
+// RFC-328：跨 context 走 facade，不直接 import 别人的 infrastructure
+//（`@/services/taskCollab` 就是 collaboration 那套成员 / 可见性判据的既有 facade，
+// SQLite 那一侧一直走的也是它）。
+import {
+  assertCanReplaySourceTask,
+  canViewTask,
+  getTaskMembers,
+  requireTaskOperator,
+  updateTaskMembers,
+} from '@/services/taskCollab'
 import type {
   ClarifyRepairParticipant,
   CollaborationRuntimeMechanics,
@@ -108,7 +117,6 @@ import {
 } from './postgresqlTaskRouteRepairOperations'
 import {
   withSerializableTaskExecution,
-  withPostgresqlTaskAggregateTransaction,
   type TaskExecutionTransaction,
 } from './postgresqlTaskLifecycleTransaction'
 import {
@@ -136,13 +144,7 @@ import {
   snapshotMissingDetail,
 } from '@/services/nodeRollback'
 import { selectSyncRollbackTargets } from '@/services/task'
-import {
-  ConflictError,
-  DomainError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-} from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { killStaleRunProcessTree } from '@/util/process'
 import {
@@ -185,18 +187,6 @@ export interface TaskRouteUserDirectory {
   lookup(ids: readonly string[]): Promise<readonly UserPublic[]>
 }
 
-export interface TaskRouteMembershipEvents {
-  committed(
-    input: Readonly<{
-      taskId: string
-      previousOwnerUserId: string | null
-      ownerUserId: string | null
-      previousMemberUserIds: readonly string[]
-      memberUserIds: readonly string[]
-    }>,
-  ): Promise<void>
-}
-
 export interface TaskRouteDeletionEvents {
   committed(
     input: Readonly<{
@@ -225,7 +215,6 @@ export interface PostgresqlTaskRouteOperationsDependencies {
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
   readonly users: TaskRouteUserDirectory
   readonly owners: OwnerIdentityQueries
-  readonly membershipEvents: TaskRouteMembershipEvents
   readonly deletionEvents: TaskRouteDeletionEvents
   /** Closed Collaboration facts used by the TaskExecution-owned repair engine. */
   readonly repair: Readonly<{
@@ -756,184 +745,76 @@ async function listItems(
   )
 }
 
-function canManageMembers(actor: Actor, ownerUserId: string | null): boolean {
-  return actor.permissions.has('resource-acl:bypass') || ownerUserId === actor.user.id
-}
-
-async function actingMember(
-  db: PostgresqlDatabaseClient,
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 4 刀）—— 任务的**访问门 + 成员四件**，两个引擎共用一份。
+ *
+ * 合并前这一族在两侧是两套：SQLite 转给 `modules/collaboration/infrastructure/taskCollab.ts`
+ * 的中立实现，PostgreSQL 在本文件里另写了一份内联的。对读之后取 `taskCollab` 那一份——
+ * 它**严格更全**：RFC-324 的观察者只读文案（PG 那份统一回泛化的 `not-task-member`）、
+ * 与评审写同一把任务 FIFO 锁（`withTaskReviewMutationLock`，PG 那份只锁聚合根事务，
+ * 成员变更与评审写可以交错）、锁内重读任务行（路由读到的行可能已过期）、
+ * 以及提交后的 WS 重校验 + 列表广播。聚合根锁本身两份都有（RFC-359 W9 实测的
+ * 32 并发 22.9% 冲突那条），所以取它不丢 PostgreSQL 的并发性质。
+ *
+ * **存在性口径统一成「不存在即 404」**（原 PG 那一档）。合并前 SQLite 取不到行就**不判**、
+ * 静默放行，靠路由随后自己 404——两侧最终 HTTP 状态相同，但方法层面的契约不同：
+ * 一道对不存在的 id 说「行」的门，在别的调用方手里就是个谎。
+ */
+async function taskAccessRow(
+  db: ProviderNeutralDatabase,
   taskId: string,
-  userId: string,
-): Promise<boolean> {
+): Promise<Readonly<{ id: string; ownerUserId: string | null }>> {
   const rows = await db
-    .select({ role: taskCollaborators.role })
-    .from(taskCollaborators)
-    .where(and(eq(taskCollaborators.taskId, taskId), eq(taskCollaborators.userId, userId)))
-  return rows.some((row) => row.role === 'owner' || row.role === 'collaborator')
+    .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1)
+  const row = rows[0]
+  if (row === undefined) {
+    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  }
+  return row
 }
 
-async function taskMembers(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/** 可见性门：全读权限直接放行；否则不存在与不可见同形（都 404）。 */
+export async function assertTaskVisibleProjection(
+  db: ProviderNeutralDatabase,
+  actor: Actor,
+  taskId: string,
+): Promise<void> {
+  if (actor.permissions.has('tasks:read:all')) return
+  const task = await taskAccessRow(db, taskId)
+  if (!(await canViewTask(db, actor, task))) {
+    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  }
+}
+
+/** 操作权门：owner / collaborator / bypass 放行，observer 拿 RFC-324 的只读文案。 */
+export async function requireTaskOperatorProjection(
+  db: ProviderNeutralDatabase,
+  actor: Actor,
+  taskId: string,
+): Promise<void> {
+  await requireTaskOperator(db, actor, await taskAccessRow(db, taskId))
+}
+
+/** 成员面板的读投影。 */
+export async function taskMembersProjection(
+  db: ProviderNeutralDatabase,
   actor: Actor,
   taskId: string,
 ): Promise<TaskMembers> {
-  const task = await requireTaskRow(dependencies.db, taskId)
-  const memberships = await dependencies.db
-    .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.taskId, taskId))
-  const memberRows = memberships.filter(
-    (row): row is { userId: string; role: AssignableTaskMemberRole } =>
-      row.role === 'collaborator' || row.role === 'observer',
-  )
-  const userIds = [
-    ...(task.ownerUserId === null || task.ownerUserId === SYSTEM_USER_ID ? [] : [task.ownerUserId]),
-    ...memberRows.map((row) => row.userId),
-  ]
-  const users = await dependencies.users.lookup([...new Set(userIds)])
-  const byId = new Map(users.map((user) => [user.id, user]))
-  const canManage = canManageMembers(actor, task.ownerUserId)
-  return {
-    taskId,
-    ownerUserId: task.ownerUserId,
-    owner: task.ownerUserId === null ? null : (byId.get(task.ownerUserId) ?? null),
-    members: memberRows.flatMap((row) => {
-      const user = byId.get(row.userId)
-      return user === undefined ? [] : [{ user, role: row.role }]
-    }),
-    canManage,
-    canOperate:
-      canManage ||
-      memberRows.some((row) => row.userId === actor.user.id && row.role === 'collaborator'),
-  }
+  return await getTaskMembers(db, actor, await taskAccessRow(db, taskId))
 }
 
-function planMembers(input: {
-  readonly previousOwnerUserId: string | null
-  readonly ownerUserId: string | undefined
-  readonly requested:
-    | readonly Readonly<{ readonly userId: string; readonly role: AssignableTaskMemberRole }>[]
-    | undefined
-  readonly current: readonly Readonly<{
-    readonly userId: string
-    readonly role: AssignableTaskMemberRole
-  }>[]
-}): Readonly<{
-  ownerUserId: string | null
-  members: ReadonlyMap<string, AssignableTaskMemberRole>
-}> {
-  const ownerUserId = input.ownerUserId ?? input.previousOwnerUserId
-  const members = new Map(
-    (input.requested ?? input.current).map((member) => [member.userId, member.role] as const),
-  )
-  if (
-    ownerUserId !== input.previousOwnerUserId &&
-    input.previousOwnerUserId !== null &&
-    input.previousOwnerUserId !== SYSTEM_USER_ID &&
-    !members.has(input.previousOwnerUserId)
-  ) {
-    members.set(input.previousOwnerUserId, 'collaborator')
-  }
-  if (ownerUserId !== null) members.delete(ownerUserId)
-  return { ownerUserId, members }
-}
-
-async function replaceTaskMembers(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/** 成员面板的全量替换。 */
+export async function replaceTaskMembersProjection(
+  db: ProviderNeutralDatabase,
   actor: Actor,
   taskId: string,
   body: Parameters<TaskRouteOperations['replaceMembers']>[2],
 ): Promise<TaskMembers> {
-  const referenced = new Set(body.members?.map((member) => member.userId) ?? [])
-  if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
-  const referencedUsers = await dependencies.users.lookup([...referenced])
-  const activeIds = new Set(
-    referencedUsers.filter((user) => user.status === 'active').map((user) => user.id),
-  )
-  const invalid = [...referenced].filter((id) => id === SYSTEM_USER_ID || !activeIds.has(id))
-  if (invalid.length > 0) {
-    throw new ValidationError('members-user-invalid', 'referenced user(s) not active', {
-      userIds: invalid,
-    })
-  }
-
-  // RFC-349 —— 成员替换的不变量是**每任务**的：读的 owner 与 collaborators 都属于同一个
-  // 任务。SERIALIZABLE 在这种「读一批 → delete 同一批 → insert 回去」的形状上会因为
-  // predicate lock 落在索引**页**而不是行，把改不同任务的事务也判成读写依赖（实测 32 并发
-  // 下 22.9% 冲突率，逃逸成 500）。锁住聚合根即可，判据见
-  // `withPostgresqlTaskAggregateTransaction` 的适用条件。
-  const committed = await withPostgresqlTaskAggregateTransaction(
-    dependencies.db,
-    taskId,
-    async (tx) => {
-      const taskRows = await tx
-        .select({ ownerUserId: tasks.ownerUserId })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-      const task = taskRows[0]
-      if (task === undefined) {
-        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      }
-      if (!canManageMembers(actor, task.ownerUserId)) {
-        throw new ForbiddenError(
-          'forbidden',
-          'only the task owner or an actor with resource-acl:bypass can manage members',
-        )
-      }
-      const previousRows = await tx
-        .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
-        .from(taskCollaborators)
-        .where(eq(taskCollaborators.taskId, taskId))
-      const current = previousRows.flatMap((row) =>
-        row.role === 'collaborator' || row.role === 'observer'
-          ? [{ userId: row.userId, role: row.role }]
-          : [],
-      )
-      const planned = planMembers({
-        previousOwnerUserId: task.ownerUserId,
-        ownerUserId: body.ownerUserId,
-        requested: body.members,
-        current,
-      })
-      if (planned.ownerUserId !== task.ownerUserId) {
-        await tx
-          .update(tasks)
-          .set({ ownerUserId: planned.ownerUserId })
-          .where(eq(tasks.id, taskId))
-          .run()
-      }
-      await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, taskId)).run()
-      const values: (typeof taskCollaborators.$inferInsert)[] = []
-      if (planned.ownerUserId !== null) {
-        values.push({
-          taskId,
-          userId: planned.ownerUserId,
-          role: 'owner',
-          addedBy: actor.user.id,
-          addedAt: dependencies.now?.() ?? Date.now(),
-        })
-      }
-      for (const [userId, role] of planned.members) {
-        values.push({
-          taskId,
-          userId,
-          role,
-          addedBy: actor.user.id,
-          addedAt: dependencies.now?.() ?? Date.now(),
-        })
-      }
-      if (values.length > 0) await tx.insert(taskCollaborators).values(values).run()
-      return {
-        previousOwnerUserId: task.ownerUserId,
-        ownerUserId: planned.ownerUserId,
-        previousMemberUserIds: previousRows.map((row) => row.userId),
-        memberUserIds: [...planned.members.keys()],
-      }
-    },
-  )
-  await dependencies.membershipEvents.committed({ taskId, ...committed })
-  return await taskMembers(dependencies, actor, taskId)
+  return await updateTaskMembers(db, actor, await taskAccessRow(db, taskId), body)
 }
 
 function workflowLaunchSnapshot(snapshots: readonly FrozenTaskExecutionResourceSnapshot[]) {
@@ -2558,7 +2439,6 @@ async function deleteTask(
 export function createPostgresqlTaskRouteOperations(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
 ): TaskRouteOperations & Pick<PostgresqlTaskRepairOperations, 'automaticRepair'> {
-  const authorization = createTaskAuthorizationQueries(dependencies.db)
   const launches = createPostgresqlTaskExecutionLaunchParticipant({
     db: dependencies.db,
     ...dependencies.launch,
@@ -2582,41 +2462,17 @@ export function createPostgresqlTaskRouteOperations(
     list: (filters) => taskListSummariesProjection(dependencies.db, filters),
     listItems: (filters) => listItems(dependencies, filters),
     get: (taskId) => loadTask(dependencies.db, taskId),
-    async assertVisible(actor, taskId) {
-      if (actor.permissions.has('tasks:read:all')) return
-      const visible = await authorization.canViewTask({
-        subject: {
-          userId: actor.user.id,
-          canReadAllTasks: false,
-        },
-        taskId,
-      })
-      if (!visible) {
-        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      }
-    },
-    async requireOperator(actor, taskId) {
-      const task = await requireTaskRow(dependencies.db, taskId)
-      if (
-        actor.permissions.has('resource-acl:bypass') ||
-        task.ownerUserId === actor.user.id ||
-        (await actingMember(dependencies.db, taskId, actor.user.id))
-      ) {
-        return
-      }
-      throw new ForbiddenError(
-        'not-task-member',
-        'only the task owner, a collaborator, or an authorized operator may mutate this task',
-      )
-    },
-    async assertReplayVisible(actor, sourceTaskId) {
-      await operations.assertVisible(actor, sourceTaskId)
-      if ((await loadTask(dependencies.db, sourceTaskId)) === null) {
-        throw new NotFoundError('task-not-found', `task '${sourceTaskId}' not found`)
-      }
-    },
-    getMembers: (actor, taskId) => taskMembers(dependencies, actor, taskId),
-    replaceMembers: (actor, taskId, body) => replaceTaskMembers(dependencies, actor, taskId, body),
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 刀）：访问门 + 成员四件与 SQLite 共用**同一份**。
+    // 取的是 `taskCollab` 那一份（原 SQLite 侧转发的目标）——它严格更全：RFC-324 观察者只读
+    // 文案、与评审写同一把任务 FIFO 锁、锁内重读任务行。存在性口径统一成「不存在即 404」。
+    assertVisible: (actor, taskId) => assertTaskVisibleProjection(dependencies.db, actor, taskId),
+    requireOperator: (actor, taskId) =>
+      requireTaskOperatorProjection(dependencies.db, actor, taskId),
+    assertReplayVisible: (actor, sourceTaskId) =>
+      assertCanReplaySourceTask(dependencies.db, actor, sourceTaskId),
+    getMembers: (actor, taskId) => taskMembersProjection(dependencies.db, actor, taskId),
+    replaceMembers: (actor, taskId, body) =>
+      replaceTaskMembersProjection(dependencies.db, actor, taskId, body),
     getReviewers: (actor, taskId) =>
       getReviewNodeReviewerConfig(dependencies.collaboration, { actor, taskId }),
     replaceReviewers: (actor, taskId, body) =>

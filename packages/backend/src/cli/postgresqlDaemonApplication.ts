@@ -278,7 +278,6 @@ import { createLogger } from '@/util/log'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
-import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
@@ -974,21 +973,6 @@ export async function composePostgresqlApplication(
       collaboration: boundCollaborationContext,
       users: identityAccess.userDirectory,
       owners: composeOwnerIdentityQueries(input.db),
-      membershipEvents: {
-        async committed(change) {
-          await triggerRevalidationAndWait('task-members-changed')
-          const visibleUserIds = new Set<string>()
-          if (change.previousOwnerUserId !== null) visibleUserIds.add(change.previousOwnerUserId)
-          if (change.ownerUserId !== null) visibleUserIds.add(change.ownerUserId)
-          for (const userId of change.previousMemberUserIds) visibleUserIds.add(userId)
-          for (const userId of change.memberUserIds) visibleUserIds.add(userId)
-          tasksListBroadcaster.broadcast(
-            TASKS_LIST_CHANNEL,
-            { type: 'task.members.changed', taskId: change.taskId },
-            { kind: 'task.members-changed-audience', taskId: change.taskId, visibleUserIds },
-          )
-        },
-      },
       deletionEvents: {
         async committed(change) {
           for (const taskId of change.taskIds) {

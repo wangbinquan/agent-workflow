@@ -1,6 +1,7 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -1940,6 +1941,8 @@ async function composeSqliteProviderSession(
               authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
               resources: taskExecutionResources,
             }),
+          // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。
+          owners: composeOwnerIdentityQueries(db),
           appHome: Paths.root,
         }
       },

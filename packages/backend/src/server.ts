@@ -2516,6 +2516,8 @@ function composeSqliteApiRouteMounts(
   const taskRouteOperations = createSqliteTaskRouteOperations({
     db: deps.db,
     collaboration: deps.collaborationContext,
+    // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。
+    owners: composeOwnerIdentityQueries(deps.db),
     recovery: taskExecutionPersistence.recoveryAdministration,
     startDepsFor: (actor) =>
       buildStartTaskDeps(

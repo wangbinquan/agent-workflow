@@ -119,8 +119,13 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
       expect(block, `TASK_LIST_COLUMNS must not carry ${heavy}`).not.toContain(`tasks.${heavy}`)
     }
     // 列清单存在还不够——`listRows` 必须真的用它，而不是留一份摆设再走 `select()`。
-    const listRows = source.slice(source.indexOf('async function listRows('))
-    expect(listRows.slice(0, 1600)).toContain('.select(TASK_LIST_COLUMNS)')
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：投影多带一列 `workflowName`
+    //（工作流名从「另一次批量查询」并进同一次 `leftJoin`，少一次往返），于是形状从
+    // `.select(TASK_LIST_COLUMNS)` 变成 `.select({ ...TASK_LIST_COLUMNS, workflowName })`。
+    // 本条锁的不变量没变——**列清单必须被真的摊进去**，且不得回退成裸 `select()`。
+    const listRows = source.slice(source.indexOf('async function listRows(')).slice(0, 1600)
+    expect(listRows).toContain('.select({ ...TASK_LIST_COLUMNS')
+    expect(listRows, '裸 select() 会把整行重列拖过来').not.toMatch(/\.select\(\)/)
   })
 
   test('failure codes are loaded in one batch, not one query per failed row', () => {

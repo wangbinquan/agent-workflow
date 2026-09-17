@@ -52,6 +52,7 @@
 // ⑥（续跑交棒的事件语义）不吃这条折扣：它走的是每一次 PostgreSQL 重试都会发生的事件面。
 
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,7 +63,6 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { committedEvents, nodeRuns, tasks, users, workflows } from '@/db/schema'
-import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
@@ -175,6 +175,7 @@ function sqliteOperations(
     db: client,
     collaboration: {} as never,
     recovery,
+    owners: composeOwnerIdentityQueries(client),
     startDepsFor: () =>
       ({
         db: client,

@@ -16366,3 +16366,85 @@ A4（openAlertCount 只数未解决的）、A5（owner 身份 + 本 actor 可见
 ⑥`workflowSyncPreview` / `syncWorkflow` ⑦`repairOptions` / `applyRepair`，
 然后是**命名债收尾**（§5hj）：这一对塌成一份之后把 `postgresqlTaskRouteOperations.ts`
 连同 `createPostgresql*` 一族改成中立名，让 t19d 那两行假信号一起消失。
+
+## 盘点后的第 4 刀落地　访问门 + 成员四件合一（并修第 3 刀推的红）
+
+### 先说红：第 3 刀推了六条源码锁 / 棘轮上去
+
+`07b187db0` 在 CI 上红了 11 个 backend 分片，去重后是**六条**：
+
+| 锁 | 为什么红 | 处置 |
+| --- | --- | --- |
+| `rfc305-architecture-lock` | `sqliteTaskRouteOperations.ts` 自己 compose 了 identity-access | **改设计**：`owners` 由组合根注入（与 PG 同形），账本补两条已审边 |
+| `rfc347-identity-access-runtime` | `cli/start.ts` 成了第三个 compose identity-access 的根 | 账本补一条（`server.ts` / `postgresqlDaemonApplication.ts` 早在表上） |
+| `rfc357-narrow-projection` | 投影从 `.select(TASK_LIST_COLUMNS)` 变成 `.select({ ...TASK_LIST_COLUMNS, workflowName })` | 改锚 + 补一条「不得回退成裸 `select()`」的反向断言 |
+| `rfc301-task-launch-origin` | `launchOrigin` 文本计数 8 → 7（读谓词随 `listTaskSummaryRows` 搬走） | 棘轮只降不升，改小 |
+| `rfc247-token-redaction` | `redactGitUrl(row.repoUrl)` 在 `services/task.ts` 里 4 → 3（`rowToSummary` 删了） | 改成**两份源码合起来数**（≥7），不变量没变 |
+| `rfc328-architecture-guards` | 第 4 刀新引入：PG 侧直接 import 了 collaboration 的 infrastructure | 改走 `@/services/taskCollab` facade（SQLite 侧一直走的就是它） |
+
+**教训（已进 `docs/dev-gotchas.md`）**：架构棘轮 / 源码锁**不只住在 `tests/architecture/`**。
+`rfc305` / `rfc347` / `rfc357` / `rfc301` / `rfc247` / `rfc328` 六条全在 `tests/` 根下，
+只扫 `tests/architecture/` 必漏。现在的做法是按文件名建一份清单
+（`architecture|-lock|ratchet|guard|source-text|conformance|parity|contracts|boundary|cutover|highwater|census`，
+208 个文件）分 26 片跑，改完架构面就整份跑一遍。
+
+### 第 4 刀本身
+
+`assertVisible` / `requireOperator` / `assertReplayVisible` / `getMembers` / `replaceMembers`
+（`getReviewers` / `replaceReviewers` 两侧本来就同一行转发，不用动）。
+
+合并前 SQLite 转给 `modules/collaboration/infrastructure/taskCollab.ts` 的中立实现，
+PostgreSQL 在路由文件里另写了一份内联的。对读之后取 `taskCollab` 那一份——它**严格更全**：
+
+- RFC-324 的观察者只读文案（PG 那份统一回泛化的 `not-task-member`）；
+- 与评审写同一把任务 FIFO 锁（`withTaskReviewMutationLock`）；PG 那份只锁聚合根事务，
+  成员变更与评审写可以交错；
+- 锁内**重读**任务行（路由读到的行排到队首时可能已过期：owner 转移 / 成员被移除）。
+
+聚合根行锁本身两份都有（同一对原语、同一条 RFC-359 W9 的 22.9% 冲突实测），所以取它
+**不丢 PostgreSQL 的并发性质**——`rfc349-task-aggregate-transaction` 那条锁改锚到新家后
+断言一字未变（「聚合根行锁在、SERIALIZABLE 不在」）。
+
+**销的账两笔**：
+- **B1**：拒绝时的错误码。前端按 code 选提示语——对一个**确实是成员、只是只读**的人说
+  「你不是成员」是错的答案，取 RFC-324 那一档。
+- **B2**：任务不存在时的门。SQLite 取不到行就不判、静默放行（靠路由随后自己 404），
+  PG 不存在即 404。两侧最终 HTTP 状态相同，但方法层面的契约不同——一道对不存在的 id
+  说「行」的门，在别的调用方手里就是个谎。取 404 那一档。
+
+**删除**：PG 侧内联的 `taskMembers` / `replaceTaskMembers` / `planMembers` / `canManageMembers` /
+`actingMember`（共 175 行）、`TaskRouteMembershipEvents` 端口与它在 `postgresqlDaemonApplication.ts`
+里的 15 行绑定（WS 重校验 + 列表广播现在由共用实现自己做）、SQLite 侧的本地 `taskAccessRow`。
+
+`withPostgresqlTaskAggregateTransaction` **不删**：它生产调用方归零了，但两个测试文件仍用它
+锁方言行为，且它的函数体就是这条技术的锁定参照；随 `postgresqlTaskLifecycleTransaction`
+自己那一刀一起退役。
+
+### 账本连带
+
+t19d 两侧各 +1 ref（差额不变，来源是那条改锚的成员替换锁）；
+`rfc359-w8-t29` 的「先查存在再插唯一键表」**销掉一整行**（PG 内联 `replaceTaskMembers` 删除），
+`ledger-baselines` 的 `rfc359-w8-unnormalized-unique-insert` 基线 16 → 15；
+W29 两个摘要更新（`membershipEvents` 退役 + SQLite 路由新增 `owners`）。
+
+### 一处只在本地红的用例（记录，不掩盖）
+
+`rfc359-w18-task-count-index-conformance` 的
+`W18 count covering indexes [postgresql] > old and indexed count reads are identical across
+empty, boundary and rollback states` 在**本机** macOS + docker PostgreSQL 上稳定红，
+失败点在驱动层：事务体按预期抛出 `interruption` 之后，`rollback` 这条语句本身失败
+（`postgresqlDatabaseClient.ts:368` → `bun:sql:211`），耗时固定 ~5.1s。
+
+判为**环境差异，不是本轮改动**，依据三条：①同一条用例在 CI 的 PostgreSQL lane 上实测 pass
+（`44d9a459b` 全绿那次的日志里有 `(pass) … [postgresql] > old and indexed count reads …`）；
+②`07b187db0` 的 11 个红分片去重后不含它；③本轮 diff 不触及它读的任何东西
+（`createTaskOverviewQuery` / `composeRepositoryWorkspaceStore` / 索引 DDL / 事务原语）。
+重启本地 PG 容器后仍复现（不是连接残留），**换一个全新建的空库**跑也一样红、
+耗时同样固定在 ~5.1s（不是累积的库状态）。那个固定的 5 秒像是本地某处的超时，
+CI 的 Linux 服务容器上不触发。**权威门禁是 CI，由它裁决**；若 CI 上也红则另立一刀查
+驱动侧的 rollback 路径。
+
+### 剩余（承前，④起）
+
+④`cancel` / `delete` ⑤`resume` / `retry` ⑥`workflowSyncPreview` / `syncWorkflow`
+⑦`repairOptions` / `applyRepair`，然后是命名债收尾（§5hj）。

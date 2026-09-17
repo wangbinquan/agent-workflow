@@ -546,7 +546,10 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts: 1',
   'modules/task-execution/infrastructure/effectQuiescence.ts: 1',
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts: 1',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts: 1',
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 刀）：**这一行销账**——那处「先查存在、
+  // 再插 task_collaborators」的形状随 PG 侧内联 `replaceTaskMembers` 一起删除，
+  // 成员替换现在走共用的 `updateTaskMembersLocked`（聚合根锁内重读 + 全量替换）。
+  // 账本只降不升，这是一次收敛。
   // RFC-359 W10 销账：5 → 3 —— 同步的 `closeOutcomeUnknownAndRelease`（生产零调用方，清算只剩
   // `effectQuiescence.ts` 那一份中立实现）随本波删除，它体内那两处「先查存在、再插入唯一键表」
   // 一并消失。

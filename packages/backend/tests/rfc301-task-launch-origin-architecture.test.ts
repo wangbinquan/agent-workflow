@@ -200,7 +200,11 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // 列表页过滤器的那条同型——棘轮锁的是「写只有一个 owner」（紧随其后的
     // `.update(tasks) … launchOrigin` 否定断言）与「不进请求/响应 schema 和
     // routes/」，过滤谓词发生在查询层本就是它认可的形态。
-    expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(8)
+    // 8 → 7（RFC-359 AC-1，plan §5hn 之后的盘点第 3 刀）：上面那处读谓词**搬走了**——
+    // 列表三件两个引擎合一，`listTaskSummaryRows` 连同它一起从 `services/task.ts` 删除，
+    // 现在住在共用的 `listRows` 里。棘轮**只降不升**，这是一次收敛：写侧的唯一 owner
+    // 与「不进请求/响应 schema」两条判据都没动。
+    expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(7)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
     expect(schema).toContain("launchOrigin: text('launch_origin'")
     // RFC-311 G1:过滤谓词改成**可换别名**的形式(`col('launch_origin')`),因为

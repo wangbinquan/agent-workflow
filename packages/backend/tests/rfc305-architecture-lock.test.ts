@@ -315,6 +315,10 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/userOperations',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/public/operations',
+      // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的**第三个
+      // 组合根**（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上），列表行的
+      // owner 身份投影在这里装配后注入任务路由——与另外两个根同形。
+      'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition',
@@ -366,6 +370,9 @@ describe('RFC-305 identity-access architecture', () => {
       // 的 public 消费，与 postgresqlTaskRouteOperations 那条同型；模块自己去 compose
       // 别的 context 的 provider 才是被 RFC-328 判红的形状，这里刻意不那么做。
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
+      // RFC-359 AC-1（同上）：SQLite 任务路由也只**类型**依赖 `OwnerIdentityQueries`，
+      // 实例由组合根注入——与上面 `postgresqlTaskRouteOperations` 那条同型。
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts -> @/modules/identity-access/public/operations',

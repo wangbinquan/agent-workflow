@@ -12,8 +12,12 @@ import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/comma
 import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
 import {
+  assertTaskVisibleProjection,
   launchMultipartTask,
   loadTaskProjection,
+  replaceTaskMembersProjection,
+  requireTaskOperatorProjection,
+  taskMembersProjection,
   nodeRunEventsProjection,
   nodeRunStdoutProjection,
   taskDiffProjection,
@@ -21,14 +25,8 @@ import {
   taskListSummariesProjection,
   taskNodeRunsProjection,
 } from './postgresqlTaskRouteOperations'
-import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
-import {
-  assertCanReplaySourceTask,
-  canViewTask,
-  getTaskMembers,
-  requireTaskOperator,
-  updateTaskMembers,
-} from '@/services/taskCollab'
+import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
+import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import {
@@ -63,6 +61,12 @@ export interface SqliteTaskRouteOperationsDependencies {
    * 生产调用路。
    */
   readonly launches: PostgresqlTaskExecutionLaunchParticipant
+  /**
+   * RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：列表行的 owner 身份投影。**由组合根注入**，
+   * 与 PostgreSQL 那一侧同形——这层是 infrastructure，不该自己去 compose 另一个模块
+   *（`rfc305-architecture-lock` 的已审消费者账本盯的正是这条边）。
+   */
+  readonly owners: OwnerIdentityQueries
   readonly appHome?: string
 }
 
@@ -70,15 +74,6 @@ async function requiredTask(db: LegacySqliteTaskDatabase, taskId: string): Promi
   const task = await getTask(db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   return task
-}
-
-async function taskAccessRow(db: LegacySqliteTaskDatabase, taskId: string) {
-  return db
-    .select({ id: taskRows.id, ownerUserId: taskRows.ownerUserId })
-    .from(taskRows)
-    .where(eq(taskRows.id, taskId))
-    .limit(1)
-    .all()[0]
 }
 
 async function assertManualExecutionAllowed(
@@ -134,35 +129,16 @@ export function createSqliteTaskRouteOperations(
     // 这类只会由裸 SQL / 手工修复写进去的值，静默上线比响亮失败更糟（前端会落进默认分支，
     // 渲染成一个看不出错的错）。
     list: (filters) => taskListSummariesProjection(db, filters),
-    listItems: (filters) =>
-      taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, filters),
+    listItems: (filters) => taskListItemsProjection({ db, owners: dependencies.owners }, filters),
     get: (taskId) => loadTaskProjection(db, taskId),
-    async assertVisible(actor, taskId) {
-      if (actor.permissions.has('tasks:read:all')) return
-      const task = await taskAccessRow(db, taskId)
-      if (task !== undefined && !(await canViewTask(db, actor, task))) {
-        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      }
-    },
-    async requireOperator(actor, taskId) {
-      const task = await taskAccessRow(db, taskId)
-      if (task !== undefined) await requireTaskOperator(db, actor, task)
-    },
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 刀）：访问门 + 成员四件与 PostgreSQL 共用**同一份**。
+    // 这一侧原来就是转给 `taskCollab` 的中立实现，合并把 PG 那份内联重写退役掉；顺带统一
+    // 存在性口径——**不存在即 404**，不再「取不到行就不判、靠路由随后自己 404」。
+    assertVisible: (actor, taskId) => assertTaskVisibleProjection(db, actor, taskId),
+    requireOperator: (actor, taskId) => requireTaskOperatorProjection(db, actor, taskId),
     assertReplayVisible: (actor, taskId) => assertCanReplaySourceTask(db, actor, taskId),
-    async getMembers(actor, taskId) {
-      const task = await taskAccessRow(db, taskId)
-      if (task === undefined) {
-        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      }
-      return await getTaskMembers(db, actor, task)
-    },
-    async replaceMembers(actor, taskId, body) {
-      const task = await taskAccessRow(db, taskId)
-      if (task === undefined) {
-        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      }
-      return await updateTaskMembers(db, actor, task, body)
-    },
+    getMembers: (actor, taskId) => taskMembersProjection(db, actor, taskId),
+    replaceMembers: (actor, taskId, body) => replaceTaskMembersProjection(db, actor, taskId, body),
     getReviewers: (actor, taskId) =>
       getReviewNodeReviewerConfig(dependencies.collaboration, { actor, taskId }),
     replaceReviewers: (actor, taskId, body) =>

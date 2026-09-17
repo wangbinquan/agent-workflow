@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 843,
+    "consumers": 844,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1041,
@@ -45684,6 +45684,7 @@
         "import:3b49e4cc59dba49edde8",
         "import:74230d814389db0a96d2",
         "import:9ec8d7cb92d07a0009d3",
+        "import:bdfa34e226c762309da6",
         "import:e8a4132e0a20bd59b8f0"
       ],
       "context": "identity-access",
@@ -45751,6 +45752,12 @@
           "edgeId": "import:9ec8d7cb92d07a0009d3",
           "file": "packages/backend/src/services/ownerIdentity.ts",
           "ownerEntryId": "owner:packages/backend/src/services/ownerIdentity.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:bdfa34e226c762309da6",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file"
         },
         {
           "context": "task-execution",
@@ -159649,7 +159656,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae2cbca6ee186894cb3b1f4138756ab74c98b314c15a83a713a7d4129b1c1ebe",
+  "sourceDigest": "sha256:6d50e3d9c74127e23f357de8fce87e92a29c25c10ec3834d6a49726e3e115e8e",
   "targetContexts": [
     "collaboration",
     "development-automation",

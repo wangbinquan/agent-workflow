@@ -7928,3 +7928,21 @@ const sliceBetween = (source: string, from: string, to: string): string => {
 
 同类形状还有 `match(...)?.[1] ?? ''`（匹配不上就拿空串去断言 `not.toContain`，恒绿）与
 `split(marker)[1]`（分不开就是 `undefined`）。**凡是「先定位再断言」的锁，定位失败必须是红，不是空。**
+
+### 架构棘轮 / 源码锁**不只住在 `tests/architecture/`**
+
+（RFC-359 列表三件合一时实撞，一次推红 11 个 CI 分片。）改完架构面只跑 `tests/architecture/`
+是不够的——那次去重后的六条红里，**六条全在 `tests/` 根下**：
+`rfc305-architecture-lock` / `rfc347-identity-access-runtime` / `rfc357-narrow-projection` /
+`rfc301-task-launch-origin-architecture` / `rfc247-token-redaction` / `rfc328-architecture-guards`。
+
+可用的做法是按**文件名**建一份清单再分片跑（本地一次跑太多文件会造假红，见上面的条目）：
+
+```
+ls tests/*.test.ts | grep -iE "architecture|-lock|ratchet|guard|source-text|conformance|parity|contracts|boundary|cutover|highwater|census" > /tmp/ratchets.txt
+split -l 8 /tmp/ratchets.txt /tmp/rt-
+for g in /tmp/rt-*; do bun test $(sed 's|^|tests/|' $g | tr '\n' ' ') 2>&1 | grep -E "^\s*\(fail\)|[0-9]+ fail$"; done
+```
+
+当前是 208 个文件、26 片，整份跑一遍几分钟。**凡是删函数 / 搬家 / 改装配图的改动，
+提交前把这份清单整份跑一遍**——比推上去等 11 个分片红了再逐个 grep CI 日志便宜得多。

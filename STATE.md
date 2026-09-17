@@ -2,6 +2,39 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 66，**访问门 + 成员四件合一；修第 3 刀推的六条锁**）
+>
+> **先说红**：`07b187db0` 红了 11 个 backend 分片，去重后**六条**，全都是源码锁 / 棘轮：
+> `rfc305`（SQLite 路由自己 compose 了 identity-access → 改成由组合根注入 `owners`，与 PG 同形）、
+> `rfc347`（`cli/start.ts` 成了第三个 compose 根 → 账本补一条）、
+> `rfc357-narrow-projection`（投影多带一列 `workflowName` → 改锚 + 补「不得回退成裸 select()」）、
+> `rfc301`（`launchOrigin` 计数 8→7，读谓词随 `listTaskSummaryRows` 搬走 → 棘轮只降不升）、
+> `rfc247`（`redactGitUrl(row.repoUrl)` 在 task.ts 里 4→3 → 改成两份源码合起来数 ≥7）、
+> `rfc328`（第 4 刀新引入的跨 context 内部 import → 改走 `@/services/taskCollab` facade）。
+>
+> **教训**：架构棘轮 / 源码锁**不只住在 `tests/architecture/`**——这六条全在 `tests/` 根下。
+> 现在按文件名建清单（208 个文件）分 26 片整份跑，已写进 `docs/dev-gotchas.md`。
+>
+> **第 4 刀正题**：`assertVisible` / `requireOperator` / `assertReplayVisible` / `getMembers` /
+> `replaceMembers` 合一（两个 reviewers 动词本来就同一行转发）。取 `taskCollab` 那一份——它严格更全：
+> RFC-324 观察者只读文案、与评审写同一把任务 FIFO 锁、锁内重读任务行。聚合根行锁两份都有
+>（同一对原语、同一条 W9 的 22.9% 实测），**不丢 PG 的并发性质**。
+>
+> **销账两笔**：B1（拒绝时的错误码——对「是成员但只读」的人说「你不是成员」是错的答案）、
+> B2（任务不存在时的门——一道对不存在的 id 说「行」的门在别的调用方手里就是个谎，统一 404）。
+> 删除 PG 侧内联的成员实现 175 行 + `membershipEvents` 端口与它 15 行的绑定 + SQLite 的本地 `taskAccessRow`。
+>
+> **一处只在本地红的用例（记录、不掩盖）**：`rfc359-w18` 的 PG lane count/rollback 那条，
+> 在本机 macOS+docker PG 上稳定红在**驱动层的 `rollback` 语句**（~5.1s）。判为环境差异：
+> 同一条用例在 CI 的 PG lane 上实测 pass（`44d9a459b` 日志有据）、`07b187db0` 的 11 个红分片不含它、
+> 本轮 diff 不触及它读的任何东西；重启本地容器**以及换一个全新空库**跑都一样红、耗时固定 ~5.1s，
+> 故既不是连接残留也不是库状态——像本地某处的 5 秒超时。**由 CI 裁决**。
+>
+> 证据：W7 对拍 56/56 双引擎；成员 / 评审面 172/172；架构棘轮 208 文件 26 片全绿；
+> 架构守卫 + W29 714/714；tsc 0 / eslint 0 / prettier 干净。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` 盘点后的第 4 刀。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 65，**列表三件合一——`list` / `listItems` / `get`**）
 >
 > 本段待推：盘点后的第 3 刀。基线不用新立——W7 的 A1–A5 就是这三件的双引擎对拍，一直在跑。

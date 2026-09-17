@@ -5660,13 +5660,14 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:3be29c6fccbc96539368",
-        "import:47060ef7e265dde0fdd7",
         "import:56584bfddf18aed8607e",
         "import:5b3e497b08867a624a12",
-        "import:7d89c25c20c826a2655c",
-        "import:d999123f1203e84cac30",
-        "import:df189dbac11a61cd26d1"
+        "import:74bf4f478a541c44ad8d",
+        "import:b0320a3e61a1af5c6068",
+        "import:bd17391b1ee737bf420d",
+        "import:df189dbac11a61cd26d1",
+        "import:e4a970d41eea51b4b43e",
+        "import:fab7ac10dff524f60151"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/taskCollab.ts",
@@ -6528,5 +6529,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae2cbca6ee186894cb3b1f4138756ab74c98b314c15a83a713a7d4129b1c1ebe"
+  "sourceDigest": "sha256:6d50e3d9c74127e23f357de8fce87e92a29c25c10ec3834d6a49726e3e115e8e"
 }

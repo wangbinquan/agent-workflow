@@ -43,6 +43,7 @@
 // 不能（要给一侧凭空造一套机制），才是 B 段。
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -65,7 +66,6 @@ import {
   workflows,
 } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations'
 import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
 import {
@@ -146,6 +146,7 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     db: db as unknown as DbClient,
     collaboration: {} as never,
     recovery: {} as never,
+    owners: composeOwnerIdentityQueries(db as unknown as DbClient),
     // SQLite 壳在调用 `retryNode` / `resumeTask` **之前**就展开这个对象，所以它不能抛；
     // 本对拍只驱动到前置门为止，门后的驱动依赖一个都用不到。
     startDepsFor: () => ({ db }) as never,
@@ -877,28 +878,29 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
   // `harness` 只能在 test 体内读——describe 体里读会抛（库还没建）。
   const isPostgresql = (): boolean => harness.capabilities.provider === 'postgresql'
 
-  test('B1 requireOperator 拒绝时的错误码不同（RFC-324 文案 vs 通用成员文案）', async () => {
+  // **账已销**（RFC-359 AC-1，plan §5hn 之后的盘点第 4 刀）：访问门 + 成员四件两个引擎共用
+  // `taskCollab` 那一份之后，下面两条从「实测分叉」变成「不许再分家」的锁。
+  //
+  // 原 B1：拒绝时的错误码。SQLite 走 `requireTaskOperator`（RFC-324 的观察者只读文案），
+  // PG 自带一句泛化的 `not-task-member`。前端按 code 选提示语——对一个**确实是成员、只是
+  // 只读**的人说「你不是成员」是错的答案，所以取 RFC-324 那一档。
+  test('B1→A requireOperator 拒绝时两侧同一个错误码：观察者拿 RFC-324 只读文案', async () => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db)
     await seedMembers(harness.db, taskId, [{ userId: OBSERVER, role: 'observer' }])
-    // SQLite 走 `requireTaskOperator`（RFC-324 的观察者只读文案）；PG 是自带的通用文案。
-    // 前端按 code 选提示语，所以这条分叉是用户可见的。
-    expect(await code(ops.requireOperator(actorOf(OBSERVER), taskId))).toBe(
-      isPostgresql() ? 'not-task-member' : 'task-observer-read-only',
-    )
+    expect(
+      await code(ops.requireOperator(actorOf(OBSERVER), taskId)),
+      '观察者是成员、只是只读——文案必须说这件事，不能说「你不是成员」',
+    ).toBe('task-observer-read-only')
   })
 
-  test('B2 任务不存在时的可见性门：SQLite 静默放行，PG 404', async () => {
+  // 原 B2：任务不存在时的门。SQLite 取不到行就**不判**、静默放行（靠路由随后自己 404），
+  // PG 不存在即 404。两侧最终 HTTP 状态相同，但方法层面的契约不同——一道对不存在的 id
+  // 说「行」的门，在别的调用方手里就是个谎。取 404 那一档。
+  test('B2→A 任务不存在时两侧同一个契约：可见性门与操作权门都 404', async () => {
     const ops = operations(harness)
-    // SQLite 壳先取 `taskAccessRow`，取不到就**不判**（路由随后自己 404）；
-    // PG 直接问 `canViewTask` / `requireTaskRow`，不存在即 404。两侧最终 HTTP 状态相同，
-    // 但抛点不同——把断言错在方法层面的调用方会看到不一样的行为。
-    expect(await code(ops.assertVisible(actorOf(STRANGER), 't_missing'))).toBe(
-      isPostgresql() ? 'task-not-found' : 'no-throw',
-    )
-    expect(await code(ops.requireOperator(actorOf(STRANGER), 't_missing'))).toBe(
-      isPostgresql() ? 'task-not-found' : 'no-throw',
-    )
+    expect(await code(ops.assertVisible(actorOf(STRANGER), 't_missing'))).toBe('task-not-found')
+    expect(await code(ops.requireOperator(actorOf(STRANGER), 't_missing'))).toBe('task-not-found')
   })
 
   test('B3 assertManualExecutionAllowed：PG 额外要求工作流当前可见/仍在', async () => {
