@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 73，**更正续 72 的一条判断**）
+>
+> **续 72 写错了一条，在此更正**：它说「手动的两个路由动词在 PostgreSQL 上零行为覆盖」——**不对**。
+> `rfc359-w8-auto-repair-conformance` 第二个 describe 块（5 条）里的 `repairEngineFor()`
+> **没有 provider 分支**，无条件构造 `createPostgresqlTaskRouteRepairOperations` 并把
+> `harness.db` 当 PG 句柄用；于是这 5 条在**两个库上都跑 PG 那份实现**，里面就有
+> `repairOptions` / `applyRepair`。PG 那份**有覆盖，而且被证明可移植到 SQLite 库上**。
+> 我上一提只数了文件名带 `lifecycle-repair-` 的 13 个套件，没往下核 `repairEngineFor` 的构造。
+>
+> **订正后的真实缺口是另一件事**：SQLite 路由走 `taskLifecycleRepair.ts`（513 行，13 个套件覆盖），
+> PG 路由走 `postgresqlTaskRouteRepairOperations.ts`（1546 行，那 5 条覆盖），
+> **没有任何一条测试把这两份实现放在一起比**。不是「一侧无人看管」，是**各看各的**——
+> 两份实现各自都绿，谁也不知道它们是否同答案。
+>
+> 合并的收益因此也要改写：不是给弱侧补覆盖，而是让「同一个告警在两个部署上给出同一份修复选项」
+> 变成可断言的事实。第 8 刀的三步次序不变，只是第 1 步的定位改了。
+>
+> **续 72 的另一条结论仍然成立**：t19d 按文件名前缀配对，配不出
+> `taskLifecycleRepair.ts` ↔ `postgresqlTaskRouteRepairOperations.ts` 这一对，
+> 于是账本里根本没有这一行——合并时一并修守卫。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 72，**第 8 刀勘察：手动修复零对拍 + 一处守卫盲区**）
 >
 > `d6922cd34`（第 7 刀）CI 全绿。下一刀勘察 `repairOptions` / `applyRepair`，**挖出两件事**：

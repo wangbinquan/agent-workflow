@@ -16710,17 +16710,25 @@ SQLite 路由不再自己判工作流可见性。`rfc345` 兼容边账本 37 →
 
 ## 第 8 刀的勘察　`repairOptions` / `applyRepair`　——**并报一处守卫盲区**
 
-### 发现：手动修复这一对，双引擎零对拍
+### 发现：手动修复这一对，**两侧各自有覆盖，但没有任何东西比较它们**
 
-- SQLite 侧：`platform/persistence/sqlite/taskLifecycleRepair.ts`（513 行），
-  由 **13 个** `lifecycle-repair-*.test.ts` 覆盖——**没有一个是 `describeEachProvider`**。
-- PostgreSQL 侧：`modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts`
-  （1546 行）。它**有**覆盖，但只覆盖 `automaticRepair`（`rfc359-w8-auto-repair-conformance`
-  的 11 条，且那份也是单引擎）。**手动的两个路由动词 `repairOptions` / `applyRepair`
-  在 PostgreSQL 上零行为覆盖。**
+**先更正一条本 plan 上一版写错的判断**（原文写的是「手动的两个路由动词在 PostgreSQL 上零行为
+覆盖」，那是错的，依据没核到底）：`rfc359-w8-auto-repair-conformance` 的第二个 describe 块
+（`manual and automatic repair share the same engine`，5 条）里，`repairEngineFor()`
+**没有 provider 分支**——它无条件构造 `createPostgresqlTaskRouteRepairOperations`，
+把 `harness.db` 直接当 PG 句柄用。于是这 5 条在**两个库上都跑 PG 那份实现**，
+其中就包含 `repairOptions` / `applyRepair`（选项清单相等、审计归属、resume 失败的响应形状等）。
+换句话说 PG 那份实现**是有覆盖的，而且被证明可移植到 SQLite 库上**。
 
-这正是 `dual-provider-parity-audit-2026-09-04` 里 12 条 P0 的孵化形态：一侧被十几个套件天天跑，
-另一侧一条行为判据都没有，于是它可以长期比另一侧弱而没有任何东西转红。
+订正后的真实缺口是另一件事：
+
+- SQLite 路由走的是 `platform/persistence/sqlite/taskLifecycleRepair.ts`（513 行），
+  由 **13 个** `lifecycle-repair-*.test.ts` 覆盖——没有一个是 `describeEachProvider`；
+- PG 路由走的是 `postgresqlTaskRouteRepairOperations.ts`（1546 行），由上面那 5 条覆盖；
+- **没有任何一条测试把这两份实现放在一起比。** 两份实现各自都绿，谁也不知道它们是否同答案。
+
+这与「一侧零覆盖」是不同的病：不是无人看管，而是**各看各的**。合并的收益因此也不同——
+不是给弱侧补覆盖，而是让「同一个告警在两个部署上给出同一份修复选项」变成可断言的事实。
 
 ### 守卫盲区：t19d 的配对是**按文件名前缀**的，看不见这一对
 
@@ -16744,7 +16752,7 @@ SQLite 路由不再自己判工作流可见性。`rfc345` 兼容边账本 37 →
 
 ### 因此第 8 刀的次序
 
-1. **先立基线**（这一步本身就是 PG 手动修复路径的第一份行为覆盖，即使不合并也值得做）：
+1. **先立基线**（订正后它的价值是**第一次把两份实现放在一起比**，不是「给 PG 补覆盖」）：
    同一条告警下比两侧 `repairOptions` 的**整份选项清单**（id / rule / labelKey / risk /
    destructive / available / unavailableReasonKey / previewSteps / 两个标记），
    以及 `applyRepair` 的六个错误码（`alert-not-found` / `alert-not-on-task` /
