@@ -30,7 +30,8 @@ import { tmpdir } from 'node:os'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { getTaskDiff, startTask } from '../src/services/task'
+import { startTask } from '../src/services/task'
+import { taskDiffProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
@@ -121,7 +122,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
     writeFileSync(join(wtA, 'big.txt'), filler(700 * 1024))
     writeFileSync(join(wtB, 'big.txt'), filler(700 * 1024))
 
-    const diff = await getTaskDiff(h.db, task.id)
+    const diff = await taskDiffProjection({ db: h.db }, task.id)
     expect(diff.truncated).toBe(true)
     expect(diff.baseCommit).toBeNull()
     // repo[0]'s header was emitted before the budget ran out.
@@ -150,7 +151,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
     // Neither worktree is mutated: both repos are in `usable` (valid base +
     // existing worktree) so the 409 task-no-base-commit must NOT throw, yet
     // every per-repo snapshot is '' so the loop `continue`s every repo.
-    const diff = await getTaskDiff(h.db, task.id)
+    const diff = await taskDiffProjection({ db: h.db }, task.id)
     expect(diff.diff).toBe('')
     expect(diff.baseCommit).toBeNull()
     expect(diff.truncated).toBe(false)

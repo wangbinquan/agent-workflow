@@ -22,7 +22,8 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { getTaskDiff, startTask, startTaskWithLocalRepo } from '../src/services/task'
+import { startTask, startTaskWithLocalRepo } from '../src/services/task'
+import { taskDiffProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
@@ -98,7 +99,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
     )
     // Stage a change inside the worktree so the diff is non-empty.
     writeFileSync(join(task.worktreePath, 'README.md'), '# repo-0 (mutated)\n')
-    const diff = await getTaskDiff(h.db, task.id)
+    const diff = await taskDiffProjection({ db: h.db }, task.id)
     expect(diff.baseCommit).not.toBeNull()
     expect(diff.truncated).toBe(false)
     expect(diff.diff).toContain('README.md')
@@ -129,7 +130,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
     writeFileSync(join(wtA, 'README.md'), '# repo-A mutated\n')
     writeFileSync(join(wtB, 'README.md'), '# repo-B mutated\n')
 
-    const diff = await getTaskDiff(h.db, task.id)
+    const diff = await taskDiffProjection({ db: h.db }, task.id)
     expect(diff.baseCommit).toBeNull()
     expect(diff.truncated).toBe(false)
     // Both per-repo headers are present, in repoIndex order.
@@ -163,7 +164,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
     const wtA = join(task.worktreePath, task.repos[0]!.worktreeDirName)
     writeFileSync(join(wtA, 'README.md'), '# repo-A mutated\n')
 
-    const diff = await getTaskDiff(h.db, task.id)
+    const diff = await taskDiffProjection({ db: h.db }, task.id)
     expect(diff.baseCommit).toBeNull()
     expect(diff.truncated).toBe(false)
     expect(diff.diff).toContain(`# === Repo: ${task.repos[0]!.worktreeDirName} ===`)

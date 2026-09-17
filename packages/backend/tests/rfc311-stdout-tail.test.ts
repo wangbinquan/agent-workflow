@@ -21,10 +21,10 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import {
-  getNodeRunStdout,
+  nodeRunStdoutProjection,
   STDOUT_OMITTED_MARKER,
   STDOUT_TAIL_BUDGET_BYTES,
-} from '../src/services/task'
+} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
@@ -87,7 +87,7 @@ describeEachProvider('RFC-311 T13 — stdout 保尾且读取有界', (harness) =
     const db = harness.db
     await seed(db, ['first line', 'second line', 'third line'])
     const logsDir = mkdtempSync(join(tmpdir(), 'aw-stdout-'))
-    const out = await getNodeRunStdout(db, 't1', 'nr1', { logsDir })
+    const out = await nodeRunStdoutProjection({ db, logsDir }, 't1', 'nr1')
     expect(out).toBe('first line\nsecond line\nthird line')
     expect(out).not.toContain(STDOUT_OMITTED_MARKER)
   })
@@ -103,7 +103,7 @@ describeEachProvider('RFC-311 T13 — stdout 保尾且读取有界', (harness) =
       payload: 'noisy stderr',
     })
     const logsDir = mkdtempSync(join(tmpdir(), 'aw-stdout-'))
-    const out = await getNodeRunStdout(db, 't1', 'nr1', { logsDir })
+    const out = await nodeRunStdoutProjection({ db, logsDir }, 't1', 'nr1')
     expect(out).toBe('keep me')
   })
 
@@ -116,7 +116,7 @@ describeEachProvider('RFC-311 T13 — stdout 保尾且读取有界', (harness) =
       Array.from({ length: 20 }, (_, i) => line(`L${String(i).padStart(2, '0')}`)),
     )
     const logsDir = mkdtempSync(join(tmpdir(), 'aw-stdout-'))
-    const out = await getNodeRunStdout(db, 't1', 'nr1', { logsDir })
+    const out = await nodeRunStdoutProjection({ db, logsDir }, 't1', 'nr1')
 
     expect(out.startsWith(STDOUT_OMITTED_MARKER), '截断必须说出来').toBe(true)
     // 尾巴在：最后一行必须出现
@@ -139,7 +139,7 @@ describeEachProvider('RFC-311 T13 — stdout 保尾且读取有界', (harness) =
     // 归档目录指向一个不存在的路径：真去读会抛/返回空，而**根本不读**才是要锁的。
     // 这里用「读了也拿不到东西」的目录 + 断言输出里只有 DB 行，来锁住这条路径。
     const logsDir = join(tmpdir(), 'aw-stdout-nonexistent-' + String(Date.now()))
-    const out = await getNodeRunStdout(db, 't1', 'nr1', { logsDir })
+    const out = await nodeRunStdoutProjection({ db, logsDir }, 't1', 'nr1')
     expect(out.startsWith(STDOUT_OMITTED_MARKER)).toBe(true)
     expect(out).toContain('D19:')
   })

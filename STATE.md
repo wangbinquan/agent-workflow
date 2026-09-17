@@ -2,6 +2,39 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 63，**纯读三件合一——`diff` / `stdout` / `events`**）
+>
+> 本段待推：盘点后的第 2 刀，「纯读四件」收尾。
+>
+> 合并前这三件是两份独立源码：SQLite 侧 `services/task.ts` 的 `getTaskDiff` /
+> `getNodeRunStdout` / `getNodeRunEvents`（310 行），PG 侧 `postgresqlTaskRouteOperations.ts`
+> 的 `taskDiff` / `nodeRunStdout` / `nodeRunEventsPage`。
+>
+> **销的账是真的**：单仓 410 的文案。SQLite 分两句说清原因——「目录根本不存在」与
+> 「目录还在、但已不是有效的 git 仓库（源仓被移动或删除）」；PG 把两种压成一句泛化的
+> `is unavailable`。这是两种不同的现场，用户要据此决定是重建工作树还是去找源仓。
+> 基线里把这两格钉成分叉，合并后自己红了，改成相等断言即销账——取 SQLite 那份（信息更多）。
+>
+> **立基线时照出基线自己的缺口**：四条变异里「PG 把 baseCommit 门与工作树门对调」**没红**。
+> 原因不是变异不狠，是原来三格里两道门从没**同时**失败过——只有一道门坏时，先查谁都同一个答案。
+> 补一格「没有 base commit、工作树也没了」（两个引擎都必须先报 409），变异随即转红。
+> **已抽成通用踩坑**：凡「先 X 后 Y」的次序契约，用例矩阵必须有 X∧Y 同时为假的那一格。
+>
+> 多仓口径取 SQLite 那份（按字符串长度记账，与**单仓分支共用的 `worktreeDiff`** 同口径；
+> PG 那份按字节记账会与单仓不一致，且多字节边界上切会吐 U+FFFD）。逐仓 `isGitWorkTree`
+> 取 SQLite 的 `Promise.all` 并行式（PG 那份串行）。
+>
+> 三份账本被动更新：t19d `14/2 → 19/6`（**命名债的读数**，涨的是共用实现被引用的次数）、
+> rfc349 债收敛掉 `gt` / `nodeRunEvents`、w7 行号键 `3590 → 3580`。
+>
+> **下一刀：还命名债**（§5hj）。`postgresqlTaskRouteOperations.ts` 现在有五个共用出口 +
+> 三个共用常量，账本连着三提读假信号；做一刀纯改名让它们重新说真话。
+>
+> 证据：读投影基线 8/8 双引擎；四个消费者套件 47/47；`tasks` + W7 契约 + ws 等 153/153；
+> services/task 消费者两片 157/157；架构守卫 **706/706** + W29；tsc 0 / eslint 0 / prettier 干净。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` 盘点后的第 2 刀。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 62，**`node-runs` 投影合一；修 2e8140cf4 推的红**）
 >
 > 本段待推：盘点后的第 1 刀。

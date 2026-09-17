@@ -16215,3 +16215,70 @@ ACL 门、删除竞态）。正确做法是**把调用点迁到参与者**：加
 
 `services/task.ts#getTaskNodeRuns` 仍有测试消费者（`api-task-review-round-start` 等），
 **暂不删**：它现在是「legacy 投影的读回侧」，下一刀把那几个套件迁到路由投影之后再退役。
+
+## 盘点后的第 2 刀落地　纯读另外三件（`diff` / `stdout` / `events`）合一
+
+`TaskRouteOperations` 这一对的第二格，把「纯读四件」收尾。合并前这三件是两份独立源码：
+SQLite 侧 `services/task.ts` 的 `getTaskDiff` / `getNodeRunStdout` / `getNodeRunEvents`（310 行），
+PostgreSQL 侧 `postgresqlTaskRouteOperations.ts` 的 `taskDiff` / `nodeRunStdout` /
+`nodeRunEventsPage`。
+
+### 先立基线，并在立基线的过程中发现一格漏覆盖
+
+`rfc359-w5hn-task-read-route-provider-parity` 里加三条：
+
+- **stdout**：同一批 `node_run_events`（混 `stderr`、非 ASCII、JSON payload）下两侧正文逐字相同；
+  外加归属门（别的任务下的 run id 一律 404）。
+- **events**：`?limit=3` 截断 + 游标 + `?since=<cursor>` 续页 + payload 解析（JSON 成对象、
+  纯文本保持字符串）。自增 id 的**绝对值**两侧不必相同，比的是相对形状（`offset`）。
+- **diff**：一棵真 git 工作树（一条提交 + 一处未提交改动 + 一个未跟踪文件）下正文逐字相同，
+  外加 409 / 410 的错误契约。
+
+**变异实证四条**：①SQLite stdout 不再剔除 `stderr` → 红；②PG events 游标取本页首条而非末条 → 红；
+③PG diff 把 baseCommit 门与工作树门对调 → **第一次没红**；④SQLite 单仓 `truncated` 取反 → 红。
+
+第 ③ 条的不红是**基线的真实缺口**，不是变异不够狠：原来的三格里，`baseCommit === null` 那格
+工作树是好的、工作树坏的两格 `baseCommit` 是有的——**两门从没同时失败过**，次序自然观测不到。
+补一格「没有 base commit、工作树也没了」，断言两个引擎都先报 409（任务在准备阶段就没成是主因，
+工作树在不在是次要信息），变异随即转红。**教训**：检查次序类的判据，要让被比较的两道门
+**同时**失败才测得出来。
+
+### 合并，并销掉一笔真账
+
+三件提成 `taskDiffProjection` / `nodeRunStdoutProjection` / `nodeRunEventsProjection`
+（形参收窄到 `{ db, logsDir? }`——`logsDir` 这个可测旋钮此前只有 SQLite 那份有），
+两个组合根同调一份，`services/task.ts` 里那 310 行连同 `STDOUT_*` 三个常量一起删除，
+四个消费者测试（`rfc311-stdout-tail` / `events-archive` / `task-diff-multi-repo` /
+`task-diff-multi-repo-truncation`）改按共用投影 import。
+
+**销的账**：单仓 410 的文案。SQLite 分两句说清原因——「目录根本不存在」与「目录还在、但已不是
+有效的 git 仓库（源仓被移动或删除，链接工作树的 gitdir 指针悬空）」；PostgreSQL 把两种压成一句
+泛化的 `is unavailable`。这是两种完全不同的现场，用户要据此决定是重建工作树还是去找源仓。
+基线里把这两格显式钉成分叉，合并后它自己红了，改成相等断言即销账——取 SQLite 那份，
+因为信息严格更多。
+
+多仓分支的口径取 SQLite 那份（按字符串长度记账、坏分片逐个跳过、可用分片为零时 409），
+理由是它与**单仓分支共用的 `worktreeDiff`** 同口径；PG 那份按 `Buffer.byteLength` 记账，
+截断点会与单仓分支不一致，且在多字节边界上切会吐出 U+FFFD。逐仓 `isGitWorkTree` 探测取
+SQLite 的 `Promise.all` 并行式（PG 那份是串行 `for`）。
+
+### 账本连带（三份，全部是被动更新）
+
+- `rfc359-w5-t19d` / `INVERTED_PAIRS`：`TaskRouteOperations` 的 postgresql 侧 `14/2 → 19/6`，
+  倒挂 `9 vs 14 → 9 vs 19`。**全部是命名债的读数**——涨上去的覆盖是两个引擎共享的同一份实现，
+  SQLite 那一侧现在根本没有第二份可漂移。这已是本账本第三格这么读（见下）。
+- `rfc349-provider-cutover`：`services/task.ts` 对 legacy transport 的债收敛——`gt` 与
+  `nodeRunEvents` 两个符号随三件退役一起消失。
+- `rfc359-w7-task-insert-lineage-completeness`：`services/task.ts:3590 → 3580`。站点与它写的
+  三列都没变，是删掉的 310 行让整份文件短了。**行号键的账本就是这么被动的**。
+
+### 剩余（承上一节的顺序表，②起）
+
+②列表三件 ③成员 / 评审四件 ④`cancel` / `delete` ⑤`resume` / `retry`
+⑥`workflowSyncPreview` / `syncWorkflow` ⑦`repairOptions` / `applyRepair`。
+
+**命名债（§5hj）现在该还了**：上一节说「`postgresqlTaskRouteOperations.ts` 要等上面那片合完
+再改——它此刻仍是 PG 专属实现 + 一个共用出口」。这一刀之后它已经是**四个共用出口**
+（`launchMultipartTask` / `taskNodeRunsProjection` / `taskDiffProjection` /
+`nodeRunStdoutProjection` / `nodeRunEventsProjection`）+ 三个共用常量，账本连着三提读假信号。
+下一刀就做纯改名，让那两份账本重新说真话。

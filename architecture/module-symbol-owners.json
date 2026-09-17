@@ -6,7 +6,7 @@
     "moduleFiles": 1182,
     "productionFiles": 2550,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24700
+    "symbolsIncludingFileRoots": 24694
   },
   "entries": [
     {
@@ -128330,12 +128330,12 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#nodeRunEventsPage",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#nodeRunEventsProjection",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "nodeRunEventsPage",
+      "symbol": "nodeRunEventsProjection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -128354,12 +128354,12 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#nodeRunStdout",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#nodeRunStdoutProjection",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "nodeRunStdout",
+      "symbol": "nodeRunStdoutProjection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -128498,7 +128498,7 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#STDOUT_OMITTED_MARKER",
       "removeAfterWave": null,
@@ -128510,7 +128510,7 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#STDOUT_TAIL_BUDGET_BYTES",
       "removeAfterWave": null,
@@ -128522,7 +128522,7 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#STDOUT_TAIL_ROW_CAP",
       "removeAfterWave": null,
@@ -128594,12 +128594,12 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#taskDiff",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#taskDiffProjection",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "taskDiff",
+      "symbol": "taskDiffProjection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -128648,6 +128648,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "taskProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#TaskReadProjectionDependencies",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskReadProjectionDependencies",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -185958,46 +185970,10 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#getNodeRunEvents",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "getNodeRunEvents",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#getNodeRunStdout",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "getNodeRunStdout",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#getTask",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "getTask",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#getTaskDiff",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "getTaskDiff",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -186820,42 +186796,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#STDOUT_OMITTED_MARKER",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "STDOUT_OMITTED_MARKER",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#STDOUT_TAIL_BUDGET_BYTES",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "STDOUT_TAIL_BUDGET_BYTES",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#STDOUT_TAIL_ROW_CAP",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "STDOUT_TAIL_ROW_CAP",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#submitContinuationIntentInTx",
@@ -186887,18 +186827,6 @@
       "status": "legacy-target",
       "symbol": "synthesizeRepoFromTaskRow",
       "targetContext": "source-control",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#TASK_DIFF_MAX_BYTES",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "TASK_DIFF_MAX_BYTES",
-      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -297077,5 +297005,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:96025dbc0c50e91b0d68c5466d33b3a318d6e0cbad4a4c8219685b5f1d048f12"
+  "sourceDigest": "sha256:253587f0a322916e5c0cc8d4ecc0839c7a6fc6f9d804d815518576bf2072704e"
 }

@@ -162,9 +162,15 @@ import {
 const log = createLogger('task-execution.postgresql-task-routes')
 
 const TASK_DIFF_MAX_BYTES = 1024 * 1024
-const STDOUT_TAIL_BUDGET_BYTES = 1024 * 1024
-const STDOUT_TAIL_ROW_CAP = 50_000
-const STDOUT_OMITTED_MARKER = '[… earlier output omitted: this view shows the most recent 1 MiB …]'
+/**
+ * RFC-311 T13 —— stdout 尾巴的两道闸。字节预算保持一个用户能记住的数字（1 MiB）；
+ * 行数上限是内存侧的第二道闸（单行也可能很大）。
+ */
+export const STDOUT_TAIL_BUDGET_BYTES = 1024 * 1024
+export const STDOUT_TAIL_ROW_CAP = 50_000
+/** 截断必须**说出来**——静默丢日志会让人以为节点没输出过那段。 */
+export const STDOUT_OMITTED_MARKER =
+  '[… earlier output omitted: this view shows the most recent 1 MiB …]'
 const RETRYABLE_TASK_STATUSES = [
   'done',
   'failed',
@@ -1095,7 +1101,7 @@ export async function taskNodeRunsProjection(
 }
 
 async function assertNodeRunOwner(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeRunId: string,
 ): Promise<void> {
@@ -1112,19 +1118,36 @@ async function assertNodeRunOwner(
   }
 }
 
-async function nodeRunEventsPage(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/**
+ * 任务纯读投影的共同依赖。
+ *
+ * `logsDir` 是归档事件的落盘根目录，缺省 `Paths.logsDir`；用例要一个可控目录时从这里给。
+ * 这个旋钮此前只存在于 SQLite 那一份上（`services/task.ts` 的 `opts.logsDir`），
+ * PostgreSQL 那份写死 `Paths.logsDir`——合并成一份后两个引擎同样可测。
+ */
+export interface TaskReadProjectionDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly logsDir?: string
+}
+
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）—— node-run 事件分页，两个引擎共用同一份。
+ *
+ * 归档（更旧）在前、库内活行在后，一路按 id 升序；`limit` 缺省 500、上限 1000（W7 把
+ * PostgreSQL 从 1000 / 5000 拉齐到这份契约，前端的游标推进按条数判还有没有下一页，
+ * 两侧不能各说各话）。等价性由 `rfc359-w5hn-task-read-route-provider-parity` 作证。
+ */
+export async function nodeRunEventsProjection(
+  dependencies: TaskReadProjectionDependencies,
   taskId: string,
   nodeRunId: string,
   options: Readonly<{ since?: number; limit?: number }>,
 ) {
   await assertNodeRunOwner(dependencies.db, taskId, nodeRunId)
   const since = options.since ?? 0
-  // RFC-359 W7：分页口径与 SQLite 同一份契约（缺省 500 / 上限 1000）。此前 PG 是
-  // 1000 / 5000，于是同一个 `GET /api/tasks/:id/runs/:runId/events` 在两种部署上回不同
-  // 条数——前端的游标推进逻辑按条数判「还有没有下一页」，两侧不能各说各话。
   const limit = Math.min(options.limit ?? 500, 1000)
-  const archived = await readArchivedEvents(Paths.logsDir, taskId, nodeRunId, since, limit)
+  const logsDir = dependencies.logsDir ?? Paths.logsDir
+  const archived = await readArchivedEvents(logsDir, taskId, nodeRunId, since, limit)
   const events = archived.map((event) => ({
     id: event.id,
     nodeRunId,
@@ -1154,8 +1177,16 @@ async function nodeRunEventsPage(
   return NodeRunEventsResponseSchema.parse({ events, cursor: events.at(-1)?.id ?? null })
 }
 
-async function nodeRunStdout(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/**
+ * RFC-359 AC-1（同上，第 2 刀）—— node-run 的 stdout **尾巴**，两个引擎共用同一份。
+ *
+ * RFC-311 T13 的保尾 + 有界读原样保留：库内倒序取到预算即停（那就是尾巴）；尾巴被库内
+ * 填满则归档严格更旧、根本不读；没填满才读归档并给行数上限，上限命中时整段标为省略——
+ * 归档读取器只能从头顺读、取不到它的尾巴，拿最旧的一段来充数比明说省略更误导。
+ * `stderr` 不进这个视图（那个频道在 Events 页）。
+ */
+export async function nodeRunStdoutProjection(
+  dependencies: TaskReadProjectionDependencies,
   taskId: string,
   nodeRunId: string,
 ): Promise<string> {
@@ -1187,7 +1218,7 @@ async function nodeRunStdout(
   if (capped) omitted = true
   if (!omitted) {
     const archived = await readArchivedEvents(
-      Paths.logsDir,
+      dependencies.logsDir ?? Paths.logsDir,
       taskId,
       nodeRunId,
       0,
@@ -1211,8 +1242,28 @@ async function nodeRunStdout(
   return omitted ? `${STDOUT_OMITTED_MARKER}\n${body}` : body
 }
 
-async function taskDiff(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/**
+ * RFC-359 AC-1（同上，第 2 刀）—— 任务工作树的累计 diff，两个引擎共用同一份。
+ *
+ * 单仓（`repoCount === 1`，前 RFC-066 的字节基线）：先查 base commit（缺 → 409），
+ * 再查工作树（不是 git 工作树 → 410），然后回 `worktreeDiff` 的 1 MiB 封顶结果。
+ * **检查次序不能调**：两门同时失败时必须先报 409——「任务在准备阶段就没成」是主因，
+ * 工作树在不在是次要信息（`rfc359-w5hn-task-read-route-provider-parity` 专门钉了这一格）。
+ *
+ * 410 的文案**分两句说**：目录根本不存在 / 目录还在但已不是有效的 git 仓库（源仓被移动或
+ * 删除，链接工作树的 gitdir 指针悬空）。这是两种完全不同的现场，用户要据此决定是重建工作树
+ * 还是去找源仓。合并前 PostgreSQL 那一份把两种压成一句泛化的 `is unavailable`，SQLite 分得清
+ * ——取 SQLite 这份，因为信息严格更多。
+ *
+ * 多仓（RFC-066 PR-B T12）：按 `repoIndex` 顺序逐仓对各自的 `base_commit` 出 diff，
+ * 每段冠一行 `# === Repo: <挂载路径> ===`（RFC-248 D15 的规范 key，与结构化 diff 同源），
+ * 空 diff 的仓不出头。只读成员不进任务 diff（RFC-248 D11）。坏分片（缺 base / 目录没了 /
+ * 已不是 git 仓）逐个跳过，不为一个坏分片短掉整次调用；但**一个可用的都没有时报 409**，
+ * 而不是回一个空 diff——「没东西可比」与「比过了没有改动」在用户面前是两件事。
+ * 总预算同为 1 MiB，与单仓分支共用的 `worktreeDiff` 一样按字符串长度记账。
+ */
+export async function taskDiffProjection(
+  dependencies: Readonly<{ db: ProviderNeutralDatabase }>,
   taskId: string,
 ): Promise<TaskDiff> {
   const task = await loadTask(dependencies.db, taskId)
@@ -1225,16 +1276,23 @@ async function taskDiff(
         409,
       )
     }
+    // `existsSync` 不够：工作树目录可以比它的源仓活得久（源仓被移动 / 删除），留下一个
+    // git 解析不了的目录。在这里探一次，把 `git diff` 那份 600 行的 `--no-index` 用法转储
+    // 换成一个干净的 410。
     if (!(await isGitWorkTree(task.worktreePath))) {
       throw new DomainError(
         'task-worktree-missing',
-        `worktree '${task.worktreePath}' is unavailable; cannot compute diff`,
+        existsSync(task.worktreePath)
+          ? `worktree '${task.worktreePath}' is no longer a valid git repository (its source repo was moved or deleted); cannot compute diff`
+          : `worktree '${task.worktreePath}' does not exist; cannot compute diff`,
         410,
       )
     }
     const result = await worktreeDiff(task.worktreePath, task.baseCommit)
     return { ...result, baseCommit: task.baseCommit }
   }
+
+  // 多仓：父工作树目录必须在（它是 runtime 子进程的 cwd）。
   if (!existsSync(task.worktreePath)) {
     throw new DomainError(
       'task-worktree-missing',
@@ -1242,20 +1300,12 @@ async function taskDiff(
       410,
     )
   }
-  // RFC-359 W7 —— 多仓任务一个可用 base commit 都没有时必须 409，而不是回一个空 diff。
-  // SQLite 侧 `services/task.ts:getTaskDiff` 一直有这道门（`usable.length === 0`）：
-  // 「没东西可比」与「比过了，没有改动」在用户面前是两件事，前者是准备阶段就失败的任务，
-  // 静默回空 diff 会让人以为 agent 什么都没改。
-  const usable: boolean[] = []
-  for (const repo of task.repos) {
-    usable.push(
-      repo.baseCommit !== null &&
-        repo.baseCommit !== '' &&
-        existsSync(repo.worktreePath) &&
-        (await isGitWorkTree(repo.worktreePath)),
-    )
-  }
-  if (!usable.some(Boolean)) {
+  const candidates = task.repos.filter(
+    (repo) => repo.baseCommit !== null && repo.baseCommit !== '' && existsSync(repo.worktreePath),
+  )
+  const valid = await Promise.all(candidates.map((repo) => isGitWorkTree(repo.worktreePath)))
+  const usable = candidates.filter((_, index) => valid[index] === true)
+  if (usable.length === 0) {
     throw new DomainError(
       'task-no-base-commit',
       `task '${taskId}' has no repo with a recorded base commit; cannot compute diff`,
@@ -1263,26 +1313,34 @@ async function taskDiff(
     )
   }
   const labels = canonicalRepoKeysWire(task.repos)
+  const labelOf = new Map(task.repos.map((repo, index) => [repo, labels[index] ?? '.']))
   let diff = ''
   let truncated = false
-  for (let index = 0; index < task.repos.length; index += 1) {
-    const repo = task.repos[index]!
-    // RFC-248 D11：只读成员不进任务 diff（可用性判据在上面，与 SQLite 同序）。
-    if (repo.readonly || usable[index] !== true || repo.baseCommit === null) continue
-    const value = await gitDiffSnapshot(repo.worktreePath, repo.baseCommit)
+  for (const repo of usable) {
+    if (repo.readonly === true) continue
+    const value = await gitDiffSnapshot(repo.worktreePath, repo.baseCommit as string)
     if (value === '') continue
-    const section = `# === Repo: ${labels[index] ?? '.'} ===\n${value}${value.endsWith('\n') ? '' : '\n'}`
-    const remaining = TASK_DIFF_MAX_BYTES - Buffer.byteLength(diff, 'utf8')
+    const header = `# === Repo: ${labelOf.get(repo) ?? '.'} ===\n`
+    const remaining = TASK_DIFF_MAX_BYTES - diff.length
     if (remaining <= 0) {
       truncated = true
       break
     }
-    if (Buffer.byteLength(section, 'utf8') > remaining) {
-      diff += Buffer.from(section).subarray(0, remaining).toString('utf8')
+    if (header.length >= remaining) {
+      // 连表头都放不下——能写多少写多少然后收手。
+      diff += header.slice(0, remaining)
       truncated = true
       break
     }
-    diff += section
+    diff += header
+    const bodyBudget = TASK_DIFF_MAX_BYTES - diff.length
+    if (value.length > bodyBudget) {
+      diff += value.slice(0, bodyBudget)
+      truncated = true
+      break
+    }
+    diff += value
+    if (!diff.endsWith('\n')) diff += '\n'
   }
   return { diff, baseCommit: null, truncated }
 }
@@ -2531,10 +2589,10 @@ export function createPostgresqlTaskRouteOperations(
     },
     retry: (input) => retryNode(dependencies, input),
     nodeRuns: (taskId) => taskNodeRunsProjection(dependencies, taskId),
-    diff: (taskId) => taskDiff(dependencies, taskId),
-    stdout: (taskId, nodeRunId) => nodeRunStdout(dependencies, taskId, nodeRunId),
+    diff: (taskId) => taskDiffProjection(dependencies, taskId),
+    stdout: (taskId, nodeRunId) => nodeRunStdoutProjection(dependencies, taskId, nodeRunId),
     events: (taskId, nodeRunId, options) =>
-      nodeRunEventsPage(dependencies, taskId, nodeRunId, options),
+      nodeRunEventsProjection(dependencies, taskId, nodeRunId, options),
     async assertManualExecutionAllowed(actor, taskId) {
       const task = await loadTask(dependencies.db, taskId)
       if (task === null) return

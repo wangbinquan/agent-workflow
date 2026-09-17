@@ -196,7 +196,16 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 启动输入契约，`rfc345` 兼容债账本里那条点名它的边随之出账——少的是一条**记账提及**，
   // 而它对应的是一处真实的编排合并。
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`10/2 → 14/2`，来源同上（改锚到共用实现）。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 14/2',
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）：`postgresql 14/2 → 19/6`。纯读三件
+  // （`diff` / `stdout` / `events`）合一，SQLite 侧那三份实现连同 `services/task.ts` 里的
+  // `getTaskDiff` / `getNodeRunStdout` / `getNodeRunEvents` 一起删除，四个消费者测试
+  // （`rfc311-stdout-tail` / `events-archive` / `task-diff-multi-repo` /
+  // `task-diff-multi-repo-truncation`）改按共用投影 import——**+5 ref / +4 drive 全部落在
+  // postgresql 一侧，因为共用的那份住在 `postgresqlTaskRouteOperations.ts` 里**。
+  // 这是**命名债的读数，不是倾斜**：涨上去的覆盖是两个引擎共享的同一份实现，SQLite 那一侧
+  // 现在根本没有第二份可漂移。本账本已有三格这么读（`TaskRouteLaunchOperations` / 本格 /
+  // `TaskExecutionRuntimeParticipants`），债本身按 plan §5hj 单独一刀还。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 19/6',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -245,7 +254,9 @@ export const INVERTED_PAIRS: readonly string[] = [
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 7 vs 19',
   // 新入名单，同样是命名债的读数：共用的那条 multipart 编排（`launchMultipartTask`）住在
   // `postgresqlTaskRouteOperations.ts` 里，改锚过去的几条源码锁都提到了它。
-  'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 14',
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）：9 vs 14 → 9 vs 19，来源同上一格
+  //（纯读三件合一，共用实现住在 PG 命名的文件里）。
+  'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 19',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。

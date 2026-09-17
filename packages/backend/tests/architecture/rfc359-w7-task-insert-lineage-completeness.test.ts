@@ -72,7 +72,10 @@ const TASK_INSERT_SITES: readonly string[] = [
   // 时在事务开头加了注释，站点本身与它写的三列一格未动（正是上面 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 3538 → 3590——延后准备的依赖面拆成中立形状时
   // 在本文件上方加了注释与一段类型，站点本身与它写的三列一格未动。
-  'services/task.ts:3590 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）：3590 → 3580。站点与它写的三列都没变，
+  // 是上面删掉的纯读三件让整份文件短了 10 行。**行号键的账本就是这么被动的**——
+  // 任何同文件的增删都要重跑它（`docs/dev-gotchas.md` 的「半径盲区」第 5 条）。
+  'services/task.ts:3580 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

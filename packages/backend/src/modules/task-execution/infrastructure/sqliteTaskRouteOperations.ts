@@ -11,7 +11,13 @@ import type { CollaborationCommandContext } from '@/modules/collaboration/public
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
 import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
-import { launchMultipartTask, taskNodeRunsProjection } from './postgresqlTaskRouteOperations'
+import {
+  launchMultipartTask,
+  nodeRunEventsProjection,
+  nodeRunStdoutProjection,
+  taskDiffProjection,
+  taskNodeRunsProjection,
+} from './postgresqlTaskRouteOperations'
 import {
   assertCanReplaySourceTask,
   canViewTask,
@@ -24,10 +30,7 @@ import { assertNotBuiltin } from '@/services/systemResources'
 import {
   cancelTask,
   computeWorkflowSyncPreview,
-  getNodeRunEvents,
-  getNodeRunStdout,
   getTask,
-  getTaskDiff,
   listTaskItems,
   listTasks,
   resumeTask,
@@ -206,9 +209,14 @@ export function createSqliteTaskRouteOperations(
     // `node_runs` / `doc_versions` / `clarify_rounds` 播种下两侧响应体逐字相同，
     // 单侧变异当场红），合并前后行为不变。
     nodeRuns: (taskId) => taskNodeRunsProjection({ db }, taskId),
-    diff: (taskId) => getTaskDiff(db, taskId),
-    stdout: (taskId, nodeRunId) => getNodeRunStdout(db, taskId, nodeRunId),
-    events: (taskId, nodeRunId, options) => getNodeRunEvents(db, taskId, nodeRunId, { ...options }),
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）：纯读另外三件也与 PostgreSQL 共用**同一份**。
+    // 等价性由 `rfc359-w5hn-task-read-route-provider-parity` 作证（同一批 `node_run_events`、
+    // 同一棵真 git 工作树下两侧响应体逐字相同，单侧变异当场红）。合并同时销掉一笔账：
+    // 单仓 410 的两句话文案此前只有 SQLite 有，PostgreSQL 压成一句泛化的 `is unavailable`。
+    diff: (taskId) => taskDiffProjection({ db }, taskId),
+    stdout: (taskId, nodeRunId) => nodeRunStdoutProjection({ db }, taskId, nodeRunId),
+    events: (taskId, nodeRunId, options) =>
+      nodeRunEventsProjection({ db }, taskId, nodeRunId, { ...options }),
     assertManualExecutionAllowed: (_actor, taskId) => assertManualExecutionAllowed(db, taskId),
     async workflowSyncPreview(actor, taskId) {
       const task = await requiredTask(db, taskId)

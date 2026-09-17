@@ -12,12 +12,9 @@ import type {
   GitCommitIdentity,
   NodeKind,
   NodeRun,
-  NodeRunEvent,
-  NodeRunEventsResponse,
   NodeRunOutput,
   StartTask,
   Task,
-  TaskDiff,
   TaskListItem,
   TaskCatalogVisibility,
   TaskLaunchOrigin,
@@ -76,12 +73,10 @@ import {
   desc,
   docVersions,
   eq,
-  gt,
   inArray,
   isNotNull,
   isNull,
   lifecycleAlerts,
-  nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
   runtimeSessionLeases,
@@ -107,7 +102,6 @@ import { setDwStateTx } from '@/services/workgroup/state'
 import type { SecretBox } from '@/auth/secretBox'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
@@ -169,13 +163,10 @@ import {
   findTrackedPathUnderMounts,
   cleanupCreatedWorktree,
   createWorktree,
-  gitDiffSnapshot,
   initScratchRepo,
-  isGitWorkTree,
   reclaimStaleRefLocks,
   type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
-  worktreeDiff,
   runGit,
   withWorktreeRegistryLock,
 } from '@/util/git'
@@ -190,7 +181,6 @@ import {
   ValidationError,
   diagnosticTextOf,
 } from '@/util/errors'
-import { readArchivedEvents } from '@/services/eventsArchive'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { Paths } from '@/util/paths'
 import { createLogger, type Logger } from '@/util/log'
@@ -7204,316 +7194,6 @@ export async function getTaskNodeRuns(
  * Caller is responsible for asserting that the task owns the node_run; we
  * just verify the node_run belongs to the task to avoid cross-task leakage.
  */
-export async function getNodeRunEvents(
-  db: LegacyProviderNeutralDatabase,
-  taskId: string,
-  nodeRunId: string,
-  opts: { since?: number; limit?: number; logsDir?: string } = {},
-): Promise<NodeRunEventsResponse> {
-  const ownerRows = await db
-    .select({ taskId: nodeRuns.taskId })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const owner = ownerRows[0]
-  if (owner === undefined || owner.taskId !== taskId) {
-    throw new NotFoundError(
-      'node-run-not-found',
-      `node_run '${nodeRunId}' not found under task '${taskId}'`,
-    )
-  }
-  const limit = Math.min(opts.limit ?? 500, 1000)
-  const since = opts.since ?? 0
-  const logsDir = opts.logsDir ?? Paths.logsDir
-
-  // P-5-01: archived events (oldest) come first; live DB rows fill the
-  // remainder up to `limit`. Skipping the archive read when since is past
-  // the highest archived id is handled implicitly by `readArchivedEvents`
-  // returning [] when nothing matches.
-  const archived = await readArchivedEvents(logsDir, taskId, nodeRunId, since, limit)
-  const events: NodeRunEvent[] = archived.map((a) => {
-    let payload: unknown
-    try {
-      payload = JSON.parse(a.payload)
-    } catch {
-      payload = a.payload
-    }
-    return {
-      id: a.id,
-      nodeRunId,
-      ts: a.ts,
-      kind: a.kind as NodeRunEvent['kind'],
-      payload,
-    }
-  })
-
-  const remaining = limit - events.length
-  if (remaining > 0) {
-    const dbLowerBound = events.length > 0 ? events[events.length - 1]!.id : since
-    const rows = await db
-      .select()
-      .from(nodeRunEvents)
-      .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), gt(nodeRunEvents.id, dbLowerBound)))
-      .orderBy(asc(nodeRunEvents.id))
-      .limit(remaining)
-    for (const r of rows) {
-      let payload: unknown
-      try {
-        payload = JSON.parse(r.payload)
-      } catch {
-        payload = r.payload
-      }
-      events.push({
-        id: r.id,
-        nodeRunId: r.nodeRunId,
-        ts: r.ts,
-        kind: r.kind,
-        payload,
-      })
-    }
-  }
-  const cursor = events.length > 0 ? (events[events.length - 1]?.id ?? null) : null
-  return { events, cursor }
-}
-
-/**
- * Concatenated stdout for one node_run (P-3-13). Returns every event's
- * raw `payload` ordered by id ascending, joined with `\n`. Stderr events
- * are excluded — those live on the Events tab.
- */
-/**
- * RFC-311 T13：stdout 只回**最后 1 MiB**。与本仓既有的 worktreeDiff 1 MiB 预算同量级，
- * 保持一个用户能记住的数字；行数上限是内存侧的第二道闸（单行也可能很大）。
- */
-export const STDOUT_TAIL_BUDGET_BYTES = 1024 * 1024
-export const STDOUT_TAIL_ROW_CAP = 50_000
-/** 截断必须**说出来**——静默丢日志会让人以为节点没输出过那段。 */
-export const STDOUT_OMITTED_MARKER =
-  '[… earlier output omitted: this view shows the most recent 1 MiB …]'
-
-export async function getNodeRunStdout(
-  db: LegacyProviderNeutralDatabase,
-  taskId: string,
-  nodeRunId: string,
-  opts: { logsDir?: string } = {},
-): Promise<string> {
-  const ownerRows = await db
-    .select({ taskId: nodeRuns.taskId })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const owner = ownerRows[0]
-  if (owner === undefined || owner.taskId !== taskId) {
-    throw new NotFoundError(
-      'node-run-not-found',
-      `node_run '${nodeRunId}' not found under task '${taskId}'`,
-    )
-  }
-  // Archived (oldest) lines come first, live DB rows last. Stderr is dropped
-  // from both sides — that channel lives on the Events tab.
-  //
-  // RFC-311 T13：**保尾 + 有界读**。此前这里把「全部归档 + 全部 DB 事件」拼成一个
-  // 字符串返回（归档侧还传了 `Number.MAX_SAFE_INTEGER`），长跑节点的 stdout 可以是
-  // 几十 MB——它跑在 daemon 唯一的同步连接上，一次请求就能把全站顶住，而调试日志的
-  // 读者要的从来是**最后那段**。
-  //
-  // 读法本身也必须有界，否则"先全读进内存再截断"只省了网络、没省内存：
-  //   1. DB 侧倒序取，累到预算即停（这就是尾巴）；
-  //   2. 尾巴被 DB 填满 ⇒ 归档严格更旧，**根本不读**；
-  //   3. 没填满才读归档，并给行数上限；上限命中说明归档很大，此时**整段标为省略**，
-  //      而不是拿最旧的一段来充数——归档读取器只能从头顺读，取不到它的尾巴，
-  //      拿错的一端拼在尾巴前面比明说省略更误导。
-  const logsDir = opts.logsDir ?? Paths.logsDir
-  const tail: string[] = []
-  let bytes = 0
-  let omitted = false
-  const push = (text: string): boolean => {
-    const size = Buffer.byteLength(text, 'utf-8') + 1
-    if (bytes + size > STDOUT_TAIL_BUDGET_BYTES) return false
-    tail.push(text)
-    bytes += size
-    return true
-  }
-
-  const dbRows = await db
-    .select({ payload: nodeRunEvents.payload, kind: nodeRunEvents.kind })
-    .from(nodeRunEvents)
-    .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    .orderBy(desc(nodeRunEvents.id))
-    .limit(STDOUT_TAIL_ROW_CAP + 1)
-  const dbHitCap = dbRows.length > STDOUT_TAIL_ROW_CAP
-  for (const row of dbHitCap ? dbRows.slice(0, STDOUT_TAIL_ROW_CAP) : dbRows) {
-    if (row.kind === 'stderr') continue
-    if (!push(row.payload)) {
-      omitted = true
-      break
-    }
-  }
-  if (dbHitCap) omitted = true
-
-  if (!omitted) {
-    const archived = await readArchivedEvents(
-      logsDir,
-      taskId,
-      nodeRunId,
-      0,
-      STDOUT_TAIL_ROW_CAP + 1,
-    )
-    if (archived.length > STDOUT_TAIL_ROW_CAP) {
-      omitted = true
-    } else {
-      for (let i = archived.length - 1; i >= 0; i -= 1) {
-        const entry = archived[i]!
-        if (entry.kind === 'stderr') continue
-        if (!push(entry.payload)) {
-          omitted = true
-          break
-        }
-      }
-    }
-  }
-
-  tail.reverse()
-  const body = tail.join('\n')
-  return omitted ? `${STDOUT_OMITTED_MARKER}\n${body}` : body
-}
-
-/**
- * Cumulative diff in the worktree since the task started.
- *
- * Single-repo tasks (the legacy default and `task.repoCount === 1`): return
- * the unchanged 1 MiB-capped `worktreeDiff` of `task.worktreePath` against
- * `task.baseCommit`. Byte-baseline equivalent to pre-RFC-066 callers.
- *
- * Multi-repo tasks (RFC-066 PR-B T12, `task.repoCount > 1`): walk each
- * `task_repos` row in `repoIndex` order, compute the per-repo diff against
- * that repo's own `base_commit`, and concatenate the results with a
- * `# === Repo: <worktreeDirName> ===` header per repo. Empty diffs are
- * skipped (no header for repos that didn't change). The combined output is
- * capped at the same 1 MiB total budget; `truncated: true` is returned if a
- * later repo's diff would overflow, in which case the partial header + as
- * many bytes as fit are still emitted so the user sees what's there. The
- * top-level `baseCommit` field is null in multi-repo (no single commit
- * represents the whole task — the per-repo commits live inside the diff
- * text headers).
- *
- * Throws ValidationError if baseCommit wasn't captured (task failed before
- * worktree creation) or if the worktree directory has been removed. In
- * multi-repo mode the gate is per-repo: a missing parent dir still throws,
- * but an individual repo with `base_commit IS NULL` is skipped (its diff
- * would be undefined). At least one repo must have a usable base_commit
- * for the call to succeed.
- */
-const TASK_DIFF_MAX_BYTES = 1024 * 1024 // 1 MiB — same cap as worktreeDiff.
-
-export async function getTaskDiff(db: LegacySqliteTaskDatabase, taskId: string): Promise<TaskDiff> {
-  const task = await getTask(db, taskId)
-  if (task === null) {
-    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  }
-
-  if (task.repoCount === 1) {
-    // RFC-066: single-path byte-baseline branch — pre-RFC-066 callers see
-    // the same response shape, the same error codes, and the same order
-    // of checks (baseCommit first → no-base-commit 409, then worktree
-    // existence → worktree-missing 410). Reordering would shift a small
-    // class of failure modes between the two error codes for failed-tasks
-    // that never materialized a worktree.
-    if (task.baseCommit === null) {
-      throw new DomainError(
-        'task-no-base-commit',
-        `task '${taskId}' has no base commit recorded; cannot compute diff`,
-        409,
-      )
-    }
-    // `existsSync` is not enough: a worktree dir can outlive its source repo
-    // (moved/deleted), leaving a directory git can't resolve. Probing it here
-    // turns what was a cryptic 500 (`git diff` dumping its `--no-index` usage
-    // block) into the same clean 410 the missing-dir case already returns.
-    if (!(await isGitWorkTree(task.worktreePath))) {
-      throw new DomainError(
-        'task-worktree-missing',
-        existsSync(task.worktreePath)
-          ? `worktree '${task.worktreePath}' is no longer a valid git repository (its source repo was moved or deleted); cannot compute diff`
-          : `worktree '${task.worktreePath}' does not exist; cannot compute diff`,
-        410,
-      )
-    }
-    const { diff, truncated } = await worktreeDiff(task.worktreePath, task.baseCommit)
-    return { diff, baseCommit: task.baseCommit, truncated }
-  }
-
-  // RFC-066: multi-repo concat. The parent worktree directory must exist
-  // (it's the cwd for opencode children); at least one per-repo entry must
-  // have a usable base_commit so we have something to diff against.
-  // Per-repo missing-base / missing-worktree entries are skipped so we
-  // never short the whole call for one bad shard.
-  if (!existsSync(task.worktreePath)) {
-    throw new DomainError(
-      'task-worktree-missing',
-      `worktree '${task.worktreePath}' does not exist; cannot compute diff`,
-      410,
-    )
-  }
-  const candidates = task.repos.filter(
-    (r) => r.baseCommit !== null && r.baseCommit !== '' && existsSync(r.worktreePath),
-  )
-  // A worktree dir can survive after its source repo is gone, so `existsSync`
-  // alone isn't enough — `gitDiffSnapshot` would 500 below. Drop those here so
-  // one broken repo never shorts the whole task diff (same skip-bad-shard
-  // policy as the missing-base / missing-worktree filters above).
-  const valid = await Promise.all(candidates.map((r) => isGitWorkTree(r.worktreePath)))
-  const usable = candidates.filter((_, i) => valid[i])
-  if (usable.length === 0) {
-    throw new DomainError(
-      'task-no-base-commit',
-      `task '${taskId}' has no repo with a recorded base commit; cannot compute diff`,
-      409,
-    )
-  }
-  let out = ''
-  let truncated = false
-  // RFC-239 — canonical labels over the FULL repo list (single source with the
-  // structural diff's `label/` prefixes; before this, the fallback here was the
-  // full repoPath while the structural side used basename, so the frontend
-  // could never join the two sides for fallback-labeled repos).
-  //
-  // RFC-248 D15：规范 key 换成**挂载路径**（`canonicalRepoKeysWire`，根仓写 `.`）。
-  // basename 在嵌套布局下彻底丢失方位——agent 拿到 `utils-2` 不知道该去哪个目录；
-  // 挂载路径与它在磁盘上看到的一致。同一份 key 也用于结构化 diff 的 id 前缀与
-  // 扇出分片，三处同源。
-  const repoLabels = canonicalRepoKeysWire(task.repos)
-  const labelOf = new Map(task.repos.map((r, i) => [r, repoLabels[i] ?? '.']))
-  for (const repo of usable) {
-    // RFC-248 D11: 只读成员不进任务 diff。
-    if (repo.readonly === true) continue
-    const oneRaw = await gitDiffSnapshot(repo.worktreePath, repo.baseCommit as string)
-    if (oneRaw === '') continue
-    const header = `# === Repo: ${labelOf.get(repo) ?? '.'} ===\n`
-    const remaining = TASK_DIFF_MAX_BYTES - out.length
-    if (remaining <= 0) {
-      truncated = true
-      break
-    }
-    if (header.length >= remaining) {
-      // Even the header doesn't fit — emit what we can and stop.
-      out += header.slice(0, remaining)
-      truncated = true
-      break
-    }
-    out += header
-    const bodyBudget = TASK_DIFF_MAX_BYTES - out.length
-    if (oneRaw.length > bodyBudget) {
-      out += oneRaw.slice(0, bodyBudget)
-      truncated = true
-      break
-    }
-    out += oneRaw
-    if (!out.endsWith('\n')) out += '\n'
-  }
-  return { diff: out, baseCommit: null, truncated }
-}
-
 function rowToTask(
   row: typeof tasks.$inferSelect,
   workflowName: string | null,

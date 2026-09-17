@@ -10,7 +10,10 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
-import { getNodeRunEvents, getNodeRunStdout } from '../src/services/task'
+import {
+  nodeRunEventsProjection,
+  nodeRunStdoutProjection,
+} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 
 interface Harness {
   db: ProviderNeutralDatabase
@@ -246,7 +249,7 @@ describeEachProvider('archiveEvents', (provider) => {
       h.logsDir,
     )
     // since=0 should return all 8 events: 5 from archive + 3 from DB, in id order.
-    const r = await getNodeRunEvents(h.db, taskId, nodeRunId, { logsDir: h.logsDir })
+    const r = await nodeRunEventsProjection({ db: h.db, logsDir: h.logsDir }, taskId, nodeRunId, {})
     expect(r.events.length).toBe(8)
     expect(r.events.map((e) => e.id)).toEqual(eventIds)
     expect(r.cursor).toBe(eventIds[eventIds.length - 1]!)
@@ -261,7 +264,9 @@ describeEachProvider('archiveEvents', (provider) => {
     )
     // since=fourth-event-id -> should return events 5..8 (4 rows).
     const since = eventIds[3]!
-    const r = await getNodeRunEvents(h.db, taskId, nodeRunId, { since, logsDir: h.logsDir })
+    const r = await nodeRunEventsProjection({ db: h.db, logsDir: h.logsDir }, taskId, nodeRunId, {
+      since,
+    })
     expect(r.events.length).toBe(4)
     expect(r.events.map((e) => e.id)).toEqual(eventIds.slice(4))
   })
@@ -273,7 +278,7 @@ describeEachProvider('archiveEvents', (provider) => {
       { eventsArchiveThresholds: { perNodeRunRows: 2, globalRows: 1000 } },
       h.logsDir,
     )
-    const text = await getNodeRunStdout(h.db, taskId, nodeRunId, { logsDir: h.logsDir })
+    const text = await nodeRunStdoutProjection({ db: h.db, logsDir: h.logsDir }, taskId, nodeRunId)
     const lines = text.split('\n')
     expect(lines.length).toBe(6)
     expect(lines[0]!).toContain('"chunk":0')

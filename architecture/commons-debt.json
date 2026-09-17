@@ -4875,12 +4875,10 @@
       "canonicalImportEdgeIds": [
         "import:0b34cb2312a6b6708fe7",
         "import:0f41e9705ed1572f6dcf",
-        "import:1ac037d6b40fb7371921",
         "import:2b3bd7a4f1c1b2bface2",
         "import:38e306fb01603a8029e2",
         "import:3da8b8b5d3f37e68044e",
         "import:4de2fc6d281dcc1d22e5",
-        "import:4dfdcd4e448a7a1688b5",
         "import:5ac7c5ed5efc9da11ec5",
         "import:5b606183aa8ac08a98fa",
         "import:5f7f6d2675fbf43a322d",
@@ -7872,15 +7870,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:96025dbc0c50e91b0d68c5466d33b3a318d6e0cbad4a4c8219685b5f1d048f12",
+    "sourceDigest": "sha256:253587f0a322916e5c0cc8d4ecc0839c7a6fc6f9d804d815518576bf2072704e",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "2e8140cf43fc431266d2631304204e21b3d7bdb4",
-    "contentDigest": "sha256:086c3c9851a64f85acecad9ec5254be51490ebb68fa304126fb35d50c9d7bc63",
+    "currentSnapshotSha": "44d9a459b7f48a176e7c4d1cbafb7aa51ecb3c2a",
+    "contentDigest": "sha256:b47dce1e12b1b9ea421382be5dcacaa4fc4d7f3f6f5ac174613654861d7305b2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
