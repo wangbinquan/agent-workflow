@@ -17035,3 +17035,18 @@ PG 走 `children.resume({ taskId, runtime }, topology)` 参与者。第 8 刀已
 `startDepsFor` 钉成「一调用就炸」的桩，而 SQLite 的路由壳在进 `retryNode` / `resumeTask`
 **之前**就展开那个对象——于是这两个动词在 SQLite lane 上根本驱动不起来。
 加了可选的 `routeStartDepsFor`（缺省仍是会炸的桩，其余用例一字未动），第 9 刀后续步骤才有路可走。
+
+### 第 9 刀第 1 步续　级联语义也进对拍——**又一格实测相同**
+
+同一份基线里加了级联那格：`a → b` 两个 agent 节点，`a` failed / `b` done，`cascade: true` 重试 `a`。
+两条 lane 落下的 node_run **逐格相同**：`a#0:failed | a#1:failed | b#0:done | b#1:failed`
+（铸的是 `failed` 占位行而不是 `pending`——`retryNode` 的原文是「flip target + downstream
+from done → failed so the resumer re-runs them，插一条 retry_index max+1 的新行」）。
+变异实证：把 PG 的 `retryNodeIds` 级联短路掉 ⇒ PostgreSQL lane 当场红（少了 `b#1`）。
+
+**顺带量到一处严格度差异**（本刀不动，登记备查）：PG 的 `retryNode` 会用
+`definitionOf` 对 `workflowSnapshot` 做 **zod 严格解析**，SQLite 那份不解析。
+本用例第一版的 edge 少写了必填的 `id`：PG 当场 zod 拒绝，SQLite 照跑。
+这与 `rfc359-w7` 的 **B6** 是同一类（任务行投影的严格度），而 B6 的处置已经定过调子——
+**取严格那一档**：枚举外 / 缺字段的快照只会由裸 SQL 或旧版写进来，静默上线比响亮失败更糟。
+合并 `retryNode` 时按 B6 的先例办即可，不需要另立产品判断。

@@ -63,7 +63,36 @@ const DEFINITION: WorkflowDefinition = {
   edges: [],
 }
 
-async function seedFixture(db: ProviderNeutralDatabase): Promise<Fixture> {
+/** `a → b` 两个 agent 节点：`b` 是 `a` 的下游，用来验级联。 */
+const CASCADE_DEFINITION = {
+  $schema_version: 2,
+  inputs: [],
+  nodes: [
+    { id: 'a', kind: 'agent-single', agentName: 'a', promptTemplate: '' },
+    { id: 'b', kind: 'agent-single', agentName: 'b', promptTemplate: '' },
+  ],
+  edges: [
+    // `id` 是必填（`WorkflowEdgeSchema`）。少了它 PG 侧的 `definitionOf` 会当场 zod 拒绝，
+    // 而 SQLite 侧不解析、照跑——这处**严格度差异**本身就值得记一笔，只是本用例要的是级联语义。
+    {
+      id: 'a-b',
+      source: { nodeId: 'a', portName: 'result' },
+      target: { nodeId: 'b', portName: 'input' },
+    },
+  ],
+} as unknown as WorkflowDefinition
+
+interface SeedOptions {
+  readonly definition?: WorkflowDefinition
+  readonly status?: 'canceled' | 'failed' | 'done'
+  /** 不给就按原来的单节点形态铸一条带失效快照的 `doc` 行。 */
+  readonly runs?: readonly { readonly nodeId: string; readonly status: string }[]
+}
+
+async function seedFixture(
+  db: ProviderNeutralDatabase,
+  options: SeedOptions = {},
+): Promise<Fixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc359-w9-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -85,42 +114,50 @@ async function seedFixture(db: ProviderNeutralDatabase): Promise<Fixture> {
     createdAt: 1,
     updatedAt: 1,
   })
+  const definition = options.definition ?? DEFINITION
   const workflowId = ulid()
   await db
     .insert(workflows)
-    .values({ id: workflowId, name: 'w9', definition: JSON.stringify(DEFINITION) })
+    .values({ id: workflowId, name: 'w9', definition: JSON.stringify(definition) })
   const taskId = ulid()
   await db.insert(tasks).values({
     id: taskId,
     name: 'w9',
     workflowId,
-    workflowSnapshot: JSON.stringify(DEFINITION),
+    workflowSnapshot: JSON.stringify(definition),
     repoPath,
     worktreePath: repoPath,
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
-    // `canceled` 而不是 `failed`：终态里选一个**与升级目标不同**的，这样「任务有没有被改坏」
-    // 才看得出来（升级的目标是 failed）。
-    status: 'canceled',
+    // 缺省用 `canceled` 而不是 `failed`：终态里选一个**与升级目标不同**的，这样「任务有没有
+    // 被改坏」才看得出来（升级的目标是 failed）。
+    status: (options.status ?? 'canceled') as 'canceled',
     inputs: '{}',
     startedAt: Date.now() - 1000,
     finishedAt: Date.now() - 500,
     ownerUserId: USER_ID,
     executionLineageId: taskId,
   })
-  const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
-    id: nodeRunId,
-    taskId,
-    nodeId: 'doc',
-    status: 'failed',
-    retryIndex: 0,
-    iteration: 0,
-    preSnapshot: PRUNED_SNAPSHOT,
-    startedAt: Date.now() - 900,
-    finishedAt: Date.now() - 600,
-    errorMessage: 'boom',
-  })
+  let nodeRunId = ''
+  const seededRuns = options.runs ?? [{ nodeId: 'doc', status: 'failed' }]
+  for (const run of seededRuns) {
+    const id = ulid()
+    if (nodeRunId === '') nodeRunId = id
+    await db.insert(nodeRuns).values({
+      id,
+      taskId,
+      nodeId: run.nodeId,
+      status: run.status as 'failed',
+      retryIndex: 0,
+      iteration: 0,
+      // 失效快照只在缺省形态里铸（那条用例要的就是它）；显式给 runs 的用例不带，
+      // 免得回滚判据把级联那格挡在前面。
+      ...(options.runs === undefined ? { preSnapshot: PRUNED_SNAPSHOT } : {}),
+      startedAt: Date.now() - 900,
+      finishedAt: Date.now() - 600,
+      ...(run.status === 'failed' ? { errorMessage: 'boom' } : {}),
+    })
+  }
   return {
     appHome,
     repoPath,
@@ -128,6 +165,33 @@ async function seedFixture(db: ProviderNeutralDatabase): Promise<Fixture> {
     nodeRunId,
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
   }
+}
+
+/** 生产装配：两条 lane 各自跑自己部署里真正会执行的那份实现。 */
+async function executionFor(
+  harness: Parameters<Parameters<typeof describeEachProvider>[1]>[0],
+  fixture: Fixture,
+) {
+  return await createEachProviderTaskExecution(
+    harness,
+    { appHome: fixture.appHome, defaultNodeRetries: 0 },
+    USER_ID,
+    {
+      // SQLite 的路由壳在进 `retryNode` 之前就展开这个对象，缺省的桩一调用就炸——
+      // 交一份真的进去，两条 lane 才跑的是各自部署里真正会执行的那份实现。
+      // 二进制指向 `/usr/bin/env true`：本文件只验前置判据与落库形状，没有 agent 需要真跑。
+      routeStartDepsFor: () => ({
+        db: harness.db as unknown as DbClient,
+        appHome: fixture.appHome,
+        schedulerDriver: createTaskExecutionTestTopology({
+          db: harness.db as unknown as DbClient,
+          driver: 'real',
+        }).schedulerDriver,
+        taskRecoveryOperations: createTaskExecutionPersistence(harness.db).recoveryAdministration,
+        binaryOverride: ['/usr/bin/env', 'true'],
+      }),
+    },
+  )
 }
 
 describeEachProvider('RFC-359 W9 —— retry 撞上已丢的 pre_snapshot', (harness) => {
@@ -139,26 +203,7 @@ describeEachProvider('RFC-359 W9 —— retry 撞上已丢的 pre_snapshot', (ha
 
   test('错误码与事后的任务状态', async () => {
     fixture = await seedFixture(harness.db)
-    const execution = await createEachProviderTaskExecution(
-      harness,
-      { appHome: fixture.appHome, defaultNodeRetries: 0 },
-      USER_ID,
-      {
-        // SQLite 的路由壳在进 `retryNode` 之前就展开这个对象，缺省的桩一调用就炸——
-        // 交一份真的进去，两条 lane 才跑的是各自部署里真正会执行的那份实现。
-        // 二进制指向 `/usr/bin/env true`：本条只验前置判据，没有任何 agent 需要真跑起来。
-        routeStartDepsFor: () => ({
-          db: harness.db as unknown as DbClient,
-          appHome: fixture!.appHome,
-          schedulerDriver: createTaskExecutionTestTopology({
-            db: harness.db as unknown as DbClient,
-            driver: 'real',
-          }).schedulerDriver,
-          taskRecoveryOperations: createTaskExecutionPersistence(harness.db).recoveryAdministration,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        }),
-      },
-    )
+    const execution = await executionFor(harness, fixture)
     let code = 'no-throw'
     try {
       await execution.provider.routes.tasks.retry({
@@ -183,5 +228,54 @@ describeEachProvider('RFC-359 W9 —— retry 撞上已丢的 pre_snapshot', (ha
       status: 'failed',
       errorSummary: 'snapshot-lost',
     })
+  })
+})
+
+describeEachProvider('RFC-359 W9 —— retry 的级联与尝试铸造', (harness) => {
+  let fixture: Fixture | undefined
+  afterEach(() => {
+    fixture?.cleanup()
+    fixture = undefined
+  })
+
+  // 级联是 retry 的核心语义（RFC-052 / RFC-053 PR-C：按 `NODE_KIND_BEHAVIORS[kind].retryCascade`
+  // 给下游铸 placeholder）。两份实现各 485 / 259 行，谁也没跟谁比过这一格。
+  test('级联重试之后，两个引擎落下同一组 node_run', async () => {
+    fixture = await seedFixture(harness.db, {
+      definition: CASCADE_DEFINITION,
+      status: 'failed',
+      runs: [
+        { nodeId: 'a', status: 'failed' },
+        { nodeId: 'b', status: 'done' },
+      ],
+    })
+    const execution = await executionFor(harness, fixture)
+    await execution.provider.routes.tasks.retry({
+      actor: execution.actor,
+      taskId: fixture.taskId,
+      nodeRunId: fixture.nodeRunId,
+      cascade: true,
+    })
+
+    const rows = await harness.db
+      .select({
+        nodeId: nodeRuns.nodeId,
+        status: nodeRuns.status,
+        retryIndex: nodeRuns.retryIndex,
+      })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, fixture.taskId))
+    const shape = rows
+      .map((row) => `${row.nodeId}#${row.retryIndex}:${row.status}`)
+      .sort()
+      .join(' | ')
+
+    // 形状而不是 id：两侧铸的行 id 不同（ULID），但「哪个节点、第几次尝试、什么状态」必须一致。
+    // 铸的是 `failed` 占位行而不是 `pending`：`retryNode` 的原文是「flip target + downstream
+    // node_runs from done → failed so the resumer re-runs them，插一条 retry_index max+1 的新行」。
+    // 两个引擎逐格相同。
+    expect(shape, '级联重试后两个引擎落下的 node_run 组成不同').toBe(
+      'a#0:failed | a#1:failed | b#0:done | b#1:failed',
+    )
   })
 })
