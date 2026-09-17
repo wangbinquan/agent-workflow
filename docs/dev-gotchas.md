@@ -562,6 +562,38 @@ bun test tests/architecture/ tests/*architecture*.test.ts
 
 约一分钟、无需数据库以外的任何准备，罩住的正是「写不出文件名、只能靠跑」的那一类。
 
+## **全可选的依赖面会把配置吞掉**：只交三格的 `deps` 是个静默降级（2026-09-17 推红 e2e）
+
+`createTaskDriveCoordinator({ deps, … })` 内部是 `runtimeConfigOpts(input.deps)`——它从 `deps`
+上读**十七个**运行期旋钮（`defaultNodeRetries` / `defaultPerNodeTimeoutMs` / `commitPush` /
+`mergeAgent` / `maxConcurrentNodes` / `sessionRestartBudget` / 各类并发与超时上限…）。
+那十七格**全是可选的**，于是只交 `{ db, schedulerDriver, configPath }` 时：
+
+- 类型完全合法，tsc 一声不吭；
+- 运行时它们全是 `undefined`，驱动退回**编译期缺省**——管理员在配置里调过的每一格都没生效。
+
+实撞：把 webhook 启动挪到那台只交三格的协调器上之后，`webhook-mr-runtime-races` 里那个故意
+崩溃的 runtime 节点被重试到 **8 次**（判据要 1 次，`defaultNodeRetries` 丢了），
+Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台协调器的入口恰好没有用例验重试。
+
+**这一类的共同形状**：一个「配置漏斗」（这里是 `resolveLaunchRuntimeConfig(configPath)`）
+被某条路径**隐式**带过来（`buildStartTaskDeps` 一句 spread 全喂满），改成显式装配时漏掉，
+而类型因为「都可选」而不报。RFC-284 T30 那批字段被静默丢弃是同一形状；本轮还撞到第二例
+（`cloneTimeoutMs` / `gitBaselineSyncWindowMs` 没喂给延后仓库准备，G6 退避窗口退回默认 60s）。
+
+**处置定式**：
+
+1. 任何自己拼 `deps` 的调用点，都要 `...resolveLaunchRuntimeConfig(configPath)`
+   ——和 `buildStartTaskDeps` 取自同一处；
+2. 写一条**扫全部调用点**的判据，不要逐个回忆。本仓那条是
+   `rfc359-w5hn-drive-coordinator-runtime-config`：扫三个组合根里每一处
+   `createTaskDriveCoordinator({ deps: … })`，字面量 deps 必须 spread 配置漏斗，
+   整体交一个已构造好的 `StartTaskDeps`（裸标识符）天然合格。
+   **它当场找出了第三台手改时漏掉的协调器**——写判据比逐个回忆可靠。
+3. 同一条也适用于类型注解：`const x: T = Object.freeze({…})` 的注解不是装饰。
+   本轮实撞——去掉注解之后，一个**放错位置的键**（把协调器的入参写成了依赖束的兄弟键）
+   从编译错误降级成了运行时行为差异（那一格于是仍是缺省值）。
+
 ## `rfc359-w5-t19d` 的引用数**连注释里的提及也算**（2026-09-16 实测）
 
 那条「成对适配器覆盖对等」账本里的 `refs`，数的是「提到该实现任一**导出符号**（或其 basename）
