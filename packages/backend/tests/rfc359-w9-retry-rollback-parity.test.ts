@@ -86,7 +86,16 @@ interface SeedOptions {
   readonly definition?: WorkflowDefinition
   readonly status?: 'canceled' | 'failed' | 'done'
   /** 不给就按原来的单节点形态铸一条带失效快照的 `doc` 行。 */
-  readonly runs?: readonly { readonly nodeId: string; readonly status: string }[]
+  readonly runs?: readonly {
+    readonly nodeId: string
+    readonly status: string
+    /** 帧字段（loop / 评审轮 / 分片）——用来验重试铸出的新行有没有原样继承。 */
+    readonly frame?: Readonly<{
+      iteration?: number
+      reviewIteration?: number
+      shardKey?: string | null
+    }>
+  }[]
 }
 
 async function seedFixture(
@@ -149,7 +158,11 @@ async function seedFixture(
       nodeId: run.nodeId,
       status: run.status as 'failed',
       retryIndex: 0,
-      iteration: 0,
+      iteration: run.frame?.iteration ?? 0,
+      ...(run.frame?.reviewIteration === undefined
+        ? {}
+        : { reviewIteration: run.frame.reviewIteration }),
+      ...(run.frame?.shardKey === undefined ? {} : { shardKey: run.frame.shardKey }),
       // 失效快照只在缺省形态里铸（那条用例要的就是它）；显式给 runs 的用例不带，
       // 免得回滚判据把级联那格挡在前面。
       ...(options.runs === undefined ? { preSnapshot: PRUNED_SNAPSHOT } : {}),
@@ -165,6 +178,18 @@ async function seedFixture(
     nodeRunId,
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
   }
+}
+
+/** `<节点>#<第几次尝试>:<状态>` 的有序拼串——比 id 稳，两侧可直接对拍。 */
+async function runShape(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+  const rows = await db
+    .select({ nodeId: nodeRuns.nodeId, status: nodeRuns.status, retryIndex: nodeRuns.retryIndex })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
+  return rows
+    .map((row) => `${row.nodeId}#${row.retryIndex}:${row.status}`)
+    .sort()
+    .join(' | ')
 }
 
 /** 生产装配：两条 lane 各自跑自己部署里真正会执行的那份实现。 */
@@ -277,5 +302,114 @@ describeEachProvider('RFC-359 W9 —— retry 的级联与尝试铸造', (harnes
     expect(shape, '级联重试后两个引擎落下的 node_run 组成不同').toBe(
       'a#0:failed | a#1:failed | b#0:done | b#1:failed',
     )
+  })
+})
+
+// 三格的变异实证（各在不同侧、不同机制，证明本组确有预言力）：
+//   · PG 的 `retryNodeIds` 忽略 `cascade:false` ⇒ 「不级联」那格红；
+//   · SQLite 铸新尝试时把 `iteration` 写死 0 ⇒ 「帧继承」那格红；
+//   · SQLite 的准入 CAS 不再清 `errorSummary` ⇒ 「任务收尾」那格红。
+describeEachProvider('RFC-359 W9 —— retry 的不级联 / 帧继承 / 任务收尾', (harness) => {
+  let fixture: Fixture | undefined
+  afterEach(() => {
+    fixture?.cleanup()
+    fixture = undefined
+  })
+
+  test('cascade:false 只动被点的那个节点', async () => {
+    fixture = await seedFixture(harness.db, {
+      definition: CASCADE_DEFINITION,
+      status: 'failed',
+      runs: [
+        { nodeId: 'a', status: 'failed' },
+        { nodeId: 'b', status: 'done' },
+      ],
+    })
+    const execution = await executionFor(harness, fixture)
+    await execution.provider.routes.tasks.retry({
+      actor: execution.actor,
+      taskId: fixture.taskId,
+      nodeRunId: fixture.nodeRunId,
+      cascade: false,
+    })
+    expect(await runShape(harness.db, fixture.taskId), '不级联却动了下游').toBe(
+      'a#0:failed | a#1:failed | b#0:done',
+    )
+  })
+
+  // RFC-074 / RFC-052：铸出的尝试必须落在**同一个 loop / 评审轮 / 分片帧**里，
+  // 否则调度器会把它当成另一帧的行，重跑落在错的上下文上。
+  test('铸出的新尝试原样继承 loop / 评审轮 / 分片帧', async () => {
+    fixture = await seedFixture(harness.db, {
+      status: 'failed',
+      runs: [
+        {
+          nodeId: 'doc',
+          status: 'failed',
+          frame: { iteration: 2, reviewIteration: 1, shardKey: 'shard-b' },
+        },
+      ],
+    })
+    const execution = await executionFor(harness, fixture)
+    await execution.provider.routes.tasks.retry({
+      actor: execution.actor,
+      taskId: fixture.taskId,
+      nodeRunId: fixture.nodeRunId,
+      cascade: true,
+    })
+    const minted = (
+      await harness.db
+        .select({
+          retryIndex: nodeRuns.retryIndex,
+          iteration: nodeRuns.iteration,
+          reviewIteration: nodeRuns.reviewIteration,
+          shardKey: nodeRuns.shardKey,
+        })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, fixture.taskId))
+    )
+      .filter((row) => row.retryIndex === 1)
+      .map((row) => ({
+        iteration: row.iteration,
+        reviewIteration: row.reviewIteration,
+        shardKey: row.shardKey,
+      }))
+    expect(minted, '新尝试没有落在原来那一帧里').toEqual([
+      { iteration: 2, reviewIteration: 1, shardKey: 'shard-b' },
+    ])
+  })
+
+  test('重试之后任务回到 pending，且失败现场被清干净', async () => {
+    fixture = await seedFixture(harness.db, {
+      status: 'failed',
+      runs: [{ nodeId: 'doc', status: 'failed' }],
+    })
+    await harness.db
+      .update(tasks)
+      .set({ errorSummary: 'boom', errorMessage: 'detail', failedNodeId: 'doc' })
+      .where(eq(tasks.id, fixture.taskId))
+    const execution = await executionFor(harness, fixture)
+    await execution.provider.routes.tasks.retry({
+      actor: execution.actor,
+      taskId: fixture.taskId,
+      nodeRunId: fixture.nodeRunId,
+      cascade: true,
+    })
+    const after = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+    )[0]
+    expect({
+      status: after?.status,
+      errorSummary: after?.errorSummary,
+      errorMessage: after?.errorMessage,
+      failedNodeId: after?.failedNodeId,
+      finishedAt: after?.finishedAt,
+    }).toEqual({
+      status: 'pending',
+      errorSummary: null,
+      errorMessage: null,
+      failedNodeId: null,
+      finishedAt: null,
+    })
   })
 })

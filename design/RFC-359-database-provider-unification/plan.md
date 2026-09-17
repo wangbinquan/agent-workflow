@@ -17050,3 +17050,25 @@ from done → failed so the resumer re-runs them，插一条 retry_index max+1 �
 这与 `rfc359-w7` 的 **B6** 是同一类（任务行投影的严格度），而 B6 的处置已经定过调子——
 **取严格那一档**：枚举外 / 缺字段的快照只会由裸 SQL 或旧版写进来，静默上线比响亮失败更糟。
 合并 `retryNode` 时按 B6 的先例办即可，不需要另立产品判断。
+
+### 第 9 刀第 1 步收口　retry 的对拍面共 **5 格**，逐格实测两侧相同
+
+`rfc359-w9-retry-rollback-parity` 现在覆盖（每格都走生产装配、都在两个真引擎上跑）：
+
+| # | 格 | 实测 |
+| --- | --- | --- |
+| 1 | `pre_snapshot` 已丢 | `(409 snapshot-lost, 任务 failed, errorSummary snapshot-lost)` 两侧相同 |
+| 2 | `cascade:true` 的级联 | `a#0:failed \| a#1:failed \| b#0:done \| b#1:failed` 两侧相同 |
+| 3 | `cascade:false` | 只动被点的节点，两侧相同 |
+| 4 | 帧继承（loop / 评审轮 / 分片） | `{iteration:2, reviewIteration:1, shardKey:'shard-b'}` 原样继承，两侧相同 |
+| 5 | 任务收尾 | 回到 `pending`，`errorSummary` / `errorMessage` / `failedNodeId` / `finishedAt` 全清，两侧相同 |
+
+变异实证覆盖到每一格，且刻意分散在两侧与不同机制：
+PG `assertRollbackBaselinesPresent` 注释掉（**不红**——证明那道门在该路径上不承重）、
+SQLite `escalateSnapshotLost` 改 summary（红）、PG `escalateUnsafeContinuation` 改 summary（红）、
+PG `retryNodeIds` 忽略 `cascade:false`（红）、SQLite 铸行时 `iteration` 写死 0（红）、
+SQLite 准入 CAS 不再清 `errorSummary`（红）。
+
+**结论**：`retry` 这一对在**用户可见面上没有查到分叉**。合并的风险面因此主要不在语义，
+而在两份实现的体量差（485 vs 259 行）与各自的内部结构——下一步是把 `services/task.ts`
+那份的行为套件迁到共用入口取证（同第 8 刀的做法），而不是直接删其中一份。
