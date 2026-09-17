@@ -2,6 +2,45 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 76，**第 8 刀第 3 步：两份修复实现合一，照出三处真分叉**）
+>
+> 留 PG 那份（在正确模块、apply 分支覆盖全部 14 条规则的每个选项、且早被证明可移植），
+> 退役 classic 那份 **34 个文件**（`platform/persistence/sqlite/taskLifecycleRepair*` + `services/lifecycleRepair*`）。
+>
+> **证据步**：把 classic 的 13 个行为套件（3030 行）整体改指留下的实现，并从单引擎内存库
+> 改成 `describeEachProvider` 的两条 lane（入口统一进 `tests/helpers/repairEngine.ts`）。
+> 覆盖面：`一份实现 × SQLite 内存库` → `一份实现 × 两个真引擎`，**197 条**。
+>
+> **当场照出三处真分叉，全部是留下那份更弱，全部已修**：
+> ①S1 在「工作流没有评审节点」时报 `noAwaitingReviewRun` 而非 `noReviewNode`；
+> ②S2 在「会话还开着」时报 `noClosedSession` 而非 `sessionAlreadyOpen`；
+> ③**功能缺陷**：`T2.resurrect-clarify-run` 把**评审**的分组规则用到了**澄清**上，
+> 而澄清是 RFC-074 PR-C 写死的「世代按 id 序、只看最新那一行」——后果是 PG 部署上
+> 凡是同一澄清节点有过一次完成的世代，这个修复就永远报「无候选」、点不动。
+>
+> **第四处由源码锁照出**：留下那份的 S1 直接传 `ctx.task.worktreePath`，正是
+> `rfc193-wrapper-review` case 8d 禁止的写法。`deriveScopeRoot` 随合并移植过来并补了行为用例
+> （wrapper 的 iso 目录是活工作树 ⇒ 取它；没有 wrapper ⇒ 退回任务根），变异实证三处全红。
+>
+> **一处留下的那份更强**：apply 在一笔事务里，崩在两次 output upsert 之间零残留；
+> classic 不在事务里写，崩完库里躺着「批准了但没有批准元数据」的中间态。
+>
+> **预览文案定案**：保留人话摘要的形式（实现细节不出运维界面），但把 classic 多出来的
+> 后果说明补进来——与 acknowledge 那处同一条准则：取信息更全的一侧、用更好的形式表达。
+>
+> **守卫侧**：t19d 的按基名配对盲区加了带自证的 `MANUAL_ADAPTER_PAIRS` 出口（现为空——
+> 唯一已知的那一对已随本刀合并，**合并即销账**）；`rfc317` 转移表预言的抽取器补了第二种
+> 静态可知形态（否则语料会从 35 静默塌到 15，而那正是它最初的反例来源）；
+> 三条对拍基线退役（合并后只会拿一份实现和自己比）。
+>
+> **依赖面收窄**：复活类修复的三样依赖收成 `resumeTaskAs(actor, taskId)`；那份实现的 `db`
+> 改标中立句柄——否则调用方要写 `as unknown as`，census 会凭空长出一条跨上下文债边
+> （**修掉而不是记账**，`allowGrowth` 一条没加）。
+>
+> 证据：修复面 197/197 双引擎；543 文件内容级 sweep 零红；架构账本 90/90。
+>
+> **下一步**：`resume` / `retry` 这一对（剩下最大的一组），以及 `ChildTaskLifecycleParticipant`。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 75，**第 8 刀第 2 步：preflight 对拍照出真缺陷**）
 >
 > **解锁**：那份「SQLite 的」修复实现**没有任何 SQLite 专有原语**（零同步终结符、无 `dbTxSync`、
