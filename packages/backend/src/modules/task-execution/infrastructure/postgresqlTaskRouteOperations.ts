@@ -924,8 +924,15 @@ async function launchMultipart(
       },
     )
   }
+  // RFC-359 AC-1（plan §5hn 批次二 ⑥）：**带上候选上下文**——与工作流 JSON 路由那一格
+  // （批次二 ④（上））是同一条缺陷的 multipart 面。不带它，`loadWorkflowValidationContext`
+  // 不填 `callWorkflows` / `currentWorkflow`，call-node 规则就不在这道门上判：引用悬空要等到
+  // 冻结调用闭包时才被另一个组件以 `workflow-call-ref-missing` 拒掉（而且不带 `issues[]`，
+  // 工作流编辑器的校验面板指不到出错节点）。SQLite 的 multipart 路（`services/multipartTaskStart.ts`）
+  // 一直是带候选的，两侧因此在同一道门上以同一个契约拒掉。
   const validation = await dependencies.launch.agent.resources.validateHostWorkflow(
     workflow.definition,
+    { definition: workflow.definition, currentWorkflow: { id: workflow.id, name: workflow.name } },
   )
   const errors = validation.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
   if (!validation.ok && errors.length > 0) {

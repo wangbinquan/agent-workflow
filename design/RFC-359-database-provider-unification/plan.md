@@ -15859,3 +15859,55 @@ PG 把 `uploads: {parts, definitions, limits}` 整包交给根内核，由内核
 两个根都装得起（`cli/start.ts:2176` 已有一个 `bootWorkspaceMaintenance`），所以这不是能力差。
 **本刀不动它**——合一不顺手改收尾语义。是否要把 SQLite 也抬到 `finalizeClaimedWorkspace`，
 需要先量清「驱动释放那一刻真的存在非 webhook 的已认领清理吗」，单独立一刀。
+
+## §5hn 批次二 ⑥（上）　multipart 启动的等价性基线，以及**修 8a3036d41 推的红**
+
+### 先修红：t19d 的引用数
+
+`8a3036d41` 推上去后 CI 的 `ubuntu shard 8/12` 与 `macos shard 2/6` 红在
+`rfc359-w5-t19d-coverage-parity`：`TaskExecutionRuntimeParticipants` 的 SQLite 侧引用数
+账本记 11、实际 12。
+
+原因是这条棘轮**按纯文本数引用**——写在**注释**里的一个文件名也算一条。那一提里我先把账本
+改成 11、跑全量守卫 781/781 绿，**之后**又在 `rfc359-w8-child-launch-conformance` 的注释里
+写了一句「（`sqliteTaskExecutionRuntimeParticipants.ts` 逐字同形）」。
+**已抽成通用踩坑进 `docs/dev-gotchas.md`**：这类棘轮要在所有编辑做完之后再跑最后一遍。
+
+### multipart 基线：第一跑照出两处差异，一处当场修掉
+
+`startExecution` 只剩这最后一条生产调用路。照前四刀的次序，先立等价性基线。
+用 `scratch: true`（multipart + scratch 是合法组合，上传物落进新建的 scratch 仓），
+不必起 git smart-HTTP 远端夹具，也就不把网络时序混进等价性判据。
+
+| 差异 | SQLite | PostgreSQL | 处置 |
+| --- | --- | --- | --- |
+| 悬空 call 引用的错误契约 | `workflow-invalid` + `issues[]` 点名 `call-workflow-ref-missing` | `workflow-call-ref-missing`，**不带 `issues[]`** | **当场修**：PG 的 `launchMultipart` 补上候选上下文 |
+| `spaceNodes` | `[{ path: '', origins: [] }]`（读端 `minimalNodePaths` 兜底派生） | `[]`（工作区真正规划的 `nodePaths`） | **钉住待销**，合并后自然收敛 |
+
+第一条与批次二 ④（上）是**同一条缺陷的 multipart 面**：不带候选，
+`loadWorkflowValidationContext` 不填 `callWorkflows` / `currentWorkflow`，call-node 规则
+就不在启动期静态校验这道门上判，引用悬空要等到冻结调用闭包才被另一个组件拒掉，
+而且不带 `issues[]`——工作流编辑器的校验面板指不到出错节点。SQLite 的
+`services/multipartTaskStart.ts` 一直是带候选的。
+
+第二条是读端兜底派生的**第三次**出现（前两次：工作组路由 ③、工作流 JSON 路由 ④），
+两次的处置都是「变诚实」。这次先按剧本钉住：逐 lane 断言 SQLite 1 / PostgreSQL 0，
+并把这一格从相等面里摘掉（留着只会让整条判据红在一个已经写清楚的地方，挡住别的差异被看见）。
+
+### 变异实证（两条）
+
+| 变异 | 结果 |
+| --- | --- |
+| 去掉 PG `launchMultipart` 的候选上下文 | 红（错误契约那条） |
+| SQLite 单侧把 payload `name` 缀一截 | 红（**行级**比对那条） |
+
+### 合并这一条要先裁决的设计问题
+
+两侧的上传时序**形状相同、位置不同**——PG 的根内核已经按
+`bufferUploadParts` + `validateUploadPlan` → `workspace.prepare` → `applyUploadsToWorktree` +
+回填 `inputs[]`（失败回滚工作区）做完整条；SQLite 的 `multipartTaskStart.ts` 是同一串，
+只是自己在服务层跑、再把物化好的空间交给 `startExecution`。
+因此合并**不是**重新设计时序，而是把 SQLite 那条路由接到 PG 的 `launchMultipart` 上，
+让内核做它已经在做的事。要逐条比对的是 SQLite 那侧在内核之外多做的几步：
+`prepareWorkflowTriggerLaunch`（冻结 + 扫描 root/call 闭包）、`resolveUploadLimits` 的取处、
+以及 `space.earlyError !== null` 那条「落一行 failed 任务」的分支。

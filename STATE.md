@@ -2,6 +2,33 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 58，**multipart 基线立好；顺修 8a3036d41 推的红**）
+>
+> 本段待推：§5hn 批次二 ⑥（上）。
+>
+> **先说红**：`8a3036d41` 的 CI 两个 backend 分片红在 `rfc359-w5-t19d-coverage-parity`——
+> 账本记 11、实际 12。这条棘轮**按纯文本数引用**，写在**注释**里的一个文件名也算；
+> 那一提我先改账本、跑绿 781/781，**之后**又在另一个测试的注释里写了那个文件名。
+> 已抽成通用踩坑：这类棘轮要在**所有编辑做完之后**再跑最后一遍。
+>
+> **正题**：`startExecution` 只剩 multipart 这一条生产调用路。基线第一跑照出两处差异——
+> ①**悬空 call 引用的错误契约**：SQLite `workflow-invalid` + `issues[]`，PG
+> `workflow-call-ref-missing` 且不带 `issues[]`（编辑器指不到出错节点）。这是批次二 ④（上）
+> 同一条缺陷的 multipart 面，**当场修**：PG 的 `launchMultipart` 补上候选上下文。
+> ②`spaceNodes` 兜底派生（第三次出现），按剧本钉住待合并后销账。
+>
+> 变异实证两条：去掉候选 → 错误契约那条红；SQLite 单侧改 payload `name` → **行级**比对那条红。
+>
+> 合并这一条**不是**重新设计上传时序——PG 的根内核早就按
+> `bufferUploadParts` → `workspace.prepare` → `applyUploadsToWorktree` 做完整条，与 SQLite
+> 那串同形，只是位置不同。要逐条比对的是 SQLite 在内核之外多做的几步
+> （`prepareWorkflowTriggerLaunch`、`resolveUploadLimits` 取处、`earlyError` 落 failed 行那支）。
+>
+> 证据：multipart 基线 **4/4 双引擎**；`tasks-multipart` 20/20、`rfc107-url-upload-multipart` 13/13；
+> 路由半径 135/135；架构守卫 + 九个根目录守卫 **781/781**；tsc 0 / eslint 0。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ⑥（上）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 57，**子任务启动合一；合一当场照出 PG 丢掉触发上下文的 contract**）
 >
 > 本段待推：§5hn 批次二 ⑤（下）。**CI 在 `7720f9d4f` 已绿**（续 55/56 三提一起过）。
