@@ -16,9 +16,10 @@
 //          both `resumeTask` and `retryNode` call into. New rollback paths
 //          must reuse it; ad-hoc inline rollback in either function is a
 //          regression target.
-//   PB-G5: services/task.ts diff endpoint branches on `task.repoCount ===
-//          1` for the byte-baseline single-repo path and `# === Repo:` for
-//          the multi-repo concat header.
+//   PB-G5: the task diff projection branches on `task.repoCount === 1` for the
+//          byte-baseline single-repo path and `# === Repo:` for the multi-repo
+//          concat header (RFC-359 AC-1 起它是两个引擎共用的 `taskDiffProjection`,
+//          锚见 TASK_DIFF_SRC).
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -53,6 +54,22 @@ const RUNNER_SRC = readFileSync(
   'utf-8',
 )
 const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
+// RFC-359 AC-1：PB-G5 盯的那段搬了家——纯读三件两个引擎合一之后，任务 diff 的拼装是
+// `taskDiffProjection`，住在 task-execution 的共用实现文件里（文件名带 `postgresql` 前缀是
+// 待还的命名债，见 RFC-359 plan §5hj——它现在是两个引擎共用的那一份）。
+// **本条按文件路径读源码，搬家必须同步改锚**，否则它会以「格式变了」的名义红。
+const TASK_DIFF_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'infrastructure',
+    'postgresqlTaskRouteOperations.ts',
+  ),
+  'utf-8',
+)
 
 describe('RFC-066 PR-B — source guards', () => {
   test('PB-G1（RFC-248 翻转）scheduler 里的多仓 wrapper-git 纵深防御门必须**已删除**', () => {
@@ -108,9 +125,9 @@ describe('RFC-066 PR-B — source guards', () => {
   })
 
   test('PB-G5 diff endpoint branches on single vs multi via task.repoCount + `# === Repo:` header', () => {
-    expect(TASK_SRC.includes('task.repoCount === 1')).toBe(true)
+    expect(TASK_DIFF_SRC.includes('task.repoCount === 1')).toBe(true)
     // Multi-repo concat uses the stable header literal so the frontend can
     // safely split on it.
-    expect(TASK_SRC.includes('# === Repo:')).toBe(true)
+    expect(TASK_DIFF_SRC.includes('# === Repo:')).toBe(true)
   })
 })
