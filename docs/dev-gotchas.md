@@ -562,6 +562,18 @@ bun test tests/architecture/ tests/*architecture*.test.ts
 
 约一分钟、无需数据库以外的任何准备，罩住的正是「写不出文件名、只能靠跑」的那一类。
 
+**第五种盲区：按「文件名**+行号**」记账的守卫（2026-09-17 实撞）。**
+第一种盲区（路径字符串键）的变体，但危险得多：账本里写的是
+`modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts:826 ...`，
+**行号是键的一部分**。于是**在被记账的那一行之前加任何一行**——一条 import、一行注释——
+都会让它漂一格转红，而你可能根本没动被记账的那段代码。
+（实撞：`rfc359-w7-task-insert-lineage-completeness` 的 `TASK_INSERT_SITES`，
+我只在文件顶部多加了一行 import，`:826` → `:827`。）
+
+basename 扫法**能**捞到这一类（文件名确实写在守卫里），所以它不是新的检索方式，
+是新的**读法**：grep 到命中之后别只看「这条守卫和我的改动有没有关系」，
+还要看**它记的键里有没有行号**——有就直接跑，别推理。
+
 ## 已知的**跨文件干扰**：`rfc305-architecture-lock` 会让 `review-state-machine` 的五条红（2026-09-17 定位）
 
 同一个 bun 进程里先跑 `tests/rfc305-architecture-lock.test.ts`、再跑

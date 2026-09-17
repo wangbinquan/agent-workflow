@@ -133,6 +133,7 @@ async function createAgent(app: Hono, name: string): Promise<string> {
 
 const launched = new Map<string, Record<string, unknown>>()
 const persisted = new Map<string, Record<string, unknown>>()
+const inputContract = new Map<string, unknown>()
 
 describeEachProviderHttpApplication(
   'RFC-359 AC-1 —— 工作流 JSON 路由启动的两个引擎落库对等',
@@ -301,6 +302,98 @@ describeEachProviderHttpApplication(
         body.details?.issues?.some((issue) => issue.code === 'call-workflow-ref-missing'),
         'issues[] 必须点名是哪条 call-node 规则——编辑器靠它定位节点',
       ).toBe(true)
+    })
+
+    // RFC-359 AC-1（plan §5hn 批次二 ④）—— **启动输入契约**在两个引擎上是同一道门。
+    //
+    // 为什么这条测试存在：批次二 ④ 把 SQLite 的工作流 JSON 路由接到共用的启动参与者上，
+    // e2e `workflow-matrix.spec.ts` 的「missing required」当场红了——期望 422，实际放行。
+    // 追下去是又一条 AC-1 缺口：`assertWorkflowLaunchInputs` 只长在 `startTask` 那一侧
+    //（`services/task.ts`），共用的参与者 / 内核上没有，**于是 PostgreSQL 从来没执行过
+    // 这条契约**：同一个缺必填的启动，SQLite 422，PostgreSQL 201 照跑，必填项当空串执行。
+    // 修在工作流臂上（两侧同一道门），这条测试锁的就是「它对两个引擎都在」。
+    test('缺必填 / 未声明键：两个引擎以**同一个启动输入契约**拒掉', async () => {
+      const suffix = ulid().slice(-8).toLowerCase()
+      const writerId = await createAgent(app, `contract-writer-${suffix}`)
+      const wfRes = await req(app, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `contract-wf-${suffix}`,
+          description: 'rfc359 launch input contract',
+          definition: {
+            $schema_version: 5,
+            // 声明一个必填输入，并用 `input` 节点接进 agent——孤立输入过不了静态校验，
+            // 会在契约这道门**之前**就 422，把判据顶掉。
+            inputs: [{ kind: 'text', key: 'subject', label: 'Subject', required: true }],
+            nodes: [
+              {
+                id: 'subject_input',
+                kind: 'input',
+                inputKey: 'subject',
+                position: { x: 20, y: 20 },
+              },
+              {
+                id: 'writer',
+                kind: 'agent-single',
+                agentId: writerId,
+                agentName: 'writer',
+                promptTemplate: 'write about {{subject}}',
+                position: { x: 360, y: 20 },
+              },
+            ],
+            edges: [
+              {
+                id: 'subject_to_writer',
+                source: { nodeId: 'subject_input', portName: 'subject' },
+                target: { nodeId: 'writer', portName: 'subject' },
+              },
+            ],
+          },
+        }),
+      })
+      expect(wfRes.status, await wfRes.clone().text()).toBe(201)
+      const workflow = (await wfRes.json()) as { id: string }
+
+      const launchWith = async (inputs: Record<string, string>) => {
+        const res = await req(app, '/api/tasks', {
+          method: 'POST',
+          body: JSON.stringify({
+            workflowId: workflow.id,
+            name: 'rfc359 launch input contract',
+            scratch: true,
+            inputs,
+          }),
+        })
+        const body = (await res.clone().json()) as {
+          code?: string
+          details?: { issues?: ReadonlyArray<{ key?: string; code?: string }> }
+        }
+        return {
+          status: res.status,
+          code: body.code,
+          issues: (body.details?.issues ?? []).map((issue) => `${issue.key}:${issue.code}`).sort(),
+        }
+      }
+
+      const missing = await launchWith({})
+      const unknown = await launchWith({ subject: 'ok', stale: 'invisible' })
+
+      // 先各自钉死这一侧的正确性——两个引擎**同样地错**也会让相等断言绿掉。
+      expect(missing.status, '缺必填必须 422，不能当空串放行').toBe(422)
+      expect(missing.code, '错误码是启动输入契约的那一个').toBe('workflow-inputs-invalid')
+      expect(missing.issues, 'issues[] 必须点名是哪个键缺了——启动表单靠它定位字段').toEqual([
+        'subject:required-input-missing',
+      ])
+      expect(unknown.status, '未声明的键必须 422').toBe(422)
+      expect(unknown.code, '错误码是启动输入契约的那一个').toBe('workflow-inputs-invalid')
+      expect(unknown.issues, 'issues[] 必须点名是哪个键没声明').toEqual(['stale:unknown-input'])
+
+      inputContract.set(scope.harness.capabilities.provider, { missing, unknown })
+      if (inputContract.size < 2) return
+      expect(
+        inputContract.get('postgresql'),
+        '两个引擎的启动输入契约不一致（plan §5hn 批次二 ④：修 627290a94 推的红时才发现 PG 一直没这道门）',
+      ).toEqual(inputContract.get('sqlite'))
     })
   },
 )

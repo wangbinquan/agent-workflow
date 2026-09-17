@@ -64,6 +64,7 @@ import {
   triggerSourceFromContext,
 } from '@/services/execution/triggerPreflight'
 import { assertNotBuiltin } from '@/services/systemResources'
+import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
 import type { WorkspaceCleanupReport } from '@/services/task'
 import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
@@ -1436,6 +1437,15 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
               issues: parsed.error.issues,
             })
           }
+          // RFC-359 AC-1（plan §5hn 批次二 ④，**修 627290a94 推的红**）：启动输入契约
+          //（缺必填 / 未声明键 / picker 类型不匹配 → 422）。此前只有 `startTask` 那一侧做
+          // （`services/task.ts` 的同名调用，条件是「非 agent/workgroup/code-round/数字员工
+          // 合成宿主」——那几类各有自己的宿主契约，在各自的启动服务里验）。
+          // 内核这一侧一直没有，于是 **PostgreSQL 从来没执行过这条契约**；
+          // SQLite 的 JSON 路由改走内核之后当场照出来（e2e `workflow-matrix` 的
+          // 「missing required」期望 422，实际放行）。
+          // 这一格放在**工作流臂**而不是内核：内核也服务合成宿主，那几类不适用本契约。
+          assertWorkflowLaunchInputs(snapshot.workflow.definition.inputs, parsed.data.inputs)
           return await launchRoot({
             actor: input.actor,
             resourceAuthority: input.resources,

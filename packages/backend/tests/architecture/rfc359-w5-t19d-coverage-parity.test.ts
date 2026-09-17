@@ -142,7 +142,13 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 这次是真的覆盖变好，不是记账：`rfc165-scheduled-kinds` 与 `rfc287-t13-deferred-prep`
   // 的定时夹具从 `services/scheduleLaunch.ts`（已删）改成生产同一份编排，于是它们**值 import**
   // 了 `createSqliteTaskExecutionLaunchParticipant`——drive 那一列 1 → 3 就是这个意思。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 5/3, postgresql 11/2',
+  // RFC-359 AC-1（plan §5hn 批次二 ④）：`11/2 → 12/2`，**这一格是记账不是判据**——
+  // 涨的那一条引用来自 `rfc345-resource-acl-facade-retirement.test.ts` 的兼容债账本：
+  // 启动输入契约补进 PG 那份参与者时，该文件成了 `services/workflowLaunchInputs.ts` 的
+  // 第 6 个消费者，于是账本里多写了一次它的文件名。没有任何新的行为判据只喂给 PG 那一侧。
+  // 这一对此刻正在**收敛**：批次二 ④ 已经把工作流 JSON 路由接到这份共用实现上，
+  // SQLite 那份剩的是委托壳，销账动作是 §5hj 记的改中立名，不是往 SQLite 侧硬凑用例。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 5/3, postgresql 12/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
@@ -200,7 +206,9 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次二）：9 → 10，来源同上。
   // RFC-359 AC-1（plan §5hn 批次二 ①）：10 → 11，来源同上（定时启动的双引擎基线）。
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：3 vs 11 → 5 vs 11，差额 8 → 6（收敛）。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 5 vs 11',
+  // RFC-359 AC-1（plan §5hn 批次二 ④）：5 vs 11 → 5 vs 12，差额 6 → 7。**记账，不是倾斜**：
+  // 多出来的那一条引用是兼容债账本里的一次文件名提及（见上一格的注释），不是新判据。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 5 vs 12',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。

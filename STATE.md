@@ -2,6 +2,34 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 55，**合并照出「启动输入契约」PostgreSQL 根本没有**）
+>
+> 本段待推：§5hn 批次二 ④ 的回火。**续 54 推的 `627290a94` 把 main 推红了**，两格红是同一件事的两面。
+>
+> **缺口**：`assertWorkflowLaunchInputs`（缺必填 / 未声明键 / enum 越界 / 计数不足 / picker
+> 值不合法 → 422 `workflow-inputs-invalid` + `issues[]`）**只长在 `services/task.ts` 的
+> `startTask` 那一侧**，共用的启动参与者 / 根内核上没有这道门。于是同一个缺必填的
+> `POST /api/tasks`：**SQLite 422，PostgreSQL 201 照跑、必填项当空串执行完整条工作流**。
+> PG 部署上启动表单的必填校验只剩浏览器那一层，JSON API 与定时 / webhook 绕过去就没人拦。
+> 它此前没被任何判据照到，因为 e2e 只跑 SQLite、PG 侧根本没有对应的启动用例——
+> 续 54 把 SQLite 的 JSON 路由接到共用那道门上，当场把它照了出来。
+>
+> **处置**：补在参与者的**工作流臂**（不是内核——内核也服务 agent / workgroup / code-round /
+> 数字员工四类合成宿主，那四类各有自己的宿主契约，和 `startTask` 里那个四项条件是同一个判断）。
+> multipart 不经过参与者、子任务路自带同名调用，两条都不受影响。
+>
+> **判据**：工作流路由基线加第三条双引擎用例（必填输入用 `input` 节点接进 agent——孤立输入
+> 会在契约**之前**就 422 把判据顶掉）。**变异实证**：换成 `void assertWorkflowLaunchInputs`
+> 两个 lane 同时红——两侧共用实现时，这是「门确实是共用的那一道」的证明形状。
+>
+> 顺带：`rfc103-launch-config-passthrough` 的源码形状锁 6 → 5（工作流 JSON 启动不再自己拼
+> 启动依赖）。半径盲区第五种形态：**行号键账本**（`rfc359-w7` 记 `:826`，新增一行 import 就漂）。
+>
+> 证据：工作流路由基线 **6/6 双引擎**；启动 / 定时 / webhook 五族 **170 + 94 + 124 + 91 + 61**
+> 全绿；架构守卫 **706/706** + 九个根目录守卫 **75/75**；tsc 0 / eslint 0。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ④ 的回火。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 54，**工作流 JSON 路由合一，`spaceNodes` 第二次也是最后一次销账**）
 >
 > 本段待推：§5hn 批次二 ④（下）。

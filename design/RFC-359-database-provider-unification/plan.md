@@ -15645,3 +15645,66 @@ PostgreSQL 转 `launches.launch` → 根启动内核。现在两侧都转
 要证明它还活着，变异必须只动**一侧**。实测把 SQLite 路由的 payload `name` 缀一截
 （`{ ...task, name: \`${task.name}_MUT\` }`）当场红在行级比对上。
 已把这段写进该用例的头注释——下一个接手的人不必再推一遍。
+
+## §5hn 批次二 ④ 的回火　**启动输入契约**——合并照出的又一条 AC-1 缺口
+
+批次二 ④ 推上去（`627290a94`）之后 CI 红两格，两格是同一件事的两面：
+
+- **e2e** `workflow-matrix.spec.ts:664`「workflow launch input contract rejects missing,
+  unknown, and picker-incompatible values」——`missing required` 期望 422，实际放行；
+- **backend 分片** `rfc103-launch-config-passthrough` 的源码形状锁：
+  `...dependencies.startDepsFor(actor)` 在 `sqliteTaskRouteOperations.ts` 里 6 → 5
+  （工作流 JSON 启动不再自己拼启动依赖了，那一处随之消失）。
+
+### 缺口本身
+
+`assertWorkflowLaunchInputs`（缺必填 / 未声明键 / enum 越界 / 计数不足 / picker 值不合法
+→ 422 `workflow-inputs-invalid` + `issues[]`）**只长在 `services/task.ts` 的 `startTask`
+那一侧**，条件是「非 agent / workgroup / code-round / 数字员工合成宿主」——那四类各有
+自己的宿主契约，在各自的启动服务里验。共用的启动参与者 / 根内核上**没有这道门**。
+
+于是：
+
+```
+同一个缺必填的 POST /api/tasks
+  SQLite      422 workflow-inputs-invalid  issues=[subject:required-input-missing]
+  PostgreSQL  201 → 必填项当空串跑完整条工作流
+```
+
+**这正是本 RFC 要消灭的那种「一个好一个不好」**，而且是用户可见的：PG 部署上，启动表单
+的必填校验只剩浏览器那一层，JSON API 调用方与定时 / webhook 触发绕过去就没人拦。
+它此前没被任何判据照到，是因为 e2e 只跑 SQLite、而 PG 侧根本没有对应的启动用例。
+
+### 处置：补在**工作流臂**，不是内核
+
+内核也服务合成宿主（agent / workgroup / code-round / 数字员工），那四类不适用本契约——
+和 `startTask` 里那个四项条件是同一个判断，只是换到了契约该在的地方。所以这一格落在
+参与者 `case 'workflow'` 的 payload 解析之后、根内核调用之前。multipart 不经过参与者
+（`postgresqlTaskRouteOperations.ts` 直连内核，自带 `ignoreUploadInputs: true`），
+子任务路自带同名调用，两条都不受影响。
+
+### 判据
+
+`rfc359-w5hn-workflow-route-launch-provider-parity` 加第三条用例：声明一个必填输入并用
+`input` 节点接进 agent（孤立输入过不了静态校验，会在契约**之前**就 422 把判据顶掉），
+然后 `{}` 与 `{subject, stale}` 两发，逐 lane 钉死 `422 / workflow-inputs-invalid /
+issues[]` 再跨 lane 比相等。
+
+**变异实证**：把那一行换成 `void assertWorkflowLaunchInputs`，**两个 lane 同时红**在
+「缺必填必须 422，不能当空串放行」上——这条相等面是单侧变异之外第二种能证明它活着的形状
+（两侧共用实现时，删掉共享的那道门两侧一起红，正说明门确实是共用的那一道）。
+
+### 账本
+
+- `rfc359-w7-task-insert-lineage-completeness`：`postgresqlTaskRouteLaunchOperations.ts:826`
+  → `:827`（新增的 import 把 INSERT 站点推下一行）。**行号键账本**是半径盲区的又一种形态。
+- `rfc345-resource-acl-facade-compatibility` 39 → 40：该文件成为
+  `services/workflowLaunchInputs.ts` 的第 6 个消费者。与 W8-A 逐字同形——同一个符号、
+  同一个 remove-owner，随 RFC-294 W4-E1 cutover 一起退役。
+- `rfc294-cross-context-observed-imports` 5113 → 5114、`rfc294-architecture-exceptions`
+  4598 → 4599：同一条 symbol 边。
+- `rfc359-w5-t19d-coverage-parity`：`TaskRouteLaunchOperations` PG 侧 ref 11 → 12。
+  **这一格是记账不是倾斜**——涨的那条引用来自兼容债账本里的一次文件名提及，
+  没有任何新的行为判据只喂给 PG 那一侧。
+
+三处 `allowGrowth` 都点名 RFC-359 且写了「下一笔不涨即删」，按一次性豁免的规矩下一提退役。

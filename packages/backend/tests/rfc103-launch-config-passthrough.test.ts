@@ -163,9 +163,12 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       ),
       'utf8',
     )
+    // RFC-359 AC-1（plan §5hn 批次二 ④）：6 → 5。工作流 JSON 启动改走与 PostgreSQL 共用的
+    // 启动参与者（终端是根启动内核），那一处 `...dependencies.startDepsFor(actor)` 随之消失。
+    // 本条锁的是「剩下的每一条人工续跑入口都还在透传启动配置」，那些一处没动。
     expect(
       (sqliteOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length,
-    ).toBe(6)
+    ).toBe(5)
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {

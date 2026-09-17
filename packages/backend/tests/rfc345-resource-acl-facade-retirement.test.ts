@@ -537,6 +537,18 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflowLaunchInputs.ts',
+    'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
+    ['assertWorkflowLaunchInputs'],
+    // RFC-359 AC-1（plan §5hn 批次二 ④）：启动输入契约原本只长在 `services/task.ts` 的
+    // `startTask` 那一侧，共用的启动参与者上没有——**PostgreSQL 从来没执行过这条契约**
+    //（同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。补到参与者的
+    // 工作流臂上之后两个引擎同一道门。与 W8-A 那条同形：**同一个符号**、**同一个清偿
+    // owner**，随 RFC-294 W4-E1 cutover 一起退役。
+    'PostgreSQL workflow route launch input validation',
+    REMOVE_OWNERS.taskExecutionResources,
+  ),
+  edge(
+    'services/workflowLaunchInputs.ts',
     'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
     ['assertWorkflowLaunchInputs'],
     'PostgreSQL task launch input validation',

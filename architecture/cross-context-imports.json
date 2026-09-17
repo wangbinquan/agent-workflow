@@ -46974,6 +46974,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9bb7836984f657a9236e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/workflowLaunchInputs.ts#$file",
+      "toPath": "packages/backend/src/services/workflowLaunchInputs.ts",
+      "toSymbol": "assertWorkflowLaunchInputs",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/userOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/identity-access/composition/userOperations.ts",
       "fromSymbol": "$file",
@@ -78168,9 +78185,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4598,
+    "architectureExceptions": 4599,
     "implementationSccs": 0,
-    "observedEdges": 5113,
+    "observedEdges": 5114,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -127348,6 +127365,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#$file",
+      "id": "import:9bb7836984f657a9236e",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-outbound",
+      "specifier": "@/services/workflowLaunchInputs",
+      "syntax": "static-import",
+      "targetSymbol": "assertWorkflowLaunchInputs",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/workflowLaunchInputs.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/workflowLaunchInputs.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "identity-access",
       "fromFile": "packages/backend/src/modules/identity-access/composition/userOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/userOperations.ts#$file",
@@ -160524,7 +160557,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:797bb51911733a0b36ab85e8918f2e0525b9801a4b157d69783dded693384190",
+  "sourceDigest": "sha256:11926675c40d868177bddd34730191c251f06a0068b637b30ebd1274352b4ce4",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
