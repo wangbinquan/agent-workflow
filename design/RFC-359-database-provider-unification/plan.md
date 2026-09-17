@@ -17107,3 +17107,29 @@ nodeRunId 会把已完成的任务打成「没有调度器的 pending 僵尸」�
 变异实证：让 PG 那份忽略共享表（级联时不再按 kind 跳过）⇒ 本格当场红。
 
 至此 retry 的对拍面 **8 格 / 16 条**，仍然没有查到任何用户可见的分叉。
+
+### 第 9 刀第 1 步第四收口　wrapper 复活豁免 + 级联取消——**照出第二处真缺陷**
+
+再加两块：
+
+**① wrapper 自己的取消行是复活信号（RFC-095 / RFC-098 B3）**——被点的那一行如果是 wrapper 自己的
+`canceled` / `interrupted` 行，不该在它上面铸 failed 占位行（会把可恢复的行盖住，wrapper 从第 0 轮重来）。
+两个引擎、两种状态**逐格相同**。变异：让 PG 不认这条豁免 ⇒ 两格都红。
+
+**② 级联取消撞上已终态的子任务——第一跑就照出一处 PG 侧的真缺陷，已修**：
+
+| | 修之前 |
+| --- | --- |
+| SQLite | `no-throw`，任务回到 `pending`（终态子任务 = 幂等空操作） |
+| PostgreSQL | **`retry-child-cancel-failed`，任务卡在 `interrupted`** |
+
+根因：参与者对终态子任务抛 `ConflictError('task-not-cancelable')`，而 PG 的 retry 路径
+**只对 `NotFoundError` continue**。同一个文件里参与者自己的级联 helper
+（`postgresqlChildTaskLifecycleParticipant` 第 665 行）早就把这两个码一起 continue，
+SQLite 的 `retryNode` 也是两个都 continue——**只有这条路是例外**。
+
+用户可见后果：在 PostgreSQL 部署上，重试一个**子任务已经完成**的调用节点会失败，
+并把父任务卡在 `interrupted`（既不是终态也没有调度器），错误文案还指向一个根本没发生的取消失败。
+修法是把这条路对齐另外两处。红绿依据就是这条对拍：修之前 PostgreSQL lane 红、SQLite lane 绿。
+
+至此 retry 的对拍面 **10 格 / 22 条**，共照出 **1 处真缺陷**（本条）。

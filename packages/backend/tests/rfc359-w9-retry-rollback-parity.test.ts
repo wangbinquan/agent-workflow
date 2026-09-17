@@ -601,3 +601,128 @@ describeEachProvider('RFC-359 W9 —— retry 级联的 kind 矩阵', (harness) 
     expect(observed, '某一侧的级联判断没有按共享表办事').toEqual(expected)
   })
 })
+
+// RFC-095 / RFC-098 B3 的**豁免**：被点的那一行如果是一个 wrapper 自己的
+// `canceled` / `interrupted` 行，那不是「要重跑」的信号，而是「要接着跑」的信号——
+// 在它上面铸一条 failed 占位行会把那条可恢复的行盖住，于是 wrapper 从第 0 轮重来，
+// 而不是从中断处继续。两份实现各写了一遍这条豁免，此前没有任何东西比较过它们。
+// 变异实证：让 PG 那份不再认这条豁免（`wrapperRevival` 恒 false）⇒ 两格都红。
+describeEachProvider('RFC-359 W9 —— 被点的 wrapper 自己的取消行是复活信号', (harness) => {
+  const fixtures: Fixture[] = []
+  afterEach(() => {
+    for (const item of fixtures) item.cleanup()
+    fixtures.length = 0
+  })
+
+  const WRAPPER_DEFINITION = {
+    $schema_version: 5,
+    inputs: [],
+    nodes: [
+      { id: 'wrap', kind: 'wrapper-git', nodeIds: ['inner'] },
+      { id: 'inner', kind: 'agent-single', agentName: 'x', promptTemplate: '' },
+    ],
+    edges: [],
+  } as unknown as WorkflowDefinition
+
+  for (const status of ['canceled', 'interrupted'] as const) {
+    test(`wrapper 自己的 ${status} 行不会被盖上占位行`, async () => {
+      const fixture = await seedFixture(harness.db, {
+        definition: WRAPPER_DEFINITION,
+        status: 'failed',
+        runs: [{ nodeId: 'wrap', status }],
+      })
+      fixtures.push(fixture)
+      const execution = await executionFor(harness, fixture)
+      await execution.provider.routes.tasks.retry({
+        actor: execution.actor,
+        taskId: fixture.taskId,
+        nodeRunId: fixture.nodeRunId,
+        cascade: true,
+      })
+      const rows = await harness.db
+        .select({
+          nodeId: nodeRuns.nodeId,
+          status: nodeRuns.status,
+          retryIndex: nodeRuns.retryIndex,
+        })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, fixture.taskId))
+      expect(
+        rows.filter((row) => row.nodeId === 'wrap').map((row) => row.retryIndex),
+        `wrapper 的 ${status} 行被铸了占位行 ⇒ 它会从第 0 轮重来而不是接着跑`,
+      ).toEqual([0])
+    })
+  }
+})
+
+// 级联重试要把被点节点（及下游）**已冻结的子任务**先取消掉，免得旧一代还在写继承来的工作区。
+// 两份实现在「子任务已经是终态、取消不动」这件事上的错误处理**看起来不同**：
+// SQLite 对 `task-not-cancelable` 与 NotFound 都 continue（当幂等空操作），
+// PG 只对 NotFound continue。差别若成立，用户可见面是：重试一个下游有已完成子任务的调用节点，
+// 一个部署正常继续、另一个把任务打成 failed 并报 `retry-child-cancel-failed`。
+// **本条第一跑就照出一处真缺陷，已修**：PG 那份只对 `NotFoundError` continue，于是终态子任务
+// 抛出的 `task-not-cancelable` 被当成失败——重试报 `retry-child-cancel-failed`、任务卡在
+// `interrupted`。SQLite 那份与参与者自己的级联 helper 都是两个码一起 continue；修法是把这条路
+// 对齐它们。红绿依据就是本用例：修之前 PostgreSQL lane 红、SQLite lane 绿。
+describeEachProvider('RFC-359 W9 —— 级联取消撞上已终态的子任务', (harness) => {
+  const fixtures: Fixture[] = []
+  afterEach(() => {
+    for (const item of fixtures) item.cleanup()
+    fixtures.length = 0
+  })
+
+  const CALL_DEFINITION = {
+    $schema_version: 5,
+    inputs: [],
+    nodes: [{ id: 'call', kind: 'call-workflow', workflowName: 'child-wf' }],
+    edges: [],
+  } as unknown as WorkflowDefinition
+
+  test('已完成的子任务不该让重试失败', async () => {
+    const parent = await seedFixture(harness.db, {
+      definition: CALL_DEFINITION,
+      status: 'failed',
+      runs: [{ nodeId: 'call', status: 'failed' }],
+    })
+    fixtures.push(parent)
+    // 子任务已经收场（done）——取消它是空操作，不该把父任务的重试打断。
+    const child = await seedFixture(harness.db, {
+      status: 'done',
+      runs: [{ nodeId: 'doc', status: 'done' }],
+    })
+    fixtures.push(child)
+    await harness.db
+      .update(tasks)
+      .set({ parentTaskId: parent.taskId, parentNodeRunId: parent.nodeRunId })
+      .where(eq(tasks.id, child.taskId))
+    await harness.db
+      .update(nodeRuns)
+      .set({ childTaskId: child.taskId })
+      .where(eq(nodeRuns.id, parent.nodeRunId))
+
+    const execution = await executionFor(harness, parent)
+    let code = 'no-throw'
+    try {
+      await execution.provider.routes.tasks.retry({
+        actor: execution.actor,
+        taskId: parent.taskId,
+        nodeRunId: parent.nodeRunId,
+        cascade: true,
+      })
+    } catch (error) {
+      const value =
+        error !== null && typeof error === 'object' && 'code' in error
+          ? Reflect.get(error, 'code')
+          : null
+      code = typeof value === 'string' ? value : `no-code:${String(error)}`
+    }
+    const after = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, parent.taskId)).limit(1)
+    )[0]
+    expect({ code, status: after?.status, summary: after?.errorSummary }).toEqual({
+      code: 'no-throw',
+      status: 'pending',
+      summary: null,
+    })
+  })
+})

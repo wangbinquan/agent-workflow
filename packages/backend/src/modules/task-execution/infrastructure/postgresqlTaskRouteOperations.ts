@@ -2120,7 +2120,18 @@ async function retryNode(
         cause: { kind: 'parent-cascade', parentTaskId: input.taskId },
       })
     } catch (error) {
-      if (error instanceof NotFoundError) continue
+      // RFC-359 AC-1（第 9 刀）：**已经收场的子任务是幂等空操作，不是失败**。
+      // 参与者对终态子任务抛 `task-not-cancelable`（`postgresqlChildTaskLifecycleParticipant`
+      // 的 `cancel`），而它自己的级联 helper 早就把这个码与 NotFound 一并 continue；
+      // SQLite 的 `retryNode` 也是两个都 continue。只有这条路是例外，后果是用户可见的：
+      // 重试一个子任务已完成的调用节点，PostgreSQL 上会报 `retry-child-cancel-failed`
+      // 并把任务**卡在 `interrupted`**，SQLite 上正常继续（`rfc359-w9` 的对拍照出了这处）。
+      if (
+        error instanceof NotFoundError ||
+        (error instanceof ConflictError && error.code === 'task-not-cancelable')
+      ) {
+        continue
+      }
       await dependencies.persistence.runtimeLifecycle.trySet({
         taskId: input.taskId,
         to: 'failed',
