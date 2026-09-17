@@ -16546,3 +16546,45 @@ public 面只出类型。
 `children.cancel`），真正的两份实现在 **`ChildTaskLifecycleParticipant`** 这一对上
 （SQLite 那半转 `cancelTask`，PG 那半是 `postgresqlChildTaskLifecycleParticipant` 的原生实现），
 那是另一对适配器、另一刀。
+
+## 第 6 刀的勘察　`workflowSyncPreview` / `syncWorkflow`
+
+### 已经共用的部分
+
+两侧的**域判据早就是一份**：`workflowSyncGateReason`（可同步与否）、`diffWorkflowForSync`
+（差异投影）、`builtinWorkflowSyncPreview` / `notSyncableWorkflowPreview`（横幅形状）。
+W58 把这些收进 domain 时就写明了：SQLite 那份 12 行转给 `computeWorkflowSyncPreview` 一个函数，
+PG 那份展开成若干段——**两边判据都全，是组织方式不同，不是一侧弱**。
+
+### 三处 PG 独有的门
+
+1. `taskExecutionKind(task) !== 'workflow'` → `workflow-deleted`（非工作流任务不给同步横幅）；
+2. `awaitReleasedSettled` + `isActive` → `task-active`；
+3. `syncWorkflow` 侧还认 `workspace_pruned_at`（就是 B4，plan §5u 已登记为**既有**差异，
+   PG 的预览里**刻意没带**它，免得预览与 SQLite 再分叉一次——那条注释就写在 PG 源码里）。
+
+前两条是 PG 更强，合并时抬进共用函数即可。
+
+### 真正的裁决点：预览用**可见性**还是**可启动性**
+
+这是这一刀唯一需要定方向的地方，两侧用的是两套授权：
+
+- SQLite：`getWorkflow(db, id)` + `canViewResource(db, actor, 'workflow', workflow)`——**可见性**；
+- PG：`authority.resources.loadAuthorized(authority, [{ kind: 'workflow-launch', workflowId }])`
+  ——**可启动性**。
+
+**取 SQLite 的可见性**，理由是 PG 自己的源码提供的：它不得不在 `loadVisibleWorkflow` **之前**
+插一道内置工作流预检，注释原话是「内置工作流在那里就被挡住，异常被下面的 catch 兜成
+`workflow-deleted`——横幅内容直接是错的」。一个**预览**回答的是「同步会发生什么」，不是
+「我现在能不能启动它」；用可启动性去问这个问题，答案对内置工作流就是错的，只能再补一道
+前置门去绕。换成可见性之后那道前置门**自然不需要**——`computeWorkflowSyncPreview` 第一件事
+就是 `if (workflow.builtin) return builtinWorkflowSyncPreview(...)`。
+
+合并后 PG 的 `loadVisibleWorkflow` / `builtinCandidateWorkflow` 两个私有助手一并退役。
+`syncWorkflow`（写侧）仍需各自的准入链，那一半按 B3 / B4 逐条对齐，不与预览混在一起。
+
+### 覆盖
+
+W7 的 A17（内置工作流 sync → 403）与 B3 / B4 已经把这一对的关键格钉住；合并后 B3 应自己红
+（PG 额外要求「工作流当前可见/仍在」这一条会随授权路径的统一而消失或转成相等断言），
+B4 按 §5u 的登记保持为**已知差异**，不在本刀范围。

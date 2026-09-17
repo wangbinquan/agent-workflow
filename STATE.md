@@ -16,10 +16,21 @@
 > 顺带退役上一提的一次性 `allowGrowth`（`rfc294-public-surfaces` 959 → 960 的那条，
 > 理由并进主 `why`）。
 >
-> **下一刀**：⑥`workflowSyncPreview` / `syncWorkflow`。已对读：PG 那份组织得更展开
->（非工作流任务 / 内置工作流 / `awaitReleasedSettled` + `isActive` / call 闭包冻结 / 宿主校验
-> 各一段），SQLite 那份 12 行转给 `computeWorkflowSyncPreview` 一个函数——**两边判据都全**，
-> 是组织方式不同，不是一侧弱（W58 的注释已说明）。合并是把两种组织收成一份。
+> **下一刀**：⑥`workflowSyncPreview` / `syncWorkflow`，**勘察已做完、方向已定**。
+>
+> 域判据早就共用（`workflowSyncGateReason` / `diffWorkflowForSync` / 两个横幅构造器）；
+> 差的是三处 PG 独有的门（非工作流任务、`isActive`、以及 `syncWorkflow` 侧的
+> `workspace_pruned_at`——后者是 §5u 登记的**既有**差异，不在本刀范围）。
+>
+> **唯一需要定方向的是：预览用可见性还是可启动性。** SQLite 用 `canViewResource`（可见性），
+> PG 用 `loadAuthorized({kind:'workflow-launch'})`（可启动性）。**取可见性**——理由是 PG
+> 自己的源码给的：它不得不在前面插一道内置工作流预检，注释原话是「内置工作流在那里就被挡住，
+> 异常被 catch 兜成 `workflow-deleted`——横幅内容直接是错的」。预览回答的是「同步会发生什么」，
+> 不是「我现在能不能启动它」；换成可见性之后那道前置门自然不需要
+>（`computeWorkflowSyncPreview` 第一件事就是判 `workflow.builtin`）。
+> 合并后 PG 的 `loadVisibleWorkflow` / `builtinCandidateWorkflow` 一并退役。
+>
+> 细节见 plan「第 6 刀的勘察」。
 
 > ## 📌 RFC-359 最新一段（2026-09-17 续 68，**`delete` 合一；修 a889b978c 推的 S-14**）
 >
