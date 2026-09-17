@@ -14,6 +14,7 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   nodeRuns,
   taskCollaborators,
@@ -29,7 +30,6 @@ import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource
 import { FrozenWorkgroupGroupSchema } from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   assertTriggerPreflight,
   triggerSourceFromContext,
@@ -48,11 +48,9 @@ import type {
   ChildWorkgroupLaunchRequest,
 } from '../application/ports/childExecutionLaunchOperations'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
-import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
-import type { ProviderTaskExecutionModule } from '../composition'
 import { childLaunchAdmissionIssue } from '../domain/childLaunchAdmission'
 import { sha256Hex } from '../domain/digest'
-import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
+import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 import {
   type TaskExecutionTransaction,
   withSerializableTaskExecution,
@@ -74,11 +72,26 @@ export interface PostgresqlChildWorkgroupLaunchResources {
 }
 
 export interface PostgresqlChildExecutionLaunchDependencies {
-  readonly db: PostgresqlDatabaseClient
+  /**
+   * RFC-359 AC-1（plan §5hn 批次二 ⑤）：**中立句柄**——两个引擎共用这台子任务铸造机。
+   * 体内唯一与引擎相关的一处是 `engineOf(tx).greatest(...)`（能力矩阵按引擎渲染），
+   * 事务走的已经是中立的 `withSerializableTaskExecution`。
+   */
+  readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
-  readonly executionModule: ProviderTaskExecutionModule
-  readonly finalizeWorkspace: (taskId: string) => Promise<void>
-  readonly log: TaskExecutionTopologyLogger
+  /**
+   * RFC-359 AC-1（plan §5hn 批次二 ⑤）：**装配方交进来的驱动生命周期端口**。
+   *
+   * 此前这里收的是 `executionModule` + `log` + `finalizeWorkspace` 三格，由本文件自己
+   * `createTaskDriverLifecyclePort(...)` 拼——而那一拼把「认领走哪条路」的引擎判断锁死在了
+   * PG 那一侧（`claimPersisted({ intentId })` + 不带 legacy 连接）。SQLite 的那一条是
+   * 进程级单例的 `claim({ db, intentId })` **且**执行上下文要带 `legacyConnection`，
+   * 拼法不同，于是这台铸造机当年只能服务一个引擎。
+   *
+   * 端口化之后这一格由组合根决定（两条拼法本来就并存于 `taskDriverLifecycle.ts`），
+   * 铸造机本身不再有任何引擎判断。这三格全都只用于拼这一个端口，没有别的用途。
+   */
+  readonly lifecycle: TaskDriverLifecyclePort
   readonly workgroup: PostgresqlChildWorkgroupLaunchResources
   readonly id?: () => string
   readonly now?: () => number
@@ -367,17 +380,9 @@ function createCoordinator(
   dependencies: PostgresqlChildExecutionLaunchDependencies,
   request: ChildLaunchRequest,
 ) {
-  const lifecycle = createTaskDriverLifecyclePort({
-    db: dependencies.db,
-    module: dependencies.executionModule,
-    claim: (intentId) => dependencies.executionModule.claimPersisted({ intentId }),
-    persistence: dependencies.persistence,
-    log: dependencies.log,
-    finalizeWorkspace: dependencies.finalizeWorkspace,
-  })
   return new DefaultTaskDriveCoordinator({
     runtime: resolveTaskDriveConfig(request.runtime.runConfig),
-    lifecycle,
+    lifecycle: dependencies.lifecycle,
     repositoryPreparation: skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {
@@ -576,7 +581,23 @@ async function launchPreparedChild(
       ownerUserId: parent.ownerUserId,
       launchOrigin: parent.launchOrigin,
       catalogVisibility: parent.catalogVisibility,
-      triggerContextJson: parent.triggerContextJson,
+      // RFC-359 AC-1（plan §5hn 批次二 ⑤，**合一照出的缺陷**）：触发上下文取**请求上带来的
+      // 运行期那一份**，不是父行那一列。
+      //
+      // 两者不是同一个东西：父行存的是**落库时**的触发上下文，而调度器在运行期会把触发
+      // 定义解析出来的 `contract`（`namespace` / `definitionRef` / `availableFields`）补上去
+      //（`buildChildRuntime(state)` 交下来的就是补过的那一份）。照抄父行那一列，
+      // 子任务的触发上下文就**丢掉整个 `contract` 块**——子 agent 的 prompt 里
+      // `{{event_type}}` 这类字段随之展不开。
+      //
+      // 合并前这条只在 SQLite 那侧成立（`services/task.ts` 写的是 `deps.triggerContext`），
+      // **PostgreSQL 一直在抄父行**；`rfc243-call-workflow` 的「child task atomically inherits
+      // nested context」一合上来就红了。按强侧抬齐：父行没有触发上下文时两侧同为 null
+      //（`state.triggerContext` 本来就派生自父行），有则取补过 `contract` 的那一份。
+      triggerContextJson:
+        request.runtime.triggerContext === undefined
+          ? parent.triggerContextJson
+          : JSON.stringify(request.runtime.triggerContext),
       sourceTerminationBinding: sourceTermination?.binding ?? null,
       sourceTerminationLaunchRev: sourceTermination?.launchRevision ?? null,
       sourceTerminationFence: sourceTermination?.fence ?? null,

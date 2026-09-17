@@ -208,10 +208,12 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       // 账本视野里消失了；这次把它们一并纳入按同一把棘轮记账。
       'application/workgroups/workgroupTurnsDriver.ts': 17,
       'application/workgroups/workgroupTurnPrompts.ts': 3,
-      // RFC-243 §6.3 +2：startWorkgroupTaskFromFrozen（冻结启动面）在同文件内
-      // 复刻 readiness 的 leader 判定与 dw 快照选择——与 fresh 启动同语义、
-      // 不新增 mode 分支散射面（strategies/ 之外唯一属主仍是 launch.ts）。
-      'launch.ts': 3,
+      // RFC-243 §6.3 曾 +2：`startWorkgroupTaskFromFrozen`（冻结启动面）在同文件内复刻
+      // readiness 的 leader 判定与 dw 快照选择。
+      // **RFC-359 AC-1（plan §5hn 批次二 ⑤）3 → 1：那个函数整份删除，棘轮收敛。**
+      // 子任务启动合一之后它的唯一生产消费者（SQLite 那层 87 行转发壳）没了，
+      // 两个引擎共用的铸造机自带 `prepareWorkgroupSubject`——冻结启动面不再有第二份实现。
+      'launch.ts': 1,
       // RFC-359 W4-D19b：房间合一，legacy 的 configActions / room / dwActions 一起退役；
       // 它们的模式分支落到中立房间的这两个文件里，继续按同一把棘轮记账。
       'infrastructure/workgroupTaskRoom.ts': 2,

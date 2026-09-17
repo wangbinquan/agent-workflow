@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:11926675c40d868177bddd34730191c251f06a0068b637b30ebd1274352b4ce4`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:7be21e2ad5bd7a7a5df53a01f5efba1eaa85c9a691f42f7d48325d6e9cd2dd54`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1777 |
+| backend production TS 文件 | 1776 |
 | `services/` 文件 | 316 |
-| `modules/**` 文件 / 非空 context | 1183 / 17 |
+| `modules/**` 文件 / 非空 context | 1182 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -35,8 +35,8 @@
 | `crossContextImports` | 5114 |
 | `facades` | 316 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24716 |
-| `mutationEntrypoints` | 1685 |
+| `moduleSymbolOwners` | 24712 |
+| `mutationEntrypoints` | 1682 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 959 |
 | `transactionExternalEffects` | 252 |
@@ -48,7 +48,7 @@
 | context / layer | 数量 |
 | --- | --- |
 | resource-catalog / infrastructure | 104 |
-| task-execution / infrastructure | 97 |
+| task-execution / infrastructure | 96 |
 | task-execution / application | 87 |
 | resource-catalog / application | 55 |
 | task-execution / composition | 54 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3039 |
-| legacy-inbound | 1369 |
+| legacy-outbound | 3038 |
+| legacy-inbound | 1370 |
 | infrastructure-external | 270 |
 | offered-consumption | 158 |
 | temporary-internal-debt | 92 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3039 |
-| legacy-inbound | 1369 |
+| legacy-outbound | 3038 |
+| legacy-inbound | 1370 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 88 |
 | no-circular | 6 |
@@ -227,8 +227,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2319 |
-| W4-E1 | 820 |
+| W9 | 2320 |
+| W4-E1 | 819 |
 | W4-C | 331 |
 | W4-E0 | 214 |
 | W4 | 193 |

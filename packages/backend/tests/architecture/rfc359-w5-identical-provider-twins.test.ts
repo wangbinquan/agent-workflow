@@ -154,7 +154,11 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：84 → 83。触发器参与者两个引擎合成
       // 一份（`createTaskExecutionTriggerParticipant`），退役
       // `createSqliteTaskExecutionTriggerParticipant`。**是合一不是删覆盖**，分母少一。
-    ).toBeGreaterThanOrEqual(83)
+      // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）：83 → 82。子任务启动两个引擎共用
+      // `createPostgresqlChildExecutionLaunchOperations`，退役
+      // `createSqliteChildExecutionLaunchOperations`（连同整个 87 行的转发壳文件）。
+      // **是合一不是删覆盖**，分母少一。
+    ).toBeGreaterThanOrEqual(82)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

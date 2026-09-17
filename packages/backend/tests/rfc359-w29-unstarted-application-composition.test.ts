@@ -582,8 +582,16 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （5 处条件展开收成普通字段、6 处 `? null : construct(…)` 收成直接构造）。
     // 那些分支在生产上一条都到不了（`cli/start.ts:1480` 在选 provider 之前就无条件建 secretBox），
     // 所以**装配出来的东西不变，只是不再为「测试没传」留退路**；上面的语句数断言没红即为佐证。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）：摘要随**子任务启动两个引擎合一**更新——
+    // 这一层的 `createSqliteTaskExecutionRuntimeParticipants(...)` 多了一格
+    // `childLaunchWorkgroup`（与 PostgreSQL 组合根同名同形，走同一份
+    // `composeWorkgroupLaunchResourceOperations`）。**装配图确实变了，是有意的**：
+    // SQLite 的子任务铸造从 87 行转发壳 → `startExecution` → `startTaskImpl` 改成与
+    // PostgreSQL 共用的那台铸造机，它要一个工作组资源面。
+    // 这一格只在**回退路**上构造（生产交齐 `schedulerDriver` + `taskExecutionReadModels`，
+    // 这整段 runtime 根本不装配，走的是 `composeSqliteTaskExecutionProviderRuntime`）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      '9f05d1bead6df62355b4d6a5b67ef261baed442bdc9521ce725925e2789b0002',
+      'a0fa43596bc378da510df4fac8363dbf90e81a44b7d927aca4ac7c41376ee62c',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。

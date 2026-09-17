@@ -17,6 +17,7 @@ import {
   createPostgresqlChildExecutionLaunchOperations,
   type PostgresqlChildExecutionLaunchDependencies,
 } from '@/modules/task-execution/composition/childExecutionLaunch'
+import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -274,11 +275,18 @@ describe('RFC-349 PostgreSQL child execution launch', () => {
     const dependencies: PostgresqlChildExecutionLaunchDependencies = {
       db: fixture.db,
       persistence,
-      executionModule,
-      async finalizeWorkspace() {
-        trace.push('workspace:finalize')
-      },
-      log: logger(),
+      // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**——`executionModule` /
+      // `log` / `finalizeWorkspace` 三格只用于拼这一个端口，现在由装配方拼好交进来。
+      lifecycle: createTaskDriverLifecyclePort({
+        db: fixture.db,
+        module: executionModule,
+        claim: (intentId) => executionModule.claimPersisted({ intentId }),
+        persistence,
+        log: logger(),
+        async finalizeWorkspace() {
+          trace.push('workspace:finalize')
+        },
+      }),
       workgroup: {
         async loadExistingAgentIds() {
           throw new Error('workgroup resources are not used by workflow launch')

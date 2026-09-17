@@ -9109,7 +9109,10 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:70048a417014b7a273ec",
+            "import:ee4052e939f76db203e4"
+          ],
           "fieldPath": "$method:dispatchReviewNode.$parameter:input.executionContext.intentId",
           "type": "string"
         },
@@ -9303,7 +9306,10 @@
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:70048a417014b7a273ec",
+            "import:ee4052e939f76db203e4"
+          ],
           "fieldPath": "$method:inspectCrossClarify.$parameter:input.executionContext.intentId",
           "type": "string"
         },
@@ -9449,7 +9455,10 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:70048a417014b7a273ec",
+            "import:ee4052e939f76db203e4"
+          ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.executionContext.intentId",
           "type": "string"
         },
@@ -9596,7 +9605,10 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:70048a417014b7a273ec",
+            "import:ee4052e939f76db203e4"
+          ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.executionContext.intentId",
           "type": "string"
         },
@@ -74163,6 +74175,7 @@
         {
           "consumerEdgeIds": [
             "import:647d2f3472f9ceefca7f",
+            "import:7e143b97b6b27d09bf96",
             "import:f2378eb6be03f891eeb7"
           ],
           "fieldPath": "$method:injectForRun.$parameter:input.budget.agent",
@@ -159681,7 +159694,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:11926675c40d868177bddd34730191c251f06a0068b637b30ebd1274352b4ce4",
+  "sourceDigest": "sha256:7be21e2ad5bd7a7a5df53a01f5efba1eaa85c9a691f42f7d48325d6e9cd2dd54",
   "targetContexts": [
     "collaboration",
     "development-automation",

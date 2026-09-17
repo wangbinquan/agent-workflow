@@ -15762,3 +15762,100 @@ PG 那台铸造机要 `{db, persistence, executionModule, finalizeWorkspace, log
 并把那台铸造机的 `db` 形参放宽到中立句柄——它体内唯一的引擎相关处是
 `engineOf(tx).greatest(...)`（能力矩阵），事务走的已经是中立的
 `withSerializableTaskExecution`，两条都不构成障碍。
+
+## §5hn 批次二 ⑤（下）落地　子任务启动：两个引擎共用一台铸造机
+
+`startExecution` 剩两条生产调用路的第一条合掉了。SQLite 此前是 87 行转发壳 →
+`startExecution` → `startTaskImpl`（那台通用启动器同时服务 root / 定时 / webhook / 事件 /
+agent / 工作组），PG 是一台 740 行的专用铸造机；现在两个组合根叫**同一个**工厂。
+
+### 合一的支点：把「驱动生命周期端口」从三格依赖换成一格端口
+
+铸造机原本收 `executionModule` + `log` + `finalizeWorkspace` 三格，**自己**
+`createTaskDriverLifecyclePort(...)` 拼。那一拼把「认领走哪条路」的引擎判断锁死在了 PG 那一侧
+（`claimPersisted({ intentId })`、不带 legacy 连接）；SQLite 那条是进程级单例的
+`claim({ db, intentId })` **且**执行上下文要带 `legacyConnection`，拼法不同，于是这台机器
+当年只能服务一个引擎。
+
+改成收一格 `lifecycle: TaskDriverLifecyclePort`——**两条拼法本来就并存于
+`taskDriverLifecycle.ts`**（`createTaskDriverLifecyclePort` / `createDatabaseTaskDriverLifecyclePort`），
+端口化之后由组合根各取各的，铸造机自己不再有任何引擎判断。这三格原本就只用于拼这一个端口。
+
+`db` 形参同时放宽到中立句柄：体内唯一与引擎相关的一处是 `engineOf(tx).greatest(...)`
+（能力矩阵按引擎渲染），事务走的已经是中立的 `withSerializableTaskExecution`。
+
+### 合一照出一条真缺陷：子任务的触发上下文丢了整个 `contract`
+
+```
+PG（合一前）  triggerContextJson: parent.triggerContextJson      ← 父行**落库时**那一份
+SQLite        triggerContextJson: JSON.stringify(deps.triggerContext) ← **运行期**那一份
+```
+
+两者不是同一个东西：调度器在运行期会把触发定义解析出来的 `contract`
+（`namespace` / `definitionRef` / `availableFields`）补上去再交给子启动
+（`buildChildRuntime(state)` 交下来的就是补过的那一份）。抄父行那一列，子任务就**丢掉整个
+`contract` 块**——子 agent 的 prompt 里 `{{event_type}}` 这类字段随之展不开。
+
+合一当场红在 `rfc243-call-workflow` 的「child task atomically inherits nested context」上。
+按强侧抬齐：`request.runtime.triggerContext ?? parent.triggerContextJson`——父行没有触发上下文时
+两侧同为 null（`state.triggerContext` 本来就派生自父行），有则取补过 `contract` 的那一份。
+
+**判据**：`rfc359-w8-child-launch-conformance` 加一条双引擎用例，夹具刻意让父行存的那份
+**没有** `contract`、运行期那份有，断言子行拿到的是运行期那份。变异实证：改回
+`parent.triggerContextJson`，**两个 lane 同时红**。
+
+### 顺带销账：`startWorkgroupTaskFromFrozen` 整份删除
+
+RFC-243 §6.3 的冻结启动面，唯一生产消费者就是被删掉的那层 SQLite 转发壳；共用的铸造机
+自带 `prepareWorkgroupSubject`。87 行连同 `StartWorkgroupTaskFromFrozenArgs` 一并删除。
+「删除优于 deprecate」——留着就是一份没有消费者的第二实现。
+
+### 装配面怎么接
+
+| 组合根 | `childLaunchWorkgroup` 从哪来 | 生命周期端口 |
+| --- | --- | --- |
+| `composeSqliteTaskExecutionProviderRuntime`（生产） | `dependencies.routeLaunch.workgroup`，与 PG 同形 | `createDatabaseTaskDriverLifecyclePort`（单例 + legacy 连接） |
+| `server.ts` 的 `composeSqliteApplicationDeps`（回退路） | 就地 `composeWorkgroupLaunchResourceOperations({ db, integrity })` | 同上 |
+| `composePostgresqlTaskExecutionProviderRuntime` | `dependencies.routeLaunch.workgroup`（原样） | `createTaskDriverLifecyclePort` + `claimPersisted` |
+
+回退路只在「装配方没交齐 `schedulerDriver` + `taskExecutionReadModels`」时才构造——生产
+（`cli/start.ts`）交齐了，那整段 runtime 根本不装配。
+
+### 账本（全是**收敛**方向）
+
+| 账本 | 变化 |
+| --- | --- |
+| `rfc359-w5-provider-pair-conformance` | 8 → 7（`ChildExecutionLaunchOperations` 销账） |
+| `rfc359-w5-coverage-parity` | 8 → 7（同上，整行消失） |
+| `rfc359-w5-provider-named-file-location` | 37 → 36（`sqliteChildExecutionLaunchOperations.ts` 删除） |
+| `rfc345-resource-acl-facade-compatibility` | 40 → 39（`workgroup/launch.ts → sqlite 壳` 那条边随函数删除出账） |
+| `rfc359-w5-identical-provider-twins` 分母 | 83 → 82 |
+| `rfc359-w5-adapter-production-consumer` 分母 | 79 → 78 |
+| `rfc301` 的 `startTask` 调用点 | `workgroup/launch.ts` 2 → 1 |
+| `rfc217` G5 的 `mode === '` 散射面 | `launch.ts` 3 → 1 |
+| 两条 rfc294 边账本 | **净 0**（新增 `server.ts → composeDatabaseAgentResourceIntegrity` 一条，抵掉被删壳的那条） |
+
+`rfc359-w8-capability-pair-conformance` 的「两本账本互不包含」那条断言改了形状：
+原本要求 `pairs.length > nameBlind.length`（即与 W5 有交集），而唯一那条交集正是
+`ChildExecutionLaunchOperations`，销账后交集归零。改成**逐字钉死交集数 = 0** 并写明
+「交集归零不等于本账本该退役——它此刻看见的 2 对全是 W5 的名字盲区，正是它的本分」。
+
+### 还剩一条 `startExecution` 生产调用路
+
+multipart（`services/multipartTaskStart.ts`）。它与本刀**不同形**：SQLite 先
+`materializeSpace` 预物化、再 `applyUploadsToWorktree`、最后 `startExecution`；
+PG 把 `uploads: {parts, definitions, limits}` 整包交给根内核，由内核 `bufferUploadParts` +
+`validateUploadPlan` + 落盘。合并要先裁决「上传物在哪一步落进工作树」，是设计问题不是接线问题。
+
+### 记一条待裁决：两个引擎的 `finalizeWorkspace` 绑的不是同一个函数
+
+| 引擎 | 绑定 | 判据 |
+| --- | --- | --- |
+| SQLite | `finishClaimedWebhookWorkspacePrune(db, taskId)` | 状态 ∈ {done,canceled} **且** 有 webhook/event 触发 **且** spaceKind ∈ {remote,scratch} **且** `workspace_prune_cause = 'webhook-terminal'` |
+| PostgreSQL | `workspaceMaintenance.finalizeClaimedWorkspace(taskId)` | `workspace_pruning_at IS NOT NULL` **且** 任务已终态（不看 cause、不看 spaceKind） |
+
+也就是说 PG 在驱动释放时会收尾**任何**已认领的工作区清理，SQLite 只收尾 webhook 那一类，
+其余要等下一个小时的 GC tick。`composeWorkspaceMaintenanceCommand` 本身是 provider 中立的、
+两个根都装得起（`cli/start.ts:2176` 已有一个 `bootWorkspaceMaintenance`），所以这不是能力差。
+**本刀不动它**——合一不顺手改收尾语义。是否要把 SQLite 也抬到 `finalizeClaimedWorkspace`，
+需要先量清「驱动释放那一刻真的存在非 webhook 的已认领清理吗」，单独立一刀。

@@ -22,7 +22,11 @@ import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWor
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
-import { createSqliteChildExecutionLaunchOperations } from './sqliteChildExecutionLaunchOperations'
+import { createPostgresqlChildExecutionLaunchOperations } from './postgresqlChildExecutionLaunchOperations'
+import type { PostgresqlChildWorkgroupLaunchResources } from './postgresqlChildExecutionLaunchOperations'
+import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
+import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
+import { createLogger } from '@/util/log'
 
 /**
  * SQLite's provider adapter for the closed runtime participants. The database
@@ -48,10 +52,42 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
   readonly repositoryPublicationTransport: RepositoryPublicationTransport
   /** Bootstrap-selected credential reader; never reconstructed from SQLite here. */
   readonly codeHostConnections?: CodeHostConnectionsService
+  /**
+   * RFC-359 AC-1（plan §5hn 批次二 ⑤）：子任务铸造机的工作组资源面。与 PG 组合根同名一格
+   * （`childLaunchWorkgroup`），交的是路由启动那份 `composeWorkgroupLaunchResourceOperations`
+   * 的产物——两个组合根同一份实现。
+   */
+  readonly childLaunchWorkgroup: PostgresqlChildWorkgroupLaunchResources
 }): TaskExecutionRuntimeParticipants {
   const runtimeComponents = Object.freeze({
     wrapperRuntimeFactory: composeWrapperRuntime,
     mergeRecoveryFactory: composeExecutionMergeRecovery,
+  })
+  // RFC-359 AC-1（plan §5hn 批次二 ⑤）：子任务（call 节点）两个引擎共用同一台铸造机。
+  // 此前 SQLite 这一格是 87 行的转发壳 → `startExecution` → `startTaskImpl`（那台通用启动器
+  // 同时服务 root / 定时 / webhook / 事件 / agent / 工作组），PG 那侧是一台 740 行的专用铸造机。
+  // W8-A 已经把两侧的**门**抬齐（5 道亲子准入 + 冻结定义的启动输入门），批次二 ⑤（上）又把
+  // **落库那几行**钉成了相等面（整行 + 四张卫星表，单侧变异实证过两条）；这里做的是合一本身。
+  //
+  // **引擎差只剩这一格**：驱动生命周期端口的拼法——SQLite 绑进程级单例的
+  // `claim({ db, intentId })` 且执行上下文要带 `legacyConnection`（`services/task` 那条启动路
+  // 尚未退役的残留），PG 绑实例的 `claimPersisted({ intentId })`。两条拼法本来就并存于
+  // `taskDriverLifecycle.ts`，端口化之后由组合根各取各的，铸造机自己不再有引擎判断。
+  //
+  // `finalizeWorkspace` 逐字沿用 SQLite 今天这条路上用的那一个（`services/task.ts` 的协调器
+  // 装的就是它）——本刀是合一，不顺手改收尾语义。两个引擎的 finalize 绑的不是同一个函数，
+  // 那条差异单独记在 plan 里待裁决。
+  const childLaunch = createPostgresqlChildExecutionLaunchOperations({
+    db: input.db,
+    persistence: input.persistence,
+    lifecycle: createDatabaseTaskDriverLifecyclePort({
+      db: input.db,
+      log: createLogger('task'),
+      finalizeWorkspace: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(input.db, taskId)
+      },
+    }),
+    workgroup: input.childLaunchWorkgroup,
   })
 
   const drive: TaskExecutionRuntimeParticipants['drive'] = Object.freeze({
@@ -72,7 +108,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
           // 装配由 bootstrap 交进来——infrastructure 自己 import composition 会把 bootstrap 的
           // 职责下沉一层（RFC-328 的「装配唯一入口」守卫盯的就是这条）。
           workgroupTurns: input.workgroupTurns,
-          childLaunch: createSqliteChildExecutionLaunchOperations(input.db),
+          childLaunch,
           dynamicWorkflow: input.dynamicWorkflow,
           processConcurrencyScope: input.db,
           identityAccess: input.identityAccess,

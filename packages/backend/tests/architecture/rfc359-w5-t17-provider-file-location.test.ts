@@ -148,7 +148,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts',
-  'modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts',
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
   'modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',

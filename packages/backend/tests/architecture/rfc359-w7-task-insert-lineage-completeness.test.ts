@@ -61,7 +61,7 @@ const REQUIRED_COLUMNS = ['executionLineageId', 'lineageSlotPathJson', 'launchOr
 const TASK_INSERT_SITES: readonly string[] = [
   // RFC-359 W11：行号从 579 挪到 580——同文件里祖先链的分支时间戳回填改调能力矩阵的
   // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
-  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:548 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:553 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:110 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 788 → 813——延后仓库准备的判据与注释加在
   // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。

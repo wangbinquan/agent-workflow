@@ -345,11 +345,18 @@ describe('RFC-359 W8 —— 能力级成对适配器账本', () => {
     expect(pairs.length).toBeLessThanOrEqual(CAPABILITY_PAIR_CEILING)
   })
 
-  test('两本账本互不包含——所以两本都要留着', () => {
-    // 有 W5 看得见、本账本也看得见的（交集），也有只有本账本看得见的（名字盲）。
-    // 如果哪天名字盲清零，这条会红——那正是该退役本账本的信号，届时显式删除而不是让它空转。
+  test('本账本仍看得见 W5 看不见的东西，且与 W5 的交集逐字对账', () => {
+    // 本账本存在的理由是**名字盲**：`classify()` 按文件名词干配对，同名文件里的一对、
+    // 或两侧命名不对称的一对，W5 一个也看不见。名字盲清零才是该退役本账本的信号——
+    // 届时显式删除，而不是让它空转。
     expect(nameBlind.length).toBeGreaterThan(0)
-    expect(pairs.length).toBeGreaterThan(nameBlind.length)
+    // 交集（两本都看得见的对）逐字钉死。**涨了**说明又长出一对两侧都能被文件名认出来的分叉；
+    // **跌了**说明合一发生了，把这个数一起改小。
+    //
+    // RFC-359 AC-1（plan §5hn 批次二 ⑤）1 → 0：唯一那条交集是
+    // `ChildExecutionLaunchOperations`，已随子任务启动合一销账（SQLite 那半 87 行转发壳整份删除）。
+    // 交集归零**不等于**本账本该退役——它此刻看见的 2 对全是 W5 的名字盲区，正是它的本分。
+    expect(pairs.length - nameBlind.length).toBe(0)
   })
 
   test('灾难恢复那一对确实是被两本既有账本同时漏掉的那一对', () => {

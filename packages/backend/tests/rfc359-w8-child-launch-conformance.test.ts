@@ -65,7 +65,10 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 // 两侧实现各值 import 一条：这一对的对拍见证判据就锁在这里（`rfc359-w5-provider-pair-conformance`），
 // 走 composition 的再导出会让这份对拍在账本里看不见。
 import { createPostgresqlChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations'
-import { createSqliteChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations'
+import {
+  createDatabaseTaskDriverLifecyclePort,
+  createTaskDriverLifecyclePort,
+} from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type {
   ChildExecutionLaunchOperations,
   ChildWorkflowLaunchRequest,
@@ -75,7 +78,6 @@ import type {
   TaskExecutionTopologyLogger,
 } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { DbClient } from '@/db/client'
 import type { MaterializedSpace } from '@/services/task'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -182,6 +184,24 @@ const childPayload: StartTask = {
   autoCommitPush: false,
 }
 
+/**
+ * 父行**落库那一份**触发上下文：故意不带 `contract`。
+ * 运行期那一份（调度器把触发定义解析出来后补上 `contract` 再交给子启动）见 `RUNTIME_TRIGGER_CONTEXT`。
+ */
+const PARENT_STORED_TRIGGER_CONTEXT = {
+  trigger: { webhook: { event_type: 'note' } },
+}
+
+/** 调度器交下来的运行期那一份——比父行那一列多一个 `contract` 块。 */
+const RUNTIME_TRIGGER_CONTEXT = {
+  trigger: { webhook: { event_type: 'note' } },
+  contract: {
+    namespace: 'webhook',
+    definitionRef: { id: 'code-host.webhook.note', revision: 1 },
+    availableFields: ['event_type'],
+  },
+}
+
 interface SeedOverrides {
   readonly parentStatus?: TaskStatus
   readonly parentRunStatus?: NodeRunStatus
@@ -191,6 +211,7 @@ interface SeedOverrides {
   readonly parentOwnerUserId?: string | null
   readonly gitUserName?: string | null
   readonly gitUserEmail?: string | null
+  readonly parentTriggerContextJson?: string
 }
 
 async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}): Promise<void> {
@@ -235,6 +256,9 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
       invocationDepth: overrides.parentInvocationDepth ?? 0,
       gitUserName: overrides.gitUserName ?? null,
       gitUserEmail: overrides.gitUserEmail ?? null,
+      ...(overrides.parentTriggerContextJson === undefined
+        ? {}
+        : { triggerContextJson: overrides.parentTriggerContextJson }),
       rootTaskId: parent.id,
       executionLineageId: parent.id,
       // **必须显式写**（RFC-359 AC-1，plan §5hn 批次二 ⑤ 实撞）：这一列留空时两个引擎的父行
@@ -269,6 +293,7 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
 }
 
 interface LaunchOverrides {
+  readonly triggerContext?: Record<string, unknown>
   readonly invocationDepth?: number
   readonly frozenSnapshotJson?: string
   readonly actorUserId?: string
@@ -297,13 +322,41 @@ function workflowRequest(
     parentNodeRunId: PARENT_RUN_ID,
     invocationDepth: overrides.invocationDepth ?? 1,
     materializedSpace: inheritedSpace(CHILD_TASK_ID),
-    runtime: { runConfig: { appHome: '/app-home' }, actorUserId: OWNER_ID },
+    runtime: {
+      runConfig: { appHome: '/app-home' },
+      actorUserId: OWNER_ID,
+      ...(overrides.triggerContext === undefined
+        ? {}
+        : { triggerContext: overrides.triggerContext as never }),
+    },
     schedulerDriver: driver,
     workflowId: CHILD_WORKFLOW_ID,
     frozenWorkflowVersion: 1,
     payload: overrides.payload ?? childPayload,
     frozenSnapshotJson: overrides.frozenSnapshotJson ?? JSON.stringify(LATEST_DEFINITION),
     refClosureJson: null,
+  }
+}
+
+/** 工作流子启动不碰工作组资源面——碰了就该当场炸，而不是静默走一条别的路。 */
+function unusedWorkgroupResources() {
+  const refuse = () => {
+    throw new Error('workgroup resources are not used by workflow launch')
+  }
+  return {
+    async loadExistingAgentIds(): Promise<readonly string[]> {
+      return refuse()
+    },
+    async ensureHostWorkflow(): Promise<void> {
+      return refuse()
+    },
+    integrity: {
+      [agentLaunchResourceIntegrityParticipantBrand]:
+        'agent-launch-resource-integrity-participant' as const,
+      async assertUsable(): Promise<void> {
+        return refuse()
+      },
+    },
   }
 }
 
@@ -317,42 +370,63 @@ interface LaunchTarget {
   settle(): Promise<void>
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ⑤）—— **这一对已经合一**：两个 lane 造的是**同一台**
+ * 铸造机，只有装配方交进去的驱动生命周期端口不同（SQLite 绑进程级单例的
+ * `claim({ db, intentId })` 并带 `legacyConnection`；PG 绑实例的 `claimPersisted({ intentId })`）。
+ * 这两条拼法本来就并存于 `taskDriverLifecycle.ts`，两个组合根各取各的。
+ *
+ * 于是这份对拍的本分也换了（与批次二 ④ 记的同一条规律）：合并前它见证「两侧是不是同一个判断」，
+ * 合并后它锁「将来别再分叉」——想证明它还活着，变异必须只动**一侧**（见本文件行级比对那条
+ * 用例的 plan 记录：单侧把 `catalogVisibility` 写死 / 把 `task_repos.working_branch` 改掉，都当场红）。
+ */
 function operationsFor(harness: ProviderHarness): LaunchTarget {
-  if (harness.capabilities.isolation === 'exclusive') {
-    return {
-      operations: createSqliteChildExecutionLaunchOperations(harness.db as unknown as DbClient),
-      async settle() {},
-    }
-  }
   const db = harness.db as unknown as PostgresqlDatabaseClient
   const persistence = createTaskExecutionPersistence(db)
   let finalized = false
+  if (harness.capabilities.isolation === 'exclusive') {
+    return {
+      operations: createPostgresqlChildExecutionLaunchOperations({
+        db,
+        persistence,
+        // SQLite 组合根那一条（`sqliteTaskExecutionRuntimeParticipants.ts` 逐字同形）。
+        lifecycle: createDatabaseTaskDriverLifecyclePort({
+          db,
+          log: logger(),
+          async finalizeWorkspace() {
+            finalized = true
+          },
+        }),
+        workgroup: unusedWorkgroupResources(),
+      }),
+      async settle() {
+        for (let attempt = 0; attempt < 200 && !finalized; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+      },
+    }
+  }
+  const executionModule = createProviderTaskExecutionModule({
+    daemonGeneration: 'daemon-rfc359-w8',
+    persistence,
+  })
   const operations = createPostgresqlChildExecutionLaunchOperations({
     db,
     persistence,
-    executionModule: createProviderTaskExecutionModule({
-      daemonGeneration: 'daemon-rfc359-w8',
+    // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**。PG 这一侧绑实例的
+    // `claimPersisted({ intentId })`；SQLite 组合根绑进程级单例的 `claim({ db, intentId })`
+    // 并带 `legacyConnection`——两条拼法本来就并存于 `taskDriverLifecycle.ts`。
+    lifecycle: createTaskDriverLifecyclePort({
+      db,
+      module: executionModule,
+      claim: (intentId) => executionModule.claimPersisted({ intentId }),
       persistence,
+      log: logger(),
+      async finalizeWorkspace() {
+        finalized = true
+      },
     }),
-    async finalizeWorkspace() {
-      finalized = true
-    },
-    log: logger(),
-    workgroup: {
-      async loadExistingAgentIds() {
-        throw new Error('workgroup resources are not used by workflow launch')
-      },
-      async ensureHostWorkflow() {
-        throw new Error('workgroup resources are not used by workflow launch')
-      },
-      integrity: {
-        [agentLaunchResourceIntegrityParticipantBrand]:
-          'agent-launch-resource-integrity-participant',
-        async assertUsable() {
-          throw new Error('workgroup resources are not used by workflow launch')
-        },
-      },
-    },
+    workgroup: unusedWorkgroupResources(),
   })
   return {
     operations,
@@ -489,6 +563,37 @@ describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHa
       mintedChildRows.get('postgresql'),
       '两个引擎铸出来的子任务行 / 卫星行不一致（plan §5hn 批次二 ⑤）',
     ).toEqual(mintedChildRows.get('sqlite'))
+  })
+
+  // RFC-359 AC-1（plan §5hn 批次二 ⑤）—— 触发上下文取**运行期那一份**，不是父行那一列。
+  //
+  // 为什么这条测试存在：合一这一对时 `rfc243-call-workflow` 的「child task atomically inherits
+  // nested context」当场红了，追下去是一条真缺陷——PG 的铸造机写的是 `parent.triggerContextJson`
+  //（**落库时**那一份），而调度器在运行期会把触发定义解析出来的 `contract`
+  //（`namespace` / `definitionRef` / `availableFields`）补上去再交下来。抄父行那一列，
+  // 子任务就丢掉整个 `contract` 块，子 agent prompt 里 `{{event_type}}` 这类字段随之展不开。
+  // 合并前这条只在 SQLite 那侧成立，**PostgreSQL 一直在抄父行**。
+  //
+  // 夹具刻意把两者错开：父行存的那份**没有** `contract`，运行期那份有。断言「子行拿到的是
+  // 运行期那份」，于是「抄父行」这个实现当场红——两个引擎同码同判，将来也不会有一侧偷偷抄回去。
+  test('子任务继承的是**运行期**触发上下文（含 contract），不是父行那一列', async () => {
+    await seed(harness.db, {
+      parentTriggerContextJson: JSON.stringify(PARENT_STORED_TRIGGER_CONTEXT),
+    })
+    expect(await launchError(harness, { triggerContext: RUNTIME_TRIGGER_CONTEXT })).toBeNull()
+    const row = (
+      await harness.db
+        .select({ triggerContextJson: tasks.triggerContextJson })
+        .from(tasks)
+        .where(eq(tasks.id, CHILD_TASK_ID))
+        .limit(1)
+    )[0]
+    expect(
+      row?.triggerContextJson === undefined || row.triggerContextJson === null
+        ? null
+        : (JSON.parse(row.triggerContextJson) as unknown),
+      '子任务必须拿到补过 contract 的那一份——抄父行会把 contract 整块丢掉',
+    ).toEqual(RUNTIME_TRIGGER_CONTEXT)
   })
 
   // 两侧共有的准入：父任务不存在。

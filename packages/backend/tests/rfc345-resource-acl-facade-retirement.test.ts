@@ -591,13 +591,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workgroup/launch.ts',
-    'modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts',
-    ['startWorkgroupTaskFromFrozen'],
-    'child workgroup launch',
-    REMOVE_OWNERS.childExecutionLaunch,
-  ),
-  edge(
-    'services/workgroup/launch.ts',
     'services/execution/executor.ts',
     ['startWorkgroupTask'],
     'executor workgroup launch',

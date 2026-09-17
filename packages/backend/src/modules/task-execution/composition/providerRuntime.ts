@@ -183,7 +183,9 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
 > {
   readonly runtime: Omit<
     Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0],
-    'db' | 'persistence' | 'codeHostConnections'
+    // RFC-359 AC-1（plan §5hn 批次二 ⑤）：`childLaunchWorkgroup` 与 PostgreSQL 那一支同形——
+    // 由本组合根从 `routeLaunch.workgroup` 取，装配方不必交第二份。
+    'db' | 'persistence' | 'codeHostConnections' | 'childLaunchWorkgroup'
   > &
     Required<
       Pick<
@@ -219,6 +221,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
     db,
     persistence,
     ...dependencies.runtime,
+    childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
   })
   const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
   const routeLaunch = createSqliteTaskRouteLaunchOperations({

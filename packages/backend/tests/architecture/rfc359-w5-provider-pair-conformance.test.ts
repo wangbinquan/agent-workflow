@@ -119,7 +119,6 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // 什么样」，W9 这份问的是门后的**落盘结果**：崩溃到收敛之间账面代际变了（用户又发了一版 /
   // 删了技能 / 库更旧），live 目录里最后是哪一代内容。判据缺口 13b 就是被它照出来并销掉的。
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — verified by rfc359-w8-resource-package-maintenance-conformance.test.ts, rfc359-w9-resource-package-skill-recovery-conformance.test.ts',
-  'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite + postgresql — verified by rfc359-w8-child-launch-conformance.test.ts',
   // RFC-359 W12：共同流程和每目标事务 atom 已合一，两个 applyOne 副本退役。
   // 留下两侧既有的提交后事件/停止位置与 SQLite 无 driver 收尾机制，真实对拍继续锁定。
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — verified by rfc359-w12-source-termination-atom.test.ts, rfc359-w8-source-termination-conformance.test.ts',
@@ -226,7 +225,14 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
  * 正是同文件对，所以合掉它这个数一动不动。要按 §5fq 的判据把 AC-1 走完，**同文件对必须
  * 进入某个账本**，否则「还剩几对」永远只数得到一半。
  */
-export const PROVIDER_PAIR_COUNT = 8
+// RFC-359 AC-1（plan §5hn 批次二 ⑤）8 → 7：`ChildExecutionLaunchOperations` **销账**。
+// SQLite 那半是 87 行转发壳 → `startExecution` → `startTaskImpl`，PG 那半是 740 行专用铸造机；
+// 现在两个组合根叫**同一个**工厂，差别只剩装配方交进去的驱动生命周期端口（认领走哪条路 +
+// 要不要带 legacy 连接），那不是第二份实现。合一当场照出一条真缺陷：PG 的铸造机把子任务的
+// 触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块（子 agent prompt 里
+// `{{event_type}}` 随之展不开）。见证测试 `rfc359-w8-child-launch-conformance` 留任，
+// 本分从「见证分叉」翻成「锁住合一」。
+export const PROVIDER_PAIR_COUNT = 7
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

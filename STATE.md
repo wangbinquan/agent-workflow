@@ -2,6 +2,42 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 57，**子任务启动合一；合一当场照出 PG 丢掉触发上下文的 contract**）
+>
+> 本段待推：§5hn 批次二 ⑤（下）。**CI 在 `7720f9d4f` 已绿**（续 55/56 三提一起过）。
+>
+> `startExecution` 剩两条生产调用路，**子任务这条合掉了**。SQLite 此前是 87 行转发壳 →
+> `startExecution` → `startTaskImpl`，PG 是一台 740 行专用铸造机；现在两个组合根叫同一个工厂。
+>
+> **合一的支点**：铸造机原本收 `executionModule` + `log` + `finalizeWorkspace` 三格、**自己**拼
+> 驱动生命周期端口——那一拼把「认领走哪条路」的引擎判断锁死在 PG 那一侧。改成收一格
+> `lifecycle: TaskDriverLifecyclePort`（两条拼法本来就并存于 `taskDriverLifecycle.ts`），
+> 由组合根各取各的，铸造机自己不再有引擎判断。`db` 同时放宽到中立句柄。
+>
+> **照出的真缺陷**：PG 的铸造机写 `triggerContextJson: parent.triggerContextJson`（父行**落库时**
+> 那一份），而调度器在运行期会把触发定义解析出的 `contract`（`namespace` / `definitionRef` /
+> `availableFields`）补上去再交下来。抄父行 ⇒ 子任务**丢掉整个 `contract` 块**，子 agent prompt
+> 里 `{{event_type}}` 这类字段展不开。按强侧抬齐 + 双引擎用例（夹具刻意让父行那份没有
+> `contract`、运行期那份有）；变异实证：改回抄父行，**两个 lane 同时红**。
+>
+> **顺带销账**：`startWorkgroupTaskFromFrozen`（RFC-243 §6.3 冻结启动面，87 行）唯一生产消费者
+> 就是被删的那层壳，整份删除。账本全是收敛方向：成对适配器 8 → 7、provider 命名文件 37 → 36、
+> rfc345 兼容边 40 → 39、孪生分母 83 → 82、适配器分母 79 → 78、`startTask` 调用点少一处。
+> 两条 rfc294 边账本**净 0**，不需要 allowGrowth。
+>
+> **还剩 multipart 那一条**，它与本刀**不同形**：SQLite 先预物化再写上传物再启动，PG 把
+> `uploads` 整包交给内核由内核落盘。合并要先裁决「上传物在哪一步落进工作树」，是设计问题。
+>
+> **记一条待裁决**（plan 有表）：两个引擎驱动释放时的 `finalizeWorkspace` 绑的不是同一个函数——
+> PG 收尾**任何**已认领的工作区清理，SQLite 只收尾 `webhook-terminal` 那一类，其余等下一个
+> 小时的 GC tick。中立实现两个根都装得起，不是能力差。本刀不动它（合一不顺手改收尾语义）。
+>
+> 证据：子任务对拍 **34/34 双引擎**；call 全家 **86/86**；架构守卫 + 九个根目录守卫 **781/781**；
+> 半径 184 个文件分八片跑完全绿（**单进程塞 45 个文件会自造假红**，见 dev-gotchas 既有条目）；
+> tsc 0 / eslint 0。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ⑤（下）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 56，**子任务对拍的正向对照一直是零预言力；顺带修 627290a94 的第三格红**）
 >
 > 本段待推：§5hn 批次二 ⑤（上）+ W29 摘要重钉（已单独推 `33b5674ef`）。

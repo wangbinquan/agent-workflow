@@ -20,7 +20,15 @@ import { createWorkgroupClarifyAskGate } from '../../src/modules/collaboration/p
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTurnsOperations } from '../../src/modules/resource-catalog/composition/workgroupTurns'
 import { composeWorkgroupHostLedgerParticipantFactory } from '../../src/modules/task-execution/composition/workgroupHostLedger'
-import { createSqliteChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations'
+import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
+import { createPostgresqlChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations'
+import { createDatabaseTaskDriverLifecyclePort } from '../../src/modules/task-execution/infrastructure/taskDriverLifecycle'
+import { createTaskExecutionPersistence as createChildPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
+import { finishClaimedWebhookWorkspacePrune } from '../../src/platform/persistence/sqlite/systemWorkspaceGc'
+import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { createLogger } from '../../src/util/log'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { composeDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { buildWorkflowValidationContext } from '../../src/services/workflow.validator'
 import type { CodeHostConnectionsService } from '../../src/services/codeHost/connections'
@@ -62,6 +70,21 @@ export function createTaskExecutionTestIdentity(db: DbClient) {
   })
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ⑤）：子任务铸造机的工作组资源面。
+ * 与 `server.ts` 回退路同形——走**同一份** `composeWorkgroupLaunchResourceOperations`，
+ * 别在测试里手拼 ACL 读法（批次二 ① 实撞过：手拼的那版认不出委派 actor，PG 上 500）。
+ */
+export function composeTestChildLaunchWorkgroup(db: ProviderNeutralDatabase) {
+  return composeWorkgroupLaunchResourceOperations({
+    db,
+    integrity: composeDatabaseAgentResourceIntegrity({
+      db,
+      authorization: composeResourceCatalogFor({ db }).authorization,
+    }).launch,
+  })
+}
+
 /** Shared direct-runtime helper: test schedulers use the same admitted owner. */
 export function composeTaskExecutionTestRuntime(
   db: DbClient,
@@ -73,6 +96,7 @@ export function composeTaskExecutionTestRuntime(
     readModels: persistence.reads,
     participants: createSqliteTaskExecutionRuntimeParticipants({
       db,
+      childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
       identityAccess: identity.resources,
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db),
@@ -206,6 +230,7 @@ export function runTaskWithRealTestTopology(
     readModels: persistence.reads,
     participants: createSqliteTaskExecutionRuntimeParticipants({
       db: options.db,
+      childLaunchWorkgroup: composeTestChildLaunchWorkgroup(options.db),
       identityAccess,
       memoryInjectionQueries,
       collaborationRuntime: createCollaborationRuntimeMechanics(options.db),
@@ -244,7 +269,20 @@ export function runTaskWithRealTestTopology(
           }),
           createWorkgroupClarifyAskGate(options.db),
         ),
-      childLaunch: options.childLaunch ?? createSqliteChildExecutionLaunchOperations(options.db),
+      childLaunch:
+        options.childLaunch ??
+        createPostgresqlChildExecutionLaunchOperations({
+          db: options.db,
+          persistence: createChildPersistence(options.db),
+          lifecycle: createDatabaseTaskDriverLifecyclePort({
+            db: options.db,
+            log: createLogger('task'),
+            finalizeWorkspace: async (taskId) => {
+              await finishClaimedWebhookWorkspacePrune(options.db, taskId)
+            },
+          }),
+          workgroup: composeTestChildLaunchWorkgroup(options.db),
+        }),
       dynamicWorkflow,
       processConcurrencyScope: options.processConcurrencyScope ?? options.db,
       repositoryPublicationTransport,

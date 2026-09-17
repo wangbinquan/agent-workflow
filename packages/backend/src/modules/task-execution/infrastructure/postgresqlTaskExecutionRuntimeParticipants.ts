@@ -19,6 +19,7 @@ import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecu
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
 import { composeExecutionMergeRecovery } from '../composition/executionMergeRecovery'
 import { createProviderTaskExecutionModule, type ProviderTaskExecutionModule } from '../composition'
+import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { driveTaskEngineApplication } from '../composition/taskEngineApplication'
 import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import { composeWrapperRuntime } from '../composition/wrapperRuntime'
@@ -92,9 +93,16 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
   const childLaunch = createPostgresqlChildExecutionLaunchOperations({
     db,
     persistence,
-    executionModule,
-    finalizeWorkspace: dependencies.finalizeWorkspace,
-    log: dependencies.log,
+    // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**，认领走哪条路由组合根决定。
+    // PG 这一侧绑实例的 `claimPersisted({ intentId })`，且执行上下文不带 legacy 连接。
+    lifecycle: createTaskDriverLifecyclePort({
+      db,
+      module: executionModule,
+      claim: (intentId) => executionModule.claimPersisted({ intentId }),
+      persistence,
+      log: dependencies.log,
+      finalizeWorkspace: dependencies.finalizeWorkspace,
+    }),
     workgroup: dependencies.childLaunchWorkgroup,
   })
   const runtimeComponents = Object.freeze({

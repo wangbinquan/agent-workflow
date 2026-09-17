@@ -101,6 +101,7 @@ import {
   composeResourceCatalogFor,
   type ProviderResourceCatalogComposition,
 } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { type ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import {
@@ -1953,6 +1954,22 @@ export function composeSqliteApplicationDeps(
             },
             identityAccess,
             repositoryPublicationTransport: repositoryBootstrap.repositoryPublicationTransport,
+            // RFC-359 AC-1（plan §5hn 批次二 ⑤）：子任务（call 节点）改走与 PostgreSQL 共用的
+            // 那台铸造机，它的工作组资源面走**同一份** `composeWorkgroupLaunchResourceOperations`
+            // ——别在这里手拼 ACL 读法（批次二 ① 实撞：按 PG daemon 抄成「把 actor 投影成
+            // direct authority 再查目录」，认不出定时 / webhook 的委派 actor，当场 500）。
+            //
+            // 这一格只在**回退路**上构造：生产（`cli/start.ts`）交齐 `schedulerDriver` +
+            // `taskExecutionReadModels`，这整段 runtime 根本不装配，走的是
+            // `composeSqliteTaskExecutionProviderRuntime`，那里直接复用 `routeLaunch.workgroup`。
+            // 这里的资源目录 / 完整性都是**无状态的库读端口**，与本文件 2060 行那一处同形。
+            childLaunchWorkgroup: composeWorkgroupLaunchResourceOperations({
+              db: deps.db,
+              integrity: composeDatabaseAgentResourceIntegrity({
+                db: deps.db,
+                authorization: composeResourceCatalogFor({ db: deps.db }).authorization,
+              }).launch,
+            }),
           }),
           readModels: taskExecutionReadModels,
         })

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1777,
+    "backendFiles": 1776,
     "frontendFiles": 622,
     "legacyFiles": 594,
-    "moduleFiles": 1183,
-    "productionFiles": 2554,
+    "moduleFiles": 1182,
+    "productionFiles": 2553,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24716
+    "symbolsIncludingFileRoots": 24712
   },
   "entries": [
     {
@@ -93088,30 +93088,6 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#startWorkgroupTaskFromFrozen",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "startWorkgroupTaskFromFrozen",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#StartWorkgroupTaskFromFrozenArgs",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "StartWorkgroupTaskFromFrozenArgs",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#WorkgroupRuntimeConfigSource",
       "removeAfterWave": null,
       "status": "current-module",
@@ -129752,30 +129728,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "listSourceTerminationTargets",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts#createSqliteChildExecutionLaunchOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteChildExecutionLaunchOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -297269,5 +297221,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:11926675c40d868177bddd34730191c251f06a0068b637b30ebd1274352b4ce4"
+  "sourceDigest": "sha256:7be21e2ad5bd7a7a5df53a01f5efba1eaa85c9a691f42f7d48325d6e9cd2dd54"
 }

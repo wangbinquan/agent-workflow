@@ -108,7 +108,11 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       'services/execution/executor.ts': 1,
       'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts': 1,
       'services/task.ts': 1,
-      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 2,
+      // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）2 → 1：`startWorkgroupTaskFromFrozen`
+      // （RFC-243 §6.3 的冻结启动面）整份删除——子任务启动两个引擎合一之后它的唯一生产
+      // 消费者（SQLite 那层 87 行转发壳）没了，共用的铸造机自带 `prepareWorkgroupSubject`。
+      // 又少一个 `startTask` 调用点，正是这条棘轮要的方向。
+      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
     })
   })
 

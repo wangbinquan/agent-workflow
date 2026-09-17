@@ -84,9 +84,8 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 现在是「合一前存量格式的读回侧」，它的 3/2 由 `rfc359-w5-artifact-format-portability`
   // 的 12 格矩阵与回落链判据一起盯着。
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 3/2, postgresql 4/3',
-  // RFC-359 W8：两侧各 +1 ref —— `rfc359-w8-runtime-participants-conformance.test.ts` 的
-  // 不合一判定用源码文本钉住了「drive 里两侧各挂一台子任务启动引擎」这条锚点。
-  'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite 6/2, postgresql 8/1',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑤）：**这一对整行销账**——SQLite 那半（87 行转发壳）
+  // 已删除，两个组合根叫同一个工厂，`classify()` 再也配不出这一对。
   // RFC-359 W8：双引擎对拍 `rfc359-w8-source-termination-conformance.test.ts` 把两侧各 +1/+1。
   // RFC-359 W10：SQLite 侧再 +1 ref / +1 drive —— 三笔 `dbTxSync` 转成中立事务之后，
   // `rfc359-w10-task-execution-sync-transaction-cutover.test.ts` 在**两个引擎上都构造这一个**
@@ -99,7 +98,12 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 直接 import 各少一条，但 factory 的返回对象驱动同一真实任务；不以直接引用数冒充行为覆盖。
   // W12 第十三批：完整 dynamicWorkflow 类型负例新增 PG participants 引用；
   // ref 5 → 6，drive 仍 1，不能把纯类型证明记成新增直接行为驱动。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 10/3, postgresql 6/1',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑤）：`10/3 → 11/3`。子任务启动合一之后，
+  // 参与者这一对的 SQLite 侧多了一处引用——`rfc359-w8-child-launch-conformance` 的 SQLite lane
+  // 现在按 SQLite 组合根那条拼法造端口（`createDatabaseTaskDriverLifecyclePort`），
+  // 于是它提到了这一侧的模块。**倒挂差 4 → 5，但这一格是记账不是倾斜**：涨的那条引用
+  // 恰恰来自一份 `describeEachProvider` 的双引擎对拍，它同时喂着两侧。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 11/3, postgresql 6/1',
   // RFC-359 AC-1（plan §5hh）：`postgresql 5/1 → 6/2`。新增的那次**驱动**是
   // `rfc359-w5-kernel-launch-provider-parity`——它在**两个引擎上各真启动一次**启动内核。
   // 账本按**符号名**归边，而这台内核顶着 `Postgresql` 前缀（它只服务一条启动路，
@@ -198,7 +202,9 @@ export const REFERENCE_GAP_THRESHOLD = 3
  */
 export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359：两条 intent apply 的倒挂随合一一起消失（见 `COVERAGE_PARITY_LEDGER` 的注释）。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 10 vs 6',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑤）：10 vs 6 → 11 vs 6，来源见上一格的注释
+  //（双引擎对拍的 SQLite lane 改按组合根那条拼法造端口）。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 11 vs 6',
   // 同上（§5hh）：差额 5 → 6 来自那次双引擎的内核启动，不是新的单侧倾斜。
   // RFC-359 AC-1（plan §5hi）：6 → 7，来源同上（SQLite 两个根改用这台内核）。
   // RFC-359 AC-1（plan §5hn 批次一）：7 → 8，来源同上。
