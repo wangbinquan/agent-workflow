@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1675,
+    "entries": 1672,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -31216,77 +31216,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts#applyRepairOption",
-      "missingControls": [
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts#applyRepairOption",
-      "symbol": "applyRepairOption",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts#ApplyRepairOptionArgs",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts#ApplyRepairOptionArgs",
-      "symbol": "ApplyRepairOptionArgs",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/types.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/types.ts#ApplyResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/types.ts#ApplyResult",
-      "symbol": "ApplyResult",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
@@ -40019,7 +39948,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727",
+  "sourceDigest": "sha256:d9d506b7e819d2da366fd8b2c42e9f05a5d37d68499ed14213928c3ad89625a0",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -40131,7 +40060,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 156,
+      "durableWriterSites": 154,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -42471,38 +42400,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
         "symbol": "setTaskStatus"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "apply",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts#223:nodeRunOutputs",
-        "line": 223,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts#R1_APPROVE_RUN",
-        "requiredBrandedProof": "TerminalMaintenanceClaim+MaintenanceExecutionFence",
-        "revisionPredicate": "exact-maintenance-fence-claim-and-durable-cutoff",
-        "symbol": "R1_APPROVE_RUN"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "apply",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts#236:nodeRunOutputs",
-        "line": 236,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts#R1_APPROVE_RUN",
-        "requiredBrandedProof": "TerminalMaintenanceClaim+MaintenanceExecutionFence",
-        "revisionPredicate": "exact-maintenance-fence-claim-and-durable-cutoff",
-        "symbol": "R1_APPROVE_RUN"
       },
       {
         "allowedTables": [

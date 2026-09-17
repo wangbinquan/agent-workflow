@@ -16846,3 +16846,82 @@ regrouping pass`，`花了 182ms`（预算 150ms）。本刀改的是修复选�
 
 两侧各留 2.5 倍以上。还原生产文件后 `git diff` 逐字为空、用例两条全绿。
 通用教训落 `docs/dev-gotchas.md` §测试 / CI，backlog 那条标记已收。
+
+## 盘后第 8 刀落地　`repairOptions` / `applyRepair` / 自动修复循环合一——**并照出三处真分叉**
+
+三条基线（注册表元数据 / preflight / 准入错误码）都证明「合并安全」之后，这一步做真合并：
+**留 PG 那份**（在正确模块、功能完整——它的 apply 分支覆盖全部 14 条规则的每个选项，
+且早被证明可移植到 SQLite 库上），退役 classic 那份
+（`platform/persistence/sqlite/taskLifecycleRepair.ts` + 17 个 `options-*.ts` + `services/lifecycleRepair*` 门面，共 34 个文件）。
+
+### 合并的**证据步**：把 classic 的 3030 行行为断言搬到留下的那份上
+
+合并前只有三条纯门判据在对拍，行为面从没比过。所以先做一件有信息量的事：
+把 classic 那 13 个 `lifecycle-repair-*.test.ts`（3030 行）**整体改指**留下的实现，
+并从单引擎内存库改成 `describeEachProvider` 的两条 lane。
+入口统一收进 `tests/helpers/repairEngine.ts`（唯一装配点），共享 harness 的库由 lane 交进来。
+
+**覆盖面的变化**：`一份实现 × SQLite 内存库` → `一份实现 × 两个真引擎`，184 条断言。
+
+这一步当场照出**三处真分叉**，全部是留下那份更弱，全部已修：
+
+| # | 场景 | classic | 留下的那份（合并前） | 用户可见后果 |
+| --- | --- | --- | --- | --- |
+| 1 | 工作流里**没有评审节点** | `noReviewNode` | `noAwaitingReviewRun` | 运维被告知「没有在等评审的 run」（时机过了），而真相是「这条告警对这个任务根本不该提这个修复」 |
+| 2 | 澄清会话**还开着** | `sessionAlreadyOpen` | `noClosedSession` | 同上一类：一个说「告警是陈旧的」，一个说「这个修复不适用」 |
+| 3 | 澄清的**新世代卡住、旧世代已 done** | 复活新世代 | `noCandidate`，**修复点不动** | **功能缺陷**：PG 部署上凡是同一澄清节点有过一次完成的世代，`T2.resurrect-clarify-run` 就永远不可用 |
+
+第 3 条的根因值得记：留下那份把**评审**那套分组规则（按 `nodeId|iteration` 分组、
+组内任一行 done 就跳过整组）用到了**澄清**上，而澄清的规则是 RFC-074 PR-C 写死的
+「世代按 id 序、只看最新那一行」。两条规则现在在 `latestCandidate` 里分开写，各带理由。
+
+另有一处**留下的那份更强**：apply 在一笔事务里，崩在两次 output upsert 之间**零残留**；
+classic 不在事务里写，崩完库里躺着一个只有 `approved_doc` 的评审 run（「批准了但没有批准元数据」）。
+对应用例的断言与标题按新的（更强的）性质重写。
+
+### 登记在案的预览文案分叉：定案
+
+`S4.kick-task` / `CR-1.retry-designer-rerun` 的预览，classic 露字面 SQL 与内部函数名
+（`UPDATE tasks SET status='interrupted'…` / `resumeTask('…')`），留下那份给人话摘要。
+**定案：保留人话摘要的形式，但把 classic 那两句多出来的「后果说明」补进来**——
+与第 2 步 acknowledge 那处同一条准则：取信息更全的一侧，用更好的形式表达。
+预览的职责是告诉运维「这一步会发生什么」，实现细节不出界面。
+三条断言内部函数名的用例改成断言含义（`resume it`）。
+
+### 依赖面顺手收窄：三样 → 一句
+
+复活类修复需要的全部就是「以这个 actor 把这个任务拉起来」。原来要三样
+（`children` / `topology` / `resumeRuntimeFor`），它们只在一处组合成这一句。
+收成 `resumeTaskAs(actor, taskId)` 之后，**没有装配完整 runtime 的组合根**（`server.ts` 那条）
+也能接上同一份实现——否则这一刀在那条路上根本落不了地。
+
+### 并发两条用例的处置
+
+`lifecycle-repair-R1` 有两条并发用例原来直接驱动 classic 的内部接缝
+（先算 `preflight`、再把 `apply` 排到 cancel 之后，验「apply 在锁里二次重验」）。
+**那是 TOCTOU 类性质，本仓明令不立项**（`CLAUDE.md` §工作准则）；而且合并后那个接缝不再暴露。
+改成等价、确定、且走公开入口的**功能**场景：先完成取消再点修复（必须被拒且零写入）/
+先完成修复再取消（已落库的事实不被清扫抹掉）。断言逐条保留。
+
+### 守卫侧：t19d 的配对盲区一并修掉（带自证）
+
+`rfc359-w5-t19d` 按基名配对（`sqliteFoo.ts` ↔ `postgresqlFoo.ts`），而这一对叫
+`platform/persistence/sqlite/taskLifecycleRepair.ts`（靠**目录**表明引擎）对
+`postgresqlTaskRouteRepairOperations.ts`——基名对不上，这处倒挂**从来没进过账本**。
+新增 `MANUAL_ADAPTER_PAIRS` 出口并把配对逻辑抽成纯函数 `pairAdapters`，
+用伪造的一对喂同一个判据作自证（一个配不出新增的出口等于没写）。
+表现在是空的：唯一已知的那一对已随本刀合并成一份实现——**合并即销账，比记账更彻底**。
+
+### 顺带修的守卫覆盖面
+
+`rfc317-transition-table-oracle` 的 CAS 站点抽取器只认
+`setTaskStatus({ to, allowedFrom })` 一种写法。留下那份把同样的信息放在
+`kind: 'task-transition'` 的动作描述符里，于是 classic 一退役，语料从 35 掉到 15
+——**本预言最初的反例来源整批掉出射程**。给抽取器加上第二种静态可知形态之后回到 28，
+三条越界边按新锚点入账（`interrupted ← [done,failed]` / `awaiting_review ← [done]` / `failed ← [done]`）。
+
+### 三条对拍基线退役
+
+`rfc359-w8b-repair-{option-registry,preflight,admission}-parity` 在合并后只会拿一份实现和自己比，
+随本刀删除。它们的账已经销在上面那张表里，而行为面由 184 条双引擎断言接管——
+远强于三条纯门对拍。

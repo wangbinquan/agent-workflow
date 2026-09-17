@@ -87,7 +87,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'input-port-contract.test.ts: 1',
   'integration-chaos/chaos-scenarios.integration.test.ts: 2',
   'lifecycle-property.test.ts: 1',
-  'lifecycle-repair-harness.ts: 1',
   'lifecycle-transitions-current.test.ts: 1',
   'memory-distiller-source-context.test.ts: 1',
   'migration-0002.test.ts: 1',
@@ -195,7 +194,14 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc096-retry-cascade-inherit.test.ts: 1',
   'rfc097-cancel-wins.test.ts: 1',
   'rfc097-pending-orphan-reap.test.ts: 1',
-  'rfc097-repair-liveness.test.ts: 1',
+  // RFC-359 AC-1（第 8 刀）：`1 → 2`，同一刀里另有 `lifecycle-repair-harness.ts: 1` **清零**。
+  // harness 那一条是真收敛：它托着的 12 个行为套件从「自己 `createInMemoryDb`」改成由
+  // `describeEachProvider` 的 lane 交库，于是同一批断言落到两个真引擎上。
+  // 这一条 +1 是那次改动的**代价面**：本文件的反面对照用例（「没有活调度器的 running 任务
+  // 不该被门拦」）借的正是那个 harness，harness 不再自己建库之后，它得自己建一个——
+  // 而这条用例本来就只跑 SQLite（真 `resumeTask` + 桩 opencode 二进制 + 进程内活跃度注册表），
+  // 不是新的单引擎判据。
+  'rfc097-repair-liveness.test.ts: 2',
   'rfc097-resume-mutex.test.ts: 1',
   // RFC-359 AC-6 销账：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，
   // 唯一那处 `createInMemoryDb` 随之消失（36 例 → 两引擎各 36 例）。

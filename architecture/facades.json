@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 313,
-    "thinFacades": 66
+    "serviceFiles": 296,
+    "thinFacades": 49
   },
   "entries": [
     {
@@ -2036,196 +2036,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0e06e58841ef86931fc5",
-        "import:f41b856ac10db59de75e"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/helpers.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/helpers.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/helpers.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-C1.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-C1.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-C1.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-CR1.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-CR1.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-CR1.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-R1.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-R1.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-R1.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-R2.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-R2.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-R2.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-S1.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-S1.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-S1.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-S2.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-S2.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-S2.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-S3.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-S3.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-S3.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-S4.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-S4.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-S4.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-S5.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-S5.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-S5.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-S6.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-S6.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-S6.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-T1.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-T1.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-T1.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-T2.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-T2.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-T2.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-T3.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-T3.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-T3.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/options-U1.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/options-U1.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/options-U1.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/lifecycleRepair/types.ts",
-      "id": "facade:packages/backend/src/services/lifecycleRepair/types.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycleRepair/types.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:0b6ca79a4a3b1824d7dc",
         "import:8cf74267a9f70b038d08",
         "import:d257804213ee3e465a82",
@@ -2498,8 +2308,10 @@
         "import:53ffc9f7db845b8984d0",
         "import:565ffb8735e0987d1d86",
         "import:6d0bc01056bf144b0e6e",
+        "import:79d0edec96be0e1e9e9e",
         "import:878a1ab7b52f271f7f6e",
         "import:a002f594de8bd04927da",
+        "import:a7353baeb49e7c20315d",
         "import:b310eac7455e6a398ccd",
         "import:bc9c83d4447de5b4cd7f",
         "import:c60f083cae677598aa75",
@@ -4560,6 +4372,7 @@
         "import:1e1e92bf881073062336",
         "import:7d98f8116ddfd3f54902",
         "import:8560dbf0705aecf7cb91",
+        "import:937292ea47aebfe07106",
         "import:998fd65ab077856a1a2a",
         "import:ae39b5aa97c0e6d132ec",
         "import:bb691cc044791fa7e1ab",
@@ -6532,5 +6345,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727"
+  "sourceDigest": "sha256:d9d506b7e819d2da366fd8b2c42e9f05a5d37d68499ed14213928c3ad89625a0"
 }

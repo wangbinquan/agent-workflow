@@ -3088,7 +3088,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727",
+  "sourceDigest": "sha256:d9d506b7e819d2da366fd8b2c42e9f05a5d37d68499ed14213928c3ad89625a0",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

@@ -1034,20 +1034,20 @@
     },
     {
       "id": "lifecycle-alert-rules-repair-options-taxonomy",
-      "title": "LIFECYCLE_ALERT_RULES + REPAIR_OPTIONS taxonomy",
+      "title": "LIFECYCLE_ALERT_RULES + OPTION_DEFINITIONS taxonomy",
       "owner": "shared-contracts",
       "layer": "domain",
       "core": false,
       "files": [
         "packages/shared/src/lifecycle-alerts.ts",
-        "packages/backend/src/services/lifecycleRepair.ts"
+        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts"
       ],
-      "singleSourceOf": "Rule universe shared across backend detectors, repair-option registry and frontend; option map is `satisfies Record<LifecycleAlertRule, readonly [RepairOptionDef, ...]>` with a runtime id cross-check.",
-      "claimAudit": "Holds. This is the repo's approved registry pattern done right: adding a rule to the shared list fails compilation until a non-empty option array exists, and the loop at lifecycleRepair.ts:98-107 rejects option ids absent from the shared taxonomy. Also a compile-time union equality assert at packages/backend/src/services/lifecycleInvariants.ts:76-83. NOT a finding.",
+      "singleSourceOf": "Rule universe shared across backend detectors, repair-option registry and frontend; the backend option table is `satisfies Record<RepairOptionId, OptionDefinition>` keyed by the shared `REPAIR_OPTION_IDS`, with a runtime cross-check in lifecycle-repair-grep-guard. RFC-359 cut 8 merged the two repair implementations, so there is exactly one option table again.",
+      "claimAudit": "Holds. Adding a rule to the shared list fails compilation until the backend table covers it, and `lifecycle-repair-grep-guard` cross-checks every backend option id against the shared taxonomy at runtime. A compile-time union equality assert also lives in packages/backend/src/services/lifecycleInvariants.ts.",
       "auditedBy": "lifecycle-state",
       "guards": [],
       "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/services/lifecycleRepair.ts#$file",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts#$file",
         "owner:packages/shared/src/lifecycle-alerts.ts#$file"
       ]
     },
@@ -1395,13 +1395,13 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727",
+    "sourceDigest": "sha256:d9d506b7e819d2da366fd8b2c42e9f05a5d37d68499ed14213928c3ad89625a0",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "fd238e8f55a0cd413e957058f7e3b30ffd5f3cdb",
-    "contentDigest": "sha256:43fe4077a90785af84f69568c8b2067e87cfc579ae2eb89e888e6bf9ad4b40e4",
+    "currentSnapshotSha": "075bfbc1cba77744c5a15ceea2365b050ecf09ef",
+    "contentDigest": "sha256:1a770158a386a748805d1f3e3790a909ecbd5b15f5eb445c707fe7206c49bae8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

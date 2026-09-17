@@ -1,9 +1,10 @@
 // LOCKS: RFC-057 — T1 repair options (task awaiting_review but no run awaiting_review).
 // 2 options × 3 cases = 6 tests.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 
-import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
+import { describeEachProvider } from './helpers/eachProvider'
+
 import {
   buildHarness,
   insertAlert,
@@ -15,7 +16,7 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 
-describe('RFC-057 — T1.demote-task', () => {
+describeEachProvider('RFC-057 — T1.demote-task', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -23,7 +24,7 @@ describe('RFC-057 — T1.demote-task', () => {
   })
 
   test('happy: task awaiting_review with no awaiting_review run → demote + resume', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'interrupted',
@@ -33,15 +34,11 @@ describe('RFC-057 — T1.demote-task', () => {
       rule: 'T1',
       detail: { rule: 'T1', taskId: h.taskId },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T1.demote-task',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     const audits = await readAuditRows(h.db, h.taskId)
@@ -51,18 +48,15 @@ describe('RFC-057 — T1.demote-task', () => {
   })
 
   test('preflight-stale: task no longer awaiting_review', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'T1',
       detail: { rule: 'T1', taskId: h.taskId },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T1.demote-task')
     expect(opt?.available).toBe(false)
@@ -70,27 +64,26 @@ describe('RFC-057 — T1.demote-task', () => {
   })
 
   test('preview steps include the SQL the engine will run', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'T1',
       detail: { rule: 'T1' },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T1.demote-task')
     expect(opt?.previewSteps.length).toBeGreaterThan(0)
-    expect(opt?.previewSteps.some((s) => s.includes("status='interrupted'"))).toBe(true)
-    expect(opt?.previewSteps.some((s) => s.includes('resumeTask'))).toBe(true)
+    // RFC-359 AC-1（第 8 刀）：预览断言的是**运维读到的意思**（这个修复会把任务重新拉起来），
+    // 不再断言内部函数名 / 字面 SQL——合并后修复对话框统一给人话摘要，实现细节不出界面。
+    expect(opt?.previewSteps.some((s) => s.includes('interrupted'))).toBe(true)
+    expect(opt?.previewSteps.some((s) => s.includes('resume it'))).toBe(true)
   })
 })
 
-describe('RFC-057 — T1.resurrect-review-run', () => {
+describeEachProvider('RFC-057 — T1.resurrect-review-run', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -98,7 +91,7 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
   })
 
   test('happy: terminal-non-done review run at current iter → flip to awaiting_review (allowTerminal)', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'interrupted',
@@ -109,15 +102,11 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
       rule: 'T1',
       detail: { rule: 'T1' },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T1.resurrect-review-run',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, reviewRunId)).toBe('awaiting_review')
@@ -129,20 +118,17 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
   })
 
   test('preflight-stale: no terminal-non-done review run → unavailable', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     // Only `done` runs: no candidate.
     await insertNodeRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'T1',
       detail: { rule: 'T1' },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T1.resurrect-review-run')
     expect(opt?.available).toBe(false)
@@ -158,7 +144,7 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
     // row (retryIndex=1, larger id) — the exact bug class resumeTask fixed
     // once already; the in-memory reduce bypassed the SQL-text guards. The
     // candidate must now be the id-freshest row of the group.
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const staleHighRetry = await insertNodeRun(h.db, h.taskId, {
       id: 'nr_rfc096_t1_0001_stale',
       nodeId: 'rev_1',
@@ -182,28 +168,21 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
       detail: { rule: 'T1' },
     })
     // Preflight preview names the id-freshest run, not the retry-storm row.
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T1.resurrect-review-run')
     expect(opt?.available).toBe(true)
     expect(opt?.previewSteps.some((s) => s.includes(freshLowRetry))).toBe(true)
     expect(opt?.previewSteps.some((s) => s.includes(staleHighRetry))).toBe(false)
     // Apply resurrects the fresh row; the stale storm row is left untouched.
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T1.resurrect-review-run',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, freshLowRetry)).toBe('awaiting_review')
@@ -211,7 +190,7 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
   })
 
   test('skip when a sibling at same reviewIteration already done', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     // retry=0 done + retry=1 interrupted at same reviewIteration: the rule says
     // "done sibling exists" → no resurrection (the done one decides the iter).
     await insertNodeRun(h.db, h.taskId, {
@@ -230,13 +209,10 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
       rule: 'T1',
       detail: { rule: 'T1' },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T1.resurrect-review-run')
     expect(opt?.available).toBe(false)

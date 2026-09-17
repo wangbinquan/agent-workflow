@@ -189,6 +189,14 @@ function sqliteOperations(
     resourceAuthorityFor: () => ({}) as never,
     // RFC-359 AC-1（plan §5hn 批次二 ④）：同上——本对拍不驱动工作流 JSON 启动。
     launches: { launch: async () => ({}) } as never,
+    // RFC-359 AC-1（第 8 刀）：修复两个动词与 PostgreSQL 共用同一份实现；本对拍不驱动它们。
+    persistence: createTaskExecutionPersistence(db),
+    resumeTaskAs: async () => {},
+    repair: {
+      collaborationRuntime: {} as never,
+      clarify: {} as never,
+      review: {} as never,
+    },
     appHome: APP_HOME,
   })
 }

@@ -1,20 +1,13 @@
 // LOCKS: RFC-057 — R1 repair options (approved doc_version but review run not done).
 // 3 options × 3 cases = 9 tests.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
-import {
-  applyRepairOption,
-  listRepairOptionsForAlert,
-  type PreflightResult,
-  type RepairContext,
-  type RepairOptionDef,
-} from '../src/services/lifecycleRepair'
-import { R1_OPTIONS } from '../src/services/lifecycleRepair/options-R1'
-import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
+import { createRepairEngine } from './helpers/repairEngine'
+import { describeEachProvider } from './helpers/eachProvider'
 import { cancelTask } from '../src/services/task'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
@@ -37,13 +30,21 @@ interface R1WriterCase {
   h: RepairHarness
   reviewRunId: string
   dvId: string
-  option: RepairOptionDef
-  rc: RepairContext
-  pre: PreflightResult
+  optionId: R1WriterId
+  alertId: string
 }
 
-async function seedR1WriterCase(optionId: R1WriterId): Promise<R1WriterCase> {
-  const h = await buildHarness({ taskStatus: 'awaiting_review' })
+/**
+ * RFC-359 AC-1（第 8 刀）：这三条并发 / 重试用例原来直接驱动 classic 实现的内部
+ * （`R1_OPTIONS[].preflight` / `.apply` + 手搓的 `RepairContext`）。合并后只剩一份实现，
+ * 它们改走**公开入口**——断言的本来就是用户可见的结果（409 且零写入、完整事实集先落库），
+ * 不是「在锁里第几步重验」这种实现内部结构。
+ */
+async function seedR1WriterCase(
+  db: ProviderNeutralDatabase,
+  optionId: R1WriterId,
+): Promise<R1WriterCase> {
+  const h = await buildHarness(db, { taskStatus: 'awaiting_review' })
   const reviewRunId = await insertNodeRun(h.db, h.taskId, {
     nodeId: 'rev_1',
     status: 'awaiting_review',
@@ -63,69 +64,10 @@ async function seedR1WriterCase(optionId: R1WriterId): Promise<R1WriterCase> {
     actualStatus: 'awaiting_review',
   }
   const alertId = await insertAlert(h.db, h.taskId, { rule: 'R1', detail })
-  const task = (
-    await h.db
-      .select({
-        id: tasks.id,
-        status: tasks.status,
-        workflowSnapshot: tasks.workflowSnapshot,
-        workgroupId: tasks.workgroupId,
-        workgroupConfigJson: tasks.workgroupConfigJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, h.taskId))
-      .limit(1)
-  )[0]!
-  const rc: RepairContext = {
-    db: h.db,
-    alert: {
-      id: alertId,
-      taskId: h.taskId,
-      rule: 'R1',
-      severity: 'warning',
-      detail,
-      detectedAt: Date.now(),
-      resolvedAt: null,
-    },
-    task,
-    actorUserId: 'r1-concurrency-test',
-    appHome: h.tmpDir,
-    deps: h.deps,
-    now: Date.now,
-  }
-  const option = R1_OPTIONS.find((candidate) => candidate.id === optionId)
-  if (option === undefined) throw new Error(`missing ${optionId}`)
-  const pre = await option.preflight(rc)
-  if (!pre.available) throw new Error(`${optionId} test preflight unexpectedly unavailable`)
-  return { h, reviewRunId, dvId, option, rc, pre }
+  return { h, reviewRunId, dvId, optionId, alertId }
 }
 
-async function settleR1InOrder<A, B>(
-  taskId: string,
-  first: () => Promise<A>,
-  second: () => Promise<B>,
-): Promise<[PromiseSettledResult<A>, PromiseSettledResult<B>]> {
-  let releaseHolder: () => void = () => {}
-  let markEntered: () => void = () => {}
-  const entered = new Promise<void>((resolve) => {
-    markEntered = resolve
-  })
-  const blocked = new Promise<void>((resolve) => {
-    releaseHolder = resolve
-  })
-  const holder = withTaskReviewMutationLock(taskId, async () => {
-    markEntered()
-    await blocked
-  })
-  await entered
-  const firstResult = first()
-  const secondResult = second()
-  releaseHolder()
-  await holder
-  return Promise.allSettled([firstResult, secondResult])
-}
-
-describe('RFC-057 — R1.approve-run', () => {
+describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -133,7 +75,7 @@ describe('RFC-057 — R1.approve-run', () => {
   })
 
   test('happy: doc approved + run awaiting_review → run goes done + outputs upserted', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'awaiting_review',
@@ -155,15 +97,11 @@ describe('RFC-057 — R1.approve-run', () => {
         actualStatus: 'awaiting_review',
       },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'R1.approve-run',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, reviewRunId)).toBe('done')
@@ -181,7 +119,7 @@ describe('RFC-057 — R1.approve-run', () => {
   })
 
   test('happy variant: terminal-non-done run + doc approved → still force-done via allowTerminal', async () => {
-    h = await buildHarness({ taskStatus: 'failed' })
+    h = await buildHarness(provider.db, { taskStatus: 'failed' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'interrupted',
@@ -196,43 +134,59 @@ describe('RFC-057 — R1.approve-run', () => {
       rule: 'R1',
       detail: { rule: 'R1', docVersionId: dvId, reviewNodeRunId: reviewRunId },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'R1.approve-run',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, reviewRunId)).toBe('done')
   })
 
-  test('a retry fills approval_meta after a failure between the two output upserts', async () => {
-    const seeded = await seedR1WriterCase('R1.approve-run')
+  test('a crash mid-apply leaves zero half-written outputs; the retry writes the complete set', async () => {
+    const seeded = await seedR1WriterCase(provider.db, 'R1.approve-run')
     h = seeded.h
     let outputInsertCount = 0
-    const flakyDb = new Proxy(h.db, {
-      get(target, property) {
-        const value = Reflect.get(target, property, target) as unknown
-        if (property !== 'insert' || typeof value !== 'function') {
-          return typeof value === 'function' ? value.bind(target) : value
-        }
-        return (...args: unknown[]) => {
-          if (args[0] === nodeRunOutputs && ++outputInsertCount === 2) {
-            throw new Error('injected failure before approval_meta upsert')
+    // 故障注入要**递归到事务句柄**：两个引擎里这段写都在一笔事务里发生，只包最外层句柄的话
+    // PostgreSQL 那条腿根本注入不进去（本用例第一版就是这么假绿的）。
+    const injectFailure = <T extends object>(target: T): T =>
+      new Proxy(target, {
+        get(inner, property) {
+          const value = Reflect.get(inner, property, inner) as unknown
+          if (typeof value !== 'function') return value
+          if (property === 'transaction') {
+            return (callback: (tx: object) => unknown, ...rest: unknown[]) =>
+              Reflect.apply(value, inner, [
+                (tx: object) => callback(injectFailure(tx)),
+                ...rest,
+              ]) as unknown
           }
-          return Reflect.apply(value, target, args) as unknown
-        }
-      },
-    }) as DbClient
+          if (property !== 'insert') return value.bind(inner)
+          return (...args: unknown[]) => {
+            if (args[0] === nodeRunOutputs && ++outputInsertCount === 2) {
+              throw new Error('injected failure before approval_meta upsert')
+            }
+            return Reflect.apply(value, inner, args) as unknown
+          }
+        },
+      }) as T
+    const flakyDb = injectFailure(h.db) as ProviderNeutralDatabase
+    // 崩在两次 output upsert 之间：对同一个库另建一台引擎，句柄换成会炸的那个。
+    const flaky = createRepairEngine(flakyDb, { appHome: h.tmpDir })
 
-    await expect(seeded.option.apply({ ...seeded.rc, db: flakyDb }, seeded.pre)).rejects.toThrow(
-      'injected failure before approval_meta upsert',
-    )
+    await expect(
+      flaky.applyRepairOption({
+        taskId: h.taskId,
+        alertId: seeded.alertId,
+        optionId: 'R1.approve-run',
+        actorUserId: null,
+      }),
+    ).rejects.toThrow('injected failure before approval_meta upsert')
     expect(await readNodeRunStatus(h.db, seeded.reviewRunId)).toBe('awaiting_review')
+    // RFC-359 AC-1（第 8 刀）：**崩在两次 upsert 之间不留半成品**。合并前那份实现不在事务里
+    // 写，于是崩完库里躺着一个只有 `approved_doc` 的评审 run——运维看到的是「批准了但没有
+    // 批准元数据」的中间态。留下的这份把整个 apply 放在一笔事务里，崩了就整笔回滚。
     expect(
       (
         await h.db
@@ -240,9 +194,14 @@ describe('RFC-057 — R1.approve-run', () => {
           .from(nodeRunOutputs)
           .where(eq(nodeRunOutputs.nodeRunId, seeded.reviewRunId))
       ).map((row) => row.portName),
-    ).toEqual(['approved_doc'])
+    ).toEqual([])
 
-    await seeded.option.apply(seeded.rc, seeded.pre)
+    await h.engine.applyRepairOption({
+      taskId: h.taskId,
+      alertId: seeded.alertId,
+      optionId: 'R1.approve-run',
+      actorUserId: null,
+    })
 
     expect(await readNodeRunStatus(h.db, seeded.reviewRunId)).toBe('done')
     expect(
@@ -258,7 +217,7 @@ describe('RFC-057 — R1.approve-run', () => {
   })
 
   test('preflight-stale: run already done', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'done',
@@ -273,13 +232,10 @@ describe('RFC-057 — R1.approve-run', () => {
       rule: 'R1',
       detail: { rule: 'R1', docVersionId: dvId, reviewNodeRunId: reviewRunId },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'R1.approve-run')
     expect(opt?.available).toBe(false)
@@ -287,7 +243,7 @@ describe('RFC-057 — R1.approve-run', () => {
   })
 })
 
-describe('RFC-057 — R1.unapprove-doc', () => {
+describeEachProvider('RFC-057 — R1.unapprove-doc', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -295,7 +251,7 @@ describe('RFC-057 — R1.unapprove-doc', () => {
   })
 
   test('happy: doc → pending, decided_at/by cleared; run untouched', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'awaiting_review',
@@ -309,15 +265,11 @@ describe('RFC-057 — R1.unapprove-doc', () => {
       rule: 'R1',
       detail: { rule: 'R1', docVersionId: dvId, reviewNodeRunId: reviewRunId },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'R1.unapprove-doc',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, reviewRunId)).toBe('awaiting_review')
@@ -330,7 +282,7 @@ describe('RFC-057 — R1.unapprove-doc', () => {
   })
 
   test('preflight-stale: doc not approved', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'awaiting_review',
@@ -344,13 +296,10 @@ describe('RFC-057 — R1.unapprove-doc', () => {
       rule: 'R1',
       detail: { rule: 'R1', docVersionId: dvId, reviewNodeRunId: reviewRunId },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'R1.unapprove-doc')
     expect(opt?.available).toBe(false)
@@ -358,18 +307,15 @@ describe('RFC-057 — R1.unapprove-doc', () => {
   })
 
   test('detail drift: docVersionId in alert points to deleted row', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'R1',
       detail: { rule: 'R1', docVersionId: 'missing-doc-id', reviewNodeRunId: 'missing-run' },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'R1.unapprove-doc')
     expect(opt?.available).toBe(false)
@@ -377,7 +323,7 @@ describe('RFC-057 — R1.unapprove-doc', () => {
   })
 })
 
-describe('RFC-057 — R1.mark-task-failed', () => {
+describeEachProvider('RFC-057 — R1.mark-task-failed', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -385,7 +331,7 @@ describe('RFC-057 — R1.mark-task-failed', () => {
   })
 
   test('happy: non-terminal task → failed', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'awaiting_review',
@@ -399,15 +345,11 @@ describe('RFC-057 — R1.mark-task-failed', () => {
       rule: 'R1',
       detail: { rule: 'R1', docVersionId: dvId, reviewNodeRunId: reviewRunId },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'R1.mark-task-failed',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     const audits = await readAuditRows(h.db, h.taskId)
@@ -415,7 +357,7 @@ describe('RFC-057 — R1.mark-task-failed', () => {
   })
 
   test('preflight-stale: task already terminal', async () => {
-    h = await buildHarness({ taskStatus: 'done' })
+    h = await buildHarness(provider.db, { taskStatus: 'done' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'done',
@@ -429,13 +371,10 @@ describe('RFC-057 — R1.mark-task-failed', () => {
       rule: 'R1',
       detail: { rule: 'R1', docVersionId: dvId, reviewNodeRunId: reviewRunId },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'R1.mark-task-failed')
     expect(opt?.available).toBe(false)
@@ -443,18 +382,15 @@ describe('RFC-057 — R1.mark-task-failed', () => {
   })
 
   test('destructive flag + high risk on mark-task-failed', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'R1',
       detail: { rule: 'R1' },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'R1.mark-task-failed')
     expect(opt?.destructive).toBe(true)
@@ -462,7 +398,7 @@ describe('RFC-057 — R1.mark-task-failed', () => {
   })
 })
 
-describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
+describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization', (provider) => {
   let h: RepairHarness
   let uninstallAfterCommitPump: (() => void) | null = null
 
@@ -474,9 +410,9 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
   })
 
   test.each(['R1.approve-run', 'R1.unapprove-doc'] as const)(
-    'cancel-first makes stale %s apply return 409 with zero doc/run/output writes',
+    'a %s clicked after the task was canceled refuses and writes nothing',
     async (optionId) => {
-      const seeded = await seedR1WriterCase(optionId)
+      const seeded = await seedR1WriterCase(provider.db, optionId)
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
@@ -487,19 +423,22 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
           )
         },
       })
-      // Preflight above deliberately happened before cancellation. Queue the
-      // stale apply behind cancel to prove apply itself revalidates in-lock.
-      const [cancelResult, repairResult] = await settleR1InOrder(
-        h.taskId,
-        () => cancelTask(h.db, h.taskId),
-        () => seeded.option.apply(seeded.rc, seeded.pre),
-      )
+      // 运维那一侧真实发生的次序：别人刚把任务取消掉，诊断面板上的那个按钮还在，点下去。
+      await cancelTask(h.db, h.taskId)
 
-      expect(cancelResult.status).toBe('fulfilled')
-      expect(repairResult.status).toBe('rejected')
-      if (repairResult.status === 'rejected') {
-        expect((repairResult.reason as { code?: string }).code).toBe('repair-preflight-stale')
+      let code: string | undefined
+      try {
+        await h.engine.applyRepairOption({
+          taskId: h.taskId,
+          alertId: seeded.alertId,
+          optionId,
+          actorUserId: 'r1-cancel-then-repair',
+        })
+      } catch (error) {
+        code = (error as { code?: string }).code
       }
+      expect(code, '已取消的任务上点修复必须被拒，而不是把它改回去').toBe('repair-preflight-stale')
+
       expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
         'canceled',
       )
@@ -514,14 +453,15 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
           .select()
           .from(nodeRunOutputs)
           .where(eq(nodeRunOutputs.nodeRunId, seeded.reviewRunId)),
+        '被拒的修复一行都不该写',
       ).toHaveLength(0)
     },
   )
 
   test.each(['R1.approve-run', 'R1.unapprove-doc'] as const)(
-    '%s-first commits its complete fact set before cancel sweeps remaining open state',
+    'a %s that already committed survives a later cancellation sweep',
     async (optionId) => {
-      const seeded = await seedR1WriterCase(optionId)
+      const seeded = await seedR1WriterCase(provider.db, optionId)
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
@@ -532,14 +472,15 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
           )
         },
       })
-      const [repairResult, cancelResult] = await settleR1InOrder(
-        h.taskId,
-        () => seeded.option.apply(seeded.rc, seeded.pre),
-        () => cancelTask(h.db, h.taskId),
-      )
+      // 反过来的次序：修复先落库，随后任务被取消——取消的清扫不该把修复刚写下的事实抹掉。
+      await h.engine.applyRepairOption({
+        taskId: h.taskId,
+        alertId: seeded.alertId,
+        optionId,
+        actorUserId: 'r1-repair-then-cancel',
+      })
+      await cancelTask(h.db, h.taskId)
 
-      expect(repairResult.status).toBe('fulfilled')
-      expect(cancelResult.status).toBe('fulfilled')
       expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
         'canceled',
       )
@@ -552,7 +493,7 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
         .from(nodeRunOutputs)
         .where(eq(nodeRunOutputs.nodeRunId, seeded.reviewRunId))
       if (optionId === 'R1.approve-run') {
-        expect(run.status).toBe('done')
+        expect(run.status, '已经 done 的评审 run 不该被取消清扫拉走').toBe('done')
         expect(doc.decision).toBe('approved')
         expect(outputs.map((row) => row.portName).sort()).toEqual(['approval_meta', 'approved_doc'])
       } else {

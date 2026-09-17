@@ -434,15 +434,17 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     'taskEngineApplication.ts',
   )
   const REVIEW = resolve(import.meta.dir, '..', 'src', 'services', 'review.ts')
+  // RFC-359 AC-1（第 8 刀）：两份修复实现合成一份，S1 的锚点随之换到留下的那一份。
+  // 合并前**留下的这一份就是直传 `ctx.task.worktreePath` 的**——正是本用例禁止的写法；
+  // `deriveScopeRoot` 随合并从退役那份移植过来，本用例是它的红绿依据。
   const S1 = resolve(
     import.meta.dir,
     '..',
     'src',
-    'platform',
-    'persistence',
-    'sqlite',
-    'taskLifecycleRepair',
-    'options-S1.ts',
+    'modules',
+    'task-execution',
+    'infrastructure',
+    'postgresqlTaskRouteRepairOperations.ts',
   )
 
   test('review.ts never touches task.worktreePath (AC-7)', () => {
@@ -463,7 +465,9 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
   test('S1 repair derives scopeRoot from wrapper lineage, not task.worktreePath directly (case 8d)', () => {
     const src = readFileSync(S1, 'utf8')
     expect(src).toContain('deriveScopeRoot')
-    expect(src).toContain('scopeRoot: prep.scopeRoot')
+    expect(src).toContain('scopeRoot: await deriveScopeRoot(')
     expect(src).toContain('isoWorktreePathFor')
+    // 反面：不许再退回直传任务根。
+    expect(src).not.toContain('scopeRoot: ctx.task.worktreePath')
   })
 })

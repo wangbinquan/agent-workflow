@@ -190,6 +190,38 @@ export function casSites(units: readonly SourceUnit[]): CasSite[] {
           }
         }
       }
+      // RFC-359 AC-1（第 8 刀）：**第二种静态可知形态**——把 `(from, to)` 放进一个
+      // `kind: 'task-transition' | 'node-transition'` 的动作描述符，再交给写入者。
+      // 合并后的修复实现全用这种写法；只认第一种的话，这 20 个站点会整批掉出语料，
+      // 而它们恰恰是本预言最初的反例来源（头注释里 T1 / T2 / CR-1 / S1 / T3 那几条）。
+      if (ts.isObjectLiteralExpression(node)) {
+        let kind: string | null = null
+        let to: string | null = null
+        let from: string[] | null = null
+        for (const prop of node.properties) {
+          if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue
+          if (prop.name.text === 'kind' && ts.isStringLiteral(prop.initializer)) {
+            kind = prop.initializer.text
+          }
+          if (prop.name.text === 'to' && ts.isStringLiteral(prop.initializer)) {
+            to = prop.initializer.text
+          }
+          if (prop.name.text === 'from') from = literalStrings(prop.initializer)
+        }
+        if (
+          (kind === 'task-transition' || kind === 'node-transition') &&
+          to !== null &&
+          from !== null
+        ) {
+          sites.push({
+            file: unit.path.replace('packages/backend/src/', ''),
+            line: unit.source.getLineAndCharacterOfPosition(node.getStart(unit.source)).line + 1,
+            writer: kind,
+            to,
+            allowedFrom: from,
+          })
+        }
+      }
       ts.forEachChild(node, visit)
     }
     visit(unit.source)
@@ -229,69 +261,24 @@ interface OffTableDeviation {
  */
 const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
   {
+    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts:interrupted',
+    offTable: ['done', 'failed'],
+    why: '修复动作把已经走到终态的任务打回 interrupted 续跑：CR-1 从 failed（误判失败）、T3 / S3 从 done（误判完成）。表里 `interrupt` 只允许从 pending|running 出发——修复动作的存在前提正是「行已经走到了表说不该到的地方」。RFC-359 第 8 刀把两份修复实现合成一份，同一批边此前记在退役那一份的逐选项站点上。',
+  },
+  {
+    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts:awaiting_review',
+    offTable: ['done'],
+    why: 'R2 修复：评审行丢失时把 done 的任务退回 awaiting_review 重新评审。同上，来源是合并前记在 options-R2.ts 上的那条。',
+  },
+  {
+    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts:failed',
+    offTable: ['done'],
+    why: 'T3 / S3 的 mark-task-failed：把误判为完成的任务改判失败。表里 `fail` 不允许从 done 出发；这条边只由人工修复产生。',
+  },
+  {
     site: 'modules/collaboration/infrastructure/clarify/service.ts:done',
     offTable: ['pending'],
     why: 'clarify run 在**还没开跑**时就收到答案：直接从 pending 收成 done，不经过 running。表里 `resume-clarify` 只允许从 awaiting_human 出发。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-CR1.ts:interrupted',
-    offTable: ['failed'],
-    why: 'CR-1 修复：把误判为 failed 的任务恢复成 interrupted（可续跑）。表里 `interrupt` 只允许从 pending|running 出发——修复动作的存在前提正是「行已经走到了表说不该到的地方」。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts:done',
-    offTable: ['canceled', 'exhausted', 'failed', 'interrupted', 'pending'],
-    why: 'R1 修复：把一条卡住的 node_run 直接收成 done。五个来源覆盖了它可能卡在的所有形态。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts:awaiting_review',
-    offTable: ['done'],
-    why: 'R2 修复：评审行丢失时把 done 的 run 退回 awaiting_review 重新评审。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-S1.ts:interrupted',
-    offTable: ['awaiting_review'],
-    why: 'S1 修复：卡在评审等待里的任务打回 interrupted。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-S2.ts:interrupted',
-    offTable: ['awaiting_human'],
-    why: 'S2 修复：卡在人工等待里的任务打回 interrupted。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-S3.ts:pending',
-    offTable: ['canceled', 'exhausted', 'failed', 'interrupted'],
-    why: 'S3 修复（两处）：把终态 node_run 重置回 pending 以便重跑。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T1.ts:interrupted',
-    offTable: ['awaiting_review'],
-    why: 'T1 修复：任务级——评审等待打回 interrupted。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T1.ts:awaiting_review',
-    offTable: ['canceled', 'exhausted', 'failed', 'interrupted'],
-    why: 'T1 修复：node 级——终态 run 退回评审等待。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T2.ts:interrupted',
-    offTable: ['awaiting_human'],
-    why: 'T2 修复：任务级——人工等待打回 interrupted。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T2.ts:awaiting_human',
-    offTable: ['canceled', 'exhausted', 'failed', 'interrupted'],
-    why: 'T2 修复：node 级——终态 run 退回人工等待。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T3.ts:interrupted',
-    offTable: ['done'],
-    why: 'T3 修复：把误判为完成的任务打回 interrupted。',
-  },
-  {
-    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T3.ts:failed',
-    offTable: ['done'],
-    why: 'T3 修复：把误判为完成的任务打成 failed。表里 `fail` 不接受 done 出发。',
   },
   {
     site: 'modules/collaboration/infrastructure/review.ts:canceled',
@@ -315,7 +302,11 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
     // 站点随实现一起消失（合一后的房间用同一条准入，不是另一套 CAS）。下限只是「别抽空」的
     // 兜底，不是站点数的账本——真正逐条对齐的是下面那条越界集合等于账本的判据。
     expect(units.length).toBeGreaterThan(700)
-    expect(sites.length).toBeGreaterThanOrEqual(35)
+    // RFC-359 AC-1（第 8 刀）：35 → 25。修复原来有两份实现，退役的那一份把每个选项的
+    // `(to, allowedFrom)` 摊成一个个独立的 `setTaskStatus` 站点；留下的那一份用
+    // `kind: 'task-transition'` 动作描述符表达同一件事，同样静态可知（上面的抽取器已认它），
+    // 只是**同一条转移不再被抄两遍**，所以站点总数本来就该降。下限只是「别抽空」的兜底。
+    expect(sites.length).toBeGreaterThanOrEqual(25)
   })
 
   test('表内站点确实占多数（判据不是恒真）', () => {

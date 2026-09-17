@@ -22,13 +22,15 @@ const SRC = (rel: string) => readFileSync(resolve(import.meta.dir, '..', 'src', 
 const HAND_COPIED_TERMINAL = /'done',\s*\n?\s*'failed',\s*\n?\s*'canceled',\s*\n?\s*'interrupted'/
 
 describe('终态集合单源化（flag-audit W0）', () => {
-  test('曾手抄终态数组的五个文件已全部改引 shared', () => {
+  // RFC-359 AC-1（第 8 刀）：原清单里的两条指向修复的第二份实现
+  // （`platform/persistence/sqlite/taskLifecycleRepair/options-R{1,2}.ts`），
+  // 那份实现已随两份合一退役；它们的 R1 / R2 判据现在落在留下的那一份里，所以锚点换成它。
+  test('曾手抄终态数组的文件已全部改引 shared', () => {
     for (const rel of [
       'services/gc.ts',
       'services/stuckTaskDetector.ts',
       'modules/knowledge-evolution/application/fusionOrchestration.ts',
-      'platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts',
-      'platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts',
+      'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
     ]) {
       expect(HAND_COPIED_TERMINAL.test(SRC(rel)), `${rel} still hand-copies the terminal set`).toBe(
         false,

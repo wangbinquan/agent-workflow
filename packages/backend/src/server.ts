@@ -32,7 +32,7 @@ import {
 import type { SecretBox } from '@/auth/secretBox'
 import { actorOfDirectAuthority, admitDaemonIdentity, multiAuth } from '@/auth/session'
 import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
-import { cancelTask, createTaskDriveCoordinator } from '@/services/task'
+import { cancelTask, createTaskDriveCoordinator, resumeTask } from '@/services/task'
 import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -352,6 +352,10 @@ import {
 } from '@/modules/collaboration/composition/decisionCommands'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
+import {
+  createClarifyRepairParticipant,
+  createReviewRepairParticipant,
+} from '@/modules/collaboration/composition'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/taskCatalogSources'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
@@ -2532,6 +2536,29 @@ function composeSqliteApiRouteMounts(
         deps.secretBox,
         identityAccess,
       ),
+    // RFC-359 AC-1（第 8 刀）：手动 / 自动修复与 PostgreSQL 共用同一份实现。
+    // 这条路不装配完整 runtime，复活走的仍是本文件 `resume` 动词用的同一句
+    //（`resumeTask` + `startDepsFor`），与合并前这条路上的修复逐字同形。
+    persistence: taskExecutionPersistence,
+    resumeTaskAs: async (actor, taskId) => {
+      await resumeTask(deps.db, taskId, {
+        ...buildStartTaskDeps(
+          deps.db,
+          schedulerDriver,
+          deps.configPath,
+          actor.user.id,
+          deps.secretBox,
+          identityAccess,
+        ),
+        taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
+        actorUserId: actor.user.id,
+      })
+    },
+    repair: {
+      collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),
+      clarify: createClarifyRepairParticipant(deps.db),
+      review: createReviewRepairParticipant(deps.db),
+    },
     resourceAuthorityFor: (actor) =>
       Object.freeze({
         actor,

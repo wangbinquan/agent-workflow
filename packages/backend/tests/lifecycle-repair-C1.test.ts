@@ -1,11 +1,12 @@
 // LOCKS: RFC-057 — C1 repair options (clarify_session closed but clarify run still awaiting_human).
 // 2 options × 3 cases = 6 tests.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
+
+import { describeEachProvider } from './helpers/eachProvider'
 import { clarifyRounds } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 
-import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
 import {
   buildHarness,
   insertAlert,
@@ -17,7 +18,7 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 
-describe('RFC-057 — C1.resume-run', () => {
+describeEachProvider('RFC-057 — C1.resume-run', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -25,7 +26,7 @@ describe('RFC-057 — C1.resume-run', () => {
   })
 
   test('happy: closed session + awaiting_human run → run flips to done', async () => {
-    h = await buildHarness({
+    h = await buildHarness(provider.db, {
       taskStatus: 'awaiting_human',
       workflow: {
         $schema_version: 4,
@@ -54,15 +55,11 @@ describe('RFC-057 — C1.resume-run', () => {
         actualStatus: 'awaiting_human',
       },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'C1.resume-run',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, clarifyRunId)).toBe('done')
@@ -73,7 +70,7 @@ describe('RFC-057 — C1.resume-run', () => {
   })
 
   test('preflight-stale: run no longer awaiting_human', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human' })
     const clarifyRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'clarify_1',
       status: 'done',
@@ -87,13 +84,10 @@ describe('RFC-057 — C1.resume-run', () => {
       rule: 'C1',
       detail: { rule: 'C1', clarifySessionId: sessId, clarifyNodeRunId: clarifyRunId },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'C1.resume-run')
     expect(opt?.available).toBe(false)
@@ -101,18 +95,15 @@ describe('RFC-057 — C1.resume-run', () => {
   })
 
   test('detail drift: clarifyNodeRunId missing → unavailable', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'C1',
       detail: { rule: 'C1' /* missing ids */ },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'C1.resume-run')
     expect(opt?.available).toBe(false)
@@ -120,7 +111,7 @@ describe('RFC-057 — C1.resume-run', () => {
   })
 })
 
-describe('RFC-057 — C1.reopen-session', () => {
+describeEachProvider('RFC-057 — C1.reopen-session', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -128,7 +119,7 @@ describe('RFC-057 — C1.reopen-session', () => {
   })
 
   test('happy: session → awaiting_human + answers cleared; run untouched', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human' })
     const clarifyRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'clarify_1',
       status: 'awaiting_human',
@@ -142,15 +133,11 @@ describe('RFC-057 — C1.reopen-session', () => {
       rule: 'C1',
       detail: { rule: 'C1', clarifySessionId: sessId, clarifyNodeRunId: clarifyRunId },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'C1.reopen-session',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, clarifyRunId)).toBe('awaiting_human')
@@ -163,7 +150,7 @@ describe('RFC-057 — C1.reopen-session', () => {
   })
 
   test('preflight-stale: run no longer awaiting_human', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const clarifyRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'clarify_1',
       status: 'done',
@@ -177,20 +164,17 @@ describe('RFC-057 — C1.reopen-session', () => {
       rule: 'C1',
       detail: { rule: 'C1', clarifySessionId: sessId, clarifyNodeRunId: clarifyRunId },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'C1.reopen-session')
     expect(opt?.available).toBe(false)
   })
 
   test('option metadata: low/medium risk', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human' })
     const clarifyRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'clarify_1',
       status: 'awaiting_human',
@@ -204,13 +188,10 @@ describe('RFC-057 — C1.reopen-session', () => {
       rule: 'C1',
       detail: { rule: 'C1', clarifySessionId: sessId, clarifyNodeRunId: clarifyRunId },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(list.options.find((o) => o.id === 'C1.resume-run')?.risk).toBe('low')
     expect(list.options.find((o) => o.id === 'C1.reopen-session')?.risk).toBe('medium')

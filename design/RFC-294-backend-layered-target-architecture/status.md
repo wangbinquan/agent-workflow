@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d9d506b7e819d2da366fd8b2c42e9f05a5d37d68499ed14213928c3ad89625a0`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,8 +10,8 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1773 |
-| `services/` 文件 | 313 |
+| backend production TS 文件 | 1739 |
+| `services/` 文件 | 296 |
 | `modules/**` 文件 / 非空 context | 1182 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
@@ -33,10 +33,10 @@
 | `architectureExceptions` | 4564 |
 | `backgroundJobs` | 331 |
 | `crossContextImports` | 5081 |
-| `facades` | 313 |
+| `facades` | 296 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24681 |
-| `mutationEntrypoints` | 1675 |
+| `moduleSymbolOwners` | 24551 |
+| `mutationEntrypoints` | 1672 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 960 |
 | `transactionExternalEffects` | 252 |
@@ -141,8 +141,8 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 184 |
-| platform | 144 |
+| task-execution | 167 |
+| platform | 127 |
 | identity-access | 44 |
 | runtime-management | 44 |
 | resource-catalog | 43 |
@@ -163,7 +163,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 117 |
+| task-execution | 100 |
 | runtime-management | 39 |
 | resource-catalog | 30 |
 | workspace-insight | 29 |
@@ -180,7 +180,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 116 |
+| W4-E1 | 99 |
 | W4-E4b | 39 |
 | W4-C | 30 |
 | W4-E5 | 29 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3014 |
-| legacy-inbound | 1359 |
+| legacy-outbound | 3013 |
+| legacy-inbound | 1360 |
 | infrastructure-external | 269 |
 | offered-consumption | 160 |
 | temporary-internal-debt | 92 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3014 |
-| legacy-inbound | 1359 |
+| legacy-outbound | 3013 |
+| legacy-inbound | 1360 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 88 |
 | no-circular | 6 |
@@ -227,13 +227,13 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2312 |
-| W4-E1 | 799 |
+| W9 | 2310 |
+| W4-E1 | 797 |
 | W4-C | 327 |
 | W4-E0 | 213 |
-| W4 | 193 |
+| W4 | 195 |
 | W4-B | 180 |
-| W5 | 154 |
+| W5 | 155 |
 | W4-E8 | 110 |
 | W4-E9 | 60 |
 | W4-E4a | 50 |
@@ -241,7 +241,7 @@
 | W4-E2 | 38 |
 | W4-E4b | 35 |
 | W4-E3 | 27 |
-| W2-D/W3/W5 | 7 |
+| W2-D/W3/W5 | 8 |
 | W9-E | 6 |
 | W4-E10 | 3 |
 | W4-E5 | 2 |

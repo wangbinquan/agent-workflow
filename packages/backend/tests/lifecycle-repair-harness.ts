@@ -1,5 +1,10 @@
 // LOCKS: RFC-057 — shared test harness for repair option suites.
 // Not a *.test.ts file so bun:test doesn't try to run it.
+//
+// RFC-359 AC-1（第 8 刀）：本 harness 曾经自己 `createInMemoryDb` 一个 SQLite 内存库，
+// 于是它托着的 12 个行为套件**只在一个引擎、一份实现上跑过**。现在库由
+// `describeEachProvider` 的 lane 交进来（`buildHarness(harness.db, …)`），修复入口统一取
+// `tests/helpers/repairEngine.ts` 的唯一装配点——同一批断言因此同时落在两个真引擎上。
 
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { insertLegacySelfClarify } from './clarify-fixtures'
@@ -11,8 +16,7 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   docVersions,
   lifecycleAlerts,
@@ -22,42 +26,40 @@ import {
   workflows,
 } from '../src/db/schema'
 import { abortAllActiveTasks } from '../src/services/task'
-import type { StartTaskDeps } from '../src/services/task'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import type { TaskRecoveryOperations } from '../src/modules/task-execution/application/ports/taskRecoveryOperations'
+import { createRepairEngine, type RepairEngine } from './helpers/repairEngine'
 
 export const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 export interface RepairHarness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   workflowId: string
   tmpDir: string
   cleanup: () => void
-  /** Minimal StartTaskDeps suitable for tests: nonexistent opencode binary so
-   *  any background resumeTask -> runTask spawn fails fast and gets swallowed
-   *  by task.ts's `.catch`. Tests should call abortAllActiveTasks + a short
-   *  sleep after applyRepairOption() before asserting to avoid races. */
-  deps: StartTaskDeps
-  operations: TaskRecoveryOperations
+  /**
+   * 修复引擎的唯一装配点（`tests/helpers/repairEngine.ts`）。复活类修复走桩 `resume`，
+   * 不真起子进程——行为套件断言的是库里的状态转移与审计行，不是 spawn。
+   */
+  engine: RepairEngine
 }
 
-export async function buildHarness(opts: {
-  taskStatus:
-    | 'pending'
-    | 'running'
-    | 'awaiting_review'
-    | 'awaiting_human'
-    | 'done'
-    | 'failed'
-    | 'canceled'
-    | 'interrupted'
-  workflow?: WorkflowDefinition
-}): Promise<RepairHarness> {
+export async function buildHarness(
+  db: ProviderNeutralDatabase,
+  opts: {
+    taskStatus:
+      | 'pending'
+      | 'running'
+      | 'awaiting_review'
+      | 'awaiting_human'
+      | 'done'
+      | 'failed'
+      | 'canceled'
+      | 'interrupted'
+    workflow?: WorkflowDefinition
+  },
+): Promise<RepairHarness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc057-repair-'))
   mkdirSync(tmp, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const def: WorkflowDefinition =
     opts.workflow ??
     ({
@@ -88,26 +90,18 @@ export async function buildHarness(opts: {
     inputs: '{}',
     startedAt: Date.now(),
   })
-  const operations = taskRecoveryOperations(db)
   return {
     db,
     taskId,
     workflowId,
     tmpDir: tmp,
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
-    deps: {
-      db,
-      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
-      taskRecoveryOperations: operations,
-      appHome: tmp,
-      binaryOverride: ['/nonexistent-opencode-binary-rfc057-test'],
-    },
-    operations,
+    engine: createRepairEngine(db, { appHome: tmp }),
   }
 }
 
 export async function insertNodeRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     nodeId: string
@@ -154,7 +148,7 @@ export async function insertNodeRun(
 }
 
 export async function insertDocVersion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     reviewNodeRunId: string
@@ -184,7 +178,7 @@ export async function insertDocVersion(
 }
 
 export async function insertClarifySession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     clarifyNodeRunId: string
@@ -210,7 +204,7 @@ export async function insertClarifySession(
 }
 
 export async function insertAlert(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     rule: string
@@ -232,7 +226,7 @@ export async function insertAlert(
 }
 
 export async function readAuditRows(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<
   Array<{
@@ -257,7 +251,7 @@ export async function readAuditRows(
 }
 
 export async function readAlert(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   alertId: string,
 ): Promise<{ resolvedAt: number | null; severity: string } | null> {
   const rows = await db
@@ -269,7 +263,10 @@ export async function readAlert(
   return { resolvedAt: rows[0]!.resolvedAt, severity: rows[0]!.severity }
 }
 
-export async function readNodeRunStatus(db: DbClient, nodeRunId: string): Promise<string | null> {
+export async function readNodeRunStatus(
+  db: ProviderNeutralDatabase,
+  nodeRunId: string,
+): Promise<string | null> {
   const rows = await db
     .select({ status: nodeRuns.status })
     .from(nodeRuns)
@@ -278,7 +275,10 @@ export async function readNodeRunStatus(db: DbClient, nodeRunId: string): Promis
   return rows[0]?.status ?? null
 }
 
-export async function readTaskStatus(db: DbClient, taskId: string): Promise<string | null> {
+export async function readTaskStatus(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<string | null> {
   const rows = await db
     .select({ status: tasks.status })
     .from(tasks)

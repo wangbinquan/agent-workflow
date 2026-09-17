@@ -31,7 +31,7 @@
 //
 //  · `'direct'`   —— 声明文件之外直接引用。
 //  · `{ via: X }` —— 只经由同文件的一个访问器 `X` 出去。本仓有真实例子：
-//                    `REPAIR_OPTIONS` → `listRepairOptionsForAlert` → routes/tasks.ts。
+//                    `OPTION_DEFINITIONS` → `repairOptions` → routes/tasks.ts。
 //                    这形态**必须两半都验**：X 真的读了这张表，**且** X 自己在
 //                    声明文件之外有消费者。只验前半，一张死表配一个恰好活着的
 //                    同文件函数就能蒙混；只验后半，`isProcess` 那种「访问器自己
@@ -50,7 +50,7 @@ import {
 import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
 import { DISABLED_RESOURCE_POLICY } from '@/services/execution/resourcePolicy'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
-import { REPAIR_OPTIONS } from '@/services/lifecycleRepair'
+import { OPTION_DEFINITIONS } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { INVARIANT_RULES, STUCK_RULES } from '@/services/lifecycleInvariants'
 
@@ -118,11 +118,12 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
     why: '技能操作的中断恢复表；daemon 重启修复路径按 op 读。',
   },
   {
-    symbol: 'REPAIR_OPTIONS',
-    declaringFile: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts',
-    keys: Object.keys(REPAIR_OPTIONS),
-    consumption: { via: 'listRepairOptionsForAlert' },
-    why: '每条 lifecycle alert 规则的可选修复动作；路由经 listRepairOptionsForAlert 取，不直接读表。',
+    symbol: 'OPTION_DEFINITIONS',
+    declaringFile:
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+    keys: Object.keys(OPTION_DEFINITIONS),
+    consumption: { via: 'repairOptions' },
+    why: '每个修复选项的元数据；路由经 repairOptions 取，不直接读表。RFC-359 第 8 刀合并两份修复实现后，这是唯一的一张。',
   },
   {
     symbol: 'DAEMON_CADENCE',

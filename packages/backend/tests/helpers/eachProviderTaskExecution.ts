@@ -235,16 +235,7 @@ export async function createEachProviderTaskExecution(
           assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
           appHome,
         }),
-        lifecycleRepair: {
-          appHome,
-          deps: {
-            db: sqlite,
-            ...runConfig,
-            schedulerDriver: {
-              drive: (request) => provider.runtime.schedulerDriver.drive(request),
-            },
-          },
-        },
+        lifecycleRepair: {},
         fusion: { appHome },
         rootResumeRuntime,
         repositoryPreparationRetry: {

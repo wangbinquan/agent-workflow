@@ -36,10 +36,7 @@ import {
 import { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '../infrastructure/taskArchiveMaintenanceCommand'
 import type { AutomaticTaskRepairOptions } from '../infrastructure/postgresqlTaskRouteRepairOperations'
-import {
-  bindTaskLifecycleRepair,
-  createTaskLifecycleAutoRepairCommand,
-} from './taskLifecycleRepair'
+import { createTaskLifecycleAutoRepairCommand } from './taskLifecycleRepair'
 import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
 import { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'
 import { createPostgresqlFusionEngineTaskOperations } from '../infrastructure/postgresqlFusionEngineTaskOperations'
@@ -198,11 +195,20 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     SqliteTaskRouteOperationsDependencies,
     // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：`activity` 与 `recovery` / `launches` 同档
     // ——它是**运行时装配出来的参与者**，由本函数直接交给路由，不劳调用方的 routes 回调再拼一遍。
-    'db' | 'recovery' | 'collaboration' | 'launches' | 'activity'
+    // 第 8 刀把共用修复实现的依赖面（`persistence` / `children` / `topology` /
+    // `resumeRuntimeFor` / `repair`）一并归到这一档：它们同样是本函数手里现成的装配产物。
+    | 'db'
+    | 'recovery'
+    | 'collaboration'
+    | 'launches'
+    | 'activity'
+    | 'persistence'
+    | 'resumeTaskAs'
+    | 'repair'
   > & {
     readonly collaboration: C
   }
-  readonly lifecycleRepair: Omit<Parameters<typeof bindTaskLifecycleRepair>[0], 'db' | 'operations'>
+  readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
   readonly fusion: Omit<
     Parameters<typeof createSqliteFusionEngineTaskOperations>[0],
     'db' | 'schedulerDriver'
@@ -244,6 +250,19 @@ export function composeSqliteTaskExecutionProviderRuntime<
     recovery: persistence.recoveryAdministration,
     launches,
     activity: participants.activity,
+    // RFC-359 AC-1（第 8 刀）：手动 + 自动修复都走共用的那一份实现，依赖面由这里注入。
+    persistence,
+    resumeTaskAs: async (_actor, taskId) => {
+      await participants.children.resume(
+        { taskId, runtime: dependencies.rootResumeRuntime(taskId) },
+        runtime.topology,
+      )
+    },
+    repair: {
+      collaborationRuntime: dependencies.runtime.collaborationRuntime,
+      clarify: createPostgresqlClarifyRepairParticipant(db),
+      review: createPostgresqlReviewRepairParticipant(db),
+    },
     ...routeDependencies,
   })
   const cancellation = cancellationCommand(participants)
@@ -264,12 +283,9 @@ export function composeSqliteTaskExecutionProviderRuntime<
     resume,
     repositoryPreparation: dependencies.repositoryPreparationRetry,
   })
+  // RFC-359 AC-1（第 8 刀）：自动修复循环与 PostgreSQL 共用**同一个**绑定。
   const lifecycleRepair = createTaskLifecycleAutoRepairCommand({
-    ...bindTaskLifecycleRepair({
-      db,
-      operations: persistence.recoveryAdministration,
-      ...dependencies.lifecycleRepair,
-    }),
+    ...taskRoutes.automaticRepair({ resume, ...dependencies.lifecycleRepair }),
     operations: persistence.recoveryAdministration,
     ...(dependencies.lifecycleRepair.now === undefined
       ? {}

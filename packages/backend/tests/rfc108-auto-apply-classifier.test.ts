@@ -16,9 +16,10 @@ import {
   type RepairOption,
 } from '@agent-workflow/shared'
 
-import { REPAIR_OPTIONS } from '../src/services/lifecycleRepair'
+import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
 
-const ALL_OPTIONS = Object.values(REPAIR_OPTIONS).flat()
+// RFC-359 第 8 刀：两份修复实现合成一份，这里读的就是那唯一一张元数据表。
+const ALL_OPTIONS: RepairOption[] = Object.values(OPTION_DEFINITIONS) as RepairOption[]
 
 describe('RFC-108 T13 — autoApplyEligible safety invariant', () => {
   test('every repair option satisfies: autoApplyEligible ⟹ risk===low && !destructive', () => {

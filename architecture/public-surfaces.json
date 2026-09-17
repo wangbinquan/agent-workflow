@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 847,
+    "consumers": 846,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1043,
@@ -25090,6 +25090,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:17d7bb9e4a877407bcf2",
             "import:64d0dcb1c8d8c7dd0a49"
           ],
           "name": "resume",
@@ -150786,8 +150787,7 @@
         "maxUnionVariants": 35
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24",
-        "import:f4b4f678c210e32e252c"
+        "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -150840,16 +150840,12 @@
           "type": "'pending'"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:interruptBootOrphanTask.$parameter:input.now",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:interruptBootOrphanTask.$parameter:input.taskId",
           "type": "string"
         },
@@ -150869,9 +150865,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:interruptNodeRun.$parameter:input.now",
           "type": "number"
         },
@@ -150886,16 +150880,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:interruptPeriodicTaskIfIdle.$parameter:input.now",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:interruptPeriodicTaskIfIdle.$parameter:input.taskId",
           "type": "string"
         },
@@ -150960,9 +150950,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:listStalledRunningChildren.$parameter:input.now",
           "type": "number"
         },
@@ -150987,30 +150975,22 @@
           "type": "readonly TaskRecoveryRunRecord[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadBootOrphanSnapshot.$return.runs",
           "type": "readonly TaskRecoveryRunRecord[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadBootOrphanSnapshot.$return.tasks",
           "type": "readonly TaskRecoveryBootTaskRecord[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadLifecycleInvariantSnapshots.$parameter:scope.$variant:0.taskId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadLifecycleInvariantSnapshots.$parameter:scope.$variant:1.since",
           "type": "number"
         },
@@ -151035,9 +151015,7 @@
           "type": "Record<string, TaskStatus>"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadPeriodicReconcileSnapshot.$return.$variant:0.runs",
           "type": "readonly TaskRecoveryRunRecord[]"
         },
@@ -151072,9 +151050,7 @@
           "type": "readonly TaskLifecycleAlertFindingRecord[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reconcileStuckAlerts.$parameter:input.now",
           "type": "number"
         },
@@ -151094,9 +151070,7 @@
           "type": "readonly string[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reconcileStuckAlerts.$return.newAlerts",
           "type": "number"
         },
@@ -151136,16 +151110,12 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:recordAutoRecoveryAttempt.$parameter:input.now",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:recordAutoRecoveryAttempt.$parameter:input.taskId",
           "type": "string"
         },
@@ -151190,9 +151160,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4b4f678c210e32e252c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:recordEvent.$parameter:input.id",
           "type": "string"
         },
@@ -151434,12 +151402,6 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:f4b4f678c210e32e252c",
-          "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -159747,7 +159709,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727",
+  "sourceDigest": "sha256:d9d506b7e819d2da366fd8b2c42e9f05a5d37d68499ed14213928c3ad89625a0",
   "targetContexts": [
     "collaboration",
     "development-automation",

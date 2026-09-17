@@ -280,6 +280,11 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
     '原成员行的十个有序字段，断言完整对象属性顺序，不是仓库债务或高水位',
   'packages/backend/tests/rfc359-w12-clarify-inline-session-log.test.ts|EXPECTED_DESIGNER_SESSIONS':
     '真实子进程夹具的两次 designer session 与日志末尾换行预期，不是仓库扫描结果或债务豁免表',
+  // ④ RFC-359 第 8 刀新增：**按基名配对的出口**，不是豁免表。写进去的一对会被**加进**
+  //    覆盖账本一起清点（不是被放过），所以它变大等于看得更多；钉一个只降不升的数字，
+  //    反而会让「登记一对隐形的适配器」变成要先改基线的事——正好劝退该做的那件事。
+  'packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts|MANUAL_ADAPTER_PAIRS':
+    '基名对不上的成对适配器的登记出口：条目会被并进覆盖清点，不是把谁排除在外',
   'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SOURCES':
     'matcher 自证的假语料（modules/demo/…），不来自真实仓库',
   'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SINGLE_ENGINE_TEST':
@@ -375,6 +380,7 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_HALF_TEST',
       'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SINGLE_ENGINE_TEST',
       'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SOURCES',
+      'packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts|MANUAL_ADAPTER_PAIRS',
       'packages/backend/tests/intent-teaching-registry.test.ts|FRONTEND_BASELINE',
       'packages/backend/tests/intent-teaching-registry.test.ts|LAUNCH_BASELINE',
       'packages/backend/tests/intent-teaching-registry.test.ts|VALIDATOR_BASELINE',

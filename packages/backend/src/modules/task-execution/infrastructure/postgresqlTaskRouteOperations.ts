@@ -2168,10 +2168,13 @@ export function createPostgresqlTaskRouteOperations(
   const repairs = createPostgresqlTaskRouteRepairOperations({
     db: dependencies.db,
     persistence: dependencies.persistence,
-    children: dependencies.children,
     activity: dependencies.activity,
-    topology: dependencies.topology,
-    resumeRuntimeFor: dependencies.resumeRuntimeFor,
+    resumeTaskAs: async (actor, taskId) => {
+      await dependencies.children.resume(
+        { taskId, runtime: dependencies.resumeRuntimeFor(actor, taskId) },
+        dependencies.topology,
+      )
+    },
     collaborationRuntime: dependencies.repair.collaborationRuntime,
     clarify: dependencies.repair.clarify,
     review: dependencies.repair.review,

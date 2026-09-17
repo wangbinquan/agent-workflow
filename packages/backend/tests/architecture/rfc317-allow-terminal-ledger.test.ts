@@ -76,41 +76,6 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
       'resumeTask / retryNode / syncTaskWorkflow 三条——正是头注释点名的持有者中的三个，终态→pending。',
   },
   {
-    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts',
-    count: 1,
-    rewrites: 'R1 修复：把卡住的 node_run 收成终态。',
-  },
-  {
-    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts',
-    count: 1,
-    rewrites: 'R2 修复：done→awaiting_review（评审行丢失，把任务退回评审）。',
-  },
-  {
-    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-T1.ts',
-    count: 1,
-    rewrites: 'T1 修复：failed|canceled|interrupted|exhausted→awaiting_review。',
-  },
-  {
-    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-T2.ts',
-    count: 1,
-    rewrites: 'T2 修复：failed|canceled|interrupted|exhausted→awaiting_human。',
-  },
-  {
-    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-T3.ts',
-    count: 2,
-    rewrites: 'T3 修复：done→interrupted 与 done→failed（把误判为完成的任务打回）。',
-  },
-  {
-    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-S3.ts',
-    count: 2,
-    rewrites: 'S3 修复：两处 failed|canceled|interrupted|exhausted→pending 的重跑。',
-  },
-  {
-    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-CR1.ts',
-    count: 1,
-    rewrites: 'CR-1 修复：failed→interrupted（把误判失败的任务恢复成可续跑）。',
-  },
-  {
     file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
     count: 11,
     rewrites:
@@ -172,10 +137,14 @@ describe('RFC-317 T49 —— allowTerminal 站点账本（只减不增）', () =
     ).toEqual(expected)
   })
 
-  test('总数就是 31，且每条都写清了改写什么', () => {
-    // 总数单独锁一条：逐文件相等已经能抓住增减，但「19」仍是 lifecycle.ts
+  test('总数就是 22，且每条都写清了改写什么', () => {
+    // 总数单独锁一条：逐文件相等已经能抓住增减，但这个数仍是 lifecycle.ts
     // 头注释里那句「五个具名持有者」的反证，值得让它在测试里显式出现一次。
-    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(31)
+    //
+    // RFC-359 AC-1（第 8 刀）：31 → 22。少掉的 9 处全部来自修复的**第二份实现**
+    //（`platform/persistence/sqlite/taskLifecycleRepair/options-*.ts` 的 7 个文件），
+    // 它随两份合一退役——同一批终态改写在留下的那一份里本来就已经记着（那条 count=11）。
+    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(22)
     for (const entry of ALLOW_TERMINAL_LEDGER) {
       expect(entry.rewrites.length, `${entry.file}.rewrites`).toBeGreaterThan(15)
     }

@@ -43,6 +43,7 @@
 // 不能（要给一侧凭空造一套机制），才是 B 段。
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -164,6 +165,14 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动改走共用参与者，路由不再自己持有
     // 静态校验那道门。本对拍只驱动到前置门为止，参与者一次都不会被调到。
     launches: { launch: async () => unusedDependency('launches.launch') } as never,
+    // RFC-359 AC-1（第 8 刀）：修复两个动词与 PostgreSQL 共用同一份实现；本对拍不驱动它们。
+    persistence: createTaskExecutionPersistence(db),
+    resumeTaskAs: async () => unusedDependency('resumeTaskAs'),
+    repair: {
+      collaborationRuntime: {} as never,
+      clarify: {} as never,
+      review: {} as never,
+    },
     appHome: APP_HOME,
   })
 }

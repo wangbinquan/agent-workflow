@@ -7,12 +7,16 @@
 //     repair never deletes rows — even cancel goes through cancel-by-supersede
 //     which UPDATEs status, doesn't DELETE)
 //   - shared `REPAIR_OPTION_IDS` keys exactly cover `LifecycleAlertRule`
-//   - every backend `REPAIR_OPTIONS[rule].id` is listed in shared
-//     `REPAIR_OPTION_IDS[rule]` (PR-A pairs the compile-time satisfies with
-//     this runtime check so empty PR-A arrays don't silently drift)
+//   - every backend option definition is listed in shared `REPAIR_OPTION_IDS[rule]`
+//     (PR-A pairs the compile-time satisfies with this runtime check so empty
+//     PR-A arrays don't silently drift)
+//
+// RFC-359 AC-1（第 8 刀）：修复原来有两份实现，本守卫只扫其中一份
+// （`platform/persistence/sqlite/taskLifecycleRepair*`，已退役）。锚点换到留下的那一份，
+// 三条源码判据因此第一次覆盖到**两个部署共用**的那段代码。
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import {
@@ -21,28 +25,20 @@ import {
   type LifecycleAlertRule,
 } from '@agent-workflow/shared'
 
-import { REPAIR_OPTIONS } from '../src/services/lifecycleRepair'
+import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
 
-const SQLITE_PERSISTENCE_DIR = resolve(
+const ENGINE_FILE = resolve(
   import.meta.dir,
   '..',
   'src',
-  'platform',
-  'persistence',
-  'sqlite',
+  'modules',
+  'task-execution',
+  'infrastructure',
+  'postgresqlTaskRouteRepairOperations.ts',
 )
-const ENGINE_FILE = resolve(SQLITE_PERSISTENCE_DIR, 'taskLifecycleRepair.ts')
-const OPTIONS_DIR = resolve(SQLITE_PERSISTENCE_DIR, 'taskLifecycleRepair')
 
 function loadEngineSources(): { path: string; content: string }[] {
-  const files: { path: string; content: string }[] = []
-  files.push({ path: ENGINE_FILE, content: readFileSync(ENGINE_FILE, 'utf8') })
-  for (const entry of readdirSync(OPTIONS_DIR)) {
-    if (!entry.endsWith('.ts')) continue
-    const p = resolve(OPTIONS_DIR, entry)
-    files.push({ path: p, content: readFileSync(p, 'utf8') })
-  }
-  return files
+  return [{ path: ENGINE_FILE, content: readFileSync(ENGINE_FILE, 'utf8') }]
 }
 
 // RFC-317 T14 —— 两条判据提到模块顶层：扫描与「matcher 自证」必须走**同一份**
@@ -75,15 +71,14 @@ describe('RFC-057 grep guards', () => {
     }
   })
 
-  test('engine uses transitionNodeRunStatus or setNodeRunStatus at least once', () => {
-    // At least one of the option modules must call one of these helpers.
+  test('node-run 状态转移一律走生命周期端口，不自己拼 UPDATE', () => {
+    // 留下的那份实现经 `persistence.nodeRuns.set(...)`（RFC-097 CAS + 转移表）改状态。
+    // 与上一条「不许裸写」互为正反：这条要求正面写法**确实在用**。
     let total = 0
     for (const { content } of loadEngineSources()) {
-      const m1 = (content.match(/transitionNodeRunStatus\s*\(/g) ?? []).length
-      const m2 = (content.match(/setNodeRunStatus\s*\(/g) ?? []).length
-      total += m1 + m2
+      total += (content.match(/nodeRuns\.set\s*\(/g) ?? []).length
     }
-    expect(total).toBeGreaterThanOrEqual(4) // PR-A: S3.resurrect-x ×2, T1.resurrect, R1.approve, U1.cancel ×2 — well over 4
+    expect(total).toBeGreaterThanOrEqual(3)
   })
 
   test('shared REPAIR_OPTION_IDS keys exactly cover LifecycleAlertRule union', () => {
@@ -93,28 +88,27 @@ describe('RFC-057 grep guards', () => {
     for (const r of ruleSet) expect(sharedKeys.has(r)).toBe(true)
   })
 
-  test('backend REPAIR_OPTIONS option ids appear in shared REPAIR_OPTION_IDS', () => {
-    for (const rule of Object.keys(REPAIR_OPTIONS) as LifecycleAlertRule[]) {
-      const sharedIds = new Set(REPAIR_OPTION_IDS[rule] as readonly string[])
-      for (const def of REPAIR_OPTIONS[rule]) {
-        expect({ rule, optionId: def.id, knownInShared: sharedIds.has(def.id) }).toEqual({
-          rule,
-          optionId: def.id,
-          knownInShared: true,
-        })
-      }
+  test('backend option definitions appear in shared REPAIR_OPTION_IDS', () => {
+    for (const def of Object.values(OPTION_DEFINITIONS)) {
+      const sharedIds = new Set(REPAIR_OPTION_IDS[def.rule] as readonly string[])
+      expect({ rule: def.rule, optionId: def.id, knownInShared: sharedIds.has(def.id) }).toEqual({
+        rule: def.rule,
+        optionId: def.id,
+        knownInShared: true,
+      })
     }
   })
 
   test('every LifecycleAlertRule has ≥ 1 RepairOptionDef (PR-B exhaustiveness)', () => {
     // PR-B narrowed the central `satisfies` to a tuple form so empty arrays
     // fail compilation. This is a runtime backstop for the same guarantee.
-    for (const rule of Object.keys(REPAIR_OPTIONS) as LifecycleAlertRule[]) {
-      expect({ rule, count: REPAIR_OPTIONS[rule].length }).toEqual({
-        rule,
-        count: expect.any(Number),
-      })
-      expect(REPAIR_OPTIONS[rule].length).toBeGreaterThan(0)
+    const byRule = new Map<string, number>()
+    for (const def of Object.values(OPTION_DEFINITIONS)) {
+      byRule.set(def.rule, (byRule.get(def.rule) ?? 0) + 1)
+    }
+    for (const rule of LIFECYCLE_ALERT_RULES as readonly LifecycleAlertRule[]) {
+      expect({ rule, count: byRule.get(rule) ?? 0 }).toEqual({ rule, count: expect.any(Number) })
+      expect(byRule.get(rule) ?? 0).toBeGreaterThan(0)
     }
   })
 })

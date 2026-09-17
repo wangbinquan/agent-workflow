@@ -1947,8 +1947,6 @@ async function composeSqliteProviderSession(
         }
       },
       lifecycleRepair: {
-        appHome: Paths.root,
-        deps: taskStartDepsFor(SYSTEM_USER_ID),
         onAlert: broadcastAlert,
         onResolved: broadcastResolved,
       },

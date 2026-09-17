@@ -1,9 +1,10 @@
 // LOCKS: RFC-057 — T3 repair options (task done but output node not done).
 // 2 options × 3 cases = 6 tests.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 
-import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
+import { describeEachProvider } from './helpers/eachProvider'
+
 import {
   buildHarness,
   insertAlert,
@@ -13,7 +14,7 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 
-describe('RFC-057 — T3.demote-task', () => {
+describeEachProvider('RFC-057 — T3.demote-task', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -21,20 +22,16 @@ describe('RFC-057 — T3.demote-task', () => {
   })
 
   test('happy: done task with missing output → demote to interrupted + resume', async () => {
-    h = await buildHarness({ taskStatus: 'done' })
+    h = await buildHarness(provider.db, { taskStatus: 'done' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'T3',
       detail: { rule: 'T3', missingOutputNodeIds: ['out_1'] },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T3.demote-task',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     // task was demoted to interrupted (pre-resume); resumeTask kicks runTask
@@ -45,18 +42,15 @@ describe('RFC-057 — T3.demote-task', () => {
   })
 
   test('preflight-stale: task no longer done', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'T3',
       detail: { rule: 'T3', missingOutputNodeIds: ['out_1'] },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T3.demote-task')
     expect(opt?.available).toBe(false)
@@ -64,15 +58,12 @@ describe('RFC-057 — T3.demote-task', () => {
   })
 
   test('option metadata: low/medium/high risk distribution', async () => {
-    h = await buildHarness({ taskStatus: 'done' })
+    h = await buildHarness(provider.db, { taskStatus: 'done' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T3', detail: { rule: 'T3' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(list.options.find((o) => o.id === 'T3.demote-task')?.risk).toBe('medium')
     expect(list.options.find((o) => o.id === 'T3.mark-task-failed')?.risk).toBe('high')
@@ -80,7 +71,7 @@ describe('RFC-057 — T3.demote-task', () => {
   })
 })
 
-describe('RFC-057 — T3.mark-task-failed', () => {
+describeEachProvider('RFC-057 — T3.mark-task-failed', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -88,49 +79,38 @@ describe('RFC-057 — T3.mark-task-failed', () => {
   })
 
   test('happy: done task → failed', async () => {
-    h = await buildHarness({ taskStatus: 'done' })
+    h = await buildHarness(provider.db, { taskStatus: 'done' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T3', detail: { rule: 'T3' } })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T3.mark-task-failed',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readTaskStatus(h.db, h.taskId)).toBe('failed')
   })
 
   test('preflight-stale: task is interrupted (not done)', async () => {
-    h = await buildHarness({ taskStatus: 'interrupted' })
+    h = await buildHarness(provider.db, { taskStatus: 'interrupted' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T3', detail: { rule: 'T3' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T3.mark-task-failed')
     expect(opt?.available).toBe(false)
   })
 
   test('audit row contains before snapshot of done state', async () => {
-    h = await buildHarness({ taskStatus: 'done' })
+    h = await buildHarness(provider.db, { taskStatus: 'done' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T3', detail: { rule: 'T3' } })
-    await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T3.mark-task-failed',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const audits = await readAuditRows(h.db, h.taskId)
     expect(audits[0]!.beforeSnapshot).toMatchObject({ task: { status: 'done' } })

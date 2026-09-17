@@ -18,7 +18,9 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
+import { existsSync } from 'node:fs'
+
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
@@ -28,17 +30,15 @@ import type {
   CollaborationRuntimeMechanics,
   ReviewRepairParticipant,
 } from '@/modules/collaboration/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
+import { buildContainerMap } from '@/services/scheduler'
+import { isoKeyOf, isoWorktreePathFor } from '@/services/nodeIsolation'
 import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
+import { isGitWorkTree } from '@/util/git'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
-import type {
-  ActiveTaskExecutionParticipant,
-  ChildTaskLifecycleParticipant,
-} from '../application/ports/taskExecutionRuntimeParticipants'
-import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopology'
-import type { SchedulerRuntimeTopology } from '../public/participants'
+import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskRouteLifecycleAlertNotice, TaskRouteOperations } from '../public/taskRoutes'
 import type { TaskLifecycleAutoRepairBinding } from './taskLifecycleAutoRepairCommand'
 
@@ -332,12 +332,21 @@ const ACTIVITY_GATED_OPTIONS = new Set<RepairOptionId>([
 ])
 
 export interface PostgresqlTaskRouteRepairOperationsDependencies {
-  readonly db: PostgresqlDatabaseClient
+  /**
+   * RFC-359 AC-1（第 8 刀）：句柄是**中立**的。这份实现合并前就已经在两个引擎上被驱动
+   *（`rfc359-w8-auto-repair-conformance` 的两条 lane），合并后更是两个部署共用的唯一一份，
+   * 再标 `PostgresqlDatabaseClient` 只会逼调用方写 `as unknown as`，凭空长出一条跨上下文债边。
+   * 文件名与符号名里的 `postgresql` 仍是历史（naming debt §5hj），与句柄类型无关。
+   */
+  readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
-  readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
-  readonly topology: SchedulerRuntimeTopology
-  readonly resumeRuntimeFor: (actor: Actor, taskId: string) => ChildResumeRuntime
+  /**
+   * RFC-359 AC-1（第 8 刀）：复活类修复需要的**全部**就是这一句「以这个 actor 把这个任务拉起来」。
+   * 此前这里要三样（`children` / `topology` / `resumeRuntimeFor`），而它们只在一处组合成这一句；
+   * 收成一个端口之后，没有装配完整 runtime 的组合根（`server.ts` 那条）也能接上同一份实现。
+   */
+  readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly clarify: ClarifyRepairParticipant
   readonly review: ReviewRepairParticipant
@@ -399,6 +408,17 @@ function isClarifyNode(node: WorkflowNode): boolean {
   return node.kind === 'clarify' || node.kind === 'clarify-cross-agent'
 }
 
+/**
+ * 「哪一行是卡住的、值得复活的那一行」。评审与澄清**判据不同**，不能共用一套分组：
+ *
+ * · **评审**（T1）按 `nodeId|iteration|reviewIteration` 分组，组内**任一行 done 就整组跳过**
+ *   ——同一轮评审里只要有一行走到 done，这一轮就已经有结论了。
+ * · **澄清**（T2）按 **`nodeId` 分组**，只看**最新那一行**（max id）：RFC-074 PR-C 写死的
+ *   「世代按 id 序、不按 clarifyIteration 归组」。旧世代 done 是**正常历史**——它不该把
+ *   新世代那个卡住的轮次一起吞掉。曾经就是「任一 done 即跳组」把这条吞了
+ *   （`lifecycle-repair-T2` 的「newer generation is stuck → resurrect the NEWER (max id)」
+ *   用例照出了这处：gen0=done / gen1=interrupted 同属 iteration 0，被判成无候选）。
+ */
 function latestCandidate(
   runs: readonly RepairNodeRun[],
   nodeIds: ReadonlySet<string>,
@@ -408,17 +428,19 @@ function latestCandidate(
   for (const run of runs) {
     if (!nodeIds.has(run.nodeId)) continue
     const key =
-      grouping === 'review'
-        ? `${run.nodeId}|${run.iteration}|${run.reviewIteration}`
-        : `${run.nodeId}|${run.iteration}`
+      grouping === 'review' ? `${run.nodeId}|${run.iteration}|${run.reviewIteration}` : run.nodeId
     const group = groups.get(key) ?? []
     group.push(run)
     groups.set(key, group)
   }
   let candidate: RepairNodeRun | null = null
   for (const group of groups.values()) {
-    if (group.some((run) => run.status === 'done')) continue
     const latest = group.reduce((left, right) => (right.id > left.id ? right : left))
+    // 评审看整组，澄清只看最新那一代。
+    if (
+      grouping === 'review' ? group.some((run) => run.status === 'done') : latest.status === 'done'
+    )
+      continue
     if (!TERMINAL_NON_DONE_SET.has(latest.status)) continue
     if (candidate === null || latest.id > candidate.id) candidate = latest
   }
@@ -426,7 +448,7 @@ function latestCandidate(
 }
 
 async function loadAlert(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   alertId: string,
 ): Promise<ParsedAlert> {
@@ -469,7 +491,7 @@ async function loadAlert(
   }
 }
 
-async function loadTask(db: PostgresqlDatabaseClient, taskId: string): Promise<RepairTask> {
+async function loadTask(db: ProviderNeutralDatabase, taskId: string): Promise<RepairTask> {
   const row = await db
     .select({
       id: tasks.id,
@@ -488,7 +510,7 @@ async function loadTask(db: PostgresqlDatabaseClient, taskId: string): Promise<R
 }
 
 async function loadNodeRun(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeRunId: string,
 ): Promise<RepairNodeRun | null> {
@@ -510,7 +532,7 @@ async function loadNodeRun(
 }
 
 async function loadNodeRuns(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<readonly RepairNodeRun[]> {
   return await db
@@ -544,6 +566,48 @@ async function reviewCandidate(
   if (ctx.definition === null) return null
   const ids = new Set(ctx.definition.nodes.filter(isReviewNode).map((node) => node.id))
   return latestCandidate(await loadNodeRuns(dependencies.db, ctx.task.id), ids, 'review')
+}
+
+/**
+ * RFC-193 §4.6 —— S1 是 scheduler 之外唯一的 `dispatchReviewNode` 生产调用方，
+ * 传 `task.worktreePath` 会在 **wrapper 内的 review** 上复现该 RFC 的原始断链。
+ * 按 wrapper run 谱系恢复：review 属某 git/loop wrapper（`containerOf`）且该 wrapper
+ * 最新一次 run 的 iso 容器目录仍是**活的工作树** ⇒ 用它；否则退回 `task.worktreePath`
+ * （顶层 / iso 已灭——不劣于现状）。
+ *
+ * RFC-356 T15：iso 键不一定等于行 id（RFC-210 的跨重试复用、RFC-356 的代际自愈），
+ * 所以从持久化路径回读物理键，而不是按行 id 裸派生。兜底判据是「**是活的工作树**」
+ * 而不是「目录存在」：legacy / passthrough 行没有持久化路径，会退回按行 id 派生，
+ * 那恰好可能是代际自愈已经放弃的阻塞残留——它作为目录存在但不再是工作树，
+ * 拿它当 scopeRoot 会让修复动作落在废墟上。
+ *
+ * RFC-359 AC-1（第 8 刀）：本函数随两份修复实现合一从退役那份移植过来。合并前留下的
+ * 这一份直接传 `ctx.task.worktreePath`，正是 `rfc193-wrapper-review` case 8d 钉死禁止的写法。
+ */
+async function deriveScopeRoot(
+  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  ctx: RepairContext,
+  reviewNodeId: string,
+): Promise<string> {
+  const taskWorktreePath = ctx.task.worktreePath
+  if (ctx.definition === null) return taskWorktreePath
+  const wrapperId = buildContainerMap(ctx.definition).get(reviewNodeId)
+  if (wrapperId === undefined) return taskWorktreePath
+  const rows = await dependencies.db
+    .select({ id: nodeRuns.id, isoWorktreePath: nodeRuns.isoWorktreePath })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, ctx.task.id), eq(nodeRuns.nodeId, wrapperId)))
+    .orderBy(desc(nodeRuns.id))
+    .limit(1)
+  const wrapperRun = rows[0]
+  if (wrapperRun === undefined) return taskWorktreePath
+  const isoRoot = isoWorktreePathFor(
+    dependencies.appHome,
+    ctx.task.id,
+    isoKeyOf(wrapperRun.isoWorktreePath ?? null, wrapperRun.id),
+    '',
+  )
+  return existsSync(isoRoot) && (await isGitWorkTree(isoRoot)) ? isoRoot : taskWorktreePath
 }
 
 async function clarifyCandidate(
@@ -858,7 +922,7 @@ async function preflight(
           resume: true,
           finishedAt: 'now',
         },
-        `Reopen failed task ${ctx.task.id} as interrupted and resume it.`,
+        `Reopen failed task ${ctx.task.id} as interrupted and resume it — the scheduler freshness invariant cascades downstream.`,
       )
     case 'S1.recreate-doc-version': {
       if (ctx.task.status !== 'awaiting_review') {
@@ -869,6 +933,12 @@ async function preflight(
       }
       const hinted = repairHintNodeRunId(ctx.alert.detail)
       const reviewIds = new Set(ctx.definition.nodes.filter(isReviewNode).map((node) => node.id))
+      // RFC-359 AC-1（第 8 刀）：**先问「这条工作流有没有评审节点」**，再问「有没有在等评审的
+      // run」。这两句给运维的是不同的结论——「压根没有评审节点」说明这条告警本身就不该对这个
+      // 任务提这个修复，「没有在等评审的 run」说明修复对，只是时机过了。合并前这里缺了第一问，
+      // 于是零评审节点的工作流被报成 `noAwaitingReviewRun`（`lifecycle-repair-S1` 的
+      // 「workflow has no review nodes」用例照出了这处）。
+      if (reviewIds.size === 0) return unavailable('diagnose.repair.S1.unavailable.noReviewNode')
       const candidates = (await loadNodeRuns(dependencies.db, ctx.task.id))
         .filter((run) => run.status === 'awaiting_review' && reviewIds.has(run.nodeId))
         .sort((left, right) => right.id.localeCompare(left.id))
@@ -878,15 +948,18 @@ async function preflight(
       if (run === undefined) {
         return unavailable('diagnose.repair.S1.unavailable.noAwaitingReviewRun')
       }
+      // run 指着的节点在快照里找不到 = 快照坏了，不是「没有评审节点」（上面那一问已经排除）。
       const node = ctx.definition.nodes.find((candidate) => candidate.id === run.nodeId)
-      if (node === undefined) return unavailable('diagnose.repair.S1.unavailable.noReviewNode')
+      if (node === undefined) {
+        return unavailable('diagnose.repair.S1.unavailable.workflowSnapshotCorrupt')
+      }
       return available(
         {
           kind: 'review-dispatch',
           definition: ctx.definition,
           node,
           iteration: run.iteration,
-          scopeRoot: ctx.task.worktreePath,
+          scopeRoot: await deriveScopeRoot(dependencies, ctx, node.id),
         },
         `Re-dispatch review node ${node.id} at iteration ${run.iteration}.`,
       )
@@ -940,6 +1013,15 @@ async function preflight(
         nodeRunId: run.id,
       })
       if (round === null) {
+        // RFC-359 AC-1（第 8 刀）：**「已经开着」和「压根没有可重开的会话」是两个结论**，
+        // 不能共用一句。会话还开着意味着 S2 这条告警本身就是陈旧的（重开无事可做）；
+        // 没有已关闭的会话则意味着这个修复对这个节点就不适用。合并前这里只剩后一句，
+        // 于是前一种情形被报成 `noClosedSession`（`lifecycle-repair-S2` 的
+        // 「session already open (invariant should not have fired)」用例照出了这处）。
+        if (
+          await dependencies.clarify.hasOpenForNodeRun({ taskId: ctx.task.id, nodeRunId: run.id })
+        )
+          return unavailable('diagnose.repair.S2.reopenSession.unavailable.sessionAlreadyOpen')
         return unavailable('diagnose.repair.S2.reopenSession.unavailable.noClosedSession')
       }
       return available(
@@ -1020,7 +1102,7 @@ async function preflight(
           resume: true,
           finishedAt: 'now',
         },
-        `Kick pending task ${ctx.task.id} through interrupted and resume it.`,
+        `Kick pending task ${ctx.task.id} through interrupted and resume it — forces a fresh scheduler kick.`,
       )
     case 'S4.cancel-task':
       return taskStatusPreflight(
@@ -1313,7 +1395,7 @@ async function writeAudit(
 }
 
 async function openAlerts(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<readonly Readonly<{ id: string; rule: string }>[]> {
   return await db
@@ -1540,10 +1622,7 @@ export function createPostgresqlTaskRouteRepairOperations(
         optionId: input.optionId,
         actorUserId: input.actor.user.id,
         resume: async (taskId) => {
-          await dependencies.children.resume(
-            { taskId, runtime: dependencies.resumeRuntimeFor(input.actor, taskId) },
-            dependencies.topology,
-          )
+          await dependencies.resumeTaskAs(input.actor, taskId)
         },
         ...(onAlert === undefined ? {} : { onAlert }),
         onResolved: input.onResolved,

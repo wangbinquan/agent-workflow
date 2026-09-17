@@ -2,9 +2,10 @@
 // Mirrors design/RFC-057-diagnose-repair-actions/design.md §4.3 (S3 row).
 // 4 options × 3 cases = 12 tests + 1 stale-alert reentrancy guard.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 
-import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
+import { describeEachProvider } from './helpers/eachProvider'
+
 import {
   buildHarness,
   insertAlert,
@@ -17,7 +18,7 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 
-describe('RFC-057 — S3.resurrect-review-run', () => {
+describeEachProvider('RFC-057 — S3.resurrect-review-run', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -25,7 +26,7 @@ describe('RFC-057 — S3.resurrect-review-run', () => {
   })
 
   test('happy: review row interrupted at current iter → flips to pending + task interrupted + resume', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const reviewRunId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'interrupted',
@@ -36,27 +37,20 @@ describe('RFC-057 — S3.resurrect-review-run', () => {
       detail: { rule: 'S3', message: 'all runs terminal', totalRuns: 1, terminalRuns: 1 },
     })
 
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'S3.resurrect-review-run')
     expect(opt?.available).toBe(true)
     expect(opt?.previewSteps.length).toBeGreaterThan(0)
 
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'S3.resurrect-review-run',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(res.ok).toBe(true)
@@ -83,20 +77,17 @@ describe('RFC-057 — S3.resurrect-review-run', () => {
   })
 
   test('preflight-stale: no terminal-non-done review run → option unavailable + 409 + audit row outcome=preflight-stale', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     // Only a `done` review run, no candidate to resurrect.
     await insertNodeRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'S3',
       detail: { rule: 'S3', message: 'all runs terminal', totalRuns: 1, terminalRuns: 1 },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'S3.resurrect-review-run')
     expect(opt?.available).toBe(false)
@@ -106,15 +97,11 @@ describe('RFC-057 — S3.resurrect-review-run', () => {
 
     let threw = false
     try {
-      await applyRepairOption({
-        db: h.db,
-        operations: h.operations,
+      await h.engine.applyRepairOption({
         taskId: h.taskId,
         alertId,
         optionId: 'S3.resurrect-review-run',
         actorUserId: 'u-1',
-        appHome: h.tmpDir,
-        deps: h.deps,
       })
     } catch (err) {
       threw = true
@@ -128,7 +115,7 @@ describe('RFC-057 — S3.resurrect-review-run', () => {
   })
 })
 
-describe('RFC-057 — S3.resurrect-clarify-run', () => {
+describeEachProvider('RFC-057 — S3.resurrect-clarify-run', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -136,7 +123,7 @@ describe('RFC-057 — S3.resurrect-clarify-run', () => {
   })
 
   test('happy: clarify row interrupted at current iter → flips to pending + task interrupted + resume', async () => {
-    h = await buildHarness({
+    h = await buildHarness(provider.db, {
       taskStatus: 'running',
       workflow: {
         $schema_version: 4,
@@ -154,15 +141,11 @@ describe('RFC-057 — S3.resurrect-clarify-run', () => {
       rule: 'S3',
       detail: { rule: 'S3' },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'S3.resurrect-clarify-run',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, clarifyRunId)).toBe('pending')
@@ -174,25 +157,22 @@ describe('RFC-057 — S3.resurrect-clarify-run', () => {
   })
 
   test('preflight-stale: no clarify node in workflow', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'S3',
       detail: { rule: 'S3' },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'S3.resurrect-clarify-run')
     expect(opt?.available).toBe(false)
   })
 })
 
-describe('RFC-057 — S3.demote-task', () => {
+describeEachProvider('RFC-057 — S3.demote-task', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -200,18 +180,14 @@ describe('RFC-057 — S3.demote-task', () => {
   })
 
   test('happy: task running → interrupted + resume, regardless of node_runs shape', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     await insertNodeRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'S3.demote-task',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     const audits = await readAuditRows(h.db, h.taskId)
@@ -219,19 +195,15 @@ describe('RFC-057 — S3.demote-task', () => {
   })
 
   test('preflight-stale: task is no longer running', async () => {
-    h = await buildHarness({ taskStatus: 'done' })
+    h = await buildHarness(provider.db, { taskStatus: 'done' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
     let threw = false
     try {
-      await applyRepairOption({
-        db: h.db,
-        operations: h.operations,
+      await h.engine.applyRepairOption({
         taskId: h.taskId,
         alertId,
         optionId: 'S3.demote-task',
         actorUserId: null,
-        appHome: h.tmpDir,
-        deps: h.deps,
       })
     } catch (err) {
       threw = true
@@ -249,7 +221,7 @@ describe('RFC-057 — S3.demote-task', () => {
   })
 })
 
-describe('RFC-057 — S3.mark-task-failed', () => {
+describeEachProvider('RFC-057 — S3.mark-task-failed', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -257,18 +229,14 @@ describe('RFC-057 — S3.mark-task-failed', () => {
   })
 
   test('happy: task running → failed; no resume', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     await insertNodeRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'S3.mark-task-failed',
       actorUserId: 'u-2',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readTaskStatus(h.db, h.taskId)).toBe('failed')
@@ -277,19 +245,15 @@ describe('RFC-057 — S3.mark-task-failed', () => {
   })
 
   test('preflight-stale: task no longer running', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
     let threw = false
     try {
-      await applyRepairOption({
-        db: h.db,
-        operations: h.operations,
+      await h.engine.applyRepairOption({
         taskId: h.taskId,
         alertId,
         optionId: 'S3.mark-task-failed',
         actorUserId: null,
-        appHome: h.tmpDir,
-        deps: h.deps,
       })
     } catch (err) {
       threw = true
@@ -299,15 +263,12 @@ describe('RFC-057 — S3.mark-task-failed', () => {
   })
 
   test('destructive flag is set on the mark-failed option (UI hint)', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'S3.mark-task-failed')
     expect(opt?.destructive).toBe(true)
@@ -315,7 +276,7 @@ describe('RFC-057 — S3.mark-task-failed', () => {
   })
 })
 
-describe('RFC-057 — S3 cross-cutting', () => {
+describeEachProvider('RFC-057 — S3 cross-cutting', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -323,7 +284,7 @@ describe('RFC-057 — S3 cross-cutting', () => {
   })
 
   test('apply on already-resolved alert → 409 alert-already-resolved', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
     // Manually flip resolvedAt.
     const { lifecycleAlerts } = await import('../src/db/schema')
@@ -334,15 +295,11 @@ describe('RFC-057 — S3 cross-cutting', () => {
       .where(eq(lifecycleAlerts.id, alertId))
     let threw = false
     try {
-      await applyRepairOption({
-        db: h.db,
-        operations: h.operations,
+      await h.engine.applyRepairOption({
         taskId: h.taskId,
         alertId,
         optionId: 'S3.demote-task',
         actorUserId: null,
-        appHome: h.tmpDir,
-        deps: h.deps,
       })
     } catch (err) {
       threw = true
@@ -352,19 +309,15 @@ describe('RFC-057 — S3 cross-cutting', () => {
   })
 
   test('rule mismatch: applying a T1 option on an S3 alert → 422 repair-option-rule-mismatch', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
     let threw = false
     try {
-      await applyRepairOption({
-        db: h.db,
-        operations: h.operations,
+      await h.engine.applyRepairOption({
         taskId: h.taskId,
         alertId,
         optionId: 'T1.demote-task',
         actorUserId: null,
-        appHome: h.tmpDir,
-        deps: h.deps,
       })
     } catch (err) {
       threw = true
@@ -374,19 +327,15 @@ describe('RFC-057 — S3 cross-cutting', () => {
   })
 
   test('unknown optionId → 422 unknown-repair-option', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
     let threw = false
     try {
-      await applyRepairOption({
-        db: h.db,
-        operations: h.operations,
+      await h.engine.applyRepairOption({
         taskId: h.taskId,
         alertId,
         optionId: 'S99.do-nothing',
         actorUserId: null,
-        appHome: h.tmpDir,
-        deps: h.deps,
       })
     } catch (err) {
       threw = true

@@ -32,11 +32,13 @@
 
 import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+
+import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
 import {
   StartAgentTaskSchema,
   WorkflowDefinitionSchema,
@@ -756,32 +758,52 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
     // the caught case) walks straight into generic resumeTask. Judge each
     // def by its SOURCE: resumeAfterApply, node-run minting, or a resurrect
     // id all mean "revives execution" and MUST be stamped.
-    const dir = join(import.meta.dir, '..', 'src', 'services', 'lifecycleRepair')
-    for (const file of readdirSync(dir).filter((f: string) => f.startsWith('options-'))) {
-      const src = readFileSync(join(dir, file), 'utf8')
-      const heads = [...src.matchAll(/const \w+: RepairOptionDef = \{/g)]
-      for (let i = 0; i < heads.length; i++) {
-        const start = heads[i]!.index!
-        const end = i + 1 < heads.length ? heads[i + 1]!.index! : src.length
-        const block = src.slice(start, end)
-        const id = /id: '([^']+)'/.exec(block)?.[1] ?? '(unknown)'
-        const revives =
-          block.includes('resumeAfterApply') ||
-          block.includes('mintNodeRun') ||
-          id.includes('resurrect')
-        if (revives) {
-          expect(block.includes('revivesExecution: true'), `${file} ${id} must be stamped`).toBe(
-            true,
-          )
-        }
-      }
+    // RFC-359 第 8 刀：修复只剩一份实现，判据随它换形状——「会复活执行」的证据从
+    // 逐个 `RepairOptionDef` 里的 `resumeAfterApply` / `mintNodeRun` 变成 preflight
+    // 交出的动作描述符（`resume: true` 或 `kind: 'node-and-task-resume'`），
+    // 以及 id 里那个 `resurrect`。判据本身一字未改：**凡是会复活的，必须盖章**，
+    // 否则工作组拒绝那道门漏掉它，它就直接走进通用 resumeTask。
+    const engineSource = readFileSync(
+      join(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteRepairOperations.ts',
+      ),
+      'utf8',
+    )
+    const preflightStart = engineSource.indexOf('async function preflight(')
+    // 收在 switch 的收尾花括号处——不收的话最后一个 case 会把函数之后的整份源码吞进去，
+    // 于是一个 `resume: false` 的取消选项被后文里别处的 `resume: true` 误判成会复活。
+    const preflight = engineSource.slice(
+      preflightStart,
+      engineSource.indexOf('\n  }\n}', preflightStart),
+    )
+    const caseHeads = [...preflight.matchAll(/case '([A-Z]+-?\d*\.[a-z-]+)':/g)]
+    expect(caseHeads.length, '抽不到 preflight 的选项分支 ⇒ 判据失效').toBeGreaterThan(20)
+    for (let i = 0; i < caseHeads.length; i++) {
+      const id = caseHeads[i]![1]!
+      const start = caseHeads[i]!.index!
+      const end = i + 1 < caseHeads.length ? caseHeads[i + 1]!.index! : preflight.length
+      const block = preflight.slice(start, end)
+      const revives =
+        block.includes('resume: true') ||
+        block.includes("kind: 'node-and-task-resume'") ||
+        id.includes('resurrect')
+      if (!revives) continue
+      const definition = (OPTION_DEFINITIONS as Record<string, { revivesExecution?: boolean }>)[id]
+      expect(definition?.revivesExecution, `${id} 会复活执行，必须盖 revivesExecution`).toBe(true)
     }
   })
 
   test('A7b repair list marks revive options unavailable + apply refuses (workgroup task)', async () => {
-    const { listRepairOptionsForAlert, applyRepairOption } =
-      await import('../src/services/lifecycleRepair')
+    // RFC-359 第 8 刀：修复只剩一份实现，测试统一经 `tests/helpers/repairEngine.ts` 装配。
+    const { createRepairEngine } = await import('./helpers/repairEngine')
     const { lifecycleAlerts } = await import('../src/db/schema')
+    const engine = createRepairEngine(db, { appHome: '/tmp' })
     const wf = ulid()
     await db.insert(workflows).values({
       id: wf,
@@ -815,14 +837,10 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
       detectedAt: Date.now(),
     } as never)
 
-    const deps = { db } as never
-    const listed = await listRepairOptionsForAlert({
-      db,
+    const listed = await engine.listRepairOptionsForAlert({
       taskId,
       alertId,
       actorUserId: null,
-      appHome: '/tmp',
-      deps,
     })
     const kick = listed.options.find((o) => o.id === 'S4.kick-task')
     expect(kick).toBeDefined()
@@ -830,15 +848,11 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
     expect(kick!.unavailableReasonKey).toBe('diagnose.repair.common.workgroupUnsupported')
 
     await expect(
-      applyRepairOption({
-        db,
-        operations: taskRecoveryOperations(db),
+      engine.applyRepairOption({
         taskId,
         alertId,
         optionId: 'S4.kick-task',
         actorUserId: null,
-        appHome: '/tmp',
-        deps,
       }),
     ).rejects.toMatchObject({ code: 'workgroup-repair-unsupported' })
   })

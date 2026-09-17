@@ -1,9 +1,10 @@
 // LOCKS: RFC-057 — T2 repair options (task awaiting_human but no awaiting_human run).
 // 2 options × 3 cases = 6 tests.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 
-import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
+import { describeEachProvider } from './helpers/eachProvider'
+
 import {
   buildHarness,
   insertAlert,
@@ -15,7 +16,7 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 
-describe('RFC-057 — T2.demote-task', () => {
+describeEachProvider('RFC-057 — T2.demote-task', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -23,7 +24,7 @@ describe('RFC-057 — T2.demote-task', () => {
   })
 
   test('happy: awaiting_human task with no awaiting_human run → demote + resume', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human' })
     await insertNodeRun(h.db, h.taskId, {
       nodeId: 'clarify_1',
       status: 'interrupted',
@@ -33,15 +34,11 @@ describe('RFC-057 — T2.demote-task', () => {
       rule: 'T2',
       detail: { rule: 'T2', taskId: h.taskId },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T2.demote-task',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     const audits = await readAuditRows(h.db, h.taskId)
@@ -49,39 +46,35 @@ describe('RFC-057 — T2.demote-task', () => {
   })
 
   test('preflight-stale: task no longer awaiting_human', async () => {
-    h = await buildHarness({ taskStatus: 'running' })
+    h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T2', detail: { rule: 'T2' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T2.demote-task')
     expect(opt?.available).toBe(false)
     expect(opt?.unavailableReasonKey).toBe('diagnose.repair.T2.unavailable.taskNotAwaitingHuman')
   })
 
-  test('preview steps mention resumeTask + SQL', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human' })
+  test('preview steps say the task gets demoted and resumed', async () => {
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T2', detail: { rule: 'T2' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T2.demote-task')
     expect(opt?.previewSteps.length).toBeGreaterThan(0)
-    expect(opt?.previewSteps.some((s) => s.includes('resumeTask'))).toBe(true)
+    // RFC-359 AC-1（第 8 刀）：预览断言的是**运维读到的意思**（这个修复会把任务重新拉起来），
+    // 不再断言内部函数名 / 字面 SQL——合并后修复对话框统一给人话摘要，实现细节不出界面。
+    expect(opt?.previewSteps.some((s) => s.includes('resume it'))).toBe(true)
   })
 })
 
-describe('RFC-057 — T2.resurrect-clarify-run', () => {
+describeEachProvider('RFC-057 — T2.resurrect-clarify-run', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -89,7 +82,7 @@ describe('RFC-057 — T2.resurrect-clarify-run', () => {
   })
 
   test('happy: terminal clarify run + open clarify_session → flip back to awaiting_human', async () => {
-    h = await buildHarness({
+    h = await buildHarness(provider.db, {
       taskStatus: 'awaiting_human',
       workflow: {
         $schema_version: 4,
@@ -112,22 +105,18 @@ describe('RFC-057 — T2.resurrect-clarify-run', () => {
       rule: 'T2',
       detail: { rule: 'T2' },
     })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T2.resurrect-clarify-run',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, clarifyRunId)).toBe('awaiting_human')
   })
 
   test('preflight-stale: no terminal clarify run', async () => {
-    h = await buildHarness({
+    h = await buildHarness(provider.db, {
       taskStatus: 'awaiting_human',
       workflow: {
         $schema_version: 4,
@@ -138,13 +127,10 @@ describe('RFC-057 — T2.resurrect-clarify-run', () => {
     })
     await insertNodeRun(h.db, h.taskId, { nodeId: 'clarify_1', status: 'done' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T2', detail: { rule: 'T2' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T2.resurrect-clarify-run')
     expect(opt?.available).toBe(false)
@@ -154,7 +140,7 @@ describe('RFC-057 — T2.resurrect-clarify-run', () => {
   })
 
   test('preflight-stale: terminal run exists but no open clarify_session', async () => {
-    h = await buildHarness({
+    h = await buildHarness(provider.db, {
       taskStatus: 'awaiting_human',
       workflow: {
         $schema_version: 4,
@@ -174,13 +160,10 @@ describe('RFC-057 — T2.resurrect-clarify-run', () => {
       status: 'answered',
     })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T2', detail: { rule: 'T2' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T2.resurrect-clarify-run')
     expect(opt?.available).toBe(false)
@@ -196,7 +179,7 @@ describe('RFC-057 — T2.resurrect-clarify-run', () => {
 // LATEST row by id and only resurrects when THAT row is terminal-non-done. A
 // regression to "any stuck row" (the pre-RFC-074 cci-grouped shape) would
 // resurrect a superseded older generation. These two cases pin the boundary.
-describe('RFC-074 PR-C — T2.resurrect id-ordered generation selection', () => {
+describeEachProvider('RFC-074 PR-C — T2.resurrect id-ordered generation selection', (provider) => {
   let h: RepairHarness
   afterEach(async () => {
     await settleResumes()
@@ -211,7 +194,7 @@ describe('RFC-074 PR-C — T2.resurrect id-ordered generation selection', () => 
   }
 
   test('newer generation reached done → no resurrection even with an older stuck row', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human', workflow: clarifyWf })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human', workflow: clarifyWf })
     // gen0 (older id) is a stuck interrupted round; gen1 (newer id) is a fresh
     // round that reached done — the clarify resolved, so T2 must NOT resurrect.
     await insertNodeRun(h.db, h.taskId, {
@@ -227,13 +210,10 @@ describe('RFC-074 PR-C — T2.resurrect id-ordered generation selection', () => 
       finishedAt: Date.now(),
     })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T2', detail: { rule: 'T2' } })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'T2.resurrect-clarify-run')
     expect(opt?.available).toBe(false)
@@ -243,7 +223,7 @@ describe('RFC-074 PR-C — T2.resurrect id-ordered generation selection', () => 
   })
 
   test('newer generation is stuck → resurrect the NEWER (max id), leaving the older done row', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_human', workflow: clarifyWf })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_human', workflow: clarifyWf })
     // gen0 (older id) resolved to done; gen1 (newer id) is the stuck round with
     // an open session — resurrection targets gen1, not the older done gen0.
     const gen0 = await insertNodeRun(h.db, h.taskId, {
@@ -264,15 +244,11 @@ describe('RFC-074 PR-C — T2.resurrect id-ordered generation selection', () => 
       status: 'awaiting_human',
     })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T2', detail: { rule: 'T2' } })
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,
       optionId: 'T2.resurrect-clarify-run',
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, gen1)).toBe('awaiting_human')

@@ -48,8 +48,8 @@
       "id": "lifecycle-status-set-exemptions",
       "file": "packages/backend/tests/architecture/rfc317-lifecycle-status-sets.test.ts",
       "symbol": "EXEMPTIONS",
-      "baseline": 3,
-      "why": "仍手抄任务状态集合而未走 shared 派生的站点。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "baseline": 1,
+      "why": "仍手抄任务状态集合而未走 shared 派生的站点。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 AC-1（第 8 刀）3 → 1：两条豁免指向修复的第二份实现（`taskLifecycleRepair/options-R{1,2}.ts`），随两份合一退役——不是放宽判据，是被豁免的代码没了。"
     },
     {
       "id": "merge-state-blind-writes",
@@ -524,8 +524,8 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 327,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎。RFC-359 AC-6（plan §5ep）335 → 334：`limits` 随同一刀销账（它只需要 `enforceLimits`）。RFC-359 AC-6（plan §5es）334 → 333：`rfc357` 的三态授权谓词转双引擎——它锁的正是 NULL 比较那个坑，两个引擎渲染不同，尤其该双跑 RFC-359 AC-6（2026-09-15）333 → 332：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，唯一那处 `createInMemoryDb` 消失。 同日 332 → 331：`rfc291-closure-call-edges.test.ts` 的最后一处随死脚手架删除。 同日 331 → 330：`rfc349-websocket-provider.test.ts` 的假池孪生合一。 RFC-359 AC-6（plan §5gj）330 → 329：`rfc310-pr7b-handover.test.ts` 的 HTTP 面真迁——它原来用 `createApp({ db: createInMemoryDb(...) })`，而 `createApp` 不是能放宽形参的入口，它就是 SQLite 组合根的大门；改用仓里既有的 `describeEachProviderHttpApplication`（全仓 113 个文件在用），两个引擎各装一个真应用。本文件上半部早有四处 `describeEachProvider`，所以这一格是**残留**而不是被根挡住。4 例 → 8 例。 RFC-359 AC-6（plan §5gn）329 → 328：`rfc349-execution-peripheral-provider.test.ts` 真迁——它原来是**一真一假**：SQLite 那格用真库读回行、断言内容与幂等；PostgreSQL 那格用本地手搓的假池（记 SQL 文本、回罐头行），唯一断言是「某条 SQL 里出现过 workflows 那张表的 schema 限定名」——证明不了行真写进去了、更证明不了写两次幂等。两个 composer 的 `db` 形参本来就是 `ProviderNeutralDatabase`，合一**零生产改动**。变异验证：把期望的 name 改错 ⇒ **两个引擎各红一格**（迁移前同一处变异只会红 SQLite 一格，PG 那格压根没看 name）。 RFC-359 AC-1（plan §5gt）328 → 327：`rfc221-login-policy-routes` 的最后一格随**被测状态一起消失**——把 `AppDeps.secretBox` 收成必填之后，那格「不传 secretBox ⇒ OIDC 装配退化成 null ⇒ 两条 503」所测的状态在生产与测试里都不再构造得出来（改完实测：那两条断言从 503 变 404）。不是删测试，是连同它锁的那个分支一起退役；该文件注释当年就写明这是正解。"
+      "baseline": 326,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎。RFC-359 AC-6（plan §5ep）335 → 334：`limits` 随同一刀销账（它只需要 `enforceLimits`）。RFC-359 AC-6（plan §5es）334 → 333：`rfc357` 的三态授权谓词转双引擎——它锁的正是 NULL 比较那个坑，两个引擎渲染不同，尤其该双跑 RFC-359 AC-6（2026-09-15）333 → 332：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，唯一那处 `createInMemoryDb` 消失。 同日 332 → 331：`rfc291-closure-call-edges.test.ts` 的最后一处随死脚手架删除。 同日 331 → 330：`rfc349-websocket-provider.test.ts` 的假池孪生合一。 RFC-359 AC-6（plan §5gj）330 → 329：`rfc310-pr7b-handover.test.ts` 的 HTTP 面真迁——它原来用 `createApp({ db: createInMemoryDb(...) })`，而 `createApp` 不是能放宽形参的入口，它就是 SQLite 组合根的大门；改用仓里既有的 `describeEachProviderHttpApplication`（全仓 113 个文件在用），两个引擎各装一个真应用。本文件上半部早有四处 `describeEachProvider`，所以这一格是**残留**而不是被根挡住。4 例 → 8 例。 RFC-359 AC-6（plan §5gn）329 → 328：`rfc349-execution-peripheral-provider.test.ts` 真迁——它原来是**一真一假**：SQLite 那格用真库读回行、断言内容与幂等；PostgreSQL 那格用本地手搓的假池（记 SQL 文本、回罐头行），唯一断言是「某条 SQL 里出现过 workflows 那张表的 schema 限定名」——证明不了行真写进去了、更证明不了写两次幂等。两个 composer 的 `db` 形参本来就是 `ProviderNeutralDatabase`，合一**零生产改动**。变异验证：把期望的 name 改错 ⇒ **两个引擎各红一格**（迁移前同一处变异只会红 SQLite 一格，PG 那格压根没看 name）。 RFC-359 AC-1（plan §5gt）328 → 327：`rfc221-login-policy-routes` 的最后一格随**被测状态一起消失**——把 `AppDeps.secretBox` 收成必填之后，那格「不传 secretBox ⇒ OIDC 装配退化成 null ⇒ 两条 503」所测的状态在生产与测试里都不再构造得出来（改完实测：那两条断言从 503 变 404）。不是删测试，是连同它锁的那个分支一起退役；该文件注释当年就写明这是正解。 RFC-359 AC-1（第 8 刀）327 → 326：`lifecycle-repair-harness.ts` 那一格清零（它托着的 12 个行为套件改由 `describeEachProvider` 的 lane 交库，同一批断言落到两个真引擎上）；同刀 `rfc097-repair-liveness` 1 → 2，是那次改动的代价面——它的反面对照用例本来就只跑 SQLite（真 resumeTask + 桩 opencode 二进制），harness 不再自己建库后它得自己建一个。"
     },
     {
       "id": "rfc359-w5-test-engine-open-migration-debt",
@@ -804,7 +804,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1675,
+      "baseline": 1672,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -867,7 +867,7 @@
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 313,
+      "baseline": 296,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
@@ -895,12 +895,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24681,
+      "baseline": 24551,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727",
+    "sourceDigest": "sha256:d9d506b7e819d2da366fd8b2c42e9f05a5d37d68499ed14213928c3ad89625a0",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "fd238e8f55a0cd413e957058f7e3b30ffd5f3cdb",
-    "contentDigest": "sha256:c3c2ee3a35f3ec8b2c120a0f50f50e1335dff33b98a148c09cd4ba866d70f8d9",
+    "currentSnapshotSha": "075bfbc1cba77744c5a15ceea2365b050ecf09ef",
+    "contentDigest": "sha256:8f5712102dd4b469b0185780be2920cf8ac21a8c549187cdc6798f6c8afdb9ee",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

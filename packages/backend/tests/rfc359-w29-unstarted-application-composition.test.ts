@@ -668,8 +668,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // infrastructure 不再自己去 compose 别的 context。
     // RFC-359 AC-1（2026-09-17，第 5 刀）：再新增 `activity`——`delete` 的 `task-active` 门
     // 读注入的参与者而不是模块级全局，这条路不装配完整 runtime，所以直接取那个唯一装配点。
+    // RFC-359 AC-1（第 8 刀）：摘要随手动 / 自动修复合一更新——SQLite 任务路由新增
+    // `persistence` / `resumeTaskAs` / `repair` 三样（共用那份修复实现的依赖面），
+    // 同时 `repairOptions` / `applyRepair` 两个动词从内联转成转发。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'ed9df8c099f61b83443e0b5f2b22daad562f6572d5ba9e9c25d7ba98d4e8b2f1',
+      '0ec829c1b5c96dc1367a00d3409bc4f84b21229eaca71aeea296e0c6a5ef61aa',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

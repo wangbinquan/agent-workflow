@@ -1,9 +1,11 @@
 // LOCKS: RFC-057 — U1 repair options (multiple active runs sharing key).
 // 2 options × 3 cases = 6 tests.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 
-import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+
 import {
   buildHarness,
   insertAlert,
@@ -14,11 +16,14 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 
-async function setupDuplicateActives(opts: {
-  taskStatus?: 'awaiting_review' | 'awaiting_human'
-  count?: number
-}): Promise<{ h: RepairHarness; runIds: string[]; alertId: string }> {
-  const h = await buildHarness({ taskStatus: opts.taskStatus ?? 'awaiting_review' })
+async function setupDuplicateActives(
+  db: ProviderNeutralDatabase,
+  opts: {
+    taskStatus?: 'awaiting_review' | 'awaiting_human'
+    count?: number
+  },
+): Promise<{ h: RepairHarness; runIds: string[]; alertId: string }> {
+  const h = await buildHarness(db, { taskStatus: opts.taskStatus ?? 'awaiting_review' })
   const count = opts.count ?? 2
   const runIds: string[] = []
   for (let i = 0; i < count; i++) {
@@ -45,7 +50,7 @@ async function setupDuplicateActives(opts: {
   return { h, runIds, alertId }
 }
 
-describe('RFC-057 — U1.cancel-older-keep-newest', () => {
+describeEachProvider('RFC-057 — U1.cancel-older-keep-newest', (provider) => {
   let h: RepairHarness | undefined
   afterEach(async () => {
     await settleResumes()
@@ -53,20 +58,16 @@ describe('RFC-057 — U1.cancel-older-keep-newest', () => {
   })
 
   test('happy: 2 awaiting rows → newest kept, older canceled', async () => {
-    const setup = await setupDuplicateActives({ count: 2 })
+    const setup = await setupDuplicateActives(provider.db, { count: 2 })
     h = setup.h
     const sorted = [...setup.runIds].sort()
     const keep = sorted[sorted.length - 1]!
     const toCancel = sorted.slice(0, -1)
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId: setup.alertId,
       optionId: 'U1.cancel-older-keep-newest',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, keep)).toBe('awaiting_review')
@@ -78,20 +79,16 @@ describe('RFC-057 — U1.cancel-older-keep-newest', () => {
   })
 
   test('happy variant: 3 rows → newest kept, 2 oldest canceled', async () => {
-    const setup = await setupDuplicateActives({ count: 3 })
+    const setup = await setupDuplicateActives(provider.db, { count: 3 })
     h = setup.h
     const sorted = [...setup.runIds].sort()
     const keep = sorted[sorted.length - 1]!
     const toCancel = sorted.slice(0, -1)
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId: setup.alertId,
       optionId: 'U1.cancel-older-keep-newest',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, keep)).toBe('awaiting_review')
@@ -102,7 +99,7 @@ describe('RFC-057 — U1.cancel-older-keep-newest', () => {
   })
 
   test('preflight-stale: only 1 active row remaining → option unavailable', async () => {
-    const setup = await setupDuplicateActives({ count: 2 })
+    const setup = await setupDuplicateActives(provider.db, { count: 2 })
     h = setup.h
     // Drift: cancel one of them manually before the operator clicks apply.
     const { transitionNodeRunStatus } = await import('../src/services/lifecycle')
@@ -111,13 +108,10 @@ describe('RFC-057 — U1.cancel-older-keep-newest', () => {
       nodeRunId: setup.runIds[0]!,
       event: { kind: 'cancel-by-supersede', reason: 'test-drift' },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId: setup.alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'U1.cancel-older-keep-newest')
     expect(opt?.available).toBe(false)
@@ -125,7 +119,7 @@ describe('RFC-057 — U1.cancel-older-keep-newest', () => {
   })
 })
 
-describe('RFC-057 — U1.cancel-newer-keep-oldest', () => {
+describeEachProvider('RFC-057 — U1.cancel-newer-keep-oldest', (provider) => {
   let h: RepairHarness | undefined
   afterEach(async () => {
     await settleResumes()
@@ -133,20 +127,16 @@ describe('RFC-057 — U1.cancel-newer-keep-oldest', () => {
   })
 
   test('happy: 2 rows → oldest kept, newer canceled', async () => {
-    const setup = await setupDuplicateActives({ count: 2 })
+    const setup = await setupDuplicateActives(provider.db, { count: 2 })
     h = setup.h
     const sorted = [...setup.runIds].sort()
     const keep = sorted[0]!
     const toCancel = sorted.slice(1)
-    const res = await applyRepairOption({
-      db: h.db,
-      operations: h.operations,
+    const res = await h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId: setup.alertId,
       optionId: 'U1.cancel-newer-keep-oldest',
       actorUserId: 'u-1',
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, keep)).toBe('awaiting_review')
@@ -156,18 +146,15 @@ describe('RFC-057 — U1.cancel-newer-keep-oldest', () => {
   })
 
   test('preflight-stale: detail missing nodeRunIds', async () => {
-    h = await buildHarness({ taskStatus: 'awaiting_review' })
+    h = await buildHarness(provider.db, { taskStatus: 'awaiting_review' })
     const alertId = await insertAlert(h.db, h.taskId, {
       rule: 'U1',
       detail: { rule: 'U1' /* nodeRunIds missing */ },
     })
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const opt = list.options.find((o) => o.id === 'U1.cancel-newer-keep-oldest')
     expect(opt?.available).toBe(false)
@@ -175,15 +162,12 @@ describe('RFC-057 — U1.cancel-newer-keep-oldest', () => {
   })
 
   test('option has medium risk (default vs newest-keep)', async () => {
-    const setup = await setupDuplicateActives({ count: 2 })
+    const setup = await setupDuplicateActives(provider.db, { count: 2 })
     h = setup.h
-    const list = await listRepairOptionsForAlert({
-      db: h.db,
+    const list = await h.engine.listRepairOptionsForAlert({
       taskId: h.taskId,
       alertId: setup.alertId,
       actorUserId: null,
-      appHome: h.tmpDir,
-      deps: h.deps,
     })
     const newest = list.options.find((o) => o.id === 'U1.cancel-older-keep-newest')
     const oldest = list.options.find((o) => o.id === 'U1.cancel-newer-keep-oldest')

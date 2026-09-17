@@ -26,7 +26,6 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tasks, workflows } from '../src/db/schema'
-import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
 import { abortAllActiveTasks, isTaskActive, resumeTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
@@ -37,6 +36,7 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
+import { createRepairEngine } from './helpers/repairEngine'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -221,14 +221,15 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
       )
       expect(isTaskActive(taskId)).toBe(true)
 
+      // RFC-359 AC-1（第 8 刀）：修复入口统一走唯一装配点；本文件验的正是「活跃度」这一格，
+      // 所以把真的进程内注册表 `isTaskActive` 注进去（其余套件用缺省的「永远不活跃」，
+      // 正好当这条门的反面对照）。
+      const engine = createRepairEngine(h.db, { appHome: h.appHome, isActive: isTaskActive })
       const alertId = await insertAlert(h.db, taskId, { rule: 'S3', detail: {} })
-      const listed = await listRepairOptionsForAlert({
-        db: h.db,
+      const listed = await engine.listRepairOptionsForAlert({
         taskId,
         alertId,
         actorUserId: null,
-        appHome: h.appHome,
-        deps,
       })
       expect(listed.options.length).toBe(4)
       for (const o of listed.options) {
@@ -243,15 +244,11 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
       // contract (409 + audit row), with zero writes to the live task.
       let code: string | undefined
       try {
-        await applyRepairOption({
-          db: h.db,
-          operations: taskRecoveryOperations(h.db),
+        await engine.applyRepairOption({
           taskId,
           alertId,
           optionId: 'S3.demote-task',
           actorUserId: null,
-          appHome: h.appHome,
-          deps,
         })
       } catch (err) {
         code = (err as { code?: string }).code
@@ -273,13 +270,10 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
         async () => (isTaskActive(taskId) ? undefined : true),
         'scheduler to detach from the task',
       )
-      const relisted = await listRepairOptionsForAlert({
-        db: h.db,
+      const relisted = await engine.listRepairOptionsForAlert({
         taskId,
         alertId,
         actorUserId: null,
-        appHome: h.appHome,
-        deps,
       })
       const demote = relisted.options.find((o) => o.id === 'S3.demote-task')
       expect(demote?.available).toBe(false)
@@ -292,15 +286,12 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
     afterEach(() => h.cleanup())
 
     test('running task without a live scheduler is NOT gated (liveness-keyed, not status-keyed)', async () => {
-      h = await buildRepairHarness({ taskStatus: 'running' })
+      h = await buildRepairHarness(createInMemoryDb(MIGRATIONS), { taskStatus: 'running' })
       const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: {} })
-      const listed = await listRepairOptionsForAlert({
-        db: h.db,
+      const listed = await h.engine.listRepairOptionsForAlert({
         taskId: h.taskId,
         alertId,
         actorUserId: null,
-        appHome: h.tmpDir,
-        deps: h.deps,
       })
       const demote = listed.options.find((o) => o.id === 'S3.demote-task')
       const markFailed = listed.options.find((o) => o.id === 'S3.mark-task-failed')

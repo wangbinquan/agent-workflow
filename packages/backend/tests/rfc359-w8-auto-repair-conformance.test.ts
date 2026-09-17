@@ -10,7 +10,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   committedEventFamilyCutovers,
@@ -32,14 +31,9 @@ import type {
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createDaemonLockProof } from '@/modules/task-execution/composition/bootRecovery'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import {
-  bindTaskLifecycleRepair,
-  createTaskLifecycleAutoRepairCommand,
-} from '@/modules/task-execution/composition/taskLifecycleRepair'
+import { createTaskLifecycleAutoRepairCommand } from '@/modules/task-execution/composition/taskLifecycleRepair'
 import { createPostgresqlTaskRouteRepairOperations } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { StartTaskDeps } from '@/services/task'
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -64,33 +58,10 @@ function commandFor(harness: ProviderHarness, options: CommandOptions = {}): Com
     resumeCalls += 1
     if (options.resumeThrows === true) throw new Error('scheduler refused the kick')
   }
-  if (harness.capabilities.isolation === 'exclusive') {
-    const db = harness.db as unknown as DbClient
-    const persistence = createTaskExecutionPersistence(db)
-    // SQLite 侧的复活是引擎里写死的 `resumeTask(db, taskId, deps)`，没有注入缝——
-    // 唯一能观测/控制它的把手是 `deps.schedulerDriver.drive`（成功路径的最后一步）。
-    const deps: StartTaskDeps = {
-      db,
-      appHome: mkdtempSync(join(tmpdir(), 'aw-rfc359-w8-repair-')),
-      schedulerDriver: { drive: resume },
-      taskRecoveryOperations: persistence.recoveryAdministration,
-      awaitScheduler: true,
-    }
-    return {
-      command: createTaskLifecycleAutoRepairCommand({
-        ...bindTaskLifecycleRepair({
-          db,
-          appHome: deps.appHome ?? '',
-          deps,
-          operations: persistence.recoveryAdministration,
-          now: () => NOW,
-        }),
-        operations: persistence.recoveryAdministration,
-        now: () => NOW,
-      }),
-      resumeCalls: () => resumeCalls,
-    }
-  }
+  // RFC-359 AC-1（第 8 刀）：两个引擎共用**同一个**自动修复绑定。合并前这里分两支——
+  // SQLite 走 `bindTaskLifecycleRepair`（另一份实现，复活是引擎里写死的 `resumeTask`，
+  // 唯一把手只能是 `deps.schedulerDriver.drive`），PostgreSQL 走 `automaticRepair`。
+  // 那个分支本身就是这一刀要销的账：现在两条 lane 驱动的是同一段代码。
   const { persistence, repairs } = repairEngineFor(harness, { resume })
   return {
     command: createTaskLifecycleAutoRepairCommand({
@@ -120,7 +91,6 @@ function repairEngineFor(
     beforeTransition?: (taskId: string) => Promise<void>
   } = {},
 ) {
-  type Dependencies = Parameters<typeof createPostgresqlTaskRouteRepairOperations>[0]
   const persistence = createTaskExecutionPersistence(harness.db)
   if (options.beforeTransition !== undefined) {
     const trySet = persistence.runtimeLifecycle.trySet.bind(persistence.runtimeLifecycle)
@@ -134,18 +104,12 @@ function repairEngineFor(
     awaitReleasedSettled: async () => {},
   }
   const repairs = createPostgresqlTaskRouteRepairOperations({
-    db: harness.db as unknown as PostgresqlDatabaseClient,
+    db: harness.db,
     persistence,
     activity,
-    children: unused<Dependencies['children']>({
-      resume: async ({ taskId }) => {
-        await options.resume?.(taskId)
-      },
-    }),
-    topology: unused(),
-    resumeRuntimeFor: (actor, taskId) => {
+    resumeTaskAs: async (actor, taskId) => {
       options.onManualActor?.(actor, taskId)
-      return unused()
+      await options.resume?.(taskId)
     },
     collaborationRuntime: unused(),
     clarify: unused(),

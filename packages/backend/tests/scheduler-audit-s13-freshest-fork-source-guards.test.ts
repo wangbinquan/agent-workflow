@@ -46,8 +46,16 @@ const NODE_MECHANICS_SRC = readFileSync(
   'utf-8',
 )
 const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')
-const REPAIR_HELPERS_SRC = readFileSync(
-  join(SRC_ROOT, 'platform', 'persistence', 'sqlite', 'taskLifecycleRepair', 'helpers.ts'),
+// RFC-359 AC-1（第 8 刀）：修复原来有两份实现，这条 fork 探针盯的是退役那一份的
+// `helpers.ts`。锚点换到留下的那一份——「这个 fork 不得回来」的对象随实现走。
+const REPAIR_SRC = readFileSync(
+  join(
+    SRC_ROOT,
+    'modules',
+    'task-execution',
+    'infrastructure',
+    'postgresqlTaskRouteRepairOperations.ts',
+  ),
   'utf-8',
 )
 const FRESHNESS_SRC = readFileSync(join(SRC_ROOT, 'services', 'freshness.ts'), 'utf-8')
@@ -173,15 +181,12 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
   // review: isfresher-noderun-baseline.test.ts already locks isFresherNodeRun
   // pure-id ordering behaviorally, which is strictly stronger.)
 
-  test('G5 fork #6 DELETED (RFC-096): lifecycleRepair/helpers.ts no longer exports loadNodeRunsForNode (dead export with a desc(retryIndex) ordering) — only the tombstone comment may mention the name', () => {
-    // The function was a zero-call-site dead export since its RFC-057
-    // introduction; RFC-096 deleted it outright (design §3.5). The bare name
-    // inside the tombstone comment is fine — what must never come back is the
-    // declaration (or any call form, which would not compile anyway but a
-    // copy-paste revert would re-add both at once).
-    expect(REPAIR_HELPERS_SRC.includes('export async function loadNodeRunsForNode')).toBe(false)
-    expect(REPAIR_HELPERS_SRC.includes('loadNodeRunsForNode(')).toBe(false)
-    expect(countOccurrences(REPAIR_HELPERS_SRC, FORK_MARKER)).toBe(0)
+  test('G5 fork #6 DELETED (RFC-096): the repair engine has no loadNodeRunsForNode and no desc(retryIndex) ordering', () => {
+    // 原文：那个函数自 RFC-057 引入起就是零调用点的死导出，RFC-096 直接删掉（design §3.5）。
+    // RFC-359 第 8 刀把两份修复实现合成一份之后，声明与 fork 排序都不得在**留下的那一份**里长回来。
+    expect(REPAIR_SRC.includes('export async function loadNodeRunsForNode')).toBe(false)
+    expect(REPAIR_SRC.includes('loadNodeRunsForNode(')).toBe(false)
+    expect(countOccurrences(REPAIR_SRC, FORK_MARKER)).toBe(0)
   })
 
   test('G6 whole-src fork inventory: desc(nodeRuns.retryIndex) exists only on the two __repo_prep__ causal-order reads', () => {

@@ -63,6 +63,27 @@ const TESTS = resolve(import.meta.dir, '..')
 const PROVIDER_PREFIX = /^(sqlite|postgresql)(?=[A-Z])/
 
 /**
+ * **按基名配对的盲区，以及它的显式出口**（RFC-359 第 8 刀实撞）。
+ *
+ * 上面那条正则要求两侧叫 `sqliteFoo.ts` / `postgresqlFoo.ts`。真实的成对适配器并不总是
+ * 这么自述：修复这件事的两份实现叫 `platform/persistence/sqlite/taskLifecycleRepair.ts`
+ * （靠**目录**表明引擎，基名里根本没有前缀）与
+ * `modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts`
+ * ——基名对不上，`pairs` 配不出这一对，于是那处覆盖倒挂**从来没进过本账本**，
+ * 直到有人手工对读才发现。按名字配对与按名字筛棘轮是同一类脆弱性。
+ *
+ * 这张表是那个盲区的出口：基名对不上的成对适配器写进来，就和自述式命名的那些一样被清点。
+ * 它现在是空的——唯一已知的那一对已随第 8 刀合并成一份实现（合并即销账，比记账更彻底）。
+ * **下一个人把一对适配器落成两个名字不对称的文件时，在这里加一行**，别让它再次隐形。
+ */
+export const MANUAL_ADAPTER_PAIRS: readonly {
+  /** 账本里的键，形如 `<目录>/<名字>`。 */
+  readonly key: string
+  readonly sqlite: string
+  readonly postgresql: string
+}[] = []
+
+/**
  * `<目录>/<去掉引擎前缀的名字>: sqlite <ref>/<drive>, postgresql <ref>/<drive>`，按路径字典序。
  *
  * `ref` = 提到该侧模块名或其导出符号的测试文件数；`drive` = 有值 import 能真正构造它的测试文件数。
@@ -367,17 +388,21 @@ function valueImportsOfTest(rel: string, text: string): Set<string> {
   return out
 }
 
-let cached: Scan | undefined
+export interface AdapterPairing {
+  readonly pairs: Map<string, { sqlite?: string; postgresql?: string }>
+  /** 被认作「属于某个引擎」的实现文件数——语料非空判据用它。 */
+  readonly providerNamed: number
+}
 
-/** 两棵树各读一遍，五个用例共用（全树扫描必须缓存，否则 CI 上按秒累加）。 */
-function scan(): Scan {
-  if (cached !== undefined) return cached
-
-  const sourceFiles = listTypescript(SRC)
-  // `architecture/` 整体排除：守卫的账本按路径点名 provider 文件，却一行都不驱动它们
-  // ——把它们计进来会给每一侧均匀加一份噪声，还会让本文件扫到自己。
-  const testFiles = listTypescript(TESTS).filter((rel) => !rel.startsWith('architecture/'))
-
+/**
+ * 把实现文件配成对：自述式命名（`sqliteFoo.ts` / `postgresqlFoo.ts`）走前缀，
+ * 基名对不上的走 {@link MANUAL_ADAPTER_PAIRS}。纯函数，所以手工表这条路有真测试
+ * ——一个配不出新增的出口等于没写。
+ */
+export function pairAdapters(
+  sourceFiles: readonly string[],
+  manualPairs: typeof MANUAL_ADAPTER_PAIRS,
+): AdapterPairing {
   const pairs = new Map<string, { sqlite?: string; postgresql?: string }>()
   let providerNamed = 0
   for (const rel of sourceFiles) {
@@ -392,6 +417,25 @@ function scan(): Scan {
     slot[prefix === 'sqlite' ? 'sqlite' : 'postgresql'] = rel
     pairs.set(key, slot)
   }
+  for (const manual of manualPairs) {
+    providerNamed += 2
+    pairs.set(manual.key, { sqlite: manual.sqlite, postgresql: manual.postgresql })
+  }
+  return { pairs, providerNamed }
+}
+
+let cached: Scan | undefined
+
+/** 两棵树各读一遍，五个用例共用（全树扫描必须缓存，否则 CI 上按秒累加）。 */
+function scan(): Scan {
+  if (cached !== undefined) return cached
+
+  const sourceFiles = listTypescript(SRC)
+  // `architecture/` 整体排除：守卫的账本按路径点名 provider 文件，却一行都不驱动它们
+  // ——把它们计进来会给每一侧均匀加一份噪声，还会让本文件扫到自己。
+  const testFiles = listTypescript(TESTS).filter((rel) => !rel.startsWith('architecture/'))
+
+  const { pairs, providerNamed } = pairAdapters(sourceFiles, MANUAL_ADAPTER_PAIRS)
 
   const texts = new Map<string, string>()
   const imports = new Map<string, Set<string>>()
@@ -519,4 +563,40 @@ describe('RFC-359 W5-T19d —— 成对适配器的覆盖对等（高水位，�
     expect(mentionsIdentifier('new SqliteRealtimeStore(db)', 'SqliteRealtimeStore')).toBe(true)
     expect(mentionsIdentifier('legacySqliteRealtimeStore', 'SqliteRealtimeStore')).toBe(false)
   }, 30_000)
+})
+
+// RFC-359 AC-1（第 8 刀）—— 手工配对这条出口的自证。
+//
+// 按基名配对漏掉过一处真实倒挂（修复的两份实现，基名根本对不上），出口因此存在。
+// 一个**配不出新增**的出口和没有出口是一回事，所以这里用伪造的一对喂同一个 `pairAdapters`。
+describe('RFC-359 W5-T19d —— 手工配对表确实把基名不对称的一对接进账本', () => {
+  test('基名对不上的一对，只有写进手工表才配得出来', () => {
+    const sources = ['a/weirdLeft.ts', 'b/weirdRight.ts']
+
+    const withoutTable = pairAdapters(sources, [])
+    expect(withoutTable.providerNamed, '两个名字都不自述引擎，前缀路配不出').toBe(0)
+    expect(withoutTable.pairs.size).toBe(0)
+
+    const withTable = pairAdapters(sources, [
+      { key: 'a/Weird', sqlite: 'a/weirdLeft.ts', postgresql: 'b/weirdRight.ts' },
+    ])
+    expect(withTable.pairs.get('a/Weird')).toEqual({
+      sqlite: 'a/weirdLeft.ts',
+      postgresql: 'b/weirdRight.ts',
+    })
+    expect(withTable.providerNamed, '手工登记的一对，两侧都要计进语料').toBe(2)
+  })
+
+  test('自述式命名那条路不受影响（出口不该改变既有配对）', () => {
+    const paired = pairAdapters(['x/sqliteThing.ts', 'x/postgresqlThing.ts'], [])
+    expect(paired.pairs.get('x/Thing')).toEqual({
+      sqlite: 'x/sqliteThing.ts',
+      postgresql: 'x/postgresqlThing.ts',
+    })
+    expect(paired.providerNamed).toBe(2)
+  })
+
+  test('目前表是空的——唯一已知的那一对已随第 8 刀合并成一份实现', () => {
+    expect(MANUAL_ADAPTER_PAIRS).toEqual([])
+  })
 })

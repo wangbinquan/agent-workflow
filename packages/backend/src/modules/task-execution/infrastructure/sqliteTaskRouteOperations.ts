@@ -9,7 +9,6 @@ import type { Actor } from '@/auth/actor'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
 import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
-import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
 import {
   assertTaskVisibleProjection,
   assertTaskWorkflowSyncable,
@@ -26,7 +25,13 @@ import {
   taskListSummariesProjection,
   taskNodeRunsProjection,
 } from './postgresqlTaskRouteOperations'
+import {
+  createPostgresqlTaskRouteRepairOperations,
+  type PostgresqlTaskRepairOperations,
+  type PostgresqlTaskRouteRepairOperationsDependencies,
+} from './postgresqlTaskRouteRepairOperations'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
+import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -71,6 +76,18 @@ export interface SqliteTaskRouteOperationsDependencies {
    * 「runtime 绝不 import legacy 注册表」，而且只有注入版本才能在两个引擎上被测。
    */
   readonly activity: ActiveTaskExecutionParticipant
+  /**
+   * RFC-359 AC-1（plan §5hn 之后的盘点，第 8 刀）：手动修复两个动词与 PostgreSQL 共用**同一份**
+   * 实现，所以这一侧也要把那份实现的依赖面接进来。合并前这里转给
+   * `services/lifecycleRepair`（`platform/persistence/sqlite/taskLifecycleRepair` 的门面），
+   * 那是修复这件事的第二份实现。
+   */
+  readonly persistence: TaskExecutionPersistence
+  readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
+  readonly repair: Pick<
+    PostgresqlTaskRouteRepairOperationsDependencies,
+    'collaborationRuntime' | 'clarify' | 'review'
+  >
   readonly appHome?: string
 }
 
@@ -104,8 +121,18 @@ async function assertManualExecutionAllowed(
 
 export function createSqliteTaskRouteOperations(
   dependencies: SqliteTaskRouteOperationsDependencies,
-): TaskRouteOperations {
+): TaskRouteOperations & Pick<PostgresqlTaskRepairOperations, 'automaticRepair'> {
   const { db } = dependencies
+  const repairs = createPostgresqlTaskRouteRepairOperations({
+    db,
+    persistence: dependencies.persistence,
+    activity: dependencies.activity,
+    resumeTaskAs: dependencies.resumeTaskAs,
+    collaborationRuntime: dependencies.repair.collaborationRuntime,
+    clarify: dependencies.repair.clarify,
+    review: dependencies.repair.review,
+    appHome: dependencies.appHome ?? Paths.root,
+  })
   const operations: TaskRouteOperations = {
     // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：列表三件也与 PostgreSQL 共用**同一份**。
     // 等价性由 `rfc359-w7-task-route-conformance` 的 A1–A5 作证（筛选 / 倒序 / 告警数 /
@@ -219,36 +246,9 @@ export function createSqliteTaskRouteOperations(
         actorUserId: actor.user.id,
       })
     },
-    async repairOptions({ actor, taskId, alertId }) {
-      return await listRepairOptionsForAlert({
-        db,
-        taskId,
-        alertId,
-        actorUserId: actor.user.id,
-        appHome: dependencies.appHome ?? Paths.root,
-        deps: {
-          ...dependencies.startDepsFor(actor),
-          taskRecoveryOperations: dependencies.recovery,
-        },
-      })
-    },
-    async applyRepair({ actor, taskId, alertId, optionId, onAlert, onResolved }) {
-      return await applyRepairOption({
-        db,
-        operations: dependencies.recovery,
-        taskId,
-        alertId,
-        optionId,
-        actorUserId: actor.user.id,
-        appHome: dependencies.appHome ?? Paths.root,
-        deps: {
-          ...dependencies.startDepsFor(actor),
-          taskRecoveryOperations: dependencies.recovery,
-        },
-        onAlert,
-        onResolved,
-      })
-    },
+    // RFC-359 AC-1（第 8 刀）：手动修复两个动词直接交给共用的那一份实现。
+    repairOptions: (input) => repairs.repairOptions(input),
+    applyRepair: (input) => repairs.applyRepair(input),
   }
-  return Object.freeze(operations)
+  return Object.freeze({ ...operations, automaticRepair: repairs.automaticRepair })
 }
