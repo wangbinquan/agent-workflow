@@ -156,7 +156,12 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 那处差异修好之后那句话删了，计数就退回去了。
   // **给下一个人**：这条账本的数字**会因为改注释而动**，看到它变化时先确认是不是这种情况，
   // 别当成覆盖真的增减了。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 8/2, postgresql 11/2',
+  // RFC-359 AC-1（plan §5hn 批次二 ④）：`8/2 → 9/2`。新基线
+  // `rfc359-w5hn-workflow-route-launch-provider-parity` 在两个引擎上各真打一次
+  // JSON `POST /api/tasks`，按符号名归到 SQLite 一侧（它的头注释点名了那条仍走
+  // `startExecution → startTask` 的路）。**倒挂差额 3 → 2，跌破阈值**，这一对因此
+  // 退出下面的观察名单。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 11/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -200,7 +205,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。
   // RFC-359 AC-1（plan §5hn 批次一）：12 → 11，来源同上（注释里的提及被计入引用数）。
-  'modules/task-execution/infrastructure/TaskRouteOperations: 8 vs 11',
+  // RFC-359 AC-1（plan §5hn 批次二 ④）：**退出名单**——差额 3 → 2，跌破阈值
+  //（新基线 `rfc359-w5hn-workflow-route-launch-provider-parity` 归在 SQLite 一侧）。
   'platform/persistence/LogicalSource: 12 vs 7',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
   'platform/persistence/Migrator: 3 vs 12',

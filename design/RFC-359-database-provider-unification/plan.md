@@ -15459,3 +15459,39 @@ G7 定时用例），判据面**一字未动**——迁的是夹具，不是断�
 处置：`name` 进拒绝清单，另加 `assertScheduledName` 逐 lane 断言装饰确实加上了
 （变异实证：把基名改成 `MUTANT-BASE`，两个 lane 同时红）。
 **相等面不该由墙钟决定，但「有没有装饰」仍然必须守住。**
+
+## §5hn 批次二 ④ 的基线：工作流 JSON 路由——并且**发现前三条基线一直没在比库**
+
+剩下的最大一对孪生是 **JSON `POST /api/tasks`**：SQLite 仍走
+`sqliteTaskRouteOperations` → `startExecution` → `startTask`（三千行的老启动器），
+PostgreSQL 走 `launches.launch` → 根启动内核。这是最主要的那条启动路。
+
+`rfc359-w5hn-workflow-route-launch-provider-parity`：同一份请求打两个引擎，拒绝清单整行比对。
+
+### 第一次跑就照出同一处老熟人：`spaceNodes`
+
+```
+sqlite      spaceNodes = [{ path: '', origins: [] }]
+postgresql  spaceNodes = []
+```
+
+与 §5hn 批次二 ③ 在工作组那条路上关掉的**是同一处**——只是这一条落在工作流 JSON 路由上，
+而它还没合。成因同样是 `startTask` 的读投影在没有冻结行时兜底派生
+`minimalNodePaths(repos.map(r => r.mountPath))`。按先例钉住，合并时自己会红。
+
+### **更值得记的一条：变异证明前三条基线一直没在比库**
+
+给这条基线做变异（把根启动内核 INSERT 里的 `name` 改成 `${name}_MUTANT`）时——**没咬住**。
+
+原因：这几条基线读的是 **HTTP 响应体**，而响应体是 `taskProjection(...)` **现算**的投影，
+不是库里那行的回读；`name` 那一格直接来自入参，改 INSERT 根本影响不到它。
+**标题写着「落库对等」，判据却只到响应体为止。**
+
+处置：抽出 `tests/helpers/taskRowParity.ts#comparableTaskRow`，四条基线一并补上**行级**比对
+（同一条拒绝清单口径：只摘掉逐次必然不同的那几格）。补完再变异——
+这次七条当场红（工作流路由 1 + 定时三个 kind × 两个 lane 各 1）。
+
+**判据：一条「落库对等」的用例，必须真的 select 那一行。**
+响应体的一致是另一件事（也值得比，两者都留着）——它证明**用户看到的**一样，
+不证明**存下来的**一样。RFC-359 恰恰有一整类缺陷活在这两者的缝里
+（`spaceNodes` 就是：库里没有行，响应里却被派生出一个）。

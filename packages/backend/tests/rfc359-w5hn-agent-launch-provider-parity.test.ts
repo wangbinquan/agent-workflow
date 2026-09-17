@@ -15,9 +15,12 @@
 // 合并两份编排（§5hn 批次一）之前，这条必须是绿的——它是「合并没有改变用户可见行为」的基线。
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { AGENT_HOST_INPUT_KEY, AGENT_HOST_WORKFLOW_ID } from '@/services/agentLaunch'
+import { tasks } from '@/db/schema'
+import { comparableTaskRow } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
@@ -57,6 +60,12 @@ function agentPayload(name: string): Record<string, unknown> {
  * 比较那条先跑，看到空账本直接绿）。比较折进 lane 用例本身，谁最后到齐谁做比较。
  */
 const launched = new Map<string, Record<string, unknown>>()
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ④）——**落库那一行**也要比。
+ * 响应体是 `taskProjection(...)` 现算的投影，不是回读：变异实证显示，只比响应体时
+ * 把内核 INSERT 的 `name` 改掉**照样绿**。标题写着「落库对等」就得真去读库。
+ */
+const persistedRows = new Map<string, Record<string, unknown>>()
 /** 带上传那一支单独记一份：两条路的落点（packed 路径）必须逐字相同。 */
 const uploaded = new Map<string, Record<string, unknown>>()
 
@@ -157,6 +166,19 @@ describeEachProviderHttpApplication(
         1,
       )
       expect(comparable.snapshotEdgeCount, '宿主快照边扫成 0 ⇒ 比较面失效').toBeGreaterThan(0)
+
+      const row = (
+        await scope.harness.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, String(task['id'])))
+          .limit(1)
+      )[0] as unknown as Record<string, unknown>
+      expect(row, '任务行必须真的落库了').toBeDefined()
+      persistedRows.set(
+        scope.harness.capabilities.provider,
+        comparableTaskRow(row, ['sourceAgentId', 'sourceAgentName', 'name']),
+      )
 
       launched.set(scope.harness.capabilities.provider, comparable)
       if (launched.size < 2) return

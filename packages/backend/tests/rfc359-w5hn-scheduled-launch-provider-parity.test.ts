@@ -17,8 +17,11 @@
 // + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
+import { tasks } from '@/db/schema'
+import { comparableTaskRow } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { WORKGROUP_HOST_WORKFLOW_ID } from '@/services/workgroup/launch'
@@ -119,6 +122,12 @@ function comparableTask(task: Record<string, unknown>): Record<string, unknown> 
  * 比较那条先跑、看到空账本直接绿）。比较折进 lane 用例本身，谁最后到齐谁做比较。
  */
 const launched = new Map<string, Record<string, unknown>>()
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ④）——**落库那一行**也要比。
+ * 响应体是 `taskProjection(...)` 现算的投影，不是回读：变异实证显示，只比响应体时
+ * 把内核 INSERT 的 `name` 改掉**照样绿**。标题写着「落库对等」就得真去读库。
+ */
+const persistedRows = new Map<string, Record<string, unknown>>()
 
 async function createAgent(app: Hono, name: string): Promise<{ id: string }> {
   const res = await req(app, '/api/agents', {
@@ -212,12 +221,37 @@ describeEachProviderHttpApplication(
       expect(task['workflowId'], '工作流定时必须挂在被选中的工作流上').toBe(workflow.id)
 
       const comparable = comparableTask(task)
+      const row = (
+        await scope.harness.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, String(task['id'])))
+          .limit(1)
+      )[0] as unknown as Record<string, unknown>
+      expect(row, '任务行必须真的落库了').toBeDefined()
+      persistedRows.set(
+        `workflow:${scope.harness.capabilities.provider}`,
+        comparableTaskRow(row, [
+          'scheduledTaskId',
+          'sourceAgentId',
+          'sourceAgentName',
+          'workgroupId',
+          'workgroupName',
+          'workgroupConfigJson',
+          'name',
+        ]),
+      )
+
       launched.set(`workflow:${scope.harness.capabilities.provider}`, comparable)
       if (!launched.has('workflow:sqlite') || !launched.has('workflow:postgresql')) return
       expect(
         launched.get('workflow:postgresql'),
         '两个引擎的定时工作流启动落库结果不一致——合并 startExecution 之前必须先解释清楚（plan §5hn 批次二 ①）',
       ).toEqual(launched.get('workflow:sqlite'))
+      expect(
+        persistedRows.get('workflow:postgresql'),
+        '两个引擎**落库那一行**不一致（响应体一致不代表行一致——响应是现算的投影）',
+      ).toEqual(persistedRows.get('workflow:sqlite'))
     })
 
     test('kind=agent：定时触发的 task 行两个引擎逐字相同', async () => {
@@ -238,12 +272,37 @@ describeEachProviderHttpApplication(
       expect(task['sourceAgentId'], '单代理定时必须记下发起它的 agent').toBe(agent.id)
 
       const comparable = comparableTask(task)
+      const row = (
+        await scope.harness.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, String(task['id'])))
+          .limit(1)
+      )[0] as unknown as Record<string, unknown>
+      expect(row, '任务行必须真的落库了').toBeDefined()
+      persistedRows.set(
+        `agent:${scope.harness.capabilities.provider}`,
+        comparableTaskRow(row, [
+          'scheduledTaskId',
+          'sourceAgentId',
+          'sourceAgentName',
+          'workgroupId',
+          'workgroupName',
+          'workgroupConfigJson',
+          'name',
+        ]),
+      )
+
       launched.set(`agent:${scope.harness.capabilities.provider}`, comparable)
       if (!launched.has('agent:sqlite') || !launched.has('agent:postgresql')) return
       expect(
         launched.get('agent:postgresql'),
         '两个引擎的定时单代理启动落库结果不一致（plan §5hn 批次二 ①）',
       ).toEqual(launched.get('agent:sqlite'))
+      expect(
+        persistedRows.get('agent:postgresql'),
+        '两个引擎**落库那一行**不一致（响应体一致不代表行一致——响应是现算的投影）',
+      ).toEqual(persistedRows.get('agent:sqlite'))
     })
 
     test('kind=workgroup：定时触发的 task 行两个引擎逐字相同', async () => {
@@ -286,12 +345,37 @@ describeEachProviderHttpApplication(
         (comparable['workflowSnapshot'] as { edgeCount: number }).edgeCount,
         '宿主边扫成 0 ⇒ 比较面失效',
       ).toBeGreaterThan(0)
+      const row = (
+        await scope.harness.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, String(task['id'])))
+          .limit(1)
+      )[0] as unknown as Record<string, unknown>
+      expect(row, '任务行必须真的落库了').toBeDefined()
+      persistedRows.set(
+        `workgroup:${scope.harness.capabilities.provider}`,
+        comparableTaskRow(row, [
+          'scheduledTaskId',
+          'sourceAgentId',
+          'sourceAgentName',
+          'workgroupId',
+          'workgroupName',
+          'workgroupConfigJson',
+          'name',
+        ]),
+      )
+
       launched.set(`workgroup:${scope.harness.capabilities.provider}`, comparable)
       if (!launched.has('workgroup:sqlite') || !launched.has('workgroup:postgresql')) return
       expect(
         launched.get('workgroup:postgresql'),
         '两个引擎的定时工作组启动落库结果不一致（plan §5hn 批次二 ①）',
       ).toEqual(launched.get('workgroup:sqlite'))
+      expect(
+        persistedRows.get('workgroup:postgresql'),
+        '两个引擎**落库那一行**不一致（响应体一致不代表行一致——响应是现算的投影）',
+      ).toEqual(persistedRows.get('workgroup:sqlite'))
     })
   },
 )

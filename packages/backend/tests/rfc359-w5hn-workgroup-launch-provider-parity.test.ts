@@ -12,8 +12,11 @@
 // 判据形状照抄那条：相等面 + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
+import { tasks } from '@/db/schema'
+import { comparableTaskRow } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { WORKGROUP_HOST_WORKFLOW_ID } from '@/services/workgroup/launch'
@@ -30,6 +33,12 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
 }
 
 const launched = new Map<string, Record<string, unknown>>()
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ④）——**落库那一行**也要比。
+ * 响应体是 `taskProjection(...)` 现算的投影，不是回读：变异实证显示，只比响应体时
+ * 把内核 INSERT 的 `name` 改掉**照样绿**。标题写着「落库对等」就得真去读库。
+ */
+const persistedRows = new Map<string, Record<string, unknown>>()
 
 describeEachProviderHttpApplication(
   'RFC-359 AC-1 —— 工作组启动的两个引擎落库对等',
@@ -162,12 +171,36 @@ describeEachProviderHttpApplication(
         '宿主边扫成 0 ⇒ 比较面失效',
       ).toBeGreaterThan(0)
 
+      const row = (
+        await scope.harness.db
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, String(task['id'])))
+          .limit(1)
+      )[0] as unknown as Record<string, unknown>
+      expect(row, '任务行必须真的落库了').toBeDefined()
+      persistedRows.set(
+        scope.harness.capabilities.provider,
+        comparableTaskRow(row, [
+          'workgroupId',
+          'workgroupName',
+          'workgroupConfigJson',
+          'sourceAgentId',
+          'sourceAgentName',
+          'name',
+        ]),
+      )
+
       launched.set(scope.harness.capabilities.provider, comparable)
       if (launched.size < 2) return
       expect(
         launched.get('postgresql'),
         '两个引擎的工作组启动落库结果不一致——合并 470 行之前必须先解释清楚这处差异（plan §5hn 批次二）',
       ).toEqual(launched.get('sqlite'))
+      expect(
+        persistedRows.get('postgresql'),
+        '两个引擎**落库那一行**不一致（响应体一致不代表行一致——响应是现算的投影）',
+      ).toEqual(persistedRows.get('sqlite'))
     })
   },
 )

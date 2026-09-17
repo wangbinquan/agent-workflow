@@ -405,7 +405,7 @@
       "id": "rfc359-w5-inverted-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
-      "baseline": 5,
+      "baseline": 4,
       "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。"
     },
     {
@@ -913,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d49b54c6f33cdfeed117ab22f894c6666f33ef5b",
-    "contentDigest": "sha256:813679f0275d20c9da64fef19821158e7b1dac248fbd9a04ea886be0be2daf78",
+    "currentSnapshotSha": "14a16cfb9739d042e88a3cfde9b000141f913906",
+    "contentDigest": "sha256:56bbca0b03f4f3670402a8a08016845b8d684b900758a44a482ae8f5cba9b78c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
