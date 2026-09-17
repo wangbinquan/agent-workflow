@@ -6678,19 +6678,33 @@ function taskListFlight(
   return created
 }
 
+/**
+ * 单飞合并键 —— 对**整个 filters 对象**做规范序列化。
+ *
+ * 此前这里是一份**手写的字段清单**，RFC-301 给 `ListTasksFilters` 加 `origin` 时没有同步加进来，
+ * 于是两个只差 `origin` 的并发查询被判成同一次查询、第二个拿到第一个的行
+ * （`GET /api/tasks?origin=scheduled` 与 `?origin=api` 同一 tick 到达 → 后者收到定时那批）。
+ * 手写清单修不掉这个**类**：下一个新筛选项照样漏，而症状是「列表偶尔少几条 / 串了」，
+ * 没人会当成 bug 报。
+ *
+ * 改成按 key 排序后整体序列化：新增筛选项自动进键，漏不掉。`undefined` 的项一律跳过，
+ * 于是 `{ status: undefined }` 与 `{}` 仍是同一个键（它们查的本来就是同一批行）；
+ * 嵌套对象（`visibility`）同样按 key 排序，避免字面量书写顺序制造假的键差异。
+ * 回归防护见 `tests/rfc359-task-list-inflight-key.test.ts`。
+ */
 function taskListFlightKey(filters: ListTasksFilters): string {
-  return JSON.stringify([
-    filters.status ?? null,
-    filters.workflowId ?? null,
-    filters.repoPath ?? null,
-    filters.catalogVisibility ?? null,
-    filters.scheduledTaskId ?? null,
-    filters.topLevelOnly === true,
-    filters.parentTaskId ?? null,
-    filters.limit ?? 100,
-    filters.visibility?.actorUserId ?? null,
-    filters.visibility?.scope ?? null,
-  ])
+  const canonical = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value
+    if (Array.isArray(value)) return value.map(canonical)
+    const record = value as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const key of Object.keys(record).sort()) {
+      if (record[key] === undefined) continue
+      out[key] = canonical(record[key])
+    }
+    return out
+  }
+  return JSON.stringify(canonical(filters))
 }
 
 /**

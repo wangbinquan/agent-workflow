@@ -16282,3 +16282,28 @@ SQLite 的 `Promise.all` 并行式（PG 那份是串行 `for`）。
 （`launchMultipartTask` / `taskNodeRunsProjection` / `taskDiffProjection` /
 `nodeRunStdoutProjection` / `nodeRunEventsProjection`）+ 三个共用常量，账本连着三提读假信号。
 下一刀就做纯改名，让那两份账本重新说真话。
+
+### 第 2 刀的两处追补（源码锁半径 + 一个并发 bug）
+
+**追补一：源码锁半径漏了两处，把 main 推红。** 两处同一根因——把 `services/task.ts` 当**文本**读、
+断言 diff 发射点在那里：`packages/frontend/tests/diff.test.ts`（跨包读后端源码）与
+`source-text-rfc066-pr-b-guards` 的 PB-G5。教训两条，均已进 `docs/dev-gotchas.md`：
+①扫半径的 grep 范围要覆盖整个 `packages/` + `e2e/` + `scripts/`，不是只扫自己那个包；
+②grep 的模式要能匹配**分段拼出来的路径**——PB-G5 写的是
+`resolve(dir,'..','src','services','task.ts')`，整份文件里没有 `services/task.ts` 这个子串，
+按子串扫必然漏。事后把全部 76 个「读 `task.ts` 源码」的后端用例分十片跑了一遍（872 绿），确认无第三处。
+
+**追补二：列表单飞合并键漏了一个筛选项（真 bug，先红后绿）。**
+`services/task.ts#listTasks` 把并发的同形列表查询合并成一次（多标签页 + WS 失效风暴下是热路径），
+合并键 `taskListFlightKey` 是**手写的字段清单**——RFC-301 给 `ListTasksFilters` 加 `origin` 时
+没同步加进来。于是同一 tick 内到达的 `?origin=scheduled` 与 `?origin=api` 被判成同一次查询，
+**第二个拿到第一个的行**。而 PostgreSQL 路由走的是另一份没有单飞的实现，同样两个请求结果正确
+——又一处「一个引擎好、一个引擎不好」，只是这次不好的是 SQLite。
+
+修法不是把 `origin` 补进清单（那只修掉这一格，下一个新筛选项照样漏），而是对**整个 filters 对象**
+做规范序列化（key 排序、跳过 `undefined`、嵌套对象同样排序），整类 bug 一次性消失。
+回归防护 `rfc359-task-list-inflight-key`：①逐项过一遍「只差一项的并发查询不得被合并」；
+②「完全同形的并发查询仍然被合并」（别把性能特性一起修没了）。两个引擎上都跑。
+
+这个 bug 是**为列表三件（②）立基线时顺手挖出来的**——两侧逐行对读的副产品，正是本 RFC 的合并
+次序一路在产出的那类发现。

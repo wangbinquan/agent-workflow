@@ -2,6 +2,29 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 64，**修第 2 刀推的红 + 列表单飞键漏筛选项**）
+>
+> **先说红（两处，同一根因）**：把 `services/task.ts` 当**文本**读、断言 diff 发射点在那里的两把锁
+> ——`packages/frontend/tests/diff.test.ts`（**跨包**读后端源码）与 `source-text-rfc066-pr-b-guards`
+> 的 PB-G5。两条教训已进 `docs/dev-gotchas.md`：①扫半径要覆盖整个 `packages/` + `e2e/` + `scripts/`；
+> ②grep 模式要能匹配**分段拼出来的路径**（PB-G5 写成 `resolve(dir,'..','src','services','task.ts')`，
+> 整份文件里没有 `services/task.ts` 这个子串，按子串扫必漏）。事后把 76 个「读 task.ts 源码」的
+> 后端用例分十片跑了一遍（872 绿），确认无第三处。
+>
+> **正题是一个真 bug（先红后绿）**：`listTasks` 的并发单飞合并键 `taskListFlightKey` 是**手写字段清单**，
+> RFC-301 加 `origin` 时没同步加进来——同一 tick 到达的 `?origin=scheduled` 与 `?origin=api`
+> 被判成同一次查询，**第二个拿到第一个的行**。PG 路由走的是另一份没有单飞的实现、结果正确
+> ——又一处「一个引擎好、一个引擎不好」，这次不好的是 SQLite。
+>
+> 修法不是补 `origin`（下一个新筛选项照样漏），是对**整个 filters 对象**做规范序列化，整类 bug 一次性消失。
+> 回归防护 `rfc359-task-list-inflight-key`：逐项「只差一项不得被合并」+「完全同形仍要被合并」，两个引擎都跑。
+>
+> 这个 bug 是**为列表三件（②）立基线时顺手挖出来的**——两侧逐行对读的副产品。
+>
+> 证据：新用例 8/8 双引擎；半径十片 872/872；架构守卫 706/706。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` 第 2 刀的两处追补。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 63，**纯读三件合一——`diff` / `stdout` / `events`**）
 >
 > 本段待推：盘点后的第 2 刀，「纯读四件」收尾。

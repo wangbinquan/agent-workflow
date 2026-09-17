@@ -205,7 +205,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 这是**命名债的读数，不是倾斜**：涨上去的覆盖是两个引擎共享的同一份实现，SQLite 那一侧
   // 现在根本没有第二份可漂移。本账本已有三格这么读（`TaskRouteLaunchOperations` / 本格 /
   // `TaskExecutionRuntimeParticipants`），债本身按 plan §5hj 单独一刀还。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 19/6',
+  // `19/6 → 20/6`：`source-text-rfc066-pr-b-guards` 的 PB-G5 改锚到共用的 diff 投影，
+  // 于是它的路径常量提到了这个模块。同样是**命名债的读数**，不是新判据。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 20/6',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -256,7 +258,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // `postgresqlTaskRouteOperations.ts` 里，改锚过去的几条源码锁都提到了它。
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）：9 vs 14 → 9 vs 19，来源同上一格
   //（纯读三件合一，共用实现住在 PG 命名的文件里）。
-  'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 19',
+  // PB-G5 改锚：9 vs 19 → 9 vs 20，来源同上一格。
+  'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 20',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。
