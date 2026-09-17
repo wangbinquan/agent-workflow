@@ -3,7 +3,7 @@
 
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns } from '@/db/schema'
 import { isTaskActive } from '@/services/task'
 
@@ -27,22 +27,34 @@ export function schedulerLivenessGate(rc: { task: { id: string } }): PreflightRe
   }
 }
 
-const NODE_RUN_COLS = {
-  id: nodeRuns.id,
-  nodeId: nodeRuns.nodeId,
-  status: nodeRuns.status,
-  retryIndex: nodeRuns.retryIndex,
-  reviewIteration: nodeRuns.reviewIteration,
-  shardKey: nodeRuns.shardKey,
-  iteration: nodeRuns.iteration,
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 8 刀第 2 步）：**投影在函数体内取**，不在模块顶层缓存。
+ *
+ * 这里原来是一个模块作用域的常量。它在 SQLite 上一直没事，因为求值时刻（模块加载）拿到的
+ * 正好就是 SQLite 的列对象；本刀把这份修复实现放宽成中立句柄、让它也跑在 PostgreSQL 上之后，
+ * 那个捕获就成了活风险：顶层常量会把 SQLite 的具体列对象带进 PG 查询，`bigint({mode:'number'})`
+ * 的 mapper 整个丢失，数值列以**字符串**回到调用方——**不报错，只是结果错**
+ *（RFC-359 W4-B4a / W4-D10 各撞过一次）。判据与守卫见
+ * `rfc359-w5-t19f-toplevel-column-capture`。
+ */
+function nodeRunColumns() {
+  return {
+    id: nodeRuns.id,
+    nodeId: nodeRuns.nodeId,
+    status: nodeRuns.status,
+    retryIndex: nodeRuns.retryIndex,
+    reviewIteration: nodeRuns.reviewIteration,
+    shardKey: nodeRuns.shardKey,
+    iteration: nodeRuns.iteration,
+  }
 }
 
 export async function loadNodeRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
 ): Promise<RepairNodeRunRow | null> {
   const rows = await db
-    .select(NODE_RUN_COLS)
+    .select(nodeRunColumns())
     .from(nodeRuns)
     .where(eq(nodeRuns.id, nodeRunId))
     .limit(1)
@@ -54,10 +66,10 @@ export async function loadNodeRun(
 // the audit S-13 freshest-row forks.
 
 export async function loadAllNodeRunsForTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<RepairNodeRunRow[]> {
-  return db.select(NODE_RUN_COLS).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  return db.select(nodeRunColumns()).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
 }
 
 /** TERMINAL excluding 'done' — used by "the row got force-terminated by orphan

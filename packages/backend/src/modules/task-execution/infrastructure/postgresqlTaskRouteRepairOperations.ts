@@ -184,7 +184,7 @@ interface OptionDefinition extends RepairOptionMeta {
 /**
  * RFC-359 AC-1（plan §5hn 之后的盘点，第 8 刀）：导出供注册表对拍使用。
  *
- * 这张表与 SQLite 侧 `platform/persistence/sqlite/taskLifecycleRepair.ts` 的 `REPAIR_OPTIONS`
+ * 这张表与 classic 侧 `taskLifecycleRepair.ts` 的 `REPAIR_OPTIONS`
  * 是**两份各自手写的元数据**（这边用模板工厂派生 i18n key，那边逐个写字面量）。选项 **id 集合**
  * 早就锚在 shared 的 `REPAIR_OPTION_IDS` 上，但 `labelKey` / `descriptionKey` / `risk` /
  * `destructive` / `revivesExecution` / `autoApplyEligible` 这几格**此前没有任何东西在比**
@@ -821,10 +821,30 @@ async function preflight(
         ...cancel.map((id) => `Cancel superseded node run ${id}.`),
       )
     }
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 8 刀第 2 步）：**销掉一笔真账**。
+    // 这三条以前共用一句 `Resolve alert <id>.`，而 classic 那份对每条规则各给**两步**：
+    // 「做了什么」之后还有一句「这一步不改任何数据，你接下来该做什么」。丢掉第二句的后果是
+    // 用户点完「确认告警」以为问题解决了——而 acknowledge 本身什么都没修。
+    // 取 classic 那份逐字（它包含这边的信息还更多，取它谁也不丢东西），并按规则分开：
+    // 三条规则的「接下来该做什么」本来就不一样，共用一个分支正是那句话丢失的原因。
     case 'CR-1.acknowledge':
+      return available(
+        { kind: 'acknowledge' },
+        `Resolve alert (audit + lifecycle_alerts.resolved_at).`,
+        `No data mutations. cross_clarify_session was already upgraded to abandoned by the invariant scan.`,
+      )
     case 'S5.acknowledge':
+      return available(
+        { kind: 'acknowledge' },
+        `Resolve alert (audit + lifecycle_alerts.resolved_at).`,
+        `No data mutations. Inspect the active-run pids in the alert detail; cancel/resume the task to recover (RFC-098 group-kills live children before rollback).`,
+      )
     case 'S6.acknowledge':
-      return available({ kind: 'acknowledge' }, `Resolve alert ${ctx.alert.id}.`)
+      return available(
+        { kind: 'acknowledge' },
+        `Resolve alert (audit + lifecycle_alerts.resolved_at).`,
+        `No data mutations. Restore a member: re-activate a disabled user, invite a new collaborator, or transfer ownership so someone can answer.`,
+      )
     case 'CR-1.retry-designer-rerun':
       return taskStatusPreflight(
         ctx,

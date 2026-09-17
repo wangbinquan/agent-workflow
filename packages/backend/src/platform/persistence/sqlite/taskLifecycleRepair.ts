@@ -27,6 +27,7 @@
 // or row deletions from this file or the options-*.ts modules.
 
 import { and, asc, eq, isNull } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { ulid } from 'ulid'
 
 import {
@@ -39,7 +40,6 @@ import {
   ruleForOptionId,
 } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
 import { lifecycleAlerts, lifecycleRepairAudit, tasks } from '@/db/schema'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/public/participants'
 import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
@@ -117,7 +117,7 @@ for (const rule of Object.keys(REPAIR_OPTIONS) as LifecycleAlertRule[]) {
 // ---------------------------------------------------------------------------
 
 export interface ListRepairOptionsArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   alertId: string
   actorUserId: string | null
@@ -401,7 +401,7 @@ export async function applyRepairOption(args: ApplyRepairOptionArgs): Promise<Re
 // ---------------------------------------------------------------------------
 
 async function loadAlertOrThrow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   alertId: string,
 ): Promise<ParsedLifecycleAlert> {
@@ -441,7 +441,10 @@ async function loadAlertOrThrow(
   }
 }
 
-async function loadTaskOrThrow(db: DbClient, taskId: string): Promise<RepairTaskRow> {
+async function loadTaskOrThrow(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<RepairTaskRow> {
   const rows = await db
     .select({
       id: tasks.id,
@@ -461,7 +464,7 @@ async function loadTaskOrThrow(db: DbClient, taskId: string): Promise<RepairTask
 }
 
 async function loadOpenAlertIdsForTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<Array<{ id: string; rule: string }>> {
   return db
@@ -482,7 +485,7 @@ interface AuditInput {
   appliedAt: number
 }
 
-async function writeAudit(db: DbClient, a: AuditInput): Promise<string> {
+async function writeAudit(db: ProviderNeutralDatabase, a: AuditInput): Promise<string> {
   const id = ulid()
   await db.insert(lifecycleRepairAudit).values({
     id,

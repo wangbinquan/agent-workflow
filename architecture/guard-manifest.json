@@ -2152,6 +2152,18 @@
       "lines": 898
     },
     {
+      "id": "rfc359-w8b-repair-preflight-parity",
+      "file": "packages/backend/tests/rfc359-w8b-repair-preflight-parity.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 245
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -2549,14 +2561,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d8e4aaa7d538ba68a8cbb0fce31911f28909ab4f2f1b188ce105743e4b6c577a",
+    "sourceDigest": "sha256:a1395e6918fc4ec0efa4a1745819c07929437262ae10466c01523338fd9a4727",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "bedd95410584e0890b073841f6d032301af7a941",
-    "contentDigest": "sha256:e1bdafda15656ed39283e59431cd11110e8f75fef80594691f1cedfafb6f93e7",
+    "currentSnapshotSha": "a0f722ce3615d89bbc4975eccdaedd8018a045b6",
+    "contentDigest": "sha256:6a9dc98326885ebcc98ac6344a5a3c994f4f77d12486fb21c0a410453c83d9f9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

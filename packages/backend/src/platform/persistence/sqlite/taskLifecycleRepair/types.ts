@@ -4,7 +4,12 @@
 
 import type { LifecycleAlertRule, RepairOptionMeta, RepairOutcome } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
+// RFC-359 AC-1（plan §5hn 之后的盘点，第 8 刀第 2 步）：库句柄放宽到中立。
+// 本实现（`taskLifecycleRepair.ts` + 各 `options-*.ts`）**没有任何 SQLite 专有原语**
+// ——零同步终结符（`.get()` / `.all()` / `.run()`）、无 `dbTxSync`、不 import bun:sqlite。
+// 把它绑在 SQLite 上的就只有这一行类型标注。放宽之后两份修复实现可以跑在同一个库上，
+// preflight 结果才比得了（`rfc359-w8b-repair-preflight-parity`）。
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { StartTaskDeps } from '@/services/task'
 
 export interface ParsedLifecycleAlert {
@@ -41,7 +46,7 @@ export interface RepairNodeRunRow {
 }
 
 export interface RepairContext {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly alert: ParsedLifecycleAlert
   readonly task: RepairTaskRow
   readonly actorUserId: string | null

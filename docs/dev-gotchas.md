@@ -8009,3 +8009,16 @@ PostgreSQL 侧的手动修复一条行为判据都没有。账本存在的全部
 实际上 `rfc359-w8-auto-repair-conformance` 里的 `repairEngineFor()` **没有 provider 分支**，
 在两个库上都构造 PG 那份实现——覆盖一直在，只是藏在一个名字看不出来的地方。
 **数覆盖要核到构造点**（谁 `import` 了它、谁真把它 new 出来），不是数文件名。
+
+### 往 `postgresql*.ts` 里写注释时，别在里面写 `sqlite` 这个词
+
+（RFC-359 第 8 刀实撞，推红两个分片。）`rfc349-task-execution-provider-runtime` 有一条
+「PostgreSQL 修复实现里不得出现 `sqlite`」的**文本**守卫——它要挡的是 PG 执行面悄悄 import
+SQLite 专有的东西。判据是整份源码 `not.toContain('sqlite')`，**注释也算**。
+
+于是给共用表加一句「这张表与 SQLite 侧 `platform/persistence/sqlite/taskLifecycleRepair.ts`
+的 `REPAIR_OPTIONS` 是两份手写元数据」就会推红——注释里那个**小写的路径字面量**命中了判据。
+
+改法是**保留信息、换个写法**（「classic 侧 `taskLifecycleRepair.ts`」），不要去放宽守卫：
+它挡的那件事是真的。这与本仓另外几条「按文本/名字判断」的守卫是同一类代价——
+判据简单所以可靠，代价是**注释也在判据的射程内**。
