@@ -40019,7 +40019,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eb58e08e4fc07bc576305f26e38c2358bf4c3afccd03f0f54ccef55ef60ceafc",
+  "sourceDigest": "sha256:d8e4aaa7d538ba68a8cbb0fce31911f28909ab4f2f1b188ce105743e4b6c577a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

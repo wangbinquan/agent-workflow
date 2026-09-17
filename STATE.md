@@ -2,6 +2,28 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 74，**第 8 刀第 1 步：注册表元数据对拍**）
+>
+> 按订正后的定位做第 1 步——**第一次把两份修复实现放在一起比**。
+> `rfc359-w8b-repair-option-registry-parity`（纯数据、不连库）钉三件事：
+> ①两张表恰好覆盖 shared 分类（SQLite 原有的运行期守卫只查 ⊆，漏一项不报）；
+> ②逐个选项的六格元数据相等（`labelKey` / `descriptionKey` / `risk` / `destructive` /
+> `revivesExecution` / `autoApplyEligible`）；③`autoApplyEligible ⇒ low + 非破坏性`
+> **两侧同时成立**（shared 的不变量只管一侧）。
+>
+> **第一跑两侧就相等**——今天没漂，这一条证明「合并安全」并把将来会漂的那六格钉住。
+> 变异三条全红：PG 改 `S3.demote-task` 风险等级 / PG 把 `S5.acknowledge` 改成破坏性 /
+> SQLite 去掉 `S4.kick-task` 的 `autoApplyEligible`。
+>
+> **为什么这六格值得单独钉**：漂了不会让任何现有测试变红（两份实现各自自洽），但用户看得见
+> ——风险等级漂了则一侧弹二次确认、另一侧一键执行；`labelKey` 漂了一侧按钮显示 i18n key 原文；
+> `autoApplyEligible` 漂了自动修复循环在一个部署上会自己动手。
+>
+> 证据：新用例 3/3（变异 3/3 红）；修复面 84 + 55；架构守卫 706/706。
+>
+> **下一步**：第 8 刀第 2 步——preflight 结果的对拍（同一条告警下两侧的
+> `available` / `unavailableReasonKey` / `previewSteps` 是否同答案），然后才谈合并。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 73，**更正续 72 的一条判断**）
 >
 > **续 72 写错了一条，在此更正**：它说「手动的两个路由动词在 PostgreSQL 上零行为覆盖」——**不对**。

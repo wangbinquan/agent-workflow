@@ -16760,3 +16760,22 @@ SQLite 路由不再自己判工作流可见性。`rfc345` 兼容边账本 37 →
    `workgroup-repair-unsupported`）。这些全是纯门判据，不需要真跑任务。
 2. 变异实证 → 合并 → 销账。
 3. **同一刀里修 t19d 的配对盲区**，把这一对显式收进账本。
+
+### 第 8 刀第 1 步落地　注册表元数据的两份对拍
+
+`rfc359-w8b-repair-option-registry-parity`（纯数据，不连库）逐格比两张手写元数据表：
+
+- **两张表都恰好覆盖 shared 分类**（不多不少）。SQLite 侧原有的运行期守卫只查 ⊆，漏一项它不报；
+- **逐个选项的六格元数据相等**：`labelKey` / `descriptionKey` / `risk` / `destructive` /
+  `revivesExecution` / `autoApplyEligible`。两边一个「缺省即 false」、一个「存在即 true」，
+  归一成布尔再比，免得写法差异冒充成真分叉；
+- **`autoApplyEligible ⇒ low + 非破坏性` 在两侧同时成立**（shared 的不变量只对一侧成立不够）。
+
+**第一跑两侧就相等**——今天没有漂。这一条证明的是「合并安全」，并把将来会漂的那六格钉住。
+
+变异实证三条，全红：PG 侧把 `S3.demote-task` 的 risk 改成 `high`；PG 侧把 `S5.acknowledge`
+改成 destructive；SQLite 侧去掉 `S4.kick-task` 的 `autoApplyEligible`。
+
+**为什么这六格值得单独钉**：漂了不会让任何现有测试变红（两份实现各自自洽），但用户看得见——
+风险等级漂了，同一个修复在一个部署上弹二次确认、另一个一键执行；`labelKey` 漂了，
+一侧按钮显示 i18n key 原文；`autoApplyEligible` 漂了，自动修复循环在一个部署上会自己动手。

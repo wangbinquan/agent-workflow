@@ -181,7 +181,17 @@ interface OptionDefinition extends RepairOptionMeta {
   readonly id: RepairOptionId
 }
 
-const OPTION_DEFINITIONS = {
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 8 刀）：导出供注册表对拍使用。
+ *
+ * 这张表与 SQLite 侧 `platform/persistence/sqlite/taskLifecycleRepair.ts` 的 `REPAIR_OPTIONS`
+ * 是**两份各自手写的元数据**（这边用模板工厂派生 i18n key，那边逐个写字面量）。选项 **id 集合**
+ * 早就锚在 shared 的 `REPAIR_OPTION_IDS` 上，但 `labelKey` / `descriptionKey` / `risk` /
+ * `destructive` / `revivesExecution` / `autoApplyEligible` 这几格**此前没有任何东西在比**
+ * ——同一条告警在两个部署上可以给出风险等级不同、甚至按钮文案不同的修复选项。
+ * `rfc359-w8b-repair-option-registry-parity` 逐格钉住它。
+ */
+export const OPTION_DEFINITIONS = {
   'R1.approve-run': option('R1.approve-run', 'R1', 'approveRun', 'low', false, true),
   'R1.unapprove-doc': option('R1.unapprove-doc', 'R1', 'unapproveDoc', 'medium', false),
   'R1.mark-task-failed': option('R1.mark-task-failed', 'R1', 'markTaskFailed', 'high', true),
