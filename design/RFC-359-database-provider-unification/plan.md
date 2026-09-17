@@ -17012,3 +17012,26 @@ PG 走 `children.resume({ taskId, runtime }, topology)` 参与者。第 8 刀已
 
 留给第 9 刀第 1 步：先补那份 git 夹具基线，再谈合并方向。在它给出实测之前，
 不要按上面任何一版勘察表去改生产代码。
+
+### 第 9 刀第 1 步落地　带真 git 工作树的回滚基线——**实测：两侧同答案**
+
+`rfc359-w9-retry-rollback-parity`（真 `git init` + 一次提交 + 一个不存在的 sha，
+走 `createEachProviderTaskExecution` 交出的**生产装配** `provider.routes.tasks`，不是手搓依赖）：
+
+两条 lane 逐格相同：`(409 snapshot-lost, 任务 failed, errorSummary snapshot-lost)`。
+
+**变异实证三次，结论比「都绿」更具体**：
+
+| 变异 | 结果 | 含义 |
+| --- | --- | --- |
+| 把 PG 的 CAS 前置门 `assertRollbackBaselinesPresent` 整块注释掉 | **两条 lane 仍全绿** | 那道门在这条路径上**不是承重的**——后面的真回滚给出完全相同的升级 |
+| SQLite 的 `escalateSnapshotLost` 改 `errorSummary` | SQLite lane 红 | 本条确有预言力 |
+| PG 的 `escalateUnsafeContinuation` 改 `errorSummary` | PostgreSQL lane 红 | 同上 |
+
+于是勘察阶段那个悬而未决的问题有了答案：**「判据相对准入 CAS 的位置」不同，但没有用户可见后果**。
+合并时这一格**不需要产品判断**；也别把它当成「PG 独有的保护」而去 SQLite 侧补一道。
+
+**顺带解掉一处 harness 限制**：`createEachProviderTaskExecution` 原来把 SQLite 路由的
+`startDepsFor` 钉成「一调用就炸」的桩，而 SQLite 的路由壳在进 `retryNode` / `resumeTask`
+**之前**就展开那个对象——于是这两个动词在 SQLite lane 上根本驱动不起来。
+加了可选的 `routeStartDepsFor`（缺省仍是会炸的桩，其余用例一字未动），第 9 刀后续步骤才有路可走。

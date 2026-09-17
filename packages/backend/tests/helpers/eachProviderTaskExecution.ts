@@ -11,7 +11,9 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import type { StartTaskDeps } from '@/services/task'
 import { agents, mcps, workflows } from '@/db/schema'
+import type { Actor } from '@/auth/actor'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
@@ -105,7 +107,16 @@ export async function createEachProviderTaskExecution(
   harness: ProviderHarness,
   runConfig: TaskDriveRuntimeOptions,
   userId: string,
-  options: { readonly completionMode?: TaskDriveCompletionMode } = {},
+  options: {
+    readonly completionMode?: TaskDriveCompletionMode
+    /**
+     * RFC-359 AC-1（第 9 刀第 1 步）：SQLite 的路由壳在调用 `retryNode` / `resumeTask`
+     * **之前**就展开这个对象，所以缺省那个「一调用就炸」的桩会让 retry / resume 两个动词
+     * 在 SQLite lane 上根本驱动不起来（对拍拿不到真实答案）。要驱动它们的用例把真的交进来；
+     * 其余用例保持原样——不该被调用到的依赖仍然当场炸，而不是静默走假路径。
+     */
+    readonly routeStartDepsFor?: (actor: Actor) => StartTaskDeps
+  } = {},
 ) {
   const completionMode = options.completionMode ?? 'await-settle'
   const { db } = harness
@@ -228,7 +239,8 @@ export async function createEachProviderTaskExecution(
         },
         routes: () => ({
           collaboration: unusedCapability('collaboration route'),
-          startDepsFor: () => unavailable('task route launch'),
+          startDepsFor: (routeActor: Actor) =>
+            options.routeStartDepsFor?.(routeActor) ?? unavailable('task route launch'),
           multipart: unusedCapability('multipart upload'),
           resourceAuthorityFor: () => launchResources,
           owners: composeOwnerIdentityQueries(db),
