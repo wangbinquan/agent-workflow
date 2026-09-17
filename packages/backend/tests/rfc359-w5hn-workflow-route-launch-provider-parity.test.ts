@@ -220,5 +220,92 @@ describeEachProviderHttpApplication(
         '两个引擎的工作流 JSON 路由启动落库结果不一致——合并 startTask 之前必须先解释清楚（plan §5hn 批次二 ④）',
       ).toEqual(launched.get('sqlite'))
     })
+
+    test('call 目标改名后启动：两个引擎都拒，但**错误契约不同**（已知差异，钉住待销）', async () => {
+      const suffix = ulid().slice(-8).toLowerCase()
+      const calleeName = `callee-${suffix}`
+      const emptyDefinition = { $schema_version: 5, inputs: [], nodes: [], edges: [] }
+
+      const calleeRes = await req(app, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({ name: calleeName, description: '', definition: emptyDefinition }),
+      })
+      expect(calleeRes.status, await calleeRes.clone().text()).toBe(201)
+      const callee = (await calleeRes.json()) as {
+        id: string
+        version: number
+        definition: unknown
+      }
+
+      const callerRes = await req(app, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `caller-${suffix}`,
+          description: '',
+          definition: {
+            $schema_version: 5,
+            inputs: [],
+            nodes: [
+              {
+                id: 'call1',
+                kind: 'call-workflow',
+                workflowName: calleeName,
+                position: { x: 10, y: 20 },
+              },
+            ],
+            edges: [],
+          },
+        }),
+      })
+      expect(callerRes.status, await callerRes.clone().text()).toBe(201)
+      const caller = (await callerRes.json()) as { id: string }
+
+      // `call-workflow` 按**名字**解析（durable name + 可选 id 缓存）——改名即让引用悬空。
+      // 这是删除之外唯一能到达该状态的路径：删被引用的工作流会 409 `workflow-in-use`。
+      const renamed = await req(app, `/api/workflows/${callee.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          expectedVersion: callee.version,
+          clientMutationId: ulid(),
+          snapshot: { name: `renamed-${suffix}`, description: '', definition: callee.definition },
+        }),
+      })
+      expect(renamed.status, await renamed.clone().text()).toBe(200)
+
+      const launch = await req(app, '/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflowId: caller.id,
+          name: 'dangling call launch',
+          scratch: true,
+        }),
+      })
+      // **两个引擎都拒**，用户可见的大形状一致（422 + 启动被拒）。
+      expect(launch.status, await launch.clone().text()).toBe(422)
+      const body = (await launch.json()) as { code?: string; details?: { issues?: unknown[] } }
+
+      // **已知差异，钉的是缺陷不是契约**（plan §5hn 批次二 ④）：同一条规则在两条不同的门上生效。
+      //   · SQLite：路由先跑 `assertWorkflowSnapshotLaunchable`（带 candidate 的静态校验），
+      //     于是回通用的 `workflow-invalid` + `issues[]`——编辑器的校验面板正是靠 `issues[]`
+      //     把出错节点高亮出来的；
+      //   · PostgreSQL：路由没有那道门，一路走到冻结调用闭包时才被
+      //     `taskExecutionResourceSnapshots` 拒掉，回更具体的 `workflow-call-ref-missing`，
+      //     但**不带 `issues[]`**，前端指不到是哪个节点。
+      // 规则本身两侧都在，差的是**哪一道门先响**。合并 JSON 路由那一刀会统一它——
+      // 届时这条会红，并强迫我们回答「统一到哪一侧」（`issues[]` 的可用性是主要论据）。
+      if (scope.harness.capabilities.provider === 'sqlite') {
+        expect(body.code, 'SQLite 走路由那道静态校验门').toBe('workflow-invalid')
+        expect(
+          Array.isArray(body.details?.issues),
+          'SQLite 回的是通用静态校验错，带 issues[] 供编辑器定位节点',
+        ).toBe(true)
+      } else {
+        expect(body.code, 'PostgreSQL 走冻结调用闭包那道门').toBe('workflow-call-ref-missing')
+        expect(
+          body.details?.issues,
+          'PostgreSQL 这条不带 issues[]——前端指不到出错节点，这正是销账时要权衡的那一点',
+        ).toBeUndefined()
+      }
+    })
   },
 )

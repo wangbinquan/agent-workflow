@@ -15523,6 +15523,26 @@ postgresql  spaceNodes = []
 ② 如果没有，PG 那侧缺 candidate 是不是**本来就无所谓**——那 SQLite 那侧的 candidate 也就
 只是多花一次闭包查询，两边都该收敛到同一个口径，而不是各留各的。
 
+### 问题 ① 已答：**改名就是那条路径**，而且两侧**都拒、错误契约不同**
+
+`call-workflow` 按**名字**解析（durable name + 可选 id 缓存），所以把 callee 改名即让引用悬空
+——这是删除之外唯一到得了的路径（删被引用的工作流会 409 `workflow-in-use`）。实测：
+
+| | HTTP | code | `issues[]` |
+| --- | --- | --- | --- |
+| SQLite | 422 | `workflow-invalid` | **有**（`call-workflow-ref-missing`，带节点 pointer） |
+| PostgreSQL | 422 | `workflow-call-ref-missing` | **无** |
+
+**所以规则两侧都在，差的是哪一道门先响**：SQLite 的路由先跑
+`assertWorkflowSnapshotLaunchable`（带 candidate 的静态校验）；PostgreSQL 没有那道门，
+一路走到冻结调用闭包时才被 `taskExecutionResourceSnapshots.ts:175` 拒掉。
+上面那条「call-node 规则在 PG 启动期不参与判定」的推论**据此修正**——它参与，
+只是由另一个组件、以另一个错误形状参与。
+
+**这处差异是可达且确定的，已钉进 `rfc359-w5hn-workflow-route-launch-provider-parity`。**
+销账时要回答的是「统一到哪一侧」，主要论据是 `issues[]`：工作流编辑器的校验面板靠它把出错
+节点高亮出来，PG 那条不带，前端指不到是哪个节点。
+
 ### 另记一处观察：准备失败之后「重试准备仓库」两个引擎的响应形状不同（未定性）
 
 补 G7 时顺手验了一次 AC-11 的重试面（`POST /api/tasks/:id/nodes/:nodeRunId/retry`，
