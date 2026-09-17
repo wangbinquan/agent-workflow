@@ -535,8 +535,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // 驱动协调器的 `repositoryPreparation` 从 `skipRepositoryPreparation` 换成真正的
     // `composeDeferredRepositoryPreparation({...})`。此前 PG 上这一格是空操作，
     // 于是「远端拉不动」时同步抛错、一行任务都不留。**语句数仍是 160**：换的是一个实参。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ④）：摘要随 `agentLaunchResources` 的
+    // `workflowValidation` 注入**退役**更新——注入的那份丢掉了候选上下文，于是 call-node 规则
+    // 不在启动那道门上判；缺省实现读同一批清单并把候选透传下去。**语句数仍是 160**。
     expect(digest(restored, pg)).toBe(
-      'aebfc95ac66b73663dc82feaf22ea774eeb17f9e21ece88dd3b8bed05dc75251',
+      'e1d141b9aaaf048082fbac1dedc0b4be8ccfd40ab1f070154e59d1bb31c5d258',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

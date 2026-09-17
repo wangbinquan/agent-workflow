@@ -68,8 +68,11 @@ export function createAgentLaunchResourceOperations(input: {
     },
   }
   const workflowValidation: AgentLaunchWorkflowValidation = input.workflowValidation ?? {
-    async validate(definition) {
-      return validateWorkflowDef(definition, await loadWorkflowValidationContext(db))
+    async validate(definition, candidate) {
+      // RFC-359 AC-1（plan §5hn 批次二 ④）：**候选上下文必须透传**。没有它，
+      // `loadWorkflowValidationContext` 不填 `callWorkflows` / `callWorkgroupNames` /
+      // `currentWorkflow`，call-node 规则就不在这道门上判。
+      return validateWorkflowDef(definition, await loadWorkflowValidationContext(db, candidate))
     },
   }
   return Object.freeze({
@@ -82,8 +85,9 @@ export function createAgentLaunchResourceOperations(input: {
     },
     async validateHostWorkflow(
       definition: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[0],
+      candidate?: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[1],
     ) {
-      return workflowValidation.validate(definition)
+      return workflowValidation.validate(definition, candidate)
     },
   })
 }

@@ -1409,8 +1409,16 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
               },
             )
           }
+          // RFC-359 AC-1（plan §5hn 批次二 ④）：**带上候选上下文**——不带它，
+          // `loadWorkflowValidationContext` 不填 `callWorkflows` / `currentWorkflow`，
+          // call-node 规则就不在这道门上判，引用悬空要等到冻结调用闭包时才被另一个组件
+          // 以 `workflow-call-ref-missing` 拒掉（而且不带 `issues[]`，编辑器指不到出错节点）。
           const validation = await dependencies.agent.resources.validateHostWorkflow(
             snapshot.workflow.definition,
+            {
+              definition: snapshot.workflow.definition,
+              currentWorkflow: { id: snapshot.workflow.id, name: snapshot.workflow.name },
+            },
           )
           const errors = validation.issues.filter(
             (issue) => (issue.severity ?? 'error') === 'error',

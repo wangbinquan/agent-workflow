@@ -898,14 +898,11 @@ export async function composePostgresqlApplication(
   // 只认凭据边缘铸出来的那一个投影，而定时 / webhook / 子任务拿到的是**委派** actor
   // ——那条路在 PostgreSQL 上让定时单代理启动当场 500（`foreign-legacy-actor-projection`），
   // SQLite 一切正常。缺省实现读库 + `canViewResource`，判据同一套、对两种 actor 都成立。
-  const agentLaunchResources = composeAgentLaunchResourceOperations({
-    db: input.db,
-    workflowValidation: {
-      async validate(definition) {
-        return validateWorkflowDef(definition, await validationContext.load())
-      },
-    },
-  })
+  // RFC-359 AC-1（plan §5hn 批次二 ④）：`workflowValidation` 的注入也退役。注入的那份
+  // 只喂 agents/skills/mcps/plugins，**丢掉候选上下文**——于是 call-node 规则不在启动那道门上判。
+  // 缺省实现（`agentLaunchResourceOperations.ts`）读同一批清单，并把候选透传给
+  // `loadWorkflowValidationContext`，两个引擎因此在同一道门上以同一个错误契约拒掉悬空引用。
+  const agentLaunchResources = composeAgentLaunchResourceOperations({ db: input.db })
   // RFC-359 AC-1（plan §5hn 批次二 ①）：与 agent 臂同一处置——两个根共用
   // `composeWorkgroupLaunchResourceOperations`（读库 + `canViewResource` + 中立的
   // 宿主锚行懒种）。此前这份注入实现同样把 actor 投影成 direct authority，

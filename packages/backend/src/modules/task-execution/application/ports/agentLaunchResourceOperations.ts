@@ -12,9 +12,26 @@ export interface AgentLaunchVisibleAgentQuery {
   get(actor: Actor, agentId: string): Promise<Agent | null>
 }
 
+/**
+ * 启动期静态校验的候选上下文（RFC-359 AC-1，plan §5hn 批次二 ④）。
+ *
+ * 不给它，`loadWorkflowValidationContext` 就不会填 `ctx.callWorkflows` /
+ * `callWorkgroupNames` / `currentWorkflow`——**call-node 规则因此不在这道门上判**，
+ * 引用悬空要等到冻结调用闭包时才被另一个组件以另一个错误码拒掉
+ *（PostgreSQL 曾经就是这样：`workflow-call-ref-missing`，而且不带 `issues[]`，
+ * 工作流编辑器的校验面板指不到出错节点）。
+ */
+export interface AgentLaunchWorkflowValidationCandidate {
+  readonly definition: WorkflowDefinition
+  readonly currentWorkflow: Readonly<{ id: string; name: string }>
+}
+
 /** Provider-selected full Resource Catalog validation context. */
 export interface AgentLaunchWorkflowValidation {
-  validate(definition: WorkflowDefinition): Promise<{
+  validate(
+    definition: WorkflowDefinition,
+    candidate?: AgentLaunchWorkflowValidationCandidate,
+  ): Promise<{
     readonly ok: boolean
     readonly issues: readonly AgentLaunchValidationIssue[]
   }>
@@ -24,7 +41,10 @@ export interface AgentLaunchWorkflowValidation {
 export interface AgentLaunchResourceOperations {
   loadVisibleAgent(actor: Actor, agentId: string): Promise<Agent | null>
   ensureHostWorkflow(): Promise<void>
-  validateHostWorkflow(definition: WorkflowDefinition): Promise<{
+  validateHostWorkflow(
+    definition: WorkflowDefinition,
+    candidate?: AgentLaunchWorkflowValidationCandidate,
+  ): Promise<{
     readonly ok: boolean
     readonly issues: readonly AgentLaunchValidationIssue[]
   }>

@@ -15564,3 +15564,30 @@ postgresql  spaceNodes = []
 **下一刀要做的**：先用 `rfc287-t13-deferred-prep` 那套夹具在**两个引擎**上各跑一次 AC-11 重试，
 确认「同一个状态下两侧的响应」；两侧一致就只是我的夹具问题，不一致才是新的 AC-1 缺口。
 在那之前不要给这条写判据——写了就是把一个没定性的形状钉成契约。
+
+## §5hn 批次二 ④（上）落地　启动期静态校验带上候选，两个引擎的错误契约统一
+
+上一节钉住的错误契约差**已销账**。处置只有一处：把**候选上下文**接进端口。
+
+- `AgentLaunchWorkflowValidation.validate(definition, candidate?)`，
+  缺省实现把它转给 `loadWorkflowValidationContext(db, candidate)`；
+- 工作流启动臂调用时带上 `{ definition, currentWorkflow: { id, name } }`；
+- **PG 守护进程根的 `workflowValidation` 注入同批退役**——注入的那份只喂
+  agents/skills/mcps/plugins，恰恰把候选丢了；缺省实现读同一批清单。
+
+于是两个引擎在**同一道门**上、以**同一个契约**拒掉悬空引用：
+`workflow-invalid` + `issues[]`（含 `call-workflow-ref-missing`，带节点 pointer）。
+统一到这一侧是因为工作流编辑器的校验面板靠 `issues[]` 高亮出错节点。
+
+**这一格的教训写在端口注释里**：一个可选参数如果决定「某一整类规则判不判」，
+它就不该是可选的装饰——缺省实现必须把它透传，注入方必须解释为什么不透传。
+
+### 顺带排除一处**与本刀无关**的红（A/B 证明，不是重跑放过）
+
+50 文件半径里 `review-state-machine` 的五条 REST 用例稳定红在
+`system-operations.get-database-runtime.v1: declared operation has no mounted binding`，
+单跑 15/15 绿。二分定位到触发者是 `rfc305-architecture-lock.test.ts`（同进程先跑它即复现），
+再把工作树里改过的四个 `src/` 文件**换回 HEAD 版本**——照样 5 红。
+**与本刀无关，是既有的跨文件干扰**，已登记进 `docs/dev-gotchas.md`。
+
+判据：怀疑「我是不是把它弄红了」时，**把自己的改动换回去跑一次**比任何推理都快。

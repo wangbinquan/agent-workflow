@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 53，**候选上下文接进端口，两个引擎的启动错误契约统一**）
+>
+> 本段待推：§5hn 批次二 ④（上）。续 52 钉住的错误契约差**已销账**。
+>
+> **最该带走的一句：一个可选参数如果决定「某一整类规则判不判」，它就不该是可选的装饰。**
+> `validateHostWorkflow(definition)` 少的那个候选上下文，正是 `callWorkflows` /
+> `currentWorkflow` 的来源——没有它，call-node 规则整类不在启动那道门上判。
+>
+> 处置一处：端口加 `candidate?`，缺省实现透传给 `loadWorkflowValidationContext`，
+> 工作流启动臂带上 `{ definition, currentWorkflow }`，**PG 根的 `workflowValidation` 注入退役**
+> （注入的那份恰恰把候选丢了）。两个引擎因此在同一道门上、以同一个契约拒掉悬空引用：
+> `workflow-invalid` + `issues[]`（统一到这一侧是因为编辑器校验面板靠 `issues[]` 高亮节点）。
+>
+> **顺带排除一处与本刀无关的红（A/B 证明，不是重跑放过）**：50 文件半径里
+> `review-state-machine` 五条稳定红在 `declared operation has no mounted binding`，
+> 单跑 15/15 绿。二分到触发者 `rfc305-architecture-lock.test.ts`，再把改过的四个 `src/` 文件
+> **换回 HEAD 版本**——照样 5 红。既有的跨文件干扰，已登记 `docs/dev-gotchas.md`。
+> **怀疑「我是不是把它弄红了」时，把自己的改动换回去跑一次比任何推理都快。**
+>
+> 证据：五条启动基线 30/30；架构守卫 796/796；20 文件启动面 228/228。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 52，**变异证明前三条「落库对等」基线一直没在比库**）
 >
 > 已推并 CI 绿：`3c98082bb`。同段后续已推：`4658de07f`·`f9f583649`（两笔勘察落档）。

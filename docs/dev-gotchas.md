@@ -562,6 +562,25 @@ bun test tests/architecture/ tests/*architecture*.test.ts
 
 约一分钟、无需数据库以外的任何准备，罩住的正是「写不出文件名、只能靠跑」的那一类。
 
+## 已知的**跨文件干扰**：`rfc305-architecture-lock` 会让 `review-state-machine` 的五条红（2026-09-17 定位）
+
+同一个 bun 进程里先跑 `tests/rfc305-architecture-lock.test.ts`、再跑
+`tests/review-state-machine.test.ts`，后者的五条 REST 用例全部红在
+
+```
+system-operations.get-database-runtime.v1: declared operation has no mounted binding
+```
+
+单独跑 `review-state-machine` 15/15 绿。**已用 A/B 证明与 RFC-359 §5hn 的改动无关**：
+把工作树里那四个改过的 `src/` 文件换回 `HEAD` 版本，这一对照样 5 红。
+
+**看到这五条红先按这条排除**，别去猜自己改的启动路——它们跟启动没有关系。
+CI 按文件发现顺序分片，这一对未必落进同一个分片，所以 CI 绿不代表这条不存在。
+
+根因未查（route registry 里某个「已声明操作」的挂载状态是进程级的，被前一个文件的
+源码形状锁装配污染）。修它要么让那个注册表按 app 实例隔离，要么让形状锁不去建真 app。
+属于测试基础设施债，不在 RFC-359 的功能面上，登记在这里等一次专门的清理。
+
 ## **全可选的依赖面会把配置吞掉**：只交三格的 `deps` 是个静默降级（2026-09-17 推红 e2e）
 
 `createTaskDriveCoordinator({ deps, … })` 内部是 `runtimeConfigOpts(input.deps)`——它从 `deps`

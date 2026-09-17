@@ -6,7 +6,7 @@
     "moduleFiles": 1183,
     "productionFiles": 2554,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24715
+    "symbolsIncludingFileRoots": 24716
   },
   "entries": [
     {
@@ -112028,6 +112028,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "AgentLaunchWorkflowValidation",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/agentLaunchResourceOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/agentLaunchResourceOperations.ts#AgentLaunchWorkflowValidationCandidate",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentLaunchWorkflowValidationCandidate",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -297257,5 +297269,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c90f1c85e83449f406d0ab783b9ea0132535cbe5b667c08cbc54082472d932a8"
+  "sourceDigest": "sha256:df703190fc7089df4042f85d5b5d46e1738adf7a30889128e8ea4b7c8e060a4d"
 }

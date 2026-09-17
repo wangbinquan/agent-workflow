@@ -221,7 +221,7 @@ describeEachProviderHttpApplication(
       ).toEqual(launched.get('sqlite'))
     })
 
-    test('call 目标改名后启动：两个引擎都拒，但**错误契约不同**（已知差异，钉住待销）', async () => {
+    test('call 目标改名后启动：两个引擎以**同一个错误契约**拒掉', async () => {
       const suffix = ulid().slice(-8).toLowerCase()
       const calleeName = `callee-${suffix}`
       const emptyDefinition = { $schema_version: 5, inputs: [], nodes: [], edges: [] }
@@ -280,32 +280,24 @@ describeEachProviderHttpApplication(
           scratch: true,
         }),
       })
-      // **两个引擎都拒**，用户可见的大形状一致（422 + 启动被拒）。
       expect(launch.status, await launch.clone().text()).toBe(422)
-      const body = (await launch.json()) as { code?: string; details?: { issues?: unknown[] } }
-
-      // **已知差异，钉的是缺陷不是契约**（plan §5hn 批次二 ④）：同一条规则在两条不同的门上生效。
-      //   · SQLite：路由先跑 `assertWorkflowSnapshotLaunchable`（带 candidate 的静态校验），
-      //     于是回通用的 `workflow-invalid` + `issues[]`——编辑器的校验面板正是靠 `issues[]`
-      //     把出错节点高亮出来的；
-      //   · PostgreSQL：路由没有那道门，一路走到冻结调用闭包时才被
-      //     `taskExecutionResourceSnapshots` 拒掉，回更具体的 `workflow-call-ref-missing`，
-      //     但**不带 `issues[]`**，前端指不到是哪个节点。
-      // 规则本身两侧都在，差的是**哪一道门先响**。合并 JSON 路由那一刀会统一它——
-      // 届时这条会红，并强迫我们回答「统一到哪一侧」（`issues[]` 的可用性是主要论据）。
-      if (scope.harness.capabilities.provider === 'sqlite') {
-        expect(body.code, 'SQLite 走路由那道静态校验门').toBe('workflow-invalid')
-        expect(
-          Array.isArray(body.details?.issues),
-          'SQLite 回的是通用静态校验错，带 issues[] 供编辑器定位节点',
-        ).toBe(true)
-      } else {
-        expect(body.code, 'PostgreSQL 走冻结调用闭包那道门').toBe('workflow-call-ref-missing')
-        expect(
-          body.details?.issues,
-          'PostgreSQL 这条不带 issues[]——前端指不到出错节点，这正是销账时要权衡的那一点',
-        ).toBeUndefined()
+      const body = (await launch.json()) as {
+        code?: string
+        details?: { issues?: ReadonlyArray<{ code?: string }> }
       }
+
+      // **已销账**（plan §5hn 批次二 ④）：此前同一条规则在两条不同的门上生效——
+      // SQLite 的路由先跑带 candidate 的静态校验（`workflow-invalid` + `issues[]`），
+      // PostgreSQL 没有那道门，一路走到冻结调用闭包才被 `workflow-call-ref-missing` 拒掉
+      // （不带 `issues[]`，编辑器指不到出错节点）。
+      // 处置是把**候选上下文**透传进启动期校验（`validateHostWorkflow(definition, candidate)`），
+      // 两侧因此在同一道门上以同一个契约拒掉。统一到 `issues[]` 这一侧是因为
+      // 工作流编辑器的校验面板靠它把出错节点高亮出来。
+      expect(body.code, '两个引擎必须回同一个错误码').toBe('workflow-invalid')
+      expect(
+        body.details?.issues?.some((issue) => issue.code === 'call-workflow-ref-missing'),
+        'issues[] 必须点名是哪条 call-node 规则——编辑器靠它定位节点',
+      ).toBe(true)
     })
   },
 )
