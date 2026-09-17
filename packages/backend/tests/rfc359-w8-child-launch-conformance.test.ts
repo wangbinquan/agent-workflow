@@ -49,7 +49,16 @@ import {
 
 import { buildActor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, users, workflows } from '@/db/schema'
+import {
+  nodeRuns,
+  taskCollaborators,
+  taskExecutionIntents,
+  taskRepos,
+  taskSpaceNodes,
+  tasks,
+  users,
+  workflows,
+} from '@/db/schema'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -228,6 +237,20 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
       gitUserEmail: overrides.gitUserEmail ?? null,
       rootTaskId: parent.id,
       executionLineageId: parent.id,
+      // **必须显式写**（RFC-359 AC-1，plan §5hn 批次二 ⑤ 实撞）：这一列留空时两个引擎的父行
+      // 状态就不一样了——SQLite 有 `rfc328_tasks_lineage_after_insert` 触发器（迁移 0210，
+      // 注释自陈是「给不走生产工厂的直写 SQL / 测试兜底」）会按 `workflow_version` 把它补上，
+      // **PostgreSQL 一个触发器都没有**。于是子任务继承到的根槽一侧是 `workflowRevision: 1`、
+      // 另一侧是 `null`，而那根本不是子启动的行为差，是夹具被单侧触发器骗了。
+      // 生产写入方全都显式写这三列（`rfc359-w7-task-insert-lineage-completeness` 逐站点锁着），
+      // 夹具也照生产形状写。
+      lineageSlotPathJson: JSON.stringify([
+        {
+          stableNodeKey: 'task-root',
+          frozenOccurrenceKey: parent.id,
+          workflowRevision: 1,
+        },
+      ]),
     })
   }
   await db.insert(nodeRuns).values({
@@ -366,6 +389,81 @@ async function launchError(
   }
 }
 
+/**
+ * 逐次必然不同的那几格：墙钟，以及 `inheritedSpace()` 每 lane 各建一个临时目录带来的路径 / 分支。
+ * 其余整行都比——拒绝清单而不是允许清单（允许清单只护得住想得到的字段）。
+ */
+const VOLATILE_CHILD_COLUMNS = new Set([
+  'createdAt',
+  'updatedAt',
+  'startedAt',
+  'finishedAt',
+  'branchStartedAt',
+  'claimedAt',
+  'completedAt',
+  'addedAt',
+  'repoPath',
+  'worktreePath',
+  'branch',
+])
+
+function comparableRows(rows: readonly Record<string, unknown>[]): unknown[] {
+  return rows.map((row) => {
+    const comparable: Record<string, unknown> = {}
+    for (const key of Object.keys(row).sort()) {
+      if (VOLATILE_CHILD_COLUMNS.has(key)) continue
+      comparable[key] = row[key]
+    }
+    return comparable
+  })
+}
+
+/** 子任务那一行 + PG 铸造机显式写的每一张卫星表。少写一张也要红。 */
+async function childRows(db: ProviderNeutralDatabase): Promise<Record<string, unknown>> {
+  const [task, repos, spaceNodes, collaborators, intents] = await Promise.all([
+    db.select().from(tasks).where(eq(tasks.id, CHILD_TASK_ID)),
+    db.select().from(taskRepos).where(eq(taskRepos.taskId, CHILD_TASK_ID)),
+    db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, CHILD_TASK_ID)),
+    db.select().from(taskCollaborators).where(eq(taskCollaborators.taskId, CHILD_TASK_ID)),
+    db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.taskId, CHILD_TASK_ID)),
+  ])
+  return {
+    task: comparableRows(task as unknown as Record<string, unknown>[]),
+    repos: comparableRows(repos as unknown as Record<string, unknown>[]),
+    spaceNodes: comparableRows(spaceNodes as unknown as Record<string, unknown>[]),
+    collaborators: comparableRows(collaborators as unknown as Record<string, unknown>[]),
+    // 意图行的 id 是本次铸造现生成的 ULID，两 lane 天然不同；其余整行都比。
+    intents: comparableRows(intents as unknown as Record<string, unknown>[]).map((row) => {
+      const { id: _id, ...rest } = row as Record<string, unknown>
+      return rest
+    }),
+  }
+}
+
+/**
+ * 等两侧的执行意图都走到终态再读。
+ *
+ * **不是可有可无的等待**：两侧的 coordinator 都是 `completionMode: 'background'`，
+ * `state` / `completedAt` 因此取决于「读的那一刻收尾跑完没有」。实测（plan §5hn 批次二 ⑤）
+ * PG 的 `settle()` 会等 `finalizeWorkspace`，SQLite 那侧没有这个钩子，读到的是 `claimed`
+ * ——**差的是几百毫秒，不是行为**（探针连读五次：SQLite 第二次就翻到 `completed`）。
+ * 把 `state` 也拉进拒绝清单能让判据变绿，但那会把「有一侧真的不收尾」这类缺陷一起盖掉；
+ * 等到终态再比才是既诚实又能比的那一种。
+ */
+async function settledChildRows(db: ProviderNeutralDatabase): Promise<Record<string, unknown>> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const rows = await db
+      .select({ state: taskExecutionIntents.state })
+      .from(taskExecutionIntents)
+      .where(eq(taskExecutionIntents.taskId, CHILD_TASK_ID))
+    if (rows.length > 0 && rows.every((row) => row.state !== 'claimed')) break
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  return await childRows(db)
+}
+
+const mintedChildRows = new Map<string, Record<string, unknown>>()
+
 describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHarness) => {
   // 正向对照：合法的一次子启动在两个引擎上都把子任务铸出来。没有它，下面那一排「都拒」
   // 的断言可以被一个「什么都拒」的实现全部满足。
@@ -373,6 +471,24 @@ describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHa
     await seed(harness.db)
     expect(await launchError(harness)).toBeNull()
     expect(await childExists(harness.db)).toBe(true)
+  })
+
+  // RFC-359 AC-1（plan §5hn 批次二 ⑤）—— **落库那几行**也要比，不能只比「铸出来了没有」。
+  //
+  // 为什么这条测试存在：上面那条正向对照只断言 `childExists === true`。批次二 ④ 已经用变异
+  // 实证过同一个坑的另一面（`tests/helpers/taskRowParity.ts` 头注释）：**「存在」与「一样」
+  // 差着整整一类缺陷**——两侧都把子任务铸出来、但 `catalog_visibility` / `invocation_depth` /
+  // `root_task_id` / 卫星表少写一张，这条对拍一个字都不会红。合并这一对之前先把行钉住。
+  test('一次合法的子启动：两个引擎落出的子任务行与卫星行逐字相同', async () => {
+    await seed(harness.db)
+    expect(await launchError(harness)).toBeNull()
+
+    mintedChildRows.set(harness.capabilities.provider, await settledChildRows(harness.db))
+    if (mintedChildRows.size < 2) return
+    expect(
+      mintedChildRows.get('postgresql'),
+      '两个引擎铸出来的子任务行 / 卫星行不一致（plan §5hn 批次二 ⑤）',
+    ).toEqual(mintedChildRows.get('sqlite'))
   })
 
   // 两侧共有的准入：父任务不存在。

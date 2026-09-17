@@ -7731,3 +7731,51 @@ CI 上（Linux）同一份代码 `actualPasses=26`，`current-before` / `current
 合掉一对孪生工厂，注入点就从 2 变 1，守卫报 `mutation sites drifted`——
 **那不是变异失效，是被建模的那处历史回归现在只有一个边界可复现**。
 改 N 的同时要把「为什么从两处变一处」写在旁边，否则下一个人无从判断这次改 N 是不是在放水。
+
+## 双引擎对拍的夹具用**裸 INSERT** 播种时，SQLite 那 9 个兜底触发器会替它撒谎（2026-09-17 实撞）
+
+`db/migrations/` 里有 **9 个 `CREATE TRIGGER`**，`db/postgresql-migrations/` 里 **0 个**。
+其中三个是**兜底回填**触发器，专门给「不走生产工厂的直写 SQL」补列：
+
+- `rfc328_tasks_lineage_after_insert` —— 补 `execution_lineage_id` / `lineage_slot_path_json`
+  （迁移 0210 的注释自陈："Defense for direct SQL/test/task-migration writers that do not
+  use the production factories."）；
+- `rfc328_node_runs_lineage_after_insert` —— node_runs 那一套同理；
+- `trg_tasks_launch_origin_inherit_child` —— 子任务补 `launch_origin`。
+
+**后果**：一条 `describeEachProvider` 的对拍，如果夹具用 `db.insert(tasks).values({…})`
+播种父行而**漏了这几列**，两个 lane 的**起点就已经不一样**了——SQLite 侧触发器按
+`workflow_version` 把 `lineage_slot_path_json` 补成 `[{…,"workflowRevision":1}]`，
+PostgreSQL 侧留 NULL、被 `parseLineage` 兜底成 `workflowRevision: null`。
+于是子任务继承到的根槽两侧不同，对拍报出一处**看起来像行为差、实际是夹具差**的红。
+
+实撞：`rfc359-w8-child-launch-conformance` 加行级比对的第一跑，
+`lineageSlotPathJson` / `slotPathJson` 两格同时不一致。追到底是 seed 没写那一列。
+
+**判据**：写双引擎对拍的夹具时，凡是生产写入方**显式写**的列，夹具也要显式写。
+哪些列是「生产显式写」有现成的账本——`rfc359-w7-task-insert-lineage-completeness`
+逐站点锁着 `insert(tasks)` 的三列（`executionLineageId` / `lineageSlotPathJson` /
+`launchOrigin`）。**把它当夹具的必填清单读**，别等对拍红了再追。
+
+反过来也成立：对拍红在这类列上时，先问「这一列夹具写了没有」，再问「实现是不是真的不一样」。
+两者的区别是**改夹具**还是**改实现**，判错了就会去改一份本来是对的实现。
+
+## 「两侧都做了」不等于「两侧做得一样」：正向对照要比**行**，不是比「存在」（2026-09-17）
+
+`rfc359-w8-child-launch-conformance` 的正向对照原本只有一句
+`expect(await childExists(harness.db)).toBe(true)`——两侧都把子任务铸出来就算过。
+批次二 ④ 已经在启动路上实证过同一个坑的另一面（见 `tests/helpers/taskRowParity.ts` 头注释：
+只比 HTTP 响应体的判据，对「把落库的 `name` 缀一截」这种变异毫无反应）。
+
+这里是同一件事的第三种形态：**「铸出来了」与「铸得一样」差着整整一类缺陷**——
+`catalog_visibility` / `invocation_depth` / `source_termination_*` 抄漏一格、
+卫星表（`task_repos` / `task_space_nodes` / `task_collaborators` / `task_execution_intents`）
+少写一张，「存在」判据一个字都不会红。
+
+补法：读回**整行 + 每一张卫星表**，摘掉逐次必然不同的那几格（墙钟、每 lane 各建的临时路径），
+其余整行比。变异实证两条都咬得住：单侧把 `catalogVisibility` 写死成 `private` → 红；
+单侧把 `task_repos.working_branch` 写成 `'MUTANT'` → 红。
+
+**顺带一条口径**：后台收尾（`completionMode: 'background'`）让 `state` / `completedAt`
+取决于「读的那一刻收尾跑完没有」。**别把这两列拉进拒绝清单**——那会把「有一侧真的不收尾」
+一起盖掉。正解是**等到终态再读**（轮询意图行离开 `claimed`），既诚实又能比。

@@ -308,10 +308,7 @@
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
       "baseline": 40,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。 RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 W57：`/api/overview` 两侧收成一份，SQLite 专属的 `platform/persistence/sqlite/systemOverviewReadModel.ts` 整份删除，它对 `services/resourceAcl.ts` 的那条兼容边（`AclColumnRef` / `visibleRowsCondition`）随之出账，41→40。 RFC-359 AC-1（plan §5hl）40 → 39：`services/agent.ts → digitalEmployeeExecution.ts` 那条边销账——数字员工执行的两份 composer 合一后，Agent 查询改成装配方交进来的 `agents` 端口，composer 自己不再 import `getAgentById`。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ④）39 → 40：启动输入契约补到共用的启动参与者上（此前只长在 `services/task.ts` 的 `startTask` 那一侧，**PostgreSQL 从来没执行过**——同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。`postgresqlTaskRouteLaunchOperations.ts` 由此成为该门面的第 6 个消费者，形态与 W8-A 逐字相同：**同一个符号**（`assertWorkflowLaunchInputs`）、**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把 PG 侧这条契约缺口留着不补」——那正是本 RFC 要消灭的东西。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ④）：修 627290a94 推的红时照出的 AC-1 缺口，启动输入契约补到两个引擎共用的那道门上，兼容边 +1（第 6 个消费者，同符号同 owner）。下一笔不涨即删。"
-      }
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。 RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 W57：`/api/overview` 两侧收成一份，SQLite 专属的 `platform/persistence/sqlite/systemOverviewReadModel.ts` 整份删除，它对 `services/resourceAcl.ts` 的那条兼容边（`AclColumnRef` / `visibleRowsCondition`）随之出账，41→40。 RFC-359 AC-1（plan §5hl）40 → 39：`services/agent.ts → digitalEmployeeExecution.ts` 那条边销账——数字员工执行的两份 composer 合一后，Agent 查询改成装配方交进来的 `agents` 端口，composer 自己不再 import `getAgentById`。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ④）39 → 40：启动输入契约补到共用的启动参与者上（此前只长在 `services/task.ts` 的 `startTask` 那一侧，**PostgreSQL 从来没执行过**——同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。`postgresqlTaskRouteLaunchOperations.ts` 由此成为该门面的第 6 个消费者，形态与 W8-A 逐字相同：**同一个符号**（`assertWorkflowLaunchInputs`）、**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把 PG 侧这条契约缺口留着不补」——那正是本 RFC 要消灭的东西。"
     },
     {
       "id": "rfc348-teaching-frontend-allowlist",
@@ -843,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5114,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ④）：修 627290a94 推的红时才照出来的一条 AC-1 缺口——启动输入契约（缺必填 / 未声明键 → 422）只长在 `services/task.ts` 的 `startTask` 那一侧，共用的启动参与者上没有，**于是 PostgreSQL 从来没执行过这条契约**（同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。补法是把它放进参与者的工作流臂，两个引擎同一道门——代价是 `postgresqlTaskRouteLaunchOperations.ts` 新增一条到 `services/workflowLaunchInputs` 的 symbol 边。同模块的 `postgresqlTaskRouteOperations.ts`（multipart 路）与 `postgresqlChildExecutionLaunchOperations.ts`（子任务路）早已是同一条边，本笔只是第三个站点；这族债该由 resource-catalog 的 `public/` 合同一次性收口，不在这笔红修里做。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4599,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ④）：修 627290a94 推的红时才照出来的一条 AC-1 缺口——启动输入契约（缺必填 / 未声明键 → 422）只长在 `services/task.ts` 的 `startTask` 那一侧，共用的启动参与者上没有，**于是 PostgreSQL 从来没执行过这条契约**（同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。补法是把它放进参与者的工作流臂，两个引擎同一道门——代价是 `postgresqlTaskRouteLaunchOperations.ts` 新增一条到 `services/workflowLaunchInputs` 的 symbol 边。同模块的 `postgresqlTaskRouteOperations.ts`（multipart 路）与 `postgresqlChildExecutionLaunchOperations.ts`（子任务路）早已是同一条边，本笔只是第三个站点；这族债该由 resource-catalog 的 `public/` 合同一次性收口，不在这笔红修里做。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -922,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "627290a9414856e07cca9a2e1cce99b67b8e00bf",
-    "contentDigest": "sha256:54201997d32d77c36df15b0b49e2743d7f60c8e2a76f47baa5541d4d93f21431",
+    "currentSnapshotSha": "33b5674efadbebec823b5af4324f67394b223852",
+    "contentDigest": "sha256:0cb8223c9e219d1a58d0c89a29fed119c2422e05f66683d13f89b49d3f347cee",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

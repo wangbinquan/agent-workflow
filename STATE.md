@@ -2,6 +2,37 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 56，**子任务对拍的正向对照一直是零预言力；顺带修 627290a94 的第三格红**）
+>
+> 本段待推：§5hn 批次二 ⑤（上）+ W29 摘要重钉（已单独推 `33b5674ef`）。
+>
+> **先说红**：`627290a94` 还留了第三格——它改了 `server.ts` 的 `composeSqliteApiRouteMounts`
+> （`assertWorkflowLaunchable` 换成 `launches` 转发面），没同步 `rfc359-w29` 钉的装配摘要。
+> 半径补课：这一条**写着源码路径**，basename 扫法本该捞到，但 `server.ts` 名字太常见被淹了。
+> 已把「测试树里提到 `src/server.ts` 的 39 个文件」整批跑过（341 pass / 0 fail）。
+>
+> **正题**：`startExecution` 剩两条生产调用路，子任务是其一。W8-A 已经把两侧的**门**抬齐了，
+> 但那份对拍的**正向对照只有一句 `childExists === true`**——照批次二 ④ 的实证口径，
+> 那是零预言力：两侧都铸出来、但抄漏一格或少写一张卫星表，它一个字都不会红。
+>
+> 补上整行 + 四张卫星表的比对。**变异实证两条**（都只动 PG 单侧）：`catalogVisibility`
+> 写死 `'private'` → 红；`task_repos.working_branch` 写成 `'MUTANT'` → 红。
+>
+> **第一跑照出一处夹具差，值得记**：根槽的 `workflowRevision` 一侧 1、一侧 null。
+> 不是行为差——夹具用裸 `db.insert(tasks)` 播种父行漏了 `lineage_slot_path_json`，而
+> **SQLite 有 9 个兜底触发器、PostgreSQL 一个都没有**，其中 `rfc328_tasks_lineage_after_insert`
+> 自陈是「给不走生产工厂的直写 SQL / 测试兜底」。**夹具被单侧触发器骗了**。
+> 已抽成通用踩坑进 `docs/dev-gotchas.md`：双引擎夹具的必填列清单直接读 W7 那份账本。
+>
+> 另一条口径：后台收尾让 `state` / `completedAt` 取决于读的时机（探针连读五次，SQLite 第二次
+> 就翻到 `completed`）。**别拉进拒绝清单**——那会把「有一侧真的不收尾」一起盖掉，正解是等到终态再读。
+>
+> 下一刀（合并这一对）要穿的装配面已在 plan 里列清：PG 铸造机要的
+> `executionModule` / `finalizeWorkspace` / `log` / `childLaunchWorkgroup` 四格穿进 SQLite 组合根，
+> 并把 `db` 形参放宽到中立句柄（体内唯一引擎相关处是 `engineOf(tx).greatest`，事务已中立）。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ⑤（上）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 55，**合并照出「启动输入契约」PostgreSQL 根本没有**）
 >
 > 本段待推：§5hn 批次二 ④ 的回火。**续 54 推的 `627290a94` 把 main 推红了**，两格红是同一件事的两面。

@@ -15708,3 +15708,57 @@ issues[]` 再跨 lane 比相等。
   没有任何新的行为判据只喂给 PG 那一侧。
 
 三处 `allowGrowth` 都点名 RFC-359 且写了「下一笔不涨即删」，按一次性豁免的规矩下一提退役。
+
+## §5hn 批次二 ⑤（上）　子任务启动：合并之前先把**行**钉住
+
+`startExecution` 在生产上剩两条调用路，这是其中之一：call 节点铸子任务
+（`sqliteChildExecutionLaunchOperations` 87 行转发 → `startExecution` → `startTaskImpl`；
+PG 那侧 `postgresqlChildExecutionLaunchOperations` 740 行是一台只做子任务的铸造机）。
+
+W8-A 已经把**两侧的门**抬齐了（5 道亲子准入 + 冻结定义的启动输入门，见
+`rfc359-w8-child-launch-conformance` 头注释），但那份对拍的**正向对照只有一句
+`childExists === true`**。照批次二 ④ 的实证口径，那是一条零预言力的正向断言：
+两侧都把子任务铸出来、但抄漏一格或少写一张卫星表，它一个字都不会红。
+
+### 补上：整行 + 每一张卫星表
+
+读回子任务的 `tasks` 行与 `task_repos` / `task_space_nodes` / `task_collaborators` /
+`task_execution_intents`，摘掉逐次必然不同的那几格（墙钟、`inheritedSpace()` 每 lane
+各建的临时路径 / 分支），其余整行比。
+
+**变异实证**（两条都只动 PG 单侧——共用实现之前，单侧变异是唯一能证明相等面活着的形状）：
+
+| 变异 | 结果 |
+| --- | --- |
+| `catalogVisibility: parent.catalogVisibility` → 写死 `'private'` | 红（`tasks` 行） |
+| `task_repos.workingBranch: null` → `'MUTANT'` | 红（卫星表） |
+
+### 第一跑就照出一处**夹具**差（不是行为差，值得记）
+
+`lineageSlotPathJson` / `slotPathJson` 的根槽两侧不同：SQLite `workflowRevision: 1`，
+PostgreSQL `null`。追到底**不是子启动的行为差**——是夹具用裸 `db.insert(tasks)` 播种父行、
+漏写了 `lineage_slot_path_json`，而 **SQLite 有 `rfc328_tasks_lineage_after_insert`
+触发器**（迁移 0210，注释自陈是「给不走生产工厂的直写 SQL / 测试兜底」）会按
+`workflow_version` 把它补上，**PostgreSQL 一个触发器都没有**（`db/migrations/` 9 个
+`CREATE TRIGGER`，`db/postgresql-migrations/` 0 个）。
+
+处置：夹具照生产形状显式写这一列。生产写入方本来就全都显式写——
+`rfc359-w7-task-insert-lineage-completeness` 逐站点锁着。
+**这条已抽成通用踩坑进 `docs/dev-gotchas.md`**：双引擎夹具的必填列清单直接读 W7 那份账本。
+
+### 顺带一条口径：后台收尾不能靠拒绝清单摆平
+
+`state` / `completedAt` 取决于「读的那一刻收尾跑完没有」（两侧 coordinator 都是
+`completionMode: 'background'`；PG 的 `settle()` 等 `finalizeWorkspace`，SQLite 没有这个钩子）。
+探针连读五次：SQLite 第二次就从 `claimed` 翻到 `completed`——**差几百毫秒，不是行为**。
+把这两列拉进拒绝清单能变绿，但会把「有一侧真的不收尾」一起盖掉。
+正解是**等到终态再读**（轮询意图行离开 `claimed`）。
+
+### 合并这一对要动的装配面（下一刀）
+
+PG 那台铸造机要 `{db, persistence, executionModule, finalizeWorkspace, log, workgroup}`；
+`createSqliteTaskExecutionRuntimeParticipants` 目前只有前两格。合并要把
+`executionModule` / `finalizeWorkspace` / `log` / `childLaunchWorkgroup` 穿进 SQLite 组合根，
+并把那台铸造机的 `db` 形参放宽到中立句柄——它体内唯一的引擎相关处是
+`engineOf(tx).greatest(...)`（能力矩阵），事务走的已经是中立的
+`withSerializableTaskExecution`，两条都不构成障碍。
