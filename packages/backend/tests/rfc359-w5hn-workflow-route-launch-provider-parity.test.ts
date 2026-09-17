@@ -8,6 +8,12 @@
 //
 // 合它之前先把等价性钉住——这是前三刀验证过的次序。判据形状照抄：
 // **拒绝清单**（把逐次必然不同的那几格摘掉、其余整行都比）+ 各自的正确性断言。
+// **合一之后怎么给这条做变异**（2026-09-17 实做记下）：两侧共用一份实现之后，
+// 改**共享实现**的变异再也咬不住这条相等断言——两个 lane 会一起变，相等照样成立。
+// 这不是判据失效，是相等面的本分换了：合并前它护的是「换终端没换行为」，
+// 合并后它护的是「将来别再分叉」。要证明它还活着，变异必须只动**一侧**——
+// 实测把 SQLite 路由的 payload `name` 缀一截（`{ ...task, name: \`${task.name}_MUT\` }`）
+// 当场红在行级比对上。
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
@@ -46,8 +52,6 @@ const VOLATILE = new Set([
   'repos',
   // 调度器异步接手，读回来时可能已经从 pending 翻到 running——时间相关，不是引擎差异。
   'status',
-  // **已知差异，单独钉住**（见下）。
-  'spaceNodes',
 ])
 
 function comparableTask(task: Record<string, unknown>): Record<string, unknown> {
@@ -185,20 +189,19 @@ describeEachProviderHttpApplication(
         '作者自绘的坐标必须原样冻结进快照',
       ).toEqual(['{"x":137,"y":421}', '{"x":733,"y":61}'])
 
-      // **已知差异，钉的是缺陷不是契约**（与 §5hn 批次二 ③ 的 `spaceNodes` 同一处，
-      // 只是这一条落在**工作流 JSON 路由**上——它还没合，SQLite 仍走
-      // `startExecution` → `startTask`）。成因：`startTask` 的读投影在没有冻结的
-      // `task_space_nodes` 行时**兜底派生** `minimalNodePaths(repos.map(r => r.mountPath))`，
-      // scratch 那一个挂载点是空串，于是派生出一个 **path 为空**的节点；
-      // 根启动内核则原样返回工作区真正规划的 `nodePaths`——scratch 上就是空的。
-      // PG 那半更诚实。合并 `startTask` 那一刀把它统一时，下面这条会红并要求销账。
+      // **已销账**（plan §5hn 批次二 ④）：此前 SQLite 的读投影在没有冻结的 `task_space_nodes`
+      // 行时**兜底派生** `minimalNodePaths(repos.map(r => r.mountPath))`，scratch 那个挂载点是
+      // 空串，于是派生出一个 **path 为空**的节点；根启动内核则原样返回工作区真正规划的
+      // `nodePaths`。工作流 JSON 路由改走内核之后两侧都是空——**这是用户可见的响应形状变化，
+      // 方向是「变诚实」**：没有规划目录就返回空，而不是一个凭空派生出来的空路径节点
+      //（与 §5hn 批次二 ③ 在工作组那条路上做的是同一件事）。
       expect(
         (task['spaceNodes'] as readonly unknown[]).length,
-        `${scope.harness.capabilities.provider}：scratch 启动的 spaceNodes 形状变了。` +
-          'SQLite 应为 1（兜底派生出一个空路径节点）、PostgreSQL 应为 0（工作区没规划目录）。' +
-          '若两侧一致了，说明合并把这处差异统一了——把这条改成相等断言并在 plan 里销账。',
-      ).toBe(scope.harness.capabilities.provider === 'sqlite' ? 1 : 0)
+        'scratch 启动没有规划目录，spaceNodes 就该是空的（plan §5hn 批次二 ④）',
+      ).toBe(0)
 
+      // **落库那一行**也要比：响应体是 `taskProjection(...)` 现算的投影，不是回读
+      //（变异实证见 `tests/helpers/taskRowParity.ts` 的头注释）。
       const row = (
         await scope.harness.db
           .select()
@@ -217,7 +220,7 @@ describeEachProviderHttpApplication(
       ).toEqual(persisted.get('sqlite'))
       expect(
         launched.get('postgresql'),
-        '两个引擎的工作流 JSON 路由启动落库结果不一致——合并 startTask 之前必须先解释清楚（plan §5hn 批次二 ④）',
+        '两个引擎的工作流 JSON 路由启动响应体不一致（plan §5hn 批次二 ④）',
       ).toEqual(launched.get('sqlite'))
     })
 

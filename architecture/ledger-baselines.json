@@ -839,7 +839,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5114,
+      "baseline": 5113,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -896,14 +896,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24716,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ④）：启动期静态校验的**候选上下文**接进端口——新增 `AgentLaunchWorkflowValidationCandidate` 一个导出。不带它，`loadWorkflowValidationContext` 不填 `callWorkflows` / `currentWorkflow`，call-node 规则就不在启动那道门上判：引用悬空要等到冻结调用闭包时才被另一个组件以 `workflow-call-ref-missing` 拒掉，且**不带 `issues[]`**——工作流编辑器的校验面板指不到出错节点。净账方向是减：PG 守护进程根的 `workflowValidation` 注入同批退役，两个引擎在同一道门上以同一个错误契约拒掉悬空引用（`rfc359-w5hn-workflow-route-launch-provider-parity` 先钉后销）。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:df703190fc7089df4042f85d5b5d46e1738adf7a30889128e8ea4b7c8e060a4d",
+    "sourceDigest": "sha256:797bb51911733a0b36ab85e8918f2e0525b9801a4b157d69783dded693384190",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -916,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "92c6481c602fe4fd57a786bd5eae8bb4b1e89d3f",
-    "contentDigest": "sha256:b7af1653217e32f9b4ae2c6472e0084ce09f031dd08b44400cf54e4fb244f231",
+    "currentSnapshotSha": "98410b8f1c3fdfd8f038d7bf11e471ee1d3fc5b9",
+    "contentDigest": "sha256:d0cb262c9519492900970cdfdcb4e1d8b508194a849b0659d4d9da7ae4633b1a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

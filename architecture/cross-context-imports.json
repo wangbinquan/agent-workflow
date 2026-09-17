@@ -31434,23 +31434,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:682ad93a13b2c3daa19e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#startExecution",
-      "toPath": "packages/backend/src/services/execution/executor.ts",
-      "toSymbol": "startExecution",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -36464,6 +36447,23 @@
       "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
       "toSymbol": "ResolvedDatabaseProviderRuntime",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:78a38c70c42bf6b82b7b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts",
+      "toSymbol": "PostgresqlTaskExecutionLaunchParticipant",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -78170,7 +78170,7 @@
   "denominator": {
     "architectureExceptions": 4598,
     "implementationSccs": 0,
-    "observedEdges": 5114,
+    "observedEdges": 5113,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -111203,22 +111203,6 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
-      "id": "import:682ad93a13b2c3daa19e",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/execution/executor",
-      "syntax": "static-import",
-      "targetSymbol": "startExecution",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/execution/executor.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#startExecution"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -116401,6 +116385,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolvedDatabaseProviderRuntime"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:78a38c70c42bf6b82b7b",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/taskRouteLaunch",
+      "syntax": "static-import",
+      "targetSymbol": "PostgresqlTaskExecutionLaunchParticipant",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -136993,22 +136993,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composeLegacyIntentSkillArtifactCompat"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
-      "id": "import:baaa383137cfa58034de",
-      "owner": "task-execution",
-      "removeAfterWave": null,
-      "role": "offered-consumption",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "TaskExecutionWorkflowSnapshot",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#TaskExecutionWorkflowSnapshot"
     },
     {
       "edgeKind": "value",
@@ -160540,7 +160524,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:df703190fc7089df4042f85d5b5d46e1738adf7a30889128e8ea4b7c8e060a4d",
+  "sourceDigest": "sha256:797bb51911733a0b36ab85e8918f2e0525b9801a4b157d69783dded693384190",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

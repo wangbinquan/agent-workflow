@@ -152,7 +152,9 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     multipart: {} as never,
     // 同上：壳在进入服务之前就展开依赖，所以这里给空对象而不是抛。
     resourceAuthorityFor: () => ({}) as never,
-    assertWorkflowLaunchable: async () => unusedDependency('assertWorkflowLaunchable'),
+    // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动改走共用参与者，路由不再自己持有
+    // 静态校验那道门。本对拍只驱动到前置门为止，参与者一次都不会被调到。
+    launches: { launch: async () => unusedDependency('launches.launch') } as never,
     appHome: APP_HOME,
   })
 }

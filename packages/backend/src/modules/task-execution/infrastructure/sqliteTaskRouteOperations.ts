@@ -38,14 +38,13 @@ import {
   type StartTaskDeps,
 } from '@/services/task'
 import { deleteTask } from '@/services/taskDelete'
-import { startExecution } from '@/services/execution/executor'
-import type { TaskExecutionWorkflowSnapshot } from '@/modules/resource-catalog/public/types'
 import { getWorkflow } from '@/services/workflow'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 import type { TaskRouteOperations } from '../public/taskRoutes'
+import type { PostgresqlTaskExecutionLaunchParticipant } from './postgresqlTaskRouteLaunchOperations'
 import { tasks as taskRows, type LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
 import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
 
@@ -56,7 +55,12 @@ export interface SqliteTaskRouteOperationsDependencies {
   readonly startDepsFor: (actor: Actor) => StartTaskDeps
   readonly multipart: Omit<MultipartLaunchDeps, 'db'>
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
-  readonly assertWorkflowLaunchable: (workflow: TaskExecutionWorkflowSnapshot) => Promise<void>
+  /**
+   * RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动的**唯一编排**，与 PostgreSQL 同一份。
+   * 此前这里转 `startExecution` → `startTask`——`startExecution` 那个三分支 switch 的最后一条
+   * 生产调用路。
+   */
+  readonly launches: PostgresqlTaskExecutionLaunchParticipant
   readonly appHome?: string
 }
 
@@ -155,31 +159,18 @@ export function createSqliteTaskRouteOperations(
     replaceReviewers: (actor, taskId, body) =>
       replaceReviewNodeReviewers(dependencies.collaboration, { actor, taskId, body }),
     async launchWorkflow(actor, task) {
-      const resources = dependencies.resourceAuthorityFor(actor)
-      const loaded = await resources.resources.loadAuthorized(resources, [
-        { kind: 'workflow-launch', workflowId: task.workflowId },
-      ])
-      const snapshot = loaded[0]
-      if (snapshot?.kind !== 'workflow-launch') {
-        throw new Error('task-execution-resource-kind-mismatch:workflow-launch')
-      }
-      await dependencies.assertWorkflowLaunchable(snapshot.workflow)
-      return await startExecution(
-        db,
+      // RFC-359 AC-1（plan §5hn 批次二 ④）：与 PostgreSQL 共用同一份编排。参与者自己做
+      // 冻结快照（`loadAuthorized` 里含 `assertNotBuiltin`）、版本围栏、带候选的静态校验
+      // 与 payload 解析，终端是根启动内核——所以这里不再需要路由自己那道
+      // `assertWorkflowLaunchable`（它做的正是参与者已经做过的那次静态校验）。
+      // RFC-287 G7：JSON body 启动延后仓库准备，这一格只有路由自己知道（隔壁 multipart 不能延后）。
+      return await dependencies.launches.launch({
         actor,
-        {
-          kind: 'workflow',
-          refId: task.workflowId,
-          invoker: { type: 'user', launchKind: 'direct-json' },
-          payload: task,
-        },
-        {
-          ...dependencies.startDepsFor(actor),
-          launchResources: resources,
-          taskRecoveryOperations: dependencies.recovery,
-          deferRepoPreparation: true,
-        },
-      )
+        target: { kind: 'workflow', refId: task.workflowId, payload: task },
+        invoker: { type: 'user', launchKind: 'direct-json' },
+        resources: dependencies.resourceAuthorityFor(actor),
+        deferRepoPreparation: true,
+      })
     },
     launchMultipart: (request, actor) =>
       handleMultipartTaskStart(request, { db, ...dependencies.multipart }, actor),

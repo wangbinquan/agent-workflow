@@ -194,7 +194,7 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     SqliteTaskRouteOperationsDependencies,
-    'db' | 'recovery' | 'collaboration'
+    'db' | 'recovery' | 'collaboration' | 'launches'
   > & {
     readonly collaboration: C
   }
@@ -229,19 +229,22 @@ export function composeSqliteTaskExecutionProviderRuntime<
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
   })
+  // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动的编排与 PostgreSQL 共用同一份。
+  // 装配一次，路由与触发器两处都用它。`startExecution` 在生产上还剩两条调用路：
+  // 子任务（`sqliteChildExecutionLaunchOperations`）与 multipart（`services/multipartTaskStart`），
+  // 各自单独一刀。
+  const launches = createSqliteTaskExecutionLaunchParticipant({ db, ...dependencies.routeLaunch })
   const taskRoutes = createSqliteTaskRouteOperations({
     db,
     recovery: persistence.recoveryAdministration,
+    launches,
     ...routeDependencies,
   })
   const cancellation = cancellationCommand(participants)
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：触发器参与者两个引擎共用一份。
   // 此前 SQLite 那半自己调 `startExecution`（那是启动参与者的第二份写法），
   // PG 那半只是八行转发；SQLite 一有启动参与者，这一对就塌成一份。
-  const taskExecutions = createTaskExecutionTriggerParticipant({
-    launches: createSqliteTaskExecutionLaunchParticipant({ db, ...dependencies.routeLaunch }),
-    cancellation,
-  })
+  const taskExecutions = createTaskExecutionTriggerParticipant({ launches, cancellation })
   const resume = Object.freeze({
     async resume(taskId: string) {
       await participants.children.resume(

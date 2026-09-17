@@ -1949,7 +1949,6 @@ async function composeSqliteProviderSession(
               authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
               resources: taskExecutionResources,
             }),
-          assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(db, workflow),
           appHome: Paths.root,
         }
       },

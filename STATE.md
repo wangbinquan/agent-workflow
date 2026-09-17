@@ -2,6 +2,29 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 54，**工作流 JSON 路由合一，`spaceNodes` 第二次也是最后一次销账**）
+>
+> 本段待推：§5hn 批次二 ④（下）。
+>
+> **`POST /api/tasks` 这条最主要的启动路两个引擎共用一份编排了。** 此前 SQLite 转
+> `startExecution` → `startTask`（三千行的老启动器），现在两侧都转共享参与者、终端同一台内核。
+>
+> 路由那道 `assertWorkflowLaunchable` 随之退役——参与者自己做冻结快照（含 `assertNotBuiltin`）、
+> 版本围栏、**带候选的**静态校验（续 53 刚接上）、payload 解析。留着就是同一件事做两遍。
+>
+> **又一处用户可见的响应形状变化**：scratch 启动的 `spaceNodes` 从 `[{path:'',origins:[]}]`
+> 变成 `[]`。与续 47 在工作组那条路上关掉的是同一处（读端 `minimalNodePaths` 的兜底派生），
+> 这次落在工作流 JSON 路由上。方向仍是「变诚实」。预先写好的反向断言按剧本红了。
+>
+> 证据：工作流路由基线 **4/4**（含行级比对与错误契约）；`rfc287-t13-deferred-prep` **58/58**；
+> 五个核心任务路由套件 **142/142**；multipart / 上传 / 成员 **43/43**；架构守卫 **796/796**。
+>
+> **`startExecution` 在生产上还剩两条调用路**：子任务（`sqliteChildExecutionLaunchOperations`）
+> 与 multipart（`services/multipartTaskStart`）。各自单独一刀——multipart 那条**不延后仓库准备**
+> （上传物要写进真工作树），子任务那条走 `forCall` 的委派身份，判据面都和本刀不同。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ④（下）。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 53，**候选上下文接进端口，两个引擎的启动错误契约统一**）
 >
 > 本段待推：§5hn 批次二 ④（上）。续 52 钉住的错误契约差**已销账**。

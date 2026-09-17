@@ -15591,3 +15591,57 @@ postgresql  spaceNodes = []
 **与本刀无关，是既有的跨文件干扰**，已登记进 `docs/dev-gotchas.md`。
 
 判据：怀疑「我是不是把它弄红了」时，**把自己的改动换回去跑一次**比任何推理都快。
+
+## §5hn 批次二 ④（下）落地　工作流 JSON 路由两个引擎共用一份编排
+
+`POST /api/tasks` 此前 SQLite 转 `startExecution` → `startTask`（三千行的老启动器），
+PostgreSQL 转 `launches.launch` → 根启动内核。现在两侧都转
+`createSqliteTaskExecutionLaunchParticipant`（= 同一个共享参与者），终端统一为根内核。
+
+### 路由那道 `assertWorkflowLaunchable` 随之退役
+
+参与者自己做：冻结快照（`loadAuthorized` 里含 `assertNotBuiltin`）→ 版本围栏 →
+**带候选的**静态校验（批次二 ④（上）刚接上）→ payload 解析 → 根内核。
+路由那道门做的正是参与者已经做过的那次静态校验，留着就是同一件事做两遍。
+
+`SqliteTaskRouteOperationsDependencies` 因此 `-assertWorkflowLaunchable` `+launches`。
+`server.ts` 那一处用**转发面**接（真参与者是同一作用域后面那个 const，因为它依赖的
+`taskRouteLaunchDependencies` 在更下方才装配得起来）——与协调器转发面同一个词法闭环手法。
+
+### 销账：`spaceNodes` 那处用户可见差异（第二次，也是最后一次）
+
+```
+合并前  sqlite [{ path: '', origins: [] }]   postgresql []
+合并后  两侧都是 []
+```
+
+与 §5hn 批次二 ③ 在工作组那条路上关掉的是**同一处**——读端 `minimalNodePaths` 的兜底派生。
+这次落在**工作流 JSON 路由**上，仍是用户可见的响应形状变化，方向仍是「变诚实」。
+预先写好的反向断言按剧本红了，改成 `.toBe(0)` 销账。
+
+### 证据
+
+- `rfc359-w5hn-workflow-route-launch-provider-parity` **4/4 双引擎绿**（含行级比对与错误契约）
+- `rfc287-t13-deferred-prep`（G7 全家）**58/58**
+- `tasks` / `tasks-create-name` / `tasks-visibility` / `rfc199-workflow-revision` /
+  `rfc244-task-operations` **142/142**
+- `rfc107-url-upload-multipart` / `tasks-multipart` / `rfc099-task-members` **43/43**
+- 全部架构守卫 **796/796**
+
+### 还剩两条 `startExecution` 生产调用路
+
+子任务（`sqliteChildExecutionLaunchOperations`）与 multipart（`services/multipartTaskStart`）。
+各自单独一刀；multipart 那条**不延后仓库准备**（上传物要写进真工作树），子任务那条走
+`forCall` 的委派身份，两条的判据面都和本刀不同。
+
+### 合一之后怎么给等价性基线做变异（这一刀实做记下）
+
+两侧共用一份实现之后，改**共享实现**的变异**再也咬不住相等断言**——两个 lane 会一起变，
+相等照样成立。实测：把根启动内核 INSERT 的 `name` 缀 `_MUTANT`，工作流路由那条 4/4 照过。
+
+**这不是判据失效，是相等面的本分换了**：
+合并前它护的是「换终端没换行为」；合并后它护的是「将来别再分叉」。
+
+要证明它还活着，变异必须只动**一侧**。实测把 SQLite 路由的 payload `name` 缀一截
+（`{ ...task, name: \`${task.name}_MUT\` }`）当场红在行级比对上。
+已把这段写进该用例的头注释——下一个接手的人不必再推一遍。

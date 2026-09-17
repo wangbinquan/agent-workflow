@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 848,
+    "consumers": 847,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1041,
@@ -114278,8 +114278,7 @@
       "consumerEdgeIds": [
         "import:2ff847a4bf252025925b",
         "import:8f0fd8b85dc2bac902fb",
-        "import:a77d66292804bb07c3f6",
-        "import:baaa383137cfa58034de"
+        "import:a77d66292804bb07c3f6"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -114299,8 +114298,7 @@
           "consumerEdgeIds": [
             "import:2ff847a4bf252025925b",
             "import:8f0fd8b85dc2bac902fb",
-            "import:a77d66292804bb07c3f6",
-            "import:baaa383137cfa58034de"
+            "import:a77d66292804bb07c3f6"
           ],
           "fieldPath": "id",
           "type": "string"
@@ -114350,12 +114348,6 @@
           "edgeId": "import:a77d66292804bb07c3f6",
           "file": "packages/backend/src/services/taskLaunchGate.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file"
-        },
-        {
-          "context": "task-execution",
-          "edgeId": "import:baaa383137cfa58034de",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -159689,7 +159681,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:df703190fc7089df4042f85d5b5d46e1738adf7a30889128e8ea4b7c8e060a4d",
+  "sourceDigest": "sha256:797bb51911733a0b36ab85e8918f2e0525b9801a4b157d69783dded693384190",
   "targetContexts": [
     "collaboration",
     "development-automation",

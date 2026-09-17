@@ -320,6 +320,7 @@ import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-executi
 import {
   createSqliteTaskExecutionLaunchParticipant,
   createSqliteTaskRouteLaunchOperations,
+  type PostgresqlTaskExecutionLaunchParticipant,
   type SqliteTaskRouteLaunchDependencies,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
@@ -2523,7 +2524,13 @@ function composeSqliteApiRouteMounts(
         authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
         resources: identityAccess.taskExecutionResources,
       }),
-    assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(deps.db, workflow),
+    // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动的编排与 PostgreSQL 共用。
+    // 这里是**转发面**——真参与者是同一作用域后面那个 const（它依赖的 `taskRouteLaunchDependencies`
+    // 在本函数更下方才装配得起来），与协调器转发面同一个词法闭环手法。
+    launches: Object.freeze({
+      launch: (request: Parameters<PostgresqlTaskExecutionLaunchParticipant['launch']>[0]) =>
+        sqliteTaskExecutionLaunches.launch(request),
+    }),
     appHome,
   })
   const routeDeps = {
@@ -2847,6 +2854,10 @@ function composeSqliteApiRouteMounts(
   })
   const taskRouteLaunch =
     deps.taskRouteLaunch ?? createSqliteTaskRouteLaunchOperations(taskRouteLaunchDependencies)
+  // 上面那个转发面指向的真身（同一份依赖束，终端同一台内核）。
+  const sqliteTaskExecutionLaunches = createSqliteTaskExecutionLaunchParticipant(
+    taskRouteLaunchDependencies,
+  )
   const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db: deps.db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
