@@ -1,6 +1,8 @@
 // RFC-232 — owner projection batching + scheduled-list mapper parity.
 
 import { expect, test } from 'bun:test'
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -10,7 +12,6 @@ import {
   listScheduledTasks,
 } from './helpers/integrationTriggerResourceBinding'
 import { OWNER_IDENTITY_SQL_BATCH_SIZE } from '../src/services/ownerIdentity'
-import { listTaskItems } from '../src/services/task'
 
 const SCHEDULE_SPEC = JSON.stringify({ kind: 'daily', at: '09:00', timezone: 'UTC' })
 
@@ -192,7 +193,10 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
     ])
     if (enforcesOwnerForeignKey) await harness.executeFixtureDdl('PRAGMA foreign_keys = ON')
 
-    const rows = await listTaskItems(db)
+    const rows = await taskListItemsProjection(
+      { db: db, owners: composeOwnerIdentityQueries(db) },
+      {},
+    )
     expect(rows.find((row) => row.id === 'task-owner-null')).toMatchObject({
       ownerUserId: null,
       owner: null,

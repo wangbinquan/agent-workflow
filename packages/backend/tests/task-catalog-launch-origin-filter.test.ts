@@ -20,6 +20,8 @@
 // 修法：来源→存储值的映射进 domain（`taskListOriginMatches`，单一事实源），两个
 // provider 的列表查询都按它下推到 SQL；目录源只做校验与透传。
 
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   TASK_LIST_ORIGINS,
   TASK_LIST_VISIBLE_ORIGINS,
@@ -32,10 +34,8 @@ import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users, workflows } from '@/db/schema'
-import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
-import { listTaskItems } from '@/services/task'
 import { ValidationError } from '@/util/errors'
 
 describe('launch-origin filter maps to the stored column, once', () => {
@@ -140,7 +140,10 @@ async function seed(db: Db): Promise<void> {
 }
 
 async function idsFor(db: Db, origin: TaskListOrigin | undefined): Promise<string[]> {
-  const items = await listTaskItems(db, origin === undefined ? {} : { origin })
+  const items = await taskListItemsProjection(
+    { db: db, owners: composeOwnerIdentityQueries(db) },
+    origin === undefined ? {} : { origin },
+  )
   return items.map((item) => item.id).sort()
 }
 

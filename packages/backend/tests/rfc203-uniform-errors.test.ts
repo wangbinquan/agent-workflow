@@ -9,12 +9,17 @@
 // getTaskNodeRuns surfaces the per-run code.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import {
+  taskListItemsProjection,
+  taskListSummariesProjection,
+} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTask, getTaskNodeRuns, listTaskItems, listTasks } from '../src/services/task'
+import { getTask, getTaskNodeRuns } from '../src/services/task'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedFailedTask(
@@ -101,11 +106,14 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
 
   test('listTasks batches the projection; non-failed tasks stay null-free', async () => {
     const { taskId } = await seedFailedTask(db, 'port-validation-failed')
-    const rows = await listTasks(db, {})
+    const rows = await taskListSummariesProjection(db, {})
     const row = rows.find((r) => r.id === taskId)
     expect(row?.failureCode).toBe('port-validation-failed')
 
-    const ownerRows = await listTaskItems(db, {})
+    const ownerRows = await taskListItemsProjection(
+      { db: db, owners: composeOwnerIdentityQueries(db) },
+      {},
+    )
     expect(ownerRows.find((r) => r.id === taskId)?.failureCode).toBe('port-validation-failed')
   })
 

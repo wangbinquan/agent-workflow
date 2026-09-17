@@ -43,10 +43,11 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/startTaskDeps.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
   'packages/backend/src/services/startTaskDeps.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
   'packages/backend/src/services/task.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
-  // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）：纯读三件合一，`getTaskDiff` /
-  // `getNodeRunStdout` / `getNodeRunEvents` 连同它们独占的 `gt` / `nodeRunEvents` 一起从
-  // 这条债里消失（债只降不升，这是一次收敛）。
-  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,SQL,agents,and,asc,cachedRepos,clarifyRounds,count,desc,docVersions,eq,inArray,isNotNull,isNull,lifecycleAlerts,nodeRunOutputs,nodeRuns,runtimeSessionLeases,sql,taskCollaborators,taskExecutionIntents,taskExecutionOwners,taskRepos,taskSpaceNodes,tasks,users,workflows,workgroupTaskState',
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 / 3 刀）：纯读三件 + 列表三件合一，
+  // `getTaskDiff` / `getNodeRunStdout` / `getNodeRunEvents` / `listTasks` / `listTaskItems`
+  // 连同它们独占的 `gt` / `nodeRunEvents` / `SQL` / `count` / `isNull` / `lifecycleAlerts`
+  // 一起从这条债里消失（债只降不升，这是连着两次收敛）。
+  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,agents,and,asc,cachedRepos,clarifyRounds,desc,docVersions,eq,inArray,isNotNull,nodeRunOutputs,nodeRuns,runtimeSessionLeases,sql,taskCollaborators,taskExecutionIntents,taskExecutionOwners,taskRepos,taskSpaceNodes,tasks,users,workflows,workgroupTaskState',
   // RFC-359 W4-B1：branchTraceSnapshotReader 已是一份中立实现，services/task.ts 对它的边不再是 provider 专属债。
   'packages/backend/src/services/taskArchive.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,and,asc,clarifyRounds,collaborationGateArtifacts,collaborationGateOperations,docVersions,eq,inArray,isNull,lifecycleAlerts,lte,nodeRunEvents,nodeRunOutputs,nodeRuns,or,recoveryEvents,reviewComments,reviewNodeReviewers,sql,taskArchiveAudit,taskCollaborators,taskExecutionEffectAttempts,taskExecutionEffectFences,taskExecutionEffects,taskExecutionIntents,taskExecutionLineageOperationRecords,taskExecutionMaintenanceClaims,taskExecutionMaintenanceMembers,taskExecutionOwners,taskFeedback,taskNodeClarifyDirectives,taskQuestions,taskRepos,taskSpaceNodes,tasks,workgroupAssignments,workgroupMemberCursors,workgroupMessages,workgroupTaskState',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: export:LegacySqliteTaskAuthorizationRef,export:LegacyTaskOwnershipScope',

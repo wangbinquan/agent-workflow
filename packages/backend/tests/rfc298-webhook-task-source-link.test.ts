@@ -1,4 +1,5 @@
 import type { ProviderNeutralDatabase } from '../src/db/query'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-298 — task detail derives a minimal webhook source link from the task's
 // own frozen context. Raw context remains private, historical flat rows are
@@ -9,7 +10,7 @@ import { expect, test } from 'bun:test'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { tasks, workflows } from '../src/db/schema'
-import { getTask, listTasks } from '../src/services/task'
+import { getTask } from '../src/services/task'
 
 function seedWorkflowWrite(db: ProviderNeutralDatabase) {
   const id = ulid()
@@ -229,7 +230,9 @@ describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
       }),
     })
 
-    const summary = (await listTasks(db, { limit: 100 })).find((row) => row.id === taskId)
+    const summary = (await taskListSummariesProjection(db, { limit: 100 })).find(
+      (row) => row.id === taskId,
+    )
     expect(summary).toBeDefined()
     expect(summary).not.toHaveProperty('webhookSourceLink')
   })

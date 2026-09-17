@@ -153,6 +153,7 @@ import {
   worktreeDiff,
 } from '@/util/git'
 import { Paths } from '@/util/paths'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import {
   builtinWorkflowSyncPreview,
   notSyncableWorkflowPreview,
@@ -476,6 +477,17 @@ async function taskProjection(db: ProviderNeutralDatabase, row: TaskRow): Promis
   })
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）—— `GET /api/tasks/:id` 的行投影，
+ * 两个引擎共用一份。等价性由 `rfc359-w7-task-route-conformance` 的 A1 / A2 作证。
+ */
+export async function loadTaskProjection(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<Task | null> {
+  return await loadTask(db, taskId)
+}
+
 async function loadTask(db: ProviderNeutralDatabase, taskId: string): Promise<Task | null> {
   const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   return rows[0] === undefined ? null : await taskProjection(db, rows[0])
@@ -532,7 +544,7 @@ function summaryProjection(
  * 而不是真，所以必须并上 `isNull`）。三态由 `rfc357-task-list-authorization` 钉住。
  */
 function visibilityCondition(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   visibility: NonNullable<TaskRouteListFilters['visibility']>,
 ): SQL<unknown> {
   return taskListOwnershipScopeCondition(
@@ -580,10 +592,10 @@ const TASK_LIST_COLUMNS = {
 
 type TaskListRow = {
   [K in keyof typeof TASK_LIST_COLUMNS]: (typeof tasks.$inferSelect)[K]
-}
+} & { workflowName: string | null }
 
 async function listRows(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListRow[]> {
   const predicates: SQL<unknown>[] = []
@@ -604,21 +616,25 @@ async function listRows(
   if (filters.parentTaskId !== undefined)
     predicates.push(eq(tasks.parentTaskId, filters.parentTaskId))
   if (filters.visibility !== undefined) predicates.push(visibilityCondition(db, filters.visibility))
+  // 工作流名与行**同一次查询**取回（此前 PostgreSQL 侧是行一次、名字再一次批量）。
+  // 列表上界 10k、首页每 10s 轮一次，少一次往返在 PG 上是实打实的；SQLite 侧本来就是这么写的。
   return await db
-    .select(TASK_LIST_COLUMNS)
+    .select({ ...TASK_LIST_COLUMNS, workflowName: workflows.name })
     .from(tasks)
+    .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(predicates.length === 0 ? undefined : and(...predicates))
     .orderBy(desc(tasks.startedAt))
     .limit(filters.limit ?? 100)
 }
 
 async function listSummaries(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   filters: TaskRouteListFilters,
 ): Promise<readonly Readonly<{ summary: TaskSummary; ownerUserId: string | null }>[]> {
   const rows = await listRows(db, filters)
   if (rows.length === 0) return []
   const ids = rows.map((row) => row.id)
+  // RFC-108 T22：整页告警数一次分组查询，列表才能不按行探测就渲染「卡住」徽标。
   const alertRows = await db
     .select({ taskId: lifecycleAlerts.taskId, value: count() })
     .from(lifecycleAlerts)
@@ -629,25 +645,83 @@ async function listSummaries(
   // 的形状在 10k 上界的列表上就是 N+1；`loadTaskFailureCodes` 的函数体只有一次批量查询加
   // 一个纯函数挑选，两个 provider 共用。
   const failureCodes = await loadTaskFailureCodes(db, rows)
-  // RFC-359 W7：列表行的工作流名与详情页同源（SQLite 侧是 `leftJoin(workflows)`）。
-  // 一次批量，不是每行一次——列表上界 10k。
-  const identities = await workflowIdentities(
-    db,
-    rows.map((row) => row.workflowId),
-  )
   return rows.map((row) => ({
     summary: summaryProjection(
       row,
       alerts.get(row.id) ?? 0,
       failureCodes.has(row.id) ? (failureCodes.get(row.id) ?? null) : undefined,
-      identities.get(row.workflowId)?.name ?? null,
+      row.workflowName,
     ),
     ownerUserId: row.ownerUserId ?? null,
   }))
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）—— 任务列表的**并发单飞合并**，两个引擎共用一份。
+ *
+ * 为什么列表要单飞：首页每 10s 轮一次 `GET /api/tasks`，多标签页 + WS 失效风暴下同一形状的
+ * 查询会同时到达好几份。它们查的是同一批行，合并成一次库访问即可。
+ *
+ * **合并键对整个 filters 对象做规范序列化**，不是手写字段清单——手写清单漏过一次
+ *（RFC-301 加 `origin` 时没同步加进来，于是 `?origin=scheduled` 与 `?origin=api` 并发到达时
+ * 后者收到前者的行），而漏的症状是「列表偶尔少几条 / 串了」，没人会当成 bug 报。
+ * 回归防护见 `tests/rfc359-task-list-inflight-key.test.ts`。
+ *
+ * 合并表按**库句柄**分桶（`WeakMap`），所以两个引擎、两套测试夹具互不串台。
+ */
+const taskListFlights = new WeakMap<object, InFlightCoalescer<string, readonly TaskSummary[]>>()
+
+function taskListFlight(
+  db: ProviderNeutralDatabase,
+): InFlightCoalescer<string, readonly TaskSummary[]> {
+  const owner = db as unknown as object
+  const existing = taskListFlights.get(owner)
+  if (existing !== undefined) return existing
+  const created = createInFlightCoalescer<string, readonly TaskSummary[]>()
+  taskListFlights.set(owner, created)
+  return created
+}
+
+function taskListFlightKey(filters: TaskRouteListFilters): string {
+  const canonical = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value
+    if (Array.isArray(value)) return value.map(canonical)
+    const record = value as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const key of Object.keys(record).sort()) {
+      if (record[key] === undefined) continue
+      out[key] = canonical(record[key])
+    }
+    return out
+  }
+  return JSON.stringify(canonical(filters))
+}
+
+/**
+ * RFC-359 AC-1（同上，第 3 刀）—— `GET /api/tasks` 的行投影，两个引擎共用一份。
+ *
+ * 行、工作流名一次查询取回；未解决告警数与失败码各一次批量（都不是按行探测）。
+ * 等价性由 `rfc359-w7-task-route-conformance` 的 A3 / A4 作证。
+ */
+export async function taskListSummariesProjection(
+  db: ProviderNeutralDatabase,
+  filters: TaskRouteListFilters,
+): Promise<readonly TaskSummary[]> {
+  return await taskListFlight(db)(taskListFlightKey(filters), async () =>
+    (await listSummaries(db, filters)).map((row) => row.summary),
+  )
+}
+
+/** RFC-359 AC-1（同上）—— `GET /api/tasks?include_owner=true` 的行投影，两个引擎共用一份。 */
+export async function taskListItemsProjection(
+  dependencies: Readonly<{ db: ProviderNeutralDatabase; owners: OwnerIdentityQueries }>,
+  filters: TaskRouteListFilters,
+): Promise<readonly TaskListItem[]> {
+  return await listItems(dependencies, filters)
+}
+
 async function listItems(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+  dependencies: Readonly<{ db: ProviderNeutralDatabase; owners: OwnerIdentityQueries }>,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListItem[]> {
   const rows = await listSummaries(dependencies.db, filters)
@@ -2505,8 +2579,7 @@ export function createPostgresqlTaskRouteOperations(
   })
 
   const operations: TaskRouteOperations = {
-    list: async (filters) =>
-      (await listSummaries(dependencies.db, filters)).map((row) => row.summary),
+    list: (filters) => taskListSummariesProjection(dependencies.db, filters),
     listItems: (filters) => listItems(dependencies, filters),
     get: (taskId) => loadTask(dependencies.db, taskId),
     async assertVisible(actor, taskId) {

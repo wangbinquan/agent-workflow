@@ -19,6 +19,7 @@
 //   7. runIsoWorktreeGc P0-2 tightening: interrupted parents and parents with
 //      live/interrupted children keep their iso containers.
 import { describe, expect, test } from 'bun:test'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { mkdirSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -459,12 +460,11 @@ describe('RFC-243 §8 — 列表口径（PR-5 翻转）', () => {
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
-    const { listTasks } = await import('../src/services/task')
-    const top = await listTasks(db, { topLevelOnly: true })
+    const top = await taskListSummariesProjection(db, { topLevelOnly: true })
     expect(top.map((t) => t.id)).toContain(parent)
     expect(top.map((t) => t.id)).not.toContain(child)
     expect(top.find((t) => t.id === parent)?.parentTaskId ?? null).toBeNull()
-    const children = await listTasks(db, { parentTaskId: parent })
+    const children = await taskListSummariesProjection(db, { parentTaskId: parent })
     expect(children.map((t) => t.id)).toEqual([child])
     expect(children[0]?.parentTaskId).toBe(parent)
   })

@@ -6,7 +6,7 @@
     "moduleFiles": 1182,
     "productionFiles": 2550,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24694
+    "symbolsIncludingFileRoots": 24689
   },
   "entries": [
     {
@@ -128294,6 +128294,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#loadTaskProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "loadTaskProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#loadVisibleWorkflow",
@@ -128608,10 +128620,70 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#taskListFlight",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskListFlight",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#taskListFlightKey",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskListFlightKey",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#taskListFlights",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskListFlights",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#taskListItemsProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskListItemsProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#TaskListRow",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskListRow",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#taskListSummariesProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskListSummariesProjection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -186040,66 +186112,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#listTaskItems",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "listTaskItems",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#listTasks",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "listTasks",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#ListTasksFilters",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "ListTasksFilters",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#listTaskSummaryRows",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "listTaskSummaryRows",
-      "targetContext": "task-execution",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#loadChildCounts",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "loadChildCounts",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#loadFrozenSpaceLayout",
@@ -186642,18 +186654,6 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#rowToSummary",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "rowToSummary",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#rowToTask",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -186894,72 +186894,12 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#taskListFlight",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "taskListFlight",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#taskListFlightKey",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "taskListFlightKey",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#taskListFlights",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "taskListFlights",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#taskRepoRowsFor",
       "removeAfterWave": "W5",
       "status": "legacy-target",
       "symbol": "taskRepoRowsFor",
       "targetContext": "source-control",
       "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#TaskSummaryRow",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "TaskSummaryRow",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#taskVisibilityCondition",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "taskVisibilityCondition",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
     },
     {
       "currentContext": "legacy",
@@ -297005,5 +296945,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aff19c28540c35275213a4eec19703b4c2d00dcd89e27a9182bcb23656bbca6d"
+  "sourceDigest": "sha256:ae2cbca6ee186894cb3b1f4138756ab74c98b314c15a83a713a7d4129b1c1ebe"
 }

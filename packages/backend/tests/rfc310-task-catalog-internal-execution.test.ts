@@ -3,6 +3,11 @@
 // pagination, hierarchy or facets.
 
 import { describe, expect, test } from 'bun:test'
+import {
+  taskListItemsProjection,
+  taskListSummariesProjection,
+} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { TaskCatalogVisibility } from '@agent-workflow/shared'
@@ -11,8 +16,6 @@ import { buildActor } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users, workflows } from '../src/db/schema'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/taskCatalogSources'
-import { listTaskItems, listTasks } from '../src/services/task'
-import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 
 function task(
   id: string,
@@ -130,8 +133,11 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
     expect(second.nextCursor).toBeNull()
 
     const [legacyRows, legacyItems] = await Promise.all([
-      listTasks(db, { catalogVisibility: 'public' }),
-      listTaskItems(db, { catalogVisibility: 'public' }),
+      taskListSummariesProjection(db, { catalogVisibility: 'public' }),
+      taskListItemsProjection(
+        { db: db, owners: composeOwnerIdentityQueries(db) },
+        { catalogVisibility: 'public' },
+      ),
     ])
     expect(legacyRows.map((item) => item.id)).toEqual(['public-new', 'public-old'])
     expect(legacyItems.map((item) => [item.id, item.childCount])).toEqual([

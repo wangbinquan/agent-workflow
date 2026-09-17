@@ -15,17 +15,13 @@ import type {
   NodeRunOutput,
   StartTask,
   Task,
-  TaskListItem,
   TaskCatalogVisibility,
   TaskLaunchOrigin,
-  TaskListOrigin,
   TaskNodeRuns,
   TaskRepo,
-  TaskSummary,
   TriggerContext,
   WebhookTaskSourceLink,
 } from '@agent-workflow/shared'
-import { taskListOriginMatches } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 // RFC-359 W10：workgroup 运行态行的 INSERT 内联进任务铸行事务后，校验 schema 直接取用。
 import { DwStateSchema } from '@agent-workflow/shared'
@@ -69,14 +65,11 @@ import {
   asc,
   cachedRepos,
   clarifyRounds,
-  count,
   desc,
   docVersions,
   eq,
   inArray,
   isNotNull,
-  isNull,
-  lifecycleAlerts,
   nodeRunOutputs,
   nodeRuns,
   runtimeSessionLeases,
@@ -90,7 +83,6 @@ import {
   users,
   workflows,
   workgroupTaskState,
-  type SQL,
   type LegacySqliteTaskDatabase,
   type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
@@ -184,7 +176,6 @@ import {
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { Paths } from '@/util/paths'
 import { createLogger, type Logger } from '@/util/log'
-import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import {
   composeSqliteRepositoryWorkspaceStore,
@@ -203,7 +194,6 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
 import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
-import { loadOwnerIdentities } from '@/services/ownerIdentity'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
@@ -218,10 +208,7 @@ import {
 } from '@/services/execution/triggerPreflight'
 import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
 import { collectExecutionRefs } from '@agent-workflow/shared'
-import {
-  defaultTaskAuthorizationRef,
-  taskOwnershipScopeCondition,
-} from '@/services/taskAuthorization'
+import {} from '@/services/taskAuthorization'
 import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
 import {
   deriveTaskLaunchOrigin,
@@ -6624,273 +6611,6 @@ export async function getTask(db: LegacyProviderNeutralDatabase, id: string): Pr
   return failureCode !== undefined ? { ...task, failureCode } : task
 }
 
-export interface ListTasksFilters {
-  status?: Task['status']
-  workflowId?: string
-  repoPath?: string
-  /**
-   * Generic catalog boundary. Public list surfaces pass `public`; internal
-   * executions remain durable and directly addressable through their id.
-   */
-  catalogVisibility?: TaskCatalogVisibility
-  /** RFC-159: filter to tasks launched by a given `scheduled_tasks` id (run history). */
-  scheduledTaskId?: string
-  /**
-   * RFC-301 launch-origin filter, applied in SQL against `tasks.launch_origin`
-   * via `taskListOriginMatches` — the same mapping the catalog page pipeline
-   * uses, so both list surfaces select identical rows.
-   */
-  origin?: TaskListOrigin
-  /**
-   * RFC-243 §8: parent/child list filters (PR-2 lands the query surface only —
-   * the DEFAULT stays "everything flat" until PR-5 flips it together with the
-   * nesting UI, so awaiting child executions never become invisible in a
-   * window where the UI cannot reveal them).
-   *   - topLevelOnly: only rows with parent_task_id IS NULL.
-   *   - parentTaskId: only the direct children of the given task.
-   */
-  topLevelOnly?: boolean
-  parentTaskId?: string
-  limit?: number
-  /**
-   * RFC-036 visibility filter. When set, the SQL also requires either
-   * `tasks.owner_user_id = visibility.actorUserId` OR an entry in
-   * task_collaborators for that user. `scope: 'shared'` excludes self-owned
-   * rows. Setting visibility=undefined disables the filter (admin scope=all
-   * + legacy daemon-token callers).
-   */
-  visibility?: {
-    actorUserId: string
-    scope: 'mine' | 'shared'
-  }
-}
-
-const taskListFlights = new WeakMap<object, InFlightCoalescer<string, TaskSummary[]>>()
-
-function taskListFlight(
-  db: LegacyProviderNeutralDatabase,
-): InFlightCoalescer<string, TaskSummary[]> {
-  const owner = db as unknown as object
-  const existing = taskListFlights.get(owner)
-  if (existing !== undefined) return existing
-  const created = createInFlightCoalescer<string, TaskSummary[]>()
-  taskListFlights.set(owner, created)
-  return created
-}
-
-/**
- * 单飞合并键 —— 对**整个 filters 对象**做规范序列化。
- *
- * 此前这里是一份**手写的字段清单**，RFC-301 给 `ListTasksFilters` 加 `origin` 时没有同步加进来，
- * 于是两个只差 `origin` 的并发查询被判成同一次查询、第二个拿到第一个的行
- * （`GET /api/tasks?origin=scheduled` 与 `?origin=api` 同一 tick 到达 → 后者收到定时那批）。
- * 手写清单修不掉这个**类**：下一个新筛选项照样漏，而症状是「列表偶尔少几条 / 串了」，
- * 没人会当成 bug 报。
- *
- * 改成按 key 排序后整体序列化：新增筛选项自动进键，漏不掉。`undefined` 的项一律跳过，
- * 于是 `{ status: undefined }` 与 `{}` 仍是同一个键（它们查的本来就是同一批行）；
- * 嵌套对象（`visibility`）同样按 key 排序，避免字面量书写顺序制造假的键差异。
- * 回归防护见 `tests/rfc359-task-list-inflight-key.test.ts`。
- */
-function taskListFlightKey(filters: ListTasksFilters): string {
-  const canonical = (value: unknown): unknown => {
-    if (value === null || typeof value !== 'object') return value
-    if (Array.isArray(value)) return value.map(canonical)
-    const record = value as Record<string, unknown>
-    const out: Record<string, unknown> = {}
-    for (const key of Object.keys(record).sort()) {
-      if (record[key] === undefined) continue
-      out[key] = canonical(record[key])
-    }
-    return out
-  }
-  return JSON.stringify(canonical(filters))
-}
-
-/**
- * The member-visibility predicate: owner OR task_collaborators membership
- * ('mine'), or strictly shared-with-me-but-not-mine ('shared'). Single source
- * shared by listTasks and /api/overview task stats (RFC-190) so the two can
- * never drift.
- */
-export function taskVisibilityCondition(
-  db: LegacyProviderNeutralDatabase,
-  visibility: { actorUserId: string; scope: 'mine' | 'shared' },
-): SQL<unknown> {
-  return taskOwnershipScopeCondition(
-    db,
-    defaultTaskAuthorizationRef(),
-    visibility.actorUserId,
-    visibility.scope,
-  )
-}
-
-interface TaskSummaryRow {
-  summary: TaskSummary
-  ownerUserId: string | null
-}
-
-async function listTaskSummaryRows(
-  db: LegacyProviderNeutralDatabase,
-  filters: ListTasksFilters = {},
-): Promise<TaskSummaryRow[]> {
-  const conditions = []
-  if (filters.status !== undefined) conditions.push(eq(tasks.status, filters.status))
-  if (filters.workflowId !== undefined) conditions.push(eq(tasks.workflowId, filters.workflowId))
-  if (filters.repoPath !== undefined) conditions.push(eq(tasks.repoPath, filters.repoPath))
-  if (filters.catalogVisibility !== undefined)
-    conditions.push(eq(tasks.catalogVisibility, filters.catalogVisibility))
-  if (filters.scheduledTaskId !== undefined)
-    conditions.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
-  if (filters.origin !== undefined) {
-    const origins = taskListOriginMatches(filters.origin)
-    if (origins !== null) conditions.push(inArray(tasks.launchOrigin, origins))
-  }
-  if (filters.topLevelOnly === true) conditions.push(isNull(tasks.parentTaskId))
-  if (filters.parentTaskId !== undefined)
-    conditions.push(eq(tasks.parentTaskId, filters.parentTaskId))
-  if (filters.visibility) {
-    conditions.push(taskVisibilityCondition(db, filters.visibility))
-  }
-  const where =
-    conditions.length === 0
-      ? undefined
-      : conditions.length === 1
-        ? conditions[0]
-        : and(...conditions)
-  // RFC-311 (audit L1-8): exactly the 20 columns rowToSummary consumes. The
-  // former `task: tasks` dragged workflow_snapshot / inputs / ref_closure_json
-  // / trigger_context_json (up to hundreds of KB per row) through SQLite → JS
-  // on every list request — and the homepage polls this endpoint every 10s.
-  const rows = await db
-    .select({
-      task: {
-        id: tasks.id,
-        name: tasks.name,
-        workflowId: tasks.workflowId,
-        status: tasks.status,
-        startedAt: tasks.startedAt,
-        finishedAt: tasks.finishedAt,
-        errorSummary: tasks.errorSummary,
-        repoPath: tasks.repoPath,
-        repoUrl: tasks.repoUrl,
-        repoCount: tasks.repoCount,
-        cachedRepoId: tasks.cachedRepoId,
-        spaceKind: tasks.spaceKind,
-        parentTaskId: tasks.parentTaskId,
-        invocationDepth: tasks.invocationDepth,
-        scheduledTaskId: tasks.scheduledTaskId,
-        sourceAgentId: tasks.sourceAgentId,
-        sourceAgentName: tasks.sourceAgentName,
-        workgroupId: tasks.workgroupId,
-        workgroupConfigJson: tasks.workgroupConfigJson,
-        codeRoundId: tasks.codeRoundId,
-        // listTasks 函数体自身的消费（failure code 批查 + 可见性判定），
-        // rowToSummary 不读这两列。
-        failedNodeId: tasks.failedNodeId,
-        ownerUserId: tasks.ownerUserId,
-      },
-      workflowName: workflows.name,
-    })
-    .from(tasks)
-    .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
-    .where(where)
-    .orderBy(desc(tasks.startedAt))
-    .limit(filters.limit ?? 100)
-  // RFC-108 T22: one grouped query for the open-alert count of every listed
-  // task, so the list can render a "stuck" badge without a per-row fetch.
-  const taskIds = rows.map((r) => r.task.id)
-  const alertCounts =
-    taskIds.length === 0
-      ? []
-      : await db
-          .select({ taskId: lifecycleAlerts.taskId, n: count() })
-          .from(lifecycleAlerts)
-          .where(and(inArray(lifecycleAlerts.taskId, taskIds), isNull(lifecycleAlerts.resolvedAt)))
-          .groupBy(lifecycleAlerts.taskId)
-  const openByTask = new Map(alertCounts.map((a) => [a.taskId, Number(a.n)]))
-  // RFC-203 T4: one batched failure-code projection for the whole page.
-  const failureCodes = await loadTaskFailureCodes(
-    db,
-    rows.map((r) => ({
-      id: r.task.id,
-      status: r.task.status,
-      failedNodeId: r.task.failedNodeId,
-    })),
-  )
-  return rows.map((r) => ({
-    ownerUserId: r.task.ownerUserId ?? null,
-    summary: {
-      ...rowToSummary(r.task, r.workflowName),
-      openAlertCount: openByTask.get(r.task.id) ?? 0,
-      ...(failureCodes.has(r.task.id) ? { failureCode: failureCodes.get(r.task.id) ?? null } : {}),
-    },
-  }))
-}
-
-export async function listTasks(
-  db: LegacyProviderNeutralDatabase,
-  filters: ListTasksFilters = {},
-): Promise<TaskSummary[]> {
-  return taskListFlight(db)(taskListFlightKey(filters), async () =>
-    (await listTaskSummaryRows(db, filters)).map((row) => row.summary),
-  )
-}
-
-/**
- * RFC-243 follow-up — direct visible child counts for one page of list rows.
- *
- * ONE grouped query for the whole page (never a per-row probe), and it reuses
- * `taskVisibilityCondition` — the exact predicate the list itself ran under.
- * That shared predicate is the point: it makes `childCount > 0` mean "expanding
- * shows something" for THIS actor, so a child the viewer cannot see can never
- * produce an arrow that opens onto an empty list.
- */
-async function loadChildCounts(
-  db: LegacyProviderNeutralDatabase,
-  parentIds: readonly string[],
-  filters: Pick<ListTasksFilters, 'visibility' | 'catalogVisibility'>,
-): Promise<Map<string, number>> {
-  const counts = new Map<string, number>()
-  if (parentIds.length === 0) return counts
-  const conditions: SQL<unknown>[] = [inArray(tasks.parentTaskId, [...parentIds])]
-  if (filters.visibility) conditions.push(taskVisibilityCondition(db, filters.visibility))
-  if (filters.catalogVisibility !== undefined)
-    conditions.push(eq(tasks.catalogVisibility, filters.catalogVisibility))
-  const rows = await db
-    .select({ parentTaskId: tasks.parentTaskId, n: count() })
-    .from(tasks)
-    .where(and(...conditions))
-    .groupBy(tasks.parentTaskId)
-  for (const row of rows) {
-    if (row.parentTaskId !== null) counts.set(row.parentTaskId, row.n)
-  }
-  return counts
-}
-
-/** RFC-232 — list-only owner projection over the canonical summary pipeline. */
-export async function listTaskItems(
-  db: LegacyProviderNeutralDatabase,
-  filters: ListTasksFilters = {},
-): Promise<TaskListItem[]> {
-  const rows = await listTaskSummaryRows(db, filters)
-  const owners = await loadOwnerIdentities(
-    db,
-    rows.map((row) => row.ownerUserId),
-  )
-  const childCounts = await loadChildCounts(
-    db,
-    rows.map((row) => row.summary.id),
-    filters,
-  )
-  return rows.map(({ summary, ownerUserId }) => ({
-    ...summary,
-    ownerUserId,
-    owner: ownerUserId === null ? null : (owners.get(ownerUserId) ?? null),
-    childCount: childCounts.get(summary.id) ?? 0,
-  }))
-}
-
 /**
  * RFC-075: defensively parse `node_runs.commit_push_json` into CommitPushMeta.
  * Returns null for regular rows (NULL column) and for any corrupt payload —
@@ -7359,75 +7079,6 @@ function frozenWorkgroupGoal(configJson: string | null): string | null {
     // Corrupt frozen config must never 5xx; degrade to null.
   }
   return null
-}
-
-function rowToSummary(
-  row: Pick<
-    typeof tasks.$inferSelect,
-    | 'id'
-    | 'name'
-    | 'workflowId'
-    | 'status'
-    | 'startedAt'
-    | 'finishedAt'
-    | 'errorSummary'
-    | 'repoPath'
-    | 'repoUrl'
-    | 'repoCount'
-    | 'cachedRepoId'
-    | 'spaceKind'
-    | 'parentTaskId'
-    | 'invocationDepth'
-    | 'scheduledTaskId'
-    | 'sourceAgentId'
-    | 'sourceAgentName'
-    | 'workgroupId'
-    | 'workgroupConfigJson'
-    | 'codeRoundId'
-  >,
-  workflowName: string | null,
-): TaskSummary {
-  return {
-    id: row.id,
-    name: row.name, // RFC-037
-    workflowId: row.workflowId,
-    workflowName,
-    repoPath: row.repoPath,
-    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
-    // StartTaskSchema only rejects them in the QUERY STRING, so a
-    // `https://user:token@host/repo.git` launch URL is accepted and stored.
-    // Sibling paths in this file already redact (see `:1194`); these four
-    // `rowToTask` sites did not, so every task read handed the credential back.
-    // Redacted for ALL channels, not just tokens: this is an existing leak
-    // being closed, not a new token-only gate.
-    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
-    cachedRepoId: row.cachedRepoId ?? null,
-    status: row.status,
-    startedAt: row.startedAt,
-    finishedAt: row.finishedAt,
-    errorSummary: row.errorSummary,
-    // RFC-066: source-of-truth `tasks.repo_count`. Migration 0034 defaulted
-    // every existing row to 1; multi-repo launches set it explicitly.
-    repoCount: row.repoCount,
-    // RFC-248: 组名不进 summary DTO——列表页已有「N 仓」chip，再加一列组名会
-    // 把行挤爆；组溯源在详情页展示（`rowToTask` 带）。
-    // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
-    scheduledTaskId: row.scheduledTaskId ?? null,
-    workgroupId: row.workgroupId ?? null,
-    workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
-    // RFC-165: execution-space kind + single-agent soft link.
-    spaceKind: row.spaceKind,
-    // RFC-243: parent linkage so the list can nest/badge child executions.
-    parentTaskId: row.parentTaskId ?? null,
-    invocationDepth: row.invocationDepth ?? 0,
-    sourceAgentName: row.sourceAgentName ?? null,
-    // RFC-304: code-capability round link — the subject discriminator, so it
-    // must reach both the detail and the list projections.
-    codeRoundId: row.codeRoundId ?? null,
-    // RFC-177: frozen stable agent id so the list subject link resolves by id
-    // (rename/reuse-safe); NULL for non-agent / pre-RFC-175 rows (by-name fallback).
-    sourceAgentId: row.sourceAgentId ?? null,
-  }
 }
 
 /**

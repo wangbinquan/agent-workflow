@@ -956,18 +956,23 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     }
   })
 
-  test('B6 任务行投影的严格度：PG 用 TaskSchema.parse，SQLite 原样投出', async () => {
+  // **账已销**（RFC-359 AC-1，plan §5hn 之后的盘点第 3 刀）：`get` 两个引擎共用
+  // `loadTaskProjection` 之后，行投影的严格度也只剩一档。原来的分叉是：PG 走
+  // `TaskSchema.parse`，枚举外的 `space_kind` 让整条详情 500；SQLite 走 `rowToTask`
+  // 不解析，原样上线。取严格那一档——`space_kind` 没有库级 CHECK，枚举外的值只会由裸 SQL /
+  // 手工修复写进去，静默上线比响亮失败更糟：前端会落进默认分支，渲染成一个看不出错的错。
+  // 这条从 B 段（实测分叉）变成了相等断言，留在这里作为「不许再分家」的锁。
+  test('B6→A 任务行投影的严格度两侧同一档：枚举外的 space_kind 一律拒绝', async () => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db)
-    // `space_kind` 是 legacy 行 / 手工修复可能带上的枚举外值。PG 侧的投影是
-    // `TaskSchema.parse(...)`，遇到它整条详情 500；SQLite 侧 `rowToTask` 不解析，原样上线。
     await harness.db
       .update(tasks)
       .set({ spaceKind: 'isolated' as 'local' })
       .where(eq(tasks.id, taskId))
-    const outcome = await code(ops.get(taskId))
-    if (isPostgresql()) expect(outcome).not.toBe('no-throw')
-    else expect(outcome).toBe('no-throw')
+    expect(
+      await code(ops.get(taskId)),
+      '两个引擎都必须拒绝——合并前只有 PG 拒，SQLite 原样投出',
+    ).not.toBe('no-throw')
   })
 })
 

@@ -13,6 +13,8 @@
 // ever diverge, the arrow starts promising rows the viewer cannot open.
 
 import { describe, expect, test } from 'bun:test'
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { Database } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'
 import { resolve } from 'node:path'
@@ -21,7 +23,6 @@ import { createInMemoryDb } from '../src/db/client'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users } from '../src/db/schema'
-import { listTaskItems } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -105,7 +106,10 @@ async function seedQueryRows(db: ProviderNeutralDatabase, rows: Parameters<typeo
   )
 }
 
-function countOf(rows: { id: string; childCount: number }[], id: string): number | undefined {
+function countOf(
+  rows: readonly { id: string; childCount: number }[],
+  id: string,
+): number | undefined {
   return rows.find((r) => r.id === id)?.childCount
 }
 
@@ -126,7 +130,10 @@ describe('RFC-243 — list childCount', () => {
         { id: 'g-a', owner: null, parent: 'c-a' },
       ])
 
-      const rows = await listTaskItems(db)
+      const rows = await taskListItemsProjection(
+        { db: db, owners: composeOwnerIdentityQueries(db) },
+        {},
+      )
       expect(countOf(rows, 'p-two')).toBe(2)
       expect(countOf(rows, 'p-one')).toBe(1)
       expect(countOf(rows, 'p-none')).toBe(0)
@@ -145,7 +152,12 @@ describe('RFC-243 — list childCount', () => {
 
       // The old status-gated arrow hid children under failed/canceled parents —
       // exactly the rows a user most needs to open when diagnosing a failure.
-      expect(countOf(await listTaskItems(db), 'p-failed')).toBe(1)
+      expect(
+        countOf(
+          await taskListItemsProjection({ db: db, owners: composeOwnerIdentityQueries(db) }, {}),
+          'p-failed',
+        ),
+      ).toBe(1)
     })
   })
 
@@ -163,15 +175,23 @@ describe('RFC-243 — list childCount', () => {
       { id: 'c-bob', owner: 'bob', parent: 'p-alice' },
     ])
 
-    const asAlice = await listTaskItems(db, {
-      visibility: { actorUserId: 'alice', scope: 'mine' },
-    })
+    const asAlice = await taskListItemsProjection(
+      { db: db, owners: composeOwnerIdentityQueries(db) },
+      {
+        visibility: { actorUserId: 'alice', scope: 'mine' },
+      },
+    )
     // 1, not 2 — an arrow that counted Bob's row would open onto a list Alice
     // cannot see, because the children fetch applies this same filter.
     expect(countOf(asAlice, 'p-alice')).toBe(1)
 
     // Unfiltered (admin scope=all) sees the true total.
-    expect(countOf(await listTaskItems(db), 'p-alice')).toBe(2)
+    expect(
+      countOf(
+        await taskListItemsProjection({ db: db, owners: composeOwnerIdentityQueries(db) }, {}),
+        'p-alice',
+      ),
+    ).toBe(2)
   })
 
   describeEachProvider('nested child counts', (harness) => {
@@ -185,11 +205,17 @@ describe('RFC-243 — list childCount', () => {
         { id: 'leaf', owner: null, parent: 'mid' },
       ])
 
-      const children = await listTaskItems(db, { parentTaskId: 'root' })
+      const children = await taskListItemsProjection(
+        { db: db, owners: composeOwnerIdentityQueries(db) },
+        { parentTaskId: 'root' },
+      )
       expect(children.map((r) => r.id)).toEqual(['mid'])
       expect(countOf(children, 'mid')).toBe(1)
 
-      const grandchildren = await listTaskItems(db, { parentTaskId: 'mid' })
+      const grandchildren = await taskListItemsProjection(
+        { db: db, owners: composeOwnerIdentityQueries(db) },
+        { parentTaskId: 'mid' },
+      )
       expect(countOf(grandchildren, 'leaf')).toBe(0)
     })
   })
@@ -219,7 +245,10 @@ describe('RFC-243 — list childCount', () => {
       return realPrepare(text, ...(rest as []))
     }) as typeof raw.prepare
 
-    const rows = await listTaskItems(db)
+    const rows = await taskListItemsProjection(
+      { db: db, owners: composeOwnerIdentityQueries(db) },
+      {},
+    )
     raw.prepare = realPrepare
 
     expect(rows.filter((r) => r.id.startsWith('p')).every((r) => r.childCount === 1)).toBe(true)

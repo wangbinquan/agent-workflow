@@ -6,11 +6,12 @@
 // validation flow lives in tasks-create-name.test.ts (T5).
 
 import { expect, test } from 'bun:test'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
-import { getTask, listTasks } from '../src/services/task'
+import { getTask } from '../src/services/task'
 
 async function seedTask(db: ProviderNeutralDatabase, name: string) {
   const wfId = ulid()
@@ -60,7 +61,7 @@ describeEachProvider('RFC-037 — task row mappers include `name`', (harness) =>
     const db = harness.db
     await seedTask(db, 'one')
     await seedTask(db, 'two')
-    const rows = await listTasks(db, { limit: 100 })
+    const rows = await taskListSummariesProjection(db, { limit: 100 })
     const names = rows.map((r) => r.name).sort()
     expect(names).toEqual(['one', 'two'])
   })

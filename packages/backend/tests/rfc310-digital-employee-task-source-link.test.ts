@@ -3,13 +3,14 @@
 // details can render the same stable backlink without a cross-context join.
 
 import { describeEachProvider } from './helpers/eachProvider'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { tasks, workflows } from '../src/db/schema'
-import { getTask, listTasks } from '../src/services/task'
+import { getTask } from '../src/services/task'
 
 describe('RFC-310 digital employee task source link', () => {
   describeEachProvider('database behavior', (harness) => {
@@ -49,7 +50,9 @@ describe('RFC-310 digital employee task source link', () => {
         .run()
 
       expect((await getTask(db, taskId))?.digitalEmployeeCaseId).toBe('case-42')
-      const summary = (await listTasks(db, { limit: 100 })).find((row) => row.id === taskId)
+      const summary = (await taskListSummariesProjection(db, { limit: 100 })).find(
+        (row) => row.id === taskId,
+      )
       expect(summary).toBeDefined()
       expect(summary).not.toHaveProperty('digitalEmployeeCaseId')
     })

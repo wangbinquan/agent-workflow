@@ -5,6 +5,8 @@
 // only their model output is deterministic system-mock data.
 
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -42,12 +44,7 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { addReviewComment, submitReviewDecision } from '@/services/review'
-import {
-  abortAllActiveTasks,
-  isTaskActive,
-  listTaskItems,
-  wakeHumanGateContinuation,
-} from '@/services/task'
+import { abortAllActiveTasks, isTaskActive, wakeHumanGateContinuation } from '@/services/task'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
@@ -348,7 +345,12 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         catalogVisibility: 'internal',
       })
       expect(
-        (await listTaskItems(db, { catalogVisibility: 'public' })).map((item) => item.id),
+        (
+          await taskListItemsProjection(
+            { db: db, owners: composeOwnerIdentityQueries(db) },
+            { catalogVisibility: 'public' },
+          )
+        ).map((item) => item.id),
       ).not.toContain(taskId)
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('1')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
@@ -493,7 +495,12 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         catalogVisibility: 'internal',
       })
       expect(
-        (await listTaskItems(db, { catalogVisibility: 'public' })).map((item) => item.id),
+        (
+          await taskListItemsProjection(
+            { db: db, owners: composeOwnerIdentityQueries(db) },
+            { catalogVisibility: 'public' },
+          )
+        ).map((item) => item.id),
       ).not.toContain(taskId)
       expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('approved')
       expect(

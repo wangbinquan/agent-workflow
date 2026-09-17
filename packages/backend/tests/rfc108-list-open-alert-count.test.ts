@@ -5,11 +5,15 @@
 // 无告警的任务 count=0；③ 已 resolved 的告警不计入。
 
 import { expect, test } from 'bun:test'
+import {
+  taskListItemsProjection,
+  taskListSummariesProjection,
+} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
-import { listTaskItems, listTasks } from '../src/services/task'
 
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -65,12 +69,15 @@ describeEachProvider('RFC-108 T22 — listTasks openAlertCount', (harness) => {
     await addAlert(db, stuck, true) // resolved → not counted
     await addAlert(db, healthy, true) // resolved only → 0
 
-    const list = await listTasks(db)
+    const list = await taskListSummariesProjection(db, {})
     const byId = new Map(list.map((s) => [s.id, s.openAlertCount ?? 0]))
     expect(byId.get(stuck)).toBe(2)
     expect(byId.get(healthy)).toBe(0)
 
-    const ownerRows = await listTaskItems(db)
+    const ownerRows = await taskListItemsProjection(
+      { db: db, owners: composeOwnerIdentityQueries(db) },
+      {},
+    )
     const ownerById = new Map(ownerRows.map((s) => [s.id, s.openAlertCount ?? 0]))
     expect(ownerById).toEqual(byId)
   })

@@ -7897,3 +7897,34 @@ grep 多仓 diff 的表头模板，确保前端解析器与后端发射点用同
 `resolve(import.meta.dir,'..','src','services','task.ts')`——整份文件里**没有 `services/task.ts`
 这个子串**，按子串扫的那一轮自然扫不到。可靠的扫法是按**文件名**扫（`grep -rn "'task\.ts'"`），
 再人工过滤，或者干脆把「读源码的测试」整体跑一遍。
+
+### 切片型源码锁：必须先断言两端锚点都找得到
+
+（RFC-359 列表三件合一时实撞。）不少源码锁的形状是「把一段源码切出来再断言」：
+
+```ts
+const projection = src.slice(
+  src.indexOf('function rowToTask('),
+  src.indexOf('\nfunction rowToSummary(', ...),   // ← 结束锚点
+)
+expect(projection).not.toContain('triggerContextJson')
+```
+
+结束锚点那个函数一旦被删 / 改名，`indexOf` 返回 **-1**，而 `slice(a, -1)` 不报错——它**静默变成
+「从起点切到文件末尾」**。锁照样绿，但断言的对象已经不是它说的那段了：一条永远绿的装饰。
+起始锚点同理（-1 会变成「从末尾第一个字符开始」）。
+
+**修法**：切之前先断言两端都找得到。
+
+```ts
+const sliceBetween = (source: string, from: string, to: string): string => {
+  const start = source.indexOf(from)
+  expect(start, `锚点不见了：${from}`).toBeGreaterThanOrEqual(0)
+  const end = source.indexOf(to, start + from.length)
+  expect(end, `结束锚点不见了：${to}`).toBeGreaterThan(start)
+  return source.slice(start, end)
+}
+```
+
+同类形状还有 `match(...)?.[1] ?? ''`（匹配不上就拿空串去断言 `not.toContain`，恒绿）与
+`split(marker)[1]`（分不开就是 `undefined`）。**凡是「先定位再断言」的锁，定位失败必须是红，不是空。**

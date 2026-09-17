@@ -13,11 +13,15 @@ import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/quer
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
 import {
   launchMultipartTask,
+  loadTaskProjection,
   nodeRunEventsProjection,
   nodeRunStdoutProjection,
   taskDiffProjection,
+  taskListItemsProjection,
+  taskListSummariesProjection,
   taskNodeRunsProjection,
 } from './postgresqlTaskRouteOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   assertCanReplaySourceTask,
   canViewTask,
@@ -31,8 +35,6 @@ import {
   cancelTask,
   computeWorkflowSyncPreview,
   getTask,
-  listTaskItems,
-  listTasks,
   resumeTask,
   retryNode,
   syncTaskWorkflow,
@@ -125,9 +127,16 @@ export function createSqliteTaskRouteOperations(
 ): TaskRouteOperations {
   const { db } = dependencies
   const operations: TaskRouteOperations = {
-    list: (filters) => listTasks(db, filters),
-    listItems: (filters) => listTaskItems(db, filters),
-    get: (taskId) => getTask(db, taskId),
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：列表三件也与 PostgreSQL 共用**同一份**。
+    // 等价性由 `rfc359-w7-task-route-conformance` 的 A1–A5 作证（筛选 / 倒序 / 告警数 /
+    // owner 身份 / 子任务数逐格对拍）。合并同时销掉 B6 那一格：任务行投影的严格度此前两侧不同
+    //（PG `TaskSchema.parse`，SQLite 原样投出），现在统一走严格解析——枚举外的 `space_kind`
+    // 这类只会由裸 SQL / 手工修复写进去的值，静默上线比响亮失败更糟（前端会落进默认分支，
+    // 渲染成一个看不出错的错）。
+    list: (filters) => taskListSummariesProjection(db, filters),
+    listItems: (filters) =>
+      taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, filters),
+    get: (taskId) => loadTaskProjection(db, taskId),
     async assertVisible(actor, taskId) {
       if (actor.permissions.has('tasks:read:all')) return
       const task = await taskAccessRow(db, taskId)

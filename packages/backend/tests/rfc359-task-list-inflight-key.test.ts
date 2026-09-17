@@ -1,7 +1,7 @@
 // RFC-359 AC-1 —— 任务列表的**单飞合并键**必须覆盖全部筛选项。
 //
 // 为什么这条测试存在（先红后绿的那个红）：
-// `services/task.ts#listTasks` 把并发的同形列表查询合并成一次（`createInFlightCoalescer`，
+// 任务列表的并发单飞合并（`createInFlightCoalescer`，合并前住在 `services/task.ts#listTasks`，
 // 多标签页 + WS 失效风暴下这是热路径）。合并键 `taskListFlightKey` 是**手写的字段清单**，
 // 而 RFC-301 给 `ListTasksFilters` 加 `origin` 时**没有把它加进那份清单**——
 // 于是两个只差 `origin` 的并发请求会被判成同一次查询，**第二个拿到第一个的行**：
@@ -17,6 +17,8 @@
 //   1. 只差一个筛选项的并发查询**不得**被合并（逐项过一遍，新加的筛选项漏了就红）；
 //   2. 完全同形的并发查询**仍然**被合并（别把性能特性一起修没了）。
 import { beforeEach, expect, test } from 'bun:test'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import type { TaskRouteListFilters } from '@/modules/task-execution/public/taskRoutes'
 import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -70,11 +72,10 @@ describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛�
   })
 
   test('只差 origin 的两个并发列表查询不得互相污染', async () => {
-    const { listTasks } = await import('@/services/task')
     // **不 await 第一个就发第二个**——单飞窗口正是在这一刻。
     const [schedule, api] = await Promise.all([
-      listTasks(harness.db, { origin: 'scheduled' }),
-      listTasks(harness.db, { origin: 'api' }),
+      taskListSummariesProjection(harness.db, { origin: 'scheduled' }),
+      taskListSummariesProjection(harness.db, { origin: 'api' }),
     ])
     expect(
       schedule.map((task) => task.id),
@@ -87,18 +88,20 @@ describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛�
   })
 
   test('逐个筛选项：任何一项不同的两个并发查询都不得被合并', async () => {
-    const { listTasks } = await import('@/services/task')
     // 每组两个只差**一项**的筛选；两条种子任务的形状让每组必然给出不同结果。
-    const probes = [
-      [{ status: 'done' as const }, { status: 'failed' as const }],
-      [{ origin: 'scheduled' as const }, { origin: 'api' as const }],
+    const probes: ReadonlyArray<readonly [TaskRouteListFilters, TaskRouteListFilters]> = [
+      [{ status: 'done' }, { status: 'failed' }],
+      [{ origin: 'scheduled' }, { origin: 'api' }],
       [{ workflowId: 'wf-flight' }, { workflowId: 'wf-absent' }],
       [{ repoPath: '/tmp/flight' }, { repoPath: '/tmp/absent' }],
       [{ limit: 2 }, { limit: 1 }],
       [{ topLevelOnly: true }, { topLevelOnly: false }],
     ]
     for (const [left, right] of probes) {
-      const [a, b] = await Promise.all([listTasks(harness.db, left), listTasks(harness.db, right)])
+      const [a, b] = await Promise.all([
+        taskListSummariesProjection(harness.db, left),
+        taskListSummariesProjection(harness.db, right),
+      ])
       expect(
         a === b,
         `筛选项不同的两个并发查询返回了同一个数组：${JSON.stringify([left, right])}`,
@@ -107,11 +110,10 @@ describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛�
   })
 
   test('完全同形的并发查询仍然被合并（别把性能特性一起修没了）', async () => {
-    const { listTasks } = await import('@/services/task')
     const key = { status: 'done' as const, origin: 'scheduled' as const, limit: 50 }
     const [a, b] = await Promise.all([
-      listTasks(harness.db, { ...key }),
-      listTasks(harness.db, { ...key }),
+      taskListSummariesProjection(harness.db, { ...key }),
+      taskListSummariesProjection(harness.db, { ...key }),
     ])
     expect(a, '同形并发查询应当共享同一次库访问的结果').toBe(b)
     expect(a.map((task) => task.id)).toEqual(['tk-schedule-0001'])

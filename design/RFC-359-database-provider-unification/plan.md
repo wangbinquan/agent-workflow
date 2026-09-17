@@ -16307,3 +16307,62 @@ SQLite 的 `Promise.all` 并行式（PG 那份是串行 `for`）。
 
 这个 bug 是**为列表三件（②）立基线时顺手挖出来的**——两侧逐行对读的副产品，正是本 RFC 的合并
 次序一路在产出的那类发现。
+
+## 盘点后的第 3 刀落地　列表三件（`list` / `listItems` / `get`）合一
+
+`TaskRouteOperations` 这一对的第二组，也是差异面第二小的一组。
+
+### 基线早就有：W7 的 A 段
+
+这一刀不用新立基线——`rfc359-w7-task-route-conformance` 的 A1（未知任务回 null / 仓库 / 目录节点 /
+失败码按行投影）、A2（workflowName 投影）、A3（状态 / workflow / 父子 / 可见性筛选与 startedAt 倒序）、
+A4（openAlertCount 只数未解决的）、A5（owner 身份 + 本 actor 可见的直接子任务数）就是这三件的
+双引擎对拍，一直在跑。合并要做的是让它继续绿，并让 B 段里属于这三件的那一格自己红掉。
+
+### 销的账：B6 —— 行投影的严格度
+
+合并前 PG 走 `TaskSchema.parse`，枚举外的 `space_kind`（只会由裸 SQL / 手工修复写进去——该列没有
+库级 CHECK）让整条详情 500；SQLite 走 `rowToTask` 不解析，原样上线。`get` 共用
+`loadTaskProjection` 之后这条自己红了，改成相等断言即销账，**取严格那一档**：静默上线比响亮失败更糟
+——前端会落进默认分支，渲染成一个看不出错的错。B6 从「实测分叉」变成「不许再分家」的锁。
+
+### 顺带两处性能收敛（都朝 PostgreSQL 更好的方向）
+
+1. **工作流名并进同一次查询**。合并前 PG 是「行一次 + `workflowIdentities` 批量一次」，SQLite 是
+   `leftJoin(workflows)` 一次。取 SQLite 那份：列表上界 10k、首页每 10s 轮一次，少一次往返在 PG 上
+   是实打实的（SQLite 是进程内调用，差别小；PG 是网络往返）。
+2. **并发单飞合并给了 PostgreSQL**。合并前只有 SQLite 有（`createInFlightCoalescer`），PG 每个并发
+   请求各查一次库。现在两个引擎共用一份，键是上一提修好的「整个 filters 规范序列化」。
+
+### 删除
+
+`services/task.ts` 少 335 行：`ListTasksFilters` / 单飞合并表与键 / `taskVisibilityCondition`
+（这一份；`@/db/query` 的同名共享函数不动）/ `listTaskSummaryRows` / `listTasks` /
+`loadChildCounts` / `listTaskItems` / `rowToSummary`，外加 11 个随之无用的 import。
+十四个消费者测试改按共用投影 import。
+
+`services/task.ts#getTask` **暂不删**——它还有 33 个 `services/` 内部调用方，不是路由面。
+路由的 `get` 已经只有一份（`loadTaskProjection`）；`getTask` 现在是「legacy 内部读回侧」，
+随 `services/task.ts` 整体拆解一起退役。
+
+### 一处静默降级的源码锁（修掉了）
+
+`rfc292-trigger-source-locks` 按 `indexOf('\nfunction rowToSummary(')` 切片划边界。函数一删
+`indexOf` 返回 -1，`slice(a, -1)` **静默变成「从 rowToTask 到文件末尾」**——锁还是绿的，
+但断言的对象已经不是它说的那段了。抽了个 `sliceBetween` 先断言两端锚点都找得到，
+并把判据扩到共用的 `taskProjection` / `summaryProjection` 两段。
+**教训**：切片型源码锁必须先断言边界找得到，否则退化成一条永远绿的装饰。
+
+### 账本连带（三份，仍是被动更新）
+
+- `rfc359-w5-t19d` / `INVERTED_PAIRS`：`20/6 → 35/20`，倒挂 `9 vs 20 → 9 vs 35`。
+  这是本账本上**最响的一次假信号**——涨的 15 条引用全是两个引擎共用的同一份实现被引用的次数。
+- `rfc349-provider-cutover`：债再收敛，`SQL` / `count` / `isNull` / `lifecycleAlerts` 四个符号消失。
+- `rfc359-w7-task-insert-lineage-completeness`：行号键 `3580 → 3567`。
+
+### 剩余（承前，③起）
+
+③成员 / 评审四件 ④`cancel` / `delete` ⑤`resume` / `retry`
+⑥`workflowSyncPreview` / `syncWorkflow` ⑦`repairOptions` / `applyRepair`，
+然后是**命名债收尾**（§5hj）：这一对塌成一份之后把 `postgresqlTaskRouteOperations.ts`
+连同 `createPostgresql*` 一族改成中立名，让 t19d 那两行假信号一起消失。

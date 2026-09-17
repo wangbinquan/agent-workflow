@@ -98,23 +98,62 @@ describe('RFC-292 trigger namespace source locks', () => {
   }, 20_000)
 
   test('task wire exposes only the RFC-298 derived link, never frozen trigger JSON', () => {
+    // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：列表三件两个引擎合一之后，**列表行的
+    // 投影不在 `services/task.ts` 里了**（`rowToSummary` 已删除，取而代之的是共用的
+    // `summaryProjection`）。此前这里按 `indexOf('\nfunction rowToSummary(')` 切片划边界，
+    // 函数一没它就返回 -1、`slice(a, -1)` 静默变成「从 rowToTask 到文件末尾」——
+    // 锁还在绿，但断言的对象已经不是它说的那段了。**切片型源码锁必须先断言边界找得到**，
+    // 否则退化成一条永远绿的装饰。下面两处 `sliceBetween` 就是这道保险。
+    const sliceBetween = (source: string, from: string, to: string): string => {
+      const start = source.indexOf(from)
+      expect(start, `锚点不见了：${from}`).toBeGreaterThanOrEqual(0)
+      const end = source.indexOf(to, start + from.length)
+      expect(end, `结束锚点不见了：${to}`).toBeGreaterThan(start)
+      return source.slice(start, end)
+    }
     const task = readFileSync(resolve(BACKEND_SRC, 'services/task.ts'), 'utf8')
-    const getTaskProjection = task.slice(
-      task.indexOf('export async function getTask('),
-      task.indexOf(
-        '\nexport interface ListTasksFilters',
-        task.indexOf('export async function getTask('),
+    const shared = readFileSync(
+      resolve(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteOperations.ts',
       ),
+      'utf8',
     )
-    const rowProjection = task.slice(
-      task.indexOf('function rowToTask('),
-      task.indexOf('\nfunction rowToSummary(', task.indexOf('function rowToTask(')),
+    // 详情投影：两条路各自都要把冻结的 trigger JSON **只**折成派生链接。
+    const getTaskProjection = sliceBetween(
+      task,
+      'export async function getTask(',
+      '\nfunction parseCommitPushJson(',
+    )
+    const rowProjection = sliceBetween(
+      task,
+      'function rowToTask(',
+      '\nfunction frozenWorkgroupName(',
+    )
+    // 共用的那份详情 / 列表投影同一条规矩。
+    const sharedTaskProjection = sliceBetween(
+      shared,
+      'async function taskProjection(',
+      '\nexport async function loadTaskProjection(',
+    )
+    const sharedSummaryProjection = sliceBetween(
+      shared,
+      'function summaryProjection(',
+      '\nfunction visibilityCondition(',
     )
     expect(getTaskProjection).toContain('webhookTaskSourceLinkOf(parsedTriggerContext.value)')
     expect(getTaskProjection).toContain('row.task.triggerContextJson')
     expect(rowProjection).not.toContain('triggerContextJson')
     expect(rowProjection).toContain('webhookSourceLink')
     expect(rowProjection).not.toMatch(/comment_text|event_json|triggerContext:/)
+    expect(sharedTaskProjection).toContain('webhookTaskSourceLinkOf(trigger.value)')
+    expect(sharedTaskProjection).toContain('webhookSourceLink: sourceLink')
+    // 列表行**从不**碰冻结的 trigger 上下文——它只出派生链接以外的字段。
+    expect(sharedSummaryProjection).not.toContain('triggerContextJson')
+    expect(sharedSummaryProjection).not.toMatch(/comment_text|event_json|triggerContext:/)
 
     for (const rel of [
       'services/runtime',
