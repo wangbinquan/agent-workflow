@@ -879,6 +879,31 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
     expect(settled.reason, '进程退出后这道门必须让开——否则横幅永远不可同步').not.toBe('task-active')
   })
 
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 7 刀）：`syncWorkflow` 前置门里的 `isActive`
+  // 此前**零覆盖**（变异掉不红）——与第 6 刀预览那两道门同一类盲区：它原本只有 PG 有，
+  // 而 A/B 结构里「一侧有、另一侧没有」的门两边都不进。按「改动自带测试」补。
+  test('A23 syncWorkflow：进程内仍在跑 → 409 task-not-syncable', async () => {
+    const ops = operations(harness)
+    activeTaskIds.clear()
+    const workflowId = await seedWorkflow(harness.db)
+    const taskId = await seedTask(harness.db, {
+      workflowId,
+      worktreePath: join(APP_HOME, 'wt', 'live'),
+    })
+
+    activeTaskIds.add(taskId)
+    expect(
+      await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
+      '进程内还在跑时改工作流定义会和正在跑的节点抢同一棵工作树',
+    ).toBe('task-not-syncable')
+
+    activeTaskIds.clear()
+    expect(
+      await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
+      '进程退出后这道门必须让开——否则任务永远同步不了',
+    ).not.toBe('task-not-syncable')
+  })
+
   // 同上：非工作流任务那道门此前也是零覆盖（变异掉不红）。
   test('A22 workflowSyncPreview：非工作流任务（agent）不给同步横幅', async () => {
     const ops = operations(harness)
@@ -982,7 +1007,13 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     )
   })
 
-  test('B4 syncWorkflow 的工作区判据：PG 还认 workspace_pruned_at', async () => {
+  // **账已销**（RFC-359 AC-1，plan §5hn 之后的盘点第 7 刀）：`syncWorkflow` 的七道前置门
+  // 两个引擎共用 `assertTaskWorkflowSyncable` 之后，工作区判据也只剩一档。
+  // 原来的分叉是：SQLite 只判 `worktreePath === ''`，一个已回收（pruned）但路径还在的任务
+  // 会**穿过**这道门继续往下走、要到 resumeKick 才撞上；PG 在前置门就 409。
+  // **取 PG 那一档**，判据与 `delete` 那一刀一致：工作区已回收是确定的「这条路走不通」，
+  // 让它穿过去到 resumeKick 才报，错误来得更晚、现场更难读。
+  test('B4→A syncWorkflow 的工作区判据两侧同一档：已回收的工作区在前置门就 409', async () => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db, {
       worktreePath: join(APP_HOME, 'wt', 'pruned'),
@@ -991,13 +1022,10 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
       .update(tasks)
       .set({ workspacePrunedAt: Date.now() })
       .where(eq(tasks.id, taskId))
-    // SQLite 只判 `worktreePath === ''`，一个已回收（pruned）但路径还在的任务会**穿过**这道门
-    // 继续往下走（要到 resumeKick 才撞上）；PG 在前置门就 409 `worktree-missing`。
-    const outcome = await code(
-      ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 }),
-    )
-    if (isPostgresql()) expect(outcome).toBe('worktree-missing')
-    else expect(outcome).not.toBe('worktree-missing')
+    expect(
+      await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
+      '合并前只有 PG 在前置门拦，SQLite 穿过去到 resumeKick 才报',
+    ).toBe('worktree-missing')
   })
 
   test('B5 retry 一条过期的仓库准备行：SQLite 拒，PG 直接转交准备重试命令', async () => {

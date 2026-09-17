@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:38ef1cb2450faef7711499a3ec4610ae0c7ca7559911645b2613cd2d6cd64abc`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:eb58e08e4fc07bc576305f26e38c2358bf4c3afccd03f0f54ccef55ef60ceafc`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -32,10 +32,10 @@
 | `ambientWiring` | 494 |
 | `architectureExceptions` | 4564 |
 | `backgroundJobs` | 331 |
-| `crossContextImports` | 5083 |
+| `crossContextImports` | 5081 |
 | `facades` | 313 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24683 |
+| `moduleSymbolOwners` | 24681 |
 | `mutationEntrypoints` | 1675 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 960 |
@@ -203,12 +203,12 @@
 | legacy-outbound | 3014 |
 | legacy-inbound | 1359 |
 | infrastructure-external | 269 |
-| offered-consumption | 159 |
+| offered-consumption | 160 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 88 |
 | authority-type-only | 58 |
 | required-implementation | 22 |
-| provider-mirror | 19 |
+| provider-mirror | 16 |
 | external-layer-debt | 3 |
 
 ### 5.2 exact exceptions 按 rule

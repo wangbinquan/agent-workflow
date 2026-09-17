@@ -307,11 +307,8 @@
       "id": "rfc345-resource-acl-facade-compatibility",
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 37,
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）35 → 37：共用预览住在 `postgresqlTaskRouteOperations.ts` 里，于是 `services/resourceAcl.ts#canViewResource` 与 `services/workflow.ts#getWorkflow` 两条兼容边在那个文件上新出现；SQLite 侧的 `syncWorkflow`（写侧）还在用同两个，故没减少。**过渡态的净增 2，随写侧那一刀一起回落**——与 `rfc294-cross-context-observed-imports` 是同一对边的两个视角。"
-      },
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。 RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 W57：`/api/overview` 两侧收成一份，SQLite 专属的 `platform/persistence/sqlite/systemOverviewReadModel.ts` 整份删除，它对 `services/resourceAcl.ts` 的那条兼容边（`AclColumnRef` / `visibleRowsCondition`）随之出账，41→40。 RFC-359 AC-1（plan §5hl）40 → 39：`services/agent.ts → digitalEmployeeExecution.ts` 那条边销账——数字员工执行的两份 composer 合一后，Agent 查询改成装配方交进来的 `agents` 端口，composer 自己不再 import `getAgentById`。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ④）39 → 40：启动输入契约补到共用的启动参与者上（此前只长在 `services/task.ts` 的 `startTask` 那一侧，**PostgreSQL 从来没执行过**——同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。`postgresqlTaskRouteLaunchOperations.ts` 由此成为该门面的第 6 个消费者，形态与 W8-A 逐字相同：**同一个符号**（`assertWorkflowLaunchInputs`）、**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把 PG 侧这条契约缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 AC-1（plan §5hn 批次二 ⑤）40 → 39：`services/workgroup/launch.ts → sqliteChildExecutionLaunchOperations.ts` 那条边销账——子任务启动两个引擎合一，SQLite 那半 87 行转发壳整份删除，`startWorkgroupTaskFromFrozen` 的唯一生产消费者随之归零，该函数（87 行）也一并删除。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ⑥）39 → 38：`postgresqlTaskRouteOperations.ts` 那条边销账——multipart 路由改走共用的启动参与者之后，它不再自己跑启动输入契约（那道门在参与者的工作流臂上，带 `ignoreUploadInputs`），该 import 随之删除。 RFC-359 AC-1（plan §5hn 批次二 ⑦）38 → 35：`services/multipartTaskStart.ts` 与`services/execution/executor.ts` 两个文件整份删除——multipart 路由改走共用的启动参与者，「统一执行门面」的 `startExecution` 是启动编排的第二份写法、生产消费者归零。随之出账的三条边：workflow.validator→multipart、workflowLaunchInputs→multipart、workgroup/launch→executor。债是还掉的，不是挪走的。"
+      "baseline": 36,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。 RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 W57：`/api/overview` 两侧收成一份，SQLite 专属的 `platform/persistence/sqlite/systemOverviewReadModel.ts` 整份删除，它对 `services/resourceAcl.ts` 的那条兼容边（`AclColumnRef` / `visibleRowsCondition`）随之出账，41→40。 RFC-359 AC-1（plan §5hl）40 → 39：`services/agent.ts → digitalEmployeeExecution.ts` 那条边销账——数字员工执行的两份 composer 合一后，Agent 查询改成装配方交进来的 `agents` 端口，composer 自己不再 import `getAgentById`。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ④）39 → 40：启动输入契约补到共用的启动参与者上（此前只长在 `services/task.ts` 的 `startTask` 那一侧，**PostgreSQL 从来没执行过**——同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。`postgresqlTaskRouteLaunchOperations.ts` 由此成为该门面的第 6 个消费者，形态与 W8-A 逐字相同：**同一个符号**（`assertWorkflowLaunchInputs`）、**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把 PG 侧这条契约缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 AC-1（plan §5hn 批次二 ⑤）40 → 39：`services/workgroup/launch.ts → sqliteChildExecutionLaunchOperations.ts` 那条边销账——子任务启动两个引擎合一，SQLite 那半 87 行转发壳整份删除，`startWorkgroupTaskFromFrozen` 的唯一生产消费者随之归零，该函数（87 行）也一并删除。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ⑥）39 → 38：`postgresqlTaskRouteOperations.ts` 那条边销账——multipart 路由改走共用的启动参与者之后，它不再自己跑启动输入契约（那道门在参与者的工作流臂上，带 `ignoreUploadInputs`），该 import 随之删除。 RFC-359 AC-1（plan §5hn 批次二 ⑦）38 → 35：`services/multipartTaskStart.ts` 与`services/execution/executor.ts` 两个文件整份删除——multipart 路由改走共用的启动参与者，「统一执行门面」的 `startExecution` 是启动编排的第二份写法、生产消费者归零。随之出账的三条边：workflow.validator→multipart、workflowLaunchInputs→multipart、workgroup/launch→executor。债是还掉的，不是挪走的。。RFC-359 AC-1（第 6 刀）35 → 37：共用预览住在 `postgresqlTaskRouteOperations.ts` 里，`canViewResource` / `getWorkflow` 两条兼容边在那里新出现；SQLite 侧因写侧还在用故没减少——过渡态，随写侧那一刀回落。（`allowGrowth` 已随本次不涨的提交退役。）RFC-359 AC-1（第 7 刀）37 → 36：`syncWorkflow` 前置门合一后 SQLite 路由不再自己判工作流可见性，`resourceAcl → sqliteTaskRouteOperations` 那条边销账——上一刀记的「过渡态净增 2」回落了一条。"
     },
     {
       "id": "rfc348-teaching-frontend-allowlist",
@@ -842,7 +839,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5083,
+      "baseline": 5081,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -898,12 +895,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24683,
+      "baseline": 24681,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:38ef1cb2450faef7711499a3ec4610ae0c7ca7559911645b2613cd2d6cd64abc",
+    "sourceDigest": "sha256:eb58e08e4fc07bc576305f26e38c2358bf4c3afccd03f0f54ccef55ef60ceafc",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -916,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d95de55e731a727238124d8a04a068f86315920c",
-    "contentDigest": "sha256:f887706e678e4c53b3035fe8b086c96d468ce84c73562b7cde12a9aaae742bd0",
+    "currentSnapshotSha": "f8b85675a8ff3431f826a39bd2155e9d12ae40ae",
+    "contentDigest": "sha256:0cc597e6485ea0c9f7efc4095cd88275b4b3eb26ea5138cdaed900180f6e216e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

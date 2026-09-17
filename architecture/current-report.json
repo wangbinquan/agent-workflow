@@ -4,10 +4,10 @@
     "ambientWiring": 494,
     "architectureExceptions": 4564,
     "backgroundJobs": 331,
-    "crossContextImports": 5083,
+    "crossContextImports": 5081,
     "facades": 313,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24683,
+    "moduleSymbolOwners": 24681,
     "mutationEntrypoints": 1675,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 960,
@@ -157,5 +157,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:38ef1cb2450faef7711499a3ec4610ae0c7ca7559911645b2613cd2d6cd64abc"
+  "sourceDigest": "sha256:eb58e08e4fc07bc576305f26e38c2358bf4c3afccd03f0f54ccef55ef60ceafc"
 }

@@ -116,15 +116,13 @@ import {
 } from './taskLifecycleCommittedEvents'
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 
-function lacksMaterializedWorkspace(path: string): boolean {
-  return path.length === 0
-}
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import { parseMultipartLaunch } from '@/services/launchMultipart'
 import { deleteTask } from '@/services/taskDelete'
 import { computeWorkflowSyncPreview } from '@/services/task'
 import { canViewResource } from '@/services/resourceAcl'
 import { getWorkflow } from '@/services/workflow'
+import type { WorkflowCatalogDetail } from '@/modules/resource-catalog/public/types'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
@@ -1585,35 +1583,76 @@ async function rollbackRunsForContinuation(
   }
 }
 
+/**
+ * RFC-359 AC-1（plan §5hn 之后的盘点，第 7 刀）—— `POST /api/tasks/:id/sync-workflow` 的
+ * **前置门**，两个引擎共用一份。主体（快照改写 / 节点回滚 / 续跑）仍各自一份，
+ * 它与 `resume` / `retry` 是同一套准入机制，归那一刀（见 plan「第 7 刀的勘察」）。
+ *
+ * 七道门按这个次序（合并前两侧各缺几道）：
+ *   1. 任务存在 → 404；
+ *   2. 非工作流任务（agent / workgroup / code-round）→ `task-host-sync-unsupported`；
+ *   3. 内置工作流 → `builtin-readonly`（RFC-104：永远不可被手动 sync，**先于**状态 / 工作树，
+ *      否则一个内置工作流的任务会因为「正在跑」而拿到 `task-not-syncable`，文案是错的）；
+ *   4. 进程内仍在跑 → `task-not-syncable`（合并前只有 PostgreSQL 有）；
+ *   5. 状态转移表 → `task-not-syncable`（合并前只有 PostgreSQL 在这一层有；
+ *      SQLite 靠 `syncTaskWorkflow` 内部再判一次，门提前了、码不变）；
+ *   6. 工作树 → `worktree-missing`，**含 `workspace_pruned_at`**（原 B4）：
+ *      取 PostgreSQL 那一档，判据与 `delete` 那一刀一致——工作区已回收是确定的
+ *      「这条路走不通」，让它穿过去到 resumeKick 才报，错误来得更晚、现场更难读；
+ *   7. 工作流存在 → `workflow-deleted` 404、可见 → `workflow-not-visible` 404。
+ *      **授权用可见性**，与第 6 刀的预览同一条判据（预览与写侧对「看不看得见」必须同口径，
+ *      否则横幅说能同步、按钮回 404）。
+ */
+export async function assertTaskWorkflowSyncable(
+  dependencies: Readonly<{
+    readonly db: ProviderNeutralDatabase
+    readonly activity: ActiveTaskExecutionParticipant
+  }>,
+  actor: Actor,
+  taskId: string,
+): Promise<Readonly<{ task: Task; workflow: WorkflowCatalogDetail }>> {
+  const task = await loadTask(dependencies.db, taskId)
+  if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  if (taskExecutionKind(task) !== 'workflow') {
+    throw new ValidationError(
+      'task-host-sync-unsupported',
+      'agent/workgroup host tasks run a synthesized snapshot — there is no workflow to sync from',
+    )
+  }
+  const workflow = await getWorkflow(dependencies.db, task.workflowId)
+  if (workflow !== null) assertNotBuiltin('workflow', workflow)
+  await dependencies.activity.awaitReleasedSettled(taskId)
+  if (dependencies.activity.isActive(taskId)) {
+    throw new ConflictError('task-not-syncable', `task '${taskId}' is actively running`)
+  }
+  if (!allowedFromForTaskEvent({ kind: 'sync-workflow' }).includes(task.status)) {
+    throw new ConflictError('task-not-syncable', `task '${taskId}' is ${task.status}; cannot sync`)
+  }
+  if (task.worktreePath.length === 0 || task.workspaceState === 'pruned') {
+    throw new ConflictError('worktree-missing', `task '${taskId}' has no live worktree`)
+  }
+  if (workflow === null) {
+    throw new NotFoundError('workflow-deleted', `workflow '${task.workflowId}' no longer exists`)
+  }
+  if (!(await canViewResource(dependencies.db, actor, 'workflow', workflow))) {
+    throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
+  }
+  return { task, workflow }
+}
+
 async function syncWorkflow(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
   input: Parameters<TaskRouteOperations['syncWorkflow']>[0],
 ): Promise<Task> {
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 7 刀）：七道前置门与 SQLite 共用**同一份**
+  //（`assertTaskWorkflowSyncable`）。主体仍是这一侧自己的——它与 `resume` / `retry` 是同一套
+  // 准入机制，归那一刀。
+  await assertTaskWorkflowSyncable(
+    { db: dependencies.db, activity: dependencies.activity },
+    input.actor,
+    input.taskId,
+  )
   const row = await requireTaskRow(dependencies.db, input.taskId)
-  if (taskExecutionKind(row) !== 'workflow') {
-    throw new ValidationError(
-      'task-host-sync-unsupported',
-      'agent/workgroup host tasks run a synthesized snapshot and cannot be synced',
-    )
-  }
-  // 判据缺口账本 01b —— 与 SQLite 的 `assertTaskSyncable` 同位同序：内置身份先于
-  // 活跃 / 状态 / 工作树各门，一个内置工作流无论任务处于什么状态都不可被 sync。
-  const syncCandidate = await builtinCandidateWorkflow(dependencies.db, row.workflowId)
-  if (syncCandidate !== null) assertNotBuiltin('workflow', syncCandidate)
-  await dependencies.activity.awaitReleasedSettled(input.taskId)
-  if (dependencies.activity.isActive(input.taskId)) {
-    throw new ConflictError('task-not-syncable', `task '${input.taskId}' is actively running`)
-  }
-  const allowedFrom = allowedFromForTaskEvent({ kind: 'sync-workflow' })
-  if (!allowedFrom.includes(row.status as TaskStatus)) {
-    throw new ConflictError(
-      'task-not-syncable',
-      `task '${input.taskId}' is ${row.status}; cannot sync`,
-    )
-  }
-  if (lacksMaterializedWorkspace(row.worktreePath) || row.workspacePrunedAt !== null) {
-    throw new ConflictError('worktree-missing', `task '${input.taskId}' has no live worktree`)
-  }
   const { authority, workflow } = await loadVisibleWorkflow(
     dependencies,
     input.actor,
@@ -1690,7 +1729,7 @@ async function syncWorkflow(
   await assertRollbackBaselinesPresent(dependencies, {
     taskId: input.taskId,
     runs: syncRollbackRuns,
-    allowedFrom: allowedFrom,
+    allowedFrom: allowedFromForTaskEvent({ kind: 'sync-workflow' }),
     reason: 'syncTaskWorkflow',
   })
 

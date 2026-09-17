@@ -2,7 +2,6 @@ import {
   isTurnEngineWorkgroupTask,
   isWorkgroupTask,
   taskExecutionKind,
-  type Task,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
@@ -13,6 +12,7 @@ import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/quer
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
 import {
   assertTaskVisibleProjection,
+  assertTaskWorkflowSyncable,
   launchMultipartTask,
   taskWorkflowSyncPreviewProjection,
   loadTaskProjection,
@@ -29,7 +29,6 @@ import {
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
-import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import {
   cancelTask,
@@ -41,7 +40,6 @@ import {
 } from '@/services/task'
 import { deleteTask } from '@/services/taskDelete'
 import { getWorkflow } from '@/services/workflow'
-import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
@@ -76,12 +74,6 @@ export interface SqliteTaskRouteOperationsDependencies {
   readonly appHome?: string
 }
 
-async function requiredTask(db: LegacySqliteTaskDatabase, taskId: string): Promise<Task> {
-  const task = await getTask(db, taskId)
-  if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  return task
-}
-
 async function assertManualExecutionAllowed(
   db: LegacySqliteTaskDatabase,
   taskId: string,
@@ -108,19 +100,6 @@ async function assertManualExecutionAllowed(
   }
   const workflow = await getWorkflow(db, task.workflowId)
   if (workflow !== null) assertNotBuiltin('workflow', workflow)
-}
-
-async function assertTaskSyncable(db: LegacySqliteTaskDatabase, taskId: string): Promise<Task> {
-  const task = await requiredTask(db, taskId)
-  if (taskExecutionKind(task) !== 'workflow') {
-    throw new ValidationError(
-      'task-host-sync-unsupported',
-      'agent/workgroup host tasks run a synthesized snapshot — there is no workflow to sync from',
-    )
-  }
-  const workflow = await getWorkflow(db, task.workflowId)
-  if (workflow !== null) assertNotBuiltin('workflow', workflow)
-  return task
 }
 
 export function createSqliteTaskRouteOperations(
@@ -227,17 +206,11 @@ export function createSqliteTaskRouteOperations(
         taskId,
       ),
     async syncWorkflow({ actor, taskId, expectedVersion }) {
-      const task = await assertTaskSyncable(db, taskId)
-      const workflow = await getWorkflow(db, task.workflowId)
-      if (workflow === null) {
-        throw new NotFoundError(
-          'workflow-deleted',
-          `workflow '${task.workflowId}' no longer exists`,
-        )
-      }
-      if (!(await canViewResource(db, actor, 'workflow', workflow))) {
-        throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
-      }
+      // RFC-359 AC-1（plan §5hn 之后的盘点，第 7 刀）：七道前置门与 PostgreSQL 共用**同一份**。
+      // 这一侧此前只在路由层判三道（类型 / 内置 / 工作流可见），其余靠 `syncTaskWorkflow`
+      // 内部再判——门提前了、错误码不变；新增的是「进程内仍在跑」与「工作区已回收」两档
+      //（后者即原 B4，判据与 `delete` 那一刀一致：先报确定的「这条路走不通」）。
+      await assertTaskWorkflowSyncable({ db, activity: dependencies.activity }, actor, taskId)
       return await syncTaskWorkflow(db, taskId, {
         ...dependencies.startDepsFor(actor),
         taskRecoveryOperations: dependencies.recovery,

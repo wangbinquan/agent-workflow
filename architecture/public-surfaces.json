@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 846,
+    "consumers": 847,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1043,
@@ -115259,7 +115259,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:4df8104a9c1a569f81a8"
+        "import:4df8104a9c1a569f81a8",
+        "import:f9ebfe680cc057b1bd15"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -115283,6 +115284,12 @@
           "edgeId": "import:4df8104a9c1a569f81a8",
           "file": "packages/backend/src/modules/intent/application/resourceCatalog.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:f9ebfe680cc057b1bd15",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -159740,7 +159747,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:38ef1cb2450faef7711499a3ec4610ae0c7ca7559911645b2613cd2d6cd64abc",
+  "sourceDigest": "sha256:eb58e08e4fc07bc576305f26e38c2358bf4c3afccd03f0f54ccef55ef60ceafc",
   "targetContexts": [
     "collaboration",
     "development-automation",

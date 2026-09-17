@@ -16661,3 +16661,49 @@ B4 按 §5u 的登记保持为**已知差异**，不在本刀范围。
 B4 按上面的判据定档），主体留给 `resume` / `retry` 那一刀连同准入链一起收。
 这样上一刀那笔 `cross-context-observed-imports` 的 allowGrowth 也能按预期回落——
 门合一之后 SQLite 路由文件不再需要 `getWorkflow` / `canViewResource`。
+
+## 盘后第 7 刀落地　`syncWorkflow` 的前置门合一
+
+按上一节的勘察实施：**只合前置门**，主体（快照改写 / 节点回滚 / 续跑）仍各自一份——
+它与 `resume` / `retry` 是同一套准入机制，归那一刀。
+
+### 七道门，一份实现
+
+`assertTaskWorkflowSyncable` 按这个次序判：任务存在 → 非工作流任务 → 内置工作流 →
+进程内仍在跑 → 状态转移表 → 工作树（**含 `workspace_pruned_at`**）→ 工作流存在 / 可见。
+
+合并前两侧各缺几道：SQLite 的路由只判三道（类型 / 内置 / 工作流可见），其余靠
+`syncTaskWorkflow` 内部再判——**门提前了、错误码不变**；PostgreSQL 缺的是可见性那一档
+（它走可启动性，第 6 刀已裁决取可见性；预览与写侧对「看不看得见」必须同口径，
+否则横幅说能同步、按钮回 404）。
+
+内置身份**先于**状态 / 工作树各门，这一点两侧原来就同位同序（判据缺口账本 01b）——
+一个内置工作流的任务如果因为「正在跑」先拿到 `task-not-syncable`，文案就是错的。
+
+### 销的账：B4
+
+工作区已回收（`workspace_pruned_at`）但路径还在的任务，合并前 SQLite 会**穿过**这道门、
+要到 resumeKick 才撞上，PG 在前置门就 409。合并后自己红，改成相等断言——**取 PG 那一档**，
+判据与 `delete` 那一刀一致：工作区已回收是确定的「这条路走不通」，让它往下走到 resumeKick
+才报，错误来得更晚、现场更难读。
+
+### 又一格零覆盖（同第 6 刀的盲区）
+
+前置门里的 `isActive` 变异掉**不红**——与第 6 刀预览那两道门同一类：它原本只有 PG 有，
+而 A/B 结构里「一侧有、另一侧没有」的门两边都不进。补 A23（进程内仍在跑 → 409
+`task-not-syncable`，且**进程退出后这道门必须让开**），变异随即在两个引擎上同时红。
+
+**这已经是连着两刀在同一个盲区上抓到东西**，`docs/dev-gotchas.md` 那条的反向用法值得每刀都做：
+合并前对着 B 段清单问一句「有没有哪一侧的门根本没进这张表」。
+
+### 过渡态回落了一条
+
+上一刀记的「净增 2」中，`resourceAcl → sqliteTaskRouteOperations` 这条**本刀就销账**——
+SQLite 路由不再自己判工作流可见性。`rfc345` 兼容边账本 37 → 36，`allowGrowth` 按一次性约定退役。
+另一条（`services/workflow#getWorkflow`）SQLite 侧的 `assertManualExecutionAllowed` 还在用，
+随那一刀走。
+
+### 剩余
+
+`resume` / `retry`（连同 `syncWorkflow` 的主体与那套准入链）、`repairOptions` / `applyRepair`、
+`ChildTaskLifecycleParticipant` 那一对（`cancel` 的真实两份实现），最后命名债收尾（§5hj）。
