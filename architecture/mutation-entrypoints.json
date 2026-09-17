@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1679,
+    "entries": 1677,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17355,28 +17355,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#startWorkgroupTask",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#startWorkgroupTask",
-      "symbol": "startWorkgroupTask",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -32583,29 +32561,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/agentLaunch.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/agentLaunch.ts#startAgentTask",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/agentLaunch.ts#startAgentTask",
-      "symbol": "startAgentTask",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -40110,7 +40065,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7",
+  "sourceDigest": "sha256:16bd0c8813f1c29cbdb8b26d1b8aac394abdbd0b72c6541eb718b9b57d761e4b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -43,7 +43,15 @@ import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { agents, nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
+import {
+  agents,
+  nodeRuns,
+  runtimes,
+  tasks,
+  users,
+  workflows,
+  workgroupTaskState,
+} from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
@@ -68,7 +76,10 @@ import {
 } from '../src/services/orchestratorAgent'
 import { createUser } from '../src/services/users'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+import {
+  createTestTaskExecutionLaunchParticipant,
+  launchWorkgroupTaskViaParticipant,
+} from './helpers/participantLaunch'
 import type { WorkgroupTurnHostResult as WorkgroupHostRunResult } from '../src/modules/task-execution/public/commands'
 import type {
   WorkgroupTurnHostOperations,
@@ -623,18 +634,17 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       // carries the OLD id → rejected AFTER the ACL gate (never a 409-vs-404
       // existence probe for a private group name), before readiness/materialize.
       await expect(
-        startWorkgroupTask(
+        launchWorkgroupTaskViaParticipant(
+          createTestTaskExecutionLaunchParticipant({
+            db,
+            appHome,
+            schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+              .schedulerDriver,
+          }),
           db,
           actor,
           workgroup.id,
           { name: 't', goal: 'g', scratch: true, expectedWorkgroupId: 'stale-other-id' },
-          {
-            db,
-            schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-              .schedulerDriver,
-            appHome,
-            launchProvenance: { kind: 'direct-json', initiator: 'api' },
-          },
         ),
       ).rejects.toMatchObject({ code: 'workgroup-id-mismatch' })
     } finally {
@@ -694,20 +704,34 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
           edges: [],
         }),
       })
-      const task = await startWorkgroupTask(
+      // RFC-359 AC-1（plan §5hn 批次二 ⑧）：改走**生产那条路**——启动参与者的工作组臂 → 根内核。
+      // 内核要为非系统 actor 解析 Git 提交身份，所以这一行用户是完整的（email + gitName）。
+      await db
+        .insert(users)
+        .values({
+          id: 'u-own',
+          username: 'own',
+          displayName: 'own',
+          email: 'own@example.test',
+          gitName: 'own',
+          role: 'admin',
+          status: 'active',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+        .onConflictDoNothing()
+      const task = await launchWorkgroupTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          runConfig: { binaryOverride: OPENCODE_CMD },
+        }),
         db,
         actor,
         workgroup.id,
         { name: 't', goal: '目标', scratch: true },
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          binaryOverride: OPENCODE_CMD,
-          awaitScheduler: true,
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       )
 
       const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]

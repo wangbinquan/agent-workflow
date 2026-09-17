@@ -87,7 +87,9 @@ function identifierCalls(name: string): Map<string, number> {
 describe('RFC-301 task launch-origin architecture ratchets', () => {
   test('all production startTask calls stay inside the reviewed launch adapters', () => {
     expect(Object.fromEntries(identifierCalls('startTask'))).toEqual({
-      'services/agentLaunch.ts': 3,
+      // RFC-359 AC-1（plan §5hn 批次二 ⑧）：`services/agentLaunch.ts` 这一行**删除**——
+      // `startAgentTask` 整份退役（门面退役后生产零消费者，测试侧调用点已迁到启动参与者）。
+      // 该文件只剩合成宿主快照与启动表单校验，一个 `startTask` 调用都没有。
       // RFC-304: the code-round launch adapter, reviewed as part of PR-0's
       // go/no-go. Like the other adapters it does NOT invent provenance — it
       // forwards whatever deps the executor derived from the invoker, so the
@@ -114,7 +116,8 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // （RFC-243 §6.3 的冻结启动面）整份删除——子任务启动两个引擎合一之后它的唯一生产
       // 消费者（SQLite 那层 87 行转发壳）没了，共用的铸造机自带 `prepareWorkgroupSubject`。
       // 又少一个 `startTask` 调用点，正是这条棘轮要的方向。
-      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
+      // **RFC-359 AC-1（plan §5hn 批次二 ⑧）1 → 0：整行出账。** `startWorkgroupTask` 也删了，
+      // 理由同上。
     })
   })
 

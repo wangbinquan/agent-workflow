@@ -17,7 +17,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DAEMON_RESTART_ERROR_SUMMARY, DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workgroupAssignments } from '../src/db/schema'
+import { nodeRuns, tasks, users, workgroupAssignments } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -27,9 +27,12 @@ import { createWorkgroup } from '../src/services/workgroups'
 import {
   buildWorkgroupHostSnapshot,
   ensureWorkgroupHostWorkflow,
-  startWorkgroupTask,
   WORKGROUP_HOST_WORKFLOW_ID,
 } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+import {
+  createTestTaskExecutionLaunchParticipant,
+  launchWorkgroupTaskViaParticipant,
+} from './helpers/participantLaunch'
 import { runTestCommand, runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -135,6 +138,22 @@ async function seedAgent(db: DbClient, name: string): Promise<string> {
 }
 
 async function seedLeaderWorkerGroup(db: DbClient, name: string): Promise<string> {
+  // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
+  // （用户存在、active、有 email、gitName 非空），旧的 `startWorkgroupTask` 不看这些。
+  await db
+    .insert(users)
+    .values({
+      id: 'u-e2e',
+      username: 'e2e',
+      displayName: 'e2e',
+      email: 'e2e@example.test',
+      gitName: 'e2e',
+      role: 'admin',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    .onConflictDoNothing()
   const leadId = await seedAgent(db, 'wg-lead')
   const writerId = await seedAgent(db, 'wg-writer')
   const group = await createWorkgroup(db, {
@@ -179,22 +198,23 @@ const WORKER_RESULT: Step = {
 
 async function launch(h: Harness, workgroupId: string) {
   const task = await withActiveTaskDeadline(() =>
-    startWorkgroupTask(
+    // RFC-359 AC-1（plan §5hn 批次二 ⑧）：改走**生产那条路**——启动参与者的工作组臂 → 根内核。
+    launchWorkgroupTaskViaParticipant(
+      createTestTaskExecutionLaunchParticipant({
+        db: h.db,
+        appHome: h.appHome,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        runConfig: {
+          binaryOverride: opencodeCmd(),
+          defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+          defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+        },
+      }),
       h.db,
       actor,
       workgroupId,
       { name: 'e2e', goal: '产出 alpha', scratch: true },
-      {
-        db: h.db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-          .schedulerDriver,
-        appHome: h.appHome,
-        binaryOverride: opencodeCmd(),
-        awaitScheduler: true,
-        defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
-        defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      },
     ),
   )
   return task

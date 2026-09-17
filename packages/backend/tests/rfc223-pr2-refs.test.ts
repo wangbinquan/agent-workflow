@@ -31,7 +31,10 @@ import { createRuntime } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
 import { createWorkgroup, getWorkgroupById } from '../src/services/workgroups'
-import { startWorkgroupTask } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+import {
+  createTestTaskExecutionLaunchParticipant,
+  launchWorkgroupTaskViaParticipant,
+} from './helpers/participantLaunch'
 import { extractWorkflowAgentRefs, stripWorkflowNodeAgentIds } from '../src/services/resourceRefs'
 import { createUser } from '../src/services/users'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -240,20 +243,18 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
     const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
     const group = await createWorkgroup(db, groupInput(a1.id))
     await expect(
-      startWorkgroupTask(
+      launchWorkgroupTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          runConfig: { binaryOverride: ['bun', '-e', 'process.exit(0)'] },
+        }),
         db,
         actor('u1'),
         group.name,
         { name: 'e2e', goal: 'g', scratch: true },
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          binaryOverride: ['bun', '-e', 'process.exit(0)'],
-          awaitScheduler: true,
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'workgroup-not-found' })
   })
@@ -265,20 +266,18 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
     await deleteAgent(db, a1.id, actor('u1'))
     // Its frozen id no longer resolves → readiness fails BEFORE any spawn.
     await expect(
-      startWorkgroupTask(
+      launchWorkgroupTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          runConfig: { binaryOverride: ['bun', '-e', 'process.exit(0)'] },
+        }),
         db,
         actor('u1'),
         group.id,
         { name: 'e2e', goal: 'g', scratch: true },
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          binaryOverride: ['bun', '-e', 'process.exit(0)'],
-          awaitScheduler: true,
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'workgroup-not-ready' })
   })

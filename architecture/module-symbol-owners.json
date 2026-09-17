@@ -6,7 +6,7 @@
     "moduleFiles": 1182,
     "productionFiles": 2550,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24702
+    "symbolsIncludingFileRoots": 24700
   },
   "entries": [
     {
@@ -93076,18 +93076,6 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#startWorkgroupTask",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "startWorkgroupTask",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#WorkgroupRuntimeConfigSource",
       "removeAfterWave": null,
       "status": "current-module",
@@ -156922,18 +156910,6 @@
       "removeAfterWave": "W4-C",
       "status": "legacy-target",
       "symbol": "buildAgentHostSnapshot",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/agentLaunch.ts",
-      "id": "owner:packages/backend/src/services/agentLaunch.ts#startAgentTask",
-      "removeAfterWave": "W4-C",
-      "status": "legacy-target",
-      "symbol": "startAgentTask",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -297101,5 +297077,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7"
+  "sourceDigest": "sha256:16bd0c8813f1c29cbdb8b26d1b8aac394abdbd0b72c6541eb718b9b57d761e4b"
 }

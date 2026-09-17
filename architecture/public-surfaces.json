@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 844,
+    "consumers": 843,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1041,
@@ -97992,7 +97992,6 @@
       "consumerEdgeIds": [
         "import:094310af10dafa636874",
         "import:3b3f93b0eaac09288cdd",
-        "import:64bd93c7a02b214b4eb3",
         "import:c455a417e109065601c3",
         "import:f5fa653da3465d788d75"
       ],
@@ -98004,7 +98003,6 @@
         {
           "consumerEdgeIds": [
             "import:094310af10dafa636874",
-            "import:64bd93c7a02b214b4eb3",
             "import:c455a417e109065601c3"
           ],
           "fieldPath": "$method:assertUsable.$parameter:input.rootAgentIds",
@@ -98026,7 +98024,6 @@
         {
           "consumerEdgeIds": [
             "import:094310af10dafa636874",
-            "import:64bd93c7a02b214b4eb3",
             "import:c455a417e109065601c3"
           ],
           "name": "assertUsable",
@@ -98046,12 +98043,6 @@
           "edgeId": "import:3b3f93b0eaac09288cdd",
           "file": "packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:64bd93c7a02b214b4eb3",
-          "file": "packages/backend/src/services/agentLaunch.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/agentLaunch.ts#$file"
         },
         {
           "context": "task-execution",
@@ -159658,7 +159649,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7",
+  "sourceDigest": "sha256:16bd0c8813f1c29cbdb8b26d1b8aac394abdbd0b72c6541eb718b9b57d761e4b",
   "targetContexts": [
     "collaboration",
     "development-automation",

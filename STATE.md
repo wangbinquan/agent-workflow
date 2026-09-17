@@ -2,6 +2,31 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 61，**legacy 启动服务清零**）
+>
+> 本段待推：§5hn 批次二 ⑧。**CI 在 `ffca0d63a` 已绿**（含续 60 的 `startExecution` 退役）。
+>
+> 门面退役后 `startAgentTask`（195 行）与 `startWorkgroupTask`（157 行）也是**生产零消费者**。
+> 本刀把它们的**测试调用点迁到启动参与者**（19 个调用点 / 8 个文件），再删函数。
+> 两个文件剩下的都是还在用的东西：合成宿主快照、启动表单校验、运行期配置、`ensureWorkgroupHostWorkflow`。
+>
+> 迁移用的助手 `tests/helpers/participantLaunch.ts` 有三处要记住：①鉴权句柄不能走
+> `authorityForLegacyProjection`（按对象同一性认凭据边缘铸的 actor，`buildActor` 造的会当场抛），
+> 走 `contexts.fromAuthenticatedPrincipal`；②`resourceAuthorityFor` 交**会当场炸**的实现
+> （它只被路由包装读，本 helper 不装路由）；③`completionMode` 是 `awaitScheduler: true` 的
+> 对应物，只看返回行的用例要显式传 `background`（否则毫秒级用例涨到 25 秒）。
+>
+> **迁移照出一处入口能力差，是强化不是回归**：根启动内核要为非系统 actor 解析 **Git 提交身份**
+> （用户存在、active、有 email、gitName 非空），两个 legacy 入口不看。夹具改成生产形状
+> （无条件建一行完整用户），不是放宽内核——生产上的用户本来就有这几格。
+>
+> 账本全是收敛：`rfc301` 的 `startTask` 调用点两行整行出账、`rfc217` G5 的 `launch.ts` 整行出账。
+>
+> 证据：迁移的 8 个文件全绿；`agentLaunch` 族 104/104；40 个相关文件分五片全绿；
+> 架构守卫 + 九个根目录守卫 **781/781**；tsc 0 / eslint 0。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ⑧。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 60，**`startExecution` 从生产退役——启动编排只剩一份**）
 >
 > 本段待推：§5hn 批次二 ⑦。**同时修 `9cd72ce24` 推的红**（W29 摘要 + 架构清单没跟上）。

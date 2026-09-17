@@ -29,7 +29,7 @@ import {
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { nodeRuns, tasks, workflows, workgroupTaskState } from '../src/db/schema'
+import { nodeRuns, tasks, users, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
@@ -42,7 +42,10 @@ import {
   resumeTask,
 } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+import {
+  createTestTaskExecutionLaunchParticipant,
+  launchWorkgroupTaskViaParticipant,
+} from './helpers/participantLaunch'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -132,6 +135,22 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         user: { id: 'u-e2e', username: 'e2e', displayName: 'e2e', role: 'admin', status: 'active' },
         source: 'daemon',
       })
+      // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
+      // （用户存在、active、有 email、gitName 非空），旧的 `startWorkgroupTask` 不看这些。
+      await db
+        .insert(users)
+        .values({
+          id: 'u-e2e',
+          username: 'e2e',
+          displayName: 'e2e',
+          email: 'e2e@example.test',
+          gitName: 'e2e',
+          role: 'admin',
+          status: 'active',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+        .onConflictDoNothing()
 
       // ── phase 1: GENERATE — the orchestrator (mock) emits the workflow JSON.
       const task = await withActiveTaskDeadline(() =>
@@ -140,22 +159,23 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             MOCK_OPENCODE_OUTPUTS: JSON.stringify({ workflow: JSON.stringify(GENERATED) }),
           },
           () =>
-            startWorkgroupTask(
+            // RFC-359 AC-1（plan §5hn 批次二 ⑧）：改走**生产那条路**——参与者的工作组臂 → 根内核。
+            launchWorkgroupTaskViaParticipant(
+              createTestTaskExecutionLaunchParticipant({
+                db,
+                appHome,
+                schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+                  .schedulerDriver,
+                runConfig: {
+                  binaryOverride: OPENCODE_CMD,
+                  defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+                  defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+                },
+              }),
               db,
               actor,
               group.id,
               { name: 'e2e', goal: '把回调竞态修掉', scratch: true },
-              {
-                db,
-                schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-                  .schedulerDriver,
-                appHome,
-                binaryOverride: OPENCODE_CMD,
-                awaitScheduler: true,
-                defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
-                defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-                launchProvenance: { kind: 'direct-json', initiator: 'api' },
-              },
             ),
         ),
       )

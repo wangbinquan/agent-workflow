@@ -21,10 +21,11 @@ import { createRuntime } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
+import { WORKGROUP_HOST_WORKFLOW_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import {
-  startWorkgroupTask,
-  WORKGROUP_HOST_WORKFLOW_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+  createTestTaskExecutionLaunchParticipant,
+  launchWorkgroupTaskViaParticipant,
+} from './helpers/participantLaunch'
 import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeDatabaseAgentResourceInventorySource } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -240,19 +241,19 @@ describe('RFC-228 Agent resource integrity', () => {
       },
     })
     await expect(
-      startWorkgroupTask(
+      launchWorkgroupTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          // 资源完整性门在**参与者的工作组臂**里，早于内核碰工作区——这条路径一次都用不到它。
+          appHome: '/unused-before-resource-gate',
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          runConfig: { defaultRuntime: VALID_RUNTIME },
+        }),
         db,
         viewer,
         group.id,
         { name: 'blocked run', goal: 'work', scratch: true },
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome: '/unused-before-resource-gate',
-          defaultRuntime: VALID_RUNTIME,
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       ),
     ).rejects.toMatchObject({
       code: 'agent-resources-invalid',

@@ -47,7 +47,7 @@ import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { agents, tasks, workflows } from '../src/db/schema'
+import { agents, tasks, users, workflows } from '../src/db/schema'
 import {
   acquireAgentLaunch,
   isAgentLaunching,
@@ -62,11 +62,12 @@ import {
   AGENT_HOST_INPUT_KEY,
   AGENT_HOST_WORKFLOW_ID,
   buildAgentHostSnapshot,
-  startAgentTask,
 } from '../src/services/agentLaunch'
+import {
+  createTestTaskExecutionLaunchParticipant,
+  launchAgentTaskViaParticipant,
+} from './helpers/participantLaunch'
 import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
-import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { createUser } from '../src/services/users'
 import {
@@ -107,11 +108,26 @@ function daemonActor() {
   })
 }
 
-function agentResourceIntegrity(db: DbClient) {
-  return composeDatabaseAgentResourceIntegrity({
-    db,
-    authorization: composeResourceCatalogFor({ db }).authorization,
-  }).launch
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
+ * （用户存在、active、有 email、gitName 非空），旧的 `startAgentTask` 不看这些。
+ * 这不是夹具将就实现——生产上的用户本来就有这几格，旧入口宽容的是它自己不写 git 身份这件事。
+ */
+async function seedLaunchUser(db: DbClient): Promise<void> {
+  await db
+    .insert(users)
+    .values({
+      id: 'u-admin',
+      username: 'admin',
+      displayName: 'A',
+      email: 'admin@example.test',
+      gitName: 'A',
+      role: 'admin',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    .onConflictDoNothing()
 }
 
 beforeAll(async () => {
@@ -223,6 +239,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
     await seedTestDefaultOpencodeRuntime(db)
+    await seedLaunchUser(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-agent-'))
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
@@ -236,19 +253,18 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
   test('A3 happy path (scratch): anchor row + sourceAgentName + frozen synthesized snapshot', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    const task = await startAgentTask(
-      composeAgentLaunchResourceOperations({ db: db }),
+    const task = await launchAgentTaskViaParticipant(
+      createTestTaskExecutionLaunchParticipant({
+        db,
+        appHome,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        completionMode: 'background',
+      }),
+      db,
       daemonActor(),
       solo.id,
       BODY(),
-      {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        integrity: agentResourceIntegrity(db),
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      },
     )
 
     expect(task.status).toBe('pending')
@@ -274,19 +290,18 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   test('RFC-223 PR-7: service input is canonical id; an existing name is not resolved', async () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
-      startAgentTask(
-        composeAgentLaunchResourceOperations({ db: db }),
+      launchAgentTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          completionMode: 'background',
+        }),
+        db,
         daemonActor(),
         'solo',
         BODY(),
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          integrity: agentResourceIntegrity(db),
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     expect((await db.select().from(tasks)).length).toBe(0)
@@ -323,35 +338,33 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     })
 
     await expect(
-      startAgentTask(
-        composeAgentLaunchResourceOperations({ db: db }),
+      launchAgentTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          completionMode: 'background',
+        }),
+        db,
         strangerActor,
         'no-such-id',
         BODY(),
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          integrity: agentResourceIntegrity(db),
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     await expect(
-      startAgentTask(
-        composeAgentLaunchResourceOperations({ db: db }),
+      launchAgentTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          completionMode: 'background',
+        }),
+        db,
         strangerActor,
         privateAgent.id,
         BODY(),
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          integrity: agentResourceIntegrity(db),
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
@@ -373,37 +386,35 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       updatedAt: Date.now(),
     })
     await expect(
-      startAgentTask(
-        composeAgentLaunchResourceOperations({ db: db }),
+      launchAgentTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          completionMode: 'background',
+        }),
+        db,
         daemonActor(),
         builtinId,
         BODY(),
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          integrity: agentResourceIntegrity(db),
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'builtin-readonly' })
 
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
-      startAgentTask(
-        composeAgentLaunchResourceOperations({ db: db }),
+      launchAgentTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          completionMode: 'background',
+        }),
+        db,
         daemonActor(),
         solo.id,
         StartAgentTaskSchema.parse({ name: 't', description: 'd' }),
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          integrity: agentResourceIntegrity(db),
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'agent-launch-invalid' })
   })
@@ -844,6 +855,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
     await seedTestDefaultOpencodeRuntime(db)
+    await seedLaunchUser(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc175-agent-'))
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
@@ -856,55 +868,52 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     const agentId = solo.id
 
     // Baseline launch stamps the stable id onto the task.
-    const t1 = await startAgentTask(
-      composeAgentLaunchResourceOperations({ db: db }),
+    const t1 = await launchAgentTaskViaParticipant(
+      createTestTaskExecutionLaunchParticipant({
+        db,
+        appHome,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        completionMode: 'background',
+      }),
+      db,
       daemonActor(),
       agentId,
       BODY(),
-      {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        integrity: agentResourceIntegrity(db),
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      },
     )
     expect(t1.sourceAgentId).toBe(agentId)
 
     // Relaunch carrying the CORRECT expected id succeeds.
-    const t2 = await startAgentTask(
-      composeAgentLaunchResourceOperations({ db: db }),
+    const t2 = await launchAgentTaskViaParticipant(
+      createTestTaskExecutionLaunchParticipant({
+        db,
+        appHome,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        completionMode: 'background',
+      }),
+      db,
       daemonActor(),
       agentId,
       BODY({ expectedAgentId: agentId }),
-      {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        integrity: agentResourceIntegrity(db),
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      },
     )
     expect(t2.sourceAgentId).toBe(agentId)
 
     // Relaunch carrying a STALE id (the delete+recreate-same-name ABA the guard
     // exists to close) → 409, and no ghost task row is minted.
     await expect(
-      startAgentTask(
-        composeAgentLaunchResourceOperations({ db: db }),
+      launchAgentTaskViaParticipant(
+        createTestTaskExecutionLaunchParticipant({
+          db,
+          appHome,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          completionMode: 'background',
+        }),
+        db,
         daemonActor(),
         agentId,
         BODY({ expectedAgentId: 'stale-other-id' }),
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          integrity: agentResourceIntegrity(db),
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
       ),
     ).rejects.toMatchObject({ code: 'agent-id-mismatch' })
     expect((await db.select().from(tasks)).length).toBe(2)

@@ -162,7 +162,14 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 一批源码文本锁改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 记的命名债）。
   // 于是「PG 侧引用数」涨的其实是「共用实现被引用的次数」。真正的处置是把那两个文件改成中立名，
   // 不是往 SQLite 那侧硬凑用例——SQLite 侧剩下的只是一层委托壳。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 6/3, postgresql 16/3',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑧）：`6/3, 16/3 → 7/3, 17/3`，**两侧同步 +1，倒挂差额不变**。
+  // 新增的那条引用来自 `tests/helpers/participantLaunch.ts`——它是这次把
+  // `startAgentTask` / `startWorkgroupTask` 的测试调用点迁到启动参与者时加的测试助手，
+  // 两侧的模块名都被它提到（它装的是 SQLite 组合根那条拼法、造的是共用的那台参与者）。
+  // 同一笔里 PG 侧再 +1：`rfc287-t13-preset-task-id` 的源码锁改锚到内核的
+  // `workspace.prepare(...)`（`materializeSpace` 的 agent / multipart 两个调用点都随函数删除了）。
+  // 仍是**命名债的读数**——共用实现还叫 `postgresql*`（§5hj）。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 7/3, postgresql 18/3',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
@@ -231,7 +238,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次二 ④）：5 vs 11 → 5 vs 12，差额 6 → 7。**记账，不是倾斜**：
   // 多出来的那一条引用是兼容债账本里的一次文件名提及（见上一格的注释），不是新判据。
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：5 vs 12 → 6 vs 16，来源见上（命名债的读数）。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 6 vs 16',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑧）：6 vs 16 → 7 vs 17，**差额不变**（两侧同步 +1）。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 7 vs 18',
   // 新入名单，同样是命名债的读数：共用的那条 multipart 编排（`launchMultipartTask`）住在
   // `postgresqlTaskRouteOperations.ts` 里，改锚过去的几条源码锁都提到了它。
   'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 14',

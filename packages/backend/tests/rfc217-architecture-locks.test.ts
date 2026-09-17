@@ -213,7 +213,9 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       // **RFC-359 AC-1（plan §5hn 批次二 ⑤）3 → 1：那个函数整份删除，棘轮收敛。**
       // 子任务启动合一之后它的唯一生产消费者（SQLite 那层 87 行转发壳）没了，
       // 两个引擎共用的铸造机自带 `prepareWorkgroupSubject`——冻结启动面不再有第二份实现。
-      'launch.ts': 1,
+      // **RFC-359 AC-1（plan §5hn 批次二 ⑧）1 → 0：整行出账。** `startWorkgroupTask` 也删了
+      //（门面退役后生产零消费者，测试侧调用点已迁到启动参与者），`launch.ts` 只剩合成宿主快照
+      // 与运行期配置，一个 `mode === '` 分支都没有。
       // RFC-359 W4-D19b：房间合一，legacy 的 configActions / room / dwActions 一起退役；
       // 它们的模式分支落到中立房间的这两个文件里，继续按同一把棘轮记账。
       'infrastructure/workgroupTaskRoom.ts': 2,

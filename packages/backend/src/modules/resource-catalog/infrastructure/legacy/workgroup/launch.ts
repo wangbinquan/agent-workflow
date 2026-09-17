@@ -18,35 +18,22 @@
 // (fusion precedent): assertWorkflowLaunchable would 403 the builtin host,
 // which is exactly the point — route-level launches cannot target it.
 
+// RFC-359 AC-1（plan §5hn 批次二 ⑧）：`startWorkgroupTask` 整份删除——它是 legacy 启动路的
+// 工作组入口，门面（`services/execution/executor.ts`）退役后生产零消费者。工作组启动现在只有
+// 一条：启动参与者的工作组臂 → 根启动内核（两个引擎共用）。本文件剩下的是**合成宿主快照**与
+// 运行期配置那几件事，启动路与测试都还在用。
 import {
-  applySpaceFields,
-  initialDwState,
   resolveWorkgroupOutputContract,
   serializeWorkflowDefinitionStorageV1,
-  StartTaskSchema,
-  workgroupLaunchReadiness,
   WorkgroupRuntimeConfigSchema,
-  type LaunchSpaceFields,
-  type StartWorkgroupTask,
-  type Task,
   type Workgroup,
   type WorkgroupRuntimeConfig,
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import { buildClarifyEdges } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
-import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
-import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, workflows } from '@/db/schema'
+import { workflows } from '@/db/schema'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
-import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
-import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
-import { startTask, type StartTaskDeps } from '@/services/task'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import { assertAgentResourceIntegrity } from '../../../application/agents/agentResourceIntegrity'
-import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
 // fix). Re-exported here for existing test-side importers only; PRODUCTION
@@ -195,161 +182,4 @@ export function resolveWorkgroupCollaborators(
     .filter((m) => m.memberType === 'human' && m.userId !== null)
     .map((m) => m.userId as string)
   return [...new Set([...(explicit ?? []), ...humanUserIds])]
-}
-
-/**
- * Launch a workgroup task. ACL: the launcher must be able to VIEW the group
- * (missing and invisible are the identical 404, D1); the member-agent closure
- * is implicitly authorized (RFC-099 D3 — same rule as workflow launches).
- * Readiness (≥1 agent member; lw has a designated leader) is enforced HERE,
- * not at save time (决策 #21).
- */
-export async function startWorkgroupTask(
-  db: ProviderNeutralDatabase,
-  actor: Actor,
-  workgroupId: string,
-  input: StartWorkgroupTask,
-  deps: StartTaskDeps,
-): Promise<Task> {
-  const resourceInventory = composeDatabaseAgentResourceInventorySource({
-    db,
-    authorization: composeResourceCatalogFor({ db }).authorization,
-  })
-  const group = await getWorkgroupById(db, workgroupId)
-  if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
-    throw new NotFoundError('workgroup-not-found', 'workgroup not found')
-  }
-
-  // RFC-175 (§2b/§2d-1) / RFC-223 PR-7: the route target is already the
-  // canonical id. Keep the body fence for relaunch OCC, comparing id-to-id
-  // after the ACL-404 gate so private existence still cannot leak.
-  if (input.expectedWorkgroupId !== undefined && group.id !== input.expectedWorkgroupId) {
-    throw new ConflictError(
-      'workgroup-id-mismatch',
-      `workgroup '${group.name}' is not the expected resource`,
-    )
-  }
-  if (
-    input.expectedWorkgroupVersion !== undefined &&
-    group.version !== input.expectedWorkgroupVersion
-  ) {
-    throw staleConflictError(
-      'workgroup',
-      `workgroup '${group.name}' changed during launch (expected v${input.expectedWorkgroupVersion}, now v${group.version})`,
-      { expectedVersion: input.expectedWorkgroupVersion, currentVersion: group.version },
-    )
-  }
-
-  const memberAgentIds = group.members.flatMap((member) =>
-    member.memberType === 'agent' && typeof member.agentId === 'string' && member.agentId.length > 0
-      ? [member.agentId]
-      : [],
-  )
-
-  const readiness = workgroupLaunchReadiness(group)
-  if (!readiness.ready) {
-    throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
-      reasons: readiness.reasons,
-    })
-  }
-
-  // Save-time leniency lets a roster survive an agent deletion, but launch must
-  // fail before task/worktree materialization. Keep this as the established
-  // workgroup-readiness surface; RFC-228's agent-resources-invalid is reserved
-  // for a present roster Agent whose own resource closure is broken.
-  //
-  // RFC-223 (PR-2): validate the roster by CANONICAL agent id (frozen at save,
-  // beside the display name). This makes a member survive a rename (the id is
-  // stable, no rename guard shields a workgroup member) and refuses to silently
-  // bind a delete+recreate-same-name replacement (ABA).
-  const agentMembers = group.members.filter((m) => m.memberType === 'agent')
-  const existingAgentIds =
-    memberAgentIds.length === 0
-      ? new Set<string>()
-      : new Set(
-          (
-            await db
-              .select({ id: agents.id })
-              .from(agents)
-              .where(inArray(agents.id, [...new Set(memberAgentIds)]))
-          ).map((row) => row.id),
-        )
-  const missingAgentNames = [
-    ...new Set(
-      agentMembers
-        .filter((m) => typeof m.agentId !== 'string' || !existingAgentIds.has(m.agentId))
-        .map((m) => m.agentName ?? '(unnamed)'),
-    ),
-  ]
-  if (missingAgentNames.length > 0) {
-    throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
-      reasons: ['agent-missing'],
-      missingAgentNames,
-    })
-  }
-
-  // RFC-224: resolve every canonical roster member through the same
-  // RFC-228: the roster gate above proves that every member Agent row exists;
-  // this proves that each member's full resource closure is executable. Still
-  // before host seeding, snapshot/state construction, worktree, task or messages.
-  await assertAgentResourceIntegrity(resourceInventory, memberAgentIds)
-
-  // PR-5 (T24): human members auto-join as task collaborators (proposal 目标 6).
-  const collaboratorUserIds = resolveWorkgroupCollaborators(
-    input.collaboratorUserIds,
-    group.members,
-  )
-
-  const config = buildWorkgroupRuntimeConfig(group, input.goal)
-  // RFC-167: a dynamic_workflow group launches into the GENERATE phase — the
-  // snapshot is a single built-in orchestrator node (swapped for the generated
-  // DAG on human confirm), and the config carries the `dw` state slot beside
-  // the runtime config (the lw `gate` free-slot pattern). Turn-engine modes
-  // keep the three-node chatroom host snapshot.
-  const isDynamic = group.mode === 'dynamic_workflow'
-  const snapshot = isDynamic
-    ? buildDynamicWorkflowGenerateSnapshot()
-    : buildWorkgroupHostSnapshot(config)
-  // RFC-217 T2 — the config column is a PURE frozen config again; the dw
-  // checkpoint seeds workgroup_task_state via startTaskImpl (same tx).
-  const configJson = JSON.stringify(config)
-
-  // Compose the full StartTask candidate and validate through StartTaskSchema
-  // so repo-source cross-field rules stay single-sourced (schemas/task.ts).
-  // Space fields (RFC-165 modern set: repoUrl+ref / repos[] / scratch) go
-  // through applySpaceFields — the ONE assembly point every launch face
-  // shares, so adding a space field can't silently skip this endpoint. The
-  // cast is safe: StartWorkgroupTaskSchema keeps repos[] shape-lenient and
-  // the composed candidate is deep-validated by StartTaskSchema right below.
-  const candidate = applySpaceFields(
-    {
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-      name: input.name,
-      inputs: {},
-      ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
-      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-      ...(input.autoCommitPush !== undefined ? { autoCommitPush: input.autoCommitPush } : {}),
-      ...(input.maxDurationMs !== undefined ? { maxDurationMs: input.maxDurationMs } : {}),
-      ...(input.maxTotalTokens !== undefined ? { maxTotalTokens: input.maxTotalTokens } : {}),
-    },
-    input as LaunchSpaceFields,
-  )
-  const parsed = StartTaskSchema.safeParse(candidate)
-  if (!parsed.success) {
-    throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {
-      issues: parsed.error.issues,
-    })
-  }
-
-  await ensureWorkgroupHostWorkflow(db)
-
-  return startTask(parsed.data, {
-    ...deps,
-    workgroupLaunch: {
-      workgroupId: group.id,
-      configJson,
-      snapshotJson: JSON.stringify(snapshot),
-      ...(isDynamic ? { dw: initialDwState() } : {}),
-    },
-  })
 }

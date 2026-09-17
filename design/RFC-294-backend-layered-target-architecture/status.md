@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:16bd0c8813f1c29cbdb8b26d1b8aac394abdbd0b72c6541eb718b9b57d761e4b`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -21,7 +21,7 @@
 | background work entries | 331 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 77 |
-| RFC-317 boundary census（inbound / outbound） | 253 / 33 |
+| RFC-317 boundary census（inbound / outbound） | 252 / 33 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4589 |
+| `architectureExceptions` | 4578 |
 | `backgroundJobs` | 331 |
-| `crossContextImports` | 5104 |
+| `crossContextImports` | 5092 |
 | `facades` | 313 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24702 |
-| `mutationEntrypoints` | 1679 |
+| `moduleSymbolOwners` | 24700 |
+| `mutationEntrypoints` | 1677 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 959 |
 | `transactionExternalEffects` | 252 |
@@ -200,9 +200,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3034 |
-| legacy-inbound | 1364 |
-| infrastructure-external | 270 |
+| legacy-outbound | 3025 |
+| legacy-inbound | 1362 |
+| infrastructure-external | 269 |
 | offered-consumption | 158 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 88 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3034 |
-| legacy-inbound | 1364 |
+| legacy-outbound | 3025 |
+| legacy-inbound | 1362 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 88 |
 | no-circular | 6 |
@@ -227,10 +227,10 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2321 |
-| W4-E1 | 810 |
-| W4-C | 329 |
-| W4-E0 | 214 |
+| W9 | 2316 |
+| W4-E1 | 807 |
+| W4-C | 327 |
+| W4-E0 | 213 |
 | W4 | 193 |
 | W4-B | 180 |
 | W5 | 156 |

@@ -61,8 +61,6 @@
       "boundaryEdgeIds": [
         "import:4ad3f50179cff7aa33f0",
         "import:53ce8948bff36de4678f",
-        "import:64bd93c7a02b214b4eb3",
-        "import:857a748504f953ff3221",
         "import:a342655508b7f614a6ad",
         "import:d2fb75dde1420b8062e0",
         "import:e0c76c91d5c98f3f80ca"
@@ -75,7 +73,6 @@
         "AGENT_HOST_WORKFLOW_ID",
         "AGENT_HOST_WORKFLOW_NAME",
         "buildAgentHostSnapshot",
-        "startAgentTask",
         "validateAgentLaunchShape"
       ],
       "file": "packages/backend/src/services/agentLaunch.ts",
@@ -2697,8 +2694,7 @@
         "import:685e672ce99d6e4eec52",
         "import:7a1c1471fd64f9545158",
         "import:c0d63379327c1e3691a3",
-        "import:ee67eabc272206d3d912",
-        "import:fbe249de1bfb4c5d1d0e"
+        "import:ee67eabc272206d3d912"
       ],
       "exportedSymbols": [
         "DW_ORCHESTRATOR_NODE_ID",
@@ -5435,7 +5431,6 @@
         "import:78bda158c8e1258eea34",
         "import:799ae0a4f3877e45f9f2",
         "import:7ec17b34194429ad862d",
-        "import:8862334246eab6027866",
         "import:8b24b24e5abf279646e4",
         "import:8c4ac449d9754e21ddec",
         "import:8d868818826de17ee1d8",
@@ -5463,7 +5458,6 @@
         "import:c85c6809159c9f65d090",
         "import:c920441e58d6c83f5086",
         "import:cf5f570227949209b5ec",
-        "import:d0fe58770dbe785de5b4",
         "import:d3878ef3405d8ba0d432",
         "import:d40458411935c8508bf4",
         "import:de17d18a53431aaefb1a",
@@ -6556,5 +6550,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7"
+  "sourceDigest": "sha256:16bd0c8813f1c29cbdb8b26d1b8aac394abdbd0b72c6541eb718b9b57d761e4b"
 }

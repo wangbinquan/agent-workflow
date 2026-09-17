@@ -16087,3 +16087,47 @@ ACL 门、删除竞态）。正确做法是**把调用点迁到参与者**：加
 两份账本已经因此读出假信号（`rfc359-w5-t19d` 的「倒挂加深」、`rfc359-w5-inverted-pairs` 的
 新入名单），plan 与账本注释都已写明「这是命名债的读数，不是倾斜」。
 改中立名是一刀纯改名，收益是让那两份账本重新说真话。
+
+## §5hn 批次二 ⑧ 落地　`startAgentTask` / `startWorkgroupTask` 也退役——legacy 启动服务清零
+
+门面退役（批次二 ⑦）之后这两个 legacy 启动服务**生产零消费者**。本刀把它们的**测试调用点
+迁到启动参与者**，再删函数。
+
+| 函数 | 删掉的行数 | 迁走的调用点 |
+| --- | --- | --- |
+| `startAgentTask`（`services/agentLaunch.ts`） | 195 | 11（2 个文件） |
+| `startWorkgroupTask`（`.../legacy/workgroup/launch.ts`） | 157 | 8（6 个文件） |
+
+两个文件剩下的都是**还在用的东西**：合成宿主快照、启动表单校验（`validateAgentLaunchShape`）、
+运行期配置构造、`ensureWorkgroupHostWorkflow`。
+
+### 迁移用的测试助手：`tests/helpers/participantLaunch.ts`
+
+按 `composeTestChildLaunchWorkgroup` 的样子从 `db` 装出**生产同形**的启动参与者，
+并给出与旧签名等价的两个调用面。三处刻意说明：
+
+1. **鉴权句柄**不能走 `directAuthority.authorityForLegacyProjection(actor)`——那一条按**对象
+   同一性**认凭据边缘铸出来的 actor，测试里 `buildActor` 造的 actor 会当场抛
+   `foreign-legacy-actor-projection`。走 `contexts.fromAuthenticatedPrincipal`，
+   与 `integrationTriggerResourceAuthority` 同一条路。
+2. `resourceAuthorityFor` 交一个**会当场炸**的实现——它只被路由包装读，本 helper 不装路由；
+   交个静默占位就等于允许将来有人从那条路走进来。
+3. `completionMode` 是旧调用面上 `awaitScheduler: true` 的对应物，缺省 `await-settle`；
+   只断言「返回的那一行」的用例显式传 `background`（否则一条毫秒级用例会涨到 25 秒）。
+
+### 迁移照出的一处**入口能力差**（是强化，不是回归）
+
+根启动内核要为非系统 actor 解析 **Git 提交身份**（用户存在、active、有 `email`、`gitName`
+非空），而 `startAgentTask` / `startWorkgroupTask` **不看这些**。于是好几个套件的夹具原本
+只建半行用户、甚至不建用户也能启动。
+
+处置是把夹具改成**生产形状**（无条件建一行带 `email` / `gitName` 的用户），不是放宽内核：
+生产上的用户本来就有这几格，旧入口宽容的是**它自己不写 git 身份**这件事。
+
+### 账本（全是收敛）
+
+| 账本 | 变化 |
+| --- | --- |
+| `rfc301` 的 `startTask` 调用点 | `services/agentLaunch.ts`(3) 与 `workgroup/launch.ts`(1) **两行整行出账** |
+| `rfc217` G5 的 `mode === '` 散射面 | `launch.ts` 1 → **整行出账**（一个分支都没有了） |
+| `rfc359-w5-t19d` | 两侧各 +1（新 helper 提到两侧模块名，差额不变），PG 侧再 +1（`rfc287-t13` 源码锁改锚到内核）——仍是**命名债的读数** |

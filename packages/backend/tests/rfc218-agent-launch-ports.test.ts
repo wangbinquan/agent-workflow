@@ -42,12 +42,13 @@ import {
   AGENT_HOST_AGENT_NODE_ID,
   AGENT_HOST_WORKFLOW_ID,
   buildAgentHostSnapshot,
-  startAgentTask,
   validateAgentLaunchShape,
 } from '../src/services/agentLaunch'
-import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
-import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import {
+  createTestTaskExecutionLaunchParticipant,
+  launchAgentTaskViaParticipant,
+} from './helpers/participantLaunch'
+import { users } from '../src/db/schema'
 import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
@@ -87,18 +88,30 @@ const PORTS = [
   { name: 'style_guide', kind: 'string', required: false },
 ] as const
 
+async function seedLaunchUser(db: DbClient): Promise<void> {
+  // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
+  // （用户存在、active、有 email、gitName 非空），旧的 `startAgentTask` 不看这些。
+  await db
+    .insert(users)
+    .values({
+      id: 'u-admin',
+      username: 'admin',
+      displayName: 'A',
+      email: 'admin@example.test',
+      gitName: 'A',
+      role: 'admin',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    .onConflictDoNothing()
+}
+
 function daemonActor(): Actor {
   return buildActor({
     user: { id: 'u-admin', username: 'admin', displayName: 'A', role: 'admin', status: 'active' },
     source: 'daemon',
   })
-}
-
-function agentResourceIntegrity(db: DbClient) {
-  return composeDatabaseAgentResourceIntegrity({
-    db,
-    authorization: composeResourceCatalogFor({ db }).authorization,
-  }).launch
 }
 
 let cleanupDirs: string[] = []
@@ -336,19 +349,22 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       inputs: { report: 'weekly {{report}} literal', style_guide: 'terse' },
       scratch: true,
     })
-    const task = await startAgentTask(
-      composeAgentLaunchResourceOperations({ db: db }),
+    await seedLaunchUser(db)
+    // RFC-359 AC-1（plan §5hn 批次二 ⑧）：改走**生产那条路**——启动参与者的单代理臂 → 根内核。
+    const task = await launchAgentTaskViaParticipant(
+      createTestTaskExecutionLaunchParticipant({
+        db,
+        appHome,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        // 本用例只断言**返回的那一行**（端口值 / 快照），不需要等驱动跑完——
+        // 旧调用面也没传 `awaitScheduler`。等它会让用例从毫秒级涨到 25 秒。
+        completionMode: 'background',
+      }),
+      db,
       daemonActor(),
       ported.id,
       body,
-      {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        integrity: agentResourceIntegrity(db),
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      },
     )
     expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
     expect(task.sourceAgentName).toBe('ported')
@@ -365,19 +381,21 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
     await seedValidOpencodeRuntime(db)
     const appHome = makeTempDir('aw-rfc218-b4z-')
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    const task = await startAgentTask(
-      composeAgentLaunchResourceOperations({ db: db }),
+    await seedLaunchUser(db)
+    const task = await launchAgentTaskViaParticipant(
+      createTestTaskExecutionLaunchParticipant({
+        db,
+        appHome,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        // 本用例只断言**返回的那一行**（端口值 / 快照），不需要等驱动跑完——
+        // 旧调用面也没传 `awaitScheduler`。等它会让用例从毫秒级涨到 25 秒。
+        completionMode: 'background',
+      }),
+      db,
       daemonActor(),
       solo.id,
       StartAgentTaskSchema.parse({ name: 't', description: 'fix it', scratch: true }),
-      {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        integrity: agentResourceIntegrity(db),
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      },
     )
     expect(task.inputs.description).toBe('fix it')
   })

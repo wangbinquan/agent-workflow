@@ -26,7 +26,10 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resumeTask } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+import {
+  createTestTaskExecutionLaunchParticipant,
+  launchWorkgroupTaskViaParticipant,
+} from './helpers/participantLaunch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
@@ -96,22 +99,26 @@ async function seedGroup(
 ): Promise<string> {
   const leadAgentId = await seedAgent(db, 'wg-lead')
   const writerAgentId = await seedAgent(db, 'wg-writer')
-  if (opts.withHuman) {
-    // The human member must resolve to an ACTIVE user — createWorkgroup rejects a
-    // roster pointing at a missing/inactive one (workgroups.ts assertHumanMembersActive).
-    await db
-      .insert(users)
-      .values({
-        id: 'u-e2e',
-        username: 'e2e',
-        displayName: 'e2e',
-        role: 'admin',
-        status: 'active',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      .onConflictDoNothing()
-  }
+  // RFC-359 AC-1（plan §5hn 批次二 ⑧）：**这一行现在无条件建**，并且带上 `email` / `gitName`。
+  // 原因是启动路换了：根启动内核要为非系统 actor 解析 **Git 提交身份**
+  //（`getUserGitCommitIdentity`：用户存在、active、有 email、gitName 非空），
+  // 而旧的 `startWorkgroupTask` 不看这些。这不是夹具将就实现——生产上的用户本来就有这几格，
+  // 旧入口宽容的是**它自己不写 git 身份**这件事。
+  // 人类成员那一条原因照旧：`createWorkgroup` 会拒绝指向缺失 / 非 active 用户的花名册。
+  await db
+    .insert(users)
+    .values({
+      id: 'u-e2e',
+      username: 'e2e',
+      displayName: 'e2e',
+      email: 'e2e@example.test',
+      gitName: 'e2e',
+      role: 'admin',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    .onConflictDoNothing()
   const group = await createWorkgroup(db, {
     name,
     description: '',
@@ -160,21 +167,22 @@ const CLARIFY = {
 }
 
 async function launch(h: Harness, workgroupId: string) {
-  return startWorkgroupTask(
-    h.db,
-    actor,
-    workgroupId,
-    { name: 'e2e', goal: '产出 alpha', scratch: true },
-    {
-      db: h.db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-        .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: opencodeCmd(),
-      awaitScheduler: true,
-      launchProvenance: { kind: 'direct-json', initiator: 'api' },
-    },
-  )
+  // RFC-359 AC-1（plan §5hn 批次二 ⑧）：改走**生产那条路**——启动参与者的工作组臂 → 根启动内核。
+  // 此前这里调 `startWorkgroupTask`，而门面退役后那个函数在生产上一个调用方都没有了：
+  // 测一个没人跑的入口，等于让这条 e2e 在生产坏掉时照样绿。
+  // `launchProvenance` 不再由调用方交——来源现在由内核从 invoker 算（`rootLaunchMetadata`）；
+  // `awaitScheduler: true` 的对应物是协调器的 `completionMode: 'await-settle'`（helper 缺省值）。
+  const participant = createTestTaskExecutionLaunchParticipant({
+    db: h.db,
+    appHome: h.appHome,
+    schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' }).schedulerDriver,
+    runConfig: { binaryOverride: opencodeCmd() },
+  })
+  return launchWorkgroupTaskViaParticipant(participant, h.db, actor, workgroupId, {
+    name: 'e2e',
+    goal: '产出 alpha',
+    scratch: true,
+  })
 }
 
 const leaderRunCount = async (db: DbClient, taskId: string): Promise<number> =>
