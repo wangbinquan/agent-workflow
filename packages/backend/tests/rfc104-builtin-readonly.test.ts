@@ -699,10 +699,32 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
     expect(snapshotAdapter).toContain("dependencies.assertNotBuiltin('workflow', row)")
     expect(tasksSrc).toContain('operations.launchWorkflow(actor, parsed.data)')
     expect(tasksSrc).toContain('operations.launchMultipart(c.req.raw, actorOf(c))')
-    const orchSrc = readFileSync(resolve(SRC, 'services', 'multipartTaskStart.ts'), 'utf-8')
-    expect(
-      (orchSrc.match(/assertWorkflowSnapshotLaunchable\(/g) ?? []).length,
-    ).toBeGreaterThanOrEqual(1)
+    // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：`services/multipartTaskStart.ts` 整份删除。
+    // 它那道 `assertWorkflowSnapshotLaunchable`（= 带候选的启动期静态校验）现在由**共用的
+    // 启动编排**做——multipart 路由把冻结快照 / 版本围栏 / 静态校验 / 启动输入契约整串
+    // 交给启动参与者，内置工作流在冻结资源快照那一步就被 `assertNotBuiltin` 挡住。
+    const sharedMultipart = readFileSync(
+      resolve(
+        SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteOperations.ts',
+      ),
+      'utf-8',
+    )
+    expect(sharedMultipart).toContain('dependencies.launches.launch(')
+    const participant = readFileSync(
+      resolve(
+        SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteLaunchOperations.ts',
+      ),
+      'utf-8',
+    )
+    expect((participant.match(/validateHostWorkflow\(/g) ?? []).length).toBeGreaterThanOrEqual(1)
     const taskRouteOperations = readFileSync(
       resolve(SRC, 'modules', 'task-execution', 'infrastructure', 'sqliteTaskRouteOperations.ts'),
       'utf-8',

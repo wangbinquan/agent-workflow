@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1776,
+    "backendFiles": 1773,
     "frontendFiles": 622,
-    "legacyFiles": 594,
+    "legacyFiles": 591,
     "moduleFiles": 1182,
-    "productionFiles": 2553,
+    "productionFiles": 2550,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24713
+    "symbolsIncludingFileRoots": 24702
   },
   "entries": [
     {
@@ -162941,90 +162941,6 @@
       "currentContext": "legacy",
       "currentLayer": "services",
       "exported": false,
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "owner:packages/backend/src/services/execution/executor.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "owner:packages/backend/src/services/execution/executor.ts#cancelExecution",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "cancelExecution",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "owner:packages/backend/src/services/execution/executor.ts#depsForInvoker",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "depsForInvoker",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "owner:packages/backend/src/services/execution/executor.ts#startExecution",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "startExecution",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "owner:packages/backend/src/services/execution/executor.ts#StartExecutionDeps",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "StartExecutionDeps",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "owner:packages/backend/src/services/execution/executor.ts#WatchExecutionResult",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "WatchExecutionResult",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "owner:packages/backend/src/services/execution/executor.ts#watchExecutionTerminal",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "watchExecutionTerminal",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
       "file": "packages/backend/src/services/execution/inventoryObservation.ts",
       "id": "owner:packages/backend/src/services/execution/inventoryObservation.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -168659,42 +168575,6 @@
       "status": "legacy-target",
       "symbol": "ResolvedPathState",
       "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/multipartTaskStart.ts",
-      "id": "owner:packages/backend/src/services/multipartTaskStart.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/multipartTaskStart.ts",
-      "id": "owner:packages/backend/src/services/multipartTaskStart.ts#handleMultipartTaskStart",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "handleMultipartTaskStart",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/multipartTaskStart.ts",
-      "id": "owner:packages/backend/src/services/multipartTaskStart.ts#MultipartLaunchDeps",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "MultipartLaunchDeps",
-      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -191119,18 +190999,6 @@
       "exported": false,
       "file": "packages/backend/src/services/workgroup/constants.ts",
       "id": "owner:packages/backend/src/services/workgroup/constants.ts#$file",
-      "removeAfterWave": "W4-C",
-      "status": "legacy-target",
-      "symbol": "$file",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/workgroup/launch.ts",
-      "id": "owner:packages/backend/src/services/workgroup/launch.ts#$file",
       "removeAfterWave": "W4-C",
       "status": "legacy-target",
       "symbol": "$file",
@@ -297233,5 +297101,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:171d5f9a24d5f578f9430fe8cab7d4c2d58f3acc1fa380acdea532f949cff8ea"
+  "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7"
 }

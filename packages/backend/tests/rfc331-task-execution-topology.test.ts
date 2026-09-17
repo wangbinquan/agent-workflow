@@ -34,7 +34,8 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   'packages/backend/src/routes/tasks.ts',
   'packages/backend/src/services/autoRepair.ts',
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
-  'packages/backend/src/services/multipartTaskStart.ts',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）：`services/multipartTaskStart.ts` 整份删除——
+  // multipart 路由改走与 PostgreSQL 共用的启动参与者，这个 legacy 消费者随之出账。
   'packages/backend/src/services/scheduler.ts',
   'packages/backend/src/services/startTaskDeps.ts',
   'packages/backend/src/services/structuralDiff/callGraph/expandService.ts',

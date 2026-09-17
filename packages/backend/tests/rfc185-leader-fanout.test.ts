@@ -44,7 +44,7 @@ import {
   buildWorkgroupRuntimeConfig,
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
-} from '../src/services/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import {
   createWorkgroup,
   getWorkgroupById,

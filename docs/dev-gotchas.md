@@ -7798,3 +7798,18 @@ PostgreSQL 侧留 NULL、被 `parseLineage` 兜底成 `workflowRevision: null`�
 
 同一条教训的更一般形式已经在本文件另有条目（「验证跑的时候别改源码」）——这里是它在
 **测试树文本**上的变体：改的是注释，看起来最人畜无害，却直接改了判据的输入。
+
+## `bun run format:check` 是**全仓**的，只 `prettier --check <改过的文件>` 会漏（2026-09-17 推红一次）
+
+本地自查的建议写法是「只对本次改动的文件跑 prettier / eslint」。这条建议有个**顺序陷阱**：
+跑完之后又编辑了那个文件，那次自查就作废了——而 eslint / tsc 会照样绿，
+因为它们不看格式。
+
+实撞：删掉三个不再使用的 import 之后只跑了 eslint 与 tsc，留下一个只剩单项的多行 import
+（`import {\n  parseMultipartLaunch,\n} from ...`）。CI 的
+`Lint + Typecheck + Format + Shared + system mock tests` 那格红在 `format:check`。
+
+**判据**：把 `bunx prettier --write <改过的文件>` 放在**提交前的最后一步**，
+在所有 python / sed / 手改之后。成本是秒级。同一天还撞过它的兄弟形态——
+按文本数引用的棘轮（见上一条「按测试文件**文本**计数的棘轮」），
+两者的通用形式是一句话：**任何以「文件当前内容」为输入的判据，都必须在最后一次编辑之后再跑**。

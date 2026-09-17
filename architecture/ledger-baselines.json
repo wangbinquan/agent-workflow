@@ -307,8 +307,8 @@
       "id": "rfc345-resource-acl-facade-compatibility",
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 38,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。 RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 W57：`/api/overview` 两侧收成一份，SQLite 专属的 `platform/persistence/sqlite/systemOverviewReadModel.ts` 整份删除，它对 `services/resourceAcl.ts` 的那条兼容边（`AclColumnRef` / `visibleRowsCondition`）随之出账，41→40。 RFC-359 AC-1（plan §5hl）40 → 39：`services/agent.ts → digitalEmployeeExecution.ts` 那条边销账——数字员工执行的两份 composer 合一后，Agent 查询改成装配方交进来的 `agents` 端口，composer 自己不再 import `getAgentById`。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ④）39 → 40：启动输入契约补到共用的启动参与者上（此前只长在 `services/task.ts` 的 `startTask` 那一侧，**PostgreSQL 从来没执行过**——同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。`postgresqlTaskRouteLaunchOperations.ts` 由此成为该门面的第 6 个消费者，形态与 W8-A 逐字相同：**同一个符号**（`assertWorkflowLaunchInputs`）、**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把 PG 侧这条契约缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 AC-1（plan §5hn 批次二 ⑤）40 → 39：`services/workgroup/launch.ts → sqliteChildExecutionLaunchOperations.ts` 那条边销账——子任务启动两个引擎合一，SQLite 那半 87 行转发壳整份删除，`startWorkgroupTaskFromFrozen` 的唯一生产消费者随之归零，该函数（87 行）也一并删除。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ⑥）39 → 38：`postgresqlTaskRouteOperations.ts` 那条边销账——multipart 路由改走共用的启动参与者之后，它不再自己跑启动输入契约（那道门在参与者的工作流臂上，带 `ignoreUploadInputs`），该 import 随之删除。"
+      "baseline": 35,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。 RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 W57：`/api/overview` 两侧收成一份，SQLite 专属的 `platform/persistence/sqlite/systemOverviewReadModel.ts` 整份删除，它对 `services/resourceAcl.ts` 的那条兼容边（`AclColumnRef` / `visibleRowsCondition`）随之出账，41→40。 RFC-359 AC-1（plan §5hl）40 → 39：`services/agent.ts → digitalEmployeeExecution.ts` 那条边销账——数字员工执行的两份 composer 合一后，Agent 查询改成装配方交进来的 `agents` 端口，composer 自己不再 import `getAgentById`。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ④）39 → 40：启动输入契约补到共用的启动参与者上（此前只长在 `services/task.ts` 的 `startTask` 那一侧，**PostgreSQL 从来没执行过**——同一个缺必填的启动，SQLite 422、PG 201 照跑，必填项当空串执行）。`postgresqlTaskRouteLaunchOperations.ts` 由此成为该门面的第 6 个消费者，形态与 W8-A 逐字相同：**同一个符号**（`assertWorkflowLaunchInputs`）、**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把 PG 侧这条契约缺口留着不补」——那正是本 RFC 要消灭的东西。 RFC-359 AC-1（plan §5hn 批次二 ⑤）40 → 39：`services/workgroup/launch.ts → sqliteChildExecutionLaunchOperations.ts` 那条边销账——子任务启动两个引擎合一，SQLite 那半 87 行转发壳整份删除，`startWorkgroupTaskFromFrozen` 的唯一生产消费者随之归零，该函数（87 行）也一并删除。债是还掉的，不是挪走的。 RFC-359 AC-1（plan §5hn 批次二 ⑥）39 → 38：`postgresqlTaskRouteOperations.ts` 那条边销账——multipart 路由改走共用的启动参与者之后，它不再自己跑启动输入契约（那道门在参与者的工作流臂上，带 `ignoreUploadInputs`），该 import 随之删除。 RFC-359 AC-1（plan §5hn 批次二 ⑦）38 → 35：`services/multipartTaskStart.ts` 与`services/execution/executor.ts` 两个文件整份删除——multipart 路由改走共用的启动参与者，「统一执行门面」的 `startExecution` 是启动编排的第二份写法、生产消费者归零。随之出账的三条边：workflow.validator→multipart、workflowLaunchInputs→multipart、workgroup/launch→executor。债是还掉的，不是挪走的。"
     },
     {
       "id": "rfc348-teaching-frontend-allowlist",
@@ -405,8 +405,11 @@
       "id": "rfc359-w5-inverted-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
-      "baseline": 4,
-      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。"
+      "baseline": 5,
+      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。 RFC-359 AC-1（plan §5hn 批次二 ⑦）4 → 5：`TaskRouteOperations` 入名单。**这一条是命名债的读数，不是新的倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除后，一批源码文本锁改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 的命名债）。真正的处置是把那两个文件改成中立名，不是往 SQLite 那侧硬凑用例。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（plan §5hn 批次二 ⑦）4 → 5：`TaskRouteOperations` 入深度倒挂名单。**命名债的读数，不是新的倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除后，一批源码文本锁改锚到了共用实现上，而共用实现此刻还叫 `postgresql*`（§5hj）。处置是把那两个文件改成中立名（单独一刀），不是往 SQLite 那侧硬凑用例。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc359-w5-name-collision-definition-drift",
@@ -531,8 +534,8 @@
       "id": "rfc359-w5-test-engine-open-migration-debt",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "OPEN_MIGRATION_DEBT",
-      "baseline": 14,
-      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件。RFC-359 AC-6（plan §5ek）53 → 52：`workflows` 销账。RFC-359 AC-6（plan §5el）52 → 44：第四波再迁 7 个文件 RFC-359 AC-6（2026-09-15）27 → 26：`rfc097-task-status-cas.test.ts` 真迁完成。迁移里唯一要重新设计的是 CAS 竞态怎么造——原来代理 `db.run`/`db.transaction` 同步插竞争写者，依赖 bun:sqlite 同步落库，PG 上会静默退化成「没有并发」；改用 helper 自己的 `beforeCas` 注入点（SELECT 与 CAS 之间、被 await、两引擎都成立）。变异验证：删掉生产里那句 `await args.beforeCas?.()` ⇒ 两个引擎的竞态用例共 4 格红。 同日 26 → 25：`rfc291-closure-call-edges.test.ts` 真迁完成——卡住它的是 `freezeCallClosure(db: DbClient)` 这个**残留品牌标注**（全模块零 `.get()`/`.run()`/`dbTxSync`，函数体本来就中立），形参放宽到 `ProviderNeutralDatabase` 即解，零生产调用点需要改。9 例 → 17 例。 同日 25 → 24：`rfc349-websocket-provider.test.ts` 真迁——它不是 AC-1 的成对适配器，而是**一份中立实现（`DrizzleRealtimeStore(db: ProviderNeutralDatabase)`）被喂了两种库**：一条真 SQLite、一条回放罐头行的假池并断言发出的 SQL 文本。合成一条双引擎跑真库后，丢掉的只有那组 SQL 文本断言——**净赚**：真 PG 上跑通是对「投影带 schema 限定名」强得多的证明（写错当场报错）。5 例 → 7 例。 RFC-359 AC-6（plan §5gd）24 → 23：`rfc189-wg-round` 移出债务、进 sanctioned——它测的是**迁移 0095 的回填口径**，必须把库停在那条迁移之前（`partialMigrationsDir()` 截断 journal）。原来的 `migration-chain` 判据按**文件名**匹配（`migration-\\d`），而这个文件叫 `rfc189-wg-round`，做的是迁移对账、名字里却没有 migration——按文件名分类分到的是「谁起的名字好」。新判据 `frozen-migration-revision` 改按 **call shape** 认：建库喂的不是规范迁移目录，而是被截断/冻结过的副本。 RFC-359 AC-6（plan §5gj）23 → 22：`rfc310-pr7b-handover.test.ts` 真迁完成（同上一条）。 RFC-359 AC-6（plan §5gk）22 → 19：§5gi 留下的三个「没就近说明」的文件逐个读完，各自落进一条**新加的通用判据**（不是为它们量身定做的豁免）。`rfc329-mcp-surface-guard` 与 `rfc305-architecture-lock` 进 `provider-independent-route-registry`——它们装应用只为拿模块级路由注册表那张「路由 → 权限」表，库是脚手架；而「那张表与引擎无关」这件事从此**有判据钉着**：新守卫 `rfc359-w5-composition-root-route-surface` 把两个组合根都装出来逐字比过（连 tokenAccess 与权限集合），结论相等。`rfc349-daemon-provider-core` 进 `provider-pair-covered-by-name`——它一条用例驱动 `composeSqliteDaemonProviderCore`、紧挨着一条驱动 `composePostgresqlDaemonProviderCore`，两个引擎都验了，只是两半断言的是不同的事（谁拥有客户端生命周期），塞进同一个 harness 反而要靠 `capabilities` 分叉回去。该判据按**配对**认（同一个 X 的两半都出现），特意没放宽成「出现任意 `composeSqlite*(`」——那样会一口气划掉 6 个债务文件，而只有这一个真的两半都覆盖。 RFC-359 AC-6（plan §5gm）19 → 16：又三条**本来就在文件里写明了理由、只是没有判据认领**的重判进 sanctioned。`rfc311-repos-page` / `rfc311-task-page-fastpath` 进 `sqlite-plan-vocabulary`——它们的判据文本是 `EXPLAIN QUERY PLAN` 的 detail 列（`TEMP B-TREE` / 索引名）加 SQLite 的 `?` 占位符，PostgreSQL 的 `EXPLAIN` 是另一套词汇，换引擎后锁的不是同一件事；要给 PG 补同类守卫走 `harness.explain()`，那本来就该是另一条判据。`rfc291-unavailable-mount` 进 `sync-client-fault-injection`——它的**被测代码是中立的**（同文件的双引擎格已经两个引擎各跑过），单引擎的是**注入机制**：用 `Proxy` 包住客户端在同步 `select` 拦截器里当场改库，PG 上 `.run()` 只返回没人 await 的 Promise，改与读之间没有定序，判据会退化成掷骰子。写这两条时踩到判据本身的坑：`codeOnly` 按 token 重拼并补空格，`includes('xxx(')` 只会碰巧命中字符串字面量里的那一份、漏掉真正的调用点——四条新判据统一改成带 `\\s*` 的正则。 RFC-359 AC-6（plan §5gn）16 → 15：`rfc349-execution-peripheral-provider.test.ts` 真迁完成（同上一条）。 RFC-359 AC-1（plan §5gt）15 → 14：`rfc221-login-policy-routes` 销账（同上一条）。"
+      "baseline": 13,
+      "why": "RFC-359 W5：上一条总账里**没有任何机械正当理由**留在单引擎的那一部分——真正的「还没迁」。总账把「还没迁」与「按裁决就该单引擎」（迁移链自身 / SQLite 执行引擎 / `new Database(` 开真实文件 / `$client`·PRAGMA·dbTxSync 这类独有原语）混在一个数字里，谁都答不出「这一行是债还是本来就这样」。这一条只数债，是唯一需要往下压的数字。。RFC-359（plan §5dy）94 → 92：同上，那两份单引擎判据退役。RFC-359 AC-6（plan §5ej）72 → 63：第二波并行迁移 9 个文件转双引擎。RFC-359 AC-6（plan §5ek）63 → 53：第三波再迁 10 个文件。RFC-359 AC-6（plan §5ek）53 → 52：`workflows` 销账。RFC-359 AC-6（plan §5el）52 → 44：第四波再迁 7 个文件 RFC-359 AC-6（2026-09-15）27 → 26：`rfc097-task-status-cas.test.ts` 真迁完成。迁移里唯一要重新设计的是 CAS 竞态怎么造——原来代理 `db.run`/`db.transaction` 同步插竞争写者，依赖 bun:sqlite 同步落库，PG 上会静默退化成「没有并发」；改用 helper 自己的 `beforeCas` 注入点（SELECT 与 CAS 之间、被 await、两引擎都成立）。变异验证：删掉生产里那句 `await args.beforeCas?.()` ⇒ 两个引擎的竞态用例共 4 格红。 同日 26 → 25：`rfc291-closure-call-edges.test.ts` 真迁完成——卡住它的是 `freezeCallClosure(db: DbClient)` 这个**残留品牌标注**（全模块零 `.get()`/`.run()`/`dbTxSync`，函数体本来就中立），形参放宽到 `ProviderNeutralDatabase` 即解，零生产调用点需要改。9 例 → 17 例。 同日 25 → 24：`rfc349-websocket-provider.test.ts` 真迁——它不是 AC-1 的成对适配器，而是**一份中立实现（`DrizzleRealtimeStore(db: ProviderNeutralDatabase)`）被喂了两种库**：一条真 SQLite、一条回放罐头行的假池并断言发出的 SQL 文本。合成一条双引擎跑真库后，丢掉的只有那组 SQL 文本断言——**净赚**：真 PG 上跑通是对「投影带 schema 限定名」强得多的证明（写错当场报错）。5 例 → 7 例。 RFC-359 AC-6（plan §5gd）24 → 23：`rfc189-wg-round` 移出债务、进 sanctioned——它测的是**迁移 0095 的回填口径**，必须把库停在那条迁移之前（`partialMigrationsDir()` 截断 journal）。原来的 `migration-chain` 判据按**文件名**匹配（`migration-\\d`），而这个文件叫 `rfc189-wg-round`，做的是迁移对账、名字里却没有 migration——按文件名分类分到的是「谁起的名字好」。新判据 `frozen-migration-revision` 改按 **call shape** 认：建库喂的不是规范迁移目录，而是被截断/冻结过的副本。 RFC-359 AC-6（plan §5gj）23 → 22：`rfc310-pr7b-handover.test.ts` 真迁完成（同上一条）。 RFC-359 AC-6（plan §5gk）22 → 19：§5gi 留下的三个「没就近说明」的文件逐个读完，各自落进一条**新加的通用判据**（不是为它们量身定做的豁免）。`rfc329-mcp-surface-guard` 与 `rfc305-architecture-lock` 进 `provider-independent-route-registry`——它们装应用只为拿模块级路由注册表那张「路由 → 权限」表，库是脚手架；而「那张表与引擎无关」这件事从此**有判据钉着**：新守卫 `rfc359-w5-composition-root-route-surface` 把两个组合根都装出来逐字比过（连 tokenAccess 与权限集合），结论相等。`rfc349-daemon-provider-core` 进 `provider-pair-covered-by-name`——它一条用例驱动 `composeSqliteDaemonProviderCore`、紧挨着一条驱动 `composePostgresqlDaemonProviderCore`，两个引擎都验了，只是两半断言的是不同的事（谁拥有客户端生命周期），塞进同一个 harness 反而要靠 `capabilities` 分叉回去。该判据按**配对**认（同一个 X 的两半都出现），特意没放宽成「出现任意 `composeSqlite*(`」——那样会一口气划掉 6 个债务文件，而只有这一个真的两半都覆盖。 RFC-359 AC-6（plan §5gm）19 → 16：又三条**本来就在文件里写明了理由、只是没有判据认领**的重判进 sanctioned。`rfc311-repos-page` / `rfc311-task-page-fastpath` 进 `sqlite-plan-vocabulary`——它们的判据文本是 `EXPLAIN QUERY PLAN` 的 detail 列（`TEMP B-TREE` / 索引名）加 SQLite 的 `?` 占位符，PostgreSQL 的 `EXPLAIN` 是另一套词汇，换引擎后锁的不是同一件事；要给 PG 补同类守卫走 `harness.explain()`，那本来就该是另一条判据。`rfc291-unavailable-mount` 进 `sync-client-fault-injection`——它的**被测代码是中立的**（同文件的双引擎格已经两个引擎各跑过），单引擎的是**注入机制**：用 `Proxy` 包住客户端在同步 `select` 拦截器里当场改库，PG 上 `.run()` 只返回没人 await 的 Promise，改与读之间没有定序，判据会退化成掷骰子。写这两条时踩到判据本身的坑：`codeOnly` 按 token 重拼并补空格，`includes('xxx(')` 只会碰巧命中字符串字面量里的那一份、漏掉真正的调用点——四条新判据统一改成带 `\\s*` 的正则。 RFC-359 AC-6（plan §5gn）16 → 15：`rfc349-execution-peripheral-provider.test.ts` 真迁完成（同上一条）。 RFC-359 AC-1（plan §5gt）15 → 14：`rfc221-login-policy-routes` 销账（同上一条）。 RFC-359 AC-1（plan §5hn 批次二 ⑦）14 → 13：`rfc268-webhook-scratch-launch.test.ts` 转为 sanctioned（`sqlite-execution-engine`）——不是迁移发生了，而是它一直属于那一类、只是被 `services/execution/executor.ts` 那层转交式门面挡住了判据的视线。门面删除后判据才看见它真正驱动的引擎。"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -804,7 +807,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1682,
+      "baseline": 1679,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -839,7 +842,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5110,
+      "baseline": 5104,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -860,14 +863,14 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4595,
+      "baseline": 4589,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 316,
+      "baseline": 313,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
@@ -895,15 +898,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24713,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ⑥）24712 → 24713：multipart 启动的编排提成两个引擎共用的具名出口——`launchMultipartTask` + 它收窄过的 `TaskRouteMultipartLaunchDependencies`（库句柄 / 启动参与者 / 鉴权句柄工厂三格），替掉原来那个私有的 `launchMultipart`，净 +1。换来的是「冻结快照 → 版本围栏 → 静态校验 → 启动输入契约 → 根内核」只剩一份：此前 multipart 那条手拼了第二份，于是每补一道门就得记得补两处（批次二 ④ 的启动输入契约、批次二 ⑥ 的候选上下文，两次都是只补了一处才被基线照出来）。下一笔删 `services/multipartTaskStart.ts` 与 `startExecution`，符号数会大幅下降，届时即删本豁免。"
-      }
+      "baseline": 24702,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:171d5f9a24d5f578f9430fe8cab7d4c2d58f3acc1fa380acdea532f949cff8ea",
+    "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -916,8 +916,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "63a1493ba24319d355fbe6d674fb8b6f59525d79",
-    "contentDigest": "sha256:a91d266767ba0c29afeeba56197f04bb7ebc3ee37f07706a8db92e8b808facb4",
+    "currentSnapshotSha": "9cd72ce246bd18e02223970d92933c1ed705fbfc",
+    "contentDigest": "sha256:9f4e9e41d597176acee71b140300cc3374e973ace2267bcccae45c64e099f50d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

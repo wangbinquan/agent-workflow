@@ -103,7 +103,9 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
     expect(publicParticipants).toContain(
       'assertUsable(input: GetAgentResourceClosureStatusInput): Promise<void>',
     )
-    for (const consumer of ['services/agentLaunch.ts', 'services/execution/executor.ts']) {
+    // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 整份删除
+    //（统一执行门面退役），这条负锁只剩 `agentLaunch.ts` 一个消费者。
+    for (const consumer of ['services/agentLaunch.ts']) {
       expect(source(consumer), consumer).not.toContain(
         '@/modules/resource-catalog/application/agents/ports',
       )

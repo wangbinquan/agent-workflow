@@ -144,14 +144,20 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
 
   test('provider-neutral task routes delegate launch config to the SQLite operation adapter', () => {
     expect(routesSrc).not.toContain('resolveLaunchRuntimeConfig(')
-    const orch = readFileSync(
-      join(import.meta.dir, '../src/services/multipartTaskStart.ts'),
+    // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）**改锚**：multipart 编排体
+    // （`services/multipartTaskStart.ts`）整份删除——那条路由改走与 PostgreSQL 共用的启动
+    // 参与者 → 根启动内核。原来那四条断言锁的是「编排体自己解析一次启动配置、并把同一份
+    // 依赖交给两条交接」，等价的新形状是：**内核从 `dependencies.configPath` 解析上传上限，
+    // 路由一个字都不自解析**。
+    const kernel = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
+      ),
       'utf8',
     )
-    expect((orch.match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []).length).toBe(1)
-    expect((orch.match(/\.\.\.launchRuntime/g) ?? []).length).toBe(1)
-    expect((orch.match(/\.\.\.resolvedRouteLaunchDeps/g) ?? []).length).toBe(2)
-    expect(orch).toContain('materializeSpace(startInput, resolvedRouteLaunchDeps, appHome)')
+    expect(kernel).toContain('resolveUploadLimits(dependencies.configPath)')
+    expect(routesSrc).not.toContain('resolveUploadLimits(')
     // T25 后路由侧不再持有 launchRuntime spread（三处全随编排体走）。
     expect(routesSrc.includes('...launchRuntime')).toBe(false)
     const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')

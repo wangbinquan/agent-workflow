@@ -26,18 +26,21 @@ describe('RFC-287 T13 — materializeSpace 的 taskId 可由调用方预定', ()
     expect(SRC).toContain('?? ulid()')
   })
 
-  test('三条现存调用路径都还在，且都没被迫改签名', () => {
-    // materializeSpace 有三个调用点：JSON 启动（task.ts 自身）、multipart、
-    // agent 启动。本刀是纯增量——后两者一个字都不用动。
-    const multipart = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'multipartTaskStart.ts'),
-      'utf8',
-    )
+  test('现存调用路径都还在，且都没被迫改签名', () => {
+    // materializeSpace 原本有三个调用点：JSON 启动（task.ts 自身）、multipart、agent 启动。
+    // **RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）：multipart 那个调用点没有了**——
+    // 那条路由改走与 PostgreSQL 共用的启动参与者 → 根启动内核，工作区物化由内核的
+    // `workspace.prepare(...)` 做，`services/multipartTaskStart.ts` 整份删除。
+    // 本刀（预置 taskId）是纯增量这件事没变，只是剩下两个调用点。
     const agentLaunch = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'agentLaunch.ts'),
       'utf8',
     )
-    expect(multipart).toContain('materializeSpace(')
     expect(agentLaunch).toContain('materializeSpace(')
+    const taskService = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
+      'utf8',
+    )
+    expect(taskService).toContain('materializeSpace(')
   })
 })

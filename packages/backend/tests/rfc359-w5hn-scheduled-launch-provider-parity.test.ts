@@ -24,7 +24,7 @@ import { tasks } from '@/db/schema'
 import { comparableTaskRow } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { WORKGROUP_HOST_WORKFLOW_ID } from '@/services/workgroup/launch'
+import { WORKGROUP_HOST_WORKFLOW_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
 const TOKEN = 'e'.repeat(64)
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const

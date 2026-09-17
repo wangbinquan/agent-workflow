@@ -23,7 +23,10 @@ import {
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
+import {
+  WG_LEADER_NODE_ID,
+  WG_MEMBER_NODE_ID,
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {

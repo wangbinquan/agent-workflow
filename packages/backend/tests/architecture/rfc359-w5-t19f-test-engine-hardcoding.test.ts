@@ -751,7 +751,12 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   'execution-contract-platform.test.ts',
   'helpers/rfc310Pr3Fixture.ts',
   'rfc257-webhook-error-codes.test.ts',
-  'rfc268-webhook-scratch-launch.test.ts',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`rfc268-webhook-scratch-launch.test.ts` **转为
+  // sanctioned**（`sqlite-execution-engine` 那一类），不是迁移发生了，而是**它一直就属于那一类、
+  // 只是被一层门面挡住了**：它原本从 `services/execution/executor.ts` 取 `cancelExecution`，
+  // 而那个门面只是 `cancelTask` 的一行转交。门面整份删除、改直接 import `services/task` 之后，
+  // 判据才看见它真正驱动的是 SQLite 那台执行引擎。
+  // **记一条判据教训**：转交式门面会让「这条测试依赖哪台引擎」这类源码判据失明。
   'rfc269-webhook-code-host-context-e2e.test.ts',
   'rfc349-digital-employee-platform-tools-wiring.test.ts',
   'rfc349-dual-provider-behavior-oracle.test.ts',

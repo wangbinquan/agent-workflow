@@ -40,7 +40,7 @@ import {
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createApp } from '../src/server'
-import { cancelExecution } from '../src/services/execution/executor'
+import { cancelTask } from '../src/services/task'
 import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
 import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
 import { getTask, isTaskActive } from '../src/services/task'
@@ -362,7 +362,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
         return row?.status === 'running' && isTaskActive(taskId) ? true : null
       }, `${one.space} task driver`)
       if (one.terminal === 'canceled') {
-        await cancelExecution(db, taskId)
+        await cancelTask(db, taskId)
       } else {
         await setTaskStatus({
           db,

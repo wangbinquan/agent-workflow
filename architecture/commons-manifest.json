@@ -258,21 +258,19 @@
       ]
     },
     {
-      "id": "startexecution-projectexecutionoutcome",
-      "title": "startExecution / projectExecutionOutcome",
+      "id": "projectexecutionoutcome",
+      "title": "projectExecutionOutcome",
       "owner": "task-execution",
       "layer": "engine",
       "core": true,
       "files": [
-        "packages/backend/src/services/execution/executor.ts",
         "packages/backend/src/services/execution/outcome.ts"
       ],
-      "singleSourceOf": "The one task-level start choke point and the one 'what did this task produce' projection across workflow/agent/workgroup/code-round.",
-      "claimAudit": "Dispatch is compile-time exhaustive (`const unhandled: never = kind`, outcome.ts:265-271) \u2014 the approved pattern. But the projection reaches directly into one domain's table and service (see EK-07).",
+      "singleSourceOf": "The one 'what did this task produce' projection across workflow/agent/workgroup/code-round. RFC-359 AC-1 (plan section 5hn batch 2 step 7): the task-level start choke point (startExecution, services/execution/executor.ts) was deleted - it was the second orchestration of task launch; the single launch choke point is now the launch participant -> root launch kernel, shared by both database engines.",
+      "claimAudit": "Dispatch is compile-time exhaustive (`const unhandled: never = kind`, outcome.ts:265-271) - the approved pattern. But the projection reaches directly into one domain's table and service (see EK-07).",
       "auditedBy": "execution-kernel",
       "guards": [],
       "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/services/execution/executor.ts#$file",
         "owner:packages/backend/src/services/execution/outcome.ts#$file"
       ]
     },
@@ -1397,13 +1395,13 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:171d5f9a24d5f578f9430fe8cab7d4c2d58f3acc1fa380acdea532f949cff8ea",
+    "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "63a1493ba24319d355fbe6d674fb8b6f59525d79",
-    "contentDigest": "sha256:b3c49c23f4ff81d2013646d6a648170d97f9916ac35dbcd9ac7bff38d1ada383",
+    "currentSnapshotSha": "9cd72ce246bd18e02223970d92933c1ed705fbfc",
+    "contentDigest": "sha256:4b6e04c33247147c2214348c4c29aa03ea0f003a1a7ed5e95a7ccd67b7ee80d4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

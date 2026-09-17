@@ -23,7 +23,7 @@ import {
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { tasks, workflows } from '@/db/schema'
-import { getExecutionOutcome } from '@/services/execution/executor'
+import { getExecutionOutcome } from '@/services/execution/outcome'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { initialBuiltinResourceAcl } from '@/services/resourceAcl'
 import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'

@@ -903,32 +903,43 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
 })
 
 // ---------------------------------------------------------------------------
-// Source anchor — the lift must not silently regress: the old path-mode-only
-// throw is gone, and BOTH startTask handoffs consume the SAME materialized
-// space. RFC-165 (F3) superseded the preResolvedSource/preCreatedWorktree
-// pair with `materializedSpace` — resolve-exactly-once now lives inside
-// services/task.ts `materializeSpace`, and the route hands its tagged result
-// (success OR earlyError) to startTask verbatim, so neither handoff can
-// re-resolve or re-materialize.
+// Source anchor —— 这一抬起来的能力不能悄悄退回去：老那条「只支持本地 repoPath」的硬拒
+// 已经没有了，而**成功与 earlyError 两条交接消费的是同一份物化空间**。
+//
+// **RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚**：编排主体从
+// `services/multipartTaskStart.ts` 迁到了**根启动内核**——那条路由改走与 PostgreSQL 共用的
+// 启动参与者，`multipartTaskStart.ts` 整份删除。全部原断言原样作用于新址：内核里
+// `workspace.prepare(...)` 一次物化，成功那支写上传物 + 回填 `inputs[]`，
+// `earlyError` 那支跳过写盘直接落一行 failed 任务——**同一份 `preparedWorkspace`**。
+// 路由侧仍然保持零自解析（负锁两文件同断）。
 // ---------------------------------------------------------------------------
 describe('RFC-107 — source anchors', () => {
-  test('route no longer hard-refuses url uploads, and hands the materialized space to both handoffs', () => {
-    // RFC-284 T25 改锚：multipart 编排主体迁 services/multipartTaskStart.ts——
-    // 全部原断言原样作用于新址；路由侧保持零自解析（负锁两文件同断）。
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'multipartTaskStart.ts'),
+  test('route no longer hard-refuses url uploads, and both handoffs consume one materialized space', () => {
+    const kernel = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteLaunchOperations.ts',
+      ),
       'utf8',
     )
     const routeSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'),
       'utf8',
     )
-    expect(src).not.toContain('multipart uploads currently require launching with a local repoPath')
-    expect(src).not.toContain('if (startInput.repoUrl) {')
-    // success + earlyError handoffs both consume the one materialized space —
-    // and the orchestration must NOT re-resolve on its own anymore.
-    expect(src.split('materializedSpace: space').length - 1).toBe(2)
-    for (const s of [src, routeSrc]) {
+    expect(kernel).not.toContain(
+      'multipart uploads currently require launching with a local repoPath',
+    )
+    expect(kernel).not.toContain('if (startInput.repoUrl) {')
+    // 一次物化、两条交接：写上传物那支与 earlyError 那支读的都是同一个 `preparedWorkspace`，
+    // 内核**不得**自己再解析一次。
+    expect(kernel).toContain('const preparedWorkspace = await (')
+    expect((kernel.match(/preparedWorkspace\.earlyError/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    for (const s of [kernel, routeSrc]) {
       expect(s).not.toContain('preResolvedSource: resolvedSource')
       expect(s).not.toContain('resolveRepoSourceSingle(')
     }

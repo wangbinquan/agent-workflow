@@ -36,7 +36,7 @@ import {
   runWorkgroupTurns as runWorkgroupEngine,
   type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
 } from './helpers/workgroupTurns'
-import { buildWorkgroupHostSnapshot } from '../src/services/workgroup/launch'
+import { buildWorkgroupHostSnapshot } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

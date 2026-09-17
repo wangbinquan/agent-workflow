@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 316,
-    "thinFacades": 67
+    "serviceFiles": 313,
+    "thinFacades": 66
   },
   "entries": [
     {
@@ -1263,28 +1263,6 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [
-        "import:523be4dc38479c9b1844",
-        "import:ab23dfa3c61b1425a759",
-        "import:e3b380ad30fe58f65bb9",
-        "import:fd48b4c52f42414794fe"
-      ],
-      "exportedSymbols": [
-        "StartExecutionDeps",
-        "WatchExecutionResult",
-        "cancelExecution",
-        "startExecution",
-        "watchExecutionTerminal"
-      ],
-      "file": "packages/backend/src/services/execution/executor.ts",
-      "id": "facade:packages/backend/src/services/execution/executor.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/execution/executor.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
         "buildRuntimeInventoryObservation"
@@ -1370,6 +1348,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:148d118e73019f550feb",
         "import:72afd3b4982302788fd3",
         "import:e901e9ea1cfbded62e4c",
         "import:eca01bcba382fb2d12cf"
@@ -2509,23 +2488,6 @@
       "removeAfterWave": "W4-C",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:62f92a1725e7d433c0cf",
-        "import:823d0a8f93ee6eb04b30"
-      ],
-      "exportedSymbols": [
-        "MultipartLaunchDeps",
-        "handleMultipartTaskStart"
-      ],
-      "file": "packages/backend/src/services/multipartTaskStart.ts",
-      "id": "facade:packages/backend/src/services/multipartTaskStart.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/multipartTaskStart.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
-      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -6512,19 +6474,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:c2ecc6cdeae12eaf3f88"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/workgroup/launch.ts",
-      "id": "facade:packages/backend/src/services/workgroup/launch.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/workgroup/launch.ts#$file",
-      "removeAfterWave": "W4-C",
-      "status": "thin-facade",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:c4d2548fbbb20a04aee5"
       ],
       "exportedSymbols": [],
@@ -6607,5 +6556,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:171d5f9a24d5f578f9430fe8cab7d4c2d58f3acc1fa380acdea532f949cff8ea"
+  "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7"
 }

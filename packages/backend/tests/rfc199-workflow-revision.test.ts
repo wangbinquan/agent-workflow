@@ -35,7 +35,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import {
   ensureWorkgroupHostWorkflow,
   WORKGROUP_HOST_WORKFLOW_ID,
-} from '../src/services/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import {
   resetBroadcastersForTests,
   WORKFLOWS_CHANNEL,

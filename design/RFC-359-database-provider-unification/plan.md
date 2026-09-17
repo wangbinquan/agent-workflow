@@ -15976,3 +15976,86 @@ PG 把 `uploads: {parts, definitions, limits}` 整包交给根内核，由内核
 **源码文本锁**改锚（它们都指着 `multipartTaskStart.ts`：`rfc103-launch-config-passthrough`
 的启动配置透传、`rfc107` 的 source anchors、`rfc287-t13-preset-task-id`），
 并把 `startExecution` / `cancelExecution` 的**测试**消费者迁到参与者上。
+
+## §5hn 批次二 ⑦ 落地　`startExecution` 从生产退役——启动编排只剩一份
+
+`services/execution/executor.ts`（RFC-243 的「统一执行门面」）与
+`services/multipartTaskStart.ts` **整份删除**。前者的核心 `startExecution` 是**启动编排的
+第二份写法**——同一个 workflow / agent / workgroup 三分支 switch，只是终端转
+`startTask` / `startAgentTask` / `startWorkgroupTask`；后者是它在生产上的最后一个调用方。
+
+**唯一的启动编排现在是：启动参与者（`createPostgresqlTaskExecutionLaunchParticipant`）
+→ 根启动内核，两个引擎共用。**
+
+### 顺带退役的三样
+
+| 退役物 | 为什么 |
+| --- | --- |
+| `cancelExecution` | 一行转交 `cancelTask`，三个测试消费者改直调 |
+| `watchExecutionTerminal` | **生产消费者一直是零**，只有测试用——挪进 `tests/helpers/executionTerminal.ts` |
+| `services/workgroup/launch.ts` | 门面的唯一生产消费者就是被删的 `executor.ts`；`rfc345` 守卫当场报「零生产消费者必须退役」。30 个测试的 import 改指 canonical 路径 |
+
+### 测试侧的迁移（不是删覆盖）
+
+- **`tests/helpers/webhookTaskExecution.ts` 重写**：它原本自己调 `startExecution` 拼了一份
+  webhook 参与者——生产早已换成 `createTaskExecutionTriggerParticipant({ launches, cancellation })`，
+  于是那三条 webhook e2e 测的是一个**生产已经不用的形状**（生产坏掉它照样绿）。
+  现在逐格复刻 `server.ts` 的 `taskRouteLaunchDependencies`，终端同一台根内核；形参一个字没动。
+- **`rfc269-webhook-trigger-context-atomicity`**：改直调 `startTask`，invoker → deps 的映射
+  （原 `depsForInvoker`）搬进该文件并写明它在生产上的对应物是内核的 `rootLaunchMetadata`。
+  其中**第 ④ 条 attempt 退役**：「调用方预置 `launchProvenance`」→ `task-launch-provenance-conflict`
+  是门面自己的守卫，删除后该冲突**结构上不可能**（内核没有这一格，`startTask` 那条路调用方
+  只传 provenance 不传 invoker）。那个错误码本身没消失——它在 `startTask` 里守的是
+  「子任务不得携带根来源」，由 `rfc301-task-launch-origin-inheritance` 锁着。
+- **`rfc243-executor-facade`**：三类锁里第 3 类（`startExecution` 守卫）改锚——
+  ref/payload 一致性守卫**原样活着**（参与者三个臂各自第一行的 `execution-ref-mismatch`），
+  改测它；`node` invoker 的 fail-closed **由类型承担**（参与者的 target 联合里没有 node 形状，
+  子任务走另一条带 5 道准入门的入口），删除那条测不到东西的断言。
+  「executor.ts 是唯一能同时调三个启动服务的模块」改成「**启动参与者一个都不 import**」。
+
+### 七处源码文本锁改锚
+
+`rfc103`（启动配置透传）、`rfc104`（内置只读守卫）、`rfc107`（source anchors）、
+`rfc165`（raw-key 门）、`rfc287-t13`（`materializeSpace` 调用点）、`rfc301`（车道声明 + `startTask`
+调用点 + initiator 映射）、`rfc331`（legacy 消费者名单）、`rfc345`（两处）、`rfc305`（identity-access
+消费者名单）、`scheduler-subagent-live-capture`（旋钮解析处）。每一条都写明了新锚点与理由。
+
+### 账本
+
+| 账本 | 变化 |
+| --- | --- |
+| `rfc345-resource-acl-facade-compatibility` | 38 → 35（三条边随两个文件删除出账） |
+| `rfc301` 的 `startTask` 调用点 | `services/execution/executor.ts` 那一行删除 |
+| `rfc294-canonical-manifests` 的 facade 清单 | `services/workgroup/launch.ts` 出账 |
+| `architecture/commons-manifest.json` | 内核 `startexecution-projectexecutionoutcome` → `projectexecutionoutcome`，只剩 `outcome.ts` |
+| `rfc359-w5-test-engine-open-migration-debt` | 14 → 13（见下） |
+| `rfc359-w5-inverted-pairs` | 4 → 5（见下，一次性 allowGrowth） |
+| `rfc359-w5-t19d` 的两对 | PG 侧 ref 涨（见下） |
+
+**两条读数要单独说明，它们都不是「倾斜加深」**：
+
+1. `rfc268-webhook-scratch-launch.test.ts` 从 open 债转为 sanctioned（`sqlite-execution-engine`）
+   ——**不是迁移发生了**，而是它一直属于那一类、只是被门面挡住了判据的视线：它原本从
+   `executor.ts` 取 `cancelExecution`，而那只是 `cancelTask` 的一行转交。
+   **判据教训：转交式门面会让「这条测试依赖哪台引擎」这类源码判据失明。**
+2. `TaskRouteLaunchOperations` / `TaskRouteOperations` 的 PG 侧引用数上涨，是因为一批源码锁
+   改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 的命名债）。
+   真正的处置是把那两个文件改成中立名，单独一刀。
+
+### 记一条待办：内核那条路的「提交边界」还没有显式判据
+
+`rfc269` 那条用例锁的是「归属与触发上下文必须写在**首次 INSERT** 里」，它靠
+`startTask` 的 `workflowLaunchCommitHook` 观察。内核没有等价钩子，所以那条判据留在
+`startTask` 这一侧；内核那条路上同一个不变量是**结构性**的（所有字段同一条 INSERT，
+提交之后才 `coordinator.submit`），由几条行级基线间接覆盖。
+要做成显式判据，办法是**注入一个在 `submit` 里回读任务行的协调器**——单独一刀。
+
+### 记一条未定性的观察：`rfc164-workgroup-engine` 在 CI 上间歇红
+
+`9cd72ce24` 的 CI（run 35187604870）`ubuntu shard 12/12` 红在
+`RFC-164 engine — free_collab orchestration [postgresql] > initial burst …`：
+`requests` 期望 4、实际 3。本机同一条 PG lane **连跑 8 次全绿**（73 pass × 8），
+同一份代码在 `63a1493ba` 的 CI 上也是绿的。
+**没有定性为 flaky——按仓规不允许「重跑就过了」**：这里只记录观察与证据，
+下一次 CI 若复现就按真缺陷追（它测的是 free_collab 的去重 + 认领轮次，
+「4 变 3」意味着有一轮认领没发生，值得从 PG 的可见性 / 提交时序查起）。

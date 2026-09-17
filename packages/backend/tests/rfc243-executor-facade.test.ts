@@ -1,16 +1,19 @@
-// RFC-243 PR-1 — unified executor facade locks.
+// RFC-243 PR-1 — 启动调用面 / 引擎分派 / 终态守望的源码锁。
 //
-// Locks in (design.md §1.1/§1.2/§1.4):
+// **RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 整份删除。**
+// 那个「统一执行门面」的核心 `startExecution` 是**启动编排的第二份写法**——同一个
+// workflow / agent / workgroup 三分支 switch，只是终端转 `startTask` / `startAgentTask` /
+// `startWorkgroupTask`。两个引擎的启动路合一之后，唯一的编排是启动参与者
+//（`createPostgresqlTaskExecutionLaunchParticipant`）→ 根启动内核，门面的生产消费者归零。
+//
+// 本文件因此只剩三类锁（原第 1、2、4 类），第 3 类按下面各自的注释重新落位：
 //   1. Source-text: the launch call faces (routes/tasks.ts incl. the
 //      multipart handoff, routes/agents.ts, routes/workgroups.ts,
-//      services/scheduleLaunch.ts) go through a required closed launch port
-//      (or the remaining compatibility executor) and never call startTask /
-//      startAgentTask / startWorkgroupTask directly again.
+//      webhookDispatchRuntime.ts) go through a required closed launch port and
+//      never call startTask / startAgentTask / startWorkgroupTask directly.
 //   2. resolveTaskEngine — the engine fork extracted from scheduler.ts is
 //      byte-equal to the pre-RFC-243 inline decision (RFC-164/167/217
 //      semantics).
-//   3. startExecution guards: workflow ref/payload id mismatch fails loudly;
-//      the `node` invoker is fail-closed until RFC-243 PR-3/4.
 //   4. executionWatch: immediate resolve for already-terminal rows; multicast
 //      resolve from the lifecycle write path for ALL FOUR terminal statuses
 //      (failed/interrupted included — the single-slot RFC-202 hook only fires
@@ -26,16 +29,14 @@ import { tasks, workflows } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
 import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
-import { startExecution } from '../src/services/execution/executor'
+import { createPostgresqlTaskExecutionLaunchParticipant } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
 import {
   notifyTaskTerminal,
   resetTaskTerminalWatchersForTests,
   watchTaskTerminal,
 } from '../src/services/execution/executionWatch'
-import { ValidationError } from '../src/util/errors'
 import type { Actor } from '../src/auth/actor'
 import type { TaskStatus } from '@agent-workflow/shared'
-import type { StartTaskDeps } from '../src/services/task'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -74,21 +75,31 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
         expect(text).toContain('operations.launchMultipart')
         expect(text).toContain('operations.launchWorkflow')
         expect(text).not.toContain('startExecution')
-      } else if (rel.includes('webhookDispatchRuntime')) {
+      } else {
+        expect(rel.includes('webhookDispatchRuntime')).toBe(true)
         expect(text).toContain('createWebhookExecutionRuntime')
         expect(text).toContain('taskExecutions: input.taskExecutions')
-        expect(text).not.toContain('startExecution')
-      } else {
-        expect(text).toContain(`startExecution`)
       }
+      // RFC-359 AC-1（plan §5hn 批次二 ⑦）：门面删除之后**没有任何调用面**允许提到它。
+      // 此前这里还有一条 `else` 分支要求「其余调用面必须转 `startExecution`」——
+      // 那条分支的最后一个成员（`services/scheduleLaunch.ts`）在批次二 ①② 就删了。
+      expect(text).not.toContain('startExecution')
     })
   }
 
-  test('executor.ts is the only module allowed to call all three launch services', () => {
-    const text = srcText('services/execution/executor.ts')
-    expect(text).toContain('startTask(')
-    expect(text).toContain('startAgentTask(')
-    expect(text).toContain('startWorkgroupTask(')
+  // RFC-359 AC-1（plan §5hn 批次二 ⑦）**改锚**：此前这条锁的是「`executor.ts` 是唯一允许
+  // 同时调三个启动服务的模块」。那个文件已整份删除——它的存在本身就是第二份编排。
+  // 这条锁的意图（**启动编排只有一处**）改由下面这条承担：三个 legacy 启动服务
+  // 在生产里已经没有任何「同时调用它们」的模块，启动参与者一个都不 import。
+  test('启动参与者不 import 任何 legacy 启动服务——编排只有一处', () => {
+    const text = srcText(
+      'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
+    )
+    for (const legacy of ['startTask', 'startAgentTask', 'startWorkgroupTask']) {
+      expect(new RegExp(`\\b${legacy}\\(`).test(text), `${legacy} 不该出现在启动参与者里`).toBe(
+        false,
+      )
+    }
   })
 
   test('call 分支纪律：不持任何节点池名额；adoption 区零 mint（实现门 P2-4 源锁）', () => {
@@ -158,47 +169,34 @@ describe('RFC-243 T3 — resolveTaskEngine (extracted fork, byte-equal semantics
   })
 })
 
-describe('RFC-243 T1 — startExecution guards', () => {
-  // guard paths throw before any db/actor/deps use — safe minimal stubs.
-  const stubDb = null as unknown as StartTaskDeps['db']
+describe('RFC-359 AC-1 —— 启动参与者继承了门面的 ref/payload 一致性守卫', () => {
+  // RFC-359 AC-1（plan §5hn 批次二 ⑦）**改锚**：原本这一段测的是 `startExecution` 的两条守卫。
+  // 门面整份删除之后：
+  //
+  //   · **ref/payload 不一致** —— 守卫**原样活着**，落在启动参与者三个臂各自的第一行
+  //     （`execution-ref-mismatch`）。这里改测它；桩依赖照旧——守卫在任何库 / 鉴权访问之前抛。
+  //   · **`node` invoker 必须 fail-closed** —— 这条**由类型承担**，不再需要运行期守卫：
+  //     参与者的 `target` 联合类型里压根没有 node 形状，子任务走的是另一条有自己准入门的入口
+  //     （`ChildExecutionLaunchOperations`，5 道亲子准入由 `rfc359-w8-child-launch-conformance`
+  //     双引擎锁着）。删除，而不是留一条测不到东西的断言。
+  const stubDeps = {} as unknown as Parameters<
+    typeof createPostgresqlTaskExecutionLaunchParticipant
+  >[0]
   const stubActor = { user: { id: 'u1' } } as unknown as Actor
-  const stubDeps = {} as unknown as StartTaskDeps
 
   test('workflow ref/payload mismatch → execution-ref-mismatch', async () => {
     await expect(
-      startExecution(
-        stubDb,
-        stubActor,
-        {
+      createPostgresqlTaskExecutionLaunchParticipant(stubDeps).launch({
+        actor: stubActor,
+        target: {
           kind: 'workflow',
           refId: 'wf-a',
-          invoker: { type: 'user', launchKind: 'direct-json' },
           payload: { workflowId: 'wf-b', name: 't', inputs: {} },
         },
-        stubDeps,
-      ),
+        invoker: { type: 'user', launchKind: 'direct-json' },
+        resources: {} as never,
+      }),
     ).rejects.toMatchObject({ code: 'execution-ref-mismatch' })
-  })
-
-  test('node invoker is fail-closed until PR-3/4', async () => {
-    await expect(
-      startExecution(
-        stubDb,
-        stubActor,
-        {
-          kind: 'workflow',
-          refId: 'wf-a',
-          invoker: {
-            type: 'node',
-            parentTaskId: 't1',
-            parentNodeRunId: 'r1',
-            invocationDepth: 1,
-          },
-          payload: { workflowId: 'wf-a', name: 't', inputs: {} },
-        },
-        stubDeps,
-      ),
-    ).rejects.toBeInstanceOf(ValidationError)
   })
 })
 

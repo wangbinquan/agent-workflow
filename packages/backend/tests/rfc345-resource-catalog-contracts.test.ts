@@ -880,7 +880,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     const task = readFileSync(resolve(sourceRoot, 'services/task.ts'), 'utf8')
     const taskRoute = readFileSync(resolve(sourceRoot, 'routes/tasks.ts'), 'utf8')
-    const multipart = readFileSync(resolve(sourceRoot, 'services/multipartTaskStart.ts'), 'utf8')
+    // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：`services/multipartTaskStart.ts` 整份删除，
+    // multipart 编排与 PostgreSQL 共用一份（`launchMultipartTask`，在这个文件里）。
+    const multipart = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts'),
+      'utf8',
+    )
     const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
     const webhook = readFileSync(resolve(sourceRoot, 'services/webhook/webhookDispatch.ts'), 'utf8')
     const node = readFileSync(

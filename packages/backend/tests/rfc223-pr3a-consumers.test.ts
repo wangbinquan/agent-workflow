@@ -18,7 +18,7 @@ import { tasks, workflows } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
 import { createWorkgroup } from '../src/services/workgroups'
-import { buildWorkgroupRuntimeConfig } from '../src/services/workgroup/launch'
+import { buildWorkgroupRuntimeConfig } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import {
   deriveWorkgroupRunHistory,
   type HostRunLite,

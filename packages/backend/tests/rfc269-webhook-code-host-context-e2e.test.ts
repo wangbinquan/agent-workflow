@@ -36,7 +36,7 @@ import {
   composeRepositoryTransportCredentials,
   SQLiteRepositoryTransportCredentialRepository,
 } from '../src/modules/source-control/composition'
-import { watchExecutionTerminal } from '../src/services/execution/executor'
+import { watchExecutionTerminal } from './helpers/executionTerminal'
 import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
 import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
 import { createIntentSession } from '@/modules/intent/application/session'

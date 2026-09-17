@@ -157,7 +157,12 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 第 6 个消费者，于是账本里多写了一次它的文件名。没有任何新的行为判据只喂给 PG 那一侧。
   // 这一对此刻正在**收敛**：批次二 ④ 已经把工作流 JSON 路由接到这份共用实现上，
   // SQLite 那份剩的是委托壳，销账动作是 §5hj 记的改中立名，不是往 SQLite 侧硬凑用例。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 5/3, postgresql 12/2',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`5/3, 12/2 → 6/3, 16/3`。**这一格是命名债的读数，
+  // 不是倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除之后，
+  // 一批源码文本锁改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 记的命名债）。
+  // 于是「PG 侧引用数」涨的其实是「共用实现被引用的次数」。真正的处置是把那两个文件改成中立名，
+  // 不是往 SQLite 那侧硬凑用例——SQLite 侧剩下的只是一层委托壳。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 6/3, postgresql 16/3',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
@@ -180,7 +185,8 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // multipart 路由改走共用的启动参与者之后，`postgresqlTaskRouteOperations.ts` 不再自己跑
   // 启动输入契约，`rfc345` 兼容债账本里那条点名它的边随之出账——少的是一条**记账提及**，
   // 而它对应的是一处真实的编排合并。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 10/2',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`10/2 → 14/2`，来源同上（改锚到共用实现）。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 14/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -224,7 +230,11 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：3 vs 11 → 5 vs 11，差额 8 → 6（收敛）。
   // RFC-359 AC-1（plan §5hn 批次二 ④）：5 vs 11 → 5 vs 12，差额 6 → 7。**记账，不是倾斜**：
   // 多出来的那一条引用是兼容债账本里的一次文件名提及（见上一格的注释），不是新判据。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 5 vs 12',
+  // RFC-359 AC-1（plan §5hn 批次二 ⑦）：5 vs 12 → 6 vs 16，来源见上（命名债的读数）。
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 6 vs 16',
+  // 新入名单，同样是命名债的读数：共用的那条 multipart 编排（`launchMultipartTask`）住在
+  // `postgresqlTaskRouteOperations.ts` 里，改锚过去的几条源码锁都提到了它。
+  'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 14',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。

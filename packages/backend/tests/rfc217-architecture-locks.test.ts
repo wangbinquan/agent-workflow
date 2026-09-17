@@ -428,7 +428,7 @@ describe('RFC-317 T14 —— matcher 自证：伪造的哨兵常量导入必须�
 
   test('四种导入路径写法都命中', () => {
     for (const fabricated of [
-      "import { WG_CLARIFY } from '@/services/workgroup/launch'",
+      "import { WG_CLARIFY } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'",
       "import { WG_CLARIFY } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'",
       "import { WORKGROUP_HOST_ID } from './launch'",
       "import { WG_A, WG_B } from '../workgroup/launch'",
@@ -438,7 +438,11 @@ describe('RFC-317 T14 —— matcher 自证：伪造的哨兵常量导入必须�
   })
 
   test('从 launch 取非哨兵符号放行（锁的是常量，不是整个模块）', () => {
-    expect(smuggled("import { launchWorkgroup } from '@/services/workgroup/launch'")).toBe(false)
+    expect(
+      smuggled(
+        "import { launchWorkgroup } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'",
+      ),
+    ).toBe(false)
   })
 
   test('从别的模块取同名常量不算（判据锁的是来源）', () => {

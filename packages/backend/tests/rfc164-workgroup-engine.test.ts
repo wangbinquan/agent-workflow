@@ -58,7 +58,7 @@ import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
   WORKGROUP_HOST_WORKFLOW_ID,
-} from '../src/services/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
@@ -488,7 +488,8 @@ describeEachProviderHttpApplication(
       // 目标 6). A real launch would need a repo source and couple the test to
       // the concurrent RFC-165 space-schema migration (scratch/repoUrl), so we
       // lock the wiring at the pure boundary.
-      const { resolveWorkgroupCollaborators } = await import('../src/services/workgroup/launch')
+      const { resolveWorkgroupCollaborators } =
+        await import('@/modules/resource-catalog/infrastructure/legacy/workgroup/launch')
       const members = [
         { memberType: 'agent' as const, userId: null },
         { memberType: 'human' as const, userId: 'u-pm' },

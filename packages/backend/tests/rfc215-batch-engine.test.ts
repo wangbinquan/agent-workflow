@@ -22,7 +22,7 @@ import {
   workgroupMessages,
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
+import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,

@@ -42,7 +42,7 @@ import {
   resumeTask,
 } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '../src/services/workgroup/launch'
+import { startWorkgroupTask } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

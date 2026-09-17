@@ -105,7 +105,9 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // 启动从 `startTask` 改走启动内核。两条合法启动（选定的既有 Workflow / 合成的
       // Agent·Program 宿主）仍由这**一个**受审适配器拥有，只是它现在经内核落库。
       // 又少两个 startTask 调用点，正是这条棘轮要的方向。
-      'services/execution/executor.ts': 1,
+      // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 这一行
+      // **删除**——那个「统一执行门面」整份退役（它的 `startExecution` 是启动编排的第二份写法，
+      // 生产消费者已归零）。又少一个 `startTask` 调用点。
       'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts': 1,
       'services/task.ts': 1,
       // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）2 → 1：`startWorkgroupTaskFromFrozen`
@@ -125,7 +127,8 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     })
     expect(Object.fromEntries(identifierCalls('directTaskInitiatorFromActorSource'))).toEqual({
       'modules/knowledge-evolution/inbound/fusionRoutes.ts': 2,
-      'services/execution/executor.ts': 1,
+      // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 那一处随门面删除。
+      // 直连启动的 initiator 映射现在只有内核这一处（`rootLaunchMetadata`）。
       'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts': 1,
     })
   })
@@ -151,8 +154,16 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       ),
       'utf8',
     )
-    const multipartTaskStart = readFileSync(
-      resolve(BACKEND_SRC, 'services', 'multipartTaskStart.ts'),
+    // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：`services/multipartTaskStart.ts` 整份删除——
+    // multipart 那条车道现在由**共用的** `launchMultipartTask` 声明（两个引擎同一处）。
+    const sharedMultipart = readFileSync(
+      resolve(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteOperations.ts',
+      ),
       'utf8',
     )
 
@@ -162,7 +173,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       )
       expect(launch).toContain("launchKind: 'direct-json'")
     }
-    expect((multipartTaskStart.match(/launchKind: 'direct-multipart'/g) ?? []).length).toBe(2)
+    expect((sharedMultipart.match(/launchKind: 'direct-multipart'/g) ?? []).length).toBe(1)
   })
 
   test('the persisted fact has one application INSERT owner and no response/request schema seam', () => {

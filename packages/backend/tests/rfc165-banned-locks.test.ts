@@ -134,13 +134,17 @@ describe('RFC-165 — public request schemas never emit the retired keys', () =>
 })
 
 describe('RFC-165 — raw-key guard wiring (source lock)', () => {
-  test('JSON 与 multipart 两条启动臂都过 raw-key 门（multipart 臂随 RFC-284 T25 迁 service）', () => {
-    // RFC-284 T25 改锚：multipart 编排主体迁 services/multipartTaskStart.ts，
-    // 其 raw-key 门随体走——两臂各自文件内至少一处调用，意图不变。
+  test('JSON 与 multipart 两条启动臂都过 raw-key 门', () => {
+    // RFC-284 T25 曾把 multipart 编排主体迁到 `services/multipartTaskStart.ts`。
+    // **RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）再改锚**：那个文件整份删除——multipart 路由改走
+    // 与 PostgreSQL 共用的启动参与者，raw-key 门随之落在**共用的那条 multipart 编排**上
+    //（`launchMultipartTask`，与 JSON 路由各自一处，意图一个字没变）。
     const routeSrc = read('packages/backend/src/routes/tasks.ts')
     expect(countOf(routeSrc, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
-    const svcSrc = read('packages/backend/src/services/multipartTaskStart.ts')
-    expect(countOf(svcSrc, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
+    const sharedMultipart = read(
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    )
+    expect(countOf(sharedMultipart, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
   })
 
   test('routes/scheduledTasks.ts gates create + update payloads', () => {

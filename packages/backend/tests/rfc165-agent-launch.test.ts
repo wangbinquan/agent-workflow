@@ -543,7 +543,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   test('A6 lifecycle guards: agent host passes builtin lock; workgroup host stays 403; both sync 422', async () => {
     await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
     const { ensureWorkgroupHostWorkflow, WORKGROUP_HOST_WORKFLOW_ID } =
-      await import('../src/services/workgroup/launch')
+      await import('@/modules/resource-catalog/infrastructure/legacy/workgroup/launch')
     await ensureWorkgroupHostWorkflow(db)
 
     const mk = async (over: Record<string, unknown>) => {
@@ -610,7 +610,8 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('start-task-path-retired')
 
-    const { ensureWorkgroupHostWorkflow } = await import('../src/services/workgroup/launch')
+    const { ensureWorkgroupHostWorkflow } =
+      await import('@/modules/resource-catalog/infrastructure/legacy/workgroup/launch')
     await ensureWorkgroupHostWorkflow(db)
     const { createWorkgroup } = await import('../src/services/workgroups')
     const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })

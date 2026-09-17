@@ -26,7 +26,7 @@ import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
 import { layoutBuiltinWorkflowSnapshotJson, projectWorkflowSnapshotForRead } from '@/services/task'
-import { buildWorkgroupHostSnapshot } from '@/services/workgroup/launch'
+import { buildWorkgroupHostSnapshot } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 function withoutGeometry(definition: WorkflowDefinition): unknown {

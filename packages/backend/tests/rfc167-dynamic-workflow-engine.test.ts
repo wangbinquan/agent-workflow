@@ -68,7 +68,7 @@ import {
 } from '../src/services/orchestratorAgent'
 import { createUser } from '../src/services/users'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '../src/services/workgroup/launch'
+import { startWorkgroupTask } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import type { WorkgroupTurnHostResult as WorkgroupHostRunResult } from '../src/modules/task-execution/public/commands'
 import type {
   WorkgroupTurnHostOperations,

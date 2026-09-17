@@ -257,7 +257,6 @@ const FACADE_DEFINITIONS: readonly FacadeDefinition[] = [
   facade('services/workgroup/context.ts'),
   facade('services/workgroup/dwActions.ts', false),
   facade('services/workgroup/hooks.ts'),
-  facade('services/workgroup/launch.ts'),
   facade('services/workgroup/lifecycle.ts'),
   facade('services/workgroup/memberTurns.ts'),
   facade('services/workgroup/messages.ts'),
@@ -496,13 +495,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflow.validator.ts',
-    'services/multipartTaskStart.ts',
-    ['buildWorkflowValidationContext', 'validateWorkflowDef'],
-    'multipart task Workflow validation',
-    REMOVE_OWNERS.workflowValidation,
-  ),
-  edge(
-    'services/workflow.validator.ts',
     'services/task.ts',
     ['buildWorkflowValidationContext', 'validateWorkflowDef'],
     'task Workflow validation',
@@ -549,13 +541,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflowLaunchInputs.ts',
-    'services/multipartTaskStart.ts',
-    ['assertWorkflowLaunchInputs'],
-    'multipart task launch input validation',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflowLaunchInputs.ts',
     'services/scheduledTasks.ts',
     ['assertWorkflowLaunchInputs'],
     'scheduled task launch input validation',
@@ -581,13 +566,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['WG_LEADER_NODE_ID', 'WG_MEMBER_NODE_ID'],
     'workgroup question dispatch node identities',
     REMOVE_OWNERS.collaborationQuestions,
-  ),
-  edge(
-    'services/workgroup/launch.ts',
-    'services/execution/executor.ts',
-    ['startWorkgroupTask'],
-    'executor workgroup launch',
-    REMOVE_OWNERS.childExecutionLaunch,
   ),
   edge(
     'services/workgroup/state.ts',

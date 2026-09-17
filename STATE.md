@@ -2,6 +2,43 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 60，**`startExecution` 从生产退役——启动编排只剩一份**）
+>
+> 本段待推：§5hn 批次二 ⑦。**同时修 `9cd72ce24` 推的红**（W29 摘要 + 架构清单没跟上）。
+>
+> `services/execution/executor.ts`（RFC-243 统一执行门面）与 `services/multipartTaskStart.ts`
+> **整份删除**。前者的 `startExecution` 是**启动编排的第二份写法**，后者是它在生产上的最后一个
+> 调用方。**唯一的启动编排现在是：启动参与者 → 根启动内核，两个引擎共用。**
+>
+> 顺带退役三样：`cancelExecution`（一行转交 `cancelTask`）、`watchExecutionTerminal`
+> （**生产消费者一直是零**，挪进 `tests/helpers/executionTerminal.ts`）、
+> `services/workgroup/launch.ts`（门面唯一生产消费者就是被删的 executor，`rfc345` 守卫当场
+> 报「零生产消费者必须退役」；30 个测试的 import 改指 canonical 路径）。
+>
+> **测试侧是迁移不是删覆盖**：`tests/helpers/webhookTaskExecution.ts` 重写成照生产装配
+> （它原本自己调 `startExecution` 拼参与者——那三条 webhook e2e 在测一个**生产已经不用的形状**）；
+> `rfc269-...-atomicity` 改直调 `startTask` 并把 invoker→deps 映射搬进测试；
+> `rfc243-executor-facade` 的三类锁按各自意图改锚（ref/payload 守卫**原样活着**，改测参与者；
+> `node` invoker 的 fail-closed **由类型承担**，删除那条测不到东西的断言）。
+>
+> 七处源码文本锁改锚（rfc103 / rfc104 / rfc107 / rfc165 / rfc287-t13 / rfc301 / rfc331 /
+> rfc345×2 / rfc305 / scheduler-subagent-live-capture），每条都写明新锚点与理由。
+>
+> **两条账本读数要单独说明，都不是「倾斜加深」**：①`rfc268-webhook-scratch-launch` 从 open 债
+> 转 sanctioned——不是迁移发生了，而是它一直属于 `sqlite-execution-engine` 那一类、只是被门面
+> 挡住了判据的视线（**转交式门面会让源码判据失明**，已记进 plan）；②两对 `TaskRoute*` 的 PG 侧
+> 引用数上涨，是因为源码锁改锚到了**共用实现**，而共用实现还叫 `postgresql*`（§5hj 命名债），
+> 处置是改中立名，单独一刀。
+>
+> **记一条未定性的观察**：`rfc164-workgroup-engine` 的 free_collab 用例在 `9cd72ce24` 的 CI
+> `ubuntu shard 12/12` 上红了一次（`requests` 期望 4、实际 3），本机同一条 PG lane **连跑 8 次
+> 全绿**。按仓规不允许「重跑就过了」——只记录观察与证据，下次复现就按真缺陷追。
+>
+> 证据：webhook 四族 56/56；工作组 30 个文件分四片 468/468；启动 / 门面半径 19 个文件分片全绿；
+> 架构守卫 + 九个根目录守卫 **781/781**；tsc 0 / eslint 0。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` §5hn 批次二 ⑦。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 59，**multipart 合一——`startExecution` 生产上只剩一个待删的调用方**）
 >
 > 本段待推：§5hn 批次二 ⑥（下）。**CI 在 `63a1493ba` 已绿**。

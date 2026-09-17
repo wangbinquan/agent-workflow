@@ -21,7 +21,10 @@ import { createRuntime } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
-import { startWorkgroupTask, WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/launch'
+import {
+  startWorkgroupTask,
+  WORKGROUP_HOST_WORKFLOW_ID,
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeDatabaseAgentResourceInventorySource } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'

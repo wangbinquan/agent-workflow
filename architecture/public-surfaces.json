@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 847,
+    "consumers": 844,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1041,
@@ -48390,7 +48390,6 @@
         "import:587bdaf84e4cad53baf8",
         "import:714ed498a2de684e5a21",
         "import:79370ee6afc006216029",
-        "import:823d0a8f93ee6eb04b30",
         "import:9664c044d0b65de04a60",
         "import:96ff624aab711e91ccdc",
         "import:b3a79df6adc987e325ca",
@@ -48436,7 +48435,6 @@
         {
           "consumerEdgeIds": [
             "import:587bdaf84e4cad53baf8",
-            "import:823d0a8f93ee6eb04b30",
             "import:c4b800f5680ca0f70ad6",
             "import:cf3b2a3ff031d10f59d9",
             "import:da3c5f3c106112911945",
@@ -48460,7 +48458,6 @@
             "import:587bdaf84e4cad53baf8",
             "import:714ed498a2de684e5a21",
             "import:79370ee6afc006216029",
-            "import:823d0a8f93ee6eb04b30",
             "import:c4b800f5680ca0f70ad6",
             "import:cf3b2a3ff031d10f59d9",
             "import:d124b259997b6ba0a882",
@@ -48542,7 +48539,6 @@
         {
           "consumerEdgeIds": [
             "import:587bdaf84e4cad53baf8",
-            "import:823d0a8f93ee6eb04b30",
             "import:c4b800f5680ca0f70ad6",
             "import:cf3b2a3ff031d10f59d9",
             "import:da3c5f3c106112911945",
@@ -48566,7 +48562,6 @@
             "import:587bdaf84e4cad53baf8",
             "import:714ed498a2de684e5a21",
             "import:79370ee6afc006216029",
-            "import:823d0a8f93ee6eb04b30",
             "import:c4b800f5680ca0f70ad6",
             "import:cf3b2a3ff031d10f59d9",
             "import:d124b259997b6ba0a882",
@@ -48639,7 +48634,6 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:823d0a8f93ee6eb04b30",
             "import:d650de9016dd3b78a0da"
           ],
           "name": "authorityForLegacyProjection",
@@ -48684,12 +48678,6 @@
           "edgeId": "import:79370ee6afc006216029",
           "file": "packages/backend/src/routes/digitalEmployees.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:823d0a8f93ee6eb04b30",
-          "file": "packages/backend/src/services/multipartTaskStart.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/multipartTaskStart.ts#$file"
         },
         {
           "context": "legacy",
@@ -98004,7 +97992,6 @@
       "consumerEdgeIds": [
         "import:094310af10dafa636874",
         "import:3b3f93b0eaac09288cdd",
-        "import:523be4dc38479c9b1844",
         "import:64bd93c7a02b214b4eb3",
         "import:c455a417e109065601c3",
         "import:f5fa653da3465d788d75"
@@ -98059,12 +98046,6 @@
           "edgeId": "import:3b3f93b0eaac09288cdd",
           "file": "packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:523be4dc38479c9b1844",
-          "file": "packages/backend/src/services/execution/executor.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/execution/executor.ts#$file"
         },
         {
           "context": "legacy",
@@ -134667,7 +134648,6 @@
       "consumerEdgeIds": [
         "import:0d9ac63bf6f207d82551",
         "import:52aebe854233bde53a8c",
-        "import:62f92a1725e7d433c0cf",
         "import:924a40dfc07194923acc",
         "import:d6081cab0c06792087a4"
       ],
@@ -134679,7 +134659,6 @@
         {
           "consumerEdgeIds": [
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -134710,7 +134689,6 @@
         {
           "consumerEdgeIds": [
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -134784,7 +134762,6 @@
           "consumerEdgeIds": [
             "import:0d9ac63bf6f207d82551",
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135036,7 +135013,6 @@
           "consumerEdgeIds": [
             "import:0d9ac63bf6f207d82551",
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135109,7 +135085,6 @@
           "consumerEdgeIds": [
             "import:0d9ac63bf6f207d82551",
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135119,7 +135094,6 @@
         {
           "consumerEdgeIds": [
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135158,7 +135132,6 @@
           "consumerEdgeIds": [
             "import:0d9ac63bf6f207d82551",
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135264,7 +135237,6 @@
           "consumerEdgeIds": [
             "import:0d9ac63bf6f207d82551",
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135310,7 +135282,6 @@
           "consumerEdgeIds": [
             "import:0d9ac63bf6f207d82551",
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135393,7 +135364,6 @@
           "consumerEdgeIds": [
             "import:0d9ac63bf6f207d82551",
             "import:52aebe854233bde53a8c",
-            "import:62f92a1725e7d433c0cf",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -135446,12 +135416,6 @@
           "edgeId": "import:52aebe854233bde53a8c",
           "file": "packages/backend/src/services/task.ts",
           "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:62f92a1725e7d433c0cf",
-          "file": "packages/backend/src/services/multipartTaskStart.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/multipartTaskStart.ts#$file"
         },
         {
           "context": "legacy",
@@ -159694,7 +159658,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:171d5f9a24d5f578f9430fe8cab7d4c2d58f3acc1fa380acdea532f949cff8ea",
+  "sourceDigest": "sha256:41e846a1184b8904b6988a7985e336585ab3bc10feb042b2724e7d733f1351b7",
   "targetContexts": [
     "collaboration",
     "development-automation",

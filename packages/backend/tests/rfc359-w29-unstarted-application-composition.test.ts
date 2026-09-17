@@ -652,8 +652,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // **装配图确实变了，是有意的**：这条路由此前转 `startExecution` → `startTask`
     //（三千行的老启动器），现在与 PostgreSQL 共用同一台根启动内核；那道
     // `assertWorkflowLaunchable` 是参与者已经做过的同一次静态校验，留着就是做两遍。
+    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑥）：摘要随 **multipart 路由也改走共享编排**
+    // 更新——这一层原来给 SQLite 路由拼的那整格 `multipart: { secretBox, configPath,
+    // schedulerDriver, identityAccess }`（`MultipartLaunchDeps`）退役了。
+    // **装配图确实变了，是有意的**：multipart 启动此前转 `services/multipartTaskStart.ts` →
+    // `startExecution` → `startTaskImpl`，现在与 PostgreSQL 共用同一个启动参与者
+    //（路由只解析表单 + 跑路由级门，把已解析的分片交给参与者）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '941867a3aa2ef400021dbda6ac6337216cb329a4d853f12318d7d230485c9ee8',
+      '0940b4759854afb4f114409412c9b31775d8c696453808d3eaf97b522d4e5905',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

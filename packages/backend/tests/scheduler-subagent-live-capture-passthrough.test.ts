@@ -89,14 +89,13 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
       .join('\n')
     expect(assembly).toContain('buildStartTaskDeps(')
 
-    // Multipart launch resolves the same profile once for both fallback and
-    // successful upload paths. The HTTP route itself must not regain a DB or
-    // bootstrap dependency merely to carry this option.
-    const multipart = read('packages/backend/src/services/multipartTaskStart.ts')
-    expect(multipart).toContain('resolveSubagentLiveCapture(deps.configPath)')
-    expect(
-      multipart.match(/subagentLiveCapture !== undefined/g)?.length ?? 0,
-    ).toBeGreaterThanOrEqual(2)
+    // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：multipart 那条路原本自己
+    // `resolveSubagentLiveCapture(deps.configPath)` 一次、喂给两条交接
+    //（`services/multipartTaskStart.ts`，已整份删除）。它现在与 PostgreSQL 共用启动参与者，
+    // 这个旋钮随协调器的依赖束走（`buildStartTaskDeps` / `resolveLaunchRuntimeConfig`），
+    // 装配方解析一次交给协调器——路由仍然一个字都不自解析（下面那条负锁不变）。
+    const startTaskDeps = read('packages/backend/src/services/startTaskDeps.ts')
+    expect(startTaskDeps).toContain('resolveSubagentLiveCapture(configPath)')
     const route = read('packages/backend/src/routes/tasks.ts')
     expect(route).not.toContain('DbClient')
     expect(route).not.toContain('buildStartTaskDeps(')

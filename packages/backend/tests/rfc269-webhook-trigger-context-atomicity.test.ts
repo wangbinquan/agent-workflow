@@ -16,7 +16,8 @@ import type { TriggerContext } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { startExecution } from '../src/services/execution/executor'
+import { startTask, type StartTaskDeps } from '../src/services/task'
+import { directTaskInitiatorFromActorSource } from '../src/modules/task-execution/inbound/directTaskInitiator'
 import type { ExecutionInvoker } from '../src/services/execution/types'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -26,6 +27,52 @@ const SESSION_ACTOR = { user: { id: '__system__' }, source: 'session' } as Actor
 const PAT_ACTOR = { user: { id: '__system__' }, source: 'pat' } as Actor
 
 type Harness = { db: DbClient; appHome: string; workflowId: string }
+
+/**
+ * RFC-359 AC-1（plan §5hn 批次二 ⑦）：invoker → `StartTaskDeps` 的映射。
+ *
+ * 这段原本在 `services/execution/executor.ts#depsForInvoker` 里。那个「统一执行门面」是
+ * **启动编排的第二份写法**，已随两个引擎的启动路合一整份删除；它做的这件映射，生产上现在
+ * 由根启动内核的 `rootLaunchMetadata(actor, invoker)` 做。
+ *
+ * 本用例锁的是**发布边界**——归属与触发上下文必须写在**首次 INSERT** 里，而不是随后一条
+ * UPDATE（那会和调度器那次一次性读任务竞争）。`startTask` 上的 `workflowLaunchCommitHook`
+ * 是唯一能观察到「提交那一刻」的钩子，所以这条判据留在 `startTask` 这一侧；
+ * 内核那条路上同一个不变量是**结构性**的（所有字段在同一条 INSERT 里，提交之后才
+ * `coordinator.submit`），由 `rfc359-w5hn-scheduled-launch-provider-parity` 等几条行级基线覆盖。
+ * 要在内核那侧也做成显式判据，办法是注入一个在 `submit` 里回读任务行的协调器——
+ * 记在 plan §5hn 批次二 ⑦ 的待办里。
+ */
+function startTaskDepsForInvoker(actor: Actor, invoker: ExecutionInvoker): Partial<StartTaskDeps> {
+  if (invoker.type === 'scheduled') {
+    return { scheduledTaskId: invoker.scheduledTaskId, launchProvenance: { kind: 'schedule' } }
+  }
+  if (invoker.type === 'webhook') {
+    return {
+      webhookTriggerId: invoker.webhookTriggerId,
+      webhookFireId: invoker.webhookFireId,
+      triggerContext: invoker.triggerContext,
+      sourceTerminationSnapshot: invoker.sourceTerminationSnapshot,
+      launchProvenance: { kind: 'webhook' },
+    }
+  }
+  if (invoker.type === 'event') {
+    return {
+      eventSubscriptionId: invoker.eventSubscriptionId,
+      eventDeliveryId: invoker.eventDeliveryId,
+      triggerContext: invoker.triggerContext,
+      sourceTerminationSnapshot: invoker.sourceTerminationSnapshot,
+      launchProvenance: { kind: 'event' },
+    }
+  }
+  if (invoker.type === 'node') throw new Error('node invoker is not part of this lock')
+  return {
+    launchProvenance: {
+      kind: invoker.launchKind,
+      initiator: directTaskInitiatorFromActorSource(actor.source),
+    },
+  }
+}
 
 function buildHarness(): Harness {
   const db = createInMemoryDb(MIGRATIONS)
@@ -48,16 +95,10 @@ async function launchAndObserveCommit(
   actor: Actor = ACTOR,
 ): Promise<typeof tasks.$inferSelect> {
   let committedRow: typeof tasks.$inferSelect | undefined
-  const task = await startExecution(
-    h.db,
-    actor,
+  const task = await startTask(
+    { workflowId: h.workflowId, name, inputs: {}, scratch: true },
     {
-      kind: 'workflow',
-      refId: h.workflowId,
-      invoker,
-      payload: { workflowId: h.workflowId, name, inputs: {}, scratch: true },
-    },
-    {
+      ...startTaskDepsForInvoker(actor, invoker),
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
@@ -192,74 +233,55 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
 
   test('caller spoofing and incomplete source metadata fail closed before publication', async () => {
     h = buildHarness()
-    const baseRequest = {
-      kind: 'workflow' as const,
-      refId: h.workflowId,
-      payload: {
-        workflowId: h.workflowId,
-        name: 'spoofed-origin',
-        inputs: {},
-        scratch: true,
-        launchOrigin: 'webhook',
-        launch_origin: 'webhook',
-      },
+    // RFC-359 AC-1（plan §5hn 批次二 ⑦）：门面删除后改直调 `startTask`，
+    // invoker → deps 的映射由本文件顶部那份（原 `depsForInvoker`）承担。
+    const payload = {
+      workflowId: h.workflowId,
+      name: 'spoofed-origin',
+      inputs: {},
+      scratch: true,
+      launchOrigin: 'webhook',
+      launch_origin: 'webhook',
     }
+    const baseDeps = () => ({
+      db: h!.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h!.db, driver: 'real' })
+        .schedulerDriver,
+      appHome: h!.appHome,
+    })
 
     const attempts = [
-      startExecution(
-        h.db,
-        SESSION_ACTOR,
-        { ...baseRequest, invoker: { type: 'user' as const, launchKind: 'direct-json' as const } },
-        {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: h.appHome,
-          scheduledTaskId: 'spoofed-schedule',
-        },
-      ),
-      startExecution(
-        h.db,
-        ACTOR,
-        { ...baseRequest, invoker: { type: 'scheduled' as const, scheduledTaskId: ' ' } },
-        {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: h.appHome,
-        },
-      ),
-      startExecution(
-        h.db,
-        ACTOR,
-        {
-          ...baseRequest,
-          invoker: {
-            type: 'webhook' as const,
-            webhookTriggerId: 'trigger-only',
-            webhookFireId: ' ',
-            triggerContext: { trigger: { webhook: { event_type: 'push' as const } } },
-          },
-        },
-        {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: h.appHome,
-        },
-      ),
-      startExecution(
-        h.db,
-        SESSION_ACTOR,
-        { ...baseRequest, invoker: { type: 'user' as const, launchKind: 'direct-json' as const } },
-        {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: h.appHome,
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-        },
-      ),
+      // ① 直连启动却带上定时元数据。
+      startTask(payload, {
+        ...startTaskDepsForInvoker(SESSION_ACTOR, {
+          type: 'user' as const,
+          launchKind: 'direct-json' as const,
+        }),
+        ...baseDeps(),
+        scheduledTaskId: 'spoofed-schedule',
+      }),
+      // ② 定时启动但 scheduledTaskId 是空白。
+      startTask(payload, {
+        ...startTaskDepsForInvoker(ACTOR, { type: 'scheduled' as const, scheduledTaskId: ' ' }),
+        ...baseDeps(),
+      }),
+      // ③ webhook 启动但 fireId 是空白。
+      startTask(payload, {
+        ...startTaskDepsForInvoker(ACTOR, {
+          type: 'webhook' as const,
+          webhookTriggerId: 'trigger-only',
+          webhookFireId: ' ',
+          triggerContext: { trigger: { webhook: { event_type: 'push' as const } } },
+        }),
+        ...baseDeps(),
+      }),
+      // **已退役的第 ④ 项**：原本是「调用方自己预置 `launchProvenance`」→ 门面的
+      // `task-launch-provenance-conflict`。那条守卫属于 `startExecution`（「根来源归门面所有」），
+      // 门面删除后这个冲突**结构上不可能**：内核那条路根本没有 `launchProvenance` 这一格
+      //（来源由 `rootLaunchMetadata(actor, invoker)` 算），`startTask` 那条路调用方只传
+      // provenance、不传 invoker，没有第二个来源可冲突。
+      // `task-launch-provenance-conflict` 这个码本身没有消失——它在 `startTask` 里守的是
+      // **子任务不得携带根来源**（`rfc301-task-launch-origin-inheritance` 锁着那一条）。
     ]
 
     const results = await Promise.allSettled(attempts)
@@ -273,7 +295,6 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
       'task-launch-direct-metadata-invalid',
       'task-launch-schedule-metadata-invalid',
       'task-launch-webhook-metadata-invalid',
-      'task-launch-provenance-conflict',
     ])
     expect(await h.db.select().from(tasks)).toHaveLength(0)
     const scratchRoot = join(h.appHome, 'scratch')
@@ -288,26 +309,20 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
     } as unknown as TriggerContext
 
     await expect(
-      startExecution(
-        h.db,
-        ACTOR,
+      startTask(
         {
-          kind: 'workflow',
-          refId: h.workflowId,
-          invoker: {
+          workflowId: h.workflowId,
+          name: 'broken-context',
+          inputs: {},
+          scratch: true,
+        },
+        {
+          ...startTaskDepsForInvoker(ACTOR, {
             type: 'webhook',
             webhookTriggerId: 'trigger-broken',
             webhookFireId: 'fire-broken',
             triggerContext: brokenContext,
-          },
-          payload: {
-            workflowId: h.workflowId,
-            name: 'broken-context',
-            inputs: {},
-            scratch: true,
-          },
-        },
-        {
+          }),
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,

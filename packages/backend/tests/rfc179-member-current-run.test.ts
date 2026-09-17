@@ -11,7 +11,10 @@ import {
   type HostRunLite,
   type MemberLite,
 } from '../src/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
+import {
+  WG_LEADER_NODE_ID,
+  WG_MEMBER_NODE_ID,
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
 const LEADER = 'M_leader'
 const A1 = 'M_agent1'

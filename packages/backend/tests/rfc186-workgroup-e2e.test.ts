@@ -29,7 +29,7 @@ import {
   ensureWorkgroupHostWorkflow,
   startWorkgroupTask,
   WORKGROUP_HOST_WORKFLOW_ID,
-} from '../src/services/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import { runTestCommand, runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

@@ -19,7 +19,7 @@ import { tasks } from '@/db/schema'
 import { comparableTaskRow } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { WORKGROUP_HOST_WORKFLOW_ID } from '@/services/workgroup/launch'
+import { WORKGROUP_HOST_WORKFLOW_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
 const TOKEN = 'd'.repeat(64)
 

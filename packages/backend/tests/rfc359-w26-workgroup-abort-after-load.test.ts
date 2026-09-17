@@ -13,7 +13,7 @@ import {
 } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { createLogger } from '@/util/log'
-import { WG_MEMBER_NODE_ID } from '@/services/workgroup/launch'
+import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
