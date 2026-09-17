@@ -7813,3 +7813,42 @@ PostgreSQL 侧留 NULL、被 `parseLineage` 兜底成 `workflowRevision: null`�
 在所有 python / sed / 手改之后。成本是秒级。同一天还撞过它的兄弟形态——
 按文本数引用的棘轮（见上一条「按测试文件**文本**计数的棘轮」），
 两者的通用形式是一句话：**任何以「文件当前内容」为输入的判据，都必须在最后一次编辑之后再跑**。
+
+## 改了 `server.ts` / `cli/start.ts` 就必须跑 `rfc359-w29-unstarted-application-composition`（2026-09-17 连撞两次）
+
+那条守卫对两个组合根的几个装配函数体取 **AST 摘要**（`composeSqliteApiRouteMounts` /
+`composeSqliteApplicationDeps` / `composeApplicationEventCenter`）。它**不在**
+`tests/architecture/` 目录里，也不叫 `*architecture*`，所以「改了 `src/` 就跑
+`bun test tests/architecture/ tests/*architecture*.test.ts`」这条既有定式**捞不到它**。
+
+按 basename 推半径也不可靠：它写的是 `src/server.ts`——那是全仓最常见的名字之一
+（39 个测试文件提到它），一次半径检索里很容易被淹掉。
+
+**判据**：`git diff --cached --name-only` 里只要出现
+`packages/backend/src/server.ts` 或 `packages/backend/src/cli/start.ts`，
+就**点名**跑这一条：
+
+```
+bun test tests/rfc359-w29-unstarted-application-composition.test.ts
+```
+
+秒级。它红的时候错误很清楚（一对 sha256），处置是**在重钉的那一行上方写清装配图为什么变**
+——这份文件的体例就是每次改摘要都留一段署名理由。
+
+## census 产物要在**最后一次源码编辑之后**重跑（2026-09-17 与上一条同一次事故）
+
+`architecture/*.json` 是 `scripts/architecture-census.ts` 从源码生成的投影，
+`rfc294-canonical-manifests` 会重新生成一遍并逐字比对。所以**census 跑完之后再改一行源码，
+产物就过期了**——哪怕那一行只是删掉一个不再使用的 import。
+
+这与上面两条（`format:check`、按文本计数的棘轮）是同一句话的三个面：
+**任何以「文件当前内容」为输入的判据，都必须在最后一次编辑之后再跑**。
+提交前的固定顺序因此是：
+
+```
+改完所有代码 → bunx prettier --write <改过的文件>
+             → bun run scripts/architecture-census.ts --write --snapshot-sha HEAD
+             → bun test tests/architecture/ tests/*architecture*.test.ts
+             → （若碰了 server.ts / cli/start.ts）bun test tests/rfc359-w29-...
+             → git add / commit
+```

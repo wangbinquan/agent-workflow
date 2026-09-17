@@ -406,10 +406,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
       "baseline": 5,
-      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。 RFC-359 AC-1（plan §5hn 批次二 ⑦）4 → 5：`TaskRouteOperations` 入名单。**这一条是命名债的读数，不是新的倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除后，一批源码文本锁改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 的命名债）。真正的处置是把那两个文件改成中立名，不是往 SQLite 那侧硬凑用例。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（plan §5hn 批次二 ⑦）4 → 5：`TaskRouteOperations` 入深度倒挂名单。**命名债的读数，不是新的倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除后，一批源码文本锁改锚到了共用实现上，而共用实现此刻还叫 `postgresql*`（§5hj）。处置是把那两个文件改成中立名（单独一刀），不是往 SQLite 那侧硬凑用例。下一笔不涨即删。"
-      }
+      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。 RFC-359 AC-1（plan §5hn 批次二 ⑦）4 → 5：`TaskRouteOperations` 入名单。**这一条是命名债的读数，不是新的倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除后，一批源码文本锁改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 的命名债）。真正的处置是把那两个文件改成中立名，不是往 SQLite 那侧硬凑用例。"
     },
     {
       "id": "rfc359-w5-name-collision-definition-drift",
@@ -916,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9cd72ce246bd18e02223970d92933c1ed705fbfc",
-    "contentDigest": "sha256:9f4e9e41d597176acee71b140300cc3374e973ace2267bcccae45c64e099f50d",
+    "currentSnapshotSha": "e3ec6b12dcadbc90d1b3ae0519aebab0ab0c920c",
+    "contentDigest": "sha256:1c29741fc5e4a897af39e2d9615f6a1f3c97c56b9ce648f57ec3e80715414059",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

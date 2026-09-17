@@ -16059,3 +16059,31 @@ PG 把 `uploads: {parts, definitions, limits}` 整包交给根内核，由内核
 **没有定性为 flaky——按仓规不允许「重跑就过了」**：这里只记录观察与证据，
 下一次 CI 若复现就按真缺陷追（它测的是 free_collab 的去重 + 认领轮次，
 「4 变 3」意味着有一轮认领没发生，值得从 PG 的可见性 / 提交时序查起）。
+
+### 批次二 ⑦ 之后的下一刀：`startAgentTask` / `startWorkgroupTask` 也已生产零消费者
+
+门面删除之后这两个 legacy 启动服务**在生产上一个调用方都没有了**
+（`grep` 只剩它们自己的 `export async function` 与若干注释）：
+
+| 函数 | 位置 | 行数 | 测试**值 import** 的文件 | 实际调用点 |
+| --- | --- | --- | --- | --- |
+| `startAgentTask` | `services/agentLaunch.ts:293` | 178 | 2 | ~10 |
+| `startWorkgroupTask` | `.../legacy/workgroup/launch.ts:207` | 149 | 6 | ~8 |
+
+**不能直接删测试**——那几个套件测的是真主题（端口值映射、`sourceAgentName`、校验矩阵、
+ACL 门、删除竞态）。正确做法是**把调用点迁到参与者**：加一个测试助手，
+按 `composeTestChildLaunchWorkgroup` 的样子从 `db` 装出启动参与者，
+提供与旧签名兼容的调用面；各文件只换 import。迁完再删这两个函数。
+
+迁移时要逐条对账「这条断言在参与者路上还成立吗」——参与者的 agent / workgroup 臂已由
+`rfc359-w5hn-agent-launch-provider-parity` / `-workgroup-launch-provider-parity` 双引擎覆盖，
+但那两条基线比的是**落库那一行**，不覆盖这些套件里的校验矩阵与竞态。**两边都要留。**
+
+### 之后：命名债（§5hj）
+
+`postgresqlTaskRouteLaunchOperations.ts` / `postgresqlTaskRouteOperations.ts` /
+`createPostgresqlRootTaskLaunchKernel` / `createPostgresqlTaskExecutionLaunchParticipant`
+此刻都是**两个引擎共用的实现**，名字却还挂着 `postgresql` 前缀。
+两份账本已经因此读出假信号（`rfc359-w5-t19d` 的「倒挂加深」、`rfc359-w5-inverted-pairs` 的
+新入名单），plan 与账本注释都已写明「这是命名债的读数，不是倾斜」。
+改中立名是一刀纯改名，收益是让那两份账本重新说真话。
