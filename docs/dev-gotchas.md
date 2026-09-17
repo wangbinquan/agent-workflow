@@ -7939,16 +7939,24 @@ const sliceBetween = (source: string, from: string, to: string): string => {
 可用的做法是按**文件名**建一份清单再分片跑（本地一次跑太多文件会造假红，见上面的条目）：
 
 ```
-ls tests/*.test.ts | grep -iE "architecture|-lock|ratchet|guard|source-text|conformance|parity|contracts|boundary|cutover|highwater|census|audit|inventory|snapshot|allowlist|debt|surface|retired|invariant" > /tmp/ratchets.txt
+ls tests/*.test.ts | grep -iE "architecture|-lock|ratchet|guard|source-text|conformance|parity|contracts|boundary|cutover|highwater|census|audit|inventory|snapshot|allowlist|debt|surface|retire|invariant|facade|compat|acl" > /tmp/ratchets.txt
 split -l 8 /tmp/ratchets.txt /tmp/rt-
 for g in /tmp/rt-*; do bun test $(sed 's|^|tests/|' $g | tr '\n' ' ') 2>&1 | grep -E "^\s*\(fail\)|[0-9]+ fail$"; done
 ```
 
-**过滤词要够宽**：第一版只用了前 12 个词，结果漏掉
-`scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts`——它的文件名里
-一个词都不含，于是又推红一格（非状态 `update(tasks)` 的每文件计数棘轮）。
-补上 `audit|inventory|snapshot|allowlist|debt|surface|retired|invariant` 之后是 267 个文件、34 片。
-判断标准不是「名字里有没有 lock」，而是「它是不是拿着一份**清单 / 计数 / 摘要**跟源码逐字比」。
+**按文件名筛选这件事本身不可靠，已经漏了三次**：
+第一版 12 个词漏掉 `scheduler-audit-s14-…-inventory.test.ts`（推红一格）；
+补到 20 个词后又漏掉 `rfc345-resource-acl-facade-retirement.test.ts`——因为过滤词写的是
+`retired`，而文件名是 `retirement`，**差一个字母**（又推红一格）。
+现在的词表是
+`architecture|-lock|ratchet|guard|source-text|conformance|parity|contracts|boundary|cutover|
+highwater|census|audit|inventory|snapshot|allowlist|debt|surface|retire|invariant|facade|compat|acl`
+（300 个文件）。
+
+**更可靠但更慢的那一份按内容筛**：「`readFileSync` 了 `src/` 下的源码」∪「引用了
+`architecture/*.json` 账本」——约 700 个文件。**凡是改了 import 关系的提交，用这一份**：
+按名字筛永远在赌下一个账本的文件名里恰好有你的词，而按内容筛问的是它到底读不读源码。
+判断标准始终是「它是不是拿着一份**清单 / 计数 / 摘要**跟源码逐字比」。
 
 整份跑一遍几分钟。**凡是删函数 / 搬家 / 改装配图的改动，提交前把这份清单整份跑一遍**
 ——比推上去等 11 个分片红了再逐个 grep CI 日志便宜得多。

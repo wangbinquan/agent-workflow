@@ -220,7 +220,10 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 第 4 刀（访问门 + 成员四件合一）：`9/2 → 10/2` / `35/20 → 36/20`。两侧各 +1 ref，
   // **差额不变**——`rfc349-task-aggregate-transaction` 的成员替换锁改锚到共用实现，
   // 同时提到了两侧的文件名。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 10/2, postgresql 36/20',
+  // 第 6 刀的收尾：`36/20 → 37/20`。`rfc345-resource-acl-facade-retirement` 的兼容边账本
+  // 登记了两条**过渡态**的边（共用预览住在 PG 命名的文件里），于是它提到了这个模块名。
+  // 仍是命名债的读数，随写侧那一刀一起回落。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 10/2, postgresql 37/20',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -274,7 +277,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // PB-G5 改锚：9 vs 19 → 9 vs 20，来源同上一格。
   // 第 3 刀：9 vs 20 → 9 vs 35，来源同上一格（列表三件合一 + 十四个消费者改锚）。
   // 第 4 刀：9 vs 35 → 10 vs 36，差额不变（两侧同步 +1，来源见上一格）。
-  'modules/task-execution/infrastructure/TaskRouteOperations: 10 vs 36',
+  // 第 6 刀的收尾：10 vs 36 → 10 vs 37，来源同上一格。
+  'modules/task-execution/infrastructure/TaskRouteOperations: 10 vs 37',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。
