@@ -121,9 +121,7 @@ function lacksMaterializedWorkspace(path: string): boolean {
   return path.length === 0
 }
 import { parsePortValidationFailuresJson } from '@/services/envelope'
-import {
-  parseMultipartLaunch,
-} from '@/services/launchMultipart'
+import { parseMultipartLaunch } from '@/services/launchMultipart'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
