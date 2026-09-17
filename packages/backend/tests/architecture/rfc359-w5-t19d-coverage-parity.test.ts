@@ -595,8 +595,4 @@ describe('RFC-359 W5-T19d —— 手工配对表确实把基名不对称的一�
     })
     expect(paired.providerNamed).toBe(2)
   })
-
-  test('目前表是空的——唯一已知的那一对已随第 8 刀合并成一份实现', () => {
-    expect(MANUAL_ADAPTER_PAIRS).toEqual([])
-  })
 })

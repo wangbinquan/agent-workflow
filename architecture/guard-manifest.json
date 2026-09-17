@@ -223,8 +223,8 @@
       "file": "packages/backend/tests/lifecycle-repair-grep-guard.test.ts",
       "runner": "bun",
       "mechanism": "source-text",
-      "corpusScanner": true,
-      "minCorpusFiles": 4,
+      "corpusScanner": false,
+      "minCorpusFiles": null,
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
@@ -1942,7 +1942,7 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 1500,
-      "assertsAbsence": false,
+      "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
       "lines": 374
@@ -2555,8 +2555,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "075bfbc1cba77744c5a15ceea2365b050ecf09ef",
-    "contentDigest": "sha256:c2f1a70d7634aca79132f22f4e2ff5dff070201d4de3b52d7a58d6f03933e766",
+    "currentSnapshotSha": "cfe661e9b1d8ef74323090124845859a38cc6ceb",
+    "contentDigest": "sha256:7ba84cf7521494c4b1c1f1b933b3162cefa9f6c887898e7ef9667cc5cdcde598",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
