@@ -2,6 +2,28 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-17 续 67，**第 5 刀的前置：`taskDelete` 中立化 + 分叉勘察**）
+>
+> `services/taskDelete.ts` 的库句柄从 bun:sqlite 专有类型放宽到中立别名。卡住它的只有**五处 `.get()`**
+>（bun:sqlite 独有的同步终结符），改写成 `await … .limit(1)` 之后整份实现就是普通 drizzle 查询 +
+> 中立事务原语了。这是把 `delete` 两个引擎合成一份的必要前提。
+>
+> **勘察结论（三处分叉，判据已定）**：①前置门次序——SQLite 是 `not-terminal → active → internal`，
+> PG 是 `not-terminal → internal → 树循环里 isActive`；一个「既是框架内部、又有活进程」的任务两侧
+> 给出不同 code。**取 PG 的次序**：先报永久性主因（这个任务永远不能直接删）再报暂时性次因
+>（先取消再来），把用户引向死路比引向一次重试更糟——与 `diff` 那一刀同一条判据。
+> ②活跃度从哪里读——SQLite 读模块全局 `isTaskActive`，PG 读注入的参与者端口。取 PG 的，
+> 而且**只有注入版本才能在两个引擎上被测**（这正是 A19 至今缺 `task-active` 那一格的原因）。
+> ③提交后通知——SQLite 直接广播，PG 走 `deletionEvents` 端口；与第 4 刀的 `membershipEvents` 同形，
+> 合并后那个端口一并退役。
+>
+> 合并还要给三个组合根各补一行 `activity` 注入（与第 3 刀补 `owners` 同形，**不给默认值**）。
+> 合并之后 A19 补两格：`task-active` 本身 + **两门同时失败**的次序格。
+>
+> 证据：delete 面 273/273；架构守卫 + W29 714/714；tsc 0 / eslint 0 / prettier 干净。
+>
+> 细节见 `design/RFC-359-database-provider-unification/plan.md` 第 5 刀的前置与勘察。
+
 > ## 📌 RFC-359 最新一段（2026-09-17 续 66，**访问门 + 成员四件合一；修第 3 刀推的六条锁**）
 >
 > **先说红**：`07b187db0` 红了 11 个 backend 分片，去重后**六条**，全都是源码锁 / 棘轮：

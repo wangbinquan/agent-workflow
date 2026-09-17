@@ -40065,7 +40065,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6d50e3d9c74127e23f357de8fce87e92a29c25c10ec3834d6a49726e3e115e8e",
+  "sourceDigest": "sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42687,8 +42687,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#306:tasks",
-        "line": 306,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#313:tasks",
+        "line": 313,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -42703,8 +42703,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#338:tasks",
-        "line": 338,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#349:tasks",
+        "line": 349,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",

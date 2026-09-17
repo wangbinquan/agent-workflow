@@ -16448,3 +16448,44 @@ CI 的 Linux 服务容器上不触发。**权威门禁是 CI，由它裁决**；
 
 ④`cancel` / `delete` ⑤`resume` / `retry` ⑥`workflowSyncPreview` / `syncWorkflow`
 ⑦`repairOptions` / `applyRepair`，然后是命名债收尾（§5hj）。
+
+## 第 5 刀的前置与勘察　`delete` 合一的准备
+
+### 已做：`services/taskDelete.ts` 中立化
+
+把它的库句柄从 bun:sqlite 专有的 `LegacySqliteTaskDatabase` 放宽到中立别名。卡住它的只有
+**五处 `.get()`**——那是 bun:sqlite 独有的同步终结符，中立面上没有对应物；改写成
+`await … .limit(1)` 再取 `[0]` 之后，整份实现就是普通 drizzle 查询 + 中立事务原语
+（它的事务面 W7 早就换过了）。这是把 `delete` 两个引擎合成一份的必要前提。
+
+### 勘察：两侧 `delete` 的三处分叉
+
+PostgreSQL 那侧是路由文件里的 184 行内联实现，SQLite 那侧是 `services/taskDelete.ts` 的 406 行。
+**算法同形**（同一套前置门、同一个终态维护 claim、同一段父链 `branch_started_at` 重算——
+PG 的注释里就写着「与 SQLite 的 `services/taskDelete.ts` 同形」），分叉有三处：
+
+1. **前置门的次序**。SQLite：`task-not-terminal` → **`task-active`** → `task-internal`；
+   PG：`task-not-terminal` → `task-internal` → （树循环里逐行 `isActive`）。
+   一个**既是框架内部、又有活进程**的任务，两侧给出不同的 code。
+   **判据同 `diff` 那一刀**：先报永久性的主因，再报暂时性的次因——`task-internal` 是
+   「这个任务永远不能直接删」，`task-active` 是「先取消再来」。把用户引向一条死路比
+   引向一次重试更糟，所以**取 PG 的次序**。
+2. **活跃度从哪里读**。SQLite 读模块级全局 `isTaskActive`（legacy 进程内注册表），
+   PG 读注入的 `ActiveTaskExecutionParticipant`。取 PG 的——那个端口的文档原话就是
+   「runtime 绝不 import legacy 注册表」，而且**只有注入版本才能在两个引擎上被测**
+  （这也是 W7 的 A19 至今没有 `task-active` 那一格的原因：SQLite 侧驱不动模块全局）。
+3. **提交后的通知**。SQLite 直接 `tasksListBroadcaster.broadcast`，PG 走
+   `deletionEvents.committed` 端口。与第 4 刀的 `membershipEvents` 同形——合并后共用实现
+   自己广播，PG 的那个端口与它在组合根里的绑定一并退役。
+
+### 还要动组合根
+
+合并后 `deleteTask` 需要注入 `activity`，三个根（`server.ts` / `cli/start.ts` / 测试夹具）
+各补一行，与第 3 刀补 `owners` 同形。**不给默认值**——全可选的依赖面会静默降级
+（`docs/dev-gotchas.md` 有这条）。
+
+### 合并后才补得上的覆盖
+
+A19 现在只有四道门。合并注入 `activity` 之后补两格：`task-active` 本身，
+以及**两门同时失败**（内部 + 活跃）的次序格——后者正是「检查次序类判据要让两道门同时失败」
+那条踩坑的又一处应用。

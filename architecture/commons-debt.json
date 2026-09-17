@@ -5180,7 +5180,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:7a227aa3d1e4db08c1fa"
+        "import:823661a710cb9971b280"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -7866,15 +7866,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6d50e3d9c74127e23f357de8fce87e92a29c25c10ec3834d6a49726e3e115e8e",
+    "sourceDigest": "sha256:303e73f091c9e8acdb2807fc5ee0b01f19d1c853feb1130da7e84ef9c71171fc",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "07b187db08f6d9f17d67e4ba1c2de85f697e3c1c",
-    "contentDigest": "sha256:784e9d7668f081122852b99c1fc0e37184c6de344c29a81b4c6e8d79f0140a19",
+    "currentSnapshotSha": "a889b978cdaef28cd54576b148854a30d2b9ff67",
+    "contentDigest": "sha256:aa08b603da3458cb6840b2c3b55304bd972e4c01060fc5487b86a70d5ab29090",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

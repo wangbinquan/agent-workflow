@@ -26,6 +26,12 @@
 //   (memory / DR / append-only audit — they outlive the task, dangling taskId
 //   is intended).
 //
+//   RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀的前置）：本文件的库句柄从 bun:sqlite 专有的
+//   `LegacySqliteTaskDatabase` 放宽到中立句柄。原来卡住它的只有五处 `.get()`——那是
+//   bun:sqlite 独有的同步终结符，中立面上没有对应物；改写成 `await … .limit(1)` 再取 `[0]`
+//   之后整份实现就是普通 drizzle 查询 + 中立事务原语了。这是把 `delete` 两个引擎合成一份的
+//   必要前提（PostgreSQL 那侧目前是另一份 184 行的内联实现）。
+//
 //   Disk cleanup is best-effort AFTER the tx: worktree + snapshot refs + scratch.
 //   Anything that fails (or a crash between tx-commit and cleanup) is swept by
 //   the worktree/scratch orphan GC — a tasks row no longer anchors those dirs,
@@ -45,7 +51,7 @@ import {
   taskFeedback,
   taskRepos,
   tasks,
-  type LegacySqliteTaskDatabase,
+  type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
@@ -78,10 +84,10 @@ export interface DeleteTaskResult {
  * ConflictError (409) for a non-terminal / active / fusion-internal task.
  */
 export async function deleteTask(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   taskId: string,
 ): Promise<DeleteTaskResult> {
-  const row = await db
+  const rows = await db
     .select({
       id: tasks.id,
       status: tasks.status,
@@ -93,7 +99,8 @@ export async function deleteTask(
     })
     .from(tasks)
     .where(eq(tasks.id, taskId))
-    .get()
+    .limit(1)
+  const row = rows[0]
   if (row === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
 
   // Front gates (pre-lock cheap checks).
@@ -135,11 +142,13 @@ export async function deleteTask(
   // terminal implies its call rows are settled (boot reap flips crashed rows
   // to interrupted, which is terminal).
   if (row.parentTaskId !== null) {
-    const parent = await db
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, row.parentTaskId))
-      .get()
+    const parent = (
+      await db
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, row.parentTaskId))
+        .limit(1)
+    )[0]
     if (parent !== undefined && !isTerminalTaskStatus(parent.status as TaskStatus)) {
       throw new ConflictError(
         'task-parent-active',
@@ -245,11 +254,9 @@ export async function deleteTask(
         claim: claimBeforeDelete,
         expectedState: 'io-complete',
       })
-      const fresh = await tx
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get()
+      const fresh = (
+        await tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      )[0]
       if (fresh === undefined) {
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
@@ -319,21 +326,25 @@ export async function deleteTask(
       let cursor: string | null = row.parentTaskId
       for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
         await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, cursor)
-        const parent = await tx
-          .select({
-            id: tasks.id,
-            parentTaskId: tasks.parentTaskId,
-            startedAt: tasks.startedAt,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, cursor))
-          .get()
+        const parent = (
+          await tx
+            .select({
+              id: tasks.id,
+              parentTaskId: tasks.parentTaskId,
+              startedAt: tasks.startedAt,
+            })
+            .from(tasks)
+            .where(eq(tasks.id, cursor))
+            .limit(1)
+        )[0]
         if (parent === undefined) break
-        const childMax = await tx
-          .select({ v: sql<number>`coalesce(max(${tasks.branchStartedAt}), 0)`.mapWith(Number) })
-          .from(tasks)
-          .where(eq(tasks.parentTaskId, parent.id))
-          .get()
+        const childMax = (
+          await tx
+            .select({ v: sql<number>`coalesce(max(${tasks.branchStartedAt}), 0)`.mapWith(Number) })
+            .from(tasks)
+            .where(eq(tasks.parentTaskId, parent.id))
+            .limit(1)
+        )[0]
         const recomputed = Math.max(parent.startedAt ?? 0, childMax?.v ?? 0)
         await tx
           .update(tasks)
@@ -384,7 +395,7 @@ export { recoverInterruptedTaskDeletes, type DeleteRecoveryResult }
  * against dirty data via a visited set.
  */
 async function findNonTerminalDescendant(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   rootId: string,
 ): Promise<{ id: string; status: string } | null> {
   const visited = new Set<string>([rootId])
