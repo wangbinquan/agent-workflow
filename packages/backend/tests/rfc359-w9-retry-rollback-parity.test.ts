@@ -114,15 +114,23 @@ async function seedFixture(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
-  await db.insert(users).values({
-    id: USER_ID,
-    username: USER_ID,
-    displayName: USER_ID,
-    role: 'admin',
-    status: 'active',
-    createdAt: 1,
-    updatedAt: 1,
-  })
+  // 同一条用例可能建两个任务（跨任务那格），用户只该插一次。
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, USER_ID))
+    .limit(1)
+  if (existing.length === 0) {
+    await db.insert(users).values({
+      id: USER_ID,
+      username: USER_ID,
+      displayName: USER_ID,
+      role: 'admin',
+      status: 'active',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+  }
   const definition = options.definition ?? DEFINITION
   const workflowId = ulid()
   await db
@@ -410,6 +418,107 @@ describeEachProvider('RFC-359 W9 —— retry 的不级联 / 帧继承 / 任务�
       errorMessage: null,
       failedNodeId: null,
       finishedAt: null,
+    })
+  })
+})
+
+// RFC-099 审计（2026-07-15）锁的那条门序：**校验 nodeRunId 归属必须早于准入 CAS**。
+// 旧顺序先 CAS 再查 `runRow.taskId`，于是一个伪造 / 跨任务的 nodeRunId 会把一个已完成的
+// 任务打成「没有调度器的 pending 僵尸」并抹掉它的完成元数据，然后才报 404。
+// `retry-node-guard-order.test.ts` 在 SQLite 侧锁着它；这里是**两个引擎的对拍**——
+// 门序在两份实现里各写了一遍，没有任何东西比较过它们。
+// 变异实证（两半各验一次、分别落在两侧）：
+//   · SQLite 的归属校验放宽成「只查存在」（`runRow.taskId !== taskId` 去掉）
+//     ⇒ 「跨任务」那格红——证明这条锁的是**归属**而不只是存在；
+//   · PG 的 `node-run-not-found` 换成别的码 ⇒ 两格都红——证明错误码那一半也在被断言。
+describeEachProvider('RFC-359 W9 —— retry 的 nodeRunId 归属门早于 CAS', (harness) => {
+  let fixture: Fixture | undefined
+  afterEach(() => {
+    fixture?.cleanup()
+    fixture = undefined
+  })
+
+  test('伪造的 nodeRunId：404 且任务一个字段都没动', async () => {
+    fixture = await seedFixture(harness.db, {
+      status: 'done',
+      runs: [{ nodeId: 'doc', status: 'done' }],
+    })
+    const before = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+    )[0]
+    const execution = await executionFor(harness, fixture)
+    let code = 'no-throw'
+    try {
+      await execution.provider.routes.tasks.retry({
+        actor: execution.actor,
+        taskId: fixture.taskId,
+        nodeRunId: 'no_such_node_run',
+        cascade: true,
+      })
+    } catch (error) {
+      const value =
+        error !== null && typeof error === 'object' && 'code' in error
+          ? Reflect.get(error, 'code')
+          : null
+      code = typeof value === 'string' ? value : `no-code:${String(error)}`
+    }
+    const after = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+    )[0]
+
+    expect(code).toBe('node-run-not-found')
+    expect(
+      {
+        status: after?.status,
+        finishedAt: after?.finishedAt,
+        errorSummary: after?.errorSummary,
+      },
+      '被拒的重试改动了任务——门序退回了 CAS 在前的那一版',
+    ).toEqual({
+      status: before?.status,
+      finishedAt: before?.finishedAt,
+      errorSummary: before?.errorSummary,
+    })
+  })
+
+  test('跨任务的 nodeRunId：同样 404 且两个任务都没动', async () => {
+    fixture = await seedFixture(harness.db, {
+      status: 'done',
+      runs: [{ nodeId: 'doc', status: 'done' }],
+    })
+    const other = await seedFixture(harness.db, {
+      status: 'failed',
+      runs: [{ nodeId: 'doc', status: 'failed' }],
+    })
+    const execution = await executionFor(harness, fixture)
+    let code = 'no-throw'
+    try {
+      await execution.provider.routes.tasks.retry({
+        actor: execution.actor,
+        taskId: fixture.taskId,
+        // 别人任务里的行——归属门必须在 CAS 之前把它挡住。
+        nodeRunId: other.nodeRunId,
+        cascade: true,
+      })
+    } catch (error) {
+      const value =
+        error !== null && typeof error === 'object' && 'code' in error
+          ? Reflect.get(error, 'code')
+          : null
+      code = typeof value === 'string' ? value : `no-code:${String(error)}`
+    }
+    const mine = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+    )[0]
+    const theirs = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, other.taskId)).limit(1)
+    )[0]
+    other.cleanup()
+
+    expect(code).toBe('node-run-not-found')
+    expect({ mine: mine?.status, theirs: theirs?.status }).toEqual({
+      mine: 'done',
+      theirs: 'failed',
     })
   })
 })
