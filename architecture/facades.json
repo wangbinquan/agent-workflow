@@ -3440,6 +3440,7 @@
         "import:3558bcec570b7c83b887",
         "import:6b77f3d782a1e18e57de",
         "import:c1a0be9d0441ca517d40",
+        "import:c690e731ce597cf944f4",
         "import:c9f407795bed572c0bf9",
         "import:da94ead1e9d351175e8f",
         "import:e7277e67125b1c4b2aa9",
@@ -6341,5 +6342,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a5d9dd8f18e3c0a6357bb892a76f4b2c5da3ddbe3fd9bb07bb3d493d0e0b2ae"
+  "sourceDigest": "sha256:3d92f94e5a27c14cf8d69bf950af56a8784b7b39cd6a150c02509944b05775d7"
 }

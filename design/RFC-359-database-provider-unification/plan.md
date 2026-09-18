@@ -17578,3 +17578,38 @@ expect(cancelStatements, '准入预检不得退回 bun:sqlite 的同步读').not
 （`server.ts` / `cli/start.ts` / 资源上限 / 空闲超时收割 / 数字员工 / fusion 引擎 /
 SQLite 参与者……），测试上有 **37 处 / 40 个文件**。按第 9 / 10 刀的做法拆成两半：
 上半把生产接线改指共用实现并留下退役那份，下半迁测试面再删。
+
+### 第 11 刀第 1 步的补格：**线性化面照出一处用户可见的真分叉**（已修）
+
+上面那七格全是**准入 / 级联**面。它们全同，但那不是全貌——`cancel` 还有一维：
+**与评审写入共用任务级 FIFO**。
+
+契约（`review-cancel-concurrency` 的 `cancel first …` / `… first` 两组锁的就是它）：
+取消在函数入口**同步取号**（`reserveTaskReviewMutationSlot`，取号与入队之间不许有 await），
+之后才 await 自己的前置读。少了取号，取消就会插到一个正在进行的评审写入中间。
+
+**PostgreSQL 那一侧的 `cancelCascade` 整个没有取号。**
+
+后果是用户可见的：那个部署上一边提交评审决定、一边点取消，两者的落库会交错；
+SQLite 上取消老老实实排在后面。
+
+#### 它为什么一直没人发现
+
+`review-cancel-concurrency.test.ts` **确实跑两个引擎**（它的文件头就写着这件事的理由），
+但两条 lane 调的都是 `cancelTask`——**SQLite 那份实现**。也就是说 PostgreSQL 部署上真正会
+执行的那份（`cancelCascade`）从来没被这条契约验过；PG lane 验的是「另一侧的实现跑在 PG 库上」。
+
+**判据教训**：`describeEachProvider` 只保证「库换了」，**不保证「被测的实现换了」**。
+一份对拍要真验两个引擎，被测物必须取自**生产装配**（`provider.*`），
+而不是直接 import 某一侧的函数。第 9 / 10 / 11 刀的对拍都是这么写的，那份既有判据不是。
+
+#### 处置
+
+`rfc359-w11-cancel-parity` 加第八格（H）补上这一维：先占住任务的评审变更槽，再发起**生产**取消，
+断言取消必须排队而不是插进去。加进去时 **postgresql lane 当场红**（任务在槽还占着时就已经 canceled）。
+
+修法是给 `cancelCascade` 补上同一个取号器，槽的覆盖面与另一侧**逐字对齐**：只包住准入与落库
+那一段，停运行时与级联子任务在槽外（前者要等最多 5s，后者取的是子任务自己的槽）。修完两侧全绿。
+
+记账：多出一条 `postgresqlChildTaskLifecycleParticipant.ts → services/reviewMutationCoordinator.ts`
+的边（与该目录下既有的三处同名 import 同形同 owner），已声明 `allowGrowth`。

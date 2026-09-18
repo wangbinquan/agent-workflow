@@ -686,6 +686,22 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 **定式**：`git add architecture/ design/RFC-294-backend-layered-target-architecture/status.md`
 ——**整目录加那一个文件，永远一起**。commit 时的 pathspec 同样写这两项。
 
+### `describeEachProvider` 只保证「库换了」，**不保证「被测的实现换了」**（2026-09-18 实撞，照出一处真分叉）
+
+一份对拍写成 `describeEachProvider(...)`，两条 lane 都跑，看起来是双引擎判据。但如果用例体里
+**直接 import 某一侧的实现函数**（而不是从生产装配取），那么 PostgreSQL lane 验的是
+「**SQLite 那份实现跑在 PG 库上**」——另一侧部署里真正会执行的那份，一次都没被验过。
+
+实撞的那条：`review-cancel-concurrency` 锁「取消与评审写入共用任务级 FIFO」，文件头明确写了
+「这条契约必须在 PostgreSQL 上也跑」，而两条 lane 调的都是 SQLite 那份 `cancelTask`。
+PG 部署上真正跑的那份**整个没有取号**——一边提交评审决定、一边点取消，两者的落库会交错。
+补一格从**生产装配**（`provider.cancellation.cancel`）发起同一个操作，PG lane 当场红。
+
+**定式**：双引擎对拍的被测物必须取自**生产装配**（`provider.*` / 组合根交出来的那份），
+不要 `import { someImpl } from '.../sqliteXxx'` 再喂两个库。
+自查一句话：**「把这一侧的实现整个删掉，这条用例的另一条 lane 还能跑吗？」**
+——能跑，说明它验的根本不是那一侧。
+
 ### 源码文本判据**必须先去注释**——否则会绿在「解释这条证据为什么已经不在了的那段话」上（2026-09-18 实撞）
 
 一条守卫要证「这段代码里有 X」，写成纯文本 `toContain('X')`。后来 X 被改掉了，

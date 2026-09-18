@@ -57,6 +57,7 @@ import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransact
 import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import { selectResumeRollbackTargets } from '../application/resumeRollbackTargets'
+import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
@@ -543,110 +544,130 @@ async function cancelCascade(
     | Readonly<{ readonly kind: 'user' }>
     | Readonly<{ readonly kind: 'parent-cascade'; readonly parentTaskId: string }>,
 ): Promise<void> {
+  // RFC-359 AC-1（第 11 刀第 1 步照出的真分叉）：**取消与评审写入共用任务级 FIFO**。
+  //
+  // 契约是 `review-cancel-concurrency` 的 `cancel first …` / `… first` 两组锁的那一条：
+  // 取消在函数入口**同步取号**（`reserveTaskReviewMutationSlot`，取号与入队之间不许有 await），
+  // 之后才 await 自己的前置读；少了取号，取消就会插到一个正在进行的评审写入中间。
+  //
+  // 这一侧此前**整个没有取号**。后果是用户可见的：PostgreSQL 部署上，一边提交评审决定、
+  // 一边点取消，两者的落库会交错——而 SQLite 上取消老老实实排在后面。
+  // 那份既有判据虽然跑两个引擎，但两条 lane 调的都是 `cancelTask`（另一侧的实现），
+  // 于是这一侧从来没被它验过（`rfc359-w11-cancel-parity` 的 H 格补上了这一维，
+  // 加进去时 postgresql lane 当场红）。
+  //
+  // 槽的覆盖面与另一侧**逐字对齐**：只包住准入与落库那一段；停运行时与级联子任务在槽外
+  //（前者要等最多 5s，后者取的是子任务自己的槽）。
+  const acquireMutationSlot = reserveTaskReviewMutationSlot(taskId)
   let stopToken = dependencies.executionModule.runtimeRegistry.tokenForTask(taskId)
   let revokedRevision: number | null = null
-  const committed = await withSerializableTaskExecution(dependencies.db, async (tx) => {
-    const task = (
-      await tx
-        .select({
-          status: tasks.status,
-          lifecycleEventRevision: tasks.lifecycleEventRevision,
-          errorSummary: tasks.errorSummary,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-    )[0]
-    if (task === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-    if (!CANCELABLE_TASK_STATUSES.includes(task.status as TaskStatus)) {
-      throw new ConflictError(
-        'task-not-cancelable',
-        `task '${taskId}' is already terminal (${task.status}); nothing to cancel`,
-      )
-    }
-    const owner = (
-      await tx.select().from(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
-    )[0]
-    if (owner?.state === 'claimed') {
-      stopToken ??= dependencies.executionModule.runtimeRegistry.tokenForOwner(owner)
-      const revoked = await tx
-        .update(taskExecutionOwners)
-        .set({
-          state: 'revoked',
-          revision: owner.revision + 1,
-          recoveryCode: 'terminal-control-cancel',
-          updatedAt: Date.now(),
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, taskId),
-            eq(taskExecutionOwners.ownerId, owner.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, owner.daemonGeneration),
-            eq(taskExecutionOwners.epoch, owner.epoch),
-            eq(taskExecutionOwners.revision, owner.revision),
-            eq(taskExecutionOwners.state, 'claimed'),
-          ),
+  const committed = await acquireMutationSlot(async () =>
+    withSerializableTaskExecution(dependencies.db, async (tx) => {
+      const task = (
+        await tx
+          .select({
+            status: tasks.status,
+            lifecycleEventRevision: tasks.lifecycleEventRevision,
+            errorSummary: tasks.errorSummary,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .limit(1)
+      )[0]
+      if (task === undefined)
+        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      if (!CANCELABLE_TASK_STATUSES.includes(task.status as TaskStatus)) {
+        throw new ConflictError(
+          'task-not-cancelable',
+          `task '${taskId}' is already terminal (${task.status}); nothing to cancel`,
         )
-        .returning({ revision: taskExecutionOwners.revision })
-      if (revoked[0] === undefined) {
-        throw new ConflictError('task-cancel-raced', `task '${taskId}' owner changed`)
       }
-      revokedRevision = revoked[0].revision
-    }
-    const now = Date.now()
-    const projection = taskStopProjection(cause)
-    const nextRevision = task.lifecycleEventRevision + 1
-    const changed = await tx
-      .update(tasks)
-      .set({
+      const owner = (
+        await tx.select().from(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
+      )[0]
+      if (owner?.state === 'claimed') {
+        stopToken ??= dependencies.executionModule.runtimeRegistry.tokenForOwner(owner)
+        const revoked = await tx
+          .update(taskExecutionOwners)
+          .set({
+            state: 'revoked',
+            revision: owner.revision + 1,
+            recoveryCode: 'terminal-control-cancel',
+            updatedAt: Date.now(),
+          })
+          .where(
+            and(
+              eq(taskExecutionOwners.taskId, taskId),
+              eq(taskExecutionOwners.ownerId, owner.ownerId),
+              eq(taskExecutionOwners.daemonGeneration, owner.daemonGeneration),
+              eq(taskExecutionOwners.epoch, owner.epoch),
+              eq(taskExecutionOwners.revision, owner.revision),
+              eq(taskExecutionOwners.state, 'claimed'),
+            ),
+          )
+          .returning({ revision: taskExecutionOwners.revision })
+        if (revoked[0] === undefined) {
+          throw new ConflictError('task-cancel-raced', `task '${taskId}' owner changed`)
+        }
+        revokedRevision = revoked[0].revision
+      }
+      const now = Date.now()
+      const projection = taskStopProjection(cause)
+      const nextRevision = task.lifecycleEventRevision + 1
+      const changed = await tx
+        .update(tasks)
+        .set({
+          status: 'canceled',
+          finishedAt: now,
+          errorSummary: projection.summary,
+          errorMessage: projection.code,
+          lifecycleEventRevision: nextRevision,
+        })
+        .where(and(eq(tasks.id, taskId), eq(tasks.status, task.status)))
+        .returning({ id: tasks.id })
+      if (changed[0] === undefined) {
+        throw new ConflictError('task-cancel-raced', `task '${taskId}' changed`)
+      }
+      const canceledRuns = await tx
+        .update(nodeRuns)
+        .set({
+          status: 'canceled',
+          finishedAt: now,
+          errorMessage: projection.code,
+        })
+        .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, NODE_CANCELABLE_STATUSES)))
+        .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
+      await terminalizeTaskExecutionIntentsInTx(tx, {
+        taskId,
+        state: 'canceled',
+        failureCode: projection.code,
+        now,
+      })
+      const childIds = (
+        await tx
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(
+            and(eq(tasks.parentTaskId, taskId), inArray(tasks.status, CANCELABLE_TASK_STATUSES)),
+          )
+      ).map((child) => child.id)
+      const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
+        taskId,
+        lifecycleRevision: nextRevision,
+        previousStatus: task.status as TaskStatus,
         status: 'canceled',
-        finishedAt: now,
         errorSummary: projection.summary,
-        errorMessage: projection.code,
-        lifecycleEventRevision: nextRevision,
+        nodeChanges: canceledRuns.map((run) => ({
+          nodeRunId: run.id,
+          nodeId: run.nodeId,
+          status: 'canceled',
+          cause: projection.code,
+        })),
+        occurredAt: now,
       })
-      .where(and(eq(tasks.id, taskId), eq(tasks.status, task.status)))
-      .returning({ id: tasks.id })
-    if (changed[0] === undefined) {
-      throw new ConflictError('task-cancel-raced', `task '${taskId}' changed`)
-    }
-    const canceledRuns = await tx
-      .update(nodeRuns)
-      .set({
-        status: 'canceled',
-        finishedAt: now,
-        errorMessage: projection.code,
-      })
-      .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, NODE_CANCELABLE_STATUSES)))
-      .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-    await terminalizeTaskExecutionIntentsInTx(tx, {
-      taskId,
-      state: 'canceled',
-      failureCode: projection.code,
-      now,
-    })
-    const childIds = (
-      await tx
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(and(eq(tasks.parentTaskId, taskId), inArray(tasks.status, CANCELABLE_TASK_STATUSES)))
-    ).map((child) => child.id)
-    const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
-      taskId,
-      lifecycleRevision: nextRevision,
-      previousStatus: task.status as TaskStatus,
-      status: 'canceled',
-      errorSummary: projection.summary,
-      nodeChanges: canceledRuns.map((run) => ({
-        nodeRunId: run.id,
-        nodeId: run.nodeId,
-        status: 'canceled',
-        cause: projection.code,
-      })),
-      occurredAt: now,
-    })
-    return { childIds, eventRefs: eventRef === null ? [] : [eventRef] }
-  })
+      return { childIds, eventRefs: eventRef === null ? [] : [eventRef] }
+    }),
+  )
   await publishCommittedEventsAfterCommit(committed.eventRefs)
 
   if (stopToken !== null) {

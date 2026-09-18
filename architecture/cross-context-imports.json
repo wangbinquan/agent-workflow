@@ -59673,6 +59673,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c690e731ce597cf944f4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#reserveTaskReviewMutationSlot",
+      "toPath": "packages/backend/src/services/reviewMutationCoordinator.ts",
+      "toSymbol": "reserveTaskReviewMutationSlot",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
       "fromSymbol": "$file",
@@ -77607,9 +77624,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4565,
+    "architectureExceptions": 4566,
     "implementationSccs": 0,
-    "observedEdges": 5083,
+    "observedEdges": 5084,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -140147,6 +140164,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
+      "id": "import:c690e731ce597cf944f4",
+      "owner": "task-execution",
+      "removeAfterWave": "W4",
+      "role": "legacy-outbound",
+      "specifier": "@/services/reviewMutationCoordinator",
+      "syntax": "static-import",
+      "targetSymbol": "reserveTaskReviewMutationSlot",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/reviewMutationCoordinator.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#reserveTaskReviewMutationSlot"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file",
@@ -159483,7 +159516,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a5d9dd8f18e3c0a6357bb892a76f4b2c5da3ddbe3fd9bb07bb3d493d0e0b2ae",
+  "sourceDigest": "sha256:3d92f94e5a27c14cf8d69bf950af56a8784b7b39cd6a150c02509944b05775d7",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

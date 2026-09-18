@@ -37,6 +37,7 @@ import { nodeRuns, tasks, users, workflows } from '@/db/schema'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 
 const USER_ID = 'u_rfc359_w11'
 
@@ -254,6 +255,49 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     expect(child?.status).toBe('canceled')
     expect(child?.errorMessage).toBe('canceled-by-parent-cascade')
   })
+
+  // ⚠️ 这一格不是准入面，是**线性化面**——而它正是上面七格看不见的那一维。
+  //
+  // 契约（`review-cancel-concurrency.test.ts` 的 `cancel first …` / `… first` 两组锁的就是它）：
+  // **评审写入与用户取消共用任务级 FIFO**，取消在函数入口**同步取号**
+  //（`reserveTaskReviewMutationSlot`），之后才 await 自己的前置读。少了取号，取消就会插到
+  // 一个正在进行的评审写入中间——用户可见的后果是评审决定的副作用与取消交错落库。
+  //
+  // 那份既有判据虽然跑两个引擎，但两条 lane 调的都是 `cancelTask`（SQLite 那份实现），
+  // 也就是说 **PostgreSQL 部署上真正会执行的那份（`cancelCascade`）从来没被这条契约验过**。
+  // 本格用生产取消面把这一维补上。
+  test('H 取消与评审写入共用任务级 FIFO：槽被占着时取消必须排队', async () => {
+    const seeded = await seedFixture(harness.db)
+    fixture = seeded
+    const execution = await createEachProviderTaskExecution(
+      harness,
+      { appHome: seeded.appHome, defaultNodeRetries: 0 },
+      USER_ID,
+    )
+    let release: () => void = () => {}
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const holder = withTaskReviewMutationLock(seeded.taskId, async () => {
+      await blocked
+    })
+    const canceling = execution.provider.cancellation
+      .cancel({ taskId: seeded.taskId, cause: { kind: 'user' } })
+      .catch(() => undefined)
+    // 给取消一个**真实**的机会跑完：它要是没取号，这段时间足够它整个落库。
+    await Bun.sleep(250)
+    const midway = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
+    )[0]
+    expect(midway?.status, '取消必须排在评审变更槽之后，而不是插进去').toBe('running')
+    release()
+    await holder
+    await canceling
+    const after = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
+    )[0]
+    expect(after?.status, '槽释放之后取消照常落地').toBe('canceled')
+  }, 30_000)
 
   test('G 级联撞上已终态的子任务 → 幂等空操作，父仍然取消成功', async () => {
     const seeded = await seedFixture(harness.db, { childStatus: 'done' })
