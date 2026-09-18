@@ -671,8 +671,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-359 AC-1（第 8 刀）：摘要随手动 / 自动修复合一更新——SQLite 任务路由新增
     // `persistence` / `resumeTaskAs` / `repair` 三样（共用那份修复实现的依赖面），
     // 同时 `repairOptions` / `applyRepair` 两个动词从内联转成转发。
+    // RFC-359 AC-1（第 9 刀）：摘要随 `retry` 合一更新——SQLite 任务路由再新增
+    // `repositoryPreparationRetry` / `cancelChildTaskForCascade` 两样（共用那份 `retry`
+    // 实现的依赖面：`__repo_prep__` 的自有重试路径，与级联取消旧世代子任务）。
+    // **装配图确实变了，是有意的**：这条路由此前转 `services/task.ts` 的 `retryNode`
+    //（485 行，retry 的第二份实现），现在与 PostgreSQL 共用同一份 `retryNodeProjection`。
+    // 两样依赖都用本文件既有的同一句写法（准备重试同 `cli/start.ts`，级联取消走 `cancelTask`）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '0ec829c1b5c96dc1367a00d3409bc4f84b21229eaca71aeea296e0c6a5ef61aa',
+      'c4b7a0774e23bfdf63d48b1aa473a0f671a24b49b1438b1d62f29994e235f1a3',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

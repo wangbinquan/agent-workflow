@@ -174,9 +174,21 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // 本条锁的是「剩下的每一条人工续跑入口都还在透传启动配置」，那些一处没动。
     // RFC-359 AC-1（第 8 刀）：5 → 3。少掉的两处是 `repairOptions` / `applyRepair`
     // ——它们不再自己拼 `StartTaskDeps`，改为交给与 PostgreSQL 共用的那份修复实现。
+    // RFC-359 AC-1（第 9 刀）：3 → 2。少掉的那一处是 `retry`——`retry` 两份实现合一，
+    // 它不再自己拼 `StartTaskDeps`，复活整段交给注入的 `resumeTaskAs`。
     expect(
       (sqliteOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length,
-    ).toBe(3)
+    ).toBe(2)
+    // **但启动配置在重试这条路上一个字都不能丢**——这才是 RFC-103 要锁的东西，数字只是它的
+    // 影子。合并之后它的正面锚点是这两句：路由把 `retry` 交给共用投影，而共用投影的复活
+    // 依赖由组合根绑成与 `resume` 动词**同一句** `buildStartTaskDeps`（后者内部
+    // `resolveLaunchRuntimeConfig(configPath)`，由上面 `depsSrc` 那条锁着）。
+    expect(sqliteOperations).toContain('retry: (input) =>\n      retryNodeProjection(')
+    expect(sqliteOperations).toContain('resumeTaskAs: dependencies.resumeTaskAs')
+    const serverSrc = readFileSync(join(import.meta.dir, '../src/server.ts'), 'utf8')
+    const boundResume = serverSrc.indexOf('resumeTaskAs: async (actor, taskId) => {')
+    expect(boundResume, 'SQLite 组合根必须绑一份真的复活').toBeGreaterThan(-1)
+    expect(serverSrc.slice(boundResume, boundResume + 400)).toContain('buildStartTaskDeps(')
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {
@@ -207,8 +219,11 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // RFC-332 把 start/resume/retry/retry-prep 四份 spread 收进一个 coordinator
     // factory；RFC-333 的 exact human-gate wake 复用同一 factory，但不是第五份
     // admission。配置单源仍只出现一次，四个 admission + 一个 wake 都必须接入。
+    // RFC-359 AC-1（第 9 刀）：5 → 4。`retryNode` 整份删除（`retry` 两份实现合一），
+    // 它那台 coordinator 随之出账——重试的驱动改由紧随其后的 `resumeTask` 那一台负责，
+    // 配置单源不变（仍只有一处 `...runtimeConfigOpts(`）。
     expect(spreads).toHaveLength(1)
-    expect(taskSrc.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(5)
+    expect(taskSrc.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(4)
     const wakeStart = taskSrc.indexOf('export async function wakeHumanGateContinuation(')
     const wakeEnd = taskSrc.indexOf('\nexport ', wakeStart + 1)
     const wakeBlock = taskSrc.slice(wakeStart, wakeEnd)

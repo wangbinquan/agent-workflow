@@ -46834,9 +46834,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4bbeed18f5ade6b0a66"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:forCall.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -47033,9 +47031,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4bbeed18f5ade6b0a66"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:forSchedule.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -47211,9 +47207,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4bbeed18f5ade6b0a66"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:forTaskExecution.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -47397,9 +47391,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:f4bbeed18f5ade6b0a66"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:forWebhook.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -159710,7 +159702,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d4e5c08cce19c54a62dc7107a3a9cd392ea378b1c5a035ad06e91e7bd4fa436e",
+  "sourceDigest": "sha256:136370071027722d537f122dcc8baa41e684520acd22eb2925ace8810d65a949",
   "targetContexts": [
     "collaboration",
     "development-automation",

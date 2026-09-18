@@ -7,25 +7,24 @@
 //
 // Locks the upstream half of the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { retryNode } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
-  let db: DbClient
+// RFC-359 AC-1（第 9 刀）：`retry` 两份实现合一之后本文件验的是**共用**那一份的级联口径，
+// 两个引擎各跑一遍——合并前它只喂 SQLite 那份 `retryNode`。
+describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let repoPath: string
 
@@ -38,7 +37,7 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
     writeFileSync(join(repoPath, 'README.md'), '# repo\n')
     await runGit(repoPath, ['add', '.'])
     await runGit(repoPath, ['commit', '-q', '-m', 'init'])
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   afterEach(() => {
@@ -146,17 +145,7 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
     // should still skip it because of the kind filter, not because there's
     // nothing to inherit from.)
 
-    await retryNode(db, taskId, agentRunId, {
-      cascade: true,
-      deps: {
-        db,
-        taskRecoveryOperations: taskRecoveryOperations(db),
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      },
-    })
+    await createRetryEngine(db, {}).retry({ taskId: taskId, nodeRunId: agentRunId, cascade: true })
 
     // The fresh placeholder must exist for agent_1 (retryIndex=1, failed),
     // but NOT for clarify_1 / rev_1 / out_1.
@@ -224,17 +213,7 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
       finishedAt: Date.now() - 100,
     })
 
-    await retryNode(db, taskId, aRunId, {
-      cascade: false,
-      deps: {
-        db,
-        taskRecoveryOperations: taskRecoveryOperations(db),
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      },
-    })
+    await createRetryEngine(db, {}).retry({ taskId: taskId, nodeRunId: aRunId, cascade: false })
 
     const placeholders = (
       await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))

@@ -50,6 +50,10 @@
 // above every seeded id (fresh time component).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createRetryEngine } from './helpers/retryEngine'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -58,9 +62,6 @@ import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { retryNode } from '../src/services/task'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -261,7 +262,11 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // ≥2ms gap: the production ulid() inside retryNode gets a strictly larger
     // time component than every seeded id (no same-ms random-order flake).
     await Bun.sleep(2)
-    await retryNode(h.db, taskId, upRunId, { cascade: true, deps: DEPS(h) })
+    await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
+      taskId: taskId,
+      nodeRunId: upRunId,
+      cascade: true,
+    })
 
     const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
 
@@ -345,7 +350,11 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     })
 
     await Bun.sleep(2)
-    await retryNode(h.db, taskId, upRunId, { cascade: true, deps: DEPS(h) })
+    await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
+      taskId: taskId,
+      nodeRunId: upRunId,
+      cascade: true,
+    })
 
     const innerRows = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -406,7 +415,11 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     })
 
     await Bun.sleep(2)
-    await retryNode(h.db, taskId, upTopId, { cascade: true, deps: DEPS(h) })
+    await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
+      taskId: taskId,
+      nodeRunId: upTopId,
+      cascade: true,
+    })
 
     const placeholders = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))

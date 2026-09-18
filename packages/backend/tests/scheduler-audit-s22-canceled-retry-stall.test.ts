@@ -20,6 +20,10 @@
 // 后断言行集。
 
 import { afterAll, describe, expect, test } from 'bun:test'
+
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createRetryEngine } from './helpers/retryEngine'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -28,11 +32,8 @@ import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
-import { retryNode } from '../src/services/task'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 // 同毫秒多行排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）——freshest
 // 判定是纯 ULID id 序，monotonicFactory 保证后铸的行恒为 latest。
@@ -285,9 +286,9 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     const final = await withEnv(
       { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'ok' }) },
       async () => {
-        const next = await retryNode(db, taskId, runA, {
-          cascade: true,
-          deps: {
+        const next = await createRetryEngine(db, {
+          appHome: APP_HOME,
+          resumeWith: {
             db,
             taskRecoveryOperations: taskRecoveryOperations(db),
             schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
@@ -295,6 +296,10 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
             appHome: APP_HOME,
             binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           },
+        }).retry({
+          taskId: taskId,
+          nodeRunId: runA,
+          cascade: true,
         })
         // 状态门只拒 pending/running——canceled 放行（设计内 UI 流，断言保留）。
         expect(next.status).toBe('pending')
@@ -329,16 +334,20 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
 
     await expect(
-      retryNode(db, taskId, runA, {
-        cascade: true,
-        deps: {
+      createRetryEngine(db, {
+        appHome: APP_HOME,
+        resumeWith: {
           db,
           taskRecoveryOperations: taskRecoveryOperations(db),
           schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
             .schedulerDriver,
           appHome: APP_HOME,
-          binaryOverride: ['/usr/bin/env', 'true'],
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         },
+      }).retry({
+        taskId: taskId,
+        nodeRunId: runA,
+        cascade: true,
       }),
     ).rejects.toThrow(/task-still-running|is running/)
   })

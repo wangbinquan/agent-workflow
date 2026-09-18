@@ -129,7 +129,13 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // `sqliteTaskExecutionRuntimeParticipants.ts` 这个文件名（本账本按**文本**数引用，注释也算）。
   // 记账教训：这条棘轮要在**所有编辑做完之后**再跑一次——批次二 ⑤ 那一提就是中途跑绿、
   // 之后又改了注释，把 11 推上了 main（见 `docs/dev-gotchas.md` 对应条目）。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 12/3, postgresql 6/1',
+  // RFC-359 AC-1（第 9 刀）：`12/3 → 13/4`。`retry` 两份实现合一之后，共用的测试装配点
+  // `tests/helpers/retryEngine.ts` 按**生产同形**取进程活跃度——`composeLegacyTaskActivityParticipant`
+  // 就住在 `sqliteTaskExecutionRuntimeParticipants.ts` 里，`server.ts` 绑的也是同一个。
+  // **这一格是记账不是倾斜**：涨的是一份两个引擎共用的 helper（它自己被四份
+  // `describeEachProvider` 的双引擎套件消费），不是只喂 SQLite 的新判据；
+  // 参与者这一侧的命名/落位债按 plan §5hj 单独一刀还。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 13/4, postgresql 6/1',
   // RFC-359 AC-1（plan §5hh）：`postgresql 5/1 → 6/2`。新增的那次**驱动**是
   // `rfc359-w5-kernel-launch-provider-parity`——它在**两个引擎上各真启动一次**启动内核。
   // 账本按**符号名**归边，而这台内核顶着 `Postgresql` 前缀（它只服务一条启动路，
@@ -244,7 +250,12 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 第 6 刀的收尾：`36/20 → 37/20`。`rfc345-resource-acl-facade-retirement` 的兼容边账本
   // 登记了两条**过渡态**的边（共用预览住在 PG 命名的文件里），于是它提到了这个模块名。
   // 仍是命名债的读数，随写侧那一刀一起回落。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 10/2, postgresql 37/20',
+  // RFC-359 AC-1（第 9 刀）：`37/20 → 39/21`。`retry` 合一，`services/task.ts` 的 `retryNode`
+  // （485 行）整份删除，行为套件改按共用投影 import（`retryNodeProjection`）。
+  // **+2 ref / +1 drive 全部落在 postgresql 一侧，因为共用的那份住在
+  // `postgresqlTaskRouteOperations.ts` 里**——与本格上面三次同形，仍是命名债的读数：
+  // 涨上去的覆盖是两个引擎共享的同一份实现，SQLite 那一侧已经没有第二份可漂移。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 10/2, postgresql 39/21',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -278,7 +289,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次二 ⑤）：10 vs 6 → 11 vs 6，来源见上一格的注释
   //（双引擎对拍的 SQLite lane 改按组合根那条拼法造端口）。
   // RFC-359 AC-1（plan §5hn 批次二 ⑤ 收尾）：11 vs 6 → 12 vs 6，来源见上一格的注释。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 12 vs 6',
+  // RFC-359 AC-1（第 9 刀）：12 vs 6 → 13 vs 6，来源见上一格的注释（共用 retry 装配点按生产同形取活跃度）。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 13 vs 6',
   // 同上（§5hh）：差额 5 → 6 来自那次双引擎的内核启动，不是新的单侧倾斜。
   // RFC-359 AC-1（plan §5hi）：6 → 7，来源同上（SQLite 两个根改用这台内核）。
   // RFC-359 AC-1（plan §5hn 批次一）：7 → 8，来源同上。
@@ -299,7 +311,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // 第 3 刀：9 vs 20 → 9 vs 35，来源同上一格（列表三件合一 + 十四个消费者改锚）。
   // 第 4 刀：9 vs 35 → 10 vs 36，差额不变（两侧同步 +1，来源见上一格）。
   // 第 6 刀的收尾：10 vs 36 → 10 vs 37，来源同上一格。
-  'modules/task-execution/infrastructure/TaskRouteOperations: 10 vs 37',
+  // RFC-359 AC-1（第 9 刀）：10 vs 37 → 10 vs 39，来源见上一格的注释（命名债的读数，随 §5hj 回落）。
+  'modules/task-execution/infrastructure/TaskRouteOperations: 10 vs 39',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。

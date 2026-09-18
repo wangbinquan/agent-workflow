@@ -9,15 +9,17 @@
 // build. Shrinking should still bisect any failing trace into a minimal
 // repro.
 
-import { describe, test } from 'bun:test'
+import { test } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { and, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import fc from 'fast-check'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   agents as agentsTable,
   docVersions,
@@ -27,12 +29,8 @@ import {
   workflows,
 } from '../src/db/schema'
 import { dispatchReviewNode, submitReviewDecision } from '../src/services/review'
-import { retryNode } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // Invariant checker (copy of T1c's, minus the C1/T2/T3 rules we don't
 // exercise here since this property test doesn't touch clarify/output).
@@ -50,7 +48,7 @@ interface Violation {
   rule: Rule
   detail: string
 }
-async function checkInvariants(db: DbClient, taskId: string): Promise<Violation[]> {
+async function checkInvariants(db: ProviderNeutralDatabase, taskId: string): Promise<Violation[]> {
   const v: Violation[] = []
   const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
   if (t === undefined) return v
@@ -109,7 +107,7 @@ const eventArbitrary: fc.Arbitrary<Event> = fc.oneof(
 )
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   repoPath: string
   taskId: string
@@ -117,7 +115,7 @@ interface Harness {
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-t1h-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -146,17 +144,26 @@ async function buildHarness(): Promise<Harness> {
     '-m',
     'i',
   ])
-  const db = createInMemoryDb(MIGRATIONS)
-  await db.insert(agentsTable).values({
-    id: ulid(),
-    name: 'doc',
-    description: '',
-    outputs: JSON.stringify(['docpath']),
-    permission: '{}',
-    skills: '[]',
-    frontmatterExtra: '{}',
-    bodyMd: '',
-  })
+  // RFC-359 AC-1（第 9 刀）：库由 `describeEachProvider` 提供，整份 property 的**每一轮**
+  // 共用同一个库（fast-check 一个用例跑几十轮）。代理名是唯一键，所以按名字幂等地种；
+  // 其余种子行都带 `taskId`，而全部判据（`checkInvariants`）本就按 taskId 作用域，轮与轮之间不互相看见。
+  const seededAgent = await db
+    .select({ id: agentsTable.id })
+    .from(agentsTable)
+    .where(eq(agentsTable.name, 'doc'))
+    .limit(1)
+  if (seededAgent.length === 0) {
+    await db.insert(agentsTable).values({
+      id: ulid(),
+      name: 'doc',
+      description: '',
+      outputs: JSON.stringify(['docpath']),
+      permission: '{}',
+      skills: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+    })
+  }
   const definition: WorkflowDefinition = {
     $schema_version: 2,
     inputs: [],
@@ -319,15 +326,10 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
         )
       const target = rows.sort((a, b) => b.retryIndex - a.retryIndex)[0]
       if (target === undefined) return false
-      await retryNode(h.db, h.taskId, target.id, {
+      await createRetryEngine(h.db, { appHome: h.appHome }).retry({
+        taskId: h.taskId,
+        nodeRunId: target.id,
         cascade: true,
-        deps: {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: h.appHome,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        },
       })
       return true
     }
@@ -339,100 +341,108 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
   }
 }
 
-describe('RFC-053 PR-A T1h — property-based: random sequences preserve invariants', () => {
-  // Per-test timeout 15s — same flake shape + same fix as the `stress`
-  // test below: each fc.asyncProperty iteration spawns 3× `runGit`
-  // subprocesses inside `buildHarness()` (macos GHA: ~30-80ms each) +
-  // runs the DB migration set, and numRuns=30 stacks against bun:test's
-  // default 5s ceiling. f37ef44 widened the budget on the stress test
-  // but missed this case (CI run 26302009314 macos timed out at
-  // 5006.84ms / 5000ms default). Property-based tests want shrink-time
-  // budget, so we give it 15s here too.
-  test('after any sequence of 1-8 events, R1/R2/T1/U1 hold', async () => {
-    await fc.assert(
-      fc.asyncProperty(fc.array(eventArbitrary, { minLength: 1, maxLength: 8 }), async (seq) => {
-        const h = await buildHarness()
-        try {
-          for (const ev of seq) {
-            await applyEvent(h, ev)
-          }
-          const violations = await checkInvariants(h.db, h.taskId)
-          if (violations.length > 0) {
-            // Print on failure for easier shrinking.
-            console.error('violations:', violations, 'sequence:', seq)
-          }
-          return violations.length === 0
-        } finally {
-          h.cleanup()
-        }
-      }),
-      { numRuns: 30 },
-    )
-  }, 15000)
-
-  test('after long sequences (10-15 events), invariants still hold', async () => {
-    await fc.assert(
-      fc.asyncProperty(fc.array(eventArbitrary, { minLength: 10, maxLength: 15 }), async (seq) => {
-        const h = await buildHarness()
-        try {
-          for (const ev of seq) {
-            await applyEvent(h, ev)
-          }
-          const violations = await checkInvariants(h.db, h.taskId)
-          if (violations.length > 0) {
-            console.error('violations:', violations, 'sequence:', seq)
-          }
-          return violations.length === 0
-        } finally {
-          h.cleanup()
-        }
-      }),
-      { numRuns: 10 },
-    )
-  })
-
-  test('stress: approve-iterate-approve cycles never leave R1 violated', async () => {
-    // Targeted property: any interleaving of approve/iterate operations
-    // followed by a final approve should end with R1 satisfied (every
-    // approved dv has a done node_run).
-    //
-    // Per-test timeout 15s (bumped from bun:test's default 5s). Each
-    // fc.asyncProperty iteration calls `buildHarness()` which spawns ~5
-    // `runGit` subprocesses (init / 2× config / add / commit) + runs
-    // the full DB migration set + ~5 inserts. That's ~200-500ms per
-    // iteration on macos GHA runners (which lack ramfs for /tmp), so
-    // numRuns=20 stacks to 4-10s, right at the default timeout edge.
-    // Property-based testing wants a real budget to shrink on a real
-    // failure, so we give it 15s — confirmed unrelated flake on
-    // 2026-05-22 CI run 26297919707; same shape would re-occur every
-    // few macos runs until the budget was widened.
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(fc.oneof(fc.constant('A'), fc.constant('I')), {
-          minLength: 1,
-          maxLength: 6,
-        }),
-        async (ops) => {
-          const h = await buildHarness()
+// RFC-359 AC-1（第 9 刀）：随机序列里含 retry 事件，验的是**共用**那一份 `retry`
+// （两份实现已合一），所以整份 property 在两个引擎上各跑一遍。
+describeEachProvider(
+  'RFC-053 PR-A T1h — property-based: random sequences preserve invariants',
+  (harness) => {
+    // Per-test timeout 15s — same flake shape + same fix as the `stress`
+    // test below: each fc.asyncProperty iteration spawns 3× `runGit`
+    // subprocesses inside `buildHarness()` (macos GHA: ~30-80ms each) +
+    // runs the DB migration set, and numRuns=30 stacks against bun:test's
+    // default 5s ceiling. f37ef44 widened the budget on the stress test
+    // but missed this case (CI run 26302009314 macos timed out at
+    // 5006.84ms / 5000ms default). Property-based tests want shrink-time
+    // budget, so we give it 15s here too.
+    test('after any sequence of 1-8 events, R1/R2/T1/U1 hold', async () => {
+      await fc.assert(
+        fc.asyncProperty(fc.array(eventArbitrary, { minLength: 1, maxLength: 8 }), async (seq) => {
+          const h = await buildHarness(harness.db)
           try {
-            for (const op of ops) {
-              await applyEvent(h, { kind: op === 'A' ? 'approve' : 'iterate' })
-              // After every op, re-enter dispatch (simulating scheduler resume).
-              await applyEvent(h, { kind: 'dispatch' })
+            for (const ev of seq) {
+              await applyEvent(h, ev)
             }
-            const violations = (await checkInvariants(h.db, h.taskId)).filter(
-              (v) => v.rule === 'R1',
-            )
+            const violations = await checkInvariants(h.db, h.taskId)
             if (violations.length > 0) {
-              console.error('R1 violations:', violations, 'ops:', ops)
+              // Print on failure for easier shrinking.
+              console.error('violations:', violations, 'sequence:', seq)
             }
             return violations.length === 0
           } finally {
             h.cleanup()
           }
-        },
-      ),
-      { numRuns: 20 },
-    )
-  }, 15000)
-})
+        }),
+        { numRuns: 30 },
+      )
+    }, 15000)
+
+    test('after long sequences (10-15 events), invariants still hold', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(eventArbitrary, { minLength: 10, maxLength: 15 }),
+          async (seq) => {
+            const h = await buildHarness(harness.db)
+            try {
+              for (const ev of seq) {
+                await applyEvent(h, ev)
+              }
+              const violations = await checkInvariants(h.db, h.taskId)
+              if (violations.length > 0) {
+                console.error('violations:', violations, 'sequence:', seq)
+              }
+              return violations.length === 0
+            } finally {
+              h.cleanup()
+            }
+          },
+        ),
+        { numRuns: 10 },
+      )
+    })
+
+    test('stress: approve-iterate-approve cycles never leave R1 violated', async () => {
+      // Targeted property: any interleaving of approve/iterate operations
+      // followed by a final approve should end with R1 satisfied (every
+      // approved dv has a done node_run).
+      //
+      // Per-test timeout 15s (bumped from bun:test's default 5s). Each
+      // fc.asyncProperty iteration calls `buildHarness()` which spawns ~5
+      // `runGit` subprocesses (init / 2× config / add / commit) + runs
+      // the full DB migration set + ~5 inserts. That's ~200-500ms per
+      // iteration on macos GHA runners (which lack ramfs for /tmp), so
+      // numRuns=20 stacks to 4-10s, right at the default timeout edge.
+      // Property-based testing wants a real budget to shrink on a real
+      // failure, so we give it 15s — confirmed unrelated flake on
+      // 2026-05-22 CI run 26297919707; same shape would re-occur every
+      // few macos runs until the budget was widened.
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(fc.oneof(fc.constant('A'), fc.constant('I')), {
+            minLength: 1,
+            maxLength: 6,
+          }),
+          async (ops) => {
+            const h = await buildHarness(harness.db)
+            try {
+              for (const op of ops) {
+                await applyEvent(h, { kind: op === 'A' ? 'approve' : 'iterate' })
+                // After every op, re-enter dispatch (simulating scheduler resume).
+                await applyEvent(h, { kind: 'dispatch' })
+              }
+              const violations = (await checkInvariants(h.db, h.taskId)).filter(
+                (v) => v.rule === 'R1',
+              )
+              if (violations.length > 0) {
+                console.error('R1 violations:', violations, 'ops:', ops)
+              }
+              return violations.length === 0
+            } finally {
+              h.cleanup()
+            }
+          },
+        ),
+        { numRuns: 20 },
+      )
+    }, 15000)
+  },
+)

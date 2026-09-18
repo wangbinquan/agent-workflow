@@ -19,6 +19,8 @@
 //   7. runIsoWorktreeGc P0-2 tightening: interrupted parents and parents with
 //      live/interrupted children keep their iso containers.
 import { describe, expect, test } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { mkdirSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -31,7 +33,6 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   cancelTask,
   resumeTask,
-  retryNode,
   selectResumeRollbackTargets,
   startTask,
 } from '../src/services/task'
@@ -304,7 +305,9 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
     await expect(resumeTask(db, child, deps)).rejects.toMatchObject({
       code: 'call-row-finalized',
     })
-    await expect(retryNode(db, child, ulid(), { deps })).rejects.toMatchObject({
+    await expect(
+      createRetryEngine(db, { resumeWith: deps }).retry({ taskId: child, nodeRunId: ulid() }),
+    ).rejects.toMatchObject({
       code: 'call-row-finalized',
     })
   })

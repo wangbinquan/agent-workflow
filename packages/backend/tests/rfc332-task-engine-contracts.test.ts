@@ -179,7 +179,9 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
     // Four command admissions plus RFC-333's post-commit wake use the same
     // coordinator factory. The wake is not a fifth admission: the decision
     // transaction already inserted its exact durable intent.
-    expect(task.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(5)
+    // RFC-359 AC-1（第 9 刀）：5 → 4。`retryNode` 整份删除（`retry` 两份实现合一），
+    // 它那台 coordinator 随之出账；重试的驱动改由紧随其后的 `resumeTask` 那一台负责。
+    expect(task.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(4)
     const wakeStart = task.indexOf('export async function wakeHumanGateContinuation(')
     const wakeEnd = task.indexOf('\nexport ', wakeStart + 1)
     const wakeBlock = task.slice(wakeStart, wakeEnd)

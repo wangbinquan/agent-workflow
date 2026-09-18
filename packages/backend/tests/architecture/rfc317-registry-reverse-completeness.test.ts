@@ -97,7 +97,16 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
     consumption: 'direct',
     // RFC-354 D7：`clarifyGate` 列（原 settlesWithoutRow）只经 `nodeKindIsClarifyGate`
     // 读——frontier 不再按列直读（pass-2 已删），链上的活消费者是 stuckTaskDetector。
-    keyExemptions: { isAgent: 'isAgentNodeKind', clarifyGate: 'nodeKindIsClarifyGate' },
+    // RFC-359 AC-1（第 9 刀）：`retryCascade` 列转成同一形态。`retry` 的两份实现合一后，
+    // 按列直读的那一处（`services/task.ts` 的 `retryNode`）随整份实现删除，留下的那份
+    // （`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`）读的是访问器
+    // `nodeKindParticipatesInRetryCascade`——链两半都活着：访问器确实读这一列
+    // （node-kind-behavior.ts:230），它自己也确实有声明文件之外的生产消费者。
+    keyExemptions: {
+      isAgent: 'isAgentNodeKind',
+      clarifyGate: 'nodeKindIsClarifyGate',
+      retryCascade: 'nodeKindParticipatesInRetryCascade',
+    },
     why: '表的维度（列）。RFC-146 的准入标准就是「每一维都有 grep 可证的运行时消费者」，这条把那句话变成可执行判据。',
   },
   // RFC-354 D6：`SYSTEM_CHANNEL_PORTS` 注册表已折进端口表（`DeclaredPort.channel`，

@@ -117,7 +117,17 @@ function nodeOracle(to: string): ReadonlySet<string> {
   return out
 }
 
-const TASK_WRITERS = new Set(['setTaskStatus', 'trySetTaskStatus'])
+// RFC-359 AC-1（第 9 刀）—— `trySet` 补进来。任务状态 CAS 的**中立端口**写法是
+// `persistence.runtimeLifecycle.trySet({ to, allowedFrom })`（`taskLifecycle.trySet` /
+// `lifecycle.trySet` 是同一个方法在不同装配点的名字），两个 provider 共用它。
+// 扫描器按被调用的标识符名认站点，所以在补进来之前，**20 个静态可知的站点整批在语料之外**——
+// 其中包括 PostgreSQL daemon / 子任务启动 / 子任务生命周期 / fusion 引擎的全部生命周期写点。
+// 后果与上面 `setNodeRunStatusInTransaction` 那条注释记的是同一件事，只是规模更大：
+// 每有一处从 `setTaskStatus` 迁到中立端口，这条预言的语料就少一处，而下限判据只挡「抽空」，
+// 挡不住「慢慢漏光」。任务侧与节点侧不会撞名——20 个站点的接收者全是任务生命周期端口
+// （`runtimeLifecycle` / `taskLifecycle` / `lifecycle`），节点行的 CAS 走的是
+// `setNodeRunStatus*` 那一组名字。
+const TASK_WRITERS = new Set(['setTaskStatus', 'trySetTaskStatus', 'trySet'])
 // RFC-359 W10 —— `setNodeRunStatusInTransaction` 是中立异步孪生
 // （`modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` 的 `setNodeRunStatusTx`）
 // 在调用方那边的惯用别名：`taskLifecycle.ts` / `services/task.ts` 都按这个名字 import，用来跟
@@ -286,6 +296,12 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
     why: '评审 supersede：新一轮评审到来时把上一轮已完成的 run 作废。**这是正常用户流程**——与 lifecycle.ts 头注释「never in normal flows」冲突，见 allowTerminal 账本同址条目。',
   },
   {
+    // RFC-359 AC-1（第 9 刀）新增。`trySet` 补进语料后，20 个中立端口站点里**只有这一条**越界。
+    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts:failed',
+    offTable: ['interrupted'],
+    why: '`retry` 合并后用 `interrupted` 当中转态（`pending` 不在 RESUMABLE_TASK_STATUSES 里，会被 resume 准入当场拒掉），而级联取消旧世代子任务失败时任务必须失败关闭并留下 `retry-child-cancel-failed`。表里 `interrupted` 是终态、没有出边，所以这条靠 `allowTerminal: true` 越闸——见 allowTerminal 账本同址条目。退役那份实现同一处是 `pending → failed`（表内），中转态换了，这条边才浮出来。',
+  },
+  {
     site: 'modules/collaboration/infrastructure/review.ts:pending',
     offTable: ['awaiting_human', 'done', 'pending', 'running'],
     why: '评审兄弟级联：一条被打回时，同批兄弟 run 一并重置为 pending，无论它们当前处在哪一态。',
@@ -306,14 +322,18 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
     // `(to, allowedFrom)` 摊成一个个独立的 `setTaskStatus` 站点；留下的那一份用
     // `kind: 'task-transition'` 动作描述符表达同一件事，同样静态可知（上面的抽取器已认它），
     // 只是**同一条转移不再被抄两遍**，所以站点总数本来就该降。下限只是「别抽空」的兜底。
-    expect(sites.length).toBeGreaterThanOrEqual(25)
+    // RFC-359 AC-1（第 9 刀）：25 → 40。`trySet`（任务状态 CAS 的中立端口写法）补进
+    // `TASK_WRITERS` 之后，20 个此前整批在语料之外的站点回到预言里——它们里只有 1 条越界，
+    // 其余 19 条本来就守着转移表，只是没人看得见。
+    expect(sites.length).toBeGreaterThanOrEqual(40)
   })
 
   test('表内站点确实占多数（判据不是恒真）', () => {
     // 如果 oracle 算错、把所有来源都判成合法，下面那条「越界集合等于账本」会因为
     // 两边都空而假绿。这条从反面钉住：确实有一大批站点被判为**表内**。
+    // RFC-359 AC-1（第 9 刀）：20 → 35，同上（19 条中立端口站点是表内的）。
     const onTable = sites.filter((site) => offTableSources(site).length === 0)
-    expect(onTable.length).toBeGreaterThanOrEqual(20)
+    expect(onTable.length).toBeGreaterThanOrEqual(35)
   })
 
   test('越界站点与偏离账本**逐条相等**（新增一条 ⇒ 红；改对一条不销账 ⇒ 也红）', () => {

@@ -70,10 +70,12 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
       'done→canceled（评审被 supersede，旧轮次作废）、done→pending（兄弟级联重开）。**这两处是正常用户流程**，与 lifecycle.ts 头注释「never in normal flows」直接冲突——账本先如实记下，语义处置另立决策。',
   },
   {
+    // RFC-359 AC-1（第 9 刀）3 → 2：`retryNode` 整份删除（`retry` 两份实现合一），
+    // 它那条终态→pending 的准入 CAS 随之出账。债是还掉的，不是挪走的——合并后的那份
+    // 用的是 `interrupted` 中转态 + 生产的 resume，不再自己越过终态保护推 `pending`。
     file: 'packages/backend/src/services/task.ts',
-    count: 3,
-    rewrites:
-      'resumeTask / retryNode / syncTaskWorkflow 三条——正是头注释点名的持有者中的三个，终态→pending。',
+    count: 2,
+    rewrites: 'resumeTask / syncTaskWorkflow 两条——正是头注释点名的持有者中的两个，终态→pending。',
   },
   {
     file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
@@ -91,10 +93,19 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
     // 任务已在 `pending`；PG 侧刻意把判据提到 CAS **之前**（这样被拒的重试一条占位行都不铸），
     // 于是来源必然还是终态，必须显式越过终态保护。目标态 `failed` 本身是终态，
     // 所以 `isRevival` 为 false —— 这条不会绕过任何 revival 门（栅栏 / 工作区回收）。
+    //
+    // RFC-359 AC-1（第 9 刀）再增一处（1 → 2，全仓总数不变：`services/task.ts` 同时 3 → 2）。
+    // 为什么这条终态改写值得：`retry` 合并后中转态是 `interrupted`（它在
+    // `TERMINAL_TASK_STATUSES` 里），而级联取消子任务失败时任务必须**失败关闭**
+    // 并留下 `retry-child-cancel-failed` 的 `error_summary`。不带这个开关 `trySet` 会
+    // **静默返回 false**（它不抛），任务卡在 `interrupted`、错误字段空着，前端据此当
+    // 「daemon 重启，可恢复」渲染——而调用方拿到的却是一个 409。退役那份实现同一处
+    // 是从 `pending` 收场的（它的中转态就是 `pending`），所以不需要这个开关；
+    // 中转态换成 `interrupted` 就必须补上。目标态 `failed` 本身是终态，`isRevival` 为 false。
     file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
-    count: 1,
+    count: 2,
     rewrites:
-      'RFC-098 WP-9 的 snapshot-lost / live-child-survived 升级：终态→failed，写 error_summary 让用户看得见「基线没了」而不是只拿一个 409。',
+      'RFC-098 WP-9 的 snapshot-lost / live-child-survived 升级（终态→failed，写 error_summary 让用户看得见「基线没了」而不是只拿一个 409）；以及 RFC-359 第 9 刀的 retry-child-cancel-failed 收场（interrupted→failed，同样是让失败可见而不是卡在可恢复态）。',
   },
 ]
 

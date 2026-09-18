@@ -844,13 +844,16 @@ describeEachProviderHttpApplication(
     })
 
     test('POST /:id/nodes/:nrId/retry on a failed task flips status → pending', async () => {
-      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
-      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
-      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // RFC-359 AC-1（第 9 刀）**销掉那条登记的行为分叉**：`retry` 两份实现合一，
+      // 复活整段交给 resume，于是两个引擎现在给同一个答案。
+      //
+      // 分叉原文（`docs/audit-backlog.md`）：这几条判据都把 `worktreePath` 故意置空
+      //（「空以便 retry 跳过回滚」）。同一个请求，SQLite 根直接重试回 200；PostgreSQL 根走
       // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
-      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
-      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
-      if (scope.harness.capabilities.provider !== 'sqlite') return
+      // `task-worktree-missing`。**收敛到 410 那一侧**：一个既没有工作树、也没有待跑的准备行的
+      // 任务，重试出来的那一步没有任何地方可跑——resume 早就对同一个任务这么答了。
+      // 判据的本意（铸行的形状）与工作树无关，所以夹具改成给它一棵**真的**工作树，
+      // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
       await h.db.insert(tasks).values({
@@ -865,7 +868,7 @@ describeEachProviderHttpApplication(
           edges: [],
         }),
         repoPath: h.repoPath,
-        worktreePath: '', // empty so retry skips rollback
+        worktreePath: h.repoPath,
         baseBranch: 'main',
         branch: `agent-workflow/${id}`,
         status: 'failed',
@@ -900,13 +903,16 @@ describeEachProviderHttpApplication(
     // reviewIteration, shardKey, parentNodeRunId, preSnapshot) from the row
     // the user picked.
     test('POST /:id/nodes/:nrId/retry preserves clarifyIteration / iteration / etc. on the retried row', async () => {
-      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
-      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
-      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // RFC-359 AC-1（第 9 刀）**销掉那条登记的行为分叉**：`retry` 两份实现合一，
+      // 复活整段交给 resume，于是两个引擎现在给同一个答案。
+      //
+      // 分叉原文（`docs/audit-backlog.md`）：这几条判据都把 `worktreePath` 故意置空
+      //（「空以便 retry 跳过回滚」）。同一个请求，SQLite 根直接重试回 200；PostgreSQL 根走
       // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
-      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
-      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
-      if (scope.harness.capabilities.provider !== 'sqlite') return
+      // `task-worktree-missing`。**收敛到 410 那一侧**：一个既没有工作树、也没有待跑的准备行的
+      // 任务，重试出来的那一步没有任何地方可跑——resume 早就对同一个任务这么答了。
+      // 判据的本意（铸行的形状）与工作树无关，所以夹具改成给它一棵**真的**工作树，
+      // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
       await h.db.insert(tasks).values({
@@ -921,7 +927,7 @@ describeEachProviderHttpApplication(
           edges: [],
         }),
         repoPath: h.repoPath,
-        worktreePath: '', // skip rollback path
+        worktreePath: h.repoPath,
         baseBranch: 'main',
         branch: `agent-workflow/${id}`,
         status: 'failed',
@@ -931,6 +937,13 @@ describeEachProviderHttpApplication(
         errorSummary: 'boom',
       })
       // Original clarify-driven rerun row: a failed attempt mid-multi-round.
+      //
+      // RFC-359 AC-1（第 9 刀）：基线必须是**真实存在**的对象。夹具原来写的是
+      // `'snap-abcdef'`——它此前从没被检验过，因为空工作树让这条路不走回滚；
+      // 现在给了真工作树，RFC-098 WP-9 的 `assertRollbackBaselinesPresent` 会对它
+      // 跑 `git cat-file`，一个编出来的 sha 当场 409 `snapshot-lost`。取夹具仓的
+      // HEAD 当基线，判据（继承哪些字段）一个字没改，而且不再依赖「那条门没跑」。
+      const baseline = (await runGit(h.repoPath, ['rev-parse', 'HEAD'])).stdout.trim()
       const failedRunId = ulid()
       await h.db.insert(nodeRuns).values({
         id: failedRunId,
@@ -942,7 +955,7 @@ describeEachProviderHttpApplication(
         reviewIteration: 1,
         shardKey: 'shard-a',
         parentNodeRunId: null,
-        preSnapshot: 'snap-abcdef',
+        preSnapshot: baseline,
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
@@ -959,7 +972,7 @@ describeEachProviderHttpApplication(
       expect(fresh!.iteration).toBe(2)
       expect(fresh!.reviewIteration).toBe(1)
       expect(fresh!.shardKey).toBe('shard-a')
-      expect(fresh!.preSnapshot).toBe('snap-abcdef')
+      expect(fresh!.preSnapshot).toBe(baseline)
     })
 
     // Boundary: cascade retry of an UPSTREAM node must not pollute the
@@ -967,13 +980,16 @@ describeEachProviderHttpApplication(
     // has its own clarify counter; the fresh downstream row must inherit from
     // its own latest historical row, not from the explicitly-retried target.
     test('POST /:id/nodes/:nrId/retry?cascade=true: downstream inherits from its own latest, not from runRow', async () => {
-      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
-      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
-      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // RFC-359 AC-1（第 9 刀）**销掉那条登记的行为分叉**：`retry` 两份实现合一，
+      // 复活整段交给 resume，于是两个引擎现在给同一个答案。
+      //
+      // 分叉原文（`docs/audit-backlog.md`）：这几条判据都把 `worktreePath` 故意置空
+      //（「空以便 retry 跳过回滚」）。同一个请求，SQLite 根直接重试回 200；PostgreSQL 根走
       // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
-      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
-      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
-      if (scope.harness.capabilities.provider !== 'sqlite') return
+      // `task-worktree-missing`。**收敛到 410 那一侧**：一个既没有工作树、也没有待跑的准备行的
+      // 任务，重试出来的那一步没有任何地方可跑——resume 早就对同一个任务这么答了。
+      // 判据的本意（铸行的形状）与工作树无关，所以夹具改成给它一棵**真的**工作树，
+      // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
       await h.db.insert(tasks).values({
@@ -997,7 +1013,7 @@ describeEachProviderHttpApplication(
           ],
         }),
         repoPath: h.repoPath,
-        worktreePath: '', // skip rollback
+        worktreePath: h.repoPath,
         baseBranch: 'main',
         branch: `agent-workflow/${id}`,
         status: 'failed',
@@ -1054,13 +1070,16 @@ describeEachProviderHttpApplication(
     // a higher retryIndex exists with different clarifyIteration. Locks the
     // `nodeId === runRow.nodeId ? runRow : prev` distinction.
     test('POST /:id/nodes/:nrId/retry on a historical row: fresh row reflects runRow, not the highest-retryIndex prev', async () => {
-      // RFC-359 AC-6 例外：单引擎，且**登记了一条真实的行为分叉**（`docs/audit-backlog.md`）。
-      // 这几条判据都把 `worktreePath` 故意置空（「空以便 retry 跳过回滚」）。同一个请求：
-      // SQLite 根的 `operations.retry` 直接重试并回 200；PostgreSQL 根走
+      // RFC-359 AC-1（第 9 刀）**销掉那条登记的行为分叉**：`retry` 两份实现合一，
+      // 复活整段交给 resume，于是两个引擎现在给同一个答案。
+      //
+      // 分叉原文（`docs/audit-backlog.md`）：这几条判据都把 `worktreePath` 故意置空
+      //（「空以便 retry 跳过回滚」）。同一个请求，SQLite 根直接重试回 200；PostgreSQL 根走
       // `assertWorktreePresentForResume`，空路径 + 无墓碑 + 无 `__repo_prep__` 行 ⇒ 410
-      // `task-worktree-missing`。`TaskRouteOperations` 这一对本 RFC 已判为「不该合」，
-      // 但「不该合」说的是实现不共享，**不等于行为可以分叉**——这条差异单独登记，不在此掩盖。
-      if (scope.harness.capabilities.provider !== 'sqlite') return
+      // `task-worktree-missing`。**收敛到 410 那一侧**：一个既没有工作树、也没有待跑的准备行的
+      // 任务，重试出来的那一步没有任何地方可跑——resume 早就对同一个任务这么答了。
+      // 判据的本意（铸行的形状）与工作树无关，所以夹具改成给它一棵**真的**工作树，
+      // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
       await h.db.insert(tasks).values({
@@ -1075,7 +1094,7 @@ describeEachProviderHttpApplication(
           edges: [],
         }),
         repoPath: h.repoPath,
-        worktreePath: '',
+        worktreePath: h.repoPath,
         baseBranch: 'main',
         branch: `agent-workflow/${id}`,
         status: 'failed',

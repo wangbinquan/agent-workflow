@@ -20,6 +20,8 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,7 +29,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { cancelTask, resumeTask, retryNode } from '../src/services/task'
+import { cancelTask, resumeTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -273,11 +275,16 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
     expect(readFileSync(join(h.ctrlDir, 'count-done'), 'utf-8')).toBe('x')
   }, 30000)
 
-  test('真并发双 retryNode：恰一胜（409 task-still-running）；输者零占位行污染', async () => {
-    const opts = (mock: string) => ({ cascade: true, deps: deps(h, mock) })
+  test('真并发双 retry：恰一胜（409 task-still-running）；输者零占位行污染', async () => {
     const results = await Promise.allSettled([
-      retryNode(h.db, h.taskId, h.failedRunId, opts(h.doneMock)),
-      retryNode(h.db, h.taskId, h.failedRunId, opts(h.doneMock)),
+      createRetryEngine(h.db, { resumeWith: deps(h, h.doneMock) }).retry({
+        taskId: h.taskId,
+        nodeRunId: h.failedRunId,
+      }),
+      createRetryEngine(h.db, { resumeWith: deps(h, h.doneMock) }).retry({
+        taskId: h.taskId,
+        nodeRunId: h.failedRunId,
+      }),
     ])
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
@@ -289,7 +296,7 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
     const final = await waitForTerminalTask(h.db, h.taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
-    // 占位行 oracle：retryNode 赢者恰铸 1 行 errorMessage='queued for retry'；
+    // 占位行 oracle：retry 赢者恰铸 1 行 errorMessage='queued for retry'；
     // 输者在 CAS 处出局（回滚与铸行都在 CAS 之后），不得多铸。
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
     const placeholders = rows.filter((r) => r.errorMessage === 'queued for retry')
@@ -332,7 +339,11 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
 
     let retryErr: { code?: string; message?: string } | undefined
     try {
-      await retryNode(h.db, h.taskId, h.failedRunId, { cascade: true, deps: deps(h, h.doneMock) })
+      await createRetryEngine(h.db, { resumeWith: deps(h, h.doneMock) }).retry({
+        taskId: h.taskId,
+        nodeRunId: h.failedRunId,
+        cascade: true,
+      })
     } catch (err) {
       retryErr = err as { code?: string; message?: string }
     }

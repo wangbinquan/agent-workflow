@@ -18,6 +18,8 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,7 +39,6 @@ import {
   cancelTask,
   isTaskActive,
   resumeTask,
-  retryNode,
   startTask,
   startTaskWithLocalRepo,
   type MaterializedSpace,
@@ -286,7 +287,11 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
 
     const results = await Promise.allSettled([
       resumeTask(h.db, seeded.taskId, deps),
-      retryNode(h.db, seeded.taskId, failedRunId, { cascade: true, deps }),
+      createRetryEngine(h.db, { resumeWith: deps }).retry({
+        taskId: seeded.taskId,
+        nodeRunId: failedRunId,
+        cascade: true,
+      }),
     ])
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)

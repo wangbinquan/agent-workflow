@@ -14,6 +14,8 @@
 //   5. freezeCallClosure 纯服务：无 call 节点 → null；引用缺失 →
 //      workflow-call-ref-missing；A→B→A → workflow-call-cycle（id-only 载荷）。
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import { existsSync, mkdirSync, readFileSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -513,9 +515,11 @@ describe('RFC-243 e2e — 生命周期', () => {
       h.planFile,
       JSON.stringify({ worker: { output: { out: 'SECOND TRY', echo: 'x' } } }),
     )
-    const { retryNode } = await import('../src/services/task')
-    await retryNode(h.db, parentTaskId, failedCall.id, {
-      deps: {
+    await createRetryEngine(h.db, {
+      appHome: h.appHome,
+      // 这条判据要的是「新子任务真的被发起并跑完」，所以复活必须**真的驱动引擎**——
+      // 缺省复活只把任务推回 pending、不起进程，任务会停在 pending。
+      resumeWith: {
         db: h.db,
         taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
@@ -523,8 +527,11 @@ describe('RFC-243 e2e — 生命周期', () => {
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.mockPath],
       } as unknown as StartTaskDeps,
+    }).retry({
+      taskId: parentTaskId,
+      nodeRunId: failedCall.id,
     })
-    // retryNode 的 kick 是 fire-and-forget —— 轮询到终态再断言。
+    // retry 的复活是 fire-and-forget —— 轮询到终态再断言。
     let parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     for (let i = 0; i < 300 && !['done', 'failed', 'canceled'].includes(parent.status); i++) {
       await Bun.sleep(50)

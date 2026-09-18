@@ -327,37 +327,22 @@ type AcceptedDivergence = Readonly<{
 
 /**
  * 已裁决的双引擎分叉账本。**两侧锚点都必须命中**；形状变了就红。
+ *
+ * **RFC-359 AC-1（第 9 刀）起为空。** 唯一那条 `retry-held-session-reap-order` 记的是
+ * 「攥着 native runtime session 租约的行在哪一段被围栏」：SQLite 在 `retryNode` 的准入延续里
+ * 第一件事就做，PG 放在交棒之后的 `rollbackForResume` 里。`retry` 两份实现合一之后这条不成立了——
+ * 留下的那份（`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`）两个引擎共用，
+ * 它把复活整段交给 `resumeTaskAs`，于是**两侧都**在 resume 那一段围栏：SQLite 走
+ * `services/task.ts` 的 `resumeKick`（`reapHeldRuntimeSessionOwnersForTask`），PG 走
+ * `rollbackForResume`。分叉是被消灭的，不是被挪走的。
+ *
+ * 它的 `removeWhen` 当时写的是「PG 的 retry 不再把 `children.resume` 当作第二段」——实际收敛
+ * 走的是反方向（SQLite 那一侧也改用了这个第二段），但条件的实质（两侧的重试启动分段统一）已达成。
+ *
+ * ⚠️ 空账本同样让本 describe 的每条用例退化成 `expect([]).toEqual([])`（「零与合规同形」）。
+ * 锚点漂移那一路的活证据在文件末尾的「扫描面自证」describe 里，删空这份账本时不要动它。
  */
-export const ACCEPTED_DUAL_ENGINE_DIVERGENCES: readonly AcceptedDivergence[] = [
-  {
-    id: 'retry-held-session-reap-order',
-    sqlite: {
-      file: 'services/task.ts',
-      fn: ['retryNode'],
-      anchors: [{ kind: 'identifier', text: 'reapHeldRuntimeSessionOwnersForTask' }],
-    },
-    postgresql: {
-      file: 'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
-      fn: ['rollbackForResume'],
-      anchors: [
-        { kind: 'identifier', text: 'runtimeSessionLeaseRows' },
-        { kind: 'identifier', text: 'heldIds' },
-        { kind: 'identifier', text: 'reapRun' },
-      ],
-    },
-    why:
-      '两侧都会围栏「还攥着 native runtime session 租约」的行，只是位置不同：SQLite 在 retry 的' +
-      '准入延续里第一件事就做（`reapHeldRuntimeSessionOwnersForTask`），PG 放在交棒之后的 ' +
-      'rollbackForResume 里、对整棵任务做同一件事。两者都发生在任何工作树写之前，围栏面 ' +
-      'PG 反而更宽（整棵任务的租约行，不只被点的那一条）。',
-    removeWhen:
-      '两侧的重试启动分段统一时——即 PG 的 retry 不再把 `children.resume` 当作第二段' +
-      '（那时 `rollbackForResume` 也就不再是 PG 做这件事的地方，本条的 PG 侧锚点会先失效并把这条红出来）。',
-    consequence:
-      '无。顺序差异不改变任何用户可见结果——两侧都在写工作树之前完成围栏，租约行也都会被修复；' +
-      '差的只是「在 retry 里做」还是「在紧随其后的 resume 里做」。',
-  },
-]
+export const ACCEPTED_DUAL_ENGINE_DIVERGENCES: readonly AcceptedDivergence[] = []
 
 // ---------------------------------------------------------------------------
 // AST 判据内核

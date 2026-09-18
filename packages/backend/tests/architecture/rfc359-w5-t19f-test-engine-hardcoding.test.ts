@@ -60,6 +60,12 @@ const CORPUS_FILES: readonly string[] = enumerateTestSources()
  * 迁移姿势：把 `describe(...)` 换成 `describeEachProvider(name, (harness) => ...)`，
  * 库从 `harness.db` 取（需要事务面就取 `harness.session`，需要按引擎分叉就看 `harness.capabilities`）。
  */
+// RFC-359 AC-1（第 9 刀）销账 4 行：`lifecycle-property` / `lifecycle-transitions-current` /
+// `retry-node-guard-order` / `retry-node-no-review-cascade` 已迁到 `describeEachProvider`。
+// 触发点是合并本身：这四份验的都是 `retry`，而 `retry` 原有两份实现——它们只喂 SQLite 那一份，
+// 所以此前靠 `sqlite-execution-engine` 那条机械理由挂账（它们确实 import `services/task`）。
+// 两份合一之后那条理由消失了，判据当场把它们推到「既无理由、也不在 open 名单」这一格——
+// 这正是本守卫该做的事：**实现合一了，测试面不跟上就立刻现形**。
 export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'architecture/rfc329-mcp-surface-guard.test.ts: 1',
   'architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts: 2',
@@ -86,8 +92,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2',
   'input-port-contract.test.ts: 1',
   'integration-chaos/chaos-scenarios.integration.test.ts: 2',
-  'lifecycle-property.test.ts: 1',
-  'lifecycle-transitions-current.test.ts: 1',
   'memory-distiller-source-context.test.ts: 1',
   'migration-0002.test.ts: 1',
   'migration-0008-cached-repos.test.ts: 1',
@@ -174,8 +178,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'resume-multi-repo-rollback.test.ts: 1',
   'resume-task-idempotent.test.ts: 1',
   'retry-cascade-kind-matrix.test.ts: 1',
-  'retry-node-guard-order.test.ts: 1',
-  'retry-node-no-review-cascade.test.ts: 1',
   'review-cancel-concurrency.test.ts: 1',
   'review-clarify-question-phase-stranded.test.ts: 1',
   'review-iterate-comments-in-prompt.test.ts: 1',

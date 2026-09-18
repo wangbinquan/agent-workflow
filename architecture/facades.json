@@ -1636,6 +1636,7 @@
         "import:0fb88f3544e800a5e388",
         "import:172d50fef3cf7269e4b7",
         "import:1e1318c00e5a2ae13adb",
+        "import:200c3dc8f20a352edee7",
         "import:32a7c14ea579504f17e1",
         "import:3f1fe872794501929a62",
         "import:4a67c1e929e15639fb62",
@@ -5322,7 +5323,6 @@
         "resumeDynamicWorkflowExecution",
         "resumeTask",
         "resumeTaskWithAtomicSideEffects",
-        "retryNode",
         "retryRepositoryPreparation",
         "runtimeConfigOpts",
         "selectResumeRollbackTargets",
@@ -6344,5 +6344,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d4e5c08cce19c54a62dc7107a3a9cd392ea378b1c5a035ad06e91e7bd4fa436e"
+  "sourceDigest": "sha256:136370071027722d537f122dcc8baa41e684520acd22eb2925ace8810d65a949"
 }

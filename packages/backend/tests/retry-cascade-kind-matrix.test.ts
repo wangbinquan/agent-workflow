@@ -1,6 +1,6 @@
 // RFC-053 PR-A T1d — retry-cascade kind matrix.
 //
-// For every NodeKind, verify retryNode's cascade behavior when that kind is
+// For every NodeKind, verify `retry`'s cascade behavior when that kind is
 // DOWNSTREAM of the user-clicked target:
 //   - agent-single / wrappers / calls / script / code-host-call → mint placeholder
 //     (RFC-060 PR-E: agent-multi removed)
@@ -23,12 +23,11 @@ import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { retryNode } from '../src/services/task'
+import { cancelTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createRetryEngine } from './helpers/retryEngine'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -194,10 +193,12 @@ async function seedLiveChildForCallRow(
 /**
  * 让子任务在每一次 task-cancel CAS 之前换一次可取消状态，于是那笔 CAS 永远赢不了。
  *
- * RFC-359：注入点做进被测代码内部（`retryNode` 的 `childCancelBeforeStatusCas` → `cancelTask` 的
- * `beforeStatusCas` → `setTaskStatus` 的 `beforeCas`，生产都不传），不再从外面包 db 代理拦
- * `db.transaction`——统一事务原语不走它，旧注入器**一次都不触发**，用例照样绿却一个并发场景都没验
- * （`docs/dev-gotchas.md` 有完整复盘）。
+ * RFC-359：注入点跟着实现走。它先是从「外面包 db 代理拦 `db.transaction`」挪进被测代码内部
+ * （`retryNode.childCancelBeforeStatusCas`）——统一事务原语不走 drizzle 的 `db.transaction`，
+ * 旧注入器**一次都不触发**，用例照样绿却一个并发场景都没验（`docs/dev-gotchas.md` 有完整复盘）；
+ * 第 9 刀合并两份 `retry` 之后，级联取消本身成了依赖（`cancelChildTaskForCascade`），
+ * 注入点就是 `retryVia` 往那条依赖里穿的 `cancelTask.beforeStatusCas` → `setTaskStatus.beforeCas`
+ * （生产都不传）。
  *
  * 目标状态是**读当前值再翻**，不是固定轮换：搅动与 CAS 之间不再隔着事务边界，
  * 固定轮换会与 CAS 的期望值对上号，几轮之后反而让 CAS 赢了。
@@ -216,6 +217,32 @@ function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void
   }
 }
 
+/**
+ * RFC-359 AC-1（第 9 刀）—— 本文件的 `retry` 入口：共用实现 + 生产同形的级联取消。
+ *
+ * 级联取消在共用实现里是一个**依赖**（`cancelChildTaskForCascade`），生产由 `server.ts`
+ * 绑成 `cancelTask(db, childTaskId, { cascadeFromParent: true })`——这里绑的是同一句，
+ * 只是多穿一个 `beforeStatusCas` 给下面两条并发判据用。注入点仍然跟着实现走：
+ * 合并前它是被测代码内部的 `retryNode.childCancelBeforeStatusCas`，合并后它就是这条依赖本身。
+ */
+function retryVia(
+  harness: Harness,
+  input: { taskId: string; nodeRunId: string; cascade: boolean },
+  childCancelBeforeStatusCas?: () => void | Promise<void>,
+): Promise<unknown> {
+  return createRetryEngine(harness.db, {
+    appHome: harness.appHome,
+    cancelChildTaskForCascade: async (childTaskId) => {
+      await cancelTask(harness.db, childTaskId, {
+        cascadeFromParent: true,
+        ...(childCancelBeforeStatusCas === undefined
+          ? {}
+          : { beforeStatusCas: childCancelBeforeStatusCas }),
+      })
+    },
+  }).retry(input)
+}
+
 describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
   let h: Harness
 
@@ -229,17 +256,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       const downId = `down_${kind.replace(/-/g, '_')}`
       const { taskId, agentRunId } = await seedTaskWithEdge(h, downId, kind)
 
-      await retryNode(h.db, taskId, agentRunId, {
-        cascade: true,
-        deps: {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        },
-      })
+      await retryVia(h, { taskId: taskId, nodeRunId: agentRunId, cascade: true })
 
       const placeholders = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -256,17 +273,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       const downId = `down_${kind.replace(/-/g, '_')}`
       const { taskId, agentRunId } = await seedTaskWithEdge(h, downId, kind)
 
-      await retryNode(h.db, taskId, agentRunId, {
-        cascade: true,
-        deps: {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        },
-      })
+      await retryVia(h, { taskId: taskId, nodeRunId: agentRunId, cascade: true })
 
       const placeholders = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -288,17 +295,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       .where(eq(nodeRuns.id, callRow.id))
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
 
-    await retryNode(h.db, taskId, callRow.id, {
-      cascade: false,
-      deps: {
-        db: h.db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-          .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      },
-    })
+    await retryVia(h, { taskId: taskId, nodeRunId: callRow.id, cascade: false })
 
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(child.status).toBe('canceled')
@@ -324,17 +321,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       .where(eq(nodeRuns.id, callRow.id))
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
 
-    await retryNode(h.db, taskId, agentRunId, {
-      cascade: true,
-      deps: {
-        db: h.db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-          .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      },
-    })
+    await retryVia(h, { taskId: taskId, nodeRunId: agentRunId, cascade: true })
 
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(child.status).toBe('canceled')
@@ -360,8 +347,8 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       .where(eq(nodeRuns.id, callRow.id))
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
 
-    // RFC-359 W8：注入点做进被测代码内部（`retryNode.childCancelBeforeStatusCas`，生产不传），
-    // 不再包 db 代理拦 `db.transaction`——统一事务原语不走它，旧注入器一次都不触发，
+    // RFC-359：注入点在级联取消这条**依赖**上（`retryVia` 往 `cancelTask` 穿 `beforeStatusCas`，
+    // 生产不传），不再包 db 代理拦 `db.transaction`——统一事务原语不走它，旧注入器一次都不触发，
     // 用例照样绿却什么都没验（`docs/dev-gotchas.md` 有完整复盘）。
     // 判据不变：子任务取消这一笔写失败时，retry 必须 fail-closed 成 `retry-child-cancel-failed`，
     // 且不回滚、不 mint、不留 pending 任务。
@@ -374,18 +361,11 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     }
 
     await expect(
-      retryNode(h.db, taskId, callRow.id, {
-        cascade: false,
+      retryVia(
+        h,
+        { taskId: taskId, nodeRunId: callRow.id, cascade: false },
         childCancelBeforeStatusCas,
-        deps: {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        },
-      }),
+      ),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -428,24 +408,17 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     })
 
     await expect(
-      retryNode(h.db, taskId, callRow.id, {
-        cascade: false,
+      retryVia(
+        h,
+        { taskId: taskId, nodeRunId: callRow.id, cascade: false },
         childCancelBeforeStatusCas,
-        deps: {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        },
-      }),
+      ),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
     // Four earlier ownership / intent transactions (retry status CAS, intent claim,
-    // RFC-359 W8：注入点从「包 db 代理拦 `db.transaction`」挪进被测代码内部
-    // （`retryNode.childCancelBeforeStatusCas` → `cancelTask.beforeStatusCas` →
-    // `setTaskStatus.beforeCas`）。这个计数因此**从含噪变成精确**：
+    // RFC-359：注入点从「包 db 代理拦 `db.transaction`」挪到了级联取消这条依赖上
+    // （`retryVia` → `cancelTask.beforeStatusCas` → `setTaskStatus.beforeCas`）。
+    // 这个计数因此**从含噪变成精确**：
     // 代理时代它顺带数进了几笔与子任务取消无关的事务（retry 的归属 CAS、intent 认领、
     // 取消前的状态写、releaseAfterStop……），数字一路从 13 → 12 → 11 地随「哪些事务走统一原语」往下掉；
     // 现在钩子只在**子任务那笔取消 CAS 之前**触发，于是它就等于子任务的取消尝试次数本身。
@@ -467,7 +440,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
 
   test('TARGET — even non-process target gets minted (current behavior, may change in PR-C)', async () => {
     // The user-clicked target is unconditionally added to `targets` in
-    // retryNode (current behavior). If the user picks a review row directly,
+    // `retry` (current behavior). If the user picks a review row directly,
     // a placeholder is minted for it. This is awkward semantically (you
     // can't "retry" a human decision) but is the current state.
     const downId = 'rev_x'
@@ -476,17 +449,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     // Find the seeded review row and "retry" it.
     const reviewRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, downId)))[0]!
 
-    await retryNode(h.db, taskId, reviewRow.id, {
-      cascade: false,
-      deps: {
-        db: h.db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-          .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      },
-    })
+    await retryVia(h, { taskId: taskId, nodeRunId: reviewRow.id, cascade: false })
 
     const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const reviewRows = all.filter((r) => r.nodeId === downId)
@@ -506,17 +469,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       // rfc053-allow-direct-status-write -- test seeding, not a production transition
       await h.db.update(nodeRuns).set({ status }).where(eq(nodeRuns.id, wrapRow.id))
 
-      await retryNode(h.db, taskId, wrapRow.id, {
-        cascade: true,
-        deps: {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        },
-      })
+      await retryVia(h, { taskId: taskId, nodeRunId: wrapRow.id, cascade: true })
 
       const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       const wrapRows = all.filter((r) => r.nodeId === downId)
@@ -538,17 +491,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       // rfc053-allow-direct-status-write -- test seeding, not a production transition
       await h.db.update(nodeRuns).set({ status }).where(eq(nodeRuns.id, wrapRow.id))
 
-      await retryNode(h.db, taskId, wrapRow.id, {
-        cascade: false,
-        deps: {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['/usr/bin/env', 'true'],
-        },
-      })
+      await retryVia(h, { taskId: taskId, nodeRunId: wrapRow.id, cascade: false })
 
       const wrapRows = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))

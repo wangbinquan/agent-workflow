@@ -14,6 +14,8 @@
 // 就再也重试不了准备）。
 
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import ts from 'typescript'
 import { asc, eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -115,6 +117,22 @@ async function seed(db: DbClient): Promise<{ workflowId: string; userId: string 
   })
   return { workflowId, userId }
 }
+
+/**
+ * RFC-359 AC-1（第 9 刀）：`retry` 两个引擎合一后，`__repo_prep__` 的真重跑由
+ * 共用实现经 `repositoryPreparationRetry` 端口触发；测试把合并前 `retryNode` 内部用的
+ * 那同一份 deps 交进来（`tests/helpers/retryEngine.ts` 在给了 `resumeWith` 时会调
+ * 真的 `retryRepositoryPreparation`）。
+ */
+const REPO_PREP_DEPS = (db: DbClient, actorUserId: string, cloneTimeoutMs = 1_000): StartTaskDeps =>
+  withRealSchedulerDriver({
+    db,
+    actorUserId,
+    appHome: TEST_HOME,
+    launchProvenance: { kind: 'direct-json' as const, initiator: 'manual' as const },
+    cloneTimeoutMs,
+    gitBaselineSyncWindowMs: 0,
+  })
 
 describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
   let db: DbClient
@@ -392,19 +410,15 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
     // 前置门必须放行：任务已 failed（非 pending/running）、调度器已解绑
     // （准备失败那条路径 activeTasks.delete 过）。这两条是 retryNode 的硬门，
     // 任一不满足都会 409——那样「重试准备」就成了一句空话。
-    const { retryNode } = await import('@/services/task')
     let rejected: string | null = null
     try {
-      await retryNode(db2, task.id, prep!.id, {
+      await createRetryEngine(db2, {
+        appHome: TEST_HOME,
+        resumeWith: REPO_PREP_DEPS(db2, s.userId, 3_000),
+      }).retry({
+        taskId: task.id,
+        nodeRunId: prep!.id,
         cascade: false,
-        deps: withRealSchedulerDriver({
-          db: db2,
-          actorUserId: s.userId,
-          appHome: TEST_HOME,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          cloneTimeoutMs: 3_000,
-          gitBaselineSyncWindowMs: 0,
-        }),
       })
     } catch (err) {
       rejected = err instanceof Error ? err.message : String(err)
@@ -700,17 +714,13 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     )
     expect(prep?.status).toBe('failed')
 
-    const { retryNode } = await import('@/services/task')
-    await retryNode(db, id, prep!.id, {
+    await createRetryEngine(db, {
+      appHome: TEST_HOME,
+      resumeWith: REPO_PREP_DEPS(db, s.userId),
+    }).retry({
+      taskId: id,
+      nodeRunId: prep!.id,
       cascade: false,
-      deps: withRealSchedulerDriver({
-        db,
-        actorUserId: s.userId,
-        appHome: TEST_HOME,
-        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        cloneTimeoutMs: 1_000,
-        gitBaselineSyncWindowMs: 0,
-      }),
     })
     await settle(db, id)
     const after = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
@@ -740,17 +750,15 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     )
     // 把准备行改成 done 模拟「已准备好的任务」。
     await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, prep!.id))
-    const { retryNode } = await import('@/services/task')
     let msg = ''
     try {
-      await retryNode(db, id, prep!.id, {
+      await createRetryEngine(db, {
+        appHome: TEST_HOME,
+        resumeWith: REPO_PREP_DEPS(db, s.userId),
+      }).retry({
+        taskId: id,
+        nodeRunId: prep!.id,
         cascade: false,
-        deps: withRealSchedulerDriver({
-          db,
-          actorUserId: s.userId,
-          appHome: TEST_HOME,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        }),
       })
     } catch (err) {
       // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
@@ -805,19 +813,15 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
       (r) => r.nodeId === REPO_PREP_NODE_ID,
     )
-    const { retryNode } = await import('@/services/task')
     let msg = ''
     try {
-      await retryNode(db, task.id, prep!.id, {
+      await createRetryEngine(db, {
+        appHome: TEST_HOME,
+        resumeWith: REPO_PREP_DEPS(db, s2.userId),
+      }).retry({
+        taskId: task.id,
+        nodeRunId: prep!.id,
         cascade: false,
-        deps: withRealSchedulerDriver({
-          db,
-          actorUserId: s2.userId,
-          appHome: TEST_HOME,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          cloneTimeoutMs: 1_000,
-          gitBaselineSyncWindowMs: 0,
-        }),
       })
     } catch (err) {
       // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
@@ -841,19 +845,15 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     await db.update(nodeRuns).set({ status: 'interrupted' }).where(eq(nodeRuns.id, prep!.id))
     await db.update(tasks).set({ status: 'interrupted' }).where(eq(tasks.id, id))
 
-    const { retryNode } = await import('@/services/task')
     let msg = ''
     try {
-      await retryNode(db, id, prep!.id, {
+      await createRetryEngine(db, {
+        appHome: TEST_HOME,
+        resumeWith: REPO_PREP_DEPS(db, s2.userId),
+      }).retry({
+        taskId: id,
+        nodeRunId: prep!.id,
         cascade: false,
-        deps: withRealSchedulerDriver({
-          db,
-          actorUserId: s2.userId,
-          appHome: TEST_HOME,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          cloneTimeoutMs: 1_000,
-          gitBaselineSyncWindowMs: 0,
-        }),
       })
     } catch (err) {
       // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
@@ -1248,19 +1248,14 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
     const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
       (r) => r.nodeId === REPO_PREP_NODE_ID,
     )
-    const { retryNode } = await import('@/services/task')
     const t0 = Date.now()
-    const returned = await retryNode(db, id, prep!.id, {
+    const returned = await createRetryEngine(db, {
+      appHome: TEST_HOME,
+      resumeWith: REPO_PREP_DEPS(db, s.userId, 3_000),
+    }).retry({
+      taskId: id,
+      nodeRunId: prep!.id,
       cascade: false,
-      deps: withRealSchedulerDriver({
-        db,
-        actorUserId: s.userId,
-        appHome: TEST_HOME,
-        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        // 准备本身要卡满 3 秒才失败；若重试是同步的，下面的耗时断言必然超。
-        cloneTimeoutMs: 3_000,
-        gitBaselineSyncWindowMs: 0,
-      }),
     })
     const elapsed = Date.now() - t0
     expect(elapsed, '重试请求必须立刻返回，不能等准备跑完').toBeLessThan(1_500)
@@ -1282,22 +1277,18 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac11-retryindex')
-    const { retryNode } = await import('@/services/task')
     const retryOnce = async (): Promise<void> => {
       const latest = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id)))
         .filter((r) => r.nodeId === REPO_PREP_NODE_ID)
         .sort((a, b) => a.retryIndex - b.retryIndex)
         .at(-1)!
-      await retryNode(db, id, latest.id, {
+      await createRetryEngine(db, {
+        appHome: TEST_HOME,
+        resumeWith: REPO_PREP_DEPS(db, s.userId),
+      }).retry({
+        taskId: id,
+        nodeRunId: latest.id,
         cascade: false,
-        deps: withRealSchedulerDriver({
-          db,
-          actorUserId: s.userId,
-          appHome: TEST_HOME,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          cloneTimeoutMs: 1_000,
-          gitBaselineSyncWindowMs: 0,
-        }),
       })
       await settle(db, id)
     }
@@ -1978,12 +1969,27 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
     // 989 对「后生成的反而更小」。一度为了让 G8 ratchet 变绿改用 id 序比较器，
     // 结果同毫秒铸出的两条准备行会被判反、两边都点不动。
     // `__repo_prep__` 没有 clarify/parent/iteration 分叉，retryIndex 就是因果序。
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    // RFC-359 AC-1（第 9 刀）改锚：`retry` 两份实现合一，这道门随之搬进**留下的那一份**
+    // （`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`，两个 provider 共用）。
+    // 判据一个字没改，锚跟着实现走——不改锚的后果是**假绿**：`indexOf` 取不到就是 -1，
+    // 上面那条 `toBeGreaterThan(-1)` 会红（这次红了），但下面那条 `not.toContain` 会永远绿。
+    const src = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteOperations.ts',
+      ),
+      'utf8',
+    )
     const i = src.indexOf("'repo-prep-superseded'")
     expect(i).toBeGreaterThan(-1)
     const around = src.slice(Math.max(0, i - 1200), i)
-    expect(around, '必须按 retryIndex 判').toMatch(/r\.retryIndex > runRow\.retryIndex/)
-    expect(around, '不得用 id 序比较器（ULID 同毫秒不单调）').not.toContain('isFresherNodeRun(r,')
+    expect(around, '必须按 retryIndex 判').toMatch(/row\.retryIndex > target\.retryIndex/)
+    expect(around, '不得用 id 序比较器（ULID 同毫秒不单调）').not.toContain('isFresherNodeRun(')
   })
 
   test('F3：多次挂载同一镜像时，带后缀的隔离分支也要回收', () => {

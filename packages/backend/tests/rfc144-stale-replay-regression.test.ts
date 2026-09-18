@@ -23,6 +23,9 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createRetryEngine } from './helpers/retryEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,7 +43,6 @@ import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import { retryNode } from '../src/services/task'
 import { createLogger } from '../src/util/log'
 import { runGit } from '../src/util/git'
 import { Semaphore } from '../src/util/semaphore'
@@ -48,7 +50,6 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
@@ -214,9 +215,9 @@ describe('RFC-144 场景 A — retryNode 取代崩溃窗口行后，旧 delta �
       `writeFileSync(join(process.cwd(), 'fresh.txt'), 'fresh generation\\n')
 emit(envelope)`,
     )
-    await retryNode(h.db, taskId, staleId, {
-      cascade: true,
-      deps: {
+    await createRetryEngine(h.db, {
+      appHome: h.appHome,
+      resumeWith: {
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -224,6 +225,10 @@ emit(envelope)`,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', mockPath],
       },
+    }).retry({
+      taskId: taskId,
+      nodeRunId: staleId,
+      cascade: true,
     })
     const final = await waitForTerminalTask(h.db, taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')

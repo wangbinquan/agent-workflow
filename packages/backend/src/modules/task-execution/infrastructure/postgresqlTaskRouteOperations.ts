@@ -126,6 +126,7 @@ import type { WorkflowCatalogDetail } from '@/modules/resource-catalog/public/ty
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
+import { pickFreshestRun } from '@/services/freshness'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
@@ -1823,6 +1824,19 @@ function retryNodeIds(
   if (!cascade) return affected
   const adjacency = new Map<string, string[]>()
   for (const edge of definition.edges) {
+    // RFC-359 AC-1（第 9 刀）：**wrapper 边界边不是数据流边，不参与重试级联**。
+    //
+    // `wrapper-output` 边由 `migrateWorkflowDefinitionToLatest` 从 wrapper 的
+    // `outputBindings` 合成（`inner → wrapper`），`wrapper-input` 同理。它表达的是
+    // 「这个内层端口喂 wrapper 的输出」，**不是**「wrapper 是要重跑的下游节点」。
+    // 顺着它级联会给**容器自己**铸一条 failed 占位行，而那条占位行会盖住 wrapper
+    // 那条可复活的 canceled / interrupted 行 ⇒ wrapper 从第 0 轮重来，而不是从中断处续跑
+    // （正是 RFC-095 / RFC-098 B3 要防的形态）。
+    //
+    // 实撞：`rfc095-wrapper-canceled-revival` 在 retry 合一之后当场红——退役那份读的是
+    // **未迁移**的原始快照（`edges: []`）所以撞不到，而边界边一旦落进快照（当前版本的定义
+    // 都带），同一个坑对两个引擎都成立。
+    if (edge.boundary !== undefined) continue
     const existing = adjacency.get(edge.source.nodeId)
     if (existing === undefined) adjacency.set(edge.source.nodeId, [edge.target.nodeId])
     else if (!existing.includes(edge.target.nodeId)) existing.push(edge.target.nodeId)
@@ -1837,12 +1851,6 @@ function retryNodeIds(
     }
   }
   return affected
-}
-
-function freshestTopLevel(rows: readonly NodeRunRow[]): NodeRunRow | undefined {
-  return rows
-    .filter((row) => row.parentNodeRunId === null)
-    .sort((left, right) => right.id.localeCompare(left.id))[0]
 }
 
 /**
@@ -1869,7 +1877,14 @@ function inheritanceSourceInFrame(
   const sameFrame = existing.filter(
     (row) => row.containerRunId === frame.containerRunId && row.iteration === frame.iteration,
   )
-  return freshestTopLevel(sameFrame.length > 0 ? sameFrame : existing)
+  // RFC-359 AC-1（第 9 刀）：走**共用**的取新器，不留本地副本。
+  // 这里原本是一个本地 `freshestTopLevel`（filter 顶层 + id 序倒排取首），与
+  // `pickFreshestRun(rows, { topLevelOnly: true })` 逐值相同——而「同一个取新语义有第二份
+  // 写法」正是 RFC-096 audit S-13 收敛掉的那类分叉，`scheduler-audit-s13-*` 的 G3 就钉在
+  // 这一句上（它此前钉的是退役那份实现里的同一句）。
+  return pickFreshestRun(sameFrame.length > 0 ? sameFrame : existing, {
+    topLevelOnly: true,
+  })
 }
 
 /**
@@ -2050,7 +2065,19 @@ export async function retryNodeProjection(
   ]
   const now = dependencies.now?.() ?? Date.now()
   const operationRef = `task-retry:${input.taskId}:${dependencies.id?.() ?? ulid()}`
-  const committed = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+  // RFC-359 AC-1（第 9 刀）：准入 CAS / 取消旧世代子任务 / 铸占位行是**三段**，顺序承重。
+  //
+  // 合并前 PostgreSQL 这条路把「准入 + 铸行」放在同一笔事务里、取消排在其后，于是
+  // 「子任务取消失败」时占位行**已经落库**了。退役那份实现的原注把这条不变量写得很明白：
+  // 「never reset/mint after a partially failed cancellation set」——道理是占位行会成为该
+  // 调用节点的**最新一代**，而上一代的子任务还活着；任务之后一旦被 resume，调度器按最新行
+  // 重新派发这个调用节点，就会在旧子任务仍在 `awaiting_human` 时**再开一个子任务**。
+  // `retry-cascade-kind-matrix` 的两条注入用例（写失败 / CAS 被持续挤掉）照出了这处。
+  //
+  // 取消放在准入 CAS **之后**同样承重：反过来会在一次最终被拒的重试里白杀一批子任务。
+  // 事务因此拆成两笔——事件组 id 不变、ordinal 仍是 0 / 1（`appendProgram` 按
+  // `(eventGroupId, eventGroupOrdinal)` 幂等，投递按同一对排序），跨两次提交不影响消费端。
+  const admitted = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const changed = await tx
       .update(tasks)
       .set({
@@ -2076,6 +2103,71 @@ export async function retryNodeProjection(
         `task '${input.taskId}' changed while retry was admitted`,
       )
     }
+    const lifecycle = await appendTaskLifecycleTransitionCommittedEvent(tx, {
+      taskId: input.taskId,
+      lifecycleRevision: changedTask.revision,
+      previousStatus: task.status as TaskStatus,
+      status: 'interrupted',
+      errorSummary: task.errorSummary,
+      occurredAt: now,
+      identity: { operationRef, eventGroupId: operationRef, eventGroupOrdinal: 0 },
+      // RFC-359 W8：同上——重试的第一段只是把任务推到一个**可 resume 的终态**交给
+      // `children.resume`，任务并没有结束。`pending` 不能当这个中转态（不在
+      // `RESUMABLE_TASK_STATUSES` 里，会被 `assertResumeAdmission` 当场拒掉），所以
+      // 分家只能落在事件的语义上，而不是状态值上。
+      continuationHandoff: true,
+    })
+    return [lifecycle].filter((ref) => ref !== null)
+  })
+  await publishCommittedEventsAfterCommit(admitted)
+  for (const childTaskId of childTaskIds) {
+    try {
+      await dependencies.cancelChildTaskForCascade(childTaskId, input.taskId)
+    } catch (error) {
+      // RFC-359 AC-1（第 9 刀）：**已经收场的子任务是幂等空操作，不是失败**。
+      // 参与者对终态子任务抛 `task-not-cancelable`（`postgresqlChildTaskLifecycleParticipant`
+      // 的 `cancel`），而它自己的级联 helper 早就把这个码与 NotFound 一并 continue；
+      // SQLite 的 `retryNode` 也是两个都 continue。只有这条路是例外，后果是用户可见的：
+      // 重试一个子任务已完成的调用节点，PostgreSQL 上会报 `retry-child-cancel-failed`
+      // 并把任务**卡在 `interrupted`**，SQLite 上正常继续（`rfc359-w9` 的对拍照出了这处）。
+      if (
+        error instanceof NotFoundError ||
+        (error instanceof ConflictError && error.code === 'task-not-cancelable')
+      ) {
+        continue
+      }
+      const detail = error instanceof Error ? error.message : String(error)
+      // RFC-359 AC-1（第 9 刀）：`interrupted` **是终态**（`TERMINAL_TASK_STATUSES` 含它），
+      // 所以这笔收场 CAS 不带 `allowTerminal` 会**静默返回 false**（`trySet` 不抛）——
+      // 任务卡在 `interrupted`、`errorSummary` 空着，前端据此当「daemon 重启，可恢复」渲染，
+      // 而调用方拿到的却是 `retry-child-cancel-failed`。退役那份实现此处是从 `pending` 收场的
+      // （它把中转态放在 `pending`），换成 `interrupted` 中转就必须补上这个逃生口。
+      //
+      // 这里**不**因为 `trySet` 返回 false 就改抛别的：并发的终态赢家同样算 fail-closed，
+      // 判据只有一个——调用方必须看到 `retry-child-cancel-failed`（同退役实现的 `closeErr` 分支）。
+      await dependencies.persistence.runtimeLifecycle.trySet({
+        taskId: input.taskId,
+        to: 'failed',
+        allowedFrom: ['interrupted'],
+        allowTerminal: true,
+        now: dependencies.now?.() ?? Date.now(),
+        extra: {
+          finishedAt: dependencies.now?.() ?? Date.now(),
+          errorSummary: 'retry-child-cancel-failed',
+          // 退役实现把「是哪个子任务」写进了任务行的 errorMessage——那是用户唯一能看到
+          // 这个 id 的地方（抛出的 ConflictError 只进 HTTP 响应，不落库），跟着留下。
+          errorMessage: `failed to cancel superseded child task '${childTaskId}': ${detail}`,
+          failedNodeId: target.nodeId,
+        },
+        reason: 'retry-child-cancel-failed',
+      })
+      throw new ConflictError(
+        'retry-child-cancel-failed',
+        `cannot retry node '${target.nodeId}': superseded child task '${childTaskId}' could not be canceled (${detail})`,
+      )
+    }
+  }
+  const minted = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     const mint = createNodeRunMintParticipantInTx(tx)
     const nodeChanges: Array<{
       nodeRunId: string
@@ -2140,20 +2232,6 @@ export async function retryNodeProjection(
         cause: nodeId === target.nodeId ? 'retry-node' : 'retry-node-cascade',
       })
     }
-    const lifecycle = await appendTaskLifecycleTransitionCommittedEvent(tx, {
-      taskId: input.taskId,
-      lifecycleRevision: changedTask.revision,
-      previousStatus: task.status as TaskStatus,
-      status: 'interrupted',
-      errorSummary: task.errorSummary,
-      occurredAt: now,
-      identity: { operationRef, eventGroupId: operationRef, eventGroupOrdinal: 0 },
-      // RFC-359 W8：同上——重试的第一段只是把任务推到一个**可 resume 的终态**交给
-      // `children.resume`，任务并没有结束。`pending` 不能当这个中转态（不在
-      // `RESUMABLE_TASK_STATUSES` 里，会被 `assertResumeAdmission` 当场拒掉），所以
-      // 分家只能落在事件的语义上，而不是状态值上。
-      continuationHandoff: true,
-    })
     const nodeStatuses =
       nodeChanges.length === 0
         ? null
@@ -2169,44 +2247,9 @@ export async function retryNodeProjection(
               correlationRef: null,
             },
           })
-    return [lifecycle, nodeStatuses].filter((ref) => ref !== null)
+    return [nodeStatuses].filter((ref) => ref !== null)
   })
-  await publishCommittedEventsAfterCommit(committed)
-  for (const childTaskId of childTaskIds) {
-    try {
-      await dependencies.cancelChildTaskForCascade(childTaskId, input.taskId)
-    } catch (error) {
-      // RFC-359 AC-1（第 9 刀）：**已经收场的子任务是幂等空操作，不是失败**。
-      // 参与者对终态子任务抛 `task-not-cancelable`（`postgresqlChildTaskLifecycleParticipant`
-      // 的 `cancel`），而它自己的级联 helper 早就把这个码与 NotFound 一并 continue；
-      // SQLite 的 `retryNode` 也是两个都 continue。只有这条路是例外，后果是用户可见的：
-      // 重试一个子任务已完成的调用节点，PostgreSQL 上会报 `retry-child-cancel-failed`
-      // 并把任务**卡在 `interrupted`**，SQLite 上正常继续（`rfc359-w9` 的对拍照出了这处）。
-      if (
-        error instanceof NotFoundError ||
-        (error instanceof ConflictError && error.code === 'task-not-cancelable')
-      ) {
-        continue
-      }
-      await dependencies.persistence.runtimeLifecycle.trySet({
-        taskId: input.taskId,
-        to: 'failed',
-        allowedFrom: ['interrupted'],
-        now: dependencies.now?.() ?? Date.now(),
-        extra: {
-          finishedAt: dependencies.now?.() ?? Date.now(),
-          errorSummary: 'retry-child-cancel-failed',
-          errorMessage: error instanceof Error ? error.message : String(error),
-          failedNodeId: target.nodeId,
-        },
-        reason: 'retry-child-cancel-failed',
-      })
-      throw new ConflictError(
-        'retry-child-cancel-failed',
-        `superseded child task '${childTaskId}' could not be canceled`,
-      )
-    }
-  }
+  await publishCommittedEventsAfterCommit(minted)
   await dependencies.resumeTaskAs(input.actor, input.taskId)
   const updated = await loadTask(dependencies.db, input.taskId)
   if (updated === null)

@@ -21,6 +21,8 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+
+import { createRetryEngine } from './helpers/retryEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,7 +30,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { retryNode } from '../src/services/task'
+import { resumeTask } from '../src/services/task'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import {
@@ -239,16 +241,25 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     // canceled 列为可重试）。lw 自身不在 inner1 的 edges 下游 ⇒ 不会被铸 failed
     // 占位行，其 canceled 行保持 latest——复活路径完整经过 isDispatchable(canceled)
     // → findResumableWrapperRun(canceled 可复活) → canceled→running（allowedFrom）。
-    const next = await retryNode(h.db, taskId, innerCanceled!.id, {
-      cascade: true,
-      deps: {
-        db: h.db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-          .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: ['bun', 'run', h.mockPath],
+    // RFC-359 AC-1（第 9 刀）：共用实现把任务推到 `interrupted` 后交给 `resumeTaskAs` 收尾。
+    // 本条是**端到端**用例（要真调度器把 wrapper-loop 续跑到 done），所以这里交一个真的
+    // `resumeTask`——与合并前 `retryNode` 内部那一句逐字同形（同一份 deps）。
+    const next = await createRetryEngine(h.db, {
+      appHome: h.appHome,
+      resume: async (id) => {
+        await resumeTask(h.db, id, {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', h.mockPath],
+        })
       },
+    }).retry({
+      taskId: taskId,
+      nodeRunId: innerCanceled!.id,
+      cascade: true,
     })
     expect(next.status).toBe('pending')
     const final = await waitForTerminalTask(h.db, taskId)
@@ -327,16 +338,25 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
 
     // 阶段 2：retry 目标 = wrapper 自身的 canceled 行（前端 canRetryNodeRun 把
     // canceled 列为可重试——这正是 UI 上点 wrapper 行 retry 的入口）。
-    const next = await retryNode(h.db, taskId, wrapperRunId, {
-      cascade: true,
-      deps: {
-        db: h.db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-          .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: ['bun', 'run', h.mockPath],
+    // RFC-359 AC-1（第 9 刀）：共用实现把任务推到 `interrupted` 后交给 `resumeTaskAs` 收尾。
+    // 本条是**端到端**用例（要真调度器把 wrapper-loop 续跑到 done），所以这里交一个真的
+    // `resumeTask`——与合并前 `retryNode` 内部那一句逐字同形（同一份 deps）。
+    const next = await createRetryEngine(h.db, {
+      appHome: h.appHome,
+      resume: async (id) => {
+        await resumeTask(h.db, id, {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', h.mockPath],
+        })
       },
+    }).retry({
+      taskId: taskId,
+      nodeRunId: wrapperRunId,
+      cascade: true,
     })
     expect(next.status).toBe('pending')
     const final = await waitForTerminalTask(h.db, taskId)

@@ -46,6 +46,11 @@ const NODE_MECHANICS_SRC = readFileSync(
   'utf-8',
 )
 const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')
+// RFC-359 AC-1（第 9 刀）：`retry` 合并后**唯一**的那一份实现（两个 provider 共用）。
+const RETRY_SRC = readFileSync(
+  join(SRC_ROOT, 'modules', 'task-execution', 'infrastructure', 'postgresqlTaskRouteOperations.ts'),
+  'utf-8',
+)
 // RFC-359 AC-1（第 8 刀）：修复原来有两份实现，这条 fork 探针盯的是退役那一份的
 // `helpers.ts`。锚点换到留下的那一份——「这个 fork 不得回来」的对象随实现走。
 const REPAIR_SRC = readFileSync(
@@ -142,13 +147,20 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     expect(countOccurrences(rollbackSrc, FORK_MARKER)).toBe(0)
   })
 
-  test('G3 fork #5 FIXED (RFC-096): retryNode cascade uses shared pickFreshestRun and contains no desc(retryIndex)', () => {
+  test('G3 fork #5 FIXED (RFC-096): the retry cascade uses shared pickFreshestRun and contains no desc(retryIndex)', () => {
     // Anchor updated by RFC-098 B3 (audit ⑥-11): the targets set is no longer
     // seeded inline with runRow.nodeId — the wrapper-revival carve-out guards
     // the seed (`if (!wrapperRevivalTarget) targets.add(runRow.nodeId)`).
+    //
+    // RFC-359 AC-1（第 9 刀）改锚：`retry` 的两份实现合一，**留下的那一份**是
+    // `modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts` 的
+    // `retryNodeProjection`（两个 provider 共用），`services/task.ts` 的 `retryNode` 已整份删除。
+    // 锚跟着实现走——这正是本文件多次改锚的既有做法（见 G5 在第 8 刀的同类改锚）；
+    // 不改锚的后果不是漏判而是**假绿**：`extractSection` 取不到就返回空串，
+    // 三条 `includes` 断言里两条正向的会当场红，但那条 `toBe(false)` 的负向断言会**永远绿**。
     const cascade = extractSection(
-      TASK_SRC,
-      'const targets = new Set<string>()',
+      RETRY_SRC,
+      'function inheritanceSourceInFrame(',
       "errorMessage: 'queued for retry'",
     )
     // The fork is dead: no retryIndex ordering anywhere in the cascade — nor
@@ -174,7 +186,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // RFC-284 T21 改锚：max-scan 分配器收编 nodeRunMint.nextRetryIndex（默认口径
     // = 全行集、刻意含 child rows——与原 reduce 语义逐值相同，见其头注）。意图
     // 不变：cascade 仍是「分配下一个唯一 retryIndex」而非 freshness pick。
-    expect(cascade.includes('nextRetryIndex(existing)')).toBe(true)
+    expect(cascade.includes('nextRetryIndex(nodeRows)')).toBe(true)
   })
 
   // (former G4 — comparator-purity source-text probe — deleted during test
@@ -271,9 +283,13 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // 铸出的两条准备行会被判反、两边都点不动。ratchet 的价值在这次兑现了：它逼出了
     // 这场 review，而 review 的结论是「本处该用 retryIndex」——白名单正是为此存在
     //（本条注释上方原话：whitelist 刻意宽松，目标是任何新出现的至少被 review 看见）。
+    // RFC-359 AC-1（第 9 刀）：`retry` 两份合一，`services/task.ts` 的 `retryNode` 整份删除，
+    // 上面那条经 review 判定「本处该用 retryIndex」的 `__repo_prep__` 门随之搬进**留下的那一份**
+    // （`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`）。判定未变，位置变了：
+    // 白名单跟着实现走，总数仍是 2。
     expect(srcInventory('retryIndex > ')).toEqual({
       'modules/task-execution/application/nextRetryIndex.ts': 1,
-      'services/task.ts': 1,
+      'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 1,
     })
   })
 })
