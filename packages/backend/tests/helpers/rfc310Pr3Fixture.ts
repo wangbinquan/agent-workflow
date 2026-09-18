@@ -9,9 +9,8 @@
 
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
-import { createInMemoryDb } from '../../src/db/client'
 import type { DbClient } from '../../src/db/client'
 import type { ProviderNeutralDatabase } from '../../src/db/query'
 import {
@@ -55,7 +54,6 @@ import {
   createRequirementSourceAdapter,
 } from '../../src/modules/integration/infrastructure/developmentRequirementSourceAdapter'
 
-const MIGRATIONS = resolve(import.meta.dirname, '..', '..', 'db', 'migrations')
 
 export const ADAPTER_CLI = Bun.resolveSync(
   '@agent-workflow/system-mocks/development/requirement-adapter-cli',
@@ -82,8 +80,13 @@ export const DEFAULT_PR3_RULES: readonly Pr3PolicyRule[] = [
 
 export interface Pr3FixtureOptions<Database extends ProviderNeutralDatabase = DbClient> {
   readonly rules?: readonly Pr3PolicyRule[]
-  /** journey/HTTP 测试：在已有 db（createApp harness 同一实例）上铺配置。 */
-  readonly db?: Database
+  /**
+   * 夹具要铺配置的库。**必填**（RFC-359 AC-6 收尾）：此前它可选，缺省现建一个内存 SQLite 库
+   * ——那条回退是「这套夹具的消费者可以只跑 SQLite」的唯一出口，也是本仓最后一条真·待迁项。
+   * 三个消费者（t109 全旅程 / pr7b 冲突收敛 / pr3 外部适配器）都已迁到 `describeEachProvider`，
+   * 回退随之删除：夹具不再自己造库，两个引擎上跑的是同一批铺陈。
+   */
+  readonly db: Database
   /** PR-5 T54：员工加 requirement.analyze 只读路由（含专用模板）。 */
   readonly analyzeRoute?: boolean
   /** PR-10 T109：员工加 mr.feedback.apply 路由（含专用模板）——全旅程 E2E 用。 */
@@ -152,14 +155,10 @@ function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
   }
 }
 
-export function buildPr3Fixture(options?: Pr3FixtureOptions): Promise<Pr3Fixture>
-export function buildPr3Fixture(
-  options: Pr3FixtureOptions<ProviderNeutralDatabase> & { readonly db: ProviderNeutralDatabase },
-): Promise<ProviderPr3Fixture>
 export async function buildPr3Fixture(
-  options: Pr3FixtureOptions<ProviderNeutralDatabase> = {},
+  options: Pr3FixtureOptions<ProviderNeutralDatabase>,
 ): Promise<ProviderPr3Fixture> {
-  const db = options.db ?? createInMemoryDb(MIGRATIONS)
+  const db = options.db
   const now = () => Date.now()
   const templates = createActionTemplatePersistence(db)
 

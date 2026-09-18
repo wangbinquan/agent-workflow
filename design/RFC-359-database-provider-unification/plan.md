@@ -28,7 +28,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                                                                                         | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 当日收敛轨迹**：530 → 460（判据从文本扫改成 AST 数真调用点）→ 421 → **401**，其中「真债」`OPEN_MIGRATION_DEBT` **95**。总账按**该不该双引擎**分成五条机械免责判据（`migration-chain` / `sqlite-execution-engine` / `real-file-database` / `sqlite-only-primitive` / `sync-engine-capability`）与「真债」两栏，后者是唯一需要往下压的数字。**尾巴的形状已经变了**（§5do）：剩下的 95 个文件里，批量转换器对 22 个候选实跑下来只有 3 个能迁，**8 个卡在 SQLite-only 的生产签名上**（intent apply / 资源包 apply / 资源上限 / 几个 `composeSqlite*` 参与者）。**继续压这个数字的正解不再是转换测试，而是逐对收生产侧的引擎（AC-1）**——每收一对，下游那一串测试自然跟着能迁。 **2026-09-15 实测更正**：这一行写的「真债 95」**已过期**——`OPEN_MIGRATION_DEBT` 今天实测 **27 条**（`rfc359-w5-t19f-test-engine-hardcoding` 8 pass / 0 fail，账本与源码逐字相等）。剩余 27 条都是「没有机械正当理由的单引擎测试」，销账只有两条路：真迁到 `describeEachProvider`，或证明它落进 `SANCTIONED_SINGLE_ENGINE` 的某一类（账本明写**不许**为某个文件量身定做一条豁免）。抽查一条（`rfc097-task-status-cas.test.ts`，612 行 / 16 例）：被测的 `setTaskStatus` / `trySetTaskStatus` 本身是中立的，**可迁**，但它的 CAS 竞态用例是「在 helper 的 SELECT 与 UPDATE 之间插入竞争写者」，迁过去要重新对齐两个引擎的并发语义——**是真工作，不是机械转换**。 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | **2026-09-13 当日收敛轨迹**：530 → 460（判据从文本扫改成 AST 数真调用点）→ 421 → **401**，其中「真债」`OPEN_MIGRATION_DEBT` **95**。总账按**该不该双引擎**分成五条机械免责判据（`migration-chain` / `sqlite-execution-engine` / `real-file-database` / `sqlite-only-primitive` / `sync-engine-capability`）与「真债」两栏，后者是唯一需要往下压的数字。**尾巴的形状已经变了**（§5do）：剩下的 95 个文件里，批量转换器对 22 个候选实跑下来只有 3 个能迁，**8 个卡在 SQLite-only 的生产签名上**（intent apply / 资源包 apply / 资源上限 / 几个 `composeSqlite*` 参与者）。**继续压这个数字的正解不再是转换测试，而是逐对收生产侧的引擎（AC-1）**——每收一对，下游那一串测试自然跟着能迁。 **2026-09-15 实测更正**：这一行写的「真债 95」**已过期**——`OPEN_MIGRATION_DEBT` 今天实测 **27 条**（`rfc359-w5-t19f-test-engine-hardcoding` 8 pass / 0 fail，账本与源码逐字相等）。剩余 27 条都是「没有机械正当理由的单引擎测试」，销账只有两条路：真迁到 `describeEachProvider`，或证明它落进 `SANCTIONED_SINGLE_ENGINE` 的某一类（账本明写**不许**为某个文件量身定做一条豁免）。抽查一条（`rfc097-task-status-cas.test.ts`，612 行 / 16 例）：被测的 `setTaskStatus` / `trySetTaskStatus` 本身是中立的，**可迁**，但它的 CAS 竞态用例是「在 helper 的 SELECT 与 UPDATE 之间插入竞争写者」，迁过去要重新对齐两个引擎的并发语义——**是真工作，不是机械转换**。**2026-09-18 收尾**：`OPEN_MIGRATION_DEBT` **2 → 1**。`helpers/rfc310Pr3Fixture.ts` 那条是记账幻觉——账面一条，背后是**五个**只跑 SQLite 的消费者（t109 全旅程 / pr5 java 端到端 / pr4 工作区旅程 / pr7b 冲突收敛 / pr3 外部适配器子进程）。五个全部迁到 `describeEachProvider` 并删除回退（`db` 改必填）；配方是「进程侧的世界按泳道建、库侧夹具按用例建」，pr4 实撞过共用 appHome 导致第二条泳道 `git init` 撞上已有仓的坑。实测五份双引擎 34 pass / 0 fail，整个 rfc310 家族 102 个文件双引擎全绿。**剩下的唯一一条**（`rfc257-webhook-error-codes`）是「装配里没有 dispatcher」这个测试独有的装配形态：PG 根自己构造 dispatcher，该状态在那边按构造不存在，跑到 PG 上零价值。详见 plan §「AC-6 收尾」。 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。**2026-09-13 逮到一条用户可见的分叉并修掉**：数字员工「计划人审闸门」在 PostgreSQL 上永远报不出 `waiting`（同一个案子 SQLite 显示「等待人审」、PG 显示「规划中」）——成因是端口**同步且可选**，PG 侧的 composition 实现不了、少实现也没有任何地方会红。判定已收成一份 async 中立实现、两侧都装，并加了**装配锁**（删掉 PG 侧那个方法当场红 4 格，§5dm）。同批做了一次**全类扫查**：端口/参与者接口上的可选方法全仓只有 9 个，其余 8 个都是按功能可选（工作组宿主能力 / 连接目录 / 契约投影），不是按引擎——这一类已经清干净。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | **2026-09-13 连续 exact-SHA 全绿**：`63030aaea` / `b41a8cab2` / `55864e0c8` / `51aeda3f3` / `5b706bca8` / `7482255fc` 六笔各自的 push CI run 终态 success（十二个 ubuntu 后端分片带真 postgres:17、macOS 六分片、lint/format/depcheck、单二进制 build smoke、Playwright e2e）。同期修掉两次自己推出的红并各带回归用例：①`void <promise>` 没接 rejection（PG 上 `0 fail` 却退 1 的形态，§5dk）；②铸行 id 非单调（macOS 分片随机红，§5dl）。**仍待办**：RFC 收口后需要在最终 SHA 上再取一次终态取证。 | 进行中 |
@@ -18194,3 +18194,36 @@ W12 写的理由是「两侧既有的提交后事件 / 停止位置与 SQLite �
 `Migrator`（编号 SQL 文件逐条喂 vs advisory lock 下按 drizzle 声明准备 schema 并记生成代）。
 三条都是「只有一个引擎有的**资源形态**」——SQLite 是一个**文件**，PostgreSQL 是一台**服务器**。
 **AC-1 的合一面到此收口**：留下来的每一对都指得出判据，指不出来的已经全部合掉。
+
+## AC-6 收尾　最后一条「真·待迁」销账：RFC-310 夹具的 SQLite 回退整条删除
+
+`OPEN_MIGRATION_DEBT` 的两条里，`helpers/rfc310Pr3Fixture.ts` 那条一直是个**记账幻觉**：
+账本按「谁调 `createInMemoryDb(`」归边，而那句在夹具里
+（`const db = options.db ?? createInMemoryDb(MIGRATIONS)`），所以账面上只有一条，
+真正只跑 SQLite 的是它背后**五个**消费者：t109 全旅程 E2E / pr5 java 端到端 /
+pr4 工作区旅程 / pr7b 冲突收敛旅程 / pr3 外部适配器子进程。
+上一轮的判断「把 `db` 改成必填只是把计数从 helper 挪到它身上，净额不变」是对的——
+**净额不变的唯一出路是把五个都迁了**。本刀就是这么做的，然后把回退整条删除。
+
+### 迁移配方（五份都按这个来，值得记住）
+
+它不是「把 `createInMemoryDb` 换成 `harness.db`」那么简单，两件事必须分开：
+
+1. **进程侧的世界按泳道建**——一台自己的 system mock、一个自己的 appHome、一个自己的
+   mock 项目路径（`rfc310/...-${ulid()}`）。共用会让两条泳道在同一块 mock 磁盘上推同名分支、
+   开同一个 MR。**实撞过一次**：pr4 共用 appHome 时，第二条泳道的 `git init` 落在第一条已经
+   建好的仓上，`commit -m base` 当场 `nothing to commit` 失败。
+2. **库侧夹具按用例建**——`describeEachProvider` 每个用例前会把 PostgreSQL **整库快照回滚**，
+   放 `beforeAll` 的铺陈会被抹掉。注册顺序即执行顺序：harness 的 `beforeEach` 在 body 之前
+   就登记了，所以 body 里的 `beforeEach` 一定跑在回滚之后。
+
+顺带把三处 bun:sqlite 同步写（`.run()` / `.get()` / `.all()`）改成 await 的中立写法。
+
+### 账
+
+- `OPEN_MIGRATION_DEBT` **2 → 1**；`TEST_ENGINE_HARDCODING_DEBT` 316 → 315。
+- 实测：五份套件双引擎 **34 pass / 0 fail**；整个 rfc310 家族（102 个文件）双引擎全绿。
+- **这是 AC-6 的最后一条「真·待迁」**。剩下的那一条（`rfc257-webhook-error-codes`）是
+  「装配里没有 dispatcher」这个**测试独有的装配形态**：`server.ts` 把 `webhookDispatcher`
+  当可选依赖收（缺了就不挂公共 ingress 路由），而 PostgreSQL 根自己构造一个，该状态在那边
+  按构造不存在；生产两侧也都必定有一个。它不是「一个引擎能、另一个不能」，跑到 PG 上零价值。

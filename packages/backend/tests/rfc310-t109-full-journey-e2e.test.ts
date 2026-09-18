@@ -22,7 +22,7 @@
 // `__mr.factsCollectedAt` cells 实现（PR-7 集成测试同款手法）——快进时钟，
 // 不伪造行为。
 
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -65,7 +65,9 @@ import type { MergeRequestFactsCollectorPort } from '../src/modules/development-
 import { sha256Hex } from '../src/util/hash'
 import { cachedRepos, developmentAgentAttempts, developmentMrClaims } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 
 setDefaultTimeout(300_000)
 
@@ -76,13 +78,18 @@ function mockRepoDiskPath(repoHttpUrl: string): string {
   return join(realpathSync(tmpdir()), pathname.replace(/^\/git\//, ''))
 }
 
-const HOME = mkdtempSync(resolve(tmpdir(), 'rfc310-t109-'))
-const PROJECT_PATH = 'rfc310/t109-journey'
+// RFC-359 AC-6（收尾）：本套件迁到双引擎。**每条泳道要有自己的进程侧世界**——一台自己的
+// system mock、一个自己的 appHome、一个自己的 mock 项目路径；否则两条泳道会在同一块 mock
+// 磁盘上推同名分支、开同一个 MR。库侧则相反：`describeEachProvider` 每个用例前会把 PG 整库
+// 快照回滚，所以**库夹具必须每个用例重建**（放 `beforeAll` 会被回滚抹掉）。
+let HOME = ''
+let PROJECT_PATH = ''
 
 let suite: StartedSystemMockSuite
-let fx: Pr3Fixture
+let fx: ProviderPr3Fixture
 let automation: DevelopmentAutomationModule
 let repoUrl = ''
+let repoCachePath = ''
 let mrEffects: MrEffectsPort
 
 const launches: {
@@ -137,7 +144,10 @@ function hostBinding() {
   }
 }
 
-beforeAll(async () => {
+/** 进程侧的一次性世界：一台自己的 system mock + 一个自己的 appHome + 一块自己的 repo cache。 */
+async function startLaneWorld(): Promise<void> {
+  HOME = mkdtempSync(resolve(tmpdir(), 'rfc310-t109-'))
+  PROJECT_PATH = `rfc310/t109-journey-${ulid().toLowerCase()}`
   suite = await startSystemMockSuite()
   const project = await suite.client.seedCodeHost({
     provider: 'gitlab',
@@ -151,22 +161,25 @@ beforeAll(async () => {
     },
   })
   repoUrl = mockRepoDiskPath(project.gitTransportUrl)
+  repoCachePath = join(HOME, 'repo-cache')
+  git(HOME, 'clone', '-q', repoUrl, repoCachePath)
+  git(repoCachePath, 'checkout', '-q', 'main')
+}
 
-  fx = await buildPr3Fixture({ feedbackRoute: true })
-  const repoPath = join(HOME, 'repo-cache')
-  git(HOME, 'clone', '-q', repoUrl, repoPath)
-  git(repoPath, 'checkout', '-q', 'main')
-  fx.db
-    .insert(cachedRepos)
-    .values({
-      id: 'repo-1',
-      urlHash: 't109j1',
-      localPath: repoPath,
-      defaultBranch: 'main',
-      lastFetchedAt: Date.now(),
-      createdAt: Date.now(),
-    })
-    .run()
+/** 库侧夹具：**每个用例**重建（PG 泳道每个用例前会整库快照回滚）。 */
+async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
+  launches.length = 0
+  outcomes.clear()
+  fx = await buildPr3Fixture({ db, feedbackRoute: true })
+  const repoPath = repoCachePath
+  await fx.db.insert(cachedRepos).values({
+    id: 'repo-1',
+    urlHash: 't109j1',
+    localPath: repoPath,
+    defaultBranch: 'main',
+    lastFetchedAt: Date.now(),
+    createdAt: Date.now(),
+  })
 
   const vStore = createVerificationProfilePersistence(fx.db)
   const profile = await createVerificationProfile(
@@ -238,11 +251,13 @@ beforeAll(async () => {
       if (input.mrClaimId === null) {
         throw new Error(`no MR claim (mission=${input.missionId})`)
       }
-      const claim = fx.db
-        .select({ mrIid: developmentMrClaims.mrIid })
-        .from(developmentMrClaims)
-        .where(eq(developmentMrClaims.id, input.mrClaimId))
-        .get()
+      const claim = (
+        await fx.db
+          .select({ mrIid: developmentMrClaims.mrIid })
+          .from(developmentMrClaims)
+          .where(eq(developmentMrClaims.id, input.mrClaimId))
+          .limit(1)
+      )[0]
       if (claim === undefined) throw new Error('claim row missing')
       const out = await collectMergeRequestFacts(hostBinding(), claim.mrIid, {
         selfMarker: input.missionId,
@@ -284,11 +299,7 @@ beforeAll(async () => {
     mrEffects,
     mergeRequestFacts,
   })
-})
-
-afterAll(async () => {
-  await suite.close()
-})
+}
 
 async function envelopeFor(prompt: string, missionId: string): Promise<string> {
   const nonce = /<agent-result nonce="([^"]+)">/.exec(prompt)![1]!
@@ -390,14 +401,14 @@ async function reconcileUntil(
   }
   if (!(await pred())) {
     const m = await fx.store.getMission(missionId)
-    const rejections = fx.db
-      .select({
-        s: developmentAgentAttempts.status,
-        r: developmentAgentAttempts.rejectionJson,
-      })
-      .from(developmentAgentAttempts)
-      .all()
-      .map((row) => `${row.s}:${row.r ?? ''}`)
+    const rejections = (
+      await fx.db
+        .select({
+          s: developmentAgentAttempts.status,
+          r: developmentAgentAttempts.rejectionJson,
+        })
+        .from(developmentAgentAttempts)
+    ).map((row) => `${row.s}:${row.r ?? ''}`)
     throw new Error(
       `reconcileUntil(${label}) exhausted ${max} rounds; block=${m?.blockCode ?? ''}:${m?.blockDetail ?? ''}; rejections=${JSON.stringify(rejections)}; trail=${JSON.stringify(trail)}`,
     )
@@ -432,7 +443,19 @@ async function actOnLaunch(last: (typeof launches)[number]): Promise<void> {
   })
 }
 
-describe('rfc310 T109 — full mission journey on the system mock', () => {
+describeEachProvider('rfc310 T109 — full mission journey on the system mock', (harness) => {
+  beforeAll(async () => {
+    await startLaneWorld()
+  }, 120_000)
+  afterAll(async () => {
+    await suite.close()
+  })
+  // 注册顺序即执行顺序：harness 自己的 `beforeEach`（PG 整库回滚）在 `describeEachProvider`
+  // 调用 body **之前**就登记了，所以这一条一定跑在回滚之后。
+  beforeEach(async () => {
+    await seedLaneDatabase(harness.db)
+  }, 120_000)
+
   test('journey A: requirement → MR → feedback repair → reply → external merge → terminal', async () => {
     const missionId = await fx.launchDirect('t109-journey-a', 'Implement a greeting API in core.')
     journeyMissionId = missionId

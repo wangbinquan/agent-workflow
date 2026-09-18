@@ -13,7 +13,7 @@
 // requirement title）→ watching + mr-care wait。mock 侧断言 MR 与分支真实
 // 存在——平台从不 force push、从不 merge。
 
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -43,7 +43,10 @@ import {
 } from '../src/modules/source-control/composition'
 import { composeDevelopmentMrEffects } from '../src/modules/integration/composition/codeHostEffects'
 import { cachedRepos } from '../src/db/schema'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { ulid } from 'ulid'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 
 setDefaultTimeout(240_000)
 
@@ -56,13 +59,16 @@ function mockRepoDiskPath(repoHttpUrl: string): string {
   return join(realpathSync(tmpdir()), pathname.replace(/^\/git\//, ''))
 }
 
-const HOME = mkdtempSync(resolve(tmpdir(), 'rfc310-e2e-java-'))
-const PROJECT_PATH = 'rfc310/java-mission'
+// RFC-359 AC-6（收尾）：本套件迁到双引擎。每条泳道一台自己的 system mock + 自己的 appHome +
+// 自己的 mock 项目路径（否则两条泳道会在同一块 mock 磁盘上推同名分支）；库侧夹具每个用例重建。
+let HOME = ''
+let PROJECT_PATH = ''
 
 let suite: StartedSystemMockSuite
-let fx: Pr3Fixture
+let fx: ProviderPr3Fixture
 let automation: DevelopmentAutomationModule
 let repoHttpUrl = ''
+let repoCachePath = ''
 
 const launches: { executionRef: string; workspacePath: string; prompt: string }[] = []
 const outcomes = new Map<string, AgentExecutionSnapshot>()
@@ -88,7 +94,10 @@ function git(cwd: string, ...args: string[]): string {
   return proc.stdout.toString()
 }
 
-beforeAll(async () => {
+/** 进程侧的一次性世界：一台自己的 system mock + 一个自己的 appHome + 一块自己的 repo cache。 */
+async function startLaneWorld(): Promise<void> {
+  HOME = mkdtempSync(resolve(tmpdir(), 'rfc310-e2e-java-'))
+  PROJECT_PATH = `rfc310/java-mission-${ulid().toLowerCase()}`
   suite = await startSystemMockSuite()
   const project = await suite.client.seedCodeHost({
     provider: 'gitlab',
@@ -102,23 +111,26 @@ beforeAll(async () => {
     },
   })
   repoHttpUrl = mockRepoDiskPath(project.gitTransportUrl)
-
-  fx = await buildPr3Fixture()
   // 平台 repo cache = 从 mock remote 的真 clone（collector/baseline/push 的共同锚）。
-  const repoPath = join(HOME, 'repo-cache')
-  git(HOME, 'clone', '-q', repoHttpUrl, repoPath)
-  git(repoPath, 'checkout', '-q', 'main')
-  fx.db
-    .insert(cachedRepos)
-    .values({
-      id: 'repo-1',
-      urlHash: 'e2ejava1',
-      localPath: repoPath,
-      defaultBranch: 'main',
-      lastFetchedAt: Date.now(),
-      createdAt: Date.now(),
-    })
-    .run()
+  repoCachePath = join(HOME, 'repo-cache')
+  git(HOME, 'clone', '-q', repoHttpUrl, repoCachePath)
+  git(repoCachePath, 'checkout', '-q', 'main')
+}
+
+/** 库侧夹具：**每个用例**重建（PG 泳道每个用例前会整库快照回滚）。 */
+async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
+  launches.length = 0
+  outcomes.clear()
+  fx = await buildPr3Fixture({ db })
+  const repoPath = repoCachePath
+  await fx.db.insert(cachedRepos).values({
+    id: 'repo-1',
+    urlHash: 'e2ejava1',
+    localPath: repoPath,
+    defaultBranch: 'main',
+    lastFetchedAt: Date.now(),
+    createdAt: Date.now(),
+  })
 
   // verification profile：仓内 verify.sh（由 Agent 随改动写入）。
   const vStore = createVerificationProfilePersistence(fx.db)
@@ -204,11 +216,7 @@ beforeAll(async () => {
       }),
     }),
   })
-})
-
-afterAll(async () => {
-  await suite.close()
-})
+}
 
 async function envelopeFor(prompt: string, missionId: string): Promise<string> {
   const nonce = /<agent-result nonce="([^"]+)">/.exec(prompt)![1]!
@@ -235,7 +243,17 @@ async function envelopeFor(prompt: string, missionId: string): Promise<string> {
   return `log noise\n<agent-result nonce="${nonce}">\n${json}\n</agent-result>\n`
 }
 
-describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => {
+describeEachProvider('rfc310 pr5 T62 — java mission end-to-end on the system mock', (harness) => {
+  beforeAll(async () => {
+    await startLaneWorld()
+  }, 120_000)
+  afterAll(async () => {
+    await suite.close()
+  })
+  beforeEach(async () => {
+    await seedLaneDatabase(harness.db)
+  }, 120_000)
+
   test('implement → verify → commit → CAS push → MR opened on the mock host → watching', async () => {
     // launch 冻结 digest（title/body 参与）：stash 必须与 launch 提交逐字一致。
     const missionId = await fx.launchDirect('e2e-java-1', 'Implement a greeting API in core.')

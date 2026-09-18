@@ -543,8 +543,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // 由共用的 `updateTaskMembersLocked` 自己做，这一格转发面零调用方。语句数减少一格。
     // RFC-359 AC-1（2026-09-17，plan §5hn 之后的盘点第 5 刀）：`deletionEvents` 端口同样退役
     // ——`delete` 两个引擎共用 `services/taskDelete.ts` 之后，提交后的列表广播由共用实现自己做。
+    // RFC-359 AC-1（第 14 刀）：摘要随**源终止参与者与装配合一**更新——这一层改调中立的
+    // `composeTaskSourceTermination({ db, finalizeWithoutDriver })`，并把无 driver 时的工作区
+    // 收尾（source-control 的 `finalizeClaimedWorkspace`，与本文件驱动生命周期端口用的同一个）
+    // 显式交进去。**装配图变的是这一格**，且变的方向是补齐：此前这条路上的源终止没有同步收尾。
     expect(digest(restored, pg)).toBe(
-      '87e0e380068015b3e755f65ca5ffcadc9c46ffbd073123d071e2976c2b8e50e6',
+      'ca3d91297dd2263b11b300de546b7b1fc3aeff70b92b954d32fdc53c76ad5729',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

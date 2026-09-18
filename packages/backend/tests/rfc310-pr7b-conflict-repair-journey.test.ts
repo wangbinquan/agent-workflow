@@ -15,7 +15,7 @@
 // 必须前进（否则后续 fast-forward 发布拿旧 sha 当 CAS 期望值，必推不上去），
 // 以及 `__mr.factsCollectedAt` 归零（head 变了，mr.* 全部要重采）。
 
-import { beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -38,11 +38,16 @@ import {
   bindConflictMergeParticipant,
 } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 
 setDefaultTimeout(120_000)
 
-const HOME = mkdtempSync(resolve(tmpdir(), 'rfc310-t78-home-'))
+// RFC-359 AC-6（收尾）：本套件迁到双引擎。**每条泳道要有自己的进程侧世界**（一个 appHome、
+// 一套真 git 仓 + bare remote），否则两条泳道会在同一块盘上互相推分支；库侧相反——
+// `describeEachProvider` 每个用例前会把 PG 整库快照回滚，所以库夹具必须**每个用例重建**。
+let HOME = ''
 
 /**
  * 每个用例一条自己的 source 分支。共用一条会让「远端 head 被推动」那一条把
@@ -52,7 +57,7 @@ function branchOf(missionId: string): string {
   return `aw/mission/${missionId}`
 }
 
-let fx: Pr3Fixture
+let fx: ProviderPr3Fixture
 let automation: DevelopmentAutomationModule
 let repoPath: string
 let remotePath: string
@@ -94,19 +99,9 @@ function git(cwd: string, ...args: string[]): string {
   return proc.stdout.toString()
 }
 
-beforeAll(async () => {
-  fx = await buildPr3Fixture({
-    conflictRoute: true,
-    conflictPolicy: { mode: 'repair', maxRepairAttempts: 2 },
-    rules: [
-      {
-        ruleId: 'repair-on-conflict',
-        when: [{ kind: 'boolean-is', fact: 'mr.conflict', value: true }],
-        capabilityId: 'conflict.repair',
-      },
-    ],
-  })
-
+/** 进程侧的一次性世界：真 git 仓（source / target 各改同一行 = 真冲突）+ 真 bare remote。 */
+function startLaneWorld(): void {
+  HOME = mkdtempSync(resolve(tmpdir(), 'rfc310-t78-home-'))
   // base → source 分支与 target 分支在同一行各改一次 = 真冲突。
   repoPath = join(HOME, 'repo-src')
   mkdirSync(repoPath, { recursive: true })
@@ -132,17 +127,31 @@ beforeAll(async () => {
   remotePath = join(HOME, 'remote.git')
   mkdirSync(remotePath, { recursive: true })
   git(remotePath, 'init', '-q', '--bare')
+}
 
-  fx.db
-    .insert(cachedRepos)
-    .values({
-      id: 'repo-1',
-      urlHash: 't78dead',
-      localPath: repoPath,
-      lastFetchedAt: Date.now(),
-      createdAt: Date.now(),
-    })
-    .run()
+/** 库侧夹具：**每个用例**重建（PG 泳道每个用例前会整库快照回滚）。 */
+async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
+  launches.length = 0
+  outcomes.clear()
+  fx = await buildPr3Fixture({
+    db,
+    conflictRoute: true,
+    conflictPolicy: { mode: 'repair', maxRepairAttempts: 2 },
+    rules: [
+      {
+        ruleId: 'repair-on-conflict',
+        when: [{ kind: 'boolean-is', fact: 'mr.conflict', value: true }],
+        capabilityId: 'conflict.repair',
+      },
+    ],
+  })
+  await fx.db.insert(cachedRepos).values({
+    id: 'repo-1',
+    urlHash: 't78dead',
+    localPath: repoPath,
+    lastFetchedAt: Date.now(),
+    createdAt: Date.now(),
+  })
 
   automation = composeDevelopmentAutomation({
     db: fx.db,
@@ -155,7 +164,7 @@ beforeAll(async () => {
       resolve: () => ({ remoteUrl: remotePath, defaultBranch: 'main' }),
     },
   })
-})
+}
 
 function cell(value: FactCellValue): FactCell<FactCellValue> {
   return { state: 'known', value, sourceRevision: 't78' }
@@ -284,122 +293,133 @@ async function dispatchRepair(
   return last
 }
 
-describe('rfc310 pr7b T78 — conflict repair agent surface (real git + real remote)', () => {
-  test('resolved conflict set becomes a two-parent merge commit pushed with exact-head CAS', async () => {
-    const missionId = 'm-t78-happy'
-    const { workspacePath, prompt, executionRef } = await dispatchRepair(missionId)
+describeEachProvider(
+  'rfc310 pr7b T78 — conflict repair agent surface (real git + real remote)',
+  (harness) => {
+    beforeAll(() => {
+      startLaneWorld()
+    })
+    // 注册顺序即执行顺序：harness 自己的 `beforeEach`（PG 整库回滚）在 body 之前就登记了。
+    beforeEach(async () => {
+      await seedLaneDatabase(harness.db)
+    }, 120_000)
 
-    // ①②现场是真的冲突态：markers 在、两侧内容都在、MERGE_HEAD 在。
-    const conflicted = readFileSync(join(workspacePath, 'X.txt'), 'utf8')
-    expect(conflicted).toContain('<<<<<<<')
-    expect(conflicted).toContain('line1-from-source')
-    expect(conflicted).toContain('line1-from-target')
-    // ③prompt 明确告诉 Agent 边界（不碰 Git、只解冲突集）。
-    expect(prompt).toContain('Resolve only the pinned conflict work set')
+    test('resolved conflict set becomes a two-parent merge commit pushed with exact-head CAS', async () => {
+      const missionId = 'm-t78-happy'
+      const { workspacePath, prompt, executionRef } = await dispatchRepair(missionId)
 
-    // 「Agent」解冲突。
-    writeFileSync(join(workspacePath, 'X.txt'), 'line1-merged\nline2\n')
-    outcomes.set(executionRef, exited(executionRef, conflictEnvelope(prompt, ['X.txt'])))
+      // ①②现场是真的冲突态：markers 在、两侧内容都在、MERGE_HEAD 在。
+      const conflicted = readFileSync(join(workspacePath, 'X.txt'), 'utf8')
+      expect(conflicted).toContain('<<<<<<<')
+      expect(conflicted).toContain('line1-from-source')
+      expect(conflicted).toContain('line1-from-target')
+      // ③prompt 明确告诉 Agent 边界（不碰 Git、只解冲突集）。
+      expect(prompt).toContain('Resolve only the pinned conflict work set')
 
-    const collected = await automation.reconcile(missionId)
-    expect(collected.kind).toBe('action-collect')
-    if (collected.kind !== 'action-collect') return
-    expect(collected.result).toMatchObject({
-      kind: 'action-collected',
-      disposition: 'validated-changed',
+      // 「Agent」解冲突。
+      writeFileSync(join(workspacePath, 'X.txt'), 'line1-merged\nline2\n')
+      outcomes.set(executionRef, exited(executionRef, conflictEnvelope(prompt, ['X.txt'])))
+
+      const collected = await automation.reconcile(missionId)
+      expect(collected.kind).toBe('action-collect')
+      if (collected.kind !== 'action-collect') return
+      expect(collected.result).toMatchObject({
+        kind: 'action-collected',
+        disposition: 'validated-changed',
+      })
+
+      // ④⑤远端 source 分支已经前进到平台产出的 merge commit，两 parent = S/T。
+      const remoteHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
+        .split('\t')[0]!
+        .trim()
+      expect(remoteHead).not.toBe(sourceSha)
+      git(repoPath, 'fetch', '-q', remotePath, remoteHead)
+      const body = git(repoPath, 'cat-file', '-p', remoteHead)
+      const parents = [...body.matchAll(/^parent ([0-9a-f]{40})$/gm)].map((m) => m[1])
+      expect(parents).toEqual([sourceSha, targetSha])
+      expect(git(repoPath, 'show', `${remoteHead}:X.txt`)).toBe('line1-merged\nline2\n')
+
+      // candidate 那条路没被误用：merge 不是 baseline 上的 overlay diff。
+      const mission = (await fx.store.getMission(missionId))!
+      const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
+      expect(cells['__action.candidateRef']).toBeUndefined()
+      expect(cells['__conflict.mergedSha']).toMatchObject({ state: 'known', value: remoteHead })
+      // 后续 fast-forward 发布的 CAS 期望值必须已经前进到 merge commit。
+      expect(cells['__delivery.pushedSha']).toMatchObject({ state: 'known', value: remoteHead })
+      expect(cells['__delivery.sourceBranch']).toMatchObject({
+        state: 'known',
+        value: branchOf(missionId),
+      })
+      // head 变了 ⇒ MR facts 显式判过期，下轮必须重采（§8.5 步骤 6 同款纪律）。
+      expect(cells['__mr.factsCollectedAt']).toMatchObject({ state: 'known', value: '0' })
+      expect(mission.blockCode).toBeNull()
     })
 
-    // ④⑤远端 source 分支已经前进到平台产出的 merge commit，两 parent = S/T。
-    const remoteHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
-      .split('\t')[0]!
-      .trim()
-    expect(remoteHead).not.toBe(sourceSha)
-    git(repoPath, 'fetch', '-q', remotePath, remoteHead)
-    const body = git(repoPath, 'cat-file', '-p', remoteHead)
-    const parents = [...body.matchAll(/^parent ([0-9a-f]{40})$/gm)].map((m) => m[1])
-    expect(parents).toEqual([sourceSha, targetSha])
-    expect(git(repoPath, 'show', `${remoteHead}:X.txt`)).toBe('line1-merged\nline2\n')
+    test('an edit outside the pinned conflict set is a boundary violation and never publishes', async () => {
+      const missionId = 'm-t78-boundary'
+      const { workspacePath, prompt, executionRef } = await dispatchRepair(missionId)
+      const beforeHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
+        .split('\t')[0]!
+        .trim()
 
-    // candidate 那条路没被误用：merge 不是 baseline 上的 overlay diff。
-    const mission = (await fx.store.getMission(missionId))!
-    const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
-    expect(cells['__action.candidateRef']).toBeUndefined()
-    expect(cells['__conflict.mergedSha']).toMatchObject({ state: 'known', value: remoteHead })
-    // 后续 fast-forward 发布的 CAS 期望值必须已经前进到 merge commit。
-    expect(cells['__delivery.pushedSha']).toMatchObject({ state: 'known', value: remoteHead })
-    expect(cells['__delivery.sourceBranch']).toMatchObject({
-      state: 'known',
-      value: branchOf(missionId),
+      // 解了冲突，但顺手改了冲突集之外的文件。
+      writeFileSync(join(workspacePath, 'X.txt'), 'line1-merged\nline2\n')
+      writeFileSync(join(workspacePath, 'other.txt'), 'sneaky\n')
+      outcomes.set(executionRef, exited(executionRef, conflictEnvelope(prompt, ['X.txt'])))
+
+      const collected = await automation.reconcile(missionId)
+      expect(collected.kind).toBe('action-collect')
+      if (collected.kind !== 'action-collect') return
+      expect((collected.result as { kind: string }).kind).toBe('action-failed')
+
+      // 拦截点必须是**平台自己的 workspace 对拍**（writablePrefixes = 冲突集），
+      // 而不是等到 source-control 的 finish 才发现：前者是「Agent 越界」的诚实
+      // 分级（boundary ⇒ 整树废弃），后者只是合并收不了口。
+      const failedRun = (collected.result as { actionRunId: string }).actionRunId
+      const attempts = await fx.store.listAttempts(failedRun)
+      const last = attempts[attempts.length - 1]!
+      expect(last.status).toBe('discarded')
+      expect(JSON.parse(last.rejectionJson ?? '{}')).toMatchObject({
+        code: 'write-outside-allowlist',
+        paths: ['other.txt'],
+      })
+      // 远端纹丝不动：越界现场绝不产生发布。
+      const afterHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
+        .split('\t')[0]!
+        .trim()
+      expect(afterHead).toBe(beforeHead)
     })
-    // head 变了 ⇒ MR facts 显式判过期，下轮必须重采（§8.5 步骤 6 同款纪律）。
-    expect(cells['__mr.factsCollectedAt']).toMatchObject({ state: 'known', value: '0' })
-    expect(mission.blockCode).toBeNull()
-  })
 
-  test('an edit outside the pinned conflict set is a boundary violation and never publishes', async () => {
-    const missionId = 'm-t78-boundary'
-    const { workspacePath, prompt, executionRef } = await dispatchRepair(missionId)
-    const beforeHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
-      .split('\t')[0]!
-      .trim()
+    test('a source head that moved under us is refused by CAS instead of overwritten', async () => {
+      const missionId = 'm-t78-race'
+      const { workspacePath, prompt, executionRef } = await dispatchRepair(missionId)
 
-    // 解了冲突，但顺手改了冲突集之外的文件。
-    writeFileSync(join(workspacePath, 'X.txt'), 'line1-merged\nline2\n')
-    writeFileSync(join(workspacePath, 'other.txt'), 'sneaky\n')
-    outcomes.set(executionRef, exited(executionRef, conflictEnvelope(prompt, ['X.txt'])))
+      // ⑥Agent 干活期间有人往 MR 的 source 分支推了东西：S 已经不是远端 head。
+      const sideRepo = join(HOME, `side-${missionId}`)
+      mkdirSync(sideRepo, { recursive: true })
+      git(sideRepo, 'clone', '-q', remotePath, '.')
+      git(sideRepo, 'checkout', '-q', branchOf(missionId))
+      writeFileSync(join(sideRepo, 'human.txt'), 'human push\n')
+      git(sideRepo, 'add', '-A')
+      git(sideRepo, 'commit', '-q', '-m', 'human push')
+      git(sideRepo, 'push', '-q', 'origin', branchOf(missionId))
+      const humanHead = git(sideRepo, 'rev-parse', 'HEAD').trim()
 
-    const collected = await automation.reconcile(missionId)
-    expect(collected.kind).toBe('action-collect')
-    if (collected.kind !== 'action-collect') return
-    expect((collected.result as { kind: string }).kind).toBe('action-failed')
+      writeFileSync(join(workspacePath, 'X.txt'), 'line1-merged\nline2\n')
+      outcomes.set(executionRef, exited(executionRef, conflictEnvelope(prompt, ['X.txt'])))
 
-    // 拦截点必须是**平台自己的 workspace 对拍**（writablePrefixes = 冲突集），
-    // 而不是等到 source-control 的 finish 才发现：前者是「Agent 越界」的诚实
-    // 分级（boundary ⇒ 整树废弃），后者只是合并收不了口。
-    const failedRun = (collected.result as { actionRunId: string }).actionRunId
-    const attempts = await fx.store.listAttempts(failedRun)
-    const last = attempts[attempts.length - 1]!
-    expect(last.status).toBe('discarded')
-    expect(JSON.parse(last.rejectionJson ?? '{}')).toMatchObject({
-      code: 'write-outside-allowlist',
-      paths: ['other.txt'],
+      const collected = await automation.reconcile(missionId)
+      expect(collected.kind).toBe('action-collect')
+      if (collected.kind !== 'action-collect') return
+      expect(collected.result).toMatchObject({
+        kind: 'action-failed',
+        blockCode: 'conflict-head-changed',
+      })
+      // 别人的提交还在——平台没有覆盖它。
+      const afterHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
+        .split('\t')[0]!
+        .trim()
+      expect(afterHead).toBe(humanHead)
     })
-    // 远端纹丝不动：越界现场绝不产生发布。
-    const afterHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
-      .split('\t')[0]!
-      .trim()
-    expect(afterHead).toBe(beforeHead)
-  })
-
-  test('a source head that moved under us is refused by CAS instead of overwritten', async () => {
-    const missionId = 'm-t78-race'
-    const { workspacePath, prompt, executionRef } = await dispatchRepair(missionId)
-
-    // ⑥Agent 干活期间有人往 MR 的 source 分支推了东西：S 已经不是远端 head。
-    const sideRepo = join(HOME, `side-${missionId}`)
-    mkdirSync(sideRepo, { recursive: true })
-    git(sideRepo, 'clone', '-q', remotePath, '.')
-    git(sideRepo, 'checkout', '-q', branchOf(missionId))
-    writeFileSync(join(sideRepo, 'human.txt'), 'human push\n')
-    git(sideRepo, 'add', '-A')
-    git(sideRepo, 'commit', '-q', '-m', 'human push')
-    git(sideRepo, 'push', '-q', 'origin', branchOf(missionId))
-    const humanHead = git(sideRepo, 'rev-parse', 'HEAD').trim()
-
-    writeFileSync(join(workspacePath, 'X.txt'), 'line1-merged\nline2\n')
-    outcomes.set(executionRef, exited(executionRef, conflictEnvelope(prompt, ['X.txt'])))
-
-    const collected = await automation.reconcile(missionId)
-    expect(collected.kind).toBe('action-collect')
-    if (collected.kind !== 'action-collect') return
-    expect(collected.result).toMatchObject({
-      kind: 'action-failed',
-      blockCode: 'conflict-head-changed',
-    })
-    // 别人的提交还在——平台没有覆盖它。
-    const afterHead = git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
-      .split('\t')[0]!
-      .trim()
-    expect(afterHead).toBe(humanHead)
-  })
-})
+  },
+)

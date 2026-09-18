@@ -87,7 +87,10 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'fusion-engine.test.ts: 1',
   'gettask-multi-repo.test.ts: 1',
   'git-repo-cache.test.ts: 1',
-  'helpers/rfc310Pr3Fixture.ts: 1',
+  // RFC-359 AC-6（收尾）**销账**：夹具的 `options.db ?? createInMemoryDb(...)` 回退整条删除
+  //（`db` 改必填）。它是「这套夹具的消费者可以只跑 SQLite」的唯一出口；五个消费者
+  //（t109 全旅程 / pr5 java 端到端 / pr4 工作区旅程 / pr7b 冲突收敛 / pr3 外部适配器）
+  // 全部迁到 `describeEachProvider`，回退随之消失。
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2',
   'input-port-contract.test.ts: 1',
   'integration-chaos/chaos-scenarios.integration.test.ts: 2',
@@ -843,7 +846,16 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   // `rfc202-lifecycle-exits` / `rfc350-idle-timeout-integration`，同批离开上面那本总账）；
   // 第四份 `rfc268-webhook-scratch-launch` 仍真的驱动 SQLite 启动参与者，改由
   // `sqlite-execution-engine` 新补的拼法认领。**这本名单一行没涨。**
-  'helpers/rfc310Pr3Fixture.ts',
+  // RFC-359 AC-6（收尾）**销账**：`helpers/rfc310Pr3Fixture.ts` 的 SQLite 回退已删除，
+  // 五个消费者全部迁到双引擎（见上面总账里那条注释）。这批迁移的通用配方记在这里，
+  // 因为它不是「把 `createInMemoryDb` 换成 `harness.db`」那么简单：
+  //   · **进程侧的世界要按泳道建**——一台自己的 system mock / 一个自己的 appHome /
+  //     一个自己的 mock 项目路径。共用会让两条泳道在同一块盘上推同名分支、开同一个 MR；
+  //     pr4 实撞过一次：共用 appHome 时第二条泳道的 `git init` 落在第一条建好的仓上，
+  //     `commit -m base` 当场 "nothing to commit"。
+  //   · **库侧夹具要按用例建**——`describeEachProvider` 每个用例前会把 PostgreSQL 整库快照
+  //     回滚，放 `beforeAll` 的铺陈会被抹掉。注册顺序即执行顺序：harness 的 `beforeEach`
+  //     在 body 之前就登记了，所以 body 里的 `beforeEach` 一定跑在回滚之后。
   'rfc257-webhook-error-codes.test.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`rfc268-webhook-scratch-launch.test.ts` **转为
   // sanctioned**（`sqlite-execution-engine` 那一类），不是迁移发生了，而是**它一直就属于那一类、
