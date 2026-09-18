@@ -5,7 +5,8 @@ import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/quer
 import {
   assertManualExecutionAllowedProjection,
   assertTaskVisibleProjection,
-  assertTaskWorkflowSyncable,
+  loadTask,
+  syncWorkflow,
   launchMultipartTask,
   taskWorkflowSyncPreviewProjection,
   loadTaskProjection,
@@ -20,6 +21,7 @@ import {
   taskNodeRunsProjection,
 } from './taskRouteOperations'
 import { retryNodeProjection } from './taskRouteOperations'
+import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
 import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
 import {
   createTaskRouteRepairOperations,
@@ -31,11 +33,9 @@ import type { TaskExecutionPersistence } from '../application/ports/taskExecutio
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { composeTaskCancellation } from '../composition/taskCancellation'
-import { getTask, syncTaskWorkflow, type StartTaskDeps } from '@/services/task'
 import { deleteTask } from '@/services/taskDelete'
 import { Paths } from '@/util/paths'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
-import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 import type { TaskRouteOperations } from '../public/taskRoutes'
 import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 import type { LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
@@ -44,8 +44,6 @@ import { NotFoundError } from '@/util/errors'
 export interface SqliteTaskRouteOperationsDependencies {
   readonly db: LegacySqliteTaskDatabase
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
-  readonly recovery: TaskRecoveryOperations
-  readonly startDepsFor: (actor: Actor) => StartTaskDeps
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动的**唯一编排**，与 PostgreSQL 同一份。
@@ -53,6 +51,13 @@ export interface SqliteTaskRouteOperationsDependencies {
    * 生产调用路。
    */
   readonly launches: TaskExecutionLaunchParticipant
+  /**
+   * RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 的静态校验门。与 PostgreSQL 那一侧同一格
+   *（那边取自 `launch.agent.resources`），共用实现只用到这一个方法，所以依赖面收成一个函数
+   * ——`server.ts` 那条不装配完整 runtime 的路因此也交得起（转发到同一份
+   * `composeAgentLaunchResourceOperations`）。
+   */
+  readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
   /**
    * RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：列表行的 owner 身份投影。**由组合根注入**，
    * 与 PostgreSQL 那一侧同形——这层是 infrastructure，不该自己去 compose 另一个模块
@@ -154,7 +159,7 @@ export function createSqliteTaskRouteOperations(
     // 回读那三行与 PG 路由逐字同形——共用实现返回 void，路由契约要的是任务行。
     async cancel(taskId) {
       await composeTaskCancellation(db).cancel(taskId)
-      const task = await getTask(db, taskId)
+      const task = await loadTask(db, taskId)
       if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       return task
     },
@@ -168,7 +173,7 @@ export function createSqliteTaskRouteOperations(
     // 等价性由 `rfc359-w10-resume-admission-parity` 的九格对拍作证。
     async resume({ actor, taskId }) {
       await dependencies.resumeTaskAs(actor, taskId)
-      const task = await getTask(db, taskId)
+      const task = await loadTask(db, taskId)
       if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       return task
     },
@@ -225,20 +230,27 @@ export function createSqliteTaskRouteOperations(
         actor,
         taskId,
       ),
-    async syncWorkflow({ actor, taskId, expectedVersion }) {
-      // RFC-359 AC-1（plan §5hn 之后的盘点，第 7 刀）：七道前置门与 PostgreSQL 共用**同一份**。
-      // 这一侧此前只在路由层判三道（类型 / 内置 / 工作流可见），其余靠 `syncTaskWorkflow`
-      // 内部再判——门提前了、错误码不变；新增的是「进程内仍在跑」与「工作区已回收」两档
-      //（后者即原 B4，判据与 `delete` 那一刀一致：先报确定的「这条路走不通」）。
-      await assertTaskWorkflowSyncable({ db, activity: dependencies.activity }, actor, taskId)
-      return await syncTaskWorkflow(db, taskId, {
-        ...dependencies.startDepsFor(actor),
-        taskRecoveryOperations: dependencies.recovery,
-        expectedVersion,
-        launchResources: dependencies.resourceAuthorityFor(actor),
-        actorUserId: actor.user.id,
-      })
-    },
+    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 与 PostgreSQL 共用**同一份**实现。
+    // 合并之前这一侧转给 `services/task.ts` 的 `syncTaskWorkflow`（160 行，sync 的第二份
+    // 实现，终端是 `resumeKick` 的一段式准入）；共用那份走两段式交棒（准入 CAS 落
+    // `interrupted` + 打 `continuationHandoff` 标记，随后才交给复活端口），并且多两样
+    // SQLite 这边一直没有的东西：回滚基线的**跨行零副作用预检**（任一行基线被 GC 回收时
+    // 干净失败，而不是推进 interrupted 之后在半截回滚里发现），以及把 canceled 写节点的
+    // 回滚交给 `selectSyncRollbackTargets`（failed / interrupted 两档由紧随其后的复活
+    // 连同租约围栏一并处理，不重复动工作树）。
+    // 七道前置门（`assertTaskWorkflowSyncable`）本来就是共用的，现在由共用实现自己调。
+    syncWorkflow: (input) =>
+      syncWorkflow(
+        {
+          db,
+          persistence: dependencies.persistence,
+          activity: dependencies.activity,
+          resourceAuthorityFor: dependencies.resourceAuthorityFor,
+          validateHostWorkflow: dependencies.validateHostWorkflow,
+          resumeTaskAs: dependencies.resumeTaskAs,
+        },
+        input,
+      ),
     // RFC-359 AC-1（第 8 刀）：手动修复两个动词直接交给共用的那一份实现。
     repairOptions: (input) => repairs.repairOptions(input),
     applyRepair: (input) => repairs.applyRepair(input),

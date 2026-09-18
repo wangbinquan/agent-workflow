@@ -39,14 +39,11 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, users, workflows } from '@/db/schema'
 import { runGit } from '@/util/git'
-import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 
 /** 良构但**任何对象库里都不存在**的 sha——被 gc 剪掉的快照的确定性替身。 */
@@ -216,21 +213,6 @@ async function executionFor(
     harness,
     { appHome: fixture.appHome, defaultNodeRetries: 0 },
     USER_ID,
-    {
-      // SQLite 的路由壳在进 `retryNode` 之前就展开这个对象，缺省的桩一调用就炸——
-      // 交一份真的进去，两条 lane 才跑的是各自部署里真正会执行的那份实现。
-      // 二进制指向 `/usr/bin/env true`：本文件只验前置判据与落库形状，没有 agent 需要真跑。
-      routeStartDepsFor: () => ({
-        db: harness.db as unknown as DbClient,
-        appHome: fixture.appHome,
-        schedulerDriver: createTaskExecutionTestTopology({
-          db: harness.db as unknown as DbClient,
-          driver: 'real',
-        }).schedulerDriver,
-        taskRecoveryOperations: createTaskExecutionPersistence(harness.db).recoveryAdministration,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      }),
-    },
   )
 }
 

@@ -3655,8 +3655,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:0f58fcec1b97f9181318",
-            "import:4b2bdd5a312325ed153a"
+            "import:0f58fcec1b97f9181318"
           ],
           "fieldPath": "$call.$parameter:input.actor.user.id",
           "type": "string"
@@ -11800,7 +11799,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:24249236fb831829c2ad",
             "import:e27a34733d9119aa2242"
           ],
           "fieldPath": "$call.$parameter:input.actor.user.id",
@@ -93100,7 +93098,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
           "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
@@ -93250,7 +93250,9 @@
           "type": "z.infer<typeof WorkflowCandidateHashSchema>"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
           "fieldPath": "validationQueries.$method:validateDraft.$parameter:input.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
         },
@@ -159608,7 +159610,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea8f85f4ead38c1189332773535e1fce217bf098d9391daa09b119cade9f5b50",
+  "sourceDigest": "sha256:da37dbeb22a52b16e4b75505b608a2ae777a4016c1d3bd7e620cebe3373bd2f2",
   "targetContexts": [
     "collaboration",
     "development-automation",

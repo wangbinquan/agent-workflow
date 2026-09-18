@@ -701,8 +701,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `postgresql` 前缀（`childExecutionLaunchOperations` / `childTaskLifecycleParticipant` /
     // `taskRouteLaunchOperations` / `taskRouteWorkspaceParticipant`），本函数体里那些
     // `createPostgresql*` 调用随之改名。**装配图一格没变**，变的只有标识符。
+    // RFC-359 AC-1（第 13 刀下）：摘要随 `syncWorkflow` 两个引擎合一而更新。这一层交给
+    // `createSqliteTaskRouteOperations` 的依赖里，`recovery` / `startDepsFor` 两格整个消失
+    //（路由层不再持有 legacy `StartTaskDeps`），换成一个 `validateHostWorkflow` 转发面。
+    // **装配出来的东西不变**：静态校验门指向的仍是同一份 `composeAgentLaunchResourceOperations`。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '83431fa3308880e01d34a25a781ecadbdb83e7b16b1edeac0a326737e20c84ba',
+      '0915415a6524ef955ffe80b4ea1c056a92b71c30fa359f123c084f5a77b2cae2',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

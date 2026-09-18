@@ -132256,6 +132256,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#TaskWorkflowSyncDependencies",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskWorkflowSyncDependencies",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#taskWorkflowSyncPreviewProjection",
       "removeAfterWave": null,
       "status": "current-module",
@@ -185303,18 +185315,6 @@
       "status": "legacy-target",
       "symbol": "submitContinuationIntentInTx",
       "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#syncTaskWorkflow",
-      "removeAfterWave": "W4-C",
-      "status": "legacy-target",
-      "symbol": "syncTaskWorkflow",
-      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -295445,5 +295445,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea8f85f4ead38c1189332773535e1fce217bf098d9391daa09b119cade9f5b50"
+  "sourceDigest": "sha256:da37dbeb22a52b16e4b75505b608a2ae777a4016c1d3bd7e620cebe3373bd2f2"
 }

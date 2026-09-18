@@ -43,13 +43,10 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, users, workflows } from '@/db/schema'
 import { runGit } from '@/util/git'
-import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 
 const USER_ID = 'u_rfc359_w10'
@@ -229,21 +226,6 @@ async function executionFor(
     harness,
     { appHome: fixture.appHome, defaultNodeRetries: 0 },
     USER_ID,
-    {
-      // SQLite 的路由壳在进 `resumeTask` **之前**就展开这个对象，缺省那个「一调用就炸」的桩
-      // 会让 resume 在 SQLite lane 上根本驱动不起来（同 `rfc359-w9` 记的那条）。
-      // 二进制指向 `/usr/bin/env true`：本文件只验准入面与落库形状，没有 agent 需要真跑。
-      routeStartDepsFor: () => ({
-        db: harness.db as unknown as DbClient,
-        appHome: fixture.appHome,
-        schedulerDriver: createTaskExecutionTestTopology({
-          db: harness.db as unknown as DbClient,
-          driver: 'real',
-        }).schedulerDriver,
-        taskRecoveryOperations: createTaskExecutionPersistence(harness.db).recoveryAdministration,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      }),
-    },
   )
 }
 

@@ -55,6 +55,7 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import {
   clarifyRounds,
@@ -1407,11 +1408,13 @@ export async function assertManualExecutionAllowedProjection(
 }
 
 export async function loadVisibleWorkflow(
-  dependencies: TaskRouteOperationsDependencies,
+  dependencies: Readonly<{
+    readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+  }>,
   actor: Actor,
   workflowId: string,
 ) {
-  const authority = dependencies.launch.resourceAuthorityFor(actor)
+  const authority = dependencies.resourceAuthorityFor(actor)
   return {
     authority,
     workflow: workflowLaunchSnapshot(
@@ -1594,7 +1597,7 @@ async function assertRollbackBaselinesPresent(
  * 杀不掉就失败关闭。
  */
 async function rollbackRunsForContinuation(
-  dependencies: TaskRouteOperationsDependencies,
+  dependencies: Pick<TaskRetryDependencies, 'db' | 'persistence' | 'now' | 'id'>,
   input: Readonly<{
     taskId: string
     runs: readonly NodeRunRow[]
@@ -1706,8 +1709,33 @@ export async function assertTaskWorkflowSyncable(
   return { task, workflow }
 }
 
+/**
+ * RFC-359 AC-1（第 13 刀下）—— `syncWorkflow` 这条路**唯一**需要的依赖面。
+ *
+ * 比整个路由依赖窄得多，而且窄得有道理：合并之前 SQLite 那一侧走的是 `services/task.ts` 的
+ * `syncTaskWorkflow`（160 行的第二份实现），换成共用这一份的前提就是它的依赖面得小到
+ * **两条组合根都交得起**——尤其是 `server.ts` 那条**不装配完整 runtime** 的路
+ *（与第 9 刀给 `retry`、第 10 刀给 `resume` 做的收窄同形）。
+ *
+ * 三格收窄：
+ *   · `launch.resourceAuthorityFor` → `resourceAuthorityFor`（同一个东西，两个位置）；
+ *   · `launch.agent.resources.validateHostWorkflow` → `validateHostWorkflow`（只用到这一个方法）；
+ *   · `children` + `topology` + `resumeRuntimeFor` 三格 → 一个 `resumeTaskAs`
+ *     （`retryNodeProjection` 早就是这个形状）。
+ */
+export interface TaskWorkflowSyncDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly persistence: TaskExecutionPersistence
+  readonly activity: ActiveTaskExecutionParticipant
+  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+  readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
+  readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
+  readonly now?: () => number
+  readonly id?: () => string
+}
+
 export async function syncWorkflow(
-  dependencies: TaskRouteOperationsDependencies,
+  dependencies: TaskWorkflowSyncDependencies,
   input: Parameters<TaskRouteOperations['syncWorkflow']>[0],
 ): Promise<Task> {
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 7 刀）：七道前置门与 SQLite 共用**同一份**
@@ -1720,7 +1748,7 @@ export async function syncWorkflow(
   )
   const row = await requireTaskRow(dependencies.db, input.taskId)
   const { authority, workflow } = await loadVisibleWorkflow(
-    dependencies,
+    { resourceAuthorityFor: dependencies.resourceAuthorityFor },
     input.actor,
     row.workflowId,
   )
@@ -1739,9 +1767,7 @@ export async function syncWorkflow(
     closureJson,
     source: parseTriggerContextJson(row.triggerContextJson),
   })
-  const validation = await dependencies.launch.agent.resources.validateHostWorkflow(
-    workflow.definition,
-  )
+  const validation = await dependencies.validateHostWorkflow(workflow.definition)
   const validationErrors = validation.issues.filter(
     (issue) => (issue.severity ?? 'error') === 'error',
   )
@@ -1867,13 +1893,7 @@ export async function syncWorkflow(
     allowedFrom: ['interrupted'],
     reason: 'syncTaskWorkflow',
   })
-  await dependencies.children.resume(
-    {
-      taskId: input.taskId,
-      runtime: dependencies.resumeRuntimeFor(input.actor, input.taskId),
-    },
-    dependencies.topology,
-  )
+  await dependencies.resumeTaskAs(input.actor, input.taskId)
   const updated = await loadTask(dependencies.db, input.taskId)
   if (updated === null)
     throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)

@@ -226,10 +226,12 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     // ——它是**运行时装配出来的参与者**，由本函数直接交给路由，不劳调用方的 routes 回调再拼一遍。
     // 第 8 刀把共用修复实现的依赖面（`persistence` / `children` / `topology` /
     // `resumeRuntimeFor` / `repair`）一并归到这一档：它们同样是本函数手里现成的装配产物。
+    // 第 13 刀下把 `validateHostWorkflow` 也归到这一档（它就在本函数手里的 `routeLaunch`
+    // 那束依赖里），同时 `recovery` / `startDepsFor` 随 `syncWorkflow` 合一而整格消失。
     | 'db'
-    | 'recovery'
     | 'collaboration'
     | 'launches'
+    | 'validateHostWorkflow'
     | 'activity'
     | 'persistence'
     | 'resumeTaskAs'
@@ -293,8 +295,11 @@ export function composeSqliteTaskExecutionProviderRuntime<
   const launches = createSqliteTaskExecutionLaunchParticipant({ db, ...dependencies.routeLaunch })
   const taskRoutes = createSqliteTaskRouteOperations({
     db,
-    recovery: persistence.recoveryAdministration,
     launches,
+    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 与 PostgreSQL 共用同一份实现，静态校验门
+    // 取的是本支路由启动那束依赖里的同一个（PG 那侧在 `launch.agent.resources`）。
+    validateHostWorkflow: (definition, candidate) =>
+      dependencies.routeLaunch.agent.resources.validateHostWorkflow(definition, candidate),
     activity: participants.activity,
     // RFC-359 AC-1（第 8 刀）：手动 + 自动修复都走共用的那一份实现，依赖面由这里注入。
     persistence,

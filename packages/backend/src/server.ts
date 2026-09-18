@@ -2550,16 +2550,13 @@ function composeSqliteApiRouteMounts(
     // RFC-359 AC-1（第 5 刀）：`delete` 的 `task-active` 门读注入的参与者，不再读模块全局。
     // 这条路不装配完整 runtime，所以直接取那个唯一装配点。
     activity: composeLegacyTaskActivityParticipant(),
-    recovery: taskExecutionPersistence.recoveryAdministration,
-    startDepsFor: (actor) =>
-      buildStartTaskDeps(
-        deps.db,
-        schedulerDriver,
-        deps.configPath,
-        actor.user.id,
-        deps.secretBox,
-        identityAccess,
-      ),
+    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 与 PostgreSQL 共用同一份实现，于是
+    // `recovery` / `startDepsFor` 两格整个消失——它们是这条路上最后一处 legacy
+    // `StartTaskDeps` 的路由级持有者。静态校验门转发到同一份
+    // `composeAgentLaunchResourceOperations`（它在本函数更下方才装配得起来，
+    // 与紧邻的 `launches` 同一个词法闭环手法）。
+    validateHostWorkflow: (definition, candidate) =>
+      agentLaunchResources.resources.validateHostWorkflow(definition, candidate),
     // RFC-359 AC-1（第 8 刀）：手动 / 自动修复与 PostgreSQL 共用同一份实现。
     // 这条路不装配完整 runtime，复活走的仍是本文件 `resume` 动词用的同一句
     //（第 10 刀之后那一句就是下面的共用 `resumeTaskProjection`），

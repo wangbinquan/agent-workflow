@@ -98,8 +98,6 @@ import { gitStashSnapshot, runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 import type { TaskStatus, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc359-w8')
@@ -164,37 +162,79 @@ interface ChildCalls {
  * 准入 CAS 与占位行铸造（`admittedContinuation`）仍在 `submit` 里同步跑完，被换掉的只有
  * 之后那一脚后台 drive。PG 侧本来就用桩 `children.resume`，两侧对称。
  */
-function sqliteOperations(
-  db: ProviderNeutralDatabase,
-  driver: 'real' | 'noop' = 'real',
-): TaskRouteOperations {
+/**
+ * 两条泳道**共用**的资源权威替身：读的是同一张 `workflows` 表。
+ *
+ * RFC-359 AC-1（第 13 刀下）：SQLite 泳道此前这一格是 `() => ({}) as never`，因为那一侧的
+ * `syncWorkflow` 走的是 legacy 的 `syncTaskWorkflow`、根本不碰资源权威。合一之后两侧走同一份
+ * 实现，替身也必须是同一个。
+ */
+function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
+  return () =>
+    ({
+      resources: {
+        async loadAuthorized(
+          _authority: unknown,
+          requests: readonly { kind: string; workflowId: string }[],
+        ) {
+          const request = requests[0]
+          if (request === undefined) return []
+          const rows = await db
+            .select()
+            .from(workflows)
+            .where(eq(workflows.id, request.workflowId))
+            .limit(1)
+          const row = rows[0]
+          if (row === undefined) {
+            throw Object.assign(new Error('workflow-not-found'), {
+              code: 'workflow-not-found',
+            })
+          }
+          return [
+            {
+              kind: 'workflow-launch',
+              workflow: {
+                id: row.id,
+                name: row.name,
+                version: row.version,
+                definition: JSON.parse(row.definition) as WorkflowDefinition,
+              },
+            },
+          ]
+        },
+        async freezeCallClosure() {
+          return null
+        },
+      },
+    }) as never
+}
+
+function sqliteOperations(db: ProviderNeutralDatabase, calls: ChildCalls): TaskRouteOperations {
   const client = db as unknown as DbClient
-  const recovery = taskRecoveryOperations(client)
-  const topology = createTaskExecutionTestTopology({ db: client, driver })
   return createSqliteTaskRouteOperations({
     db: client,
     collaboration: {} as never,
-    recovery,
     owners: composeOwnerIdentityQueries(client),
     // RFC-359 AC-1（第 5 刀）：本对拍不驱动活跃度，给一个恒空的参与者。
     activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
-    startDepsFor: () =>
-      ({
-        db: client,
-        schedulerDriver: topology.schedulerDriver,
-        taskRecoveryOperations: recovery,
-        appHome: APP_HOME,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      }) as never,
-    resourceAuthorityFor: () => ({}) as never,
+    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 合一之后这一侧不再需要 legacy
+    // `StartTaskDeps`（`startDepsFor` / `recovery` 两格整个消失），复活也和 PostgreSQL 泳道
+    // 一样**记一笔就返回**——两条泳道从此在同一个交棒点上被观察，不再一边真起调度、
+    // 一边打空桩。静态校验门同样两侧同一个替身。
+    validateHostWorkflow: async () => ({ ok: true, issues: [] }),
+    resourceAuthorityFor: resourceAuthorityFor(db),
     // RFC-359 AC-1（plan §5hn 批次二 ④）：同上——本对拍不驱动工作流 JSON 启动。
     launches: { launch: async () => ({}) } as never,
     // RFC-359 AC-1（第 8 刀）：修复两个动词与 PostgreSQL 共用同一份实现；本对拍不驱动它们。
     persistence: createTaskExecutionPersistence(db),
-    resumeTaskAs: async () => {},
+    resumeTaskAs: async (_actor, taskId) => {
+      calls.resumed.push(taskId)
+    },
     // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现，这两样是它的依赖面。
     repositoryPreparationRetry: { retry: async () => {} },
-    cancelChildTaskForCascade: async () => {},
+    cancelChildTaskForCascade: async (childTaskId) => {
+      calls.canceled.push(childTaskId)
+    },
     repair: {
       collaborationRuntime: {} as never,
       clarify: {} as never,
@@ -214,43 +254,7 @@ function postgresqlOperations(db: ProviderNeutralDatabase, calls: ChildCalls): T
       agent: {
         resources: { validateHostWorkflow: async () => ({ ok: true, issues: [] }) },
       },
-      resourceAuthorityFor: () =>
-        ({
-          resources: {
-            async loadAuthorized(
-              _authority: unknown,
-              requests: readonly { kind: string; workflowId: string }[],
-            ) {
-              const request = requests[0]
-              if (request === undefined) return []
-              const rows = await db
-                .select()
-                .from(workflows)
-                .where(eq(workflows.id, request.workflowId))
-                .limit(1)
-              const row = rows[0]
-              if (row === undefined) {
-                throw Object.assign(new Error('workflow-not-found'), {
-                  code: 'workflow-not-found',
-                })
-              }
-              return [
-                {
-                  kind: 'workflow-launch',
-                  workflow: {
-                    id: row.id,
-                    name: row.name,
-                    version: row.version,
-                    definition: JSON.parse(row.definition) as WorkflowDefinition,
-                  },
-                },
-              ]
-            },
-            async freezeCallClosure() {
-              return null
-            },
-          },
-        }) as never,
+      resourceAuthorityFor: resourceAuthorityFor(db),
     },
     persistence: createTaskExecutionPersistence(db),
     children: {
@@ -285,14 +289,10 @@ function postgresqlOperations(db: ProviderNeutralDatabase, calls: ChildCalls): T
   return createPostgresqlTaskRouteOperations(dependencies)
 }
 
-function operations(
-  harness: ProviderHarness,
-  calls: ChildCalls,
-  driver: 'real' | 'noop' = 'real',
-): TaskRouteOperations {
+function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOperations {
   return harness.capabilities.provider === 'postgresql'
     ? postgresqlOperations(harness.db, calls)
-    : sqliteOperations(harness.db, driver)
+    : sqliteOperations(harness.db, calls)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -598,8 +598,10 @@ async function seedDirtyWorktree(): Promise<{ repoPath: string; snapshot: string
 
 describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harness) => {
   const calls: ChildCalls = { resumed: [], canceled: [] }
-  const ops = (driver: 'real' | 'noop' = 'real'): TaskRouteOperations =>
-    operations(harness, calls, driver)
+  // RFC-359 AC-1（第 13 刀下）：`driver` 这个旋钮没有了——它此前只为 SQLite 泳道存在
+  //（那一侧的 `retry` / `syncWorkflow` 收尾会真的把任务交给调度器，成功的用例因此要换 `'noop'`）。
+  // 复活两侧都收成注入的 `resumeTaskAs` 之后，两条泳道在同一个交棒点上被观察，不再起真调度。
+  const ops = (): TaskRouteOperations => operations(harness, calls)
 
   test('① 冻结的 trigger context 损坏时，retry 在改动任何东西之前就拒绝', async () => {
     const db = harness.db
@@ -751,7 +753,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     await seedRun(db, taskId, { nodeId: 'B', containerRunId: gen1, status: 'done' })
 
     // 用户点的是**第一代**里的 A，级联到 B。
-    await ops('noop').retry({
+    await ops().retry({
       actor: actorOf(OWNER),
       taskId,
       nodeRunId: targetRun,
@@ -784,7 +786,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     })
     const runId = await seedRun(db, taskId, { nodeId: 'W', status: 'canceled', preSnapshot })
 
-    await ops('noop').retry({
+    await ops().retry({
       actor: actorOf(OWNER),
       taskId,
       nodeRunId: runId,
@@ -825,7 +827,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     })
 
     const outcome = await code(
-      ops('noop').retry({
+      ops().retry({
         actor: actorOf(OWNER),
         taskId,
         nodeRunId: runId,
@@ -859,7 +861,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     })
 
     const outcome = await code(
-      ops('noop').retry({
+      ops().retry({
         actor: actorOf(OWNER),
         taskId,
         nodeRunId: runId,
@@ -942,7 +944,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     const db = harness.db
     const fixture = await seedAwaitedChild(db, {})
     try {
-      await ops('noop').retry({
+      await ops().retry({
         actor: actorOf(OWNER),
         taskId: fixture.childId,
         nodeRunId: fixture.runId,
@@ -977,7 +979,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     })
     try {
       const outcome = await code(
-        ops('noop').retry({
+        ops().retry({
           actor: actorOf(OWNER),
           taskId: fixture.childId,
           nodeRunId: fixture.runId,

@@ -4,6 +4,7 @@
 // the same production lease used by development-automation host tasks.
 
 import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { eq } from 'drizzle-orm'
 import { join } from 'node:path'
@@ -11,9 +12,7 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { StartTaskDeps } from '@/services/task'
 import { agents, mcps, workflows } from '@/db/schema'
-import type { Actor } from '@/auth/actor'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
@@ -115,7 +114,6 @@ export async function createEachProviderTaskExecution(
      * 在 SQLite lane 上根本驱动不起来（对拍拿不到真实答案）。要驱动它们的用例把真的交进来；
      * 其余用例保持原样——不该被调用到的依赖仍然当场炸，而不是静默走假路径。
      */
-    readonly routeStartDepsFor?: (actor: Actor) => StartTaskDeps
   } = {},
 ) {
   const completionMode = options.completionMode ?? 'await-settle'
@@ -229,7 +227,10 @@ export async function createEachProviderTaskExecution(
           // 所以这几格给到不会被调用到的最小形状——真被调用会当场炸，而不是静默走假路径。
           gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
           agent: {
-            resources: unusedCapability('agent route launch resources'),
+            // RFC-359 AC-1（第 13 刀下）：`resources` 交**生产那一份**——`syncWorkflow` 合一之后
+            // 它的静态校验门就是这里的 `validateHostWorkflow`（两个引擎同一份、只收中立句柄）。
+            // 此前这一格是「一碰就炸」的桩，于是本 harness 上的 sync 一调用就撞桩。
+            resources: composeAgentLaunchResourceOperations({ db }),
             integrity: unusedCapability('agent route launch integrity'),
           },
           routeWorkspace: { appHome },
@@ -237,10 +238,10 @@ export async function createEachProviderTaskExecution(
           coordinator: { submit: () => unavailable('agent route coordinator') },
           workgroup: unusedCapability('workgroup route launch resources'),
         },
+        // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
+        // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
         routes: () => ({
           collaboration: unusedCapability('collaboration route'),
-          startDepsFor: (routeActor: Actor) =>
-            options.routeStartDepsFor?.(routeActor) ?? unavailable('task route launch'),
           multipart: unusedCapability('multipart upload'),
           resourceAuthorityFor: () => launchResources,
           owners: composeOwnerIdentityQueries(db),
@@ -358,7 +359,8 @@ export async function createEachProviderTaskExecution(
           submit: (request) => coordinator.submit({ ...request, completionMode }),
         },
         agent: {
-          resources: unusedCapability('agent route resources'),
+          // RFC-359 AC-1（第 13 刀下）：与 SQLite 泳道**同一份**——`syncWorkflow` 的静态校验门。
+          resources: composeAgentLaunchResourceOperations({ db }),
           integrity: unusedCapability('agent route integrity'),
         },
         workgroup: unusedCapability('workgroup route resources'),

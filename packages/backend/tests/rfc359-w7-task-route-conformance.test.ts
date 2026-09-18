@@ -196,7 +196,6 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
   return createSqliteTaskRouteOperations({
     db: db as unknown as DbClient,
     collaboration: {} as never,
-    recovery: {} as never,
     owners: composeOwnerIdentityQueries(db as unknown as DbClient),
     // RFC-359 AC-1（第 5 刀）：活跃度是**注入的参与者**了，于是 A19 终于能在两个引擎上
     // 把 `task-active` 那道门喂出来——合并前 SQLite 侧读模块全局，对拍驱不动。
@@ -204,9 +203,9 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
       isActive: (taskId: string) => activeTaskIds.has(taskId),
       awaitReleasedSettled: async () => {},
     },
-    // SQLite 壳在调用 `retryNode` / `resumeTask` **之前**就展开这个对象，所以它不能抛；
-    // 本对拍只驱动到前置门为止，门后的驱动依赖一个都用不到。
-    startDepsFor: () => ({ db }) as never,
+    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 合一之后这一侧也走共用实现，静态校验门
+    // 与 PostgreSQL 泳道**同一个**替身（本对拍只驱动到前置门为止，一次也不会被调到）。
+    validateHostWorkflow: async () => ({ ok: true, issues: [] }),
     // RFC-359 AC-1（第 13 刀）：与 PostgreSQL 泳道**同一个**替身——手动执行门合一之后
     // 这一侧也要走资源权威。
     resourceAuthorityFor: resourceAuthorityFor(db),

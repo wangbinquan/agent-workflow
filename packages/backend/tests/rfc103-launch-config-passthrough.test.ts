@@ -178,9 +178,14 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // 它不再自己拼 `StartTaskDeps`，复活整段交给注入的 `resumeTaskAs`。
     // RFC-359 AC-1（第 10 刀）：2 → 1。少掉的那一处是 `resume` 自己——它也合一了，
     // 同样只剩「交给注入的 `resumeTaskAs`，再把任务重读一遍」。剩下的那一处是 `syncWorkflow`。
+    // RFC-359 AC-1（第 13 刀下）：1 → **0**，而且 `startDepsFor` 这一格整个从依赖面消失。
+    // `syncWorkflow` 是这条路上最后一个持有 legacy `StartTaskDeps` 的路由动词；它与
+    // PostgreSQL 合一之后，启动配置全部经注入的 `resumeTaskAs` 进去（与 `retry` / `resume`
+    // 同一条端口），路由层不再认识 `StartTaskDeps`。
     expect(
       (sqliteOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length,
-    ).toBe(1)
+    ).toBe(0)
+    expect(sqliteOperations, '路由层不得再长回 legacy 启动依赖').not.toContain('StartTaskDeps')
     // **但启动配置在重试这条路上一个字都不能丢**——这才是 RFC-103 要锁的东西，数字只是它的
     // 影子。合并之后它的正面锚点是这两句：路由把 `retry` 交给共用投影，而共用投影的复活
     // 依赖由组合根绑成与 `resume` 动词**同一句** `buildStartTaskDeps`（后者内部

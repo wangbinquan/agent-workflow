@@ -216,7 +216,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc099-migration-0045.test.ts: 1',
   'rfc107-url-upload-multipart.test.ts: 3',
   'rfc108-resume-safety.test.ts: 1',
-  'rfc109-sync-task-workflow.test.ts: 1',
+  // RFC-359 AC-1（第 13 刀下）**销账**：`syncWorkflow` 两个引擎合一之后，这套 RFC-109 的
+  // 回归判据整套迁到 `describeEachProvider` + 生产装配，单引擎那一格随之消失。
   'rfc122-clarify-directive-dispatch.test.ts: 2',
   'rfc130-crash-replay.test.ts: 1',
   'rfc130-merge-agent-scheduler.test.ts: 1',

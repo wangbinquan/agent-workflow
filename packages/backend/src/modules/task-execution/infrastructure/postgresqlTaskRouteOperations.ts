@@ -186,7 +186,29 @@ export function createPostgresqlTaskRouteOperations(
         actor,
         taskId,
       ),
-    syncWorkflow: (input) => syncWorkflow(dependencies, input),
+    // RFC-359 AC-1（第 13 刀下）：共用实现的依赖面收窄了，这里按新形状交——
+    // 三格（`children` / `topology` / `resumeRuntimeFor`）折成一个 `resumeTaskAs`，
+    // 与紧邻的 `retry` 逐字同形。
+    syncWorkflow: (input) =>
+      syncWorkflow(
+        {
+          db: dependencies.db,
+          persistence: dependencies.persistence,
+          activity: dependencies.activity,
+          resourceAuthorityFor: dependencies.launch.resourceAuthorityFor,
+          validateHostWorkflow: (definition, candidate) =>
+            dependencies.launch.agent.resources.validateHostWorkflow(definition, candidate),
+          resumeTaskAs: async (actor, taskId) => {
+            await dependencies.children.resume(
+              { taskId, runtime: dependencies.resumeRuntimeFor(actor, taskId) },
+              dependencies.topology,
+            )
+          },
+          ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+          ...(dependencies.id === undefined ? {} : { id: dependencies.id }),
+        },
+        input,
+      ),
     repairOptions: (input) => repairs.repairOptions(input),
     applyRepair: (input) => repairs.applyRepair(input),
   }

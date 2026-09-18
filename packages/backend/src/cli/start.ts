@@ -1934,8 +1934,9 @@ async function composeSqliteProviderSession(
           })
         return {
           collaboration: routeCollaborationContext,
-          startDepsFor: (actor) => taskStartDepsFor(actor.user.id),
-          resourceAuthorityFor: (actor) =>
+          // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
+          // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
+          resourceAuthorityFor: (actor: Actor) =>
             Object.freeze({
               actor,
               authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),

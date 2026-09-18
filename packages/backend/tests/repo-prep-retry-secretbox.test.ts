@@ -35,8 +35,13 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
     expect(route).toContain("path: '/api/tasks/:id/nodes/:nodeRunId/retry'")
     expect(route).toContain('await operations.retry({')
     expect(route).not.toMatch(/\bsecretBox\b|\bDbClient\b/)
-    expect(sqlite).toContain('...dependencies.startDepsFor(actor)')
-    expect(sqlite).toContain('taskRecoveryOperations: dependencies.recovery')
+    // RFC-359 AC-1（第 13 刀下）改锚：`syncWorkflow` 合一之后路由层不再持有 `StartTaskDeps`
+    //（`startDepsFor` / `recovery` 两格整个消失）。本条要锁的是「重试这条路拿得到完整启动
+    // 依赖」——它现在经注入的 `repositoryPreparationRetry` 与 `resumeTaskAs` 进去，两者都由
+    // 组合根用同一句 `buildStartTaskDeps`（带 secretBox）绑成，下面那条 bootstrap 用例锁着它。
+    expect(sqlite).toContain('repositoryPreparationRetry: dependencies.repositoryPreparationRetry')
+    expect(sqlite).toContain('resumeTaskAs: dependencies.resumeTaskAs')
+    expect(sqlite, '路由层不得再长回 legacy 启动依赖').not.toContain('StartTaskDeps')
   })
 
   test('bootstrap 只构造一次带 secretBox 的 start deps，重试与 boot 恢复复用 closed command', () => {

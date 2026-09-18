@@ -5195,8 +5195,6 @@
         "import:11e4b63b4f9f4226637f",
         "import:11f9a6b4d8215cb0324a",
         "import:12c9d0b573d244ae65bb",
-        "import:1368b8515d7120021dff",
-        "import:1edd3409bce4c47d0853",
         "import:22d95f653425a0679593",
         "import:24ceb5dbbf49c553205a",
         "import:268b94cea09f3a658c55",
@@ -5246,7 +5244,6 @@
         "import:c07d7479e713e86827ac",
         "import:c31b46594670e78f8791",
         "import:c35a5bf56849c2bd96bc",
-        "import:c7d2fef58587259c99c9",
         "import:c8a1c3024a577ff39c07",
         "import:c920441e58d6c83f5086",
         "import:cf5f570227949209b5ec",
@@ -5316,7 +5313,6 @@
         "shutdownActiveTaskExecutions",
         "startTask",
         "startTaskWithLocalRepo",
-        "syncTaskWorkflow",
         "wakeHumanGateContinuation"
       ],
       "file": "packages/backend/src/services/task.ts",
@@ -6329,5 +6325,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea8f85f4ead38c1189332773535e1fce217bf098d9391daa09b119cade9f5b50"
+  "sourceDigest": "sha256:da37dbeb22a52b16e4b75505b608a2ae777a4016c1d3bd7e620cebe3373bd2f2"
 }

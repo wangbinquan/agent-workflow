@@ -713,11 +713,14 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
       'utf-8',
     )
     expect((participant.match(/validateHostWorkflow\(/g) ?? []).length).toBeGreaterThanOrEqual(1)
-    const taskRouteOperations = readFileSync(
-      resolve(SRC, 'modules', 'task-execution', 'infrastructure', 'sqliteTaskRouteOperations.ts'),
-      'utf-8',
+    // RFC-359 AC-1（第 13 刀）改锚：手动执行门两个引擎合一，SQLite 那份本地实现
+    //（`getWorkflow` + `assertNotBuiltin('workflow', workflow)`）删除。同一条判据现在住在
+    // 共用实现的 `assertManualExecutionAllowedProjection` 里，问的是 `builtinCandidateWorkflow`
+    // 那一行——**两个引擎共用它**，所以锚点改读共用文件。
+    expect(sharedMultipart).toContain(
+      'export async function assertManualExecutionAllowedProjection(',
     )
-    expect(taskRouteOperations).toContain("assertNotBuiltin('workflow', workflow)")
+    expect(sharedMultipart).toContain("assertNotBuiltin('workflow', candidate)")
     expect(tasksSrc).toContain('operations.resume({ actor, taskId:')
     expect(tasksSrc).toContain('operations.retry({')
     const yaml = readFileSync(
