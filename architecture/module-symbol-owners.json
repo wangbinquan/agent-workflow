@@ -6,7 +6,7 @@
     "moduleFiles": 1182,
     "productionFiles": 2517,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24557
+    "symbolsIncludingFileRoots": 24558
   },
   "entries": [
     {
@@ -85160,6 +85160,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "assertNotReferenced",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertPluginsEnabled",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertPluginsEnabled",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -295361,5 +295373,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51227a04f7f3deeaf5d1ec3f7b10cae0f7030538ec9799311e701e5867ed1dcf"
+  "sourceDigest": "sha256:1ac10a08f3bbc041ce6daf1f90f100202ec71241695e4640a6dea5d238dc2547"
 }

@@ -12,7 +12,7 @@ import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { scheduledTasks, tasks, users, workflows } from '@/db/schema'
+import { plugins, scheduledTasks, tasks, users, workflows } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { WorkflowAccessRow } from '@/modules/resource-catalog/application/workflows/ports'
 import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -295,5 +295,62 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     await repository.delete(owner, byDependency.id, fenceOf(byDependency))
     await db.delete(workflows).where(eq(workflows.id, workflowId))
     await repository.delete(owner, byWorkflow.id, fenceOf(byWorkflow))
+  })
+  // ④ 2026-09-19 补：同一刀还把「引用了**已停用**插件」这一档拒绝的顶层 code 丢了。
+  // 合一前 SQLite 侧每次保存都对**全量** plugin 引用查 `enabled`，停用的报
+  // `plugin-disabled` + 「agent references disabled plugin(s): …」；合一后逐类守卫只查
+  // `onlyNew`（新增引用），于是「插件事后被停用」这一档落到 RFC-228 闭包预检手里，顶层 code
+  // 变成笼统的 `agent-resources-invalid`（`plugin-disabled` 只作为 issues 里的一条）。
+  // 保存两种情况下都会被拒，差别在**用户读到的是哪一句**：e2e RES-X3 断言的是
+  // 「拒了却不说是插件被停用 ⇒ 用户对着一条读不懂的报错，不知道该去开哪个开关」。
+  // 只新增引用才查存在性 / ACL 的规则不动；`enabled` 是**被引用资源的状态变化**，与「这条引用
+  // 是不是新的」无关，所以按全量查。
+  test('④ 引用的插件事后被停用：保存报 plugin-disabled 而不是笼统的 agent-resources-invalid', async () => {
+    const db = harness.db
+    const repository = agentRepositoryFor(db)
+    const name = () => `agent-${ulid().slice(-6).toLowerCase()}`
+    const { id: ownerId, authority: owner } = await seedUser(db)
+
+    const pluginId = ulid()
+    const pluginName = `plugin-${pluginId.slice(-6).toLowerCase()}`
+    await db.insert(plugins).values({
+      id: pluginId,
+      name: pluginName,
+      spec: pluginName,
+      sourceKind: 'npm',
+      cachedPath: '/tmp/plugin',
+      installedAt: T0,
+      enabled: true,
+      ownerUserId: ownerId,
+      visibility: 'private',
+    })
+
+    const agent = await repository.create(owner, agentInput(name(), { plugins: [pluginId] }))
+    // 负向对照：插件还开着的时候，同一笔无关改动存得下——否则下面那条 422 可能只是
+    // 「这个代理根本存不了」。
+    const enabledSave = await repository.update(
+      owner,
+      agent.id,
+      { ...agent, description: 'while enabled' },
+      fenceOf(agent),
+    )
+    expect(enabledSave.description).toBe('while enabled')
+
+    await db.update(plugins).set({ enabled: false }).where(eq(plugins.id, pluginId))
+    const refused = await errorOf(() =>
+      repository.update(
+        owner,
+        agent.id,
+        { ...enabledSave, description: 'while disabled' },
+        fenceOf(enabledSave),
+      ),
+    )
+    expect(refused.code).toBe('plugin-disabled')
+    expect(refused.details).toMatchObject({ disabled: [pluginId] })
+    expect(String((refused as { message?: string }).message)).toContain(
+      'references disabled plugin',
+    )
+    // 「拒绝」必须是真拒绝：改动一个字都不许落库。
+    expect((await repository.get(agent.id))?.description).toBe('while enabled')
   })
 })

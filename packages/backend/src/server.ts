@@ -3490,9 +3490,20 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   routes.workgroups(app)
   routes.resourcePackages(app)
   routes.workgroupTasks(app)
+  // `taskArchive` 必须挂在 `tasks` **之前**，这不是审美问题：`routes/tasks.ts` 给任务子资源装了
+  // 一道可见性中间件 `'/api/tasks/:id/*'`，而 **Hono 的 `*` 能匹配零个段**——它会命中兄弟字面
+  // 路由 `POST /api/tasks/archive` 并把 `id` 解成 `'archive'`，然后去查一个叫 archive 的任务、
+  // 查不到就 404，路由自己的 `settings:write` 门永远轮不到执行。而 Hono 的中间件与处理器按注册
+  // 顺序组链，先注册的终结处理器会在中间件之前收口：archive 先挂，中间件对它一次都不跑，对
+  // `/api/tasks/:id` 与 `/api/tasks/:id/...` 则照旧生效。
+  //
+  // 症状只在**非管理员**身上出现（`assertTaskVisibleProjection` 第一句对 `tasks:read:all` 短路），
+  // 所以管理员一路 200、e2e 的 OPS-038 却连红十三晚（Expected 403 / Received 404）。判据在
+  // `tests/rfc311-task-archive-route-reachability.test.ts`——它钉的是结果（非管理员打到的是自己的
+  // 权限门，不是 404），次序写错就红。**再往 `/api/tasks/` 下加字面路由时，一律挂在 tasks 之前。**
+  routes.taskArchive(app)
   routes.tasks(app)
   routes.taskCatalog(app)
-  routes.taskArchive(app)
   routes.maintenanceDisk(app)
   routes.scheduledTasks(app)
   routes.webhookEndpoints(app)

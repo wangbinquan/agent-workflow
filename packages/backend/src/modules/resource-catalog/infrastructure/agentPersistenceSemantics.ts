@@ -27,7 +27,11 @@ import {
 } from '../domain/resourceAccess'
 import { grantedResourceIdsFor } from './resourceVisibility'
 import type { AgentOperationContext } from '../public/participants'
-import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
+import {
+  PLUGIN_DISABLED_ERROR_CODE,
+  type AgentReferenceLabels,
+  type AgentReferenceLabelsInput,
+} from '../public/types'
 import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
 import { agentsDependingOnIn } from '../application/agents/agentDependencyValidation'
 import type { AgentPersistenceSemantics } from './agentRepository'
@@ -98,6 +102,39 @@ async function rowsByIds(
         })
         .from(plugins)
         .where(and(inArray(plugins.id, [...ids]), eq(plugins.enabled, true)))
+  }
+}
+
+/**
+ * RFC-031 的 `plugin-disabled` 闸（RFC-359 §5fq 回补，2026-09-19）。
+ *
+ * D14 合一时这一档丢了顶层 code：合一前 SQLite 侧每次保存都对**全量** plugin 引用查
+ * `enabled`，停用的报 `plugin-disabled` + 「agent references disabled plugin(s): …」；
+ * 合一后逐类守卫只查 `onlyNew`（新增引用），于是「插件事后被停用」这一档落到 RFC-228 闭包
+ * 预检手里，顶层 code 变成笼统的 `agent-resources-invalid`（`plugin-disabled` 只作为 issues
+ * 里的一条）。两种情况下保存都会被拒，差别在**用户读到的是哪一句**——e2e RES-X3 断言的正是
+ * 「拒了却不说是插件被停用 ⇒ 用户对着一条读不懂的报错，不知道该去开哪个开关」。
+ *
+ * 「只校验新增引用」这条规则不动：`enabled` 是**被引用资源的状态变化**，与「这条引用是不是
+ * 新的」无关，所以按全量查——存在性 / ACL 仍然只查新增。
+ */
+async function assertPluginsEnabled(
+  transaction: ResourceCatalogTransaction,
+  ids: readonly string[],
+): Promise<void> {
+  const unique = [...new Set(ids.filter((id) => id.length > 0))]
+  if (unique.length === 0) return
+  const rows = await transaction
+    .select({ id: plugins.id, enabled: plugins.enabled })
+    .from(plugins)
+    .where(inArray(plugins.id, unique))
+  const disabled = rows.filter((row) => !row.enabled).map((row) => row.id)
+  if (disabled.length > 0) {
+    throw new ValidationError(
+      PLUGIN_DISABLED_ERROR_CODE,
+      `agent references disabled plugin(s): ${disabled.join(', ')}`,
+      { disabled },
+    )
   }
 }
 
@@ -217,6 +254,7 @@ async function assertCandidate(input: {
     missingCode: 'plugin-not-found',
     missingLabel: 'plugin',
   })
+  await assertPluginsEnabled(input.transaction, input.candidate.plugins)
   await assertDependencyGraph(input.transaction, input.candidate.id, input.candidate.dependsOn)
 }
 

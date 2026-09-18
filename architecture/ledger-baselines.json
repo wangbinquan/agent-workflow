@@ -840,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5060,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 §5fq 回补（2026-09-19）：D14 把 Agent 聚合合成「一份实现」时取的是**弱的那一半**——删除前的四档引用拒绝压成一条不带 details 的 `agent-in-use`，非终态任务 / 定时任务 / 启动占用三条闸整个消失（跑着任务的代理能被删、被定时任务引用的代理能被删）。补回强的那一半时，`agentPersistenceSemantics.ts` 新增四条 legacy-outbound 边：`db/schema` 的 `tasks` / `scheduledTasks`、`services/scheduledTaskRefs` 的 `scheduledRowsReferencing`、`services/agentLaunchReservation` 的 `isAgentLaunching`。四条与同模块的 `workflowPersistenceSemantics.ts` **逐字同形**（同样的表、同样的 `scheduledRowsReferencing`、同样的 remove-owner），随同一次 owner adapter cutover 一起退役；零成本的替代只有「把这四条闸继续缺着」。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -864,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4561,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 §5fq 回补（2026-09-19）：D14 把 Agent 聚合合成「一份实现」时取的是**弱的那一半**——删除前的四档引用拒绝压成一条不带 details 的 `agent-in-use`，非终态任务 / 定时任务 / 启动占用三条闸整个消失（跑着任务的代理能被删、被定时任务引用的代理能被删）。补回强的那一半时，`agentPersistenceSemantics.ts` 新增四条 legacy-outbound 边：`db/schema` 的 `tasks` / `scheduledTasks`、`services/scheduledTaskRefs` 的 `scheduledRowsReferencing`、`services/agentLaunchReservation` 的 `isAgentLaunching`。四条与同模块的 `workflowPersistenceSemantics.ts` **逐字同形**（同样的表、同样的 `scheduledRowsReferencing`、同样的 remove-owner），随同一次 owner adapter cutover 一起退役；零成本的替代只有「把这四条闸继续缺着」。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -901,12 +895,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24557,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24558,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 §5fq 回补（2026-09-19）：`agentPersistenceSemantics.ts` 新增一个私有函数 `assertPluginsEnabled` —— D14 合一时把「引用了已停用插件」这一档拒绝的顶层 code 丢了（合一前 SQLite 侧每次保存都对全量 plugin 引用查 `enabled`，报 `plugin-disabled`；合一后逐类守卫只查新增引用，于是这一档落到 RFC-228 闭包预检、顶层 code 变成笼统的 `agent-resources-invalid`，用户读不出「该去开哪个开关」）。分母涨 1 是补回这条闸的代价，判据在 `tests/rfc359-w4-d14-d15-regressions.test.ts` ④（双引擎，先红后绿）。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:51227a04f7f3deeaf5d1ec3f7b10cae0f7030538ec9799311e701e5867ed1dcf",
+    "sourceDigest": "sha256:1ac10a08f3bbc041ce6daf1f90f100202ec71241695e4640a6dea5d238dc2547",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -919,8 +916,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "53d7a43469d6c5946ee859628b67e7f6ebed4aeb",
-    "contentDigest": "sha256:4e8b8a31049f071061a01292f1334b537e5f5985c4923e58c2ed5dcecedae1c2",
+    "currentSnapshotSha": "6d7dbed53134a54e59cb2268b5952d1530992b2d",
+    "contentDigest": "sha256:4228c99c234d051d460a992cf93a864b26fa0d2396766a954db9e5842f79eb3e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
