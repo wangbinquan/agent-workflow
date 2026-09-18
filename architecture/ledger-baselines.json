@@ -770,10 +770,7 @@
       "file": "packages/backend/tests/rfc331-task-execution-topology.test.ts",
       "symbol": "REGISTERED_PREEXISTING_DEEP_IMPORTS",
       "baseline": 12,
-      "why": "RFC-331：登记在册的存量跨模块深 import（`文件:被深引的模块`）。每一条都是一处绕过 public 合同的内部耦合，只该随 RFC-294 的演进减少。它是判据 C 上线时**新查出来**的一处——13 处人工清单里没有它，此前既不被 A 也不被 B 覆盖。 RFC-359 AC-1（第 10 刀）11 → 12：resume 的回滚目标选择器去重之后唯一那份落在 `application/`（纯函数、零 provider 依赖，那里是它在目标架构里的家），legacy 的 `resumeKick` 从那里 import。与既有的 `branchTrace` 那条同形同命，随 `resumeKick` / `syncTaskWorkflow` 离开 legacy 层一起消失。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 10 刀）11 → 12：resume 的回滚目标选择器原本有两份**逐字相同**的副本（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在 `application/`——纯函数、零 provider 依赖，那里是它在目标架构里的家；legacy 的 `resumeKick` 从那里 import，于是这份 legacy deep-import 名单多一条。它与名单里既有的 `branchTrace` 那条**同形同命**（同一个 legacy 消费者、同一层 `application/`、同一波 cutover 还清）。零成本的替代只有「把实现留在 legacy」——那等于把重复留着。**这条是补记**：它本该在第 10 刀上半那一提里就登记，当时漏了，CI 因此红了两轮（见提交说明）。"
-      }
+      "why": "RFC-331：登记在册的存量跨模块深 import（`文件:被深引的模块`）。每一条都是一处绕过 public 合同的内部耦合，只该随 RFC-294 的演进减少。它是判据 C 上线时**新查出来**的一处——13 处人工清单里没有它，此前既不被 A 也不被 B 覆盖。 RFC-359 AC-1（第 10 刀）11 → 12：resume 的回滚目标选择器去重之后唯一那份落在 `application/`（纯函数、零 provider 依赖，那里是它在目标架构里的家），legacy 的 `resumeKick` 从那里 import。与既有的 `branchTrace` 那条同形同命，随 `resumeKick` / `syncTaskWorkflow` 离开 legacy 层一起消失。"
     },
     {
       "id": "rfc359-w8-name-blind-capability-pairs",
@@ -916,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "db0b2f3204d600d9e2101f03f1eef9a8a3a6d50b",
-    "contentDigest": "sha256:e1438d2a5c0dfe79548259b34e12b67db85de49a11eca7292b2b423ec72dafea",
+    "currentSnapshotSha": "3259bbf533c466210cc768a3f42590659965d9e6",
+    "contentDigest": "sha256:af302858fa56b6a9357642342d96d470b486e3b304fc22172141e222ced16a55",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
