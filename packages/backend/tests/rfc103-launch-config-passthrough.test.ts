@@ -162,11 +162,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     expect(routesSrc.includes('...launchRuntime')).toBe(false)
     const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')
     expect(depsSrc).toContain('resolveLaunchRuntimeConfig(configPath)')
-    const sqliteOperations = readFileSync(
-      join(
-        import.meta.dir,
-        '../src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
-      ),
+    // RFC-359 AC-1（第 13 刀）改锚：`/api/tasks` 的两个 provider 绑定合成一个中立工厂。
+    const routeOperations = readFileSync(
+      join(import.meta.dir, '../src/modules/task-execution/infrastructure/taskRouteOperations.ts'),
       'utf8',
     )
     // RFC-359 AC-1（plan §5hn 批次二 ④）：6 → 5。工作流 JSON 启动改走与 PostgreSQL 共用的
@@ -182,26 +180,28 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // `syncWorkflow` 是这条路上最后一个持有 legacy `StartTaskDeps` 的路由动词；它与
     // PostgreSQL 合一之后，启动配置全部经注入的 `resumeTaskAs` 进去（与 `retry` / `resume`
     // 同一条端口），路由层不再认识 `StartTaskDeps`。
-    expect(
-      (sqliteOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length,
-    ).toBe(0)
-    expect(sqliteOperations, '路由层不得再长回 legacy 启动依赖').not.toContain('StartTaskDeps')
+    expect((routeOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length).toBe(
+      0,
+    )
+    expect(routeOperations, '路由层不得再长回 legacy 启动依赖').not.toContain('StartTaskDeps')
     // **但启动配置在重试这条路上一个字都不能丢**——这才是 RFC-103 要锁的东西，数字只是它的
-    // 影子。合并之后它的正面锚点是这两句：路由把 `retry` 交给共用投影，而共用投影的复活
-    // 依赖由组合根绑成与 `resume` 动词**同一句** `buildStartTaskDeps`（后者内部
+    // 影子。合并之后它的正面锚点是这三句：路由把 `retry` 交给共用投影，复活整段走由组合根
+    // 装出来的子任务生命周期参与者（`children.resume`），而那条端口的启动配置由组合根用与
+    // `resume` 动词**同一句** `buildStartTaskDeps` 绑成（后者内部
     // `resolveLaunchRuntimeConfig(configPath)`，由上面 `depsSrc` 那条锁着）。
-    expect(sqliteOperations).toContain('retry: (input) =>\n      retryNodeProjection(')
-    expect(sqliteOperations).toContain('resumeTaskAs: dependencies.resumeTaskAs')
-    // RFC-359 AC-1（第 10 刀）：`resume` 动词同形——启动配置经同一条复活端口进去。
-    expect(sqliteOperations).toContain('await dependencies.resumeTaskAs(actor, taskId)')
+    expect(routeOperations).toContain('retry: (input) =>\n      retryNodeProjection(')
+    expect(routeOperations).toContain('resumeTaskAs,')
+    expect(routeOperations).toContain('await dependencies.children.resume(')
+    expect(routeOperations).toContain('runtime: dependencies.resumeRuntimeFor(actor, taskId)')
     const serverSrc = readFileSync(join(import.meta.dir, '../src/server.ts'), 'utf8')
-    const boundResume = serverSrc.indexOf('resumeTaskAs: async (actor, taskId) => {')
-    expect(boundResume, 'SQLite 组合根必须绑一份真的复活').toBeGreaterThan(-1)
-    // RFC-359 AC-1（第 10 刀）改锚：这条绑定从「拼一份 `StartTaskDeps` 交给 `resumeTask`」
-    // 变成「逐样交给共用的 `resumeTaskProjection`」，启动配置因此改从 `runConfig` 那一格进去。
-    // 判据不变——**这条路上的复活必须带着本机的启动配置**，只是锚跟着实现走。
-    const boundResumeBlock = serverSrc.slice(boundResume, boundResume + 1200)
-    expect(boundResumeBlock).toContain('resumeTaskProjection(')
+    // RFC-359 AC-1（第 13 刀）改锚：`/api/tasks` 合成一个中立工厂之后，这条**不装配完整
+    // runtime** 的回退路改成自己装一份子任务生命周期参与者 + 一个 `resumeRuntimeFor`。
+    // 判据不变——**这条路上的复活必须带着本机的启动配置**，只是锚跟着实现走：启动配置从
+    // `resumeRuntimeFor` 的 `runConfig` 那一格进去。
+    const boundChildren = serverSrc.indexOf('children: createChildTaskLifecycleParticipant({')
+    expect(boundChildren, '回退路必须绑一份真的子任务生命周期参与者').toBeGreaterThan(-1)
+    const boundResumeBlock = serverSrc.slice(boundChildren, boundChildren + 1400)
+    expect(boundResumeBlock).toContain('createDatabaseTaskDriverLifecyclePort({')
     expect(boundResumeBlock).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
   })
 

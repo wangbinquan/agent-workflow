@@ -1,46 +1,20 @@
-// RFC-359 W7 —— `TaskRouteOperations` / `TaskRouteLaunchOperations` 两对适配器的双引擎对拍。
+// RFC-359 —— `TaskRouteOperations` / `TaskRouteLaunchOperations` 两对适配器的双引擎对拍。
 //
-// # 这一对**不合**（判定见文件末尾的账本注释，逐方法结论写在 plan.md 的 W7 段）
+// # 现状：`TaskRouteOperations` 这一对**已合一**（AC-1 第 13 刀）
 //
-// 成对账本上它记着 `sqliteTaskRouteOperations.ts`(292) / `taskRouteOperations.ts`(2048)，
-// 看上去是「薄壳 + 重写」的典型形态。逐方法核对后不是：
+// W7 当年判「不合」，理由是「两侧不是同一个算法的两份实现，是两台执行引擎」——SQLite 那 292 行
+// 只是转发，真实现在 `services/task.ts`（带模块级可变全局、两处 `dbTxSync`、自己驱动进程内
+// scheduler），PostgreSQL 那 2,048 行走的是端口化的另一套执行架构。**那条理由今天已经不成立**：
+// 第 3–11 刀把列表 / 访问门 / 成员 / 删除 / 预览 / 前置门 / 修复 / retry / resume / cancel 逐个
+// 合成一份端口化实现，第 13 刀收掉最后三处（手动执行门 / `syncWorkflow` / 启动参与者取用位置）。
+// 两份 provider 前缀的**绑定**随之退役，只剩一个中立工厂 `createTaskRouteOperations`。
 //
-//   · SQLite 那 292 行**不是**实现，是一层转发；它背后的实现是 `services/task.ts`（7,742 行，
-//     其中约 2,500 行服务本端口）+ `services/taskDelete.ts`(399) + `taskCollab.ts`(516)
-//     + `platform/persistence/sqlite/taskLifecycleRepair.ts`(513)。那台机器带**模块级可变全局**
-//     （`taskDriverRegistry` / `isTaskActive` / `materializingSpaces` / 列表的 in-flight 合流表）、
-//     两处 `dbTxSync`，并且**自己驱动进程内 scheduler**（`createTaskDriveCoordinator` + 续跑意图）。
-//   · PostgreSQL 那 2,048 行走的是**另一套执行架构**：命令一律委托给 `ChildTaskLifecycleParticipant`
-//     / `ActiveTaskExecutionParticipant` / `SchedulerRuntimeTopology` 三个端口，事务是
-//     `withSerializableTaskExecution`，事件走已提交事件出站。
+// # 这份对拍今天在锁什么
 //
-// 两侧满足同一个 route-facing 接口，但**不是同一个算法的两份实现**，是两台执行引擎。合它等于
-// 先把 `services/task.ts` 的调度耦合与同步事务面清掉——那是 W7 已记在案的结构性阻塞
-// （「同步事务面是死代码清理的前置」），不是本轮能顺手做的事。
-//
-// 于是本文件按 `IntentApplyOperations` 的先例办：
-//   · **A 段**＝两侧真正同义的公共子集，一份 body 在两个引擎上各跑一遍。这是「将来真合一时不许退化的」。
-//   · **B 段**＝实测出来的分叉，逐条钉成显式断言。这是「合一会抹掉的」。
-//   · **C 段**＝`TaskRouteLaunchOperations` 这一对里**可驱动**的那两个方法。它的 `launch`
-//     两侧各是一整台启动机器（磁盘 + git worktree），对拍覆盖不到；判据型的
-//     `uploadLimits` / `assertReplayVisible` 恰好是这一对唯一自带判据的部分。
-//
-// # B 段只收「架构不同」，不收「一侧更弱」
-//
-// 第一轮对拍照出的**弱侧欠账**已按强侧抬齐并搬进 A 段（改的都在
-// `taskRouteOperations.ts` 内）：
-//   · `assertNotBuiltin`：内置工作流在 PG 上可被手动执行 / 被 sync（判据缺口账本 01a / 01b）；
-//   · `call-row-finalized`：父调用节点已终结的子任务在 PG 上仍可 retry（判据缺口账本 02）；
-//   · `workflowName`：PG 的任务投影与列表投影**恒为 null**，详情页 / 列表 / sync 预览的工作流名
-//     在 PG 部署上永远空白；
-//   · `compareNodeRunsForTimeline`：PG 的 node_run 时间线不按评审轮锚点重排，评审行落在
-//     「槽位首次打开」的时刻而不是它评审的内容之后；
-//   · `events` 分页口径：PG 默认 1000 / 上限 5000，SQLite 默认 500 / 上限 1000——同一个
-//     `GET /api/tasks/:id/runs/:runId/events` 在两个部署上回不同条数；
-//   · 多仓 `diff`：一个可用 base commit 都没有时，SQLite 409 `task-no-base-commit`，
-//     PG 回一个空 diff 假装成功。
-// 判据同 W7 前例：分叉能不能只用「两侧都已有的东西」抹平。能，就是弱侧欠账，抬齐后进 A 段；
-// 不能（要给一侧凭空造一套机制），才是 B 段。
+// 两条泳道现在是**同一个工厂、同一批替身**，唯一按引擎变的是库句柄（由 harness 给）。
+// 合并之前这里是两个构造函数，喂的替身还不一样（SQLite 泳道的资源权威是空对象）——那种形状下
+// 「两个引擎跑同一份代码」这句话在对拍里是假的。A 段是公共契约，B 段（原「实测分叉」）
+// 已经没有一条按引擎分叉的断言，整段变成「不许再分家」的锁。
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -68,11 +42,7 @@ import {
 } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations'
-import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
-import {
-  createPostgresqlTaskRouteOperations,
-  type PostgresqlTaskRouteOperationsDependencies,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type {
   AgentRouteTaskLaunchOperations,
@@ -192,32 +162,47 @@ function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
     }) as never
 }
 
-function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
-  return createSqliteTaskRouteOperations({
-    db: db as unknown as DbClient,
+/**
+ * RFC-359 AC-1（第 13 刀收尾）—— **两条泳道现在是同一个工厂、同一批替身**。
+ *
+ * 合并之前这里有两个构造函数，各自喂各自那份绑定，而且喂的替身还不一样（SQLite 泳道的
+ * 资源权威是空对象、`children` 根本不存在）。那种形状下「两个引擎跑同一份代码」这句话
+ * 在对拍里是假的：真被驱动的是两份不同的装配。
+ *
+ * 只把本对拍不驱动的协作者换成替身：资源权威读的是同一张 `workflows` 表
+ *（生产里由 resource-catalog 提供）。库句柄是**唯一**按引擎变的东西，而它由 harness 给。
+ */
+function operations(harness: ProviderHarness): TaskRouteOperations {
+  const db = harness.db
+  return createTaskRouteOperations({
+    db,
     collaboration: {} as never,
-    owners: composeOwnerIdentityQueries(db as unknown as DbClient),
+    owners: composeOwnerIdentityQueries(db),
     // RFC-359 AC-1（第 5 刀）：活跃度是**注入的参与者**了，于是 A19 终于能在两个引擎上
     // 把 `task-active` 那道门喂出来——合并前 SQLite 侧读模块全局，对拍驱不动。
     activity: {
       isActive: (taskId: string) => activeTaskIds.has(taskId),
       awaitReleasedSettled: async () => {},
     },
-    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 合一之后这一侧也走共用实现，静态校验门
-    // 与 PostgreSQL 泳道**同一个**替身（本对拍只驱动到前置门为止，一次也不会被调到）。
+    // 本对拍只驱动到前置门为止，这几样一次也不会被调到。
     validateHostWorkflow: async () => ({ ok: true, issues: [] }),
-    // RFC-359 AC-1（第 13 刀）：与 PostgreSQL 泳道**同一个**替身——手动执行门合一之后
-    // 这一侧也要走资源权威。
     resourceAuthorityFor: resourceAuthorityFor(db),
-    // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动改走共用参与者，路由不再自己持有
-    // 静态校验那道门。本对拍只驱动到前置门为止，参与者一次都不会被调到。
     launches: { launch: async () => unusedDependency('launches.launch') } as never,
-    // RFC-359 AC-1（第 8 刀）：修复两个动词与 PostgreSQL 共用同一份实现；本对拍不驱动它们。
     persistence: createTaskExecutionPersistence(db),
-    resumeTaskAs: async () => unusedDependency('resumeTaskAs'),
-    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现，这两样是它的依赖面。
-    repositoryPreparationRetry: { retry: async () => {} },
-    cancelChildTaskForCascade: async () => {},
+    children: {
+      resume: async () => unusedDependency('children.resume'),
+      cancel: async () => unusedDependency('children.cancel'),
+    },
+    topology: {} as never,
+    resumeRuntimeFor: () => ({}) as never,
+    repositoryPreparationRetry: {
+      // B5：retry 对 `__repo_prep__` 行不做任何过期判定，整条转交给这个命令。
+      async retry() {
+        throw Object.assign(new Error('repository preparation retry invoked'), {
+          code: 'rfc359-w7-repository-preparation-retry-called',
+        })
+      },
+    },
     repair: {
       collaborationRuntime: {} as never,
       clarify: {} as never,
@@ -225,73 +210,6 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     },
     appHome: APP_HOME,
   })
-}
-
-/**
- * PostgreSQL 侧的**真实现**，只把本对拍不驱动的协作者换成替身：
- * 资源权威读的是同一张 `workflows` 表（生产里由 resource-catalog 提供），
- * 用户目录读的是同一张 `users` 表（生产里由 identity-access 提供）。
- */
-function postgresqlOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
-  const client = db as unknown as PostgresqlDatabaseClient
-  const dependencies = {
-    db: client,
-    collaboration: {} as never,
-    launch: {
-      configPath: join(APP_HOME, 'config.json'),
-      agent: {
-        resources: {
-          validateHostWorkflow: async () => ({ ok: true, issues: [] }),
-        },
-      },
-      resourceAuthorityFor: resourceAuthorityFor(db),
-    },
-    persistence: {} as never,
-    children: {} as never,
-    // RFC-359 AC-1（第 5 刀）：与 SQLite 侧同一个可控集合——A19b 要在**两个引擎**上
-    // 把 `task-active` 那道门喂出来。
-    activity: {
-      isActive: (taskId: string) => activeTaskIds.has(taskId),
-      awaitReleasedSettled: async () => {},
-    },
-    topology: {} as never,
-    resumeRuntimeFor: () => ({}) as never,
-    repositoryPreparationRetry: {
-      // B5：PG 侧 retry 对 `__repo_prep__` 行不做任何过期判定，整条转交给这个命令。
-      async retry() {
-        throw Object.assign(new Error('repository preparation retry invoked'), {
-          code: 'rfc359-w7-repository-preparation-retry-called',
-        })
-      },
-    },
-    users: {
-      async lookup(ids: readonly string[]) {
-        if (ids.length === 0) return []
-        const rows = await db.select().from(users)
-        return rows
-          .filter((row) => ids.includes(row.id))
-          .map((row) => ({
-            id: row.id,
-            username: row.username,
-            displayName: row.displayName,
-            role: row.role,
-            status: row.status,
-          }))
-      },
-    },
-    owners: composeOwnerIdentityQueries(db),
-    membershipEvents: { committed: async () => {} },
-    deletionEvents: { committed: async () => {} },
-    repair: {} as never,
-    appHome: APP_HOME,
-  } as unknown as PostgresqlTaskRouteOperationsDependencies
-  return createPostgresqlTaskRouteOperations(dependencies)
-}
-
-function operations(harness: ProviderHarness): TaskRouteOperations {
-  return harness.capabilities.provider === 'postgresql'
-    ? postgresqlOperations(harness.db)
-    : sqliteOperations(harness.db)
 }
 
 /** `TaskRouteLaunchOperations` 这一对：两侧的 agent / workgroup 两条臂。 */

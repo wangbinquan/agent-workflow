@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1743,
+    "backendFiles": 1741,
     "frontendFiles": 622,
     "legacyFiles": 558,
-    "moduleFiles": 1185,
-    "productionFiles": 2520,
+    "moduleFiles": 1183,
+    "productionFiles": 2518,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24564
+    "symbolsIncludingFileRoots": 24559
   },
   "entries": [
     {
@@ -118406,6 +118406,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#ProviderRouteOperationsAssembled",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "ProviderRouteOperationsAssembled",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#SelectedPostgresqlTaskExecutionProviderRuntime",
@@ -127515,42 +127527,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#createPostgresqlTaskRouteOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlTaskRouteOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#PostgresqlTaskRouteOperationsDependencies",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlTaskRouteOperationsDependencies",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#$file",
       "removeAfterWave": null,
@@ -127880,42 +127856,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "SqliteTaskRouteLaunchDependencies",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#createSqliteTaskRouteOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteTaskRouteOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#SqliteTaskRouteOperationsDependencies",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteTaskRouteOperationsDependencies",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -131606,6 +131546,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#createTaskRouteOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createTaskRouteOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#definitionOf",
@@ -132224,18 +132176,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskRouteOperationsDependencies",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#TaskRouteUserDirectory",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "TaskRouteUserDirectory",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -295445,5 +295385,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:da37dbeb22a52b16e4b75505b608a2ae777a4016c1d3bd7e620cebe3373bd2f2"
+  "sourceDigest": "sha256:07186b6ddc25e1b950cece8c41922d33b1d2bba4e410c30df0f6c9a44de920e4"
 }

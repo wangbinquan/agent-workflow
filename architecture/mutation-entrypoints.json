@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1670,
+    "entries": 1669,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -25399,29 +25399,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#createPostgresqlTaskRouteOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#createPostgresqlTaskRouteOperations",
-      "symbol": "createPostgresqlTaskRouteOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": true,
         "fenceOrOcc": true,
@@ -25640,28 +25617,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#createSqliteTaskRouteLaunchOperations",
       "symbol": "createSqliteTaskRouteLaunchOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#createSqliteTaskRouteOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#createSqliteTaskRouteOperations",
-      "symbol": "createSqliteTaskRouteOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -26938,6 +26893,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#commitPush",
       "symbol": "commitPush",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#createTaskRouteOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#createTaskRouteOperations",
+      "symbol": "createTaskRouteOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -39914,7 +39892,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:da37dbeb22a52b16e4b75505b608a2ae777a4016c1d3bd7e620cebe3373bd2f2",
+  "sourceDigest": "sha256:07186b6ddc25e1b950cece8c41922d33b1d2bba4e410c30df0f6c9a44de920e4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41944,8 +41922,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1846:tasks",
-        "line": 1846,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1855:tasks",
+        "line": 1855,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -41960,8 +41938,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2166:tasks",
-        "line": 2166,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2175:tasks",
+        "line": 2175,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#retryNodeProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:da37dbeb22a52b16e4b75505b608a2ae777a4016c1d3bd7e620cebe3373bd2f2`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:07186b6ddc25e1b950cece8c41922d33b1d2bba4e410c30df0f6c9a44de920e4`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1743 |
+| backend production TS 文件 | 1741 |
 | `services/` 文件 | 296 |
-| `modules/**` 文件 / 非空 context | 1185 / 17 |
+| `modules/**` 文件 / 非空 context | 1183 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4568 |
+| `architectureExceptions` | 4561 |
 | `backgroundJobs` | 331 |
-| `crossContextImports` | 5075 |
+| `crossContextImports` | 5063 |
 | `facades` | 296 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24564 |
-| `mutationEntrypoints` | 1670 |
+| `moduleSymbolOwners` | 24559 |
+| `mutationEntrypoints` | 1669 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 960 |
 | `transactionExternalEffects` | 252 |
@@ -48,7 +48,7 @@
 | context / layer | 数量 |
 | --- | --- |
 | resource-catalog / infrastructure | 104 |
-| task-execution / infrastructure | 97 |
+| task-execution / infrastructure | 95 |
 | task-execution / application | 88 |
 | resource-catalog / application | 55 |
 | task-execution / composition | 55 |
@@ -200,25 +200,25 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3014 |
+| legacy-outbound | 3010 |
 | legacy-inbound | 1363 |
 | infrastructure-external | 268 |
-| offered-consumption | 159 |
+| offered-consumption | 158 |
 | temporary-internal-debt | 93 |
-| off-dag-offered | 87 |
+| off-dag-offered | 84 |
 | authority-type-only | 57 |
 | required-implementation | 22 |
-| provider-mirror | 9 |
+| provider-mirror | 5 |
 | external-layer-debt | 3 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3014 |
+| legacy-outbound | 3010 |
 | legacy-inbound | 1363 |
 | temporary-internal-debt | 93 |
-| off-dag-offered | 87 |
+| off-dag-offered | 84 |
 | no-circular | 6 |
 | external-layer-debt | 3 |
 | no-util-to-upper | 2 |
@@ -227,11 +227,11 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2315 |
-| W4-E1 | 792 |
+| W9 | 2313 |
+| W4-E1 | 791 |
 | W4-C | 326 |
-| W4-E0 | 215 |
-| W4 | 196 |
+| W4-E0 | 214 |
+| W4 | 193 |
 | W4-B | 181 |
 | W5 | 155 |
 | W4-E8 | 110 |

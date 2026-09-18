@@ -48,6 +48,10 @@ import { createRuntimeSessionLeaseOperations } from '../infrastructure/runtimeSe
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import { createLogger } from '@/util/log'
+import {
+  createTaskRouteOperations,
+  type TaskRouteOperationsDependencies,
+} from '../infrastructure/taskRouteOperations'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '../infrastructure/taskArchiveMaintenanceCommand'
 import type { AutomaticTaskRepairOptions } from '../infrastructure/taskRouteRepairOperations'
 import { createTaskLifecycleAutoRepairCommand } from './taskLifecycleRepair'
@@ -73,14 +77,6 @@ import {
   createSqliteTaskRouteLaunchOperations,
   type SqliteTaskRouteLaunchDependencies,
 } from '../infrastructure/sqliteTaskRouteLaunchOperations'
-import {
-  createPostgresqlTaskRouteOperations,
-  type PostgresqlTaskRouteOperationsDependencies,
-} from '../infrastructure/postgresqlTaskRouteOperations'
-import {
-  createSqliteTaskRouteOperations,
-  type SqliteTaskRouteOperationsDependencies,
-} from '../infrastructure/sqliteTaskRouteOperations'
 import { composeTaskExecutionRuntime, type TaskExecutionRuntime } from './runtimeAssembly'
 import { composeTaskAutoResumeCommand } from './taskAutoResume'
 import { composeTaskClarifyDirectiveRouteOperations } from './taskClarifyDirectiveRoutes'
@@ -138,7 +134,7 @@ interface SelectedTaskExecutionProviderRuntimeBase {
   readonly background: TaskExecutionBackgroundControl
 }
 
-type SqliteRouteCollaborationContext = SqliteTaskRouteOperationsDependencies['collaboration']
+type SqliteRouteCollaborationContext = TaskRouteOperationsDependencies['collaboration']
 
 export interface SelectedSqliteTaskExecutionProviderRuntime<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
@@ -178,6 +174,26 @@ export interface TaskExecutionProviderRouteContext {
   readonly readModels: TaskExecutionReadModels
   readonly recovery: TaskRecoveryOperations
 }
+
+/**
+ * RFC-359 AC-1（第 13 刀收尾）：`/api/tasks` 的依赖里**由组合根自己装**的那几格。
+ *
+ * 两支逐字相同——它们全是本文件手里现成的装配产物（运行时参与者、持久化、拓扑、启动参与者、
+ * 资源权威与静态校验门），调用方的 `routes` 回调只需要补剩下那几格（协作上下文 / owner 目录 /
+ * appHome 之类）。合并之前这份清单两支各写一份、还不一样长。
+ */
+type ProviderRouteOperationsAssembled =
+  | 'db'
+  | 'persistence'
+  | 'children'
+  | 'activity'
+  | 'topology'
+  | 'resumeRuntimeFor'
+  | 'repositoryPreparationRetry'
+  | 'resourceAuthorityFor'
+  | 'validateHostWorkflow'
+  | 'launches'
+  | 'repair'
 
 function cancellationCommand(
   participants: TaskExecutionRuntimeParticipants,
@@ -221,23 +237,10 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     Required<Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections'>>
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
-    SqliteTaskRouteOperationsDependencies,
-    // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：`activity` 与 `recovery` / `launches` 同档
-    // ——它是**运行时装配出来的参与者**，由本函数直接交给路由，不劳调用方的 routes 回调再拼一遍。
-    // 第 8 刀把共用修复实现的依赖面（`persistence` / `children` / `topology` /
-    // `resumeRuntimeFor` / `repair`）一并归到这一档：它们同样是本函数手里现成的装配产物。
-    // 第 13 刀下把 `validateHostWorkflow` 也归到这一档（它就在本函数手里的 `routeLaunch`
-    // 那束依赖里），同时 `recovery` / `startDepsFor` 随 `syncWorkflow` 合一而整格消失。
-    | 'db'
-    | 'collaboration'
-    | 'launches'
-    | 'validateHostWorkflow'
-    | 'activity'
-    | 'persistence'
-    | 'resumeTaskAs'
-    | 'repositoryPreparationRetry'
-    | 'cancelChildTaskForCascade'
-    | 'repair'
+    TaskRouteOperationsDependencies,
+    // RFC-359 AC-1（第 13 刀收尾）：两个绑定合成一个中立工厂，于是这一档与 PostgreSQL 那一支
+    // **逐字相同**——本函数手里现成的装配产物一律不劳调用方的 routes 回调再拼一遍。
+    ProviderRouteOperationsAssembled
   > & {
     readonly collaboration: C
   }
@@ -293,30 +296,19 @@ export function composeSqliteTaskExecutionProviderRuntime<
   // 子任务（`sqliteChildExecutionLaunchOperations`）与 multipart（`services/multipartTaskStart`），
   // 各自单独一刀。
   const launches = createSqliteTaskExecutionLaunchParticipant({ db, ...dependencies.routeLaunch })
-  const taskRoutes = createSqliteTaskRouteOperations({
+  // RFC-359 AC-1（第 13 刀收尾）：`/api/tasks` 只剩一个工厂，两支各自交自己的装配产物。
+  const taskRoutes = createTaskRouteOperations({
     db,
     launches,
-    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 与 PostgreSQL 共用同一份实现，静态校验门
-    // 取的是本支路由启动那束依赖里的同一个（PG 那侧在 `launch.agent.resources`）。
+    resourceAuthorityFor: dependencies.routeLaunch.resourceAuthorityFor,
     validateHostWorkflow: (definition, candidate) =>
       dependencies.routeLaunch.agent.resources.validateHostWorkflow(definition, candidate),
     activity: participants.activity,
-    // RFC-359 AC-1（第 8 刀）：手动 + 自动修复都走共用的那一份实现，依赖面由这里注入。
     persistence,
-    resumeTaskAs: async (_actor, taskId) => {
-      await participants.children.resume(
-        { taskId, runtime: dependencies.rootResumeRuntime(taskId) },
-        runtime.topology,
-      )
-    },
-    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现，这两样是它的依赖面。
+    children: participants.children,
+    topology: runtime.topology,
+    resumeRuntimeFor: (_actor, taskId) => dependencies.rootResumeRuntime(taskId),
     repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
-    cancelChildTaskForCascade: async (childTaskId, parentTaskId) => {
-      await participants.children.cancel({
-        taskId: childTaskId,
-        cause: { kind: 'parent-cascade', parentTaskId },
-      })
-    },
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,
       clarify: createPostgresqlClarifyRepairParticipant(db),
@@ -430,21 +422,9 @@ export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
   readonly routeLaunch: Omit<TaskRouteLaunchDependencies, 'db' | 'workspace'>
   readonly routeWorkspace: Omit<TaskRouteWorkspaceDependencies, 'db'>
-  readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
-    PostgresqlTaskRouteOperationsDependencies,
-    | 'db'
-    | 'persistence'
-    | 'children'
-    | 'activity'
-    | 'topology'
-    | 'resumeRuntimeFor'
-    | 'repositoryPreparationRetry'
-    | 'launch'
-    // RFC-359 AC-1（plan §5hn 批次二 ⑥）：启动参与者由本组合根装配后交进去，
-    // 与 `launch` 同源——multipart 路由从此走它，不再手拼第二份编排。
-    | 'launches'
-    | 'repair'
-  >
+  readonly routes: (
+    context: TaskExecutionProviderRouteContext,
+  ) => Omit<TaskRouteOperationsDependencies, ProviderRouteOperationsAssembled>
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
   readonly fusion: Readonly<{ appHome: string }>
   readonly workgroupTaskRoom: Readonly<{
@@ -525,7 +505,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
   })
-  const taskRoutes = createPostgresqlTaskRouteOperations({
+  const taskRoutes = createTaskRouteOperations({
     db,
     persistence,
     children: participants.children,
@@ -533,7 +513,9 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     topology: runtime.topology,
     resumeRuntimeFor: (_actor, taskId) => dependencies.rootResumeRuntime(taskId),
     repositoryPreparationRetry,
-    launch: taskRouteLaunchDependencies,
+    resourceAuthorityFor: taskRouteLaunchDependencies.resourceAuthorityFor,
+    validateHostWorkflow: (definition, candidate) =>
+      taskRouteLaunchDependencies.agent.resources.validateHostWorkflow(definition, candidate),
     launches,
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,

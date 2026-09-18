@@ -1461,8 +1461,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/server.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteTaskRouteOperations",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations",
+      "specifier": "@/modules/task-execution/infrastructure/taskRouteOperations",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -1471,11 +1471,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:28e169f918a541d47f99"
+        "import:a83faad9cd5731b30c31"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#createSqliteTaskRouteOperations"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#createTaskRouteOperations"
       ],
       "canonicalFacadeIds": []
     },
@@ -6724,11 +6724,11 @@
       "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:87cb16e4c9c6aeb6a297"
+        "import:f99c53a251e4f255ed31"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#resumeTaskProjection"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#createChildTaskLifecycleParticipant"
       ],
       "canonicalFacadeIds": []
     }
@@ -7911,15 +7911,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:da37dbeb22a52b16e4b75505b608a2ae777a4016c1d3bd7e620cebe3373bd2f2",
+    "sourceDigest": "sha256:07186b6ddc25e1b950cece8c41922d33b1d2bba4e410c30df0f6c9a44de920e4",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "6e330920d02e88e1b4c61a8343fc989e83395d88",
-    "contentDigest": "sha256:6608585a4277ee6c1c5c99255f52d9e81a6283d6e9cf1fd817d14e196bad1442",
+    "currentSnapshotSha": "04a6535a4db6c5de3919a8fbd72756b6ec2f7ea1",
+    "contentDigest": "sha256:ff327bd976bfb0ffc43da9d8c5068faa5003ac4d6459c54be16fc725e0f4a237",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -45,7 +45,6 @@ import {
   type TaskRepo,
   type TaskStatus,
   type TaskSummary,
-  type UserPublic,
   type WorkflowDefinition,
   type WorkflowSyncPreview,
 } from '@agent-workflow/shared'
@@ -111,10 +110,7 @@ import type { TaskRouteListFilters, TaskRouteOperations } from '../public/taskRo
 import { DrizzleBranchTraceSnapshotReader } from './branchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
-import {
-  type TaskExecutionLaunchParticipant,
-  type TaskRouteLaunchDependencies,
-} from './taskRouteLaunchOperations'
+import { type TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 
 import { withSerializableTaskExecution } from './taskLifecycleTransaction'
 import {
@@ -149,6 +145,14 @@ import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/ut
 import { createLogger } from '@/util/log'
 import { killStaleRunProcessTree } from '@/util/process'
 import { gitDiffSnapshot, isGitWorkTree, worktreeDiff } from '@/util/git'
+import { assertCanReplaySourceTask } from '@/services/taskCollab'
+import { deleteTask } from '@/services/taskDelete'
+import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
+import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
+import {
+  createTaskRouteRepairOperations,
+  type TaskRepairOperations,
+} from './taskRouteRepairOperations'
 import { Paths } from '@/util/paths'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
@@ -185,21 +189,30 @@ const RETRYABLE_TASK_STATUSES = [
 export interface TaskRouteOperationsDependencies {
   readonly db: ProviderNeutralDatabase
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
-  readonly launch: Omit<TaskRouteLaunchDependencies, 'db'>
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
-   * multipart 路由从此只解析表单 + 跑路由级门，「冻结快照 → 版本围栏 → 静态校验 →
-   * 启动输入契约 → 根内核」那一串交给参与者——SQLite 的 JSON 路由（批次二 ④）
-   * 已经是这个形状，这里让 multipart 也接上去，两条路由因此共用同一份编排。
+   * 两条启动路由（JSON / multipart）都走它：路由只解析表单 + 跑路由级门，
+   * 「冻结快照 → 版本围栏 → 静态校验 → 启动输入契约 → 根内核」那一串交给参与者。
+   *
+   * RFC-359 AC-1（第 13 刀收尾）：**由装配方交**。合并之前 PostgreSQL 那个绑定除了收这一格，
+   * 还自己用 `dependencies.launch` 再 `createTaskExecutionLaunchParticipant(...)` 造**第二个**
+   * 实例给 `launchWorkflow` 用——同一份依赖造两台，两个启动动词各用各的。SQLite 那侧一直是
+   * 一台。收成一台，动词之间不再有「装配来源」这种看不见的差别。
    */
   readonly launches: TaskExecutionLaunchParticipant
+  /** 把 admitted actor 绑成 provider 的资源目录鉴权句柄。 */
+  readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+  /**
+   * RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 的静态校验门。两个组合根交的是同一份
+   * `composeAgentLaunchResourceOperations` 的这一个方法。
+   */
+  readonly validateHostWorkflow: AgentLaunchResourceOperations['validateHostWorkflow']
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
   readonly topology: SchedulerRuntimeTopology
   readonly resumeRuntimeFor: (actor: Actor, taskId: string) => ChildResumeRuntime
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
-  readonly users: TaskRouteUserDirectory
   readonly owners: OwnerIdentityQueries
   /** Closed Collaboration facts used by the TaskExecution-owned repair engine. */
   readonly repair: Readonly<{
@@ -210,10 +223,6 @@ export interface TaskRouteOperationsDependencies {
   readonly appHome?: string
   readonly now?: () => number
   readonly id?: () => string
-}
-
-export interface TaskRouteUserDirectory {
-  lookup(ids: readonly string[]): Promise<readonly UserPublic[]>
 }
 
 type TaskRow = typeof tasks.$inferSelect
@@ -2340,4 +2349,161 @@ export async function retryNodeProjection(
   if (updated === null)
     throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)
   return updated
+}
+
+/**
+ * RFC-359 AC-1（第 13 刀收尾）—— `/api/tasks` 这条经典路由面的**唯一**工厂，两个引擎共用。
+ *
+ * 合并之前它是一对同目录孪生的**绑定**（`sqlite…` 274 行 / `postgresql…` 215 行）：实现早就在
+ * 本文件里，两个绑定只是把动词接到实现上。逐个动词量过之后，两边真正不同的只有三处，而且
+ * 三处全都不是引擎差异：
+ *   ①`assertManualExecutionAllowed` —— 第 13 刀（上）合一（SQLite 那份少一道「工作流还在不在」）；
+ *   ②`syncWorkflow` —— 第 13 刀（下）合一（SQLite 那份是 `services/task.ts` 的第二台机器）；
+ *   ③**启动参与者的取用位置** —— PostgreSQL 那个绑定除了收 `launches`，还自己用
+ *     `dependencies.launch` 再造**第二个**实例给 `launchWorkflow` 用；SQLite 一直是一台。
+ *     这一处由本刀收：`launches` 一律由装配方交，两个启动动词共用同一台。
+ * 其余全是命名（`loadTask` / `loadTaskProjection` 这类纯别名）或「谁来构造」
+ *（`resumeTaskAs` / `cancelChildTaskForCascade` 折成 `children` + `resumeRuntimeFor` + `topology`）。
+ */
+export function createTaskRouteOperations(
+  dependencies: TaskRouteOperationsDependencies,
+): TaskRouteOperations & Pick<TaskRepairOperations, 'automaticRepair'> {
+  const resumeTaskAs = async (actor: Actor, taskId: string): Promise<void> => {
+    await dependencies.children.resume(
+      { taskId, runtime: dependencies.resumeRuntimeFor(actor, taskId) },
+      dependencies.topology,
+    )
+  }
+  const cancelChildTaskForCascade = async (
+    childTaskId: string,
+    parentTaskId: string,
+  ): Promise<void> => {
+    await dependencies.children.cancel({
+      taskId: childTaskId,
+      cause: { kind: 'parent-cascade', parentTaskId },
+    })
+  }
+  const repairs = createTaskRouteRepairOperations({
+    db: dependencies.db,
+    persistence: dependencies.persistence,
+    activity: dependencies.activity,
+    resumeTaskAs,
+    collaborationRuntime: dependencies.repair.collaborationRuntime,
+    clarify: dependencies.repair.clarify,
+    review: dependencies.repair.review,
+    appHome: dependencies.appHome ?? Paths.root,
+    ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+    ...(dependencies.id === undefined ? {} : { id: dependencies.id }),
+  })
+
+  const operations: TaskRouteOperations = {
+    // 列表三件：筛选 / 倒序 / 告警数 / owner 身份 / 子任务数由 `rfc359-w7` 的 A1–A5 对拍锁住。
+    list: (filters) => taskListSummariesProjection(dependencies.db, filters),
+    listItems: (filters) =>
+      listItems({ db: dependencies.db, owners: dependencies.owners }, filters),
+    get: (taskId) => loadTask(dependencies.db, taskId),
+    // 访问门 + 成员四件：存在性口径统一成「不存在即 404」。
+    assertVisible: (actor, taskId) => assertTaskVisibleProjection(dependencies.db, actor, taskId),
+    requireOperator: (actor, taskId) =>
+      requireTaskOperatorProjection(dependencies.db, actor, taskId),
+    assertReplayVisible: (actor, sourceTaskId) =>
+      assertCanReplaySourceTask(dependencies.db, actor, sourceTaskId),
+    getMembers: (actor, taskId) => taskMembersProjection(dependencies.db, actor, taskId),
+    replaceMembers: (actor, taskId, body) =>
+      replaceTaskMembersProjection(dependencies.db, actor, taskId, body),
+    getReviewers: (actor, taskId) =>
+      getReviewNodeReviewerConfig(dependencies.collaboration, { actor, taskId }),
+    replaceReviewers: (actor, taskId, body) =>
+      replaceReviewNodeReviewers(dependencies.collaboration, { actor, taskId, body }),
+    async launchWorkflow(actor, task) {
+      // 参与者自己做冻结快照（`loadAuthorized` 里含 `assertNotBuiltin`）、版本围栏、带候选的
+      // 静态校验与 payload 解析，终端是根启动内核。
+      // RFC-287 G7：JSON body 启动延后仓库准备——这一格只有路由自己知道（隔壁 multipart
+      // 必须保持预物化，上传物要写进真工作树），所以判据不能放在内核里按 invoker 猜。
+      return await dependencies.launches.launch({
+        actor,
+        target: { kind: 'workflow', refId: task.workflowId, payload: task },
+        invoker: { type: 'user', launchKind: 'direct-json' },
+        resources: dependencies.resourceAuthorityFor(actor),
+        deferRepoPreparation: true,
+      })
+    },
+    launchMultipart: (request, actor) =>
+      launchMultipartTask(
+        {
+          db: dependencies.db,
+          launches: dependencies.launches,
+          resourceAuthorityFor: dependencies.resourceAuthorityFor,
+        },
+        request,
+        actor,
+      ),
+    // 取消 / 复活：共用实现返回 void，路由契约要的是任务行，所以都要重读一遍。
+    async cancel(taskId) {
+      await dependencies.children.cancel({ taskId, cause: { kind: 'user' } })
+      const task = await loadTask(dependencies.db, taskId)
+      if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      return task
+    },
+    delete: (taskId) => deleteTask(dependencies.db, taskId, { activity: dependencies.activity }),
+    async resume({ actor, taskId }) {
+      await resumeTaskAs(actor, taskId)
+      const task = await loadTask(dependencies.db, taskId)
+      if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      return task
+    },
+    retry: (input) =>
+      retryNodeProjection(
+        {
+          db: dependencies.db,
+          persistence: dependencies.persistence,
+          activity: dependencies.activity,
+          repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
+          resumeTaskAs,
+          cancelChildTaskForCascade,
+          ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+          ...(dependencies.id === undefined ? {} : { id: dependencies.id }),
+        },
+        input,
+      ),
+    nodeRuns: (taskId) => taskNodeRunsProjection({ db: dependencies.db }, taskId),
+    diff: (taskId) => taskDiffProjection({ db: dependencies.db }, taskId),
+    stdout: (taskId, nodeRunId) =>
+      nodeRunStdoutProjection({ db: dependencies.db }, taskId, nodeRunId),
+    events: (taskId, nodeRunId, options) =>
+      nodeRunEventsProjection({ db: dependencies.db }, taskId, nodeRunId, { ...options }),
+    assertManualExecutionAllowed: (actor, taskId) =>
+      assertManualExecutionAllowedProjection(
+        { db: dependencies.db, resourceAuthorityFor: dependencies.resourceAuthorityFor },
+        actor,
+        taskId,
+      ),
+    workflowSyncPreview: (actor, taskId) =>
+      taskWorkflowSyncPreviewProjection(
+        {
+          db: dependencies.db,
+          activity: dependencies.activity,
+          resourceAuthorityFor: dependencies.resourceAuthorityFor,
+        },
+        actor,
+        taskId,
+      ),
+    syncWorkflow: (input) =>
+      syncWorkflow(
+        {
+          db: dependencies.db,
+          persistence: dependencies.persistence,
+          activity: dependencies.activity,
+          resourceAuthorityFor: dependencies.resourceAuthorityFor,
+          validateHostWorkflow: dependencies.validateHostWorkflow,
+          resumeTaskAs,
+          ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+          ...(dependencies.id === undefined ? {} : { id: dependencies.id }),
+        },
+        input,
+      ),
+    repairOptions: (input) => repairs.repairOptions(input),
+    applyRepair: (input) => repairs.applyRepair(input),
+  }
+  return Object.freeze({ ...operations, automaticRepair: repairs.automaticRepair })
 }

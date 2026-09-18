@@ -52,8 +52,7 @@ import type {
   SelectedSqliteTaskExecutionProviderRuntime,
   SqliteTaskExecutionProviderRuntimeDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import type { PostgresqlTaskRouteOperationsDependencies } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
-import type { SqliteTaskRouteOperationsDependencies } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
+import type { TaskRouteOperationsDependencies } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { AppDeps } from '@/server'
@@ -129,11 +128,12 @@ function constructionTypeContracts(
     clarify,
     reads,
   ]
+  // RFC-359 AC-1（第 13 刀收尾）：两个路由绑定合成一个中立工厂，于是这里也只剩**一个**
+  // 路由依赖面要喂——`{Sqlite,Postgresql}TaskRouteOperationsDependencies` 两条已退役。
   const narrowConsumers: [
     Parameters<typeof replaceReviewNodeReviewers>[0],
-    SqliteTaskRouteOperationsDependencies['collaboration'],
-    PostgresqlTaskRouteOperationsDependencies['collaboration'],
-  ] = [reads, reads, reads]
+    TaskRouteOperationsDependencies['collaboration'],
+  ] = [reads, reads]
   const baseConsumers: [
     Parameters<typeof createManualQuestionOpen>[0],
     Parameters<typeof prepareReviewGateOpen>[0],

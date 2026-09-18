@@ -60,7 +60,6 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { committedEvents, nodeRuns, tasks, users, workflows } from '@/db/schema'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -68,18 +67,13 @@ import {
   createTaskLifecycleDurableConsumerDefinitions,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/application/taskLifecycleConsumers'
-import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
+import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createDatabaseTaskLifecycleWsProjector } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
-import {
-  createPostgresqlTaskRouteOperations,
-  type PostgresqlTaskRouteOperationsDependencies,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { TaskRouteOperations } from '@/modules/task-execution/public/taskRoutes'
 import { storedEventFromRow } from '@/platform/events/committed/appendShared'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { ChildTaskBudget } from '@/services/execution/childBudget'
 import {
   resetTaskTerminalWatchersForTests,
@@ -209,53 +203,28 @@ function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
     }) as never
 }
 
-function sqliteOperations(db: ProviderNeutralDatabase, calls: ChildCalls): TaskRouteOperations {
-  const client = db as unknown as DbClient
-  return createSqliteTaskRouteOperations({
-    db: client,
+/**
+ * RFC-359 AC-1（第 13 刀收尾）—— **两条泳道现在是同一个工厂、同一批替身**。
+ *
+ * 合并之前这里有两个构造函数、两套替身：SQLite 泳道的资源权威是空对象、复活是空桩，
+ * 还为「SQLite 那一侧会真起调度」专门留了个 `driver: 'real' | 'noop'` 旋钮。那种形状下
+ * 两条泳道驱动的根本不是同一份装配，「能力抬齐」也就无从对拍。
+ *
+ * 现在只有一处按引擎变：库句柄，而它由 harness 给。子任务生命周期参与者收成**记录式桩**
+ *（记一笔就返回），两条泳道在同一个交棒点上被观察。
+ */
+function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOperations {
+  const db = harness.db
+  return createTaskRouteOperations({
+    db,
     collaboration: {} as never,
-    owners: composeOwnerIdentityQueries(client),
+    owners: composeOwnerIdentityQueries(db),
     // RFC-359 AC-1（第 5 刀）：本对拍不驱动活跃度，给一个恒空的参与者。
     activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
-    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 合一之后这一侧不再需要 legacy
-    // `StartTaskDeps`（`startDepsFor` / `recovery` 两格整个消失），复活也和 PostgreSQL 泳道
-    // 一样**记一笔就返回**——两条泳道从此在同一个交棒点上被观察，不再一边真起调度、
-    // 一边打空桩。静态校验门同样两侧同一个替身。
     validateHostWorkflow: async () => ({ ok: true, issues: [] }),
     resourceAuthorityFor: resourceAuthorityFor(db),
-    // RFC-359 AC-1（plan §5hn 批次二 ④）：同上——本对拍不驱动工作流 JSON 启动。
+    // RFC-359 AC-1（plan §5hn 批次二 ④）：本对拍不驱动工作流 JSON 启动。
     launches: { launch: async () => ({}) } as never,
-    // RFC-359 AC-1（第 8 刀）：修复两个动词与 PostgreSQL 共用同一份实现；本对拍不驱动它们。
-    persistence: createTaskExecutionPersistence(db),
-    resumeTaskAs: async (_actor, taskId) => {
-      calls.resumed.push(taskId)
-    },
-    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现，这两样是它的依赖面。
-    repositoryPreparationRetry: { retry: async () => {} },
-    cancelChildTaskForCascade: async (childTaskId) => {
-      calls.canceled.push(childTaskId)
-    },
-    repair: {
-      collaborationRuntime: {} as never,
-      clarify: {} as never,
-      review: {} as never,
-    },
-    appHome: APP_HOME,
-  })
-}
-
-function postgresqlOperations(db: ProviderNeutralDatabase, calls: ChildCalls): TaskRouteOperations {
-  const client = db as unknown as PostgresqlDatabaseClient
-  const dependencies = {
-    db: client,
-    collaboration: {} as never,
-    launch: {
-      configPath: join(APP_HOME, 'config.json'),
-      agent: {
-        resources: { validateHostWorkflow: async () => ({ ok: true, issues: [] }) },
-      },
-      resourceAuthorityFor: resourceAuthorityFor(db),
-    },
     persistence: createTaskExecutionPersistence(db),
     children: {
       async resume(input: { taskId: string }) {
@@ -265,7 +234,6 @@ function postgresqlOperations(db: ProviderNeutralDatabase, calls: ChildCalls): T
         calls.canceled.push(input.taskId)
       },
     },
-    activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     topology: {} as never,
     resumeRuntimeFor: () => ({}) as never,
     repositoryPreparationRetry: {
@@ -273,26 +241,13 @@ function postgresqlOperations(db: ProviderNeutralDatabase, calls: ChildCalls): T
         throw new Error('rfc359-w8 不驱动 repository preparation retry')
       },
     },
-    users: {
-      async lookup(ids: readonly string[]) {
-        if (ids.length === 0) return []
-        const rows = await db.select().from(users)
-        return rows.filter((row) => ids.includes(row.id))
-      },
+    repair: {
+      collaborationRuntime: {} as never,
+      clarify: {} as never,
+      review: {} as never,
     },
-    owners: composeOwnerIdentityQueries(db),
-    membershipEvents: { committed: async () => {} },
-    deletionEvents: { committed: async () => {} },
-    repair: {} as never,
     appHome: APP_HOME,
-  } as unknown as PostgresqlTaskRouteOperationsDependencies
-  return createPostgresqlTaskRouteOperations(dependencies)
-}
-
-function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOperations {
-  return harness.capabilities.provider === 'postgresql'
-    ? postgresqlOperations(harness.db, calls)
-    : sqliteOperations(harness.db, calls)
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

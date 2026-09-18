@@ -137,7 +137,12 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // 但它现在配不出「成对适配器」，因为另一半已经不是 provider 命名文件了。
   // RFC-359 W8：这一对多了第二份双引擎对拍——W7 只驱动到各方法的**前置门**为止，W8 补的是
   // 门后的语义（retry 的三道前置门 / sync 的 canceled 回滚 / delete 的父链排序列重算）。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts, rfc359-w8-task-route-capability-parity.test.ts',
+  // RFC-359 AC-1（第 13 刀）**销账**：`/api/tasks` 这一对已合一。逐个动词量过，两个绑定里
+  // 只有三处真分叉，而且一处也不是引擎差异：①手动执行门（SQLite 那份少一道「工作流还在不在」，
+  // 上半刀合掉）；②`syncWorkflow`（SQLite 那份是 `services/task.ts` 的第二台机器，下半刀合掉）；
+  // ③启动参与者的取用位置（PG 那个绑定除了收 `launches` 还自己再造第二个实例，本刀收掉）。
+  // 其余全是命名（`loadTask` / `loadTaskProjection` 这类纯别名）或「谁来构造」。
+  // 两份 provider 前缀文件退役，换成中立的 `createTaskRouteOperations`；两份对拍留任并翻面。
   // RFC-359 W8：判**读出 / 编码面该合、冻结围栏面不该合**（两侧都是活的生产代码，逐条见对拍
   // 文件头）。本刀只补对拍并把两条实测差异按强侧抬齐（SQLite 关闭后的裸驱动错误、PG 的引用式
   // 快照判等）；围栏本身是文件代号 vs 活跃生成代两台机器，作为能力差异留在账本里。
@@ -240,7 +245,7 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 // 触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块（子 agent prompt 里
 // `{{event_type}}` 随之展不开）。见证测试 `rfc359-w8-child-launch-conformance` 留任，
 // 本分从「见证分叉」翻成「锁住合一」。
-export const PROVIDER_PAIR_COUNT = 5
+export const PROVIDER_PAIR_COUNT = 4
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

@@ -153,10 +153,10 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // `taskExecutionRuntimeParticipants.ts`，两侧的装配（含认领策略）回到各自组合根。
   // 少两个 provider 命名文件。
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+  // RFC-359 AC-1（第 13 刀收尾）**两条一起销账**：`/api/tasks` 的两个 provider 绑定合成
+  // 一个中立工厂（`taskRouteOperations.ts`），两份 provider 命名文件退役。
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',
-  'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
 ]
 
 /**

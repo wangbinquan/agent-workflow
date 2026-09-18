@@ -166,8 +166,8 @@ import {
 } from '@/modules/memory/composition'
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
-import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
-import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
+import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
+import { createChildTaskLifecycleParticipant } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import {
@@ -2542,7 +2542,7 @@ function composeSqliteApiRouteMounts(
   const repositoryPublicationTransport = deps.repositoryPublicationTransport
   const schedulerDriver = deps.schedulerDriver
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
-  const taskRouteOperations = createSqliteTaskRouteOperations({
+  const taskRouteOperations = createTaskRouteOperations({
     db: deps.db,
     collaboration: deps.collaborationContext,
     // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。
@@ -2550,62 +2550,37 @@ function composeSqliteApiRouteMounts(
     // RFC-359 AC-1（第 5 刀）：`delete` 的 `task-active` 门读注入的参与者，不再读模块全局。
     // 这条路不装配完整 runtime，所以直接取那个唯一装配点。
     activity: composeLegacyTaskActivityParticipant(),
-    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 与 PostgreSQL 共用同一份实现，于是
-    // `recovery` / `startDepsFor` 两格整个消失——它们是这条路上最后一处 legacy
-    // `StartTaskDeps` 的路由级持有者。静态校验门转发到同一份
-    // `composeAgentLaunchResourceOperations`（它在本函数更下方才装配得起来，
-    // 与紧邻的 `launches` 同一个词法闭环手法）。
-    validateHostWorkflow: (definition, candidate) =>
-      agentLaunchResources.resources.validateHostWorkflow(definition, candidate),
-    // RFC-359 AC-1（第 8 刀）：手动 / 自动修复与 PostgreSQL 共用同一份实现。
-    // 这条路不装配完整 runtime，复活走的仍是本文件 `resume` 动词用的同一句
-    //（第 10 刀之后那一句就是下面的共用 `resumeTaskProjection`），
-    // 与合并前这条路上的修复逐字同形。
     persistence: taskExecutionPersistence,
-    // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用**同一份**实现
-    // （`resumeTaskProjection`）。这条路不装配完整 runtime，所以依赖面是**逐样交**的——
-    // 收窄之后它只要六样，`executionModule` / `finalizeWorkspace` 都折进了 `lifecycle`。
-    // `lifecycle` 用的正是这一侧今天这条路上的那一个（进程级单例的同步认领 +
-    // `finishClaimedWebhookWorkspacePrune` 收尾），与 `services/task.ts` 的协调器逐字同形。
-    resumeTaskAs: async (actor, taskId) => {
-      await resumeTaskProjection(
-        {
-          db: deps.db,
-          persistence: taskExecutionPersistence,
-          runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
-          log: createLogger('task'),
-          activity: composeLegacyTaskActivityParticipant(),
-          lifecycle: createDatabaseTaskDriverLifecyclePort({
-            db: deps.db,
-            log: createLogger('task'),
-            finalizeWorkspace: async (id: string) => {
-              await finishClaimedWebhookWorkspacePrune(deps.db, id)
-            },
-          }),
+    // RFC-359 AC-1（第 13 刀收尾）：`/api/tasks` 只剩一个中立工厂。这条**不装配完整 runtime**
+    // 的回退路因此要自己把子任务生命周期参与者装出来——它就是第 12 刀之后那份共用实现，
+    // 端口按本条路的部署形态绑（进程级单例认领 + 进程内注册表），与
+    // `composeSqliteTaskExecutionProviderRuntime` 逐字同形。取消 / 复活 / 级联取消三处
+    // 从此走同一个参与者，不再各拼各的。
+    children: createChildTaskLifecycleParticipant({
+      db: deps.db,
+      persistence: taskExecutionPersistence,
+      runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
+      log: createLogger('task'),
+      lifecycle: createDatabaseTaskDriverLifecyclePort({
+        db: deps.db,
+        log: createLogger('task'),
+        finalizeWorkspace: async (id: string) => {
+          await finishClaimedWebhookWorkspacePrune(deps.db, id)
         },
-        {
-          taskId,
-          runtime: {
-            actorUserId: actor.user.id,
-            runConfig: {
-              appHome,
-              ...resolveLaunchRuntimeConfig(deps.configPath),
-            },
-          },
-        },
-        { schedulerDriver },
-      )
-    },
-    repair: {
-      collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),
-      clarify: createClarifyRepairParticipant(deps.db),
-      review: createReviewRepairParticipant(deps.db),
-    },
+      }),
+      activity: composeLegacyTaskActivityParticipant(),
+      stop: composeLegacyTaskStopRegistry(),
+    }),
+    topology: { schedulerDriver },
+    resumeRuntimeFor: (actor) => ({
+      actorUserId: actor.user.id,
+      runConfig: {
+        appHome,
+        ...resolveLaunchRuntimeConfig(deps.configPath),
+      },
+    }),
     // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现。这条路不装配完整 runtime，
-    // 两样依赖都用本文件既有的同一句写法：仓库准备重试与 `cli/start.ts` 同形，
-    // 级联取消走共用取消实现的 `parent-cascade` cause——与合并前 `services/task.ts` 的
-    // `retryNode` 在这条路上逐字相同（终态子任务由取消自己抛 `task-not-cancelable`，
-    // 共用实现按幂等空操作处理）。
+    // 仓库准备重试与 `cli/start.ts` 同形。
     repositoryPreparationRetry: Object.freeze({
       async retry(taskId: string) {
         await retryRepositoryPreparation(
@@ -2622,18 +2597,17 @@ function composeSqliteApiRouteMounts(
         )
       },
     }),
-    cancelChildTaskForCascade: async (childTaskId) => {
-      await composeTaskCancellation(deps.db).cancel(childTaskId, {
-        kind: 'parent-cascade',
-        parentTaskId: childTaskId,
-      })
-    },
-    resourceAuthorityFor: (actor) =>
+    resourceAuthorityFor: (actor: Actor) =>
       Object.freeze({
         actor,
         authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
         resources: identityAccess.taskExecutionResources,
       }),
+    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 的静态校验门转发到同一份
+    // `composeAgentLaunchResourceOperations`（它在本函数更下方才装配得起来，
+    // 与紧邻的 `launches` 同一个词法闭环手法）。
+    validateHostWorkflow: (definition, candidate) =>
+      agentLaunchResources.resources.validateHostWorkflow(definition, candidate),
     // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动的编排与 PostgreSQL 共用。
     // 这里是**转发面**——真参与者是同一作用域后面那个 const（它依赖的 `taskRouteLaunchDependencies`
     // 在本函数更下方才装配得起来），与协调器转发面同一个词法闭环手法。
@@ -2641,6 +2615,11 @@ function composeSqliteApiRouteMounts(
       launch: (request: Parameters<TaskExecutionLaunchParticipant['launch']>[0]) =>
         sqliteTaskExecutionLaunches.launch(request),
     }),
+    repair: {
+      collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),
+      clarify: createClarifyRepairParticipant(deps.db),
+      review: createReviewRepairParticipant(deps.db),
+    },
     appHome,
   })
   const routeDeps = {

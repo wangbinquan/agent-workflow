@@ -367,9 +367,8 @@ describe('RFC-305 identity-access architecture', () => {
       // identity-access 的 exact public 面），由装配根提供实现。下面四条都是 type-only
       // 的 public 消费，与 postgresqlTaskRouteOperations 那条同型；模块自己去 compose
       // 别的 context 的 provider 才是被 RFC-328 判红的形状，这里刻意不那么做。
-      // RFC-359 AC-1（同上）：SQLite 任务路由也只**类型**依赖 `OwnerIdentityQueries`，
-      // 实例由组合根注入——与上面 `postgresqlTaskRouteOperations` 那条同型。
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts -> @/modules/identity-access/public/operations',
+      // RFC-359 AC-1（第 13 刀）**销账**：`/api/tasks` 的两个 provider 绑定合成一个中立工厂，
+      // SQLite 那半退役，这条边随之出账（共用实现那条 `taskRouteOperations.ts` 仍在下面）。
       'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> @/modules/identity-access/public/operations',
       // RFC-359 AC-1（第 12 刀）：运行时参与者合一后按新文件名重新落位（账本按字典序）。
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
