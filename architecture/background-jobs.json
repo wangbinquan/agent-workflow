@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2746",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2750",
       "kind": "register-call",
-      "line": 2746,
+      "line": 2750,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2752",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2756",
       "kind": "register-call",
-      "line": 2752,
+      "line": 2756,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3087",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3091",
       "kind": "register-call",
-      "line": 3087,
+      "line": 3091,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:3127",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:3131",
       "kind": "global-setter",
-      "line": 3127,
+      "line": 3131,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -12211,7 +12211,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5296",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5318",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12225,7 +12225,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5296",
+      "symbol": "$setTimeout:5318",
       "targetContext": "task-execution"
     },
     {
@@ -12755,5 +12755,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ac10a08f3bbc041ce6daf1f90f100202ec71241695e4640a6dea5d238dc2547"
+  "sourceDigest": "sha256:d5fbecd1b1efe5d9845fe52533ac057a4988bffe8c5f13c54886a53c53956381"
 }

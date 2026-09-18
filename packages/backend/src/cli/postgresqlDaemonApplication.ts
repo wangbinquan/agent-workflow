@@ -921,12 +921,18 @@ export async function composePostgresqlApplication(
     },
   })
   const launchRuntime = resolveLaunchRuntimeConfig(input.configPath)
-  const runConfig = Object.freeze({
-    appHome: input.appHome,
-    configPath: input.configPath,
-    daemonGeneration: input.provider.runtime.generationId,
-    ...runtimeConfigOpts(launchRuntime),
-  })
+  // 2026-09-19：运行期配置**每次取用时现读**，不再冻在 boot 那一刻的快照里。
+  // 长驻的 `boundTaskDriveCoordinator` 服务每一次 `POST /api/tasks`；冻结快照会让用户在设置页
+  // 把默认运行时改到另一行之后，新任务照旧按老档案派发——「设为默认」只改了界面
+  //（e2e CFG-45；SQLite 侧同因同治，见 `services/task.ts` 的 `refreshLaunchConfig`）。
+  // `rootResumeRuntime()` 与协调器的 `runtime` getter 都走这一个函数，两条路不会各自漂移。
+  const currentRunConfig = () =>
+    Object.freeze({
+      appHome: input.appHome,
+      configPath: input.configPath,
+      daemonGeneration: input.provider.runtime.generationId,
+      ...runtimeConfigOpts(resolveLaunchRuntimeConfig(input.configPath)),
+    })
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
     runtime: {
       taskDagCollaboration,
@@ -948,7 +954,7 @@ export async function composePostgresqlApplication(
       log,
       persistence: taskExecutionPersistence,
     },
-    rootResumeRuntime: () => ({ runConfig }),
+    rootResumeRuntime: () => ({ runConfig: currentRunConfig() }),
     routeWorkspace: {
       appHome: input.appHome,
       secretBox: input.secretBox,
@@ -1006,7 +1012,10 @@ export async function composePostgresqlApplication(
     finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
   })
   const boundTaskDriveCoordinator = new DefaultTaskDriveCoordinator({
-    runtime: resolveTaskDriveConfig(runConfig),
+    // getter：`contextFor` 每次 drive 读一次，于是每次派发拿到的是当下的配置。
+    get runtime() {
+      return resolveTaskDriveConfig(currentRunConfig())
+    },
     lifecycle: taskDriverLifecycle,
     // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：真正的**延后仓库准备**步骤。
     // 此前这里是 `skipRepositoryPreparation`——于是 G7 在 PostgreSQL 上等于没实现：

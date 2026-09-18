@@ -1358,10 +1358,27 @@ test('RFC-319 EVENT-X5: webhook 起的任务终态后自动清工作区——开
 
     const onRow = seeded.find((row) => row.tag === 'on')!
     await cancelTask(daemonForCleanup, onRow.id)
-    expect(
-      (await taskWorkspaceState(daemonForCleanup, onRow.id)).workspaceState,
-      'webhook 起的一次性工作区在终态后没有被清 ⇒ 这个开关打开了也不做事',
-    ).toBe('pruned')
+    // 回收是**取消返回之后**才发生的：终态 CAS 只盖 `workspace_pruning_at`（一阶认领）并把
+    // `workspacePruneClaim` 放进生命周期事件，物理删除由 durable 消费者
+    // `task-workspace-prune-nudge` 拿到那条事件后做（`settle: 'delivery-accepted'` —— 发布方只
+    // 等「投递被接收」，不等 handler 跑完）。所以这里读到的第一帧合法地会是 `pruning`。
+    //
+    // 这一格从 2026-09-07 的夜跑（`fa92150c7`，上一次绿是 09-06 的 `d88867805`）起连红十二晚，
+    // 每次都是 `Expected 'pruned' / Received 'pruning'`——一阶认领做到了，只是单次即读抢在
+    // 二阶物理删除之前。功能面从未坏过：后端那条同名判据
+    // （`tests/rfc300-webhook-workspace-cleanup-e2e.test.ts`）一直是**轮询**等
+    // `workspace_pruned_at`，本机复跑照旧全绿。所以这里跟着轮询，**不是**把红掩过去：
+    //   · 轮询的是 `pruned` 这个终值，超时（30s）即真失败——回收没做就是没做；
+    //   · `pruned` 是在物理删除成功**之后**才盖的戳，所以紧随其后的 `existsSync === false` 仍然
+    //     是硬断言，不会被轮询「等成」真；
+    //   · 上面「开关关着」那一格与下面 manual / local 两格都是**否定断言**（不该发生的事），
+    //     它们必须保持单次即读——轮询一个「不该出现的值」只会把判据变成恒真。
+    await expect
+      .poll(async () => (await taskWorkspaceState(daemonForCleanup, onRow.id)).workspaceState, {
+        timeout: 30_000,
+        message: 'webhook 起的一次性工作区在终态后没有被清 ⇒ 这个开关打开了也不做事',
+      })
+      .toBe('pruned')
     expect(
       existsSync(onRow.worktree),
       '状态说清了，盘上的目录还在 ⇒ 用户以为磁盘被回收了，其实没有',

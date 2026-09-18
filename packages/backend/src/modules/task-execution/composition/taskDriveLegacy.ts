@@ -16,6 +16,7 @@ export {
   type RepositoryPreparationDescriptorReader,
 } from '../application/drive/repositoryPreparationStep'
 export { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
+export type { ResolvedTaskDriveConfig } from '../application/drive/taskDriveTypes'
 export {
   activeTaskDriverController,
   awaitTaskDriverIdle,

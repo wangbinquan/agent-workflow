@@ -896,14 +896,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24558,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 §5fq 回补（2026-09-19）：`agentPersistenceSemantics.ts` 新增一个私有函数 `assertPluginsEnabled` —— D14 合一时把「引用了已停用插件」这一档拒绝的顶层 code 丢了（合一前 SQLite 侧每次保存都对全量 plugin 引用查 `enabled`，报 `plugin-disabled`；合一后逐类守卫只查新增引用，于是这一档落到 RFC-228 闭包预检、顶层 code 变成笼统的 `agent-resources-invalid`，用户读不出「该去开哪个开关」）。分母涨 1 是补回这条闸的代价，判据在 `tests/rfc359-w4-d14-d15-regressions.test.ts` ④（双引擎，先红后绿）。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:1ac10a08f3bbc041ce6daf1f90f100202ec71241695e4640a6dea5d238dc2547",
+    "sourceDigest": "sha256:d5fbecd1b1efe5d9845fe52533ac057a4988bffe8c5f13c54886a53c53956381",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -916,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "6d7dbed53134a54e59cb2268b5952d1530992b2d",
-    "contentDigest": "sha256:4228c99c234d051d460a992cf93a864b26fa0d2396766a954db9e5842f79eb3e",
+    "currentSnapshotSha": "b4cf1f9e527e3f93d13d887ccf37ce459ea8066b",
+    "contentDigest": "sha256:9dc30845eb12a31e2e936c04e62d7bbbe5b2b3e7849977a51ea1c62392217337",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

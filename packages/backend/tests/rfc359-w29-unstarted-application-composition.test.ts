@@ -547,8 +547,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `composeTaskSourceTermination({ db, finalizeWithoutDriver })`，并把无 driver 时的工作区
     // 收尾（source-control 的 `finalizeClaimedWorkspace`，与本文件驱动生命周期端口用的同一个）
     // 显式交进去。**装配图变的是这一格**，且变的方向是补齐：此前这条路上的源终止没有同步收尾。
+    // 2026-09-19：摘要随**运行期配置改成热读**更新——长驻的 `boundTaskDriveCoordinator` 不再吃
+    // boot 那一刻的 `runConfig` 快照，`runtime` 改成 getter、每次 drive 现读一次
+    // （设置页改完默认运行时之后新任务必须按新那一行派发，见
+    // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。装配图变的是这一格，
+    // 方向同样是补齐：此前这条路上「设为默认」对新任务不生效。
     expect(digest(restored, pg)).toBe(
-      'ca3d91297dd2263b11b300de546b7b1fc3aeff70b92b954d32fdc53c76ad5729',
+      'd0300882e70fbf1e460b04ad6347705e125e0bd2496b93729332a6a1ce28682a',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

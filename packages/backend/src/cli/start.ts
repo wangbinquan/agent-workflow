@@ -1991,6 +1991,10 @@ async function composeSqliteProviderSession(
       //（判据要 1 次），因为 `defaultNodeRetries` 丢了。
       ...launchRuntimeConfig,
     },
+    // 2026-09-19：这台协调器**长驻**（boot 建好、之后服务每一次 `POST /api/tasks`），所以那
+    // 17 个旋钮不能冻在 boot 那一刻——设置页把默认运行时改到另一行之后，新任务必须按新那一行
+    // 派发（e2e CFG-45）。给了 refresher 之后配置在每次 submit 现读一次。
+    refreshLaunchConfig: () => resolveLaunchRuntimeConfig(Paths.config),
     appHome: Paths.root,
     // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：这台协调器同时驱动**定时 / webhook
     // 触发**（触发器参与者收的就是它），所以必须带上延后仓库准备的第 0 步——缺了它，

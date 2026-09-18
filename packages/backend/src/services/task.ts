@@ -1547,22 +1547,44 @@ export function createTaskDriveCoordinator(input: {
   readonly repositoryPreparation?: RepositoryPreparationStep
   readonly engineFailureMessage: string
   readonly failureReporter: TaskDriveFailureReporter
+  /**
+   * **长驻**协调器必须给这一格（2026-09-19）。
+   *
+   * RFC-332 之后这里只解析一次运行期配置，作为 start / resume / retry 的唯一交接面——那一点没变。
+   * 变的是「一次」在哪个时刻：一台在 daemon boot 时建好、之后一直服务每一次
+   * `POST /api/tasks` 的协调器，如果在构造时就把 `deps` 里那 17 个旋钮解析成不可变快照，
+   * 用户在设置页改完**默认运行时**之后启的新任务照旧按老档案派发——「设为默认」只改了界面。
+   * e2e CFG-45（`rfc319-intent-task-and-settings.spec.ts`）断言的就是这条。
+   *
+   * 给了这一格，运行期配置在**每次 submit** 现读一次（`runtime` 以 getter 交给协调器，
+   * `DefaultTaskDriveCoordinator.contextFor` 每次 drive 读一次）。
+   * 每次请求现建一台的短命协调器不需要它——那种形态的「构造时」就是「请求时」。
+   */
+  readonly refreshLaunchConfig?: () => Partial<TaskDriveCoordinatorDependencies>
 }): taskDriveComposition.DefaultTaskDriveCoordinator {
-  const runtime = resolveTaskDriveConfig({
-    appHome: input.appHome,
-    ...(input.deps.binaryOverride !== undefined
-      ? { binaryOverride: input.deps.binaryOverride }
-      : {}),
-    ...(input.deps.configPath !== undefined ? { configPath: input.deps.configPath } : {}),
-    ...(input.deps.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: input.deps.subagentLiveCapture }
-      : {}),
-    ...runtimeConfigOpts(input.deps),
-    log,
-    ...(input.ensureWorkspaceProfiles === true ? { ensureWorkspaceProfiles: true } : {}),
-  })
+  const resolveRuntime = (): taskDriveComposition.ResolvedTaskDriveConfig => {
+    const deps: TaskDriveCoordinatorDependencies = {
+      ...input.deps,
+      ...(input.refreshLaunchConfig?.() ?? {}),
+    }
+    return resolveTaskDriveConfig({
+      appHome: input.appHome,
+      ...(deps.binaryOverride !== undefined ? { binaryOverride: deps.binaryOverride } : {}),
+      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+      ...(deps.subagentLiveCapture !== undefined
+        ? { subagentLiveCapture: deps.subagentLiveCapture }
+        : {}),
+      ...runtimeConfigOpts(deps),
+      log,
+      ...(input.ensureWorkspaceProfiles === true ? { ensureWorkspaceProfiles: true } : {}),
+    })
+  }
+  // 没给 refresher 的调用方保持原语义：解析一次、之后每次 drive 都是同一份。
+  const frozen = input.refreshLaunchConfig === undefined ? resolveRuntime() : null
   return new DefaultTaskDriveCoordinator({
-    runtime,
+    get runtime() {
+      return frozen ?? resolveRuntime()
+    },
     lifecycle: createDatabaseTaskDriverLifecyclePort({
       db: input.deps.db,
       log,
