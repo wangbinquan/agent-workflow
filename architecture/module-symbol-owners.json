@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1741,
+    "backendFiles": 1743,
     "frontendFiles": 622,
-    "legacyFiles": 557,
-    "moduleFiles": 1184,
-    "productionFiles": 2518,
+    "legacyFiles": 558,
+    "moduleFiles": 1185,
+    "productionFiles": 2520,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24559
+    "symbolsIncludingFileRoots": 24561
   },
   "entries": [
     {
@@ -127516,34 +127516,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#TaskExecutionTransaction",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "TaskExecutionTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#withPostgresqlTaskAggregateTransaction",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "withPostgresqlTaskAggregateTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#withSerializableTaskExecution",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "withSerializableTaskExecution",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -130460,6 +130436,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskNodeStatusesCommittedEventInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleTransaction.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleTransaction.ts#TaskExecutionTransaction",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskExecutionTransaction",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleTransaction.ts#withSerializableTaskExecution",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withSerializableTaskExecution",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -149092,42 +149104,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#lifecycleLog",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "lifecycleLog",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#registerTerminalWorkspacePrunePolicy",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "registerTerminalWorkspacePrunePolicy",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#resolveTerminalWorkspacePruneDecision",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "resolveTerminalWorkspacePruneDecision",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setNodeRunStatus",
@@ -149170,42 +149146,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "TaskStatusUpdateExtra",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#TerminalWorkspacePruneDecision",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "TerminalWorkspacePruneDecision",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#terminalWorkspacePrunePolicy",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "terminalWorkspacePrunePolicy",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#TerminalWorkspacePrunePolicy",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "TerminalWorkspacePrunePolicy",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -150010,6 +149950,90 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "SqliteWriteRetryInfo",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "id": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "id": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#lifecycleLog",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "lifecycleLog",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "id": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#registerTerminalWorkspacePrunePolicy",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "registerTerminalWorkspacePrunePolicy",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "id": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#resolveTerminalWorkspacePruneDecision",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "resolveTerminalWorkspacePruneDecision",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "id": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#TerminalWorkspacePruneDecision",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "TerminalWorkspacePruneDecision",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "id": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#terminalWorkspacePrunePolicy",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "terminalWorkspacePrunePolicy",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "id": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#TerminalWorkspacePrunePolicy",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "TerminalWorkspacePrunePolicy",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -295385,5 +295409,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f20c2e8de9ebeba737798d060ae8d717ff25982a465b5e819e1bcafa243eb56c"
+  "sourceDigest": "sha256:0b7d998820ec1c49b618ce635d7dc67e5f57a09d35cd176dea7bffe8693f15c6"
 }

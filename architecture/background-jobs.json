@@ -10457,71 +10457,6 @@
     },
     {
       "dependencies": [],
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#registerTerminalWorkspacePrunePolicy",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#registerTerminalWorkspacePrunePolicy",
-      "phase": "unknown",
-      "symbol": "registerTerminalWorkspacePrunePolicy",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "config"
-      ],
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#resolveTerminalWorkspacePruneDecision",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#resolveTerminalWorkspacePruneDecision",
-      "phase": "unknown",
-      "symbol": "resolveTerminalWorkspacePruneDecision",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#terminalWorkspacePrunePolicy",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#terminalWorkspacePrunePolicy",
-      "phase": "unknown",
-      "symbol": "terminalWorkspacePrunePolicy",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
       "file": "packages/backend/src/platform/persistence/sqliteLogicalSourceProtocol.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqliteLogicalSourceProtocol.ts#SqliteLogicalSourceWorkerEventSchema",
@@ -10650,6 +10585,71 @@
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteWriteRetry.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:105",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#registerTerminalWorkspacePrunePolicy",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#registerTerminalWorkspacePrunePolicy",
+      "phase": "unknown",
+      "symbol": "registerTerminalWorkspacePrunePolicy",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
+        "config"
+      ],
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#resolveTerminalWorkspacePruneDecision",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#resolveTerminalWorkspacePruneDecision",
+      "phase": "unknown",
+      "symbol": "resolveTerminalWorkspacePruneDecision",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#terminalWorkspacePrunePolicy",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#terminalWorkspacePrunePolicy",
+      "phase": "unknown",
+      "symbol": "terminalWorkspacePrunePolicy",
       "targetContext": "platform"
     },
     {
@@ -12755,5 +12755,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f20c2e8de9ebeba737798d060ae8d717ff25982a465b5e819e1bcafa243eb56c"
+  "sourceDigest": "sha256:0b7d998820ec1c49b618ce635d7dc67e5f57a09d35cd176dea7bffe8693f15c6"
 }

@@ -54,7 +54,7 @@ import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoor
 import {
   type TaskExecutionTransaction,
   withSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+} from './taskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
 

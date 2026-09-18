@@ -2,6 +2,25 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 86，**命名债收尾第三批：两次拆分，照出「中立代码住在 provider 目录里」**）
+>
+> 剩下两份不是纯改名、要先拆。本批拆掉 `postgresqlTaskLifecycleTransaction`：中立的
+> `withSerializableTaskExecution` / `TaskExecutionTransaction` 进新的 `taskLifecycleTransaction.ts`，
+> 真的只服务 PG 的聚合根行锁留在原文件（plan §5hn「不删」的裁决继续有效）。
+>
+> **顺带拆掉一处更深的同类债**：`platform/persistence/sqlite/taskLifecycle.ts` 里那段
+> **自述「provider-neutral，两个引擎共用」**的终态回收策略，搬到中立的 `terminalWorkspacePrune.ts`。
+> 它是被上一步**直接逼出来的**：`rfc359-w8` 按「文件里有没有 provider 锚点」判边，共用的取消实现
+> 此前两边锚都命中所以被排除；拆掉 postgresql 那条锚后它只剩 `sqlite/` 路径锚，**当场被判成
+> 「SQLite 侧适配器」**，凭空配出 2 对没有对拍的假适配器对，顶穿只降不升的棘轮。
+>
+> **教训**：中立实现住进 provider 目录、或引用住在 provider 目录里的中立代码，都会让「按锚点判边」
+> 的账本**多记债**。清命名债要连**位置**一起看。
+>
+> **还剩最后一份**：`postgresqlTaskRouteOperations.ts` —— 先把共用出口提到中立文件再改名。
+>
+> `f906127230`（第二批）**CI 已绿**。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 85，**命名债收尾第二批 + 一条提交纪律的教训**）
 >
 > 第五份 `taskRouteRepairOperations` 去前缀——它全文里 `PostgresqlDatabaseClient` 唯一一次出现

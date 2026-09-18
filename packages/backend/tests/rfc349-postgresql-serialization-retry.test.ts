@@ -15,7 +15,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { withSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from '@/modules/task-execution/infrastructure/taskLifecycleTransaction'
 import {
   POSTGRESQL_SERIALIZATION_ATTEMPTS,
   postgresqlSerializationBackoffMs,

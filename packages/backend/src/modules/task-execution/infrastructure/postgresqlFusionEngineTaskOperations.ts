@@ -34,7 +34,7 @@ import { sha256Hex } from '../domain/digest'
 import type { OwnershipToken } from '../domain/ownership'
 import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
-import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from './taskLifecycleTransaction'
 import {
   appendTaskCreatedCommittedEvent,
   appendTaskLifecycleTransitionCommittedEvent,

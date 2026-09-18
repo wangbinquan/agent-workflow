@@ -2784,8 +2784,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#transaction:103",
-      "line": 103,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#transaction:49",
+      "line": 49,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#withPostgresqlTaskAggregateTransaction",
       "status": "clear",
       "symbol": "withPostgresqlTaskAggregateTransaction",
@@ -3028,8 +3028,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transaction:780",
-      "line": 780,
+      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transaction:720",
+      "line": 720,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setTaskStatus",
       "status": "clear",
       "symbol": "setTaskStatus",
@@ -3088,7 +3088,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f20c2e8de9ebeba737798d060ae8d717ff25982a465b5e819e1bcafa243eb56c",
+  "sourceDigest": "sha256:0b7d998820ec1c49b618ce635d7dc67e5f57a09d35cd176dea7bffe8693f15c6",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

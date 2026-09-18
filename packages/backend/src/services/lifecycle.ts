@@ -8,8 +8,6 @@ export {
   assertNodeRunSourceTerminationAdmission,
   cancelOpenNodeRuns,
   isTerminalTaskStatus,
-  registerTerminalWorkspacePrunePolicy,
-  resolveTerminalWorkspacePruneDecision,
   setNodeRunStatus,
   setNodeRunStatusTx,
   setTaskStatus,
@@ -20,7 +18,11 @@ export {
   type HumanGateTaskTransition,
   type NodeRunStatusUpdateExtra,
   type TaskStatusUpdateExtra,
-  type TerminalWorkspacePruneDecision,
-  type TerminalWorkspacePrunePolicy,
   type WorkspacePruneCause,
 } from '@/platform/persistence/sqlite/taskLifecycle'
+export {
+  registerTerminalWorkspacePrunePolicy,
+  resolveTerminalWorkspacePruneDecision,
+  type TerminalWorkspacePruneDecision,
+  type TerminalWorkspacePrunePolicy,
+} from '@/platform/persistence/terminalWorkspacePrune'

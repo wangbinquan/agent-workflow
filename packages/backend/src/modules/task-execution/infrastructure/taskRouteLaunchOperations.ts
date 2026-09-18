@@ -96,7 +96,7 @@ import { createTaskAuthorizationQueries } from './taskAuthorization'
 import {
   type TaskExecutionTransaction,
   withSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+} from './taskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
 

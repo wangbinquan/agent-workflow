@@ -109,7 +109,7 @@ import {
   createTaskRouteRepairOperations,
   type TaskRepairOperations,
 } from './taskRouteRepairOperations'
-import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { withSerializableTaskExecution } from './taskLifecycleTransaction'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
   appendTaskNodeStatusesCommittedEvent,

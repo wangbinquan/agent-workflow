@@ -839,8 +839,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5082,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5083,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（命名债收尾 §5hj）：中立的写事务原语与终态回收策略各自拆出独立文件（`taskLifecycleTransaction.ts` / `terminalWorkspacePrune.ts`），于是多出两个模块的 owner 条目、跨上下文 import 边与 depcheck 例外。拆分本身零行为改动，净增来自「同一份代码换了个住处」。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,8 +863,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4566,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4567,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（命名债收尾 §5hj）：中立的写事务原语与终态回收策略各自拆出独立文件（`taskLifecycleTransaction.ts` / `terminalWorkspacePrune.ts`），于是多出两个模块的 owner 条目、跨上下文 import 边与 depcheck 例外。拆分本身零行为改动，净增来自「同一份代码换了个住处」。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -895,12 +901,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24559,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24561,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（命名债收尾 §5hj）：中立的写事务原语与终态回收策略各自拆出独立文件（`taskLifecycleTransaction.ts` / `terminalWorkspacePrune.ts`），于是多出两个模块的 owner 条目、跨上下文 import 边与 depcheck 例外。拆分本身零行为改动，净增来自「同一份代码换了个住处」。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f20c2e8de9ebeba737798d060ae8d717ff25982a465b5e819e1bcafa243eb56c",
+    "sourceDigest": "sha256:0b7d998820ec1c49b618ce635d7dc67e5f57a09d35cd176dea7bffe8693f15c6",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +922,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "871883c5e9b8a861595bddb7e32284cff88d36be",
-    "contentDigest": "sha256:997a9b19465f7011217a80085494bf578dfd4359d400e857ba90fcf29521d68d",
+    "currentSnapshotSha": "f906127230c179e15d5a3b206565d7c77d2fdd61",
+    "contentDigest": "sha256:986ad167c96d6bdfbca0c153ea9d247f54f14b04662cc189453a500afad6ee44",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

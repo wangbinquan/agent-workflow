@@ -28,7 +28,19 @@ const unitOf = (rel: string): SourceUnit =>
   sourceUnit(rel, readFileSync(resolve(REPO_ROOT, rel), 'utf8'))
 
 const SCHEMA = 'packages/backend/src/db/schema.ts'
-const LIFECYCLE = 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts'
+// RFC-359 AC-1（命名债收尾 §5hj）：**本守卫现在要读两个文件**，因为它钉的是两件事。
+//
+// 策略端口（`TerminalWorkspacePrunePolicy` / 它的中立入参与闭合返回）已从
+// `sqlite/taskLifecycle.ts` 拆到中立的 `terminalWorkspacePrune.ts`——那段代码的注释自己就写着
+// 「Provider-neutral policy evaluation shared by …」，而住在 `sqlite/` 目录里会让按路径判
+// provider 的账本把引用它的共用实现误判成 SQLite 适配器（`rfc359-w8` 实撞，凭空多出 2 对
+// 没有对拍的假适配器对）。
+//
+//   · `KERNEL` —— 通用状态写点本体。「kernel 不许自己铸回收原因」钉的是**它**；
+//     语料下限（>10k 字符）也是它的规模，证明确实解析到了那台 kernel。
+//   · `PORT` —— 策略端口的**形状**（入参中立、返回闭合联合）。端口搬家，判据跟着端口走。
+const KERNEL = 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts'
+const PORT = 'packages/backend/src/platform/persistence/terminalWorkspacePrune.ts'
 
 /**
  * 某个 drizzle 列声明的 `enum` 取值域，从 `schema.ts` 的 AST 里取。
@@ -110,7 +122,8 @@ export function portReturnTypeName(unit: SourceUnit, typeName: string): string |
 }
 
 const schemaUnit = unitOf(SCHEMA)
-const lifecycleUnit = unitOf(LIFECYCLE)
+const kernelUnit = unitOf(KERNEL)
+const portUnit = unitOf(PORT)
 const PRUNE_CAUSES = columnEnumValues(schemaUnit, 'workspace_prune_cause')
 
 /**
@@ -133,12 +146,12 @@ describe('RFC-317 T28（LC-04）—— 通用状态写点的来源中立性', ()
       'workspace_prune_cause 的 enum 没派生出取值——列被改名或换了声明形态，' +
         '此时下面那条「kernel 不铸这些字面量」会因为词汇表为空而必然绿',
     ).toBeGreaterThanOrEqual(1)
-    expect(lifecycleUnit.text.length).toBeGreaterThan(10_000)
+    expect(kernelUnit.text.length).toBeGreaterThan(10_000)
   })
 
   test('kernel 里不出现任何 workspace_prune_cause 取值（词汇表属于注入方）', () => {
     expect(
-      mintedVocabulary(lifecycleUnit, PRUNE_CAUSES),
+      mintedVocabulary(kernelUnit, PRUNE_CAUSES),
       '通用状态写点自己铸了回收原因。原因属于**决定回收的那个来源**，' +
         'kernel 只负责把 port 给的 cause 原样写下去；一旦 kernel 认识某个原因，' +
         '第二个来源就只能回来改这个所有任务都要走的写点',
@@ -147,7 +160,7 @@ describe('RFC-317 T28（LC-04）—— 通用状态写点的来源中立性', ()
 
   test('port 入参逐字等于中立集合（加一列集成归属就红）', () => {
     expect(
-      portSubjectProperties(lifecycleUnit, 'TerminalWorkspacePrunePolicy'),
+      portSubjectProperties(portUnit, 'TerminalWorkspacePrunePolicy'),
       'port 的入参里出现了只有某个集成才有的列。kernel 为了喂它就得在自己的 SELECT 里' +
         '选那一列——于是这个通用写点的类型签名与查询双双点名该集成，再也无法脱离它被抽取',
     ).toEqual(NEUTRAL_SUBJECT)
@@ -155,7 +168,7 @@ describe('RFC-317 T28（LC-04）—— 通用状态写点的来源中立性', ()
 
   test('port 返回闭合联合而不是裸 boolean（退回 boolean 就红）', () => {
     expect(
-      portReturnTypeName(lifecycleUnit, 'TerminalWorkspacePrunePolicy'),
+      portReturnTypeName(portUnit, 'TerminalWorkspacePrunePolicy'),
       '返回 boolean 意味着「要不要回收」外置了、「叫什么名字」没外置——半次反转，' +
         'cause 只能由 kernel 自己铸',
     ).toBe('Promise<TerminalWorkspacePruneDecision>')

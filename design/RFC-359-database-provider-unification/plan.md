@@ -17817,3 +17817,38 @@ plan 连着三提在写「这是命名债的读数，不是倾斜」的那一格
 `git diff --cached --name-only --no-renames` —— **`--no-renames` 不能省**，不加它 `git diff` 默认
 开着改名检测，同样只打印新路径（当天第二次撞就是这么撞的，靠 `--amend` 就地补上）。
 已落 `docs/dev-gotchas.md`。
+
+### 命名债收尾（§5hj）第三批　两次**拆分**，以及「中立代码住在 provider 目录里」这条债
+
+剩下两份不是纯改名、要先拆。本批做掉一份，并顺带拆掉一处更深的同类债。
+
+**① `postgresqlTaskLifecycleTransaction.ts` 拆成两个文件**（一个文件只能有一个名字）：
+
+| 去向 | 内容 | 为什么 |
+| --- | --- | --- |
+| **新** `taskLifecycleTransaction.ts` | `withSerializableTaskExecution` / `TaskExecutionTransaction` | **中立**——两个引擎的写路径（含共用的取消 / 启动 / 修复实现）都在跑它，形参早就是 `ProviderNeutralDatabase` |
+| **留** `postgresqlTaskLifecycleTransaction.ts` | `withPostgresqlTaskAggregateTransaction` | **真的只服务 PostgreSQL**（聚合根 `for update`，SQLite 在 `BEGIN IMMEDIATE` 下无此概念）。plan §5hn「不删」的裁决继续有效 |
+
+**② 顺带拆掉 `platform/persistence/sqlite/taskLifecycle.ts` 里的终态回收策略。**
+那段代码的注释自己就写着「Provider-neutral policy evaluation **shared by** the SQLite lifecycle
+writer **and** the PostgreSQL task-execution adapter」——**一段自述中立的策略住在 `sqlite/` 目录里**。
+现搬到 `platform/persistence/terminalWorkspacePrune.ts`。
+
+**它不是美观问题，是①直接逼出来的**：`rfc359-w8` 能力对账本按「文件里有没有 provider 锚点」
+判边（import 锚 ∪ 路径锚），两边都命中就返回 `null`、该文件整份退出配对。
+共用的取消实现 `childTaskLifecycleParticipant.ts` 此前同时命中两边（import 了
+`postgresqlTaskLifecycleTransaction` + `sqlite/taskLifecycle`），所以一直被排除；①把 postgresql
+那一侧的锚拿掉之后，它只剩 `sqlite/` 那条路径锚，**当场被判成「SQLite 侧适配器」**，凭空与一堆
+PG 文件配出 **2 对没有对拍的假适配器对**，直接顶穿 `NAME_BLIND_UNVERIFIED_COUNT` 这条只降不升的棘轮。
+把策略搬到中立位置后它零锚命中 ⇒ 正确地退出配对，两对假债消失。
+
+**记一条判据教训**：中立实现**住进** provider 目录、或**引用**住在 provider 目录里的中立代码，
+都会让「按锚点判边」的账本得出错误结论——而错的方向是**多记债**（把共用实现记成某一侧的适配器），
+不是少记。清理命名债时要连**位置**一起看。
+
+配套判据搬家：`rfc317-lifecycle-origin-neutrality`（T28/LC-04）现在读**两个**文件——
+kernel 本体钉「不许自己铸回收原因」与语料下限，端口文件钉入参中立 / 返回闭合联合；
+`rfc359-w11-dialect-ledger-conformance` 的导出面锚点只剩那一个 PG 专属函数。
+
+**还剩最后一份**：`postgresqlTaskRouteOperations.ts`（四处 PG 句柄 + 四五个共用出口），
+按 plan 早先的裁决**先把共用出口提到中立文件再改名**。

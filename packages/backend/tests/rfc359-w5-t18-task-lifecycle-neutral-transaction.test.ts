@@ -63,9 +63,9 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos } from '@/db/schema'
 import {
   withSerializableTaskExecution,
-  withPostgresqlTaskAggregateTransaction,
   type TaskExecutionTransaction,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+} from '@/modules/task-execution/infrastructure/taskLifecycleTransaction'
+import { withPostgresqlTaskAggregateTransaction } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider } from './helpers/eachProvider'

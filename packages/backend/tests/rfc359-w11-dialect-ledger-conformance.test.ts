@@ -526,10 +526,12 @@ describe('RFC-359 W11 —— 四条清偿的源码锚点', () => {
         '留着只会让下一次「谁在用它」的普查再数错一次（判零消费者时要把测试排除在消费者之外）。',
       // RFC-359 AC-1（plan §5gw）：两个纯品牌名去掉前缀后**字典序也变了**
       // （`withPostgresql…` 现在排在 `withSerializable…` 前面）——这张表是 `.sort()` 之后比的。
-    ).toEqual([
-      'TaskExecutionTransaction',
-      'withPostgresqlTaskAggregateTransaction',
-      'withSerializableTaskExecution',
-    ])
+      // RFC-359 AC-1（命名债收尾 §5hj）：中立的那两样（`TaskExecutionTransaction` /
+      // `withSerializableTaskExecution`）已拆到同目录的 `taskLifecycleTransaction.ts`——
+      // 一个文件只能有一个名字，而它俩是两个引擎共用的写事务原语，不该住在 `postgresql*` 里。
+      // 本文件只剩**真的只服务 PostgreSQL** 的那一个（聚合根 `for update` 行锁）。
+      // 上面「裸写 for update 不许回来」「必须调 lockAggregateRoot」两条判据不受影响：
+      // 它们本来钉的就是这一个函数。
+    ).toEqual(['withPostgresqlTaskAggregateTransaction'])
   }, 30_000)
 })
