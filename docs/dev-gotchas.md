@@ -723,6 +723,31 @@ allowGrowth，结果 hotfix 自己又推红两条（`T16` 的登记数 vs 基线
 **注意方向**：这类账本红的时候往往是**好事**——「少一个未受审调用点」「少一条 deep import」
 正是棘轮要的方向，处置是**删行销账**，不是放宽判据。
 
+### `prettier --write` 也是一次「最后的编辑」——它跑在 census 之后就把产物作废了（2026-09-18 实撞，推红一次）
+
+census 的 `sourceDigest` 是**整棵源码树的内容摘要**（backend + shared + frontend 每个文件的
+文本摘要，外加 `.dependency-cruiser.cjs` / `scripts/depcheck.ts`）。`RFC-294 N1b` 拿它做逐字对账：
+committed 的产物 vs CI 当场重算的产物。
+
+于是这条顺序是错的，且**本地一定看不出来**：
+
+```
+census --write        # 摘要 = 此刻的树
+prettier --check      # 报告有几个文件要重排
+prettier --write      # ← 这一步改了文件内容 ⇒ 上面那份摘要当场作废
+commit && push        # 提交了一份**过期**的摘要
+```
+
+本地全绿，是因为本地跑守卫时用的也是那棵**已经被 prettier 改过**的树，
+重算结果与工作树一致——只有 CI 拿着 committed 产物、在 committed 的树上重算，才对得出差。
+症状是 `RFC-294 N1b > the seven canonical manifests…` 与 `> RFC-317 subset ledgers…` 一起红，
+diff 里只有 `sourceDigest` 一行不一样。
+
+**定式**：`census --write` 必须是**真正的最后一步**。顺序固定成
+「改代码 → prettier --write → eslint → typecheck → 跑判据 → **census** → commit」，
+lint / format 一律排在 census 前面。已经跑完 census 又忍不住动了任何 `.ts`（哪怕只是重排空行），
+就重跑一次 census，代价只有几十秒。
+
 ### census 的产物是**一组**，不是「你改过的那几个文件」（2026-09-17 实撞，推红一次）
 
 `bun run scripts/architecture-census.ts --write` 一次写出 **8 份 `architecture/*.json`

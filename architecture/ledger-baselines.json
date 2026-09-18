@@ -840,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5083,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（命名债收尾 §5hj）：中立的写事务原语与终态回收策略各自拆出独立文件（`taskLifecycleTransaction.ts` / `terminalWorkspacePrune.ts`），于是多出两个模块的 owner 条目、跨上下文 import 边与 depcheck 例外。拆分本身零行为改动，净增来自「同一份代码换了个住处」。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -864,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4567,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（命名债收尾 §5hj）：中立的写事务原语与终态回收策略各自拆出独立文件（`taskLifecycleTransaction.ts` / `terminalWorkspacePrune.ts`），于是多出两个模块的 owner 条目、跨上下文 import 边与 depcheck 例外。拆分本身零行为改动，净增来自「同一份代码换了个住处」。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -902,14 +896,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24561,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（命名债收尾 §5hj）：中立的写事务原语与终态回收策略各自拆出独立文件（`taskLifecycleTransaction.ts` / `terminalWorkspacePrune.ts`），于是多出两个模块的 owner 条目、跨上下文 import 边与 depcheck 例外。拆分本身零行为改动，净增来自「同一份代码换了个住处」。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0b7d998820ec1c49b618ce635d7dc67e5f57a09d35cd176dea7bffe8693f15c6",
+    "sourceDigest": "sha256:b79e2acaab0c7047dd02c9743d182ec639da5e7d164f812657b1f598c86169a9",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -922,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f906127230c179e15d5a3b206565d7c77d2fdd61",
-    "contentDigest": "sha256:986ad167c96d6bdfbca0c153ea9d247f54f14b04662cc189453a500afad6ee44",
+    "currentSnapshotSha": "57b636d81b9f54898c94b479f9550e8d4f6cb0d5",
+    "contentDigest": "sha256:a5a20c8001960cfbd1727253234e6455848ed22b2511f9ffc06992cf7e3d0af7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

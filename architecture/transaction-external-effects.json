@@ -3028,8 +3028,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transaction:720",
-      "line": 720,
+      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transaction:719",
+      "line": 719,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setTaskStatus",
       "status": "clear",
       "symbol": "setTaskStatus",
@@ -3088,7 +3088,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0b7d998820ec1c49b618ce635d7dc67e5f57a09d35cd176dea7bffe8693f15c6",
+  "sourceDigest": "sha256:b79e2acaab0c7047dd02c9743d182ec639da5e7d164f812657b1f598c86169a9",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
