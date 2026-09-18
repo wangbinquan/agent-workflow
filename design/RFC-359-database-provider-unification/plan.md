@@ -17291,3 +17291,51 @@ failed cancellation set）；放在准入 CAS **之后**同样必要，反过来
 `resume` 那一半（路由动词本身：SQLite 的 `resumeTask` vs PG 的 `children.resume`）还没动。
 本刀先把 `retry` 收干净——它是两者里调用面更宽、分叉更多的那个，而且它的合并已经把
 `resumeTaskAs` 这个端口在两个组合根上都落实了，正好是 `resume` 合并的前置。
+
+## 第 9 刀第 2 步　`resume` 的准入面对拍——**九格里八格两侧相同，照出一处归因分叉**
+
+`resume` 这一对**至今没有任何双引擎行为对拍**：`rfc359-w7` / `w8` 里 PG 侧的 `children.resume`
+是**记录型空实现**（它们验的是「交棒有没有发生」，不是交棒之后那一段），SQLite 侧的 `resumeTask`
+只在单引擎内存库上被验过。于是两侧各自的准入门有没有、错误码一不一样、事后任务落在哪个状态
+——一个字都没人说过。这正是本轮反复记下的 A/B 盲区形状。
+
+`rfc359-w10-resume-admission-parity` 建九格，全部走**生产装配**
+（`provider.routes.tasks.resume`）、真 git 工作树，断言 `(错误码, 事后任务状态)` 这一对：
+
+| 格 | 场景 | 两侧答案 |
+| --- | --- | --- |
+| A | 任务不存在 | `task-not-found` / absent |
+| B | 非可恢复状态（done） | `task-not-resumable` / done |
+| C | 子任务的父调用行已收场 | `call-row-finalized` / failed |
+| D | 冻结的触发上下文损坏 | `trigger-context-invalid` / failed |
+| E | 工作树已不在磁盘上 | `task-worktree-missing`（410） / failed |
+| F | 无工作树 + 有 `__repo_prep__` 行 | `task-repo-prep-incomplete` / failed |
+| G | 工作区正被 GC 回收 | **分叉**，见下 |
+| H | 来源被 MR/PR 关闭事件栅栏 | `task-source-terminal-closed` / failed |
+| I | failed + 真工作树 | 放行 |
+
+### 唯一一格分叉（G）：两侧都拒，但**归因不同**
+
+- PostgreSQL：`workspace-pruning`，文案说「工作区正在被 GC 回收」——**可操作**（瞬态，过会儿再来）。
+- SQLite：`task-not-resumable`——准入 CAS 被 `setTaskStatus` 的复活门挡下后统一映射成这个码，
+  听起来像**永久性**的「这个任务不能恢复」。
+
+保护面没有差异（两侧都拒、都不动任务），差的是用户看到的原因。按本 RFC 已用过多次的准则
+（取信息更全的一侧），合并时收敛到 PostgreSQL 那一侧。**钉在用例里而不是掩盖**，
+合并那一刀会让这一格自己红，到时改成相等断言销账。
+
+### 变异实证（一侧一条，落在不同的格上）
+
+- 短路 PG 的来源栅栏判据 ⇒ **只有 postgresql lane 的 H 红**，sqlite lane 全绿
+  ——顺带证明 SQLite 侧独立地有这道门、报同一个码。
+- 拿掉 SQLite `resumeKick` 里那句 `await assertChildTaskDrivable(...)`
+  ⇒ **只有 sqlite lane 的 C 红**，postgresql lane 全绿。
+
+两条都证明这份对拍有预言力，不是「因为都没跑到所以都绿」。
+
+### 下一步
+
+有了这九格基线，`resume` 的真合并可以照第 8 / 9 刀的配方走：留 PG 那份（在正确模块、
+准入门的归因更全），SQLite 路由的 `resume` 改为转给它；G 那一格随之改成相等断言销账。
+`resumeKick` 还有两个调用方（`syncTaskWorkflow` 与 gate continuation），合并时要分清
+「路由动词 `resume`」与「`resumeKick` 这个内部原语」——**只合前者**，后者是另一条线。
