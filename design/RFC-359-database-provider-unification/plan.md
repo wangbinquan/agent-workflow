@@ -17629,3 +17629,34 @@ SQLite 上取消老老实实排在后面。
 两侧枚举子任务时都只取 `CANCELABLE_TASK_STATUSES`，所以**非竞态路径上这个分支根本走不到**；
 只有「枚举之后、级联调用之前那一瞬间子任务自己收场成 canceled」才会落到它。
 合并时这个分支要跟着留下的那份走，别顺手丢掉。
+
+### 第 11 刀第 2 步的形状（勘察已做完，实现待落）
+
+依赖面对读之后，`cancel` 合并要的端口**只多一样**（相对 `resume` 那一刀）：
+
+```
+db                 ProviderNeutralDatabase（PG 那份已中立化）
+persistence        TaskExecutionPersistence（两侧都有）
+stop               任务驱动注册表的停机面（tokenForTask / tokenForOwner / requestStop / awaitStopped）
+log
+```
+
+**`stop` 这个端口不能想当然**：SQLite 参与者工厂的输入里那个 `runtimeRegistry` 是
+`platform/runtime-registry` 的**运行时档案**注册表（`getRuntime(name)`），
+与这里要的**任务驱动**注册表（停机票据）**同名不同物**。要交的是
+`taskExecutionModule.runtimeRegistry`（进程级单例，`createDatabaseTaskDriverLifecyclePort` 用的
+也是它）；PG 那侧交 `executionModule.runtimeRegistry`。两者类型相同，所以端口是免费的——
+但按名字抓会抓错，这正是本轮反复记的「按名字配对」那类错误。
+
+还要跟着留下的那份走的三样（退役那份有、共用那份没有）：
+
+1. `beforeStatusCas` 注入点（生产不传；`retry-cascade-kind-matrix` 与
+   `review-cancel-concurrency` 两处并发判据靠它）——同 `resume` 的 `completionMode`，
+   做成显式参数而不是依赖面上的一格；
+2. `testActiveControllers` 那条兜底（没有持久化 owner 的控制器仍按历史行为中止）；
+3. `cascadeFromParent` 且子任务已 canceled 时补写 cascade 标记（竞态窗口，见上一节）。
+
+**次序**：`cancelTask` 生产上有 8 个调用点（`server.ts` / `cli/start.ts` / 资源上限 /
+空闲超时收割 / 数字员工 / fusion 引擎 / SQLite 参与者 / 级联自身），
+测试上 37 处 / 40 个文件。按第 9 / 10 刀拆两半：上半把 8 个生产接线改指共用实现并留下退役那份，
+下半迁测试面再删。
