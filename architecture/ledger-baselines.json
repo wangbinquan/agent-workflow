@@ -769,8 +769,11 @@
       "id": "rfc331-preexisting-deep-imports",
       "file": "packages/backend/tests/rfc331-task-execution-topology.test.ts",
       "symbol": "REGISTERED_PREEXISTING_DEEP_IMPORTS",
-      "baseline": 11,
-      "why": "RFC-331：登记在册的存量跨模块深 import（`文件:被深引的模块`）。每一条都是一处绕过 public 合同的内部耦合，只该随 RFC-294 的演进减少。它是判据 C 上线时**新查出来**的一处——13 处人工清单里没有它，此前既不被 A 也不被 B 覆盖。"
+      "baseline": 12,
+      "why": "RFC-331：登记在册的存量跨模块深 import（`文件:被深引的模块`）。每一条都是一处绕过 public 合同的内部耦合，只该随 RFC-294 的演进减少。它是判据 C 上线时**新查出来**的一处——13 处人工清单里没有它，此前既不被 A 也不被 B 覆盖。 RFC-359 AC-1（第 10 刀）11 → 12：resume 的回滚目标选择器去重之后唯一那份落在 `application/`（纯函数、零 provider 依赖，那里是它在目标架构里的家），legacy 的 `resumeKick` 从那里 import。与既有的 `branchTrace` 那条同形同命，随 `resumeKick` / `syncTaskWorkflow` 离开 legacy 层一起消失。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（第 10 刀）11 → 12：resume 的回滚目标选择器原本有两份**逐字相同**的副本（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在 `application/`——纯函数、零 provider 依赖，那里是它在目标架构里的家；legacy 的 `resumeKick` 从那里 import，于是这份 legacy deep-import 名单多一条。它与名单里既有的 `branchTrace` 那条**同形同命**（同一个 legacy 消费者、同一层 `application/`、同一波 cutover 还清）。零成本的替代只有「把实现留在 legacy」——那等于把重复留着。**这条是补记**：它本该在第 10 刀上半那一提里就登记，当时漏了，CI 因此红了两轮（见提交说明）。"
+      }
     },
     {
       "id": "rfc359-w8-name-blind-capability-pairs",
@@ -840,10 +843,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5084,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 11 刀第 1 步）+1（5083 → 5084）：**修一处用户可见的真分叉**。取消与评审写入共用任务级 FIFO（取消在入口同步取号），这是 `review-cancel-concurrency` 锁的契约；PostgreSQL 那一侧的 `cancelCascade` **整个没有取号**，于是那个部署上「一边提交评审决定、一边点取消」两者的落库会交错，而 SQLite 上取消老老实实排在后面。修法是给它补上同一个取号器，于是多出这一条 `postgresqlChildTaskLifecycleParticipant.ts → services/reviewMutationCoordinator.ts` 的边——它与该目录下既有的同名 import（`postgresqlSourceTerminationParticipant.ts` / `sqliteSourceTerminationParticipant.ts` / `taskDriverLifecycle.ts`）同形同 owner，随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把这个分叉留着不修」。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -864,10 +864,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4566,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 11 刀第 1 步）+1（4565 → 4566）：**修一处用户可见的真分叉**。取消与评审写入共用任务级 FIFO（取消在入口同步取号），这是 `review-cancel-concurrency` 锁的契约；PostgreSQL 那一侧的 `cancelCascade` **整个没有取号**，于是那个部署上「一边提交评审决定、一边点取消」两者的落库会交错，而 SQLite 上取消老老实实排在后面。修法是给它补上同一个取号器，于是多出这一条 `postgresqlChildTaskLifecycleParticipant.ts → services/reviewMutationCoordinator.ts` 的边——它与该目录下既有的同名 import（`postgresqlSourceTerminationParticipant.ts` / `sqliteSourceTerminationParticipant.ts` / `taskDriverLifecycle.ts`）同形同 owner，随 RFC-294 W4-E1 cutover 一起退役。零成本的替代只有「把这个分叉留着不修」。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -919,8 +916,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1c6ad15aca4511cbcee0d72420fc18fefef0dc5e",
-    "contentDigest": "sha256:b4e5e36be15f5c1cd42a061e4c3d4227e115ff04f9df5237f09699f8a626d506",
+    "currentSnapshotSha": "db0b2f3204d600d9e2101f03f1eef9a8a3a6d50b",
+    "contentDigest": "sha256:e1438d2a5c0dfe79548259b34e12b67db85de49a11eca7292b2b423ec72dafea",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

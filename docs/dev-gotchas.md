@@ -686,6 +686,43 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 **定式**：`git add architecture/ design/RFC-294-backend-layered-target-architecture/status.md`
 ——**整目录加那一个文件，永远一起**。commit 时的 pathspec 同样写这两项。
 
+### 查 CI 结论**必须按 workflow 名过滤**——同一个 sha 上有不止一个 workflow（2026-09-18 实撞，连报三次错结论）
+
+`gh run list --branch main --json headSha,conclusion` 在同一个 commit 上会返回**多条**记录：
+本仓至少有 `CI` 与 `git-protocols-e2e` 两个 workflow，各自一条 run，**顺序不固定**。
+取 `[0]` 就是掷硬币——实撞那次连着三个 commit 读到的都是 `git-protocols-e2e`（1 个 job、
+几乎总是绿），于是「CI 绿」被连报了三次，而真正的 `CI`（含 backend 12 分片）那三次分别是
+failure / cancelled / cancelled。**主干红了三轮没人发现**，因为守候程序自己在报绿。
+
+**定式**：任何自动查 CI 的脚本都要带 `.name == "CI"`：
+
+```bash
+gh run list --branch main --limit 80 --json databaseId,headSha,name,conclusion \
+  --jq "[.[] | select(.headSha==\"$SHA\" and .name==\"CI\")] | .[0] | \"\(.databaseId) \(.conclusion)\""
+```
+
+**并且**：`cancelled` **不是绿**。共享 `main` 上并发 push 会取消前一个 run，那时要看的是
+**含你这笔 commit 的后继 commit** 的 `CI` 结论，不能把 `cancelled` 当通过。
+
+这条与本文件既有的「zsh 不做词分割导致守候空转」是同一族：**守候程序自己坏了，
+看起来却像在正常工作**。差别是那一次是静默无输出，这一次更糟——它**主动报了绿**。
+
+### 本地「架构守卫全绿」**不等于**守卫全绿：一多半守卫不在 `tests/architecture/` 下（2026-09-18 实撞）
+
+我的自查惯例是「跑一遍 `tests/architecture/`（69 个文件）」。实际上**扫源码的守卫有一大半在
+`tests/` 根目录**——按 `backendUnits(` / `packageSrcUnits(` / `srcInventory(` / `readSrc(` /
+`readFileSync(...src` 数，`tests/architecture/` 之外还有 **110 个**。
+实撞的那条（`rfc331-task-execution-topology`）就在根目录：它钉「legacy 层不得 deep-import 模块内部」
+的**另一份**名单（与 `commons-debt` 的 R1 账本是两份，都要改），我登记了 R1 却没登记它，
+于是本地「架构全绿」而 CI 红。
+
+**定式**：动了 `src/` 的 import 图 / 导出面之后，除了 `tests/architecture/`，还要跑：
+
+```bash
+grep -rlE "backendUnits\(|packageSrcUnits\(|srcInventory\(|readSrc\(|readFileSync\(.*src" tests/ \
+  | grep -v "^tests/architecture/"
+```
+
 ### `describeEachProvider` 只保证「库换了」，**不保证「被测的实现换了」**（2026-09-18 实撞，照出一处真分叉）
 
 一份对拍写成 `describeEachProvider(...)`，两条 lane 都跑，看起来是双引擎判据。但如果用例体里

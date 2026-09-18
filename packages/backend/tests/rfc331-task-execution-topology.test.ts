@@ -49,6 +49,13 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/startTaskDeps.ts:@/modules/task-execution/infrastructure/legacySqliteTaskDatabase',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/branchTrace',
+  // RFC-359 AC-1（第 10 刀）：resume 的回滚目标选择器原本有两份**逐字相同**的副本
+  //（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在
+  // `application/`——它是纯函数、零 provider 依赖，那里是它在目标架构里的家。
+  // 于是 legacy 的 `resumeKick` 从那里 import。**这条边随 `resumeKick` / `syncTaskWorkflow`
+  // 离开 legacy 层一起消失**；把实现留在 legacy 只会把重复留着。与上一行的 `branchTrace`
+  // 同形同命（同一个 legacy 消费者、同一层 `application/`、同一波 cutover 还清）。
+  'packages/backend/src/services/task.ts:@/modules/task-execution/application/resumeRollbackTargets',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
