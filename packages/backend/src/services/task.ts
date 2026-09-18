@@ -1141,7 +1141,7 @@ async function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTas
       .from(taskRepos)
       .where(eq(taskRepos.taskId, sourceTaskId))
       .all()) {
-      checkCachedId(r.cachedRepoId)
+      await checkCachedId(r.cachedRepoId)
     }
   }
   const groupId = (input as { repoGroupId?: unknown }).repoGroupId

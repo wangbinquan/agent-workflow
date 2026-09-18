@@ -2,14 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
   renderUserPrompt,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '@/db/client'
+import type { DbClient } from '@/db/client'
 import { agents as agentRows, nodeRuns, tasks, workflows } from '@/db/schema'
 import {
   developmentEmployeeRuntimeCodec,
@@ -52,7 +52,6 @@ import {
 import { createAgent, updateAgent } from '@/services/agent'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
 
 afterEach(() => {
@@ -1039,23 +1038,21 @@ process.stdout.write(JSON.stringify({
 })
 
 /**
- * RFC-359 AC-6 —— 这两条**故意留在单引擎**，因为被测主体本身就是 SQLite 那一份 composition。
+ * RFC-359 AC-6 —— **这两条已转双引擎**（本刀）。
  *
- * `composeDigitalEmployeeExecution`（`src/modules/task-execution/composition/digitalEmployeeExecution.ts:291`）
- * 的 `deps.db` 声明成 `DbClient`，它的 `inspect`（同文件 :534-545）用的是 bun:sqlite 的**同步**
- * `.get()`。PostgreSQL 的对等物是另一支 composition —— 同文件 :766 的
- * `composeDigitalEmployeeExecution`（装配点 `src/cli/postgresqlDaemonApplication.ts:1459`），
- * 依赖形状也不同。把这两条丢进双引擎跑不是「在 PG 上验同一段生产代码」，而是让 PG 去跑一份
- * 它在生产里根本不会装的实现：`.get()` 返回未 await 的 Promise，`inspect` 于是一律退回
- * `kind: 'pending'`，断言空转。要让它们真的双跑，得先把那两支 composition 的读点收敛成一份
- * 中立实现（同文件 :247 的 `inspectDigitalEmployeeHumanReviewState` 已经是这个形状），
- * 那是生产改动，不在本次测试迁移的范围里。
+ * 上一版注释写的是「故意留在单引擎，因为被测主体就是 SQLite 那一份 composition，
+ * PostgreSQL 的对等物是另一支 composition」。**那个理由已经过期**：§5hl 的端口化把
+ * `DigitalEmployeeExecutionDependencies` 里的 `db` 字段整个去掉了，依赖面现在收的是
+ * `tasks` / `readModels` / `resourceUsage` / `executionMetadata` / `humanReview` 五个端口，
+ * 库读收在中立的 `composeDatabaseDigitalEmployeeExecutionPorts(db: ProviderNeutralDatabase)` 里
+ * ——而这两条用例**本来就在装它**。也就是说合一早已发生，只是注释和账本没跟上。
  *
- * 本文件其余用例已全部在 `describeEachProvider` 下双跑。
+ * **记一条教训**：「为什么这条还是单引擎」的理由写进注释之后**会过期**，而过期的方向是
+ * 把一条已经能迁的用例继续钉在单引擎上。清这类账时不要只读注释，要按当下的依赖面重判一次。
  */
-describe('platform execution contracts — SQLite composition only', () => {
+describeEachProvider('platform execution contracts — 数字员工执行端口', (provider) => {
   test('a failed reviewed execution reports the task failure before derived plan validation', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = provider.db
     const taskId = 'reviewed-execution-failed-before-output'
     await db.insert(tasks).values({
       id: taskId,
@@ -1107,7 +1104,7 @@ describe('platform execution contracts — SQLite composition only', () => {
   // as a permanent round failure. The Case became blocked while its Task was
   // visibly running again, and repeated reloads then burned work for no purpose.
   test('daemon-restart interruptions remain pending while automatic recovery is available', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = provider.db
     const taskId = 'employee-execution-recovering-after-daemon-restart'
     await db.insert(tasks).values({
       id: taskId,

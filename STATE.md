@@ -2,6 +2,22 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-19 续 89，**AC-6 再销一条 → 2；并修 1fdb00117 推的两条红**）
+>
+> `execution-contract-platform` **也能迁了**：它「被测主体是 SQLite 那一份 composition」的理由
+> 已随 §5hl 的端口化过期（依赖面的 `db` 字段整个去掉，库读收在中立的
+> `composeDatabaseDigitalEmployeeExecutionPorts`，而那两条用例本来就在装它）。
+> **教训**：「为什么还是单引擎」的理由写进注释**会过期**，清账要按当下依赖面重判，别只读注释。
+>
+> **`1fdb00117` 推的两条红**：①**浮动 Promise**——`checkCachedId` 转 async 时漏 await，
+> 而本仓 `bun run lint` 另有一条 `eslint.promises.config.js` 单跑 `no-floating-promises`，
+> 秒级自查的 `bunx eslint <files>` 咬不到。**凡是改过 async 的轮次推前必须补跑那一句**
+> （已落 `docs/dev-gotchas.md`；未 await 的拒绝会变成 unhandled rejection，本仓为此红过一次）。
+> ②`rfc331` 深 import 登记——**同一条判据第二次咬我**，它不在 `tests/architecture/` 下。
+>
+> **还剩 2 条**：`helpers/rfc310Pr3Fixture`（fallback 只被 669 行的全旅程 e2e 用到，
+> 真销得先迁那个 e2e）与 `rfc257-webhook-error-codes`（被测状态在 PG 根上按构造不存在）。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 88，**AC-6 推进：单引擎待办 13 → 3**）
 >
 > 命名债清完之后接着压 `OPEN_MIGRATION_DEBT`。**一条真迁 + 七条判据此前看不见**。

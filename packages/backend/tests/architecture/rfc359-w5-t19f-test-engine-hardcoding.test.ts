@@ -78,7 +78,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'createindb-snapshot-parity.test.ts: 6',
   'distill-session-capture.test.ts: 1',
   'e2e-sqlite-fixture-lock-contention.test.ts: 3',
-  'execution-contract-platform.test.ts: 2',
   'fixtures/rfc322-cpu-probe.ts: 1',
   'fixtures/rfc338-blocking-maintenance-worker.ts: 1',
   'fixtures/rfc338-foreground-contention-worker.ts: 1',
@@ -831,13 +830,18 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   //   · `rfc349-dual-provider-behavior-oracle` / `rfc349-task-execution-provider-adapters`
   //     —— 落进新的 `cross-provider-oracle`：它们在**同一条用例**里同时建 SQLite 库与真 PG
   //     客户端做对拍，`describeEachProvider`「各跑一遍」的形状会把对拍拆成两半。
+  //   · `execution-contract-platform` —— **真迁**。它的旧注释写着「被测主体就是 SQLite 那一份
+  //     composition，PG 的对等物是另一支」，**那个理由已经过期**：§5hl 的端口化把
+  //     `DigitalEmployeeExecutionDependencies` 的 `db` 字段整个去掉了，库读收在中立的
+  //     `composeDatabaseDigitalEmployeeExecutionPorts` 里——而那两条用例本来就在装它。
+  //     **教训**：「为什么这条还是单引擎」的理由写进注释之后**会过期**，而过期的方向是把一条
+  //     已经能迁的用例继续钉在单引擎上；清账时要按当下的依赖面重判，别只读注释。
   // RFC-359 AC-1（第 11 刀下半）：cancel 合一摘掉了四份判据的 `from 'services/task'` 这条机械理由
   //（它们 import 它就是为了取 `cancelTask`）。摘掉之后**三份确实不再依赖那台执行引擎**，
   // 已就地迁到 `describeEachProvider`（`retry-cascade-kind-matrix` /
   // `rfc202-lifecycle-exits` / `rfc350-idle-timeout-integration`，同批离开上面那本总账）；
   // 第四份 `rfc268-webhook-scratch-launch` 仍真的驱动 SQLite 启动参与者，改由
   // `sqlite-execution-engine` 新补的拼法认领。**这本名单一行没涨。**
-  'execution-contract-platform.test.ts',
   'helpers/rfc310Pr3Fixture.ts',
   'rfc257-webhook-error-codes.test.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`rfc268-webhook-scratch-launch.test.ts` **转为

@@ -967,6 +967,32 @@ done
 3. 脚本里做了一串命令后，**别只看最后一句的 echo**——它可能是 shell 内建、在 PATH 毁掉之后
    照样打印。判据取实际结果（这里是 `git log --oneline -1` 有没有变），不是脚本自己的口播。
 
+## `bunx eslint <你改的文件>` 漏掉 `lint:promises`——把同步函数改成 async 时正好会踩（2026-09-18 实撞）
+
+本仓的 `bun run lint` **不止一遍 eslint**。除了各包那遍，还有一条独立配置：
+
+```
+eslint --no-config-lookup -c eslint.promises.config.js "packages/backend/src/**/*.ts" --max-warnings=0
+```
+
+它专门开 `@typescript-eslint/no-floating-promises`（需要类型信息，所以单独一遍）。
+`CLAUDE.md` 推荐的秒级自查 `bunx eslint <files> --max-warnings 0` 走的是默认配置，**咬不到它**。
+
+**什么时候一定会踩**：把一个同步函数改成 `async`（本仓合一 provider 时的常规动作）。
+调用点原来写 `f(x)` 一点问题没有，改完之后它就是一个没人接的 promise——
+typecheck 绿、默认 eslint 绿、本地相关用例也绿（多数路径下那个 promise 会 resolve），
+只有 `lint:promises` 咬得住。2026-09-18 实撞：`checkCachedId` 由同步转 async，
+漏了一个 `await`，CI 的 Lint job 单独红一格。
+
+**处置**：**凡是本轮把任何函数改成了 async，推之前补跑一句**（约 60s）：
+
+```sh
+bunx eslint --no-config-lookup -c eslint.promises.config.js "packages/backend/src/**/*.ts" --max-warnings=0
+```
+
+**为什么它值得单独一条**：漏掉的 await 不只是 lint 洁癖——未 await 的拒绝会变成
+unhandled rejection，而本仓已经为此红过一次 CI（§5dk 的 `void <promise>` 没接 rejection）。
+
 ## 改名时 `git commit -- <pathspec>` 会把「旧文件的删除」整个漏掉（2026-09-18 实撞，14 个 shard 全红）
 
 本仓强制「按路径精确提交」（`git commit -F msg -- <你的路径…>`，见 `CLAUDE.md`）。把路径清单

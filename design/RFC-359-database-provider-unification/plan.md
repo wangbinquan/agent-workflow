@@ -17931,3 +17931,33 @@ bun:sqlite 库。约束写进类型而不是靠强转，于是「哪个夹具真
 
 **还剩 3 条真债**：`execution-contract-platform` / `helpers/rfc310Pr3Fixture` /
 `rfc257-webhook-error-codes`——都是「被测的是实现、只是没人迁」，下一刀做。
+
+### AC-6 收尾一刀　`execution-contract-platform` 也能迁了（并修 `1fdb00117` 推的红）
+
+**再销一条，`OPEN_MIGRATION_DEBT` 3 → 2。** 它的旧注释写着「故意留在单引擎，因为被测主体就是
+SQLite 那一份 composition，PG 的对等物是另一支 composition」——**那个理由已经过期**：§5hl 的
+端口化把 `DigitalEmployeeExecutionDependencies` 的 `db` 字段整个去掉了，依赖面收的是五个端口，
+库读收在中立的 `composeDatabaseDigitalEmployeeExecutionPorts(db: ProviderNeutralDatabase)` 里
+——**而那两条用例本来就在装它**。合一早已发生，只是注释和账本没跟上。
+
+**记一条教训**：「为什么这条还是单引擎」的理由写进注释之后**会过期**，而过期的方向是把一条
+已经能迁的用例继续钉在单引擎上。清这类账时不要只读注释，要按**当下的依赖面**重判一次。
+
+**`1fdb00117` 推的红，两条，都已修**：
+
+1. **浮动 Promise**（CI 的 Lint job 单独一格红）。`checkCachedId` 由同步转 async 时漏了一个
+   `await`。本仓的 `bun run lint` **不止一遍 eslint**——还有一条独立配置
+   `eslint.promises.config.js` 专开 `no-floating-promises`（要类型信息所以单跑），
+   而 `CLAUDE.md` 推荐的秒级自查 `bunx eslint <files>` 走默认配置、**咬不到它**。
+   **凡是本轮把任何函数改成了 async，推之前必须补跑那一句**，已落 `docs/dev-gotchas.md`。
+   它不只是洁癖：未 await 的拒绝会变成 unhandled rejection，本仓已为此红过一次（§5dk）。
+2. **`rfc331` 的深 import 登记**（又一次）。`startTaskDeps.ts` 的类型来源从
+   `legacySqliteTaskDatabase` 换到 `legacySqliteTransportMechanisms`，那条判据是逐条相等。
+   **这是同一条判据在本 RFC 里第二次咬我**——它不在 `tests/architecture/` 下，
+   而我的架构自查只跑那个目录。
+
+**还剩 2 条**：`helpers/rfc310Pr3Fixture`（`options.db ?? createInMemoryDb(…)`，fallback 只被
+`rfc310-t109-full-journey-e2e` 一个消费者用到——那是 669 行、带真子进程的全旅程 e2e；
+把 `db` 改成必填只是把计数从 helper 挪到它身上，净额不变，要真销得先迁 t109）与
+`rfc257-webhook-error-codes`（被测状态是「装配里没有 dispatcher」，PG 根自建一个、
+那边按构造不存在）。
