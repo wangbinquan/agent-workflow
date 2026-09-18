@@ -2,6 +2,31 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## ✅ RFC-359 **已完工**（2026-09-18 收口，12 / 12 条 AC 全部达成）
+>
+> **收口 SHA `55676871ccb3afc4bfe54e759652ce325d401a91`**
+> - **AC-9**：CI run `35392000678` 终态 success，**46/46 作业全绿**（该 run 自己终态 success、未被取消）。
+>   后端 × 真 PostgreSQL（ubuntu 12 分片 + postgres:17）**23,018 pass / 0 fail**，`[postgresql]` 身份 **6,271**；
+>   后端 × SQLite（macOS 6 分片）**16,740 pass / 0 fail**；前端三 OS、Playwright 四 OS 13 分片、
+>   单二进制 build smoke 三 OS、静态扫描、lint/typecheck/format 全绿。
+> - **AC-11**：`postgresql-evidence.yml` run `35389688674`（`scale=full`）终态 success，
+>   `acceptancePassed: true`、九端点全部在登记值内。**三个重端点 PostgreSQL 显著更快**
+>   （tasks-first 中位数快 **77.6ms**、tasks-running 快 **37.7ms**）。
+> - **AC-8**：两个引擎跑同一批行为套件都全绿 + `scale=full` 比较器逐端点断言两侧 wire 投影
+>   （`itemIds` / `schemaVersion` / `nextCursor`）完全一致、`errors: []`——**在 10 万任务的真语料上**。
+>
+> **用户那两句原话，现在是可验证的事实**：
+> 「以后不允许再出现两种数据库一个好一个不好的分支」——留下的 3 对孪生每一对都**指名**命中
+> §5fq 第②条「只有一个引擎有的资源形态」（SQLite 是一个文件，PostgreSQL 是一台服务器），
+> 指不出判据的已经全部合掉；「postgresql 要做到最高性能表现」——验收档实测三个重端点 PG 更快。
+>
+> **质量防护网**（新增功能天然会被验到两种数据库）：`describeEachProvider` 是缺省、缺 PG URL
+> 是 **fail 而不是 skip**；`PROVIDER_PAIR_COUNT` / `PROVIDER_NAMED_FILE_DEBT` /
+> `TEST_ENGINE_HARDCODING_DEBT` / `OPEN_MIGRATION_DEBT` / `BARE_TRANSACTION_DEBT` /
+> `PROVIDER_BRANCH_DEBT` / `RAW_DIALECT_DEBT` 等账本**只降不升**，涨要显式 `allowGrowth` 并点名 RFC。
+>
+> 下面是完工前各波的历史记录，保留供追溯。
+
 > ## 📌 RFC-359 最新一段（2026-09-19 续 90，**AC-1 / AC-6 / AC-12 三条收口；只剩 AC-8 / AC-9 / AC-11 的收口取证**）
 >
 > 本轮四刀 + 两次收尾，把开放的六条 AC 压到三条，且剩下的三条**都只差「在收口 SHA 上取一次证」**。
@@ -3858,7 +3883,12 @@
 > **仍为 In Progress**：全量行为覆盖、真实残余重复实现、原始 full P95 与最终 exact-SHA CI 待完成。
 > 本批未跑本地 PG、服务、完整性能库、soak、E2E 或全量门禁；逐项证据见 plan.md §0b/§0c。
 
-> 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
+> ✅ **已完工 RFC（2026-09-18，Done —— 12 / 12 条 AC 全部达成）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
+> **收口 SHA `55676871ccb3afc4bfe54e759652ce325d401a91`**：CI run `35392000678` 终态 success、**46/46 作业全绿**（后端 × 真 PostgreSQL 的 ubuntu 12 分片 **23,018 pass / 0 fail**，`[postgresql]` 身份 **6,271**；macOS × SQLite 6 分片 **16,740 pass / 0 fail**；前端三 OS、Playwright 四 OS 13 分片、单二进制 build smoke 三 OS、静态扫描、lint/typecheck/format 全绿）。
+> **AC-11**：`postgresql-evidence.yml` run `35389688674` 的 `scale=full` 终态 success，`acceptancePassed: true`、九端点全部在登记值内；语料就是验收档（100k tasks / 3M node_runs / 10M events / 100k deliveries / 500 repos，digests 校验通过）。**三个重端点 PostgreSQL 显著更快**（tasks-first 中位数快 77.6ms、tasks-running 快 37.7ms）——这正是用户那句「postgresql 要做到最高性能表现」要的方向。**一条不藏的红**：`overview` 在**已退役的**原始绝对 P95 预算（<10ms）上 PG 是 10.056ms、差 0.056ms；那条口径 2026-09-15 已按用户裁决换成中位数差，换后它过了（3.398 ≤ 3.5）。
+> **收口那一轮（第 12～14 刀 + 两次收尾）**：`PROVIDER_PAIR_COUNT` 6 → 3、`PROVIDER_NAMED_FILE_DEBT` 88 → 25、`OPEN_MIGRATION_DEBT` → 1；合一同时照出**四处用户可见分叉**并逐条按「取强的一半」收敛（被取消任务的工作树永不回收 / 工作流被删后手动执行两侧答案不同 / sync 缺回滚基线跨行预检 / 源终止无 driver 时不同步收尾），每处都带先红后绿的双引擎判据。
+>
+> 下面是完工前各波的历史记录，保留供追溯。
 > **进度（2026-09-07，W7 成对适配器收尾）**：本波按 W5 的成对账本逐对收 W4 的剩余部分。
 > **合一 11 对**（RealtimeStore / ResourceLimitPersistence / ClarifyDirectiveStore / Review·ClarifyRepairParticipant /
 > TerminalMaintenancePersistence / IntentSqlProgramRunner / IntentPersistence / CommittedEvents Persistence /
