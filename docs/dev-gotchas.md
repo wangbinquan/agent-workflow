@@ -1003,6 +1003,16 @@ git commit -F msg -- "${MINE[@]}"
    整个暂存区）。但共享工作树上这条很危险，见 `CLAUDE.md` 的「提交时也必须带 pathspec」；
 3. **推之前看回执**：改名提交必须同时出现 `create mode` 与 `delete mode`，只有一半就是漏了。
 
+**第三次（2026-09-18，同一天）撞在「扫改名半径只扫了自己那个包」上**：把
+`postgresqlTaskRouteOperations.ts` 改成 `taskRouteOperations.ts` 之后，后端 700+ 条守卫、
+278 条源码判据全绿，**CI 上三个 OS 的 Frontend 分片全红**——
+`packages/frontend/tests/diff.test.ts` 用 `path.resolve(here, '../../backend/src/...')`
+跨包读后端源码。这条课 `docs/dev-gotchas.md` 早就记过（「扫半径的 grep 范围要覆盖整个
+`packages/` + `e2e/` + `scripts/`」），而我那一轮的路径替换脚本只遍历了 `packages/backend/tests`。
+**改名之后收尾的那一次全仓 grep 不能省**：
+`grep -rn '<旧名>' packages e2e scripts --include='*.ts' --include='*.tsx'`，
+剩下的每一条都要能说清「它为什么应该还指着旧名」。
+
 配套自查（一秒，**改名提交必做**）：
 `git ls-tree -r --name-only HEAD <目录> | grep <旧名>` —— 有输出就是没删干净。
 已经提交但**还没推**的，`git commit --amend -- <完整清单>` 就地补上（回执会从

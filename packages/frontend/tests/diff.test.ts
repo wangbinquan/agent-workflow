@@ -144,16 +144,20 @@ diff --git a/readme.md b/readme.md
   //
   // RFC-359 AC-1：发射点搬了家。多仓 diff 的拼装此前住在 `services/task.ts#getTaskDiff`，
   // 纯读三件两个引擎合一之后它是 `taskDiffProjection`，住在
-  // `modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`
-  //（那个文件名是待还的命名债，见 RFC-359 plan §5hj——它现在是两个引擎共用的实现）。
+  // `modules/task-execution/infrastructure/taskRouteOperations.ts`。
+  //（命名债 §5hj 已还清：那个文件此前叫 `postgresqlTaskRouteOperations.ts`，而它 22 个导出里
+  // 15 个被 SQLite 侧直接消费——早就是两个引擎共用的实现，只有名字钉在 PG 上。
+  // PG 的**装配绑定**留在原名那个 215 行的小文件里。）
   // **这条锁按文件路径读源码**，所以搬家必须同步改锚，否则它会以「格式变了」的名义红，
   // 而真实原因是「文件不在那儿了」。
+  // ⚠️ 它还是一条**跨包**的锚（frontend 读 backend 源码）——扫改名半径时 grep 范围必须覆盖
+  // 整个 `packages/`，只扫自己那个包必漏（`docs/dev-gotchas.md` 记过同一课，这次又撞）。
   test('parser format matches the backend task diff emitter', () => {
     const here = path.dirname(fileURLToPath(import.meta.url))
     const backend = readFileSync(
       path.resolve(
         here,
-        '../../backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+        '../../backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
       ),
       'utf8',
     )
