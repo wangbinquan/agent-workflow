@@ -64,12 +64,22 @@ interface SeedOptions {
   readonly runStatus?: string
   /** 再挂一个处于该状态的子任务（级联那几格用）。 */
   readonly childStatus?: string
+  /** 再挂一个处于该状态的**孙**任务（挂在子任务下面，验递归深度）。 */
+  readonly grandchildStatus?: string
+  /** 额外再铸几条打开着的 node_run（验「关的是全部，不是被点的那一条」）。 */
+  readonly extraOpenRuns?: readonly string[]
 }
 
 async function seedFixture(
   db: ProviderNeutralDatabase,
   options: SeedOptions = {},
-): Promise<Fixture & { childTaskId: string | null }> {
+): Promise<
+  Fixture & {
+    childTaskId: string | null
+    grandchildTaskId: string | null
+    extraRunIds: readonly string[]
+  }
+> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc359-w11-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -154,12 +164,67 @@ async function seedFixture(
     await db.update(nodeRuns).set({ childTaskId }).where(eq(nodeRuns.id, nodeRunId))
   }
 
+  let grandchildTaskId: string | null = null
+  if (options.grandchildStatus !== undefined) {
+    if (childTaskId === null) throw new Error('grandchildStatus 需要先有 childStatus')
+    const childRunId = ulid()
+    await db.insert(nodeRuns).values({
+      id: childRunId,
+      taskId: childTaskId,
+      nodeId: 'doc',
+      status: 'running',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 700,
+    })
+    grandchildTaskId = ulid()
+    await db.insert(tasks).values({
+      id: grandchildTaskId,
+      name: 'w11-grandchild',
+      workflowId,
+      workflowSnapshot: JSON.stringify(DEFINITION),
+      repoPath,
+      worktreePath: repoPath,
+      baseBranch: 'main',
+      branch: `agent-workflow/${grandchildTaskId}`,
+      status: options.grandchildStatus as 'running',
+      inputs: '{}',
+      startedAt: Date.now() - 600,
+      ownerUserId: USER_ID,
+      executionLineageId: taskId,
+      parentTaskId: childTaskId,
+      parentNodeRunId: childRunId,
+      invocationDepth: 2,
+    })
+    await db
+      .update(nodeRuns)
+      .set({ childTaskId: grandchildTaskId })
+      .where(eq(nodeRuns.id, childRunId))
+  }
+
+  const extraRunIds: string[] = []
+  for (const nodeId of options.extraOpenRuns ?? []) {
+    const id = ulid()
+    extraRunIds.push(id)
+    await db.insert(nodeRuns).values({
+      id,
+      taskId,
+      nodeId,
+      status: 'running',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 880,
+    })
+  }
+
   return {
     appHome,
     repoPath,
     taskId,
     nodeRunId,
     childTaskId,
+    grandchildTaskId,
+    extraRunIds,
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
   }
 }
@@ -298,6 +363,38 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     )[0]
     expect(after?.status, '槽释放之后取消照常落地').toBe('canceled')
   }, 30_000)
+
+  test('I 关的是**全部**打开着的 node_run，不是被点的那一条', async () => {
+    const seeded = await seedFixture(harness.db, { extraOpenRuns: ['b', 'c'] })
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome.code).toBe('no-throw')
+    const rows = await harness.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, seeded.taskId))
+    expect(rows).toHaveLength(3)
+    expect(
+      rows.map((row) => row.status).sort(),
+      '三条打开着的行必须全部被关掉——留一条开着，任务就是终态而它的行还在跑',
+    ).toEqual(['canceled', 'canceled', 'canceled'])
+  })
+
+  test('J 级联是**递归**的：孙任务也被取消', async () => {
+    const seeded = await seedFixture(harness.db, {
+      childStatus: 'running',
+      grandchildStatus: 'running',
+    })
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome.code).toBe('no-throw')
+    expect(outcome.status).toBe('canceled')
+    const rows = await harness.db.select().from(tasks)
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    expect(byId.get(seeded.childTaskId!)?.status, '子任务').toBe('canceled')
+    expect(
+      byId.get(seeded.grandchildTaskId!)?.status,
+      '孙任务——级联只做一层的话这条会留在 running，而它的父已经终态了',
+    ).toBe('canceled')
+    expect(byId.get(seeded.grandchildTaskId!)?.errorMessage).toBe('canceled-by-parent-cascade')
+  })
 
   test('G 级联撞上已终态的子任务 → 幂等空操作，父仍然取消成功', async () => {
     const seeded = await seedFixture(harness.db, { childStatus: 'done' })

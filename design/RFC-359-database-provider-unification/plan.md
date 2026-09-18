@@ -17613,3 +17613,19 @@ SQLite 上取消老老实实排在后面。
 
 记账：多出一条 `postgresqlChildTaskLifecycleParticipant.ts → services/reviewMutationCoordinator.ts`
 的边（与该目录下既有的三处同名 import 同形同 owner），已声明 `allowGrowth`。
+
+### 对拍面扩到 10 格（第 11 刀第 1 步收口）
+
+再加两格，都是**两侧仍然全同**：
+
+- **I 关的是全部打开着的 node_run**，不是被点的那一条（种三条 running，断言三条全 canceled）。
+  留一条开着的后果是「任务已终态、它的行还在跑」。
+- **J 级联是递归的**：父 → 子 → **孙**三层全 running，取消父之后孙也 canceled 并带 cascade 标记。
+  只做一层的话孙会留在 running 而它的父已经终态。
+
+另记一处**只在竞态窗口里存在**的差异，暂不立格（构造不出确定性判据）：
+退役那份在 `cascadeFromParent` 且子任务**已经是 canceled** 时会补写 `canceled-by-parent-cascade`
+标记（RFC-243 §4.3：父崩溃后恢复要分得清「我自己的级联」与「别人取消了我的子任务」）。
+两侧枚举子任务时都只取 `CANCELABLE_TASK_STATUSES`，所以**非竞态路径上这个分支根本走不到**；
+只有「枚举之后、级联调用之前那一瞬间子任务自己收场成 canceled」才会落到它。
+合并时这个分支要跟着留下的那份走，别顺手丢掉。
