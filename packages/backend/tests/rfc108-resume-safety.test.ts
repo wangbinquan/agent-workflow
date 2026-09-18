@@ -25,10 +25,10 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTask, resumeTask } from '../src/services/task'
+import { getTask } from '../src/services/task'
 import { gitStashSnapshot, runGit, snapshotRefName } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createResumeEngine } from './helpers/resumeEngine'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DEPS_CMD = ['/usr/bin/env', 'true']
@@ -144,14 +144,14 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
     let caught: unknown
     let threw = false
     try {
-      await resumeTask(h.db, h.taskId, {
-        db: h.db,
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: DEPS_CMD,
-      })
+        runConfig: {
+          binaryOverride: DEPS_CMD,
+        },
+      }).resume(h.taskId)
     } catch (err) {
       threw = true
       caught = err
@@ -182,14 +182,14 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
     rmSync(join(h.repoPath, '.git'), { recursive: true, force: true }) // dir still exists
     let code: string | undefined
     try {
-      await resumeTask(h.db, h.taskId, {
-        db: h.db,
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: DEPS_CMD,
-      })
+        runConfig: {
+          binaryOverride: DEPS_CMD,
+        },
+      }).resume(h.taskId)
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -232,14 +232,14 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
 
     let code: string | undefined
     try {
-      await resumeTask(h.db, h.taskId, {
-        db: h.db,
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: DEPS_CMD,
-      })
+        runConfig: {
+          binaryOverride: DEPS_CMD,
+        },
+      }).resume(h.taskId)
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -268,14 +268,14 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
     writeFileSync(join(h.repoPath, 'a.txt'), 'FAILED-LEFTOVER\n')
     await insertFailedRun(h.db, h.taskId, 'a', runA, shaA)
 
-    const after = await resumeTask(h.db, h.taskId, {
-      db: h.db,
+    const after = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
-      appHome: h.appHome,
-      binaryOverride: DEPS_CMD,
-    })
+      runConfig: {
+        binaryOverride: DEPS_CMD,
+      },
+    }).resume(h.taskId)
     expect(after.status).toBe('pending')
     // Row A WAS rolled back to its snapshot (no missing-snapshot escalation).
     expect(readFileSync(join(h.repoPath, 'a.txt'), 'utf-8')).toBe('snapshot-A\n')

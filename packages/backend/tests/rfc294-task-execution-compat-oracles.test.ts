@@ -20,6 +20,7 @@ import {
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,7 +39,6 @@ import {
   abortAllActiveTasks,
   cancelTask,
   isTaskActive,
-  resumeTask,
   startTask,
   startTaskWithLocalRepo,
   type MaterializedSpace,
@@ -286,7 +286,12 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
     const deps = runtimeDeps(h, h.slowMock)
 
     const results = await Promise.allSettled([
-      resumeTask(h.db, seeded.taskId, deps),
+      createResumeEngine(h.db, {
+        appHome: h.appHome,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        runConfig: { binaryOverride: [process.execPath, 'run', h.slowMock], defaultNodeRetries: 0 },
+      }).resume(seeded.taskId),
       createRetryEngine(h.db, { resumeWith: deps }).retry({
         taskId: seeded.taskId,
         nodeRunId: failedRunId,
@@ -348,10 +353,15 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
     expect(firstGeneration.filter((row) => row.nodeId === 'work')).toHaveLength(1)
     expect(firstGeneration.find((row) => row.nodeId === 'work')?.status).toBe('interrupted')
 
-    const resumed = await resumeTask(h.db, started.id, {
-      ...runtimeDeps(h, h.doneMock),
+    const resumed = await createResumeEngine(h.db, {
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       awaitScheduler: true,
-    })
+      runConfig: {
+        ...runtimeDeps(h, h.doneMock),
+        awaitScheduler: true,
+      },
+    }).resume(started.id)
     expect(resumed.status).toBe('done')
     const generations = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, started.id)))
       .filter((row) => row.nodeId === 'work')

@@ -38,7 +38,10 @@ import {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
 } from '../application/drive/taskDriveCoordinator'
-import { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
+import {
+  resolveTaskDriveConfig,
+  type TaskDriveCompletionMode,
+} from '../application/drive/taskDriveTypes'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
 import type { ChildTaskLifecycleParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
@@ -744,6 +747,13 @@ export async function resumeTaskProjection(
   dependencies: TaskResumeDependencies,
   input: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
   topology: Parameters<ChildTaskLifecycleParticipant['resume']>[1],
+  /**
+   * 收尾模式。**生产一律不传**（`background`：复活是 fire-and-forget，路由立刻把任务行还给调用方）。
+   * 只有需要「等引擎跑完再断言」的判据传 `await-settle`——退役那份实现里这件事由
+   * `StartTaskDeps.awaitScheduler` 表达，那是 legacy 启动依赖上的一格，共用实现不该认识它，
+   * 所以它在这里变成一个显式参数。
+   */
+  options: { readonly completionMode?: TaskDriveCompletionMode } = {},
 ): Promise<void> {
   const lifecycle = dependencies.lifecycle
   const task = await loadResumeTask(dependencies.db, input.taskId)
@@ -807,6 +817,6 @@ export async function resumeTaskProjection(
   await coordinator.submit({
     taskId: input.taskId,
     intentId: admitted.intentId,
-    completionMode: 'background',
+    completionMode: options.completionMode ?? 'background',
   })
 }

@@ -5320,7 +5320,6 @@
         "resolveRepoSourceSingleWithProvider",
         "resolveTaskGitCommitIdentity",
         "resumeDynamicWorkflowExecution",
-        "resumeTask",
         "resumeTaskWithAtomicSideEffects",
         "retryRepositoryPreparation",
         "runtimeConfigOpts",
@@ -6342,5 +6341,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:adeae4fef82667efeb44c8f7aebe17e1d0eb6358d0d34fe12c7fcdeb96e8b685"
+  "sourceDigest": "sha256:0a5d9dd8f18e3c0a6357bb892a76f4b2c5da3ddbe3fd9bb07bb3d493d0e0b2ae"
 }

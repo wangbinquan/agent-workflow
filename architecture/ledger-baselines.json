@@ -804,11 +804,8 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1672,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 10 刀）1671 → 1672：`resume` 两份实现合一的**过渡态**。共用实现的入口 `resumeTaskProjection` 从 `postgresqlChildTaskLifecycleParticipant.ts` 导出（SQLite 侧要接上它必须先有这个导出）。退役那份（`services/task.ts` 的 `resumeTask`）的导出要等它的 46 处测试调用点重挂到共用入口之后才删得掉。"
-      }
+      "baseline": 1671,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -843,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5083,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 10 刀）5081 → 5083：`resume` 两份实现合一的**过渡态**。两条新边：`server.ts → 共用 resume 实现` 与 `server.ts → 生命周期端口`。这条不装配完整 runtime 的组合根要接上共用实现就必须直接 import 它们；零成本的替代只有「让这条路继续跑退役那份 `resumeTask`」——那正是本 RFC 要消灭的东西（同一个请求两个部署给不同答案）。两条都已逐条入 `commons-debt` 的 R1 账本，随 RFC-294 W4-E1 cutover 退役。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4565,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 10 刀）4564 → 4565：`resume` 两份实现合一的**过渡态**。同上那两条边在 exception schema 里的登记（`services/task.ts → application/resumeRollbackTargets` 那一条是去重 resume 回滚选择器的双份副本带来的，实现落在它在目标架构里的家）。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -904,15 +895,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24551,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 10 刀）24549 → 24551：`resume` 两份实现合一的**过渡态**。新增 `application/resumeRollbackTargets.ts`（去重掉的那份选择器的唯一家）与共用实现的导出面（`resumeTaskProjection` / `TaskResumeDependencies`）。退役那份的符号要等测试面重挂完才出账。"
-      }
+      "baseline": 24550,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:adeae4fef82667efeb44c8f7aebe17e1d0eb6358d0d34fe12c7fcdeb96e8b685",
+    "sourceDigest": "sha256:0a5d9dd8f18e3c0a6357bb892a76f4b2c5da3ddbe3fd9bb07bb3d493d0e0b2ae",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -925,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e0fe4fa1ed2d21a84ca15bbea2a126d5f6583e42",
-    "contentDigest": "sha256:150542c503944f5d2a1c6110aad38917e45f3c0edec2331831d62e29a702b376",
+    "currentSnapshotSha": "06452ed0a3abe462e52425099fdbc1729fb42473",
+    "contentDigest": "sha256:1e1831b5cbf1a32df03bc1f287cb32e40f90571e71dca233e018cc2c77097f31",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

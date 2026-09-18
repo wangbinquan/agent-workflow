@@ -26,7 +26,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tasks, workflows } from '../src/db/schema'
-import { abortAllActiveTasks, isTaskActive, resumeTask } from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
 import {
@@ -36,8 +36,8 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { createRepairEngine } from './helpers/repairEngine'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const ulid = monotonicFactory()
@@ -203,18 +203,14 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
 
     test('list → all S3 options schedulerActive; apply → 409 repair-preflight-stale; gate release frees the task', async () => {
       const taskId = await seedInterruptedTask(h)
-      const deps = {
-        db: h.db,
+      // Real ownership path: resume registers the AbortController, then
+      // its kicked runTask CASes pending→running and parks on the gate.
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: ['bun', 'run', h.mockPath],
-      }
-
-      // Real ownership path: resumeTask registers the AbortController, then
-      // its kicked runTask CASes pending→running and parks on the gate.
-      await resumeTask(h.db, taskId, deps)
+        runConfig: { binaryOverride: ['bun', 'run', h.mockPath] },
+      }).resume(taskId)
       await waitFor(
         async () => ((await taskStatusOf(h.db, taskId)) === 'running' ? true : undefined),
         'task to reach running under the live scheduler',

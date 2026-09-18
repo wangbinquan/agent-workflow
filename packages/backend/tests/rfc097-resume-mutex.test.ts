@@ -29,10 +29,12 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { cancelTask, resumeTask } from '../src/services/task'
+import { cancelTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createResumeEngine } from './helpers/resumeEngine'
+import type { Task } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -210,6 +212,23 @@ function deps(h: Harness, mockPath: string) {
   }
 }
 
+/**
+ * RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用同一份实现，本文件的复活入口
+ * 统一走 `tests/helpers/resumeEngine.ts`——`deps()` 里那些运行期旋钮（binaryOverride /
+ * defaultNodeRetries / sessionRestartBudget）改由 `runConfig` 透传，语义逐字不变。
+ */
+function resumeVia(h: Harness, mockPath: string): Promise<Task> {
+  return createResumeEngine(h.db, {
+    appHome: h.appHome,
+    schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' }).schedulerDriver,
+    runConfig: {
+      binaryOverride: ['bun', 'run', mockPath],
+      defaultNodeRetries: 0,
+      sessionRestartBudget: 0,
+    },
+  }).resume(h.taskId)
+}
+
 async function waitFor(cond: () => boolean, what: string): Promise<void> {
   for (let i = 0; i < 400; i++) {
     if (cond()) return
@@ -248,10 +267,7 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
   afterEach(() => h.cleanup())
 
   test('真并发双 resumeTask：恰一个 fulfilled、一个 409 task-not-resumable；无双铸行、单次派发、单一终态', async () => {
-    const results = await Promise.allSettled([
-      resumeTask(h.db, h.taskId, deps(h, h.doneMock)),
-      resumeTask(h.db, h.taskId, deps(h, h.doneMock)),
-    ])
+    const results = await Promise.allSettled([resumeVia(h, h.doneMock), resumeVia(h, h.doneMock)])
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1)
@@ -309,28 +325,28 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
 
   test('残余语义锁定：胜者速败（任务回到 failed）之后，顺序第二次 resume 合法再胜', async () => {
     // 第一次 resume：fail-mock 速败 → 任务完整生命周期收敛回 failed。
-    await resumeTask(h.db, h.taskId, deps(h, h.failMock))
+    await resumeVia(h, h.failMock)
     const afterFirst = await waitForTerminalTask(h.db, h.taskId)
     expect(afterFirst.status).toBe('failed')
     expect(readFileSync(join(h.ctrlDir, 'count-fail'), 'utf-8')).toBe('x')
 
     // 第二次 resume（非并发，胜者生命周期已结束）：from=failed 合法——CAS 单胜
     // 只保证同一状态纪元，这等价于用户连按两次 Resume，设计 §3 明示允许。
-    const second = await resumeTask(h.db, h.taskId, deps(h, h.doneMock))
+    const second = await resumeVia(h, h.doneMock)
     expect(second.status).toBe('pending')
     const final = await waitForTerminalTask(h.db, h.taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
   }, 30000)
 
   test('isTaskActive 入口拒：调度器挂起期间 resumeTask → 409（actively running）；retryNode → 409 task-still-running', async () => {
-    await resumeTask(h.db, h.taskId, deps(h, h.slowMock))
+    await resumeVia(h, h.slowMock)
     await waitFor(() => existsSync(join(h.ctrlDir, 'slow-started')), 'slow mock spawn')
 
     // resume 入口闸：message 注明 actively running——证明拒绝来自 isTaskActive
     // 入口（status 此刻是 running，状态门也会拒，但 message 不同）。
     let resumeErr: { code?: string; message?: string } | undefined
     try {
-      await resumeTask(h.db, h.taskId, deps(h, h.doneMock))
+      await resumeVia(h, h.doneMock)
     } catch (err) {
       resumeErr = err as { code?: string; message?: string }
     }

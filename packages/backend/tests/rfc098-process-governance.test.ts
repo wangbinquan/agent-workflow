@@ -32,7 +32,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { runNode } from './helpers/runner'
-import { resumeTask } from '../src/services/task'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { isProcessAlive, STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -406,14 +406,14 @@ describe('RFC-098 WP-8 — resumeTask kills the target row’s live child before
       startedAt: Date.now(),
     })
 
-    const after = await resumeTask(h.db, h.taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    const after = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(h.taskId)
     expect(after.status).toBe('pending')
 
     // Kill-then-proceed ran synchronously before the rollback: both pids gone.

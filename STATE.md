@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 79，**第 10 刀下半：删掉 `resumeTask`，测试面挂到共用入口**）
+>
+> 上半把两个引擎都接到共用实现之后，`services/task.ts` 的 `resumeTask` 就是零生产消费者的死导出。
+> 下半把它的 **46 处测试调用点（20 个文件）** 重挂到 `tests/helpers/resumeEngine.ts`
+> ——`resume` 的**唯一**测试装配点（与 `retry` 那一刀留下的 `retryEngine.ts` 同形），然后整份删掉。
+>
+> 装配点把两处「退役那份用 `StartTaskDeps` 表达、共用那份不认识」的东西显式化：
+> **收尾模式**（`awaitScheduler: true` → `completionMode: 'await-settle'`，共用实现因此多一个
+> 显式参数，生产一律不传）与**活跃度**（缺省就是生产那一份）。
+>
+> **迁移当场照出一处文案分叉**：`snapshot-lost` 的任务行 `errorMessage`——退役那份只说
+> 「pre-snapshot lost」，共用那份写全「是哪条 node_run、丢的是哪个 sha、没有动过任何仓库」。
+> 取信息更全的一侧。**这处 W10 的九格对拍照不出来**（那九格只断言错误码与事后状态，文案在码之下）
+> ——行为套件迁移是它的补集，两者都要有。
+>
+> 上半声明的四条 `allowGrowth` 按约回落退役。
+>
+> **下一步**：`cancel` 那一半（`ChildTaskLifecycleParticipant` 的另一半，SQLite 的 `cancelTask`
+> vs PG 的 `cancelCascade`）；然后是 plan §5hj 的命名/落位债
+> （`postgresql*` 共用文件改中立名 + `server.ts` / `providerRuntime.ts` 两套路由装配收一套）。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 78，**第 10 刀上半：`resume` 两个引擎共用一份实现**）
 >
 > 先建九格对拍基线（`rfc359-w10-resume-admission-parity`，全部走生产装配 + 真 git 工作树）：

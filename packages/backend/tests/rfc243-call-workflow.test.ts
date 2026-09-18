@@ -16,6 +16,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { existsSync, mkdirSync, readFileSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -678,7 +679,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     writeFileSync(h.planFile, JSON.stringify({ worker: { hangMs: 120000 } }))
     const { parentTaskId } = await seedParentTask(h, workerId)
     const { DAEMON_SHUTDOWN_ABORT_REASON } = await import('@agent-workflow/shared')
-    const { abortAllActiveTasks, isTaskActive, resumeTask } = await import('../src/services/task')
+    const { abortAllActiveTasks, isTaskActive } = await import('../src/services/task')
     // 父任务在生产里由 startTask 注册 activeTasks 并持 signal；直连 runTask 的
     // 测试必须自带 controller，否则「关停」只打到子任务，父侧判据无从谈起。
     const parentCtrl = new AbortController()
@@ -712,15 +713,13 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     await reapOrphanRuns(taskRecoveryOperations(h.db))
     // 修好计划再恢复。
     writeFileSync(h.planFile, JSON.stringify({ worker: { output: { out: 'RESUMED', echo: 'x' } } }))
-    await resumeTask(h.db, parentTaskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['bun', 'run', h.mockPath],
       awaitScheduler: true,
-    } as unknown as StartTaskDeps)
+      runConfig: { binaryOverride: ['bun', 'run', h.mockPath] },
+    }).resume(parentTaskId)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     expect(`${parent.status}:${parent.errorSummary ?? ''}:${parent.errorMessage ?? ''}`).toBe(
       'done::',

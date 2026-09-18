@@ -24,12 +24,12 @@ import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { getTask, resumeTask, startTask, startTaskWithLocalRepo } from '../src/services/task'
+import { getTask, startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { nodeRuns, tasks as tasksTbl, workflows } from '../src/db/schema'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -118,13 +118,11 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     })
     await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
 
-    await resumeTask(h.db, task.id, {
-      db: h.db,
+    await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
-      appHome: h.appHome,
-    })
+    }).resume(task.id)
 
     expect(readFileSync(join(task.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAPSHOT-TIME\n')
     const rerow = (
@@ -177,13 +175,11 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     })
     await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
 
-    await resumeTask(h.db, task.id, {
-      db: h.db,
+    await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
-      appHome: h.appHome,
-    })
+    }).resume(task.id)
 
     expect(readFileSync(join(r0.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAP-A\n')
     expect(readFileSync(join(r1.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAP-B\n')
@@ -225,13 +221,11 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
 
     // Should NOT throw.
-    await resumeTask(h.db, task.id, {
-      db: h.db,
+    await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
-      appHome: h.appHome,
-    })
+    }).resume(task.id)
 
     const t = await getTask(h.db, task.id)
     expect(t).not.toBeNull()

@@ -15,6 +15,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 //     rfc223-owner-transfer.test.ts
 
 import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -52,11 +53,10 @@ import {
   restoreSkillVersion,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { buildFrontierMintPlan } from '../src/services/taskQuestionDispatch'
-import { abortAllActiveTasks, getTask, resumeTask } from '../src/services/task'
+import { abortAllActiveTasks, getTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import {
   resourceScopeAuthority,
   TEST_RESOURCE_SCOPE_AUTHORIZATION,
@@ -315,16 +315,17 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
 
       process.env.MOCK_OPENCODE_OUTPUTS = JSON.stringify({ out: 'done' })
       process.env.MOCK_OPENCODE_CAPTURE_CONFIG_JSON_TO = capturePath
-      await resumeTask(db, taskId, {
-        db,
-        taskRecoveryOperations: taskRecoveryOperations(db),
+      await createResumeEngine(db, {
         schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
           .schedulerDriver,
-        appHome,
-        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-        defaultNodeRetries: 0,
-        defaultPerNodeTimeoutMs: 5_000,
-      })
+        runConfig: {
+          db,
+          appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          defaultNodeRetries: 0,
+          defaultPerNodeTimeoutMs: 5_000,
+        },
+      }).resume(taskId)
       expect(await waitForTaskTerminal(db, taskId)).toBe('done')
 
       const config = JSON.parse(readFileSync(capturePath, 'utf-8')) as {

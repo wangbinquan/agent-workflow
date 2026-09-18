@@ -135,7 +135,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // **这一格是记账不是倾斜**：涨的是一份两个引擎共用的 helper（它自己被四份
   // `describeEachProvider` 的双引擎套件消费），不是只喂 SQLite 的新判据；
   // 参与者这一侧的命名/落位债按 plan §5hj 单独一刀还。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 13/4, postgresql 6/1',
+  // RFC-359 AC-1（第 10 刀）：`13/4 → 14/5`。`resume` 合一之后共用的测试装配点
+  // `tests/helpers/resumeEngine.ts` 也按**生产同形**取进程活跃度（`composeLegacyTaskActivityParticipant`
+  // 就住在 `sqliteTaskExecutionRuntimeParticipants.ts` 里，两个组合根绑的都是它）。
+  // **这一格仍是记账不是倾斜**：涨的是一份被 20 个行为套件共用的 helper，不是只喂 SQLite 的新判据。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 14/5, postgresql 6/1',
   // RFC-359 AC-1（plan §5hh）：`postgresql 5/1 → 6/2`。新增的那次**驱动**是
   // `rfc359-w5-kernel-launch-provider-parity`——它在**两个引擎上各真启动一次**启动内核。
   // 账本按**符号名**归边，而这台内核顶着 `Postgresql` 前缀（它只服务一条启动路，
@@ -298,7 +302,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   //（双引擎对拍的 SQLite lane 改按组合根那条拼法造端口）。
   // RFC-359 AC-1（plan §5hn 批次二 ⑤ 收尾）：11 vs 6 → 12 vs 6，来源见上一格的注释。
   // RFC-359 AC-1（第 9 刀）：12 vs 6 → 13 vs 6，来源见上一格的注释（共用 retry 装配点按生产同形取活跃度）。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 13 vs 6',
+  // RFC-359 AC-1（第 10 刀）：13 vs 6 → 14 vs 6，来源见上一格的注释（共用 resume 装配点按生产同形取活跃度）。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 14 vs 6',
   // 同上（§5hh）：差额 5 → 6 来自那次双引擎的内核启动，不是新的单侧倾斜。
   // RFC-359 AC-1（plan §5hi）：6 → 7，来源同上（SQLite 两个根改用这台内核）。
   // RFC-359 AC-1（plan §5hn 批次一）：7 → 8，来源同上。

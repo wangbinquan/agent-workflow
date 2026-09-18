@@ -4403,29 +4403,6 @@ export async function cancelTask(
   return committed.task
 }
 
-/**
- * Resume a failed or interrupted task (P-3-08). Thin shell over `resumeKick`
- * (RFC-109 D5 — abstract once, don't fork). Behaviour is byte-identical to the
- * pre-RFC-109 implementation: the `{kind:'resume'}` event derives the same
- * allowed-from set (failed/interrupted/awaiting_review/awaiting_human) and
- * rollback targets (failed/interrupted) as before.
- */
-export async function resumeTask(
-  db: LegacyProviderNeutralDatabase,
-  id: string,
-  deps: StartTaskDeps,
-): Promise<Task> {
-  return resumeKick(db, id, deps, {
-    intentKind: 'resume',
-    event: { kind: 'resume' },
-    selectRollback: (runs) => selectResumeRollbackTargets(runs),
-    reason: 'resumeTask',
-    conflictCode: 'task-not-resumable',
-    verb: 'resume',
-    worktreePreflight: true, // RFC-108 T6 (AR-15)
-  })
-}
-
 const pendingHumanGateContinuationHandoffs = new Map<string, Promise<void>>()
 
 /**

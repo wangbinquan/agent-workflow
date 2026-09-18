@@ -25,9 +25,8 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runGit, gitStashSnapshot, rollbackToSnapshot } from '../src/util/git'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { resumeTask } from '../src/services/task'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createResumeEngine } from './helpers/resumeEngine'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -184,14 +183,14 @@ describe('resumeTask freshest-row selection locks isFresherNodeRun id-order (NOT
 
     // resumeTask performs the rollback synchronously before returning; the
     // subsequent runTask kick is void-ed (harmless `true` command).
-    await resumeTask(h.db, taskId, {
-      db: h.db,
+    await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(taskId)
 
     // HEADLINE: the freshest row by id (B) should drive the rollback → 'Y'.
     // Today resumeTask picks A (retryIndex 3) and applies shaX → 'X' → FAILS.

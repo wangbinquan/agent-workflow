@@ -24,9 +24,10 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { agents, nodeRuns, taskExecutionIntents, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
-import { resumeTask, startTaskWithLocalRepo } from '../src/services/task'
+import { startTaskWithLocalRepo } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -212,16 +213,16 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
 
     // 自愈闭环：interrupted 在 resumeTask 的可恢复集里——用户（或修复工具）一次
     // Resume 即可把崩溃残留任务跑到终态。
-    const resumed = await resumeTask(h.db, taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    const resumed = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['bun', 'run', h.doneMock],
-      // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
-      defaultNodeRetries: 0,
-    })
+      runConfig: {
+        binaryOverride: ['bun', 'run', h.doneMock],
+        // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
+        defaultNodeRetries: 0,
+      },
+    }).resume(taskId)
     expect(resumed.status).toBe('pending')
     const final = await waitForTerminalTask(h.db, taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')

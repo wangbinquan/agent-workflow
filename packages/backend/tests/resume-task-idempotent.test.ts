@@ -22,12 +22,11 @@ import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
-import { resumeTask } from '../src/services/task'
 import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -115,14 +114,14 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       .set({ errorSummary: 'boom', errorMessage: 'detail', failedNodeId: 'doc' })
       .where(eq(tasks.id, h.taskId))
 
-    const after = await resumeTask(h.db, h.taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    const after = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(h.taskId)
     expect(after.status).toBe('pending')
     expect(after.errorSummary).toBeNull()
     expect(after.errorMessage).toBeNull()
@@ -132,63 +131,63 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
   test('R2 resume from interrupted: same path', async () => {
     h = await buildHarness('interrupted')
-    const after = await resumeTask(h.db, h.taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    const after = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(h.taskId)
     expect(after.status).toBe('pending')
   })
 
   test('R3 resume from awaiting_review: same path (post-approve / fix-up)', async () => {
     h = await buildHarness('awaiting_review')
-    const after = await resumeTask(h.db, h.taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    const after = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(h.taskId)
     expect(after.status).toBe('pending')
   })
 
   test('R4 resume from awaiting_human: same path (post-clarify-answer)', async () => {
     h = await buildHarness('awaiting_human')
-    const after = await resumeTask(h.db, h.taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    const after = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(h.taskId)
     expect(after.status).toBe('pending')
   })
 
   test('R5 resume twice rapidly: second call throws 409 (task-not-resumable)', async () => {
     h = await buildHarness('failed')
-    await resumeTask(h.db, h.taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(h.taskId)
     let code: string | undefined
     try {
-      await resumeTask(h.db, h.taskId, {
-        db: h.db,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      })
+        runConfig: {
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
+      }).resume(h.taskId)
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -199,14 +198,14 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('done')
     let code: string | undefined
     try {
-      await resumeTask(h.db, h.taskId, {
-        db: h.db,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      })
+        runConfig: {
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
+      }).resume(h.taskId)
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -217,14 +216,14 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('failed')
     let code: string | undefined
     try {
-      await resumeTask(h.db, 'no-such-task', {
-        db: h.db,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      })
+        runConfig: {
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
+      }).resume('no-such-task')
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -259,14 +258,14 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       .where(eq(tasks.id, h.taskId))
 
     await expect(
-      resumeTask(h.db, h.taskId, {
-        db: h.db,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
+      createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      }),
+        runConfig: {
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
+      }).resume(h.taskId),
     ).rejects.toMatchObject({ code: 'trigger-context-missing' })
 
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
@@ -325,14 +324,14 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       errorMessage: 'boom',
     })
 
-    const after = await resumeTask(h.db, h.taskId, {
-      db: h.db,
-      taskRecoveryOperations: taskRecoveryOperations(h.db),
+    const after = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'],
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
+    }).resume(h.taskId)
     expect(after.status).toBe('pending')
 
     // Done row preserved (status + finishedAt unchanged).
@@ -371,14 +370,14 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
     let code: string | undefined
     try {
-      await resumeTask(h.db, h.taskId, {
-        db: h.db,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-      })
+        runConfig: {
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
+      }).resume(h.taskId)
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -389,7 +388,12 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     expect(t.status).toBe('failed')
     expect(t.errorSummary).toBe('snapshot-lost')
     expect(t.errorMessage).toContain(failedId)
-    expect(t.errorMessage).toContain('pre-snapshot lost')
+    // RFC-359 AC-1（第 10 刀）改文案：`resume` 两份实现合一，收敛到**信息更全**的那一侧。
+    // 退役那份只说「pre-snapshot lost」；共用那份把三件事都写进去——是哪条 node_run、
+    // 丢的是哪个 sha、以及**没有动过任何仓库**（fail-closed 的关键信息，用户据此知道
+    // 工作树还是原样、可以自己去救）。判据不变：任务行上必须留下「基线没了」的可诊断说明。
+    expect(t.errorMessage).toContain('pre-snapshot is missing')
+    expect(t.errorMessage).toContain('no repo touched')
     expect(t.failedNodeId).toBe('doc')
 
     // Fail-closed: the worktree was never reset/cleaned.
@@ -428,15 +432,15 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       .where(eq(nodeRuns.id, failedId))
 
     await expect(
-      resumeTask(h.db, h.taskId, {
-        db: h.db,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
+      createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        appHome: h.appHome,
-        binaryOverride: ['/usr/bin/env', 'true'],
-        killStaleRunProcessTree: async () => 'no-pid',
-      }),
+        runConfig: {
+          binaryOverride: ['/usr/bin/env', 'true'],
+          killStaleRunProcessTree: async () => 'no-pid',
+        },
+      }).resume(h.taskId),
     ).rejects.toMatchObject({ code: 'live-child-survived' })
 
     expect(

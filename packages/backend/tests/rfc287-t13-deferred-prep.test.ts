@@ -16,6 +16,7 @@
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
+import { createResumeEngine } from './helpers/resumeEngine'
 import ts from 'typescript'
 import { asc, eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -1433,21 +1434,14 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac10-resume')
-    const { resumeTask } = await import('@/services/task')
     let code = ''
     let msg = ''
     try {
-      await resumeTask(
-        db,
-        id,
-        withRealSchedulerDriver({
-          db,
-          actorUserId: s.userId,
-          appHome: TEST_HOME,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          taskRecoveryOperations: taskRecoveryOperations(db),
-        }),
-      )
+      await createResumeEngine(db, {
+        appHome: TEST_HOME,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
+        actorUserId: s.userId,
+      }).resume(id)
     } catch (err) {
       code = (err as { code?: string }).code ?? ''
       msg = err instanceof Error ? err.message : String(err)

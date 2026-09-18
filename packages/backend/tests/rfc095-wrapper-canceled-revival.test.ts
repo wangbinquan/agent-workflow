@@ -23,6 +23,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -30,14 +31,12 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { resumeTask } from '../src/services/task'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -247,14 +246,14 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     const next = await createRetryEngine(h.db, {
       appHome: h.appHome,
       resume: async (id) => {
-        await resumeTask(h.db, id, {
-          db: h.db,
+        await createResumeEngine(h.db, {
+          appHome: h.appHome,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['bun', 'run', h.mockPath],
-        })
+          runConfig: {
+            binaryOverride: ['bun', 'run', h.mockPath],
+          },
+        }).resume(id)
       },
     }).retry({
       taskId: taskId,
@@ -344,14 +343,14 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     const next = await createRetryEngine(h.db, {
       appHome: h.appHome,
       resume: async (id) => {
-        await resumeTask(h.db, id, {
-          db: h.db,
+        await createResumeEngine(h.db, {
+          appHome: h.appHome,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
-          taskRecoveryOperations: taskRecoveryOperations(h.db),
-          appHome: h.appHome,
-          binaryOverride: ['bun', 'run', h.mockPath],
-        })
+          runConfig: {
+            binaryOverride: ['bun', 'run', h.mockPath],
+          },
+        }).resume(id)
       },
     }).retry({
       taskId: taskId,

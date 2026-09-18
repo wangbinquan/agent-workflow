@@ -6,7 +6,7 @@
     "moduleFiles": 1183,
     "productionFiles": 2517,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24551
+    "symbolsIncludingFileRoots": 24550
   },
   "entries": [
     {
@@ -184938,18 +184938,6 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#resumeTask",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "resumeTask",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#resumeTaskWithAtomicSideEffects",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -295289,5 +295277,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:adeae4fef82667efeb44c8f7aebe17e1d0eb6358d0d34fe12c7fcdeb96e8b685"
+  "sourceDigest": "sha256:0a5d9dd8f18e3c0a6357bb892a76f4b2c5da3ddbe3fd9bb07bb3d493d0e0b2ae"
 }

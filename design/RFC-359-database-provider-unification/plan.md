@@ -17462,3 +17462,37 @@ W10 第九格（工作区正被 GC 回收）合并后自己红 ⇒ 改成相等�
 - `rfc103` 的接线断言改锚：SQLite 路由的 `...dependencies.startDepsFor(actor)` 2 → 1
   （`resume` 也不再自己拼 `StartTaskDeps` 了），并给 `server.ts` 那条绑定加了正面锚
   ——判据不变（**这条路上的复活必须带着本机的启动配置**），锚跟着实现走。
+
+## 盘后第 10 刀落地（下半）　删掉 `resumeTask`，测试面挂到共用入口
+
+上半把两个引擎都接到共用实现上之后，`services/task.ts` 的 `resumeTask` 就是零生产消费者的
+死导出；下半把它的 **46 处测试调用点（20 个文件）** 重挂到共用入口，然后整份删掉。
+
+### 唯一的测试装配点：`tests/helpers/resumeEngine.ts`
+
+与 `retry` 那一刀留下的 `retryEngine.ts` 同形：把共用实现包成既有套件熟悉的调用形状
+（`resume(taskId) => Task`），并把两处「退役那份用 `StartTaskDeps` 表达、共用那份不认识」
+的东西显式化：
+
+- **收尾模式**：`awaitScheduler: true` → `completionMode: 'await-settle'`。
+  共用实现因此多了一个**显式参数**（生产一律不传，缺省 `background`）——那件事本来长在
+  legacy 启动依赖的一格上，共用实现不该认识它。
+- **活跃度**：缺省就是生产那一份（进程级注册表），要造「已经有人在跑」的判据自己传。
+
+### 迁移当场照出一处文案分叉（收敛到信息更全的一侧）
+
+`snapshot-lost` 的任务行 `errorMessage`：
+
+- 退役那份只说 `pre-snapshot lost`；
+- 共用那份写全三件事——**是哪条 node_run、丢的是哪个 sha、以及没有动过任何仓库**
+  （fail-closed 的关键信息：用户据此知道工作树还是原样、可以自己去救）。
+
+按本 RFC 已用过多次的准则取后者，`resume-task-idempotent` 的断言随之改锚（判据不变：
+任务行上必须留下「基线没了」的可诊断说明）。**这处 W10 的九格对拍照不出来**——那九格只断言
+错误码与事后状态，文案在码之下。行为套件迁移是它的补集，两者都要有。
+
+### 记账
+
+- 上半声明的四条 `allowGrowth` 按约回落退役。
+- `rfc359-w8-runtime-participants` 那条反向锚（「这一侧不得再长回自己那份 `resumeTask`」）
+  现在钉的是一个**已经不存在的符号**，判据因此更强了：它连「把退役那份复活回来」都挡得住。

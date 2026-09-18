@@ -29,6 +29,7 @@ import {
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { nodeRuns, tasks, users, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
@@ -36,11 +37,7 @@ import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { DW_GATE_CAUSE, DW_GENERATE_CAUSE } from '../src/services/dynamicWorkflowRunner'
 import { setNodeRunStatus } from '../src/services/lifecycle'
 import { DW_ORCHESTRATOR_NODE_ID } from '../src/services/orchestratorAgent'
-import {
-  abortAllActiveTasks,
-  resumeDynamicWorkflowExecution,
-  resumeTask,
-} from '../src/services/task'
+import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
@@ -355,17 +352,20 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             operations: taskRecoveryOperations(db),
             breaker: { maxPerWindow: 3, windowMs: 3600_000 },
             resume: (id) =>
-              resumeTask(db, id, {
-                db,
-                taskRecoveryOperations: taskRecoveryOperations(db),
+              createResumeEngine(db, {
                 schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
                   .schedulerDriver,
-                appHome,
-                binaryOverride: OPENCODE_CMD,
                 awaitScheduler: true,
-                defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
-                defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-              }).then(() => undefined),
+                runConfig: {
+                  db,
+                  appHome,
+                  binaryOverride: OPENCODE_CMD,
+                  defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+                  defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+                },
+              })
+                .resume(id)
+                .then(() => undefined),
           }),
         ),
       )

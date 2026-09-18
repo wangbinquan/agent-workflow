@@ -21,6 +21,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
 import { mkdirSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -30,12 +31,7 @@ import { eq } from 'drizzle-orm'
 import type { StartTask } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import {
-  cancelTask,
-  resumeTask,
-  selectResumeRollbackTargets,
-  startTask,
-} from '../src/services/task'
+import { cancelTask, selectResumeRollbackTargets, startTask } from '../src/services/task'
 import { deleteTask } from '../src/services/taskDelete'
 import { enforceLimits, parseCallHumanWait } from '../src/services/limits'
 import { runIsoWorktreeGc } from '../src/services/gc'
@@ -302,7 +298,12 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
     })
     await db.update(nodeRuns).set({ childTaskId: child }).where(eq(nodeRuns.id, callRow))
     const deps = {} as unknown as StartTaskDeps
-    await expect(resumeTask(db, child, deps)).rejects.toMatchObject({
+    // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用同一份实现。这一格验的是
+    // **准入门早于任何驱动**——门在 `schedulerDriver` 被用到之前就拒，所以这里连驱动面
+    // 都不必造（`null as never` 一旦被碰到就当场炸，反过来证明门确实更早）。
+    await expect(
+      createResumeEngine(db, { schedulerDriver: null as never }).resume(child),
+    ).rejects.toMatchObject({
       code: 'call-row-finalized',
     })
     await expect(

@@ -21,8 +21,9 @@ import { nodeRuns, tasks, users, workgroupAssignments } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
-import { abortAllActiveTasks, resumeTask } from '../src/services/task'
+import { abortAllActiveTasks } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   buildWorkgroupHostSnapshot,
@@ -368,17 +369,19 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
           operations: taskRecoveryOperations(h.db),
           breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
           resume: (id) =>
-            resumeTask(h.db, id, {
-              db: h.db,
-              taskRecoveryOperations: taskRecoveryOperations(h.db),
+            createResumeEngine(h.db, {
+              appHome: h.appHome,
               schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
                 .schedulerDriver,
-              appHome: h.appHome,
-              binaryOverride: opencodeCmd(),
               awaitScheduler: true,
-              defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
-              defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-            }).then(() => undefined),
+              runConfig: {
+                binaryOverride: opencodeCmd(),
+                defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+                defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+              },
+            })
+              .resume(id)
+              .then(() => undefined),
         }),
       )
 

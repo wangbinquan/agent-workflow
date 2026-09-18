@@ -32,9 +32,8 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { enforceLimits } from '../src/services/limits'
-import { resumeTask } from '../src/services/task'
-import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createResumeEngine } from './helpers/resumeEngine'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -147,14 +146,14 @@ describe('gap1 — pause time counts toward maxDurationMs wall clock (current-be
       errorMessage: 'daemon restarted while this task was running; please resume',
     })
 
-    const returned = await resumeTask(h.db, taskId, {
-      db: h.db,
-      taskRecoveryOperations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+    const returned = await createResumeEngine(h.db, {
+      appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
-      appHome: h.appHome,
-      binaryOverride: ['/usr/bin/env', 'true'], // never spawned: empty workflow
-    })
+      runConfig: {
+        binaryOverride: ['/usr/bin/env', 'true'], // never spawned: empty workflow
+      },
+    }).resume(taskId)
     expect(returned.status).toBe('pending')
 
     // DEFECT LOCK #1: resumeTask's own UPDATE (already committed before it

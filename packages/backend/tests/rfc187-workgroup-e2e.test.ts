@@ -13,6 +13,7 @@
 //                   scenario done is zero-delta — exactly the detection surface).
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
+import { createResumeEngine } from './helpers/resumeEngine'
 import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,14 +25,12 @@ import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { resumeTask } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
 } from './helpers/participantLaunch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
@@ -246,15 +245,16 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
         directive: 'continue',
         actor: { userId: 'u-e2e', role: 'owner' },
       })
-      await resumeTask(h.db, task.id, {
-        db: h.db,
+      await createResumeEngine(h.db, {
+        appHome: h.appHome,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        taskRecoveryOperations: taskRecoveryOperations(h.db),
-        appHome: h.appHome,
-        binaryOverride: opencodeCmd(),
         awaitScheduler: true,
-      })
+        runConfig: {
+          binaryOverride: opencodeCmd(),
+          awaitScheduler: true,
+        },
+      }).resume(task.id)
 
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final?.status).toBe('done')
