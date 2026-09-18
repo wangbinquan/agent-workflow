@@ -86,7 +86,7 @@ interface PhaseReport {
     readonly errors: number
     readonly maxGapMs: number
   }
-  readonly eventLoop: MaintenanceStatus['eventLoop'] | null
+  readonly eventLoop: NonNullable<MaintenanceStatus['eventLoop']> | null
   readonly processMemory: {
     readonly samples: number
     readonly lastRssMib: number | null
@@ -95,7 +95,7 @@ interface PhaseReport {
   readonly daemon: DaemonProcessDiagnostics
 }
 
-interface TimingSummary {
+export interface TimingSummary {
   readonly count: number
   readonly maxMs: number
   readonly le50Ratio: number
@@ -130,6 +130,14 @@ interface SocketProbe {
 const ROOT = resolve(import.meta.dir, '..')
 const MIGRATIONS = resolve(ROOT, 'packages', 'backend', 'db', 'migrations')
 const HARD_FREEZE_MS = 1_000
+const SQLITE_P95_MS = 50
+const SQLITE_SLOW_MS = 250
+/** 语句样本是几千条的稳定池：千分之一越 250ms 就说明有一片慢。 */
+const STATEMENT_SLOW_RATIO = 0.001
+/** 事务样本只有百来条（一个维护 slice = 一个显式事务），门要宽一档。 */
+const TRANSACTION_SLOW_RATIO = 0.02
+/** …并且要有绝对条数下限，否则 1/92=1.1% 又退化成单样本尾部门。 */
+const TRANSACTION_SLOW_MIN_COUNT = 3
 const EVENT_LOOP_GAP_MS = 500
 
 function parseArgs(): Args {
@@ -720,8 +728,81 @@ function summarizeTiming(
     maxMs,
     le50Ratio,
     le250Ratio,
-    p95UpperBoundMs: le50Ratio >= 0.95 ? 50 : le250Ratio >= 0.95 ? 250 : null,
+    p95UpperBoundMs: le50Ratio >= 0.95 ? SQLITE_P95_MS : le250Ratio >= 0.95 ? SQLITE_SLOW_MS : null,
   }
+}
+
+/** RFC-338 的 SQLite 计时判据（纯函数，独立导出可测：
+ *  packages/backend/tests/rfc338-soak-timing-gates.test.ts 用三次真实跑的样本钉住它）。 */
+export function sqliteTimingFailures(input: {
+  readonly statements: TimingSummary
+  readonly transactions: TimingSummary
+}): string[] {
+  const { statements, transactions } = input
+  const failures: string[] = []
+  if (statements.count === 0) failures.push('no Worker SQLite statement timings recorded')
+  if (statements.le50Ratio < 0.95) {
+    failures.push(
+      `SQLite statement p95 exceeded ${SQLITE_P95_MS}ms ` +
+        `(${(statements.le50Ratio * 100).toFixed(1)}% <=${SQLITE_P95_MS}ms)`,
+    )
+  }
+  // RFC-338 的判据是「维护不许把 daemon 冻住」。此前这里卡的是**单条最慢语句**
+  // < 250ms，而这是一个单样本尾部门：夜跑在共享 runner 上跑 50 客户端 + full
+  // 种子，三千多条语句里偶尔有一条被调度噪声推到 250~400ms。实测 2026-09-01~02
+  // 这一格在**互不相关**的提交上反复红绿（`f10a38bc7` / `39d665b5e` /
+  // `2dd8de607` / `1b9b12e6c` / `022c4ca1d` 红，中间夹着 8 次绿），每次都是
+  // p95<=50ms、errors=0、只有 max 越线——它测的是 runner 抖动，不是产品回归。
+  // 改成两条各自有判别力的判据：**千分之一以上语句越 250ms** 说明真有一片慢
+  // （冻结会一次拖慢一批，不会只拖一条）；**单条越 1s** 说明真出现了一次冻结。
+  if (statements.le250Ratio < 1 - STATEMENT_SLOW_RATIO) {
+    failures.push(
+      `SQLite statements over ${SQLITE_SLOW_MS}ms exceeded ${STATEMENT_SLOW_RATIO * 100}% (${(
+        (1 - statements.le250Ratio) *
+        100
+      ).toFixed(2)}% over, count=${statements.count})`,
+    )
+  }
+  if (statements.maxMs >= HARD_FREEZE_MS) {
+    failures.push(`SQLite statement max ${statements.maxMs.toFixed(1)}ms >= ${HARD_FREEZE_MS}ms`)
+  }
+  // 2026-09-19：事务这一半此前漏改，还留着上面那段注释所否定的旧形状
+  // （`95% <=50ms` + `单条 < 250ms`），于是同一类抖动继续在这里红。两次实测红：
+  //  · `a889b978c`（run 35209174566）是**纯 runner 冻结**：92 个事务里 1 条
+  //    565.8ms，同场语句 max 560.6ms；语句那三条判据照常放绿（over250=3/8005
+  //    =0.04% < 0.1%、max < 1s），只有事务这两条旧门把它判红。
+  //  · `934c31af9`（run 35385151206）更糟，红的原因是 runner **变快了**：事务
+  //    样本池就是维护 slice 池（一个 slice = 一个显式事务），而 webhookDeliveryGc
+  //    的 slice 分两相——先 ~101 轮 body 相（UPDATE body_json=NULL，10ms 级），
+  //    越过相位边界才进 row 相（带两个 notExists 相关子查询的 1000 行批删，
+  //    50~150ms 级，见 modules/integration/infrastructure/webhookDeliveryPersistence.ts
+  //    的 gcSlice）。push 档的窗口正好落在边界附近：绿的几次只跑到 91~93 个
+  //    slice、全在 body 相、删 0 行、max 17~19ms（`04a6535a4` / `85dabac62` /
+  //    `fcbbd0962`）；这一次跑到 125 个 slice、跨界删了 25000 行，9/126 越 50ms
+  //    就红了。也就是说这条门测的是「这次 runner 快到没快到跨过第 ~101 个
+  //    slice」——越快越红；而必然跨界跑满 202 个 slice 的夜跑档反倒是绿的
+  //    （`f2e062092` schedule，max 96.2ms）。
+  // 按语句那边同一套方式改造：**一片事务越 250ms** 才算真慢（相位边界带来的
+  // 1000 行批删本来就在 50~150ms，不是回归；真回归会把整片 row 相 slice 一起
+  // 推过 250ms）；**单条越 1s** 才算真冻结。事务样本池只有百来个（92~203），
+  // 所以「一片」除比例外还要有绝对条数下限，否则 1/92=1.1% 又退化成单样本门。
+  // 50ms 这个量级仍然**照报不误**（摘要里的 p95UpperBoundMs），只是不再当门。
+  const transactionsOverSlow = Math.round(transactions.count * (1 - transactions.le250Ratio))
+  if (
+    transactionsOverSlow >= TRANSACTION_SLOW_MIN_COUNT &&
+    transactions.le250Ratio < 1 - TRANSACTION_SLOW_RATIO
+  ) {
+    failures.push(
+      `SQLite transactions over ${SQLITE_SLOW_MS}ms exceeded ${TRANSACTION_SLOW_RATIO * 100}% ` +
+        `(${transactionsOverSlow}/${transactions.count})`,
+    )
+  }
+  if (transactions.maxMs >= HARD_FREEZE_MS) {
+    failures.push(
+      `SQLite transaction max ${transactions.maxMs.toFixed(1)}ms >= ${HARD_FREEZE_MS}ms`,
+    )
+  }
+  return failures
 }
 
 function phaseFailures(phase: PhaseReport): string[] {
@@ -901,38 +982,7 @@ async function main(): Promise<void> {
         .map((job) => `${job.job}: ${job.errorCode ?? 'failed'} ${job.errorMessage ?? ''}`.trim()),
     ]
     if (jobs.every((job) => job.slices === 0)) failures.push('no maintenance job completed a slice')
-    if (statements.count === 0) failures.push('no Worker SQLite statement timings recorded')
-    if (statements.le50Ratio < 0.95) {
-      failures.push(
-        `SQLite statement p95 exceeded 50ms (${(statements.le50Ratio * 100).toFixed(1)}% <=50ms)`,
-      )
-    }
-    // RFC-338 的判据是「维护不许把 daemon 冻住」。此前这里卡的是**单条最慢语句**
-    // < 250ms，而这是一个单样本尾部门：夜跑在共享 runner 上跑 50 客户端 + full
-    // 种子，三千多条语句里偶尔有一条被调度噪声推到 250~400ms。实测 2026-09-01~02
-    // 这一格在**互不相关**的提交上反复红绿（`f10a38bc7` / `39d665b5e` /
-    // `2dd8de607` / `1b9b12e6c` / `022c4ca1d` 红，中间夹着 8 次绿），每次都是
-    // p95<=50ms、errors=0、只有 max 越线——它测的是 runner 抖动，不是产品回归。
-    // 改成两条各自有判别力的判据：**千分之一以上语句越 250ms** 说明真有一片慢
-    // （冻结会一次拖慢一批，不会只拖一条）；**单条越 1s** 说明真出现了一次冻结。
-    if (statements.le250Ratio < 0.999) {
-      failures.push(
-        `SQLite statements over 250ms exceeded 0.1% (${((1 - statements.le250Ratio) * 100).toFixed(
-          2,
-        )}% over, count=${statements.count})`,
-      )
-    }
-    if (statements.maxMs >= 1_000) {
-      failures.push(`SQLite statement max ${statements.maxMs.toFixed(1)}ms >= 1000ms`)
-    }
-    if (transactions.count > 0 && transactions.le50Ratio < 0.95) {
-      failures.push(
-        `SQLite transaction p95 exceeded 50ms (${(transactions.le50Ratio * 100).toFixed(1)}% <=50ms)`,
-      )
-    }
-    if (transactions.maxMs >= 250) {
-      failures.push(`SQLite transaction max ${transactions.maxMs.toFixed(1)}ms >= 250ms`)
-    }
+    failures.push(...sqliteTimingFailures({ statements, transactions }))
 
     const report = {
       version: 1,
@@ -942,8 +992,11 @@ async function main(): Promise<void> {
       thresholds: {
         wholeSiteFreezeMs: HARD_FREEZE_MS,
         eventLoopGapMs: EVENT_LOOP_GAP_MS,
-        sqliteP95Ms: 50,
-        sqliteMaxMs: 250,
+        sqliteStatementP95Ms: SQLITE_P95_MS,
+        sqliteSlowMs: SQLITE_SLOW_MS,
+        sqliteStatementSlowRatio: STATEMENT_SLOW_RATIO,
+        sqliteTransactionSlowRatio: TRANSACTION_SLOW_RATIO,
+        sqliteTransactionSlowMinCount: TRANSACTION_SLOW_MIN_COUNT,
       },
       dataset: { before, after, preparation, coldStartMs },
       phases: { control, maintenance },
@@ -983,4 +1036,6 @@ async function main(): Promise<void> {
   }
 }
 
-await main()
+if (import.meta.main) {
+  await main()
+}

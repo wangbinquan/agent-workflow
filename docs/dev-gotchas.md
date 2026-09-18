@@ -941,6 +941,50 @@ JIT / GC / 首次 `getrusage` 的固定成本全会落进那 60ms 的测量窗�
 一条绝对差**（`ms - cpuMs > 100`）——比值再好看也不能只差几毫秒。定阈值时按两种噪声模型
 各算一遍（固定成本 / 按比例占空比），两种都留足余量再推。
 
+### 比例门也会退化成抖动检测器：样本池**不同质**时它测的是「窗口落在哪」（2026-09-19 实撞，连红两次）
+
+上一条说的是「单样本尾部门测 runner 抖动」，处置是换成比例门。**但比例门有第二个坑**：
+样本池里混着两种量级的工作时，它测的是「这次跑到底跑到了第几个样本」。
+
+实例是 `maintenance-soak-nightly` 的 SQLite **事务**判据（`95% <=50ms` + `单条 < 250ms`）。
+事务样本池就是维护 slice 池（一个 slice = 一个显式事务），而 `webhookDeliveryGc` 的 slice
+**分两相**：先 ~101 轮 body 相（`UPDATE body_json=NULL`，10ms 级），越过相位边界才进 row 相
+（带两个 `notExists` 相关子查询的 1000 行批删，50~150ms 级；见
+`modules/integration/infrastructure/webhookDeliveryPersistence.ts` 的 `gcSlice`）。push 档的
+时间窗正好落在边界附近：
+
+| 跑 | slice 数 | 删了几行 | 事务 max | 结论 |
+| --- | ---: | ---: | ---: | --- |
+| `04a6535a4` / `85dabac62` / `fcbbd0962` | 91~93 | 0 | 17~19ms | 绿（全在 body 相） |
+| `934c31af9` | 125 | 25000 | 149.7ms | **红**（跨界，9/126 越 50ms） |
+| `f2e062092`（夜跑档） | 202 | 100000 | 96.2ms | 绿（必然跨界，样本摊薄） |
+
+也就是说这条门**runner 越快越红**——它量的是「这次快到没快到跨过第 ~101 个 slice」。
+另一次红 `a889b978c` 则是纯 runner 冻结：同样 91 个 body 相 slice、删 0 行，max 却 565.8ms。
+
+两条可推广的规律：
+
+1. **定比例门前先问「这池样本同质吗」**。不同质就先分桶（按 job / 按相位）再各自定门，或者
+   把门放到「真冻结」那一档（本次的处置：一片越 250ms + 单条越 1s，见
+   `scripts/rfc338-maintenance-soak.ts` 的 `sqliteTimingFailures`）。百来个样本的池子里，
+   比例门还要配**绝对条数下限**，否则 `1/92 = 1.1%` 又退化成单样本门。
+2. **改造判据要把同形的判据一次改完**。上一条那次改造只动了「语句」那一半，把「事务」那一半
+   原样留着——于是同一类抖动继续在事务这一格红，而且**同一次冻结**（`a889b978c`：语句
+   over250=3/8005=0.04%、max 560.6ms）被改造过的语句判据照常放绿、只被没改造的事务判据判红。
+   改完后顺手用**真实跑的 artifact 原数**（`rfc338-maintenance-soak.json` 的 `sqlite` 段）
+   写一条行为级测试把两侧一起钉住：`packages/backend/tests/rfc338-soak-timing-gates.test.ts`。
+
+取原数的姿势（比翻 log 可靠，log 里只有摘要）：
+
+```
+gh api repos/<owner>/<repo>/actions/runs/<runId>/artifacts --jq '.artifacts[] | [.id,.name] | @tsv'
+gh api repos/<owner>/<repo>/actions/artifacts/<id>/zip > a.zip && unzip -q a.zip
+```
+
+顺带：**门脚本里的纯判据要独立导出**，入口用 `if (import.meta.main)` 守住（`scripts/perf-compare.ts`
+是既有范例）。不然判据只能靠源码文本断言间接钉——本次那半条漏改就是因为源码断言只覆盖了
+语句那几行字面量。
+
 ## zsh 里 `path=` 会当场毁掉 `PATH`（2026-08-25 实撞，正好撞在上面那套 commit-tree 姿势里）
 
 zsh 把 `path` 绑定成 `PATH` 的**数组视图**（`cdpath` / `fpath` / `manpath` 同理）。于是一句再普通不过的循环变量赋值：

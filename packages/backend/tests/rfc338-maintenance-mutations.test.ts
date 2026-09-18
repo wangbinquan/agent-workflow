@@ -242,13 +242,27 @@ describe('RFC-338 mutation receipts', () => {
     expect(soak).toContain("url.pathname = '/ws/tasks'")
     expect(soak).toContain('Array.from({ length: input.args.clients }')
     expect(soak).toContain('HEAVY_MAINTENANCE_JOB_KEYS')
-    expect(soak).toContain('SQLite statement p95 exceeded 50ms')
+    expect(soak).toContain('SQLite statement p95 exceeded ')
     // The freeze judgement is two-sided on purpose: a slow *stretch* (>0.1% of
     // statements over 250ms) and a single hard stall (>=1s). A single-sample
     // `max >= 250ms` cap measured shared-runner scheduling noise, not the
     // product — it flapped red/green across unrelated commits.
-    expect(soak).toContain('SQLite statements over 250ms exceeded 0.1%')
-    expect(soak).toContain('>= 1000ms')
+    //
+    // 2026-09-19：事务那一半当初漏改，于是同一类抖动继续在事务这一格红两次
+    // （`a889b978c` 是 runner 冻结、`934c31af9` 是 runner 变快跨过 GC 相位边界，
+    // 详见 scripts/rfc338-maintenance-soak.ts 里的注释）。现在两侧同形，判据本身
+    // ——而不是消息措辞——才是不许回退的东西；行为级断言（用那三次真实跑的原数）
+    // 在 packages/backend/tests/rfc338-soak-timing-gates.test.ts。
+    expect(soak).toContain('const STATEMENT_SLOW_RATIO = 0.001')
+    expect(soak).toContain('const TRANSACTION_SLOW_RATIO = 0.02')
+    expect(soak).toContain('const TRANSACTION_SLOW_MIN_COUNT = 3')
+    expect(soak).toContain('statements.le250Ratio < 1 - STATEMENT_SLOW_RATIO')
+    expect(soak).toContain('transactions.le250Ratio < 1 - TRANSACTION_SLOW_RATIO')
+    expect(soak).toContain('statements.maxMs >= HARD_FREEZE_MS')
+    expect(soak).toContain('transactions.maxMs >= HARD_FREEZE_MS')
+    // 两侧的旧形状都不许回来：单样本 `max >= 250ms` 上限，以及事务的 95%<=50ms 门。
+    expect(soak).not.toContain('>= 250ms`')
+    expect(soak).not.toContain('transactions.le50Ratio < 0.95')
     expect(soak).toContain('perNodeRunBytes: 0')
     expect(soak).toContain('globalBytes: 0')
   })
