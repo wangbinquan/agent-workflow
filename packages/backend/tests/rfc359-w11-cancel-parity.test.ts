@@ -364,6 +364,21 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     expect(after?.status, '槽释放之后取消照常落地').toBe('canceled')
   }, 30_000)
 
+  // 文案面：任务行上留给用户看的两格（摘要 + 明细）。前十格断的都是状态，文案在状态之下。
+  test('K 取消之后任务行上的摘要与明细（用户唯一看得到的归因）', async () => {
+    const seeded = await seedFixture(harness.db)
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome.code).toBe('no-throw')
+    const after = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
+    )[0]
+    expect({ summary: after?.errorSummary, message: after?.errorMessage }).toEqual({
+      summary: 'canceled by user',
+      message: 'canceled-by-user',
+    })
+  })
+
   test('I 关的是**全部**打开着的 node_run，不是被点的那一条', async () => {
     const seeded = await seedFixture(harness.db, { extraOpenRuns: ['b', 'c'] })
     fixture = seeded

@@ -306,7 +306,13 @@ describeEachProvider('RFC-359 W10 —— resume 的准入面对拍', (harness) =
 
   test('E 工作树已经不在磁盘上 → 410，且任务原样不动', async () => {
     fixture = await seedFixture(harness.db)
-    rmSync(fixture.repoPath, { recursive: true, force: true })
+    // macOS CI 上 `rmSync` 可能留下残骸（刚跑完的 git 子进程还攥着句柄），
+    // 于是**前置条件**这一行随机红——本机总是绿。实撞一次（`afd4ac8e9` 的 macos shard 5/6）。
+    // 判据不变（工作树必须真的不在磁盘上），只是删到确认为止。
+    for (let attempt = 0; attempt < 50 && existsSync(fixture.repoPath); attempt++) {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+      if (existsSync(fixture.repoPath)) await Bun.sleep(20)
+    }
     expect(existsSync(fixture.repoPath)).toBe(false)
     const outcome = await resumeOutcome(harness, fixture)
     expect(outcome).toEqual({ code: 'task-worktree-missing', status: 'failed' })

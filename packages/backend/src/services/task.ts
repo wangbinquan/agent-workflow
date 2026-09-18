@@ -44,7 +44,6 @@ import {
   planCanonicalWorkflowLayout,
   parseTriggerContextJson,
   webhookTaskSourceLinkOf,
-  CANCELABLE_TASK_STATUSES,
 } from '@agent-workflow/shared'
 import type {
   CommitPushMeta,
@@ -74,7 +73,6 @@ import {
   sql,
   taskCollaborators,
   taskExecutionIntents,
-  taskExecutionOwners,
   taskRepos,
   taskSpaceNodes,
   tasks,
@@ -119,27 +117,18 @@ import {
   fenceTaskWrite,
   taskExecutionModule,
   withTaskExecutionWrite,
-  type OwnershipToken,
-  type RuntimeStopTicket as TaskDriverStopTicket,
   type TaskExecutionIntentKind,
   type TaskExecutionIntentSource,
   TaskExecutionError,
 } from '@/services/taskExecutionParticipants'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { recordRecoveryEvent } from '@/services/recovery'
-import {
-  setNodeRunStatus,
-  setTaskStatus,
-  transitionTaskStatusByEvent,
-  cancelOpenNodeRuns,
-} from '@/services/lifecycle'
+import { setNodeRunStatus, setTaskStatus, transitionTaskStatusByEvent } from '@/services/lifecycle'
 // RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 `@/services/lifecycle`
 // 上同名的 bun:sqlite 专属**同步**版按名字区分开。
 import {
-  revokeExactOwnerInTransaction,
   setNodeRunStatusInTransaction,
   submitTaskContinuationInTransaction,
-  terminalizeTaskExecutionIntentsInTransaction,
 } from '@/modules/task-execution/public/participants'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
@@ -207,7 +196,6 @@ import {
 import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
 import { collectExecutionRefs } from '@agent-workflow/shared'
 import {} from '@/services/taskAuthorization'
-import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
 import {
   deriveTaskLaunchOrigin,
   taskLaunchAdmissionIssue,
@@ -215,6 +203,8 @@ import {
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
 import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
+import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { DrizzleBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/branchTraceSnapshotReader'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
@@ -4177,230 +4167,38 @@ export async function cancelTask(
     beforeStatusCas?: () => void | Promise<void>
   } = {},
 ): Promise<Task> {
-  // RFC-359 —— 先**同步取号**，再做前置读。
+  // RFC-359 AC-1（第 11 刀）：`cancel` 与 PostgreSQL 共用**同一份**实现
+  // （`cancelTaskProjection`）。这里只剩三件事：把 options 形态的来源翻译成 `cause`、
+  // 把两样「退役形态才有」的东西交进去（CAS 注入点、无票据时的历史兜底中止），
+  // 再把任务行重读一遍还给调用方（共用实现返回 void）。
   //
-  // 原来这条预检是同步读（`.all()[0]`），理由是「在第一次 yield 之前抢到 FIFO 变更槽」。
-  // 那个理由是真的（`review-cancel-concurrency` 的三条 `cancel first …` 就锁它），
-  // 但它把顺序的正确性**挂在了 bun:sqlite 同步读上**——PostgreSQL 没有同步读，
-  // 于是同一段代码在一个引擎上对、另一个上错，正是 RFC-359 要消灭的形态。
-  //
-  // 取号与入队解耦之后（`reserveTaskReviewMutationSlot`），排队位置在**函数入口**就定死了，
-  // 之后这条预检 await 多久都不影响顺序；两个引擎走同一条规则。
-  const acquireMutationSlot = reserveTaskReviewMutationSlot(id)
-  const initial = (
-    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, id)).limit(1)
-  )[0]
-  if (initial === undefined) {
-    throw new NotFoundError('task-not-found', `task '${id}' not found`)
-  }
-  if (!(CANCELABLE_TASK_STATUSES as readonly string[]).includes(initial.status)) {
-    throw new ConflictError(
-      'task-not-cancelable',
-      `task '${id}' is already terminal (${initial.status}); nothing to cancel`,
-    )
-  }
-
-  let stopTicket: TaskDriverStopTicket | null = null
-  const deferredStatusEventRefs: CommittedEventRef[] = []
-  const committed = await acquireMutationSlot(async () => {
-    // Re-read only after acquiring the linearization point. A decision,
-    // dispatch, scheduler cancel or competing terminal writer may have won
-    // while the controller was settling; never overwrite that winner.
-    let current = await getTask(db, id)
-    if (current === null) {
-      throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    }
-    if ((CANCELABLE_TASK_STATUSES as readonly string[]).includes(current.status)) {
-      // A non-coordinator lifecycle writer can still move between two
-      // cancelable states in setTaskStatus's read→CAS window. Do not interpret
-      // that CAS loss as cancellation success: re-read and retry until the row
-      // is terminal, or fail explicitly under pathological continuous churn.
-      let attempts = 0
-      while ((CANCELABLE_TASK_STATUSES as readonly string[]).includes(current.status)) {
-        if (attempts++ >= 8) {
-          throw new ConflictError(
-            'cancel-transition-starved',
-            `task '${id}' kept changing between cancelable states while canceling; retry`,
-          )
-        }
-        const now = Date.now()
-        let candidateStopToken: OwnershipToken | null = null
-        let candidateCanceledNodeRuns: Array<{ id: string; nodeId: string }> = []
-        try {
-          await setTaskStatus({
-            db,
-            taskId: id,
-            to: 'canceled',
-            allowedFrom: CANCELABLE_TASK_STATUSES,
-            // 注入点透传到真正的读→CAS 窗口里（`setTaskStatus` 自己再读一次定 `from`）。
-            ...(opts.beforeStatusCas === undefined ? {} : { beforeCas: opts.beforeStatusCas }),
-            extra: {
-              finishedAt: now,
-              errorSummary: 'canceled by user',
-              errorMessage:
-                opts.cascadeFromParent === true
-                  ? 'canceled-by-parent-cascade'
-                  : 'no active scheduler at cancel time',
-            },
-            onTransitionTx: async (tx, _transition, collector) => {
-              // Once terminal control revokes the worker epoch, that worker is
-              // intentionally unable to stamp its own final node status. The
-              // same control transaction therefore owns the node projection;
-              // later stale callbacks can only lose their CAS/fence.
-              candidateCanceledNodeRuns = await cancelOpenNodeRuns({
-                tx,
-                taskId: id,
-                finishedAt: now,
-                errorMessage:
-                  opts.cascadeFromParent === true
-                    ? 'canceled-by-parent-cascade'
-                    : 'canceled by user',
-              })
-              collector.addNodeChanges(
-                candidateCanceledNodeRuns.map((run) => ({
-                  nodeRunId: run.id,
-                  nodeId: run.nodeId,
-                  status: 'canceled',
-                  cause:
-                    opts.cascadeFromParent === true
-                      ? 'canceled-by-parent-cascade'
-                      : 'canceled-by-user',
-                })),
-              )
-              const owner = await tx
-                .select()
-                .from(taskExecutionOwners)
-                .where(eq(taskExecutionOwners.taskId, id))
-                .get()
-              if (owner?.state === 'claimed') {
-                candidateStopToken = taskDriverRegistry.tokenForOwner({
-                  taskId: owner.taskId,
-                  ownerId: owner.ownerId,
-                  daemonGeneration: owner.daemonGeneration,
-                  epoch: owner.epoch,
-                })
-                await revokeExactOwnerInTransaction(tx, {
-                  owner: {
-                    taskId: owner.taskId,
-                    ownerId: owner.ownerId,
-                    daemonGeneration: owner.daemonGeneration,
-                    epoch: owner.epoch,
-                  },
-                  expectedRevision: owner.revision,
-                  now,
-                  recoveryCode: 'terminal-control-cancel',
-                })
-              }
-              await terminalizeTaskExecutionIntentsInTransaction(tx, {
-                taskId: id,
-                state: 'canceled',
-                failureCode:
-                  opts.cascadeFromParent === true
-                    ? 'canceled-by-parent-cascade'
-                    : 'canceled-by-user',
-                now,
-              })
-            },
-            deferCommittedEventPublication: (eventRefs) => {
-              deferredStatusEventRefs.push(...eventRefs)
-            },
-            reason: 'cancelTask-fallback',
-          })
-        } catch (error) {
-          if (!(error instanceof ConflictError)) throw error
-        }
-        if (candidateStopToken !== null) {
-          const cause: TaskStopCause =
-            opts.cascadeFromParent === true
-              ? { kind: 'parent-cascade', parentTaskId: opts.cascadeParentTaskId ?? id }
-              : { kind: 'user' }
-          stopTicket = taskDriverRegistry.requestStop(candidateStopToken, cause)
-        }
-        current = await getTask(db, id)
-        if (current === null) {
-          throw new NotFoundError('task-not-found', `task '${id}' not found`)
-        }
-      }
-    }
-    // RFC-243 §4.3 — scheduler settlement can also have landed canceled.
-    // Stamp the cascade provenance inside the same critical section.
-    if (opts.cascadeFromParent === true && current.status === 'canceled') {
-      await db
-        .update(tasks)
-        .set({ errorMessage: 'canceled-by-parent-cascade' })
-        .where(and(eq(tasks.id, id), eq(tasks.status, 'canceled')))
-      current = (await getTask(db, id)) as Task
-    }
-    // Freeze the direct-child impact set while the parent transition and its
-    // terminal sweep are still isolated. Recursion happens only after this
-    // parent lock is released, so an active child can settle through its own
-    // coordinator without an ancestor/descendant wait cycle.
-    const childIds = (
-      await db
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(
-          and(eq(tasks.parentTaskId, id), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])),
-        )
-    ).map((child) => child.id)
-    return { task: current, childIds }
-  }).finally(async () => {
-    await publishCommittedEventsAfterCommit(deferredStatusEventRefs)
-  })
-
-  const stopCause: TaskStopCause =
+  // 等价性由 `rfc359-w11-cancel-parity` 的十一格对拍作证。合并同时销掉两处真分叉：
+  //   · 这一侧此前**没有取评审变更号**（与评审写入的落库会交错）——在建对拍那一步已修；
+  //   · 这一侧的 `error_message` 无条件写 `no active scheduler at cancel time`，
+  //     而用户取消一个**正在跑**的任务时那句话是错的；共用那份写 `canceled-by-user`。
+  await cancelTaskProjection(
+    {
+      db,
+      persistence: createTaskExecutionPersistence(db),
+      // ⚠️ 交的是**任务驱动**注册表（停机票据），不是 `platform/runtime-registry` 的运行时档案表。
+      stop: taskExecutionModule.runtimeRegistry,
+      log,
+    },
+    id,
     opts.cascadeFromParent === true
       ? { kind: 'parent-cascade', parentTaskId: opts.cascadeParentTaskId ?? id }
-      : { kind: 'user' }
-  if (stopTicket === null) {
-    // Test/legacy compatibility handle. Production claimed workers always use
-    // the exact-token registry path above; a controller without a durable
-    // owner still retains the historical cancellation behavior.
-    testActiveControllers.get(id)?.abort(stopCause)
-  }
-
-  const exactStopTicket = stopTicket as TaskDriverStopTicket | null
-  if (exactStopTicket !== null) {
-    const exactStopToken = exactStopTicket.token
-    const result = await Promise.race([
-      taskDriverRegistry.awaitStopped(exactStopTicket),
-      Bun.sleep(5000).then(() => null),
-    ])
-    if (result === null) {
-      const ownership = taskExecutionModule.ownershipFor(db)
-      const owner = await ownership.read(id)
-      if (owner !== null && owner.epoch === exactStopToken.epoch && owner.state === 'revoked') {
-        await ownership.markRecoveryRequired({
-          token: exactStopToken,
-          expectedRevision: owner.revision,
-          code: 'terminal-stop-timeout',
-          now: Date.now(),
-        })
-      }
-    }
-  }
-
-  // RFC-243 §4.3 — recursively cascade into the frozen child set. Depth is
-  // bounded by maxInvocationDepth; already-terminal children are idempotent.
-  for (const childId of committed.childIds) {
-    try {
-      await cancelTask(db, childId, {
-        cascadeFromParent: true,
-        cascadeParentTaskId: id,
-        // 级联进子任务时把注入点一起带下去——那条回归判据锁的正是**子任务**的 CAS 被挤掉。
-        ...(opts.beforeStatusCas === undefined ? {} : { beforeStatusCas: opts.beforeStatusCas }),
-      })
-    } catch (err) {
-      if (
-        (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
-        err instanceof NotFoundError
-      ) {
-        continue
-      }
-      throw err
-    }
-  }
-  return committed.task
+      : { kind: 'user' },
+    {
+      ...(opts.beforeStatusCas === undefined ? {} : { beforeStatusCas: opts.beforeStatusCas }),
+      // 带 taskId：级联会把同一份 options 传给子任务，闭包捕获 `id` 会中止错的那个控制器。
+      abortWithoutStopTicket: (abortTaskId: string, cause: TaskStopCause) => {
+        testActiveControllers.get(abortTaskId)?.abort(cause)
+      },
+    },
+  )
+  const task = await getTask(db, id)
+  if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+  return task
 }
 
 const pendingHumanGateContinuationHandoffs = new Map<string, Promise<void>>()

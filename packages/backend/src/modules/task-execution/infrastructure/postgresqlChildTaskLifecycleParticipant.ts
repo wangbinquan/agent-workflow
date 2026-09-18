@@ -57,6 +57,7 @@ import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransact
 import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import { selectResumeRollbackTargets } from '../application/resumeRollbackTargets'
+import { resolveTerminalWorkspacePruneDecision } from '@/platform/persistence/sqlite/taskLifecycle'
 import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
@@ -124,6 +125,49 @@ export interface PostgresqlChildTaskLifecycleDependencies {
  * 收窄之后 `server.ts` 那条**不装配完整 runtime** 的路也接得上同一份实现
  *（与第 9 刀给 `retry` 做的收窄同形）。
  */
+/**
+ * RFC-359 AC-1（第 11 刀）—— `cancel` 这条路**唯一**需要的依赖面。
+ *
+ * 比参与者依赖窄两样：`finalizeWorkspace` 这条路根本用不到；`executionModule` 收成 `stop`
+ * ——它只用到任务驱动注册表的停机面（取票 / 请求停 / 等停）。
+ *
+ * ⚠️ `stop` **按名字抓会抓错**：SQLite 参与者工厂输入里那个 `runtimeRegistry` 是
+ * `platform/runtime-registry` 的**运行时档案**注册表（`getRuntime(name)`），与这里要的
+ * **任务驱动**注册表同名不同物。要交的是 `taskExecutionModule.runtimeRegistry`
+ *（进程级单例，`createDatabaseTaskDriverLifecyclePort` 用的也是它）；
+ * PostgreSQL 那侧交 `executionModule.runtimeRegistry`。
+ */
+export interface TaskCancelDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly persistence: TaskExecutionPersistence
+  readonly stop: ProviderTaskExecutionModule['runtimeRegistry']
+  readonly log: TaskExecutionTopologyLogger
+}
+
+/**
+ * 取消的可选面。**生产一律不传**——两样都是退役那份（`services/task.ts` 的 `cancelTask`）
+ * 用 options 表达、而共用实现不该认识的东西。
+ */
+export interface TaskCancelOptions {
+  /**
+   * 取消 CAS 之前的注入点。只有锁「CAS 被别的生命周期写者持续挤掉时必须报 starved、
+   * 而不是把失败当成功」的那条回归判据传。
+   */
+  readonly beforeStatusCas?: () => void | Promise<void>
+  /**
+   * 没拿到停机票据时的兜底中止。
+   *
+   * 生产里**已认领的 worker 永远走上面那条精确票据路**；这一格是给「没有持久化 owner 的
+   * 控制器」留的历史兼容（`services/task.ts` 的 `testActiveControllers`，
+   * 由 `__setActiveTaskForTesting` / `__registerActiveTaskForTesting` 注册）。
+   * 那张表是**测试专用**的，所以它留在 legacy 那边、由组合方交进来，而不是让共用实现认识它。
+   */
+  readonly abortWithoutStopTicket?: (
+    taskId: string,
+    cause: Parameters<typeof cancelTaskProjection>[2],
+  ) => void
+}
+
 export interface TaskResumeDependencies {
   readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
@@ -537,12 +581,19 @@ async function rollbackForResume(
   }
 }
 
-async function cancelCascade(
-  dependencies: PostgresqlChildTaskLifecycleDependencies,
+/**
+ * RFC-359 AC-1（第 11 刀）—— `cancel` 的**唯一**实现，两个 provider 共用。
+ *
+ * 等价性由 `rfc359-w11-cancel-parity` 的十格对拍作证（准入 / 级联 / 线性化三面，
+ * 合并前实测逐格相同；唯一那处分叉是这一侧缺了评审变更号，已在建对拍那一步修掉）。
+ */
+export async function cancelTaskProjection(
+  dependencies: TaskCancelDependencies,
   taskId: string,
   cause:
     | Readonly<{ readonly kind: 'user' }>
     | Readonly<{ readonly kind: 'parent-cascade'; readonly parentTaskId: string }>,
+  options: TaskCancelOptions = {},
 ): Promise<void> {
   // RFC-359 AC-1（第 11 刀第 1 步照出的真分叉）：**取消与评审写入共用任务级 FIFO**。
   //
@@ -559,10 +610,70 @@ async function cancelCascade(
   // 槽的覆盖面与另一侧**逐字对齐**：只包住准入与落库那一段；停运行时与级联子任务在槽外
   //（前者要等最多 5s，后者取的是子任务自己的槽）。
   const acquireMutationSlot = reserveTaskReviewMutationSlot(taskId)
-  let stopToken = dependencies.executionModule.runtimeRegistry.tokenForTask(taskId)
+  // RFC-300 / RFC-359 AC-1（第 11 刀补的**第五样**）—— 终态工作区回收的认领。
+  //
+  // 退役那份走 `setTaskStatus` → `taskLifecycleWriteSequence`：那条写序列在同一笔 CAS 里盖上
+  // `workspace_pruning_at` / `workspace_prune_cause`，并把 `workspacePruneClaim` 放进生命周期
+  // 事件；`task-workspace-prune-nudge` 消费者据此去回收工作树。
+  // 这一侧**整个没有这一步**（它自己写 tasks 行、自己追加事件，绕过了那条写序列），
+  // 后果是用户可见的：**被取消的任务的工作树永远不会被回收**
+  //（`rfc300-webhook-workspace-cleanup-e2e` 的「remote/canceled」那一格实撞——等 `workspace_pruned_at` 等到超时）。
+  //
+  // ⚠️ **必须算在事务外**：策略自己会拿另一条连接去读 `task_space_nodes`，在一笔已开的
+  // 序列化事务里等它，PostgreSQL 上会撞连接/锁（`lifecycle-repair-S1` 实撞 `Connection closed`）。
+  // 写序列那一侧也是这么做的——`workspacePruneDecision` 是**调用方在事务外算好交进去**的。
+  // 预读与 CAS 之间的窗口由下面 WHERE 里那三条 `isNull` 兜住：认领是一次性的。
+  const pruneSource = (
+    await dependencies.db
+      .select({
+        spaceKind: tasks.spaceKind,
+        workspacePruningAt: tasks.workspacePruningAt,
+        workspacePruneCause: tasks.workspacePruneCause,
+        workspacePrunedAt: tasks.workspacePrunedAt,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  const prune =
+    pruneSource === undefined
+      ? ({ prune: false } as const)
+      : await resolveTerminalWorkspacePruneDecision({ taskId, ...pruneSource }, 'canceled')
+  let stopToken = dependencies.stop.tokenForTask(taskId)
   let revokedRevision: number | null = null
-  const committed = await acquireMutationSlot(async () =>
-    withSerializableTaskExecution(dependencies.db, async (tx) => {
+  // RFC-359 AC-1（第 11 刀移植）—— **CAS 被别的可取消态写者挤掉时要复读，不能当失败**。
+  //
+  // 这一段是从退役那份搬过来的第四样（前三样：评审变更号、CAS 注入点、无票据兜底中止）。
+  // 场景：另一个写者把任务从一个可取消态推到**另一个可取消态**（awaiting_review ⇄ awaiting_human）。
+  // 那不是「任务已经收场」，取消仍然该成功；只有**病态的持续搅动**才该响亮地报
+  // `cancel-transition-starved`，而不是把一次失败的 CAS 当成取消成功。
+  //
+  // 预算与退役那份逐字相同（`attempts++ >= 8`）：`review-cancel-concurrency` 与
+  // `retry-cascade-kind-matrix` 两处并发判据都钉着这个数——少了是真回归，多了说明钩子被
+  // 无关路径触发。复读必须在**槽内**：排队位置在函数入口就取好了，重试不能再取第二个号。
+  const committed = await acquireMutationSlot(async () => {
+    let attempts = 0
+    for (;;) {
+      // 预算检查在**跑之前**——退役那份的 `while` 也是这个位置（`if (attempts++ >= 8) throw`
+      // 在循环体首行）。放到 catch 里会多跑一次：`retry-cascade-kind-matrix` 钉的
+      // `cancelCasAttempts === 8` 会变成 9，而那个数是承重判据（少了是真回归，多了说明
+      // 钩子被无关路径触发）。
+      if (attempts++ >= 8) {
+        throw new ConflictError(
+          'cancel-transition-starved',
+          `task '${taskId}' kept changing between cancelable states while canceling; retry`,
+        )
+      }
+      try {
+        return await runCancelTransaction()
+      } catch (error) {
+        if (!(error instanceof ConflictError) || error.code !== 'task-cancel-raced') throw error
+      }
+    }
+  })
+
+  async function runCancelTransaction() {
+    return await withSerializableTaskExecution(dependencies.db, async (tx) => {
       const task = (
         await tx
           .select({
@@ -577,6 +688,23 @@ async function cancelCascade(
       if (task === undefined)
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       if (!CANCELABLE_TASK_STATUSES.includes(task.status as TaskStatus)) {
+        // RFC-243 §4.3 / RFC-359 AC-1（第 11 刀移植）—— 父级联撞上一个**已经 canceled** 的
+        // 子任务时，把级联来源盖上去再返回，而不是空手抛。
+        //
+        // 为什么这件事重要：父任务崩溃后恢复时要分得清「这个子任务是我自己级联取消的」
+        // 与「别人取消了我的子任务」——前者调用节点跟着父的结局走，后者要报 `child-canceled`。
+        // 标记就是这个判据的唯一载体。
+        //
+        // 这条**只在竞态窗口里走得到**：枚举子任务时只取 `CANCELABLE_TASK_STATUSES`，
+        // 所以非竞态路径上根本到不了这里；只有「枚举之后、级联调用之前那一瞬间子任务自己
+        // 收场成 canceled」才落到它。非竞态路径照旧抛 `task-not-cancelable`（幂等空操作）。
+        if (cause.kind === 'parent-cascade' && task.status === 'canceled') {
+          await tx
+            .update(tasks)
+            .set({ errorMessage: taskStopProjection(cause).code })
+            .where(and(eq(tasks.id, taskId), eq(tasks.status, 'canceled')))
+          return { childIds: [], eventRefs: [] }
+        }
         throw new ConflictError(
           'task-not-cancelable',
           `task '${taskId}' is already terminal (${task.status}); nothing to cancel`,
@@ -586,7 +714,7 @@ async function cancelCascade(
         await tx.select().from(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
       )[0]
       if (owner?.state === 'claimed') {
-        stopToken ??= dependencies.executionModule.runtimeRegistry.tokenForOwner(owner)
+        stopToken ??= dependencies.stop.tokenForOwner(owner)
         const revoked = await tx
           .update(taskExecutionOwners)
           .set({
@@ -614,6 +742,10 @@ async function cancelCascade(
       const now = Date.now()
       const projection = taskStopProjection(cause)
       const nextRevision = task.lifecycleEventRevision + 1
+
+      // RFC-359 AC-1（第 11 刀移植）：注入点**紧贴**状态 CAS，生产从不传。
+      // 注入点跟着实现走——换事务原语不会再让判据静默失效（`docs/dev-gotchas.md` 有完整复盘）。
+      await options.beforeStatusCas?.()
       const changed = await tx
         .update(tasks)
         .set({
@@ -621,9 +753,23 @@ async function cancelCascade(
           finishedAt: now,
           errorSummary: projection.summary,
           errorMessage: projection.code,
+          ...(prune.prune ? { workspacePruningAt: now, workspacePruneCause: prune.cause } : {}),
           lifecycleEventRevision: nextRevision,
         })
-        .where(and(eq(tasks.id, taskId), eq(tasks.status, task.status)))
+        .where(
+          and(
+            eq(tasks.id, taskId),
+            eq(tasks.status, task.status),
+            // 认领是**一次性**的：已经有人盖过就别再盖（与写序列的守卫逐字同形）。
+            ...(prune.prune
+              ? [
+                  isNull(tasks.workspacePruningAt),
+                  isNull(tasks.workspacePruneCause),
+                  isNull(tasks.workspacePrunedAt),
+                ]
+              : []),
+          ),
+        )
         .returning({ id: tasks.id })
       if (changed[0] === undefined) {
         throw new ConflictError('task-cancel-raced', `task '${taskId}' changed`)
@@ -657,6 +803,9 @@ async function cancelCascade(
         previousStatus: task.status as TaskStatus,
         status: 'canceled',
         errorSummary: projection.summary,
+        workspacePruneClaim: prune.prune
+          ? { claimedAt: new Date(now).toISOString(), cause: prune.cause }
+          : null,
         nodeChanges: canceledRuns.map((run) => ({
           nodeRunId: run.id,
           nodeId: run.nodeId,
@@ -666,15 +815,20 @@ async function cancelCascade(
         occurredAt: now,
       })
       return { childIds, eventRefs: eventRef === null ? [] : [eventRef] }
-    }),
-  )
+    })
+  }
   await publishCommittedEventsAfterCommit(committed.eventRefs)
 
+  if (stopToken === null) {
+    // 没有持久化 owner 的控制器仍保留历史中止行为（见 `abortWithoutStopTicket` 的注释）。
+    // **必须带 taskId**：级联会把同一份 options 传给子任务，闭包捕获的 id 会指错任务。
+    options.abortWithoutStopTicket?.(taskId, cause)
+  }
   if (stopToken !== null) {
-    const ticket = dependencies.executionModule.runtimeRegistry.requestStop(stopToken, cause)
+    const ticket = dependencies.stop.requestStop(stopToken, cause)
     let timeout: ReturnType<typeof setTimeout> | undefined
     const stopped = await Promise.race([
-      dependencies.executionModule.runtimeRegistry.awaitStopped(ticket),
+      dependencies.stop.awaitStopped(ticket),
       new Promise<null>((resolve) => {
         timeout = setTimeout(() => resolve(null), 5_000)
       }),
@@ -694,10 +848,16 @@ async function cancelCascade(
   }
   for (const childId of committed.childIds) {
     try {
-      await cancelCascade(dependencies, childId, {
-        kind: 'parent-cascade',
-        parentTaskId: taskId,
-      })
+      // options 必须**跟着递归下去**：退役那份的级联调用就是带着同一份 options 的。
+      // 少了它，注入点与「无票据时的历史兜底中止」都到不了子任务——
+      // `review-cancel-concurrency` 的两条父子判据实撞（一条挂死在等子任务的 abort，
+      // 一条拿不到子任务的 starvation）。
+      await cancelTaskProjection(
+        dependencies,
+        childId,
+        { kind: 'parent-cascade', parentTaskId: taskId },
+        options,
+      )
     } catch (error) {
       if (
         error instanceof NotFoundError ||
@@ -728,7 +888,16 @@ export function createPostgresqlChildTaskLifecycleParticipant(
   })
   return Object.freeze({
     async cancel(input: Parameters<ChildTaskLifecycleParticipant['cancel']>[0]) {
-      await cancelCascade(dependencies, input.taskId, input.cause)
+      await cancelTaskProjection(
+        {
+          db: dependencies.db,
+          persistence: dependencies.persistence,
+          stop: dependencies.executionModule.runtimeRegistry,
+          log: dependencies.log,
+        },
+        input.taskId,
+        input.cause,
+      )
     },
     async resume(
       input: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
@@ -746,7 +915,9 @@ export function createPostgresqlChildTaskLifecycleParticipant(
           activity: {
             isActive: (taskId: string) =>
               dependencies.executionModule.runtimeRegistry.hasTask(taskId),
-            awaitReleasedSettled: async () => {},
+            // 不能是空桩：共用实现靠它做两阶段停机的等待（见 `resumeTaskProjection` 的头注）。
+            awaitReleasedSettled: (taskId: string) =>
+              dependencies.executionModule.runtimeRegistry.awaitReleasedSettled(taskId),
           },
           lifecycle,
         },
@@ -777,6 +948,17 @@ export async function resumeTaskProjection(
   options: { readonly completionMode?: TaskDriveCompletionMode } = {},
 ): Promise<void> {
   const lifecycle = dependencies.lifecycle
+  // RFC-359 AC-1（第 10 刀漏掉、第 11 刀补回）——**两阶段停机：先等上一任 driver settle**。
+  //
+  // 上一任 driver 的运行时已经停了，但库里的 owner 行 / intent 还在转移中时，直接准入会撞
+  // `assertTaskOwnerlessTx`。退役那份（`resumeKick`）进门第一件事就是等这个 settle；
+  // 合并时漏了，于是「守护进程重启后 resume」在**机器忙**的时候随机报 owner 冲突——
+  // 本机总是绿（settle 早就完成了），CI 上偶发红（`rfc294-task-execution-compat-oracles` 的
+  // 「daemon shutdown … resume owns a fresh generation」实撞）。
+  //
+  // 这类「本机绿、CI 偶红」的时序缺口最容易被当成 flaky 重跑掉，所以判据要**钉在依赖面上**：
+  // `activity.awaitReleasedSettled` 是端口，两个组合根各交各的真实现，不许再交空桩。
+  await dependencies.activity.awaitReleasedSettled(input.taskId)
   const task = await loadResumeTask(dependencies.db, input.taskId)
   await assertResumeAdmission(dependencies, task)
   const admitted = await admitResume(dependencies, task, input.runtime.actorUserId)

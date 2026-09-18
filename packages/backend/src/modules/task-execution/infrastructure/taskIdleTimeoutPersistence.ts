@@ -59,8 +59,22 @@ const log = createLogger('task-idle-timeout-persistence')
  */
 export type TaskIdleTimeoutDb = BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>
 
-/** cancelTask 写进 error_summary 的默认值；覆盖原因时按它认领「这行是我们取消的」。 */
+/**
+ * 取消写进 `error_summary` 的两个默认值；覆盖原因时按它们认领「这行是我们取消的」。
+ *
+ * RFC-359 AC-1（第 11 刀）补上第二个：`cancel` 两份实现合一之后，**级联取消的子任务**
+ * 的摘要从「canceled by user」变成了更诚实的「canceled by parent task」
+ *（退役那份无论谁取消都写前者，把级联这件事只放在 `error_message` 里）。
+ *
+ * 少了第二个的后果是用户可见的：**整棵树因长时间无活动被收割时，子任务拿不到那条原因**
+ *（认领门匹配不上，「因长时间无活动被自动终结」只落在根任务上）——
+ * `rfc350-idle-timeout-integration` 的整树用例实撞。
+ *
+ * 风险面没变：这两条都是「我们自己刚取消的」形状，认领窗口仍然只在收割器自己那一拍里。
+ */
 export const CANCEL_DEFAULT_SUMMARY = 'canceled by user'
+export const CANCEL_CASCADE_SUMMARY = 'canceled by parent task'
+const CLAIMABLE_CANCEL_SUMMARIES = [CANCEL_DEFAULT_SUMMARY, CANCEL_CASCADE_SUMMARY]
 
 const TERMINAL_TASK_SET: ReadonlySet<string> = new Set(TERMINAL_TASK_STATUSES)
 const TERMINAL_RUN_SET: ReadonlySet<string> = new Set(TERMINAL_NODE_RUN_STATUSES)
@@ -207,7 +221,7 @@ export function createTaskIdleTimeoutPersistence(
           and(
             eq(tasks.id, input.taskId),
             eq(tasks.status, 'canceled'),
-            eq(tasks.errorSummary, CANCEL_DEFAULT_SUMMARY),
+            inArray(tasks.errorSummary, CLAIMABLE_CANCEL_SUMMARIES),
           ),
         )
         .run()

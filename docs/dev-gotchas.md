@@ -462,6 +462,48 @@ PG 要真走 I/O，于是可能在应用关闭、连接池随之关掉之后才�
    PG 道则取决于连接池什么时候关。这是「同一份判据、两个引擎结论不同」的隐蔽来源，
    而且它的失败长得像 flaky，很容易被「重跑就过了」糊过去（那是被明令禁止的通过依据）。
 
+## 先发出、后 await 的落败断言：`expect(p).rejects.…` 会把主线程空转掉（Bun 1.3.13 实撞，2026-09-18）
+
+并发用例里常见的形状是「先把两件事都发出去，再逐个收」：
+
+```ts
+const cancel = cancelTask(db, taskId)
+const repair = engine.applyRepairOption({ … })   // 预期它落败
+releaseHolder()
+await holder
+await cancel
+await expect(repair).rejects.toMatchObject({ code: 'repair-preflight-stale' })  // ← 太晚
+```
+
+**两个坑叠在一起，而且它们的症状互相掩盖**：
+
+1. **落败 handler 挂晚了**：`repair` 会在 `await cancel` 还没返回时就 reject。此刻它身上还
+   没有任何 handler，于是被记成 **unhandled rejection**，Bun 把它算在当前 cell 头上并直接判红——
+   红的堆栈就是那条**预期之内**的错误，看起来像「断言没写对」，其实是「断言写晚了」。
+   更隐蔽的是 cell 的 body 会被就地放弃，于是**它后面那些 await 一次都没跑过**。
+2. **提前到前面写 `expect(...).rejects.…`、把 `await` 留到后面，会当场空转**：实测主线程
+   99% CPU、连 `--timeout` 都进不来（它靠事件循环，而事件循环已经饿死），表现为整个文件挂住、
+   一行结果都不打印（Bun 的结果行是**按文件收尾才 flush** 的，所以「零输出」不等于「卡在第一个用例」）。
+
+两条都避开的写法是**纯 promise 收错误、最后再对值断言**：
+
+```ts
+const repairOutcome = repair.then(
+  () => null,
+  (error: unknown) => error,
+)
+releaseHolder()
+await holder
+await cancel
+expect(await repairOutcome).toMatchObject({ code: 'repair-preflight-stale' })
+```
+
+判据一字不差，且 handler 在 promise 创建的下一行就挂上了。
+
+**排查姿势**：怀疑挂死时先看 `ps -o %cpu` ——99% 是同步空转（`--timeout` 不会救你），
+~0% 才是真的在等 I/O。要定位空转点，先把「本次改动」二分掉：`git checkout HEAD -- <那几个文件>`
+跑一遍、再 `cp` 回来，比盯着堆栈猜快得多。
+
 ## 改测试**标题**会踩到按名字钉死的账本（RFC-359 §5go 实撞，2026-09-16）
 
 仓里有按**测试名**做外键的账本，典型是 `tests/helpers/rfc349FunctionalEvidence.ts`：

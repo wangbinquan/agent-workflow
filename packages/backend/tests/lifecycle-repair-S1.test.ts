@@ -157,10 +157,23 @@ describeEachProvider('RFC-057 — S1.recreate-doc-version', (provider) => {
       optionId: 'S1.recreate-doc-version',
       actorUserId: 'u-1',
     })
+    // 落败 handler 必须**同步**挂上，而且**不能用 `expect(...).rejects`**。
+    //
+    // 为什么要同步挂：`repair` 会在 `await cancel` 还没返回时就落败（cancel 拿到 mutation
+    // slot 在先，repair 紧随其后看见已取消的任务）。把 `expect(repair).rejects` 留到三个
+    // await 之后才写就晚了——promise 已经以「无人接手」的姿态 reject，被 Bun 记成 unhandled
+    // rejection 并算在本 cell 头上（本 cell 的 postgresql lane 实撞）。
+    // 为什么不能用 `expect(...).rejects`：把它提前到这里、`await` 留到后面，Bun 1.3.13 会在
+    // 主线程上空转（实测 99% CPU、`--timeout` 都进不来）。纯 `.then(onFulfilled, onRejected)`
+    // 收错误、最后再 `expect` 值，判据一字不差，且没有这两个坑。
+    const repairOutcome = repair.then(
+      () => null,
+      (error: unknown) => error,
+    )
     releaseHolder()
     await holder
     await cancel
-    await expect(repair).rejects.toMatchObject({ code: 'repair-preflight-stale' })
+    expect(await repairOutcome).toMatchObject({ code: 'repair-preflight-stale' })
     expect(
       await h.db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, reviewRunId)),
     ).toHaveLength(0)

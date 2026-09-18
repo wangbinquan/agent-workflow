@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 846,
+    "consumers": 844,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1043,
@@ -134773,7 +134773,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:52aebe854233bde53a8c",
             "import:d6081cab0c06792087a4"
           ],
           "fieldPath": "$method:drive.$parameter:request.daemonGeneration",
@@ -134822,7 +134821,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:52aebe854233bde53a8c",
             "import:d6081cab0c06792087a4"
           ],
           "fieldPath": "$method:drive.$parameter:request.executionContext.token.daemonGeneration",
@@ -134830,7 +134828,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:52aebe854233bde53a8c",
             "import:924a40dfc07194923acc",
             "import:d6081cab0c06792087a4"
           ],
@@ -134843,9 +134840,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:52aebe854233bde53a8c"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:drive.$parameter:request.executionContext.token.ownerId",
           "type": "string"
         },
@@ -135143,7 +135138,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:52aebe854233bde53a8c",
             "import:d6081cab0c06792087a4"
           ],
           "fieldPath": "$method:resumeChild.$parameter:input.runtime.runConfig.daemonGeneration",
@@ -149017,8 +149011,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24",
-        "import:2cd5c42cd1aa20653ae5"
+        "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -149036,12 +149029,6 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:2cd5c42cd1aa20653ae5",
-          "file": "packages/backend/src/services/task.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -152429,8 +152416,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24",
-        "import:9666a797c68f76205924"
+        "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -152448,12 +152434,6 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:9666a797c68f76205924",
-          "file": "packages/backend/src/services/task.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -159702,7 +159682,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3d92f94e5a27c14cf8d69bf950af56a8784b7b39cd6a150c02509944b05775d7",
+  "sourceDigest": "sha256:9319205862c19eda8724ad9a42ca76e0241b9ecb8895a63355e958ee3324e602",
   "targetContexts": [
     "collaboration",
     "development-automation",

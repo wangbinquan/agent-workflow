@@ -76,7 +76,7 @@ const TASK_INSERT_SITES: readonly string[] = [
   // 三列一直没变，是上面删掉的纯读三件与列表三件让整份文件不断变短。
   // **行号键的账本就是这么被动的**——任何同文件的增删都要重跑它
   //（`docs/dev-gotchas.md` 的「半径盲区」第 5 条）。
-  'services/task.ts:3545 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'services/task.ts:3535 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

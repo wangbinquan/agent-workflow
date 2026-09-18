@@ -17660,3 +17660,42 @@ log
 空闲超时收割 / 数字员工 / fusion 引擎 / SQLite 参与者 / 级联自身），
 测试上 37 处 / 40 个文件。按第 9 / 10 刀拆两半：上半把 8 个生产接线改指共用实现并留下退役那份，
 下半迁测试面再删。
+
+### 第 11 刀第 2 步落地　`cancel` 合一——**照出第 8 个用户可见缺陷（被取消的任务工作树永不回收）**
+
+留下的是 PG 的 `cancelCascade`（用户裁决：落位对、与第 8/9/10 刀一致、更短、CAS 争用交给
+引擎的序列化重试），改名 `cancelTaskProjection`，依赖面按上一节勘察的四格
+（`db` / `persistence` / `stop` / `log`）。`services/task.ts` 的 `cancelTask` 只剩薄壳：
+翻译 `opts` → `cause`、交进两样「退役形态才有」的钩子、回读任务行还给调用方。
+
+**从退役那份移植过来的五样**（共用那份原本没有，逐样都有判据钉着）：
+
+| # | 行为 | 没有它会怎样 | 判据 |
+| --- | --- | --- | --- |
+| 1 | `beforeStatusCas` 注入点 | 并发判据一次都触发不到，用例照绿但一个场景没验 | `retry-cascade-kind-matrix` / `review-cancel-concurrency` |
+| 2 | 无停机票据时的兜底中止（`abortWithoutStopTicket`） | 没有持久化 owner 的控制器不再被中止 | 既有取消套件 |
+| 3 | CAS 被别的**可取消态**写者挤掉时复读（预算 8） | `awaiting_review ⇄ awaiting_human` 之间的正常搅动被当成「任务已收场」 | `retry-cascade-kind-matrix` 钉死 `cancelCasAttempts === 8` |
+| 4 | 父级联撞上**已经 canceled** 的子任务时补盖级联来源 | 父崩溃恢复后分不清「我自己级联取消的」与「别人取消了我的子任务」 | RFC-243 §4.3；`rfc359-w11-cancel-parity` F/G/J |
+| 5 | **终态工作区回收的认领**（`workspace_pruning_at` / `workspace_prune_cause` + 事件里的 `workspacePruneClaim`） | **被取消的任务的工作树永远不会被回收** | `rfc300-webhook-workspace-cleanup-e2e` 的 remote/canceled 格 |
+
+第 5 样是本刀照出的**第 8 个用户可见缺陷**。成因是形状差异而非疏忽：退役那份走
+`setTaskStatus` → `taskLifecycleWriteSequence`，认领写在那条写序列里；共用那份自己写 `tasks`
+行、自己追加事件，**整条绕过了它**。⚠️ 认领判定**必须算在事务外**——策略自己会拿另一条连接去读
+`task_space_nodes`，在一笔已开的序列化事务里等它，PostgreSQL 上会撞连接（`lifecycle-repair-S1`
+实撞 `Connection closed`）。写序列那一侧本来就是这么做的：`workspacePruneDecision` 是**调用方在
+事务外算好交进去**的。预读与 CAS 之间的窗口由 WHERE 里三条 `isNull` 兜住，认领是一次性的。
+
+顺带销掉的两处真分叉：退役那份的 `error_message` 无条件写 `no active scheduler at cancel time`
+（用户取消一个**正在跑**的任务时那句话是错的，共用那份写 `canceled-by-user`）；空闲超时收割的
+认领门原本只认 `cancelTask` 的默认文案，级联取消写的是另一句，于是**被父级联取消的子任务收不到
+超时文案**——门改成 `inArray(CLAIMABLE_CANCEL_SUMMARIES)`。
+
+**账本**：`commons-debt.json` 加两条 inbound 边（薄壳 → 共用实现 / → persistence，随薄壳一起消失，
+`removeAfterWave: W4-E1`）；`s14-non-status-tasks-update-snapshot` 14 → 15（写点没新增，只是按
+文件计数换了归属）；`rfc349-provider-specific-business-dependencies` 24 → 25（+1 来自命名——共用
+实现的文件名还带 `postgresql` 前缀，见 §5hj 的重命名；同批销掉 `taskExecutionOwners` 从
+`legacySqliteTransportMechanisms` 那条债里离开）。W8 的「cancel 仍是两份实现」整条退役，改钉
+「children 这一对已合一」。
+
+**下半刀仍待做**：37 处 `cancelTask` 测试调用点（40 个文件）迁到共用实现，然后删薄壳——薄壳一删，
+上面那两条 inbound 边与 rfc349 的 +1 一起消失。

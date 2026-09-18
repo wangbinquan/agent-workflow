@@ -2,6 +2,30 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 81，**第 11 刀第 2 步：cancel 合一，照出第 8 个用户可见缺陷**）
+>
+> 留下的是 PG 的 `cancelCascade`（用户裁决），改名 `cancelTaskProjection`；`services/task.ts` 的
+> `cancelTask` 只剩薄壳（翻译 `opts` → `cause`、交两样退役形态才有的钩子、回读任务行）。
+> 对拍面从 10 格扩到 11 格（K 格钉 `errorSummary` / `errorMessage` 文案），两个引擎 22/22。
+>
+> **第 8 个用户可见缺陷**：终态工作区回收的**认领**（`workspace_pruning_at` / `workspace_prune_cause`
+> 加事件里的 `workspacePruneClaim`）在 PG 那份里**整个没有**——后果是**被取消的任务的工作树永远
+> 不会被回收**。成因是形状差异：退役那份走 `setTaskStatus` → `taskLifecycleWriteSequence`，认领写在
+> 那条写序列里；PG 那份自己写 `tasks` 行、自己追加事件，绕过了它。
+> ⚠️ 认领判定**必须算在事务外**（策略会另开连接读 `task_space_nodes`，在已开的序列化事务里等它，
+> PG 上撞 `Connection closed`）——写序列那一侧本来就是调用方在事务外算好交进去的。
+>
+> 顺带销掉两处真分叉：退役那份的 `error_message` 无条件写 `no active scheduler at cancel time`
+> （用户取消一个**正在跑**的任务时那句话是错的）；空闲超时收割的认领门只认 `cancelTask` 的默认文案，
+> 于是**被父级联取消的子任务收不到超时文案**。
+>
+> 另有一条判据教训落 `docs/dev-gotchas.md`：并发用例里「先发出、后 await」的落败断言——
+> 晚挂 handler 会被记成 unhandled rejection 并**就地放弃 cell 剩下的 body**，
+> 而提前写 `expect(p).rejects.…`、把 `await` 留到后面会让 Bun **主线程 99% CPU 空转**
+> （`--timeout` 都进不来）。两个坑互相掩盖，写法改成纯 `.then(onFulfilled, onRejected)` 收错误。
+>
+> **下半刀仍待做**：37 处 `cancelTask` 测试调用点（40 个文件）迁走，然后删薄壳。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 80，**第 11 刀第 1 步：cancel 对拍照出一处用户可见真分叉，已修**）
 >
 > `rfc359-w11-cancel-parity` 建八格（准入 / 级联七格 + 线性化一格），全部走生产装配

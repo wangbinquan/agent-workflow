@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1671,
+    "entries": 1673,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -25064,12 +25064,12 @@
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelTaskProjection",
       "missingControls": [
         "audit"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
-      "symbol": "cancelCascade",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelTaskProjection",
+      "symbol": "cancelTaskProjection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -25148,7 +25148,7 @@
       "controls": {
         "audit": false,
         "authority": "system",
-        "authorization": false,
+        "authorization": true,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -25158,7 +25158,6 @@
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#resumeTaskProjection",
       "missingControls": [
         "audit",
-        "authorization",
         "event",
         "transaction"
       ],
@@ -26873,6 +26872,30 @@
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#CANCEL_CASCADE_SUMMARY",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#CANCEL_CASCADE_SUMMARY",
+      "symbol": "CANCEL_CASCADE_SUMMARY",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#CANCEL_DEFAULT_SUMMARY",
       "missingControls": [
         "audit",
@@ -26888,18 +26911,40 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#CLAIMABLE_CANCEL_SUMMARIES",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#CLAIMABLE_CANCEL_SUMMARIES",
+      "symbol": "CLAIMABLE_CANCEL_SUMMARIES",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "system",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
       "missingControls": [
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
@@ -37099,9 +37144,9 @@
     {
       "controls": {
         "audit": false,
-        "authority": "effect",
+        "authority": "none-observed",
         "authorization": true,
-        "event": true,
+        "event": false,
         "fenceOrOcc": true,
         "transaction": true
       },
@@ -37109,7 +37154,9 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/task.ts#cancelTask",
       "missingControls": [
-        "audit"
+        "audit",
+        "authority",
+        "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
       "symbol": "cancelTask",
@@ -39929,7 +39976,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3d92f94e5a27c14cf8d69bf950af56a8784b7b39cd6a150c02509944b05775d7",
+  "sourceDigest": "sha256:9319205862c19eda8724ad9a42ca76e0241b9ecb8895a63355e958ee3324e602",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -40935,8 +40982,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#279:tasks",
-        "line": 279,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#323:tasks",
+        "line": 323,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#admitResume",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -40944,51 +40991,67 @@
       },
       {
         "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "runCancelTransaction",
+        "controlSubtype": "continuation-admission",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#702:tasks",
+        "line": 702,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelTaskProjection",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
+        "symbol": "cancelTaskProjection"
+      },
+      {
+        "allowedTables": [
           "taskExecutionOwners"
         ],
         "authorityKind": "control-revision",
-        "consumer": "cancelCascade",
-        "controlSubtype": "terminal-control",
+        "consumer": "runCancelTransaction",
+        "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionOwners",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#590:taskExecutionOwners",
-        "line": 590,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#718:taskExecutionOwners",
+        "line": 718,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "cancelCascade"
+        "symbol": "cancelTaskProjection"
       },
       {
         "allowedTables": [
           "tasks"
         ],
         "authorityKind": "control-revision",
-        "consumer": "cancelCascade",
-        "controlSubtype": "terminal-control",
+        "consumer": "runCancelTransaction",
+        "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#617:tasks",
-        "line": 617,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#749:tasks",
+        "line": 749,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "cancelCascade"
+        "symbol": "cancelTaskProjection"
       },
       {
         "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "control-revision",
-        "consumer": "cancelCascade",
-        "controlSubtype": "terminal-control",
+        "consumer": "runCancelTransaction",
+        "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#631:nodeRuns",
-        "line": 631,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#777:nodeRuns",
+        "line": 777,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "cancelCascade"
+        "symbol": "cancelTaskProjection"
       },
       {
         "allowedTables": [
@@ -41751,8 +41814,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#203:tasks",
-        "line": 203,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#217:tasks",
+        "line": 217,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
         "requiredBrandedProof": "IdleTimeoutReapDecision",
         "revisionPredicate": "idle-observation-and-own-terminal-copy-cas",
@@ -42391,8 +42454,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3545:tasks",
-        "line": 3545,
+        "id": "task-authority:packages/backend/src/services/task.ts#3535:tasks",
+        "line": 3535,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -42407,8 +42470,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3673:taskExecutionIntents",
-        "line": 3673,
+        "id": "task-authority:packages/backend/src/services/task.ts#3663:taskExecutionIntents",
+        "line": 3663,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -42423,28 +42486,12 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3731:tasks",
-        "line": 3731,
+        "id": "task-authority:packages/backend/src/services/task.ts#3721:tasks",
+        "line": 3721,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
         "symbol": "startTaskImpl"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "cancelTask",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4328:tasks",
-        "line": 4328,
-        "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
-        "requiredBrandedProof": "ExactTerminalControlTuple",
-        "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
-        "symbol": "cancelTask"
       },
       {
         "allowedTables": [
@@ -42455,8 +42502,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5946:tasks",
-        "line": 5946,
+        "id": "task-authority:packages/backend/src/services/task.ts#5744:tasks",
+        "line": 5744,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
