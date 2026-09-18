@@ -226,7 +226,10 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'collaboration/infrastructure/humanGateOperationJournal: packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
   'collaboration/infrastructure/clarifyContinuationConvergence: packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
   'collaboration/infrastructure/humanGateOperationPersistence: packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
-  'collaboration/infrastructure/taskDagCollaborationOperations: packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+  // RFC-359 AC-1（第 12 刀）：运行时参与者合一之后，协作投影由**装配方**交进来——
+  // 参与者自己不再 compose 别的 context。这条债因此从 infrastructure 挪到组合根，
+  // 与 PostgreSQL 那一支同形（那边一直是 bootstrap 交）。
+  'collaboration/infrastructure/taskDagCollaborationOperations: packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
   'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/composition/triggerExecution.ts',
   'resource-catalog/application/resourceDefaults: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
   'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',

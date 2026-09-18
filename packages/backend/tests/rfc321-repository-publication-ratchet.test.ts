@@ -325,11 +325,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const providerRuntime = read(
       'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
     )
-    const sqliteParticipants = read(
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
-    )
-    const postgresqlParticipants = read(
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+    // RFC-359 AC-1（第 12 刀）：运行时参与者两个引擎合成**一份**，两个组合根各绑各的端口。
+    const participants = read(
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     )
     const webhookDispatch = read(
       'packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts',
@@ -348,15 +346,14 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     )
     expect(webhookDispatch).not.toContain('TaskRepositoryPublicationTransport')
     expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
-    expect(providerRuntime).toContain('createSqliteTaskExecutionRuntimeParticipants({')
-    expect(providerRuntime).toContain('createPostgresqlTaskExecutionRuntimeParticipants(db, {')
+    expect(
+      providerRuntime.match(/createTaskExecutionRuntimeParticipants\(\{/g)?.length,
+      '两个组合根都必须调那**同一个**中立工厂：发布 transport 由装配方交，不许任一侧自己重建',
+    ).toBe(2)
     expect(
       providerRuntime.match(/composeTaskExecutionRuntime\(\{ participants, readModels:/g)?.length,
     ).toBe(2)
-    expect(sqliteParticipants).toContain(
-      'readonly repositoryPublicationTransport: RepositoryPublicationTransport',
-    )
-    expect(postgresqlParticipants).toContain(
+    expect(participants).toContain(
       'readonly repositoryPublicationTransport: RepositoryPublicationTransport',
     )
     expect(cli).toContain('repositoryPublicationTransport,')

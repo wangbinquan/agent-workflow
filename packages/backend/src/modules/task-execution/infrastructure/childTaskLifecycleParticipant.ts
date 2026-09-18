@@ -50,7 +50,6 @@ import type { ProviderTaskExecutionModule } from '../composition'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { taskStopProjection } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
-import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import { withSerializableTaskExecution } from './taskLifecycleTransaction'
@@ -100,13 +99,36 @@ type ResumeTask = Readonly<{
   sourceTerminationFence: 'closed' | 'merged' | null
 }>
 
-export interface ChildTaskLifecycleDependencies {
+/**
+ * RFC-359 AC-1（第 12 刀）—— 两个 provider 在子任务生命周期上**唯一**的差异面。
+ *
+ * 三格说的是同一件事：「这台部署里，谁在跑、怎么认领、怎么请它停」。
+ *   · `lifecycle`：SQLite 绑进程级单例的同步认领（`createDatabaseTaskDriverLifecyclePort`），
+ *     PostgreSQL 绑持久化租约（`claimPersisted`）；
+ *   · `activity`：准入门读的「进程内是不是已经有人在跑」；
+ *   · `stop`：取消要用的停机票据面（取票 / 请求停 / 等停）。
+ *
+ * 此前这三格是由 `executionModule` + `finalizeWorkspace` 在**工厂里现拼**的，于是拼法
+ * （= 认领策略）被锁死在 PostgreSQL 那一侧，SQLite 只能另写一份参与者。端口化之后拼法由
+ * 组合根决定，参与者自己不再有任何引擎判断——`server.ts` 那条**不装配完整 runtime** 的路
+ * 也接得上同一份实现。
+ *
+ * ⚠️ `stop` **按名字抓会抓错**：参与者工厂输入里那个 `runtimeRegistry` 是
+ * `platform/runtime-registry` 的**运行时档案**注册表（`getRuntime(name)`），与这里要的
+ * **任务驱动**注册表同名不同物。单进程形态交 `composeLegacyTaskStopRegistry()`
+ *（即 `taskExecutionModule.runtimeRegistry`，`createDatabaseTaskDriverLifecyclePort` 用的也是它）；
+ * PostgreSQL 那侧交 `executionModule.runtimeRegistry`。
+ */
+export interface ChildTaskLifecycleRuntimePorts {
+  readonly lifecycle: TaskDriverLifecyclePort
+  readonly activity: ActiveTaskExecutionParticipant
+  readonly stop: ProviderTaskExecutionModule['runtimeRegistry']
+}
+
+export interface ChildTaskLifecycleDependencies extends ChildTaskLifecycleRuntimePorts {
   readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
-  readonly executionModule: ProviderTaskExecutionModule
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
-  /** Source-control selected finalizer for a terminal workspace-prune claim. */
-  readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly log: TaskExecutionTopologyLogger
 }
 
@@ -878,21 +900,13 @@ export async function cancelTaskProjection(
 export function createChildTaskLifecycleParticipant(
   dependencies: ChildTaskLifecycleDependencies,
 ): ChildTaskLifecycleParticipant {
-  const lifecycle = createTaskDriverLifecyclePort({
-    db: dependencies.db,
-    module: dependencies.executionModule,
-    claim: (intentId) => dependencies.executionModule.claimPersisted({ intentId }),
-    persistence: dependencies.persistence,
-    log: dependencies.log,
-    finalizeWorkspace: dependencies.finalizeWorkspace,
-  })
   return Object.freeze({
     async cancel(input: Parameters<ChildTaskLifecycleParticipant['cancel']>[0]) {
       await cancelTaskProjection(
         {
           db: dependencies.db,
           persistence: dependencies.persistence,
-          stop: dependencies.executionModule.runtimeRegistry,
+          stop: dependencies.stop,
           log: dependencies.log,
         },
         input.taskId,
@@ -909,17 +923,11 @@ export function createChildTaskLifecycleParticipant(
           persistence: dependencies.persistence,
           runtimeSessionLeases: dependencies.runtimeSessionLeases,
           log: dependencies.log,
-          // 这一侧的「进程内是不是已经有人在跑」读的是 PG 运行时注册表；SQLite 那一侧
-          // 注入的是 legacy 进程注册表（`composeLegacyTaskActivityParticipant`）。
+          // 「进程内是不是已经有人在跑」：PostgreSQL 读注入的 `executionModule.runtimeRegistry`，
+          // 单进程形态读 `composeLegacyTaskActivityParticipant()`。
           // 同一个角色、两份注册表——正是 `activity` 这个端口存在的理由。
-          activity: {
-            isActive: (taskId: string) =>
-              dependencies.executionModule.runtimeRegistry.hasTask(taskId),
-            // 不能是空桩：共用实现靠它做两阶段停机的等待（见 `resumeTaskProjection` 的头注）。
-            awaitReleasedSettled: (taskId: string) =>
-              dependencies.executionModule.runtimeRegistry.awaitReleasedSettled(taskId),
-          },
-          lifecycle,
+          activity: dependencies.activity,
+          lifecycle: dependencies.lifecycle,
         },
         input,
         topology,

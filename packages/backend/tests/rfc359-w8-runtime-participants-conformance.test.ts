@@ -1,41 +1,32 @@
-// RFC-359 W8 —— `TaskExecutionRuntimeParticipants` 这一对的双引擎对拍**与不合一判定**。
+// RFC-359 —— `TaskExecutionRuntimeParticipants` 的双引擎对拍。
 //
-// # 判定：这一对不是重复，是两台执行引擎（W8 只读对账结论）
+// # 现状：这一对**已合一**（AC-1 第 12 刀）
 //
-// 行数比 129 : 154 ≈ 1.2 看着像「同一段逻辑抄了两遍」，逐方法拆开后不是。两侧都是**薄壳**，
-// 真实现全在各自转发的目标里，把目标求和后是两套互不相干的引擎：
+// W8 当年判「不合」，理由写的是「两台 children 引擎 + 两个 registry」。那条理由今天只剩半句：
+//   · children 的两台引擎在第 10 / 11 刀合成了 `resumeTaskProjection` / `cancelTaskProjection`；
+//   · 子任务铸造机在批次二 ⑤ 合成了 `createChildExecutionLaunchOperations`；
+//   · drive 的内核本来就是同一个 `driveTaskEngineApplication`。
+// 剩下的「两个 registry」为真，但那是**部署形态**不是引擎实现：单进程装进程内注册表，
+// 持久化租约装执行模块的注册表。按 plan §5fq 的判据（只有三种差异算「源于引擎本身」：
+// 单引擎原语 / 单引擎资源形态 / 驱动强加的线上差异），这一条一条都不命中 ⇒ 必须合，
+// 处方是**端口 + 两个绑定**。
 //
-// | 参与者 | SQLite 侧转发到 | PostgreSQL 侧转发到 |
-// |---|---|---|
-// | `drive` | `composition/taskEngineApplication.driveTaskEngineApplication`（**同一份**）+ 现场 `createTaskDagCollaborationOperations(db)` + `childExecutionLaunchOperations`（**同一份**，RFC-359 AC-1 批次二 ⑤ 合一） | 同一份 drive + bootstrap 注入的 `taskDagCollaboration` + 同一份 childLaunch |
-//
-// **RFC-359 AC-1（plan §5hn 批次二 ⑤）勘误**：上表 `drive` 那一行原本记的是「两侧各有一台
-// 子任务启动引擎（87 行 vs 770 行）」。那一格**已经合了**：两侧叫同一个工厂，差别只剩装配方
-// 交进去的驱动生命周期端口（SQLite 绑进程级单例的 `claim({ db, intentId })` 且带
-// `legacyConnection`，PG 绑实例的 `claimPersisted({ intentId })`）。合一当场照出一条真缺陷：
-// PG 的铸造机把子任务的触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块。
-// | `children` | `services/task.ts` 的 `cancelTask`（232 行）/ `resumeTask` → `resumeKick`（245 行） | `childTaskLifecycleParticipant.ts`（774 行，自带 `cancelCascade` / `assertResumeAdmission` / `DefaultTaskDriveCoordinator`） |
-// | `activity` | 进程级单例 `taskExecutionModule.runtimeRegistry`（经 `services/task.isTaskActive` + `taskDriverLifecycle.awaitTaskDriverReleasedSettled`），外加只在测试里用的 `testActiveControllers` 旁路 | **注入的** `executionModule.runtimeRegistry` |
-//
-// 只有 `drive` 的内核（`driveTaskEngineApplication` + `composeWrapperRuntime` +
-// `composeExecutionMergeRecovery`）已经是一份实现，两侧薄壳的差别只是「谁来装配依赖」。
-// `children` 与 `activity` 是真分叉，而且分叉不在这两个文件里：
-//   · `cancelTask(db, …)` 的第一件事就是 `db.select(…).limit(1).all()[0]` —— bun:sqlite 的**同步**
-//     读，在 PostgreSQL 客户端上返回 Promise，`[0]` 恒为 undefined、当场 `task-not-found`。
-//     也就是说 SQLite 侧的 `children` **物理上跑不到 PostgreSQL 上**，反之亦然。
-//   · 两侧 `activity` 读的是**两个不同的 registry 实例**：SQLite 读进程级单例，PG 读注入的那个。
-// 合一这一对的前置条件是先合 `services/task.ts` 的 cancel / resume 引擎与
-// `childTaskLifecycleParticipant.ts`——那是另一对、量级大一个数量级，且 `services/**`
-// 不在本轮作业面内。**本轮判不合，只补对拍。**
+// 于是两份 provider 前缀的参与者文件（`sqlite…` 189 行 / `postgresql…` 160 行）退役，
+// 换成一份中立的 `taskExecutionRuntimeParticipants.ts`；认领策略 / 活跃度 / 停机票据三格
+// 收成 `ChildTaskLifecycleRuntimePorts`，由各自的组合根（`composition/providerRuntime.ts`）交。
+// 此前看着「两侧不同」的其余十来格（持久化 / 会话租约 / 记忆注入 / 运行时档案 / 协作 /
+// 并发域 / 日志）只是**谁来构造**的差别——SQLite 由装配方交、PG 在工厂里现造；
+// 合并后一律由装配方交，连返回形状都不再有差（PG 那侧原本还额外回 `persistence` /
+// `executionModule`）。
 //
 // # 这份对拍覆盖什么
 //
-// 两个工厂各自在自己的引擎上真实构造，然后：
+// 两个绑定各自在自己的引擎上真实构造，然后：
 //   ① `activity` 的行为在两个引擎上对拍（未知任务 `isActive === false`；`awaitReleasedSettled`
 //      在没有 driver 时立即 settle）——这是唯一一个两侧都能在同一段断言里驱动的参与者；
-//   ② 端口面（`drive` / `children` / `activity` 的方法名与形参个数）两侧逐字相同；
-//   ③ 上面那张分叉表以源码文本断言钉住——将来谁把这一对合一，必须先来删掉这些断言，
-//      也就必须先正面处理 `children` 的两台引擎。
+//   ② 端口面（`drive` / `children` / `activity` 的方法名与形参个数）与**返回形状**两侧逐字相同；
+//   ③ 源码文本断言从「见证分叉」翻成「锁住合一」：两份 provider 前缀文件不得复活、
+//      共用实现自己不许拼认领策略或读进程全局、两条绑定各在组合根里。
 // W12 AC-12 补充：完整 provider 的动态工作流恢复必须收到真实持久化与目录端口；
 // 下方用持久化 awaiting_confirm 状态驱动同一内核，保留原确认 run，不启动外部运行时。
 // children 的完整行为仍由 `rfc349-*` / `rfc339-*` 等既有套件承担。
@@ -48,7 +39,7 @@ import {
 } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -71,12 +62,17 @@ import {
 } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionRuntimeParticipants } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
-import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import { composeTestChildLaunchWorkgroup } from './helpers/taskExecutionTestTopology'
 import {
-  createPostgresqlTaskExecutionRuntimeParticipants,
-  type PostgresqlTaskExecutionRuntimeDependencies,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants'
+  createTaskExecutionRuntimeParticipants,
+  type TaskExecutionRuntimeParticipantsInput,
+} from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
+import {
+  composeTestChildLaunchWorkgroup,
+  singleProcessDeploymentPorts,
+} from './helpers/taskExecutionTestTopology'
+import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+import type { ChildTaskLifecycleRuntimePorts } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
@@ -133,41 +129,71 @@ function passthrough<T>(label: string): T {
   ) as T
 }
 
-function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimeParticipants {
-  const client = db as unknown as DbClient
-  const persistence = createTaskExecutionPersistence(db)
-  return createSqliteTaskExecutionRuntimeParticipants({
-    db: client,
-    childLaunchWorkgroup: composeTestChildLaunchWorkgroup(client),
-    memoryInjectionQueries: sqliteMemoryInjectionQueries(client),
-    collaborationRuntime: createCollaborationRuntimeMechanics(client),
-    persistence,
+/**
+ * 两侧共用的那一份输入。**没有任何一格按引擎分叉**——差异全在
+ * {@link ChildTaskLifecycleRuntimePorts} 那三格里，由下面两个绑定分别交。
+ */
+function sharedInput(
+  db: ProviderNeutralDatabase,
+): Omit<
+  TaskExecutionRuntimeParticipantsInput,
+  'taskDagCollaboration' | 'processConcurrencyScope' | 'log'
+> {
+  return {
+    db,
+    persistence: createTaskExecutionPersistence(db),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
-    runtimeRegistry: composeRuntimeRegistryOperations(client),
+    memoryInjectionQueries: sqliteMemoryInjectionQueries(db as unknown as DbClient),
+    runtimeRegistry: composeRuntimeRegistryOperations(db),
+    collaborationRuntime: createCollaborationRuntimeMechanics(db),
+    childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db as unknown as DbClient),
     workgroupTurns: passthrough('workgroupTurns'),
     dynamicWorkflow: createTestDynamicWorkflowOperations(db),
     identityAccess: passthrough('identityAccess'),
     repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+  }
+}
+
+/** 单进程部署形态的绑定：进程级单例的同步认领 + 进程内注册表。 */
+function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimeParticipants {
+  const client = db as unknown as DbClient
+  return createTaskExecutionRuntimeParticipants({
+    ...sharedInput(db),
+    ...singleProcessDeploymentPorts(client),
   })
 }
 
+/** 持久化租约部署形态的绑定：`claimPersisted` + 注入的执行模块注册表。 */
 function postgresqlParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimeParticipants {
   const client = db as unknown as PostgresqlDatabaseClient
-  const dependencies: PostgresqlTaskExecutionRuntimeDependencies = {
-    taskDagCollaboration: createTaskDagCollaborationOperations(db),
-    collaborationRuntime: createCollaborationRuntimeMechanics(db),
-    workgroupTurns: passthrough('workgroupTurns'),
-    dynamicWorkflow: createTestDynamicWorkflowOperations(db),
-    childLaunchWorkgroup: passthrough('childLaunchWorkgroup'),
-    identityAccess: passthrough('identityAccess'),
-    repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
-    codeHostConnections: passthrough('codeHostConnections'),
-    processConcurrencyScope: {},
+  const input = sharedInput(db)
+  const executionModule = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
-    finalizeWorkspace: async () => {},
-    log: passthrough('log'),
+    persistence: input.persistence,
+  })
+  const ports: ChildTaskLifecycleRuntimePorts = {
+    lifecycle: createTaskDriverLifecyclePort({
+      db: client,
+      module: executionModule,
+      claim: (intentId) => executionModule.claimPersisted({ intentId }),
+      persistence: input.persistence,
+      log: passthrough('log'),
+      finalizeWorkspace: async () => {},
+    }),
+    activity: Object.freeze({
+      isActive: (taskId: string) => executionModule.runtimeRegistry.hasTask(taskId),
+      awaitReleasedSettled: (taskId: string) =>
+        executionModule.runtimeRegistry.awaitReleasedSettled(taskId),
+    }),
+    stop: executionModule.runtimeRegistry,
   }
-  return createPostgresqlTaskExecutionRuntimeParticipants(client, dependencies)
+  return createTaskExecutionRuntimeParticipants({
+    ...input,
+    taskDagCollaboration: createTaskDagCollaborationOperations(db),
+    processConcurrencyScope: {},
+    log: passthrough('log'),
+    ...ports,
+  })
 }
 
 /** 按引擎取本引擎的那份适配器。`describeEachProvider` 有意不给 provider 名，只给能力矩阵。 */
@@ -181,18 +207,11 @@ function participantsFor(
 describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harness) => {
   test('端口面两侧逐字相同：drive / children / activity 的方法名与形参个数', () => {
     const participants = participantsFor(harness.db, harness.capabilities.isolation)
-    // 端口面三个参与者两侧都有；PostgreSQL 的工厂还**额外**回 `persistence` / `executionModule`
-    // （`PostgresqlTaskExecutionRuntimeAggregate`），SQLite 的只回端口——两侧连返回形状都不同，
-    // 这也是 W8 判不合的证据之一。
+    // RFC-359 AC-1（第 12 刀）：**返回形状两侧逐字相同**。合一之前 PostgreSQL 的工厂还额外回
+    // `persistence` / `executionModule`（`PostgresqlTaskExecutionRuntimeAggregate`）——那不是
+    // 引擎差异，是「谁来造」漏出来的形状；装配回到组合根之后两侧都只回三个端口。
     const keys = Object.keys(participants).sort()
-    expect(keys.filter((key) => ['activity', 'children', 'drive'].includes(key))).toEqual([
-      'activity',
-      'children',
-      'drive',
-    ])
-    expect(keys.filter((key) => !['activity', 'children', 'drive'].includes(key))).toEqual(
-      harness.capabilities.isolation === 'exclusive' ? [] : ['executionModule', 'persistence'],
-    )
+    expect(keys).toEqual(['activity', 'children', 'drive'])
     expect(Object.isFrozen(participants)).toBe(true)
     expect(Object.keys(participants.drive)).toEqual(['drive'])
     expect(participants.drive.drive.length).toBe(2)
@@ -458,22 +477,50 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
 // 这条现在钉的是**合一之后的当前事实**：两侧都转给同一份实现，且那份实现的准入预检是
 // provider 中立的（同步取号 + `await db.select(...)`），不许为了「更快一点」改回同步读——
 // 那会重新把顺序正确性挂在一个引擎的特性上。
-test('W8 · children 这一对已合一：resume / cancel 两侧都转给同一份实现', () => {
-  const sqlite = read('sqliteTaskExecutionRuntimeParticipants.ts')
-  const postgresql = read('postgresqlTaskExecutionRuntimeParticipants.ts')
-
-  // resume 已合一：两侧都不得再长回自己那份。
-  expect(sqlite).not.toContain('await resumeTask(input.db,')
-  expect(sqlite).toContain('await resumeTaskProjection(')
-
-  // cancel 已合一，而且**连薄壳都没了**（第 11 刀下半）：这一侧直接走模块自己的装配
-  // （`composeTaskCancellation`），`cause` 原样透传，不再翻译成 legacy 的 options 包。
-  expect(sqlite).toContain(
-    "import { composeTaskCancellation } from '../composition/taskCancellation'",
+test('第 12 刀 · 参与者已合一：仓里只剩一份实现，两个组合根各绑各的端口', () => {
+  const participants = read('taskExecutionRuntimeParticipants.ts')
+  const provider = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'providerRuntime.ts',
+    ),
+    'utf8',
   )
-  expect(sqlite).toContain(
-    'composeTaskCancellation(input.db).cancel(request.taskId, request.cause)',
+
+  // 两份 provider 前缀的参与者文件都不许再长回来。
+  for (const name of [
+    'sqliteTaskExecutionRuntimeParticipants.ts',
+    'postgresqlTaskExecutionRuntimeParticipants.ts',
+  ]) {
+    expect(existsSync(resolve(INFRASTRUCTURE, name)), `${name} 不得复活：参与者只有一份实现`).toBe(
+      false,
+    )
+  }
+
+  // 两个组合根调的是**同一个**工厂。
+  expect(provider.match(/createTaskExecutionRuntimeParticipants\(\{/g)?.length).toBe(2)
+
+  // resume / cancel 都转给共用实现，且不再经过退役的 legacy 入口。
+  expect(participants).toContain('createChildTaskLifecycleParticipant({')
+  // 共用工厂体内不得直呼进程全局的活跃度——那是 `composeLegacyTaskActivityParticipant`
+  // 这个**装配点**的事，参与者自己只认注入进来的 `activity` 端口。
+  const factoryBody = codeOnly(participants).slice(
+    codeOnly(participants).indexOf('export function createTaskExecutionRuntimeParticipants('),
+    codeOnly(participants).indexOf('export function composeLegacyTaskActivityParticipant('),
   )
+  expect(factoryBody).not.toContain('isTaskActive')
+  expect(factoryBody).not.toContain('awaitTaskDriverReleasedSettled')
+  const merged = codeOnly(
+    readFileSync(resolve(INFRASTRUCTURE, 'childTaskLifecycleParticipant.ts'), 'utf8'),
+  )
+  expect(merged).toContain('await cancelTaskProjection(')
+  expect(merged).toContain('await resumeTaskProjection(')
+
   // `services/task.ts` 不得再长出任何一份取消实现——`cancelTask` 整个导出已删除。
   const legacyTaskService = codeOnly(
     readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8'),
@@ -485,14 +532,23 @@ test('W8 · children 这一对已合一：resume / cancel 两侧都转给同一�
     'cancelTaskProjection(',
   )
 
-  // PostgreSQL 侧照旧走自己那份参与者（它内部调的就是同一个 `cancelTaskProjection`）。
-  expect(postgresql).toContain('createChildTaskLifecycleParticipant')
-  expect(postgresql).not.toContain("from '@/services/task'")
-
   // 共用实现的准入预检是 provider 中立的：进门第一件事是同步取号
   //（`reserveTaskReviewMutationSlot`，排队位置在函数入口就定死），随后那条状态预检是
   // `await`ed 的 select——不再是 bun:sqlite 的同步读。
-  const merged = codeOnly(
+  const cancelBody = merged.slice(merged.indexOf('export async function cancelTaskProjection('))
+  expect(cancelBody).toContain('reserveTaskReviewMutationSlot(taskId)')
+  expect(cancelBody, '准入预检不得退回 bun:sqlite 的同步读').not.toContain('.all()[0]')
+})
+
+// RFC-359 AC-1（第 12 刀）—— 这三格**就是**两个引擎剩下的全部差异，而且它们是端口不是分支。
+//
+// W8 当年判「不合」写的理由是「两台 children 引擎 + 两个 registry」。前半句已经不成立
+//（children 的两台引擎在第 10 / 11 刀合掉了）；后半句仍然为真，但那是**部署形态**：
+// 单进程装了进程内注册表，持久化租约装了执行模块的注册表。按 plan §5fq，这种差异的处方是
+// 端口 + 两个绑定，不是两份实现。下面这条锁的正是「差异只在端口上」。
+test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 停机票据', () => {
+  const participants = codeOnly(read('taskExecutionRuntimeParticipants.ts'))
+  const provider = codeOnly(
     readFileSync(
       resolve(
         import.meta.dir,
@@ -500,53 +556,36 @@ test('W8 · children 这一对已合一：resume / cancel 两侧都转给同一�
         'src',
         'modules',
         'task-execution',
-        'infrastructure',
-        'childTaskLifecycleParticipant.ts',
+        'composition',
+        'providerRuntime.ts',
       ),
       'utf8',
     ),
   )
-  const cancelBody = merged.slice(merged.indexOf('export async function cancelTaskProjection('))
-  expect(cancelBody).toContain('reserveTaskReviewMutationSlot(taskId)')
-  expect(cancelBody, '准入预检不得退回 bun:sqlite 的同步读').not.toContain('.all()[0]')
+
+  // 共用实现自己不许拼认领策略，也不许读任何进程全局注册表——三格全是收进来的。
+  expect(participants).not.toContain('createTaskDriverLifecyclePort(')
+  expect(participants).not.toContain('claimPersisted')
+  expect(participants).toContain('lifecycle: input.lifecycle')
+  expect(participants).toContain('activity: input.activity')
+  expect(participants).toContain('stop: input.stop')
+
+  // 两条绑定都在组合根里，且各绑各的。
+  expect(provider).toContain('lifecycle: createDatabaseTaskDriverLifecyclePort({')
+  expect(provider).toContain('claim: (intentId) => executionModule.claimPersisted({ intentId })')
+  expect(provider).toContain('activity: composeLegacyTaskActivityParticipant()')
+  expect(provider).toContain('stop: composeLegacyTaskStopRegistry()')
+  expect(provider).toContain('stop: executionModule.runtimeRegistry')
 })
 
-test('W8 判不合 · activity 读的是两个不同的 registry：进程级单例 vs 注入的 executionModule', () => {
-  const sqlite = read('sqliteTaskExecutionRuntimeParticipants.ts')
-  const postgresql = read('postgresqlTaskExecutionRuntimeParticipants.ts')
-
-  expect(sqlite).toContain('isActive: isTaskActive')
-  expect(sqlite).toContain('awaitReleasedSettled: awaitTaskDriverReleasedSettled')
-  // 那两个符号读的是 `taskExecutionModule` 这个进程级单例，不是构造时传进来的 registry。
-  expect(read('taskDriverLifecycle.ts')).toContain(
-    'taskExecutionModule.runtimeRegistry.awaitReleasedSettled(taskId)',
+test('第 12 刀 · drive 的内核是同一份：一处 driveTaskEngineApplication、一台子任务铸造机', () => {
+  const participants = read('taskExecutionRuntimeParticipants.ts')
+  expect(participants).toContain(
+    "import { driveTaskEngineApplication } from '../composition/taskEngineApplication'",
   )
-
-  expect(postgresql).toContain('executionModule.runtimeRegistry.hasTask(taskId)')
-  expect(postgresql).toContain('executionModule.runtimeRegistry.awaitReleasedSettled(taskId)')
-})
-
-test('W8 判不合 · drive 的内核已经是一份实现：两侧都调同一个 driveTaskEngineApplication', () => {
-  const sqlite = read('sqliteTaskExecutionRuntimeParticipants.ts')
-  const postgresql = read('postgresqlTaskExecutionRuntimeParticipants.ts')
-  for (const source of [sqlite, postgresql]) {
-    expect(source).toContain(
-      "import { driveTaskEngineApplication } from '../composition/taskEngineApplication'",
-    )
-    expect(source).toContain('await driveTaskEngineApplication(')
-    expect(source).toContain('wrapperRuntimeFactory: composeWrapperRuntime')
-    expect(source).toContain('mergeRecoveryFactory: composeExecutionMergeRecovery')
-  }
-  // RFC-359 AC-1（plan §5hn 批次二 ⑤）：**childLaunch 这一格也合了**。
-  // 此前两侧各有一台子任务启动引擎（SQLite 87 行的转发壳 → `startExecution` → `startTaskImpl`，
-  // PG 740 行的专用铸造机），这里锁的是「两侧各叫各的工厂」；现在两侧叫**同一个**工厂，
-  // 差别只剩装配方交进去的驱动生命周期端口（认领走哪条路 + 要不要带 legacy 连接）。
-  // 于是这一格从「见证分叉」翻成「锁住合一」——任何一侧再长出第二台铸造机都要先把这条改红。
-  for (const source of [sqlite, postgresql]) {
-    expect(source).toContain('createChildExecutionLaunchOperations({')
-  }
-  expect(sqlite).not.toContain('createSqliteChildExecutionLaunchOperations')
-  // 端口由各自组合根拼：SQLite 绑进程级单例（含 `legacyConnection`），PG 绑实例的 `claimPersisted`。
-  expect(sqlite).toContain('createDatabaseTaskDriverLifecyclePort({')
-  expect(postgresql).toContain('claim: (intentId) => executionModule.claimPersisted({ intentId })')
+  expect(participants).toContain('await driveTaskEngineApplication(')
+  expect(participants).toContain('wrapperRuntimeFactory: composeWrapperRuntime')
+  expect(participants).toContain('mergeRecoveryFactory: composeExecutionMergeRecovery')
+  expect(participants).toContain('createChildExecutionLaunchOperations({')
+  expect(participants).not.toContain('createSqliteChildExecutionLaunchOperations')
 })

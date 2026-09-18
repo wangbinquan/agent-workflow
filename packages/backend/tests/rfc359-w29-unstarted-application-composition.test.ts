@@ -595,8 +595,16 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // PostgreSQL 共用的那台铸造机，它要一个工作组资源面。
     // 这一格只在**回退路**上构造（生产交齐 `schedulerDriver` + `taskExecutionReadModels`，
     // 这整段 runtime 根本不装配，走的是 `composeSqliteTaskExecutionProviderRuntime`）。
+    // RFC-359 AC-1（第 12 刀）：摘要随**运行时参与者两个引擎合一**更新——这一层改调中立的
+    // `createTaskExecutionRuntimeParticipants(...)`，并把此前由 SQLite 那份工厂在体内现造的
+    // 四格（协作投影 / 并发域 / 日志 + 驱动生命周期端口）与两格进程内注册表端口
+    // （`activity` / `stop`）显式交进去。**装配出来的东西逐字不变**：四格是把原工厂体里那几行
+    // 原样搬到调用处（`createTaskDagCollaborationOperations(deps.db)` / `deps.db` /
+    // `createLogger('task')` / `createDatabaseTaskDriverLifecyclePort` + 同一个
+    // `finishClaimedWebhookWorkspacePrune` 收尾），两格是这条回退路本来就在用的那一对
+    // （`composeLegacyTaskActivityParticipant` 此前就住在同一个文件里）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      'a0fa43596bc378da510df4fac8363dbf90e81a44b7d927aca4ac7c41376ee62c',
+      'db70348162d5cc8d4414dde05b7104c9582d4d64a408e17214ba95f3ec78e7ef',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。

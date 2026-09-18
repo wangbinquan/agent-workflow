@@ -491,6 +491,6 @@ test('源码锁：回合只有一份实现与一份装配，legacy 薄壳与 pro
     expect(read(bootstrap)).toContain('composeWorkgroupTurnsOperations(')
   }
   expect(
-    read('modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts'),
+    read('modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts'),
   ).not.toContain('runWorkgroupEngine')
 })

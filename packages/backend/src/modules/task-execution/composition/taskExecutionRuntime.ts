@@ -5,11 +5,11 @@ export {
 } from './runtimeAssembly'
 export { createTaskExecutionPersistence } from './taskExecutionPersistence'
 export {
-  createPostgresqlTaskExecutionRuntimeParticipants,
-  type PostgresqlTaskExecutionRuntimeDependencies,
-  type PostgresqlTaskExecutionRuntimeAggregate,
-} from '../infrastructure/postgresqlTaskExecutionRuntimeParticipants'
-export { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
+  composeLegacyTaskActivityParticipant,
+  composeLegacyTaskStopRegistry,
+  createTaskExecutionRuntimeParticipants,
+  type TaskExecutionRuntimeParticipantsInput,
+} from '../infrastructure/taskExecutionRuntimeParticipants'
 export {
   composeWorkgroupHostLedgerParticipantFactory,
   type WorkgroupHostLedgerParticipantFactory,
@@ -22,6 +22,7 @@ export {
 export {
   createChildTaskLifecycleParticipant,
   type ChildTaskLifecycleDependencies,
+  type ChildTaskLifecycleRuntimePorts,
 } from './childTaskLifecycle'
 export {
   createChildExecutionLaunchOperations,
@@ -58,6 +59,7 @@ export {
   type SelectedPostgresqlTaskExecutionProviderRuntime,
   type SelectedSqliteTaskExecutionProviderRuntime,
   type SelectedTaskExecutionProviderRuntime,
+  type PostgresqlTaskExecutionRuntimeDependencies,
   type SqliteTaskExecutionProviderRuntimeDependencies,
   type TaskExecutionBackgroundControl,
   type TaskExecutionBackgroundStartDependencies,

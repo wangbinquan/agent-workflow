@@ -78,10 +78,13 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(composition).toContain('input.collaboration.inTransaction(transaction)')
   })
 
-  test('PostgreSQL child launch is owner-native and selected inside the provider aggregate', () => {
+  // RFC-359 AC-1（第 12 刀）：参与者已合一成一份中立实现，两个组合根绑各自的端口。
+  // 这条判据原本读 PG 那份适配器，现在读合一后的那一份——铸造机由谁选、工作组资源面从哪来，
+  // 两个引擎问的是同一份源码。
+  test('child launch is owner-native and selected inside the shared participant factory', () => {
     const adapter = read('modules/task-execution/infrastructure/childExecutionLaunchOperations.ts')
     const participants = read(
-      'modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+      'modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     )
     const provider = read('modules/task-execution/composition/providerRuntime.ts')
     const port = read('modules/task-execution/application/ports/childExecutionLaunchOperations.ts')

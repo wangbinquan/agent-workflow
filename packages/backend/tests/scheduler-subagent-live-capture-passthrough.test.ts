@@ -51,7 +51,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // 子任务启动合一删除，两个引擎共用 `childExecutionLaunchOperations.ts`。
     // 这份清单锁的是「每一条子启动路都把 runConfig 透传下去」，少一个文件不代表少一条路。
     const childLaunchAdapters = [
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
       'packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts',
       'packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts',
     ]

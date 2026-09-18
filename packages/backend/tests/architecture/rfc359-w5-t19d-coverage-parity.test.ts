@@ -126,20 +126,20 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 恰恰来自一份 `describeEachProvider` 的双引擎对拍，它同时喂着两侧。
   // RFC-359 AC-1（plan §5hn 批次二 ⑤ 收尾）：`11/3 → 12/3`。**这一格也是记账不是倾斜**——
   // 第 12 条引用来自 `rfc359-w8-child-launch-conformance` 的注释里写了
-  // `sqliteTaskExecutionRuntimeParticipants.ts` 这个文件名（本账本按**文本**数引用，注释也算）。
+  // `taskExecutionRuntimeParticipants.ts` 这个文件名（本账本按**文本**数引用，注释也算）。
   // 记账教训：这条棘轮要在**所有编辑做完之后**再跑一次——批次二 ⑤ 那一提就是中途跑绿、
   // 之后又改了注释，把 11 推上了 main（见 `docs/dev-gotchas.md` 对应条目）。
   // RFC-359 AC-1（第 9 刀）：`12/3 → 13/4`。`retry` 两份实现合一之后，共用的测试装配点
   // `tests/helpers/retryEngine.ts` 按**生产同形**取进程活跃度——`composeLegacyTaskActivityParticipant`
-  // 就住在 `sqliteTaskExecutionRuntimeParticipants.ts` 里，`server.ts` 绑的也是同一个。
+  // 就住在 `taskExecutionRuntimeParticipants.ts` 里，`server.ts` 绑的也是同一个。
   // **这一格是记账不是倾斜**：涨的是一份两个引擎共用的 helper（它自己被四份
   // `describeEachProvider` 的双引擎套件消费），不是只喂 SQLite 的新判据；
   // 参与者这一侧的命名/落位债按 plan §5hj 单独一刀还。
   // RFC-359 AC-1（第 10 刀）：`13/4 → 14/5`。`resume` 合一之后共用的测试装配点
   // `tests/helpers/resumeEngine.ts` 也按**生产同形**取进程活跃度（`composeLegacyTaskActivityParticipant`
-  // 就住在 `sqliteTaskExecutionRuntimeParticipants.ts` 里，两个组合根绑的都是它）。
+  // 就住在 `taskExecutionRuntimeParticipants.ts` 里，两个组合根绑的都是它）。
   // **这一格仍是记账不是倾斜**：涨的是一份被 20 个行为套件共用的 helper，不是只喂 SQLite 的新判据。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 14/5, postgresql 6/1',
+  // RFC-359 AC-1（第 12 刀）**销账**：这一对已合一成一份中立实现，配对本身不存在了。
   // RFC-359 AC-1（plan §5hh）：`postgresql 5/1 → 6/2`。新增的那次**驱动**是
   // `rfc359-w5-kernel-launch-provider-parity`——它在**两个引擎上各真启动一次**启动内核。
   // 账本按**符号名**归边，而这台内核顶着 `Postgresql` 前缀（它只服务一条启动路，
@@ -306,7 +306,7 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次二 ⑤ 收尾）：11 vs 6 → 12 vs 6，来源见上一格的注释。
   // RFC-359 AC-1（第 9 刀）：12 vs 6 → 13 vs 6，来源见上一格的注释（共用 retry 装配点按生产同形取活跃度）。
   // RFC-359 AC-1（第 10 刀）：13 vs 6 → 14 vs 6，来源见上一格的注释（共用 resume 装配点按生产同形取活跃度）。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 14 vs 6',
+  // RFC-359 AC-1（第 12 刀）**销账**：同上，这一对已合一，不再有「两侧」可倒挂。
   // 同上（§5hh）：差额 5 → 6 来自那次双引擎的内核启动，不是新的单侧倾斜。
   // RFC-359 AC-1（plan §5hi）：6 → 7，来源同上（SQLite 两个根改用这台内核）。
   // RFC-359 AC-1（plan §5hn 批次一）：7 → 8，来源同上。

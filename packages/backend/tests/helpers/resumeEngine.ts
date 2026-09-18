@@ -19,7 +19,7 @@ import {
   createTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { getTask } from '@/services/task'

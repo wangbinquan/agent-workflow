@@ -170,7 +170,10 @@ import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infras
 import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
-import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import {
+  composeLegacyTaskActivityParticipant,
+  composeLegacyTaskStopRegistry,
+} from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
 import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
@@ -318,7 +321,7 @@ import {
   createTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
@@ -353,6 +356,7 @@ import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
   createReviewDecisionCommand,
+  createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition/decisionCommands'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
@@ -1943,7 +1947,7 @@ export function composeSqliteApplicationDeps(
     deps.schedulerDriver !== undefined && deps.taskExecutionReadModels !== undefined
       ? undefined
       : composeTaskExecutionRuntime({
-          participants: createSqliteTaskExecutionRuntimeParticipants({
+          participants: createTaskExecutionRuntimeParticipants({
             db: deps.db,
             workgroupTurns: composeWorkgroupTurnsOperations(
               deps.db,
@@ -1979,6 +1983,22 @@ export function composeSqliteApplicationDeps(
                 authorization: composeResourceCatalogFor({ db: deps.db }).authorization,
               }).launch,
             }),
+            // RFC-359 AC-1（第 12 刀）：参与者已合一，这几格此前由 SQLite 那份工厂在体内现造
+            // （协作投影 / 并发域 / 日志），现在与 `composeSqliteTaskExecutionProviderRuntime`
+            // 逐字同形地由装配方交。三个端口是这条回退路的部署形态：进程级单例认领 +
+            // 进程内注册表。
+            taskDagCollaboration: createTaskDagCollaborationOperations(deps.db),
+            processConcurrencyScope: deps.db,
+            log: createLogger('task'),
+            lifecycle: createDatabaseTaskDriverLifecyclePort({
+              db: deps.db,
+              log: createLogger('task'),
+              finalizeWorkspace: async (taskId: string) => {
+                await finishClaimedWebhookWorkspacePrune(deps.db, taskId)
+              },
+            }),
+            activity: composeLegacyTaskActivityParticipant(),
+            stop: composeLegacyTaskStopRegistry(),
           }),
           readModels: taskExecutionReadModels,
         })

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1744,
+    "backendFiles": 1743,
     "frontendFiles": 622,
     "legacyFiles": 558,
-    "moduleFiles": 1186,
-    "productionFiles": 2521,
+    "moduleFiles": 1185,
+    "productionFiles": 2520,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24563
+    "symbolsIncludingFileRoots": 24564
   },
   "entries": [
     {
@@ -118396,6 +118396,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#PostgresqlTaskExecutionRuntimeDependencies",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "PostgresqlTaskExecutionRuntimeDependencies",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#SelectedPostgresqlTaskExecutionProviderRuntime",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
@@ -118448,6 +118460,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "SqliteRouteCollaborationContext",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#SqliteRuntimeParticipantsAssembled",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "SqliteRuntimeParticipantsAssembled",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -125260,6 +125284,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#ChildTaskLifecycleRuntimePorts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ChildTaskLifecycleRuntimePorts",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#createChildTaskLifecycleParticipant",
       "removeAfterWave": null,
       "status": "current-module",
@@ -127455,54 +127491,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#createPostgresqlTaskExecutionRuntimeParticipants",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlTaskExecutionRuntimeParticipants",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#PostgresqlTaskExecutionRuntimeAggregate",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlTaskExecutionRuntimeAggregate",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#PostgresqlTaskExecutionRuntimeDependencies",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlTaskExecutionRuntimeDependencies",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#$file",
       "removeAfterWave": null,
@@ -127844,42 +127832,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createTaskSourceTerminationParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#composeLegacyTaskActivityParticipant",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composeLegacyTaskActivityParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#createSqliteTaskExecutionRuntimeParticipants",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteTaskExecutionRuntimeParticipants",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -129296,6 +129248,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskExecutionResourceSnapshotFactory",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#composeLegacyTaskActivityParticipant",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeLegacyTaskActivityParticipant",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#composeLegacyTaskStopRegistry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeLegacyTaskStopRegistry",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#createTaskExecutionRuntimeParticipants",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createTaskExecutionRuntimeParticipants",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#TaskExecutionRuntimeParticipantsInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskExecutionRuntimeParticipantsInput",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -295433,5 +295445,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:330d7c791e0997a658815298942c34d99227d4f7bce9e5777543fac55eb4c726"
+  "sourceDigest": "sha256:10a9d855edbabf63d6d3c08c3a26455f7a8b5b79522b3bdddbc0b371d7894448"
 }

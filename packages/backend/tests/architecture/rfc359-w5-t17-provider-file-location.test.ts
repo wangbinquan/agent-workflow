@@ -149,11 +149,12 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts',
   // RFC-359 AC-1（plan §5hm）：**删除**——驱动生命周期端口两个引擎合成一份
   // （`taskDriverLifecycle.ts`），PG 专属那份已退役。少一个 provider 命名文件。
-  'modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+  // RFC-359 AC-1（第 12 刀）：**这一对整个销账**——运行时参与者合成中立的
+  // `taskExecutionRuntimeParticipants.ts`，两侧的装配（含认领策略）回到各自组合根。
+  // 少两个 provider 命名文件。
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
-  'modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
 ]

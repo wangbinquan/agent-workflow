@@ -61,8 +61,7 @@ import type {
   PostgresqlTaskExecutionProviderRuntimeDependencies,
   SqliteTaskExecutionProviderRuntimeDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import type { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import type { createPostgresqlTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants'
+import type { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -129,10 +128,12 @@ const _noneMayBeAbsent: NoneMayBeAbsent = {
 }
 
 // W12: narrow the production contract without changing the outer legacy vocabulary.
-const _sqliteIdentityRequired: undefined extends Parameters<
-  typeof createSqliteTaskExecutionRuntimeParticipants
+// RFC-359 AC-1（第 12 刀）：参与者只有一份实现，所以这条也只剩一句——两个引擎共用同一个
+// 必填判据，任一侧再想「先不交身份运行时」都得先把这里改红。
+const _participantsIdentityRequired: undefined extends Parameters<
+  typeof createTaskExecutionRuntimeParticipants
 >[0]['identityAccess']
-  ? 'SQLite runtime participants must receive the runtime during construction'
+  ? 'Runtime participants must receive the runtime during construction'
   : true = true
 const _providerIdentityRequired: undefined extends SqliteTaskExecutionProviderRuntimeDependencies['runtime']['identityAccess']
   ? 'The full provider factory must not admit a missing runtime'
@@ -141,16 +142,12 @@ const _legacyIdentityStillOptional: undefined extends RunTaskOptions['identityAc
   ? true
   : 'Legacy run options must keep their existing optional input' = true
 
-type SqliteParticipantsInput = Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0]
-type PostgresqlParticipantsInput = Parameters<
-  typeof createPostgresqlTaskExecutionRuntimeParticipants
->[1]
+type ParticipantsInput = Parameters<typeof createTaskExecutionRuntimeParticipants>[0]
 type SqliteProviderInput = SqliteTaskExecutionProviderRuntimeDependencies['runtime']
 type PostgresqlProviderInput = PostgresqlTaskExecutionProviderRuntimeDependencies['runtime']
 type CompleteDynamicWorkflowInputs = {
   drive: DriveOptions
-  sqliteParticipants: SqliteParticipantsInput
-  postgresqlParticipants: PostgresqlParticipantsInput
+  participants: ParticipantsInput
   sqliteProvider: SqliteProviderInput
   postgresqlProvider: PostgresqlProviderInput
 }
@@ -160,8 +157,7 @@ const _dynamicWorkflowRequired: {
     : true
 } = {
   drive: true,
-  sqliteParticipants: true,
-  postgresqlParticipants: true,
+  participants: true,
   sqliteProvider: true,
   postgresqlProvider: true,
 }
@@ -172,8 +168,7 @@ const _legacyDynamicWorkflowStillOptional: undefined extends RunTaskOptions['dyn
 /** Compile-only: use the real input types without invoking a runtime or domain command. */
 function dynamicWorkflowConstructionTypes(inputs: CompleteDynamicWorkflowInputs, include: boolean) {
   const { dynamicWorkflow: driveDynamic, ...drive } = inputs.drive
-  const { dynamicWorkflow: sqliteDynamic, ...sqlite } = inputs.sqliteParticipants
-  const { dynamicWorkflow: postgresqlDynamic, ...postgresql } = inputs.postgresqlParticipants
+  const { dynamicWorkflow: participantsDynamic, ...participants } = inputs.participants
   const { dynamicWorkflow: sqliteProviderDynamic, ...sqliteProvider } = inputs.sqliteProvider
   const { dynamicWorkflow: postgresqlProviderDynamic, ...postgresqlProvider } =
     inputs.postgresqlProvider
@@ -190,28 +185,16 @@ function dynamicWorkflowConstructionTypes(inputs: CompleteDynamicWorkflowInputs,
     // @ts-expect-error Explicit undefined is not a dynamic-workflow bundle.
     dynamicWorkflow: undefined,
   }
-  // @ts-expect-error SQLite participants must receive every engine capability.
-  const missingSqlite: SqliteParticipantsInput = sqlite
-  // @ts-expect-error A conditional bundle does not complete SQLite participants.
-  const optionalSqlite: SqliteParticipantsInput = {
-    ...sqlite,
-    ...(include ? { dynamicWorkflow: sqliteDynamic } : {}),
+  // @ts-expect-error Runtime participants must receive every engine capability.
+  const missingParticipants: ParticipantsInput = participants
+  // @ts-expect-error A conditional bundle does not complete runtime participants.
+  const optionalParticipants: ParticipantsInput = {
+    ...participants,
+    ...(include ? { dynamicWorkflow: participantsDynamic } : {}),
   }
-  const undefinedSqlite: SqliteParticipantsInput = {
-    ...inputs.sqliteParticipants,
-    // @ts-expect-error Explicit undefined does not complete SQLite participants.
-    dynamicWorkflow: undefined,
-  }
-  // @ts-expect-error PostgreSQL participants must receive every engine capability.
-  const missingPostgresql: PostgresqlParticipantsInput = postgresql
-  // @ts-expect-error A conditional bundle does not complete PostgreSQL participants.
-  const optionalPostgresql: PostgresqlParticipantsInput = {
-    ...postgresql,
-    ...(include ? { dynamicWorkflow: postgresqlDynamic } : {}),
-  }
-  const undefinedPostgresql: PostgresqlParticipantsInput = {
-    ...inputs.postgresqlParticipants,
-    // @ts-expect-error Explicit undefined does not complete PostgreSQL participants.
+  const undefinedParticipants: ParticipantsInput = {
+    ...inputs.participants,
+    // @ts-expect-error Explicit undefined does not complete runtime participants.
     dynamicWorkflow: undefined,
   }
   // @ts-expect-error The complete SQLite provider must require the bundle too.
@@ -243,12 +226,9 @@ function dynamicWorkflowConstructionTypes(inputs: CompleteDynamicWorkflowInputs,
     missingDrive,
     optionalDrive,
     undefinedDrive,
-    missingSqlite,
-    optionalSqlite,
-    undefinedSqlite,
-    missingPostgresql,
-    optionalPostgresql,
-    undefinedPostgresql,
+    missingParticipants,
+    optionalParticipants,
+    undefinedParticipants,
     missingSqliteProvider,
     optionalSqliteProvider,
     undefinedSqliteProvider,

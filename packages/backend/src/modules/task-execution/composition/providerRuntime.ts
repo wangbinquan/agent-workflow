@@ -30,10 +30,24 @@ import type { TaskOverviewQuery } from '../public/queries'
 import type { TaskClarifyDirectiveRouteOperations, TaskExecutionReadModels } from '../public/types'
 import type { TaskRouteOperations } from '../public/taskRoutes'
 import {
-  createPostgresqlTaskExecutionRuntimeParticipants,
-  type PostgresqlTaskExecutionRuntimeDependencies,
-} from '../infrastructure/postgresqlTaskExecutionRuntimeParticipants'
-import { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
+  composeLegacyTaskActivityParticipant,
+  composeLegacyTaskStopRegistry,
+  createTaskExecutionRuntimeParticipants,
+  type TaskExecutionRuntimeParticipantsInput,
+} from '../infrastructure/taskExecutionRuntimeParticipants'
+import {
+  createDatabaseTaskDriverLifecyclePort,
+  createTaskDriverLifecyclePort,
+} from '../infrastructure/taskDriverLifecycle'
+import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
+import { composePostgresqlMemoryInjectionQueries } from '@/modules/memory/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
+import { createProviderTaskExecutionModule } from '../composition'
+import { createRuntimeSessionLeaseOperations } from '../infrastructure/runtimeSessionLeaseOperations'
+import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
+import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
+import { createLogger } from '@/util/log'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '../infrastructure/taskArchiveMaintenanceCommand'
 import type { AutomaticTaskRepairOptions } from '../infrastructure/taskRouteRepairOperations'
 import { createTaskLifecycleAutoRepairCommand } from './taskLifecycleRepair'
@@ -175,21 +189,36 @@ function cancellationCommand(
   })
 }
 
+/**
+ * RFC-359 AC-1（第 12 刀）：本组合根自己装的那几格由 `Omit` 划出去。
+ *
+ * `taskDagCollaboration` / `processConcurrencyScope` / `log` 此前是参与者工厂在体内现造的
+ * （`createTaskDagCollaborationOperations(db)` / `db` / `createLogger('task')`），合一之后由
+ * 这里照原样造——**装配决定，不是引擎差异**。三个端口（`lifecycle` / `activity` / `stop`）
+ * 是这一支的部署形态：进程级单例的同步认领 + 进程内注册表。
+ */
+type SqliteRuntimeParticipantsAssembled =
+  | 'db'
+  | 'persistence'
+  | 'codeHostConnections'
+  | 'childLaunchWorkgroup'
+  | 'taskDagCollaboration'
+  | 'processConcurrencyScope'
+  | 'log'
+  | 'lifecycle'
+  | 'activity'
+  | 'stop'
+
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
   readonly runtime: Omit<
-    Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0],
+    TaskExecutionRuntimeParticipantsInput,
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：`childLaunchWorkgroup` 与 PostgreSQL 那一支同形——
     // 由本组合根从 `routeLaunch.workgroup` 取，装配方不必交第二份。
-    'db' | 'persistence' | 'codeHostConnections' | 'childLaunchWorkgroup'
+    SqliteRuntimeParticipantsAssembled
   > &
-    Required<
-      Pick<
-        Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0],
-        'codeHostConnections'
-      >
-    >
+    Required<Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections'>>
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     SqliteTaskRouteOperationsDependencies,
@@ -227,11 +256,26 @@ export function composeSqliteTaskExecutionProviderRuntime<
   dependencies: SqliteTaskExecutionProviderRuntimeDependencies<C>,
 ): SelectedSqliteTaskExecutionProviderRuntime<C> {
   const persistence = createTaskExecutionPersistence(db)
-  const participants = createSqliteTaskExecutionRuntimeParticipants({
+  const log = createLogger('task')
+  const participants = createTaskExecutionRuntimeParticipants({
     db,
     persistence,
     ...dependencies.runtime,
     childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
+    taskDagCollaboration: createTaskDagCollaborationOperations(db),
+    processConcurrencyScope: db,
+    log,
+    // RFC-359 AC-1（第 12 刀）：这一支的部署形态——进程级单例的同步认领
+    //（执行上下文带 `legacyConnection`）+ 进程内注册表的活跃度 / 停机票据。
+    lifecycle: createDatabaseTaskDriverLifecyclePort({
+      db,
+      log,
+      finalizeWorkspace: async (taskId: string) => {
+        await finishClaimedWebhookWorkspacePrune(db, taskId)
+      },
+    }),
+    activity: composeLegacyTaskActivityParticipant(),
+    stop: composeLegacyTaskStopRegistry(),
   })
   const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
   const routeLaunch = createSqliteTaskRouteLaunchOperations({
@@ -345,6 +389,37 @@ export function composeSqliteTaskExecutionProviderRuntime<
   })
 }
 
+/**
+ * RFC-359 AC-1（第 12 刀）：PostgreSQL 这一支的运行时装配面。
+ *
+ * 此前它是 `infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts` 的入参接口，而那个
+ * 文件干的事全是**装配**（现造持久化 / 执行模块 / 会话租约 / 记忆注入 / 运行时档案注册表，
+ * 再挑一条认领策略），一行适配逻辑都没有。按 RFC-294 装配归 `composition/`，所以它整条搬到
+ * 这里，跟本支其余的装配放在一起；参与者实现只剩中立的那一份。
+ */
+export interface PostgresqlTaskExecutionRuntimeDependencies extends Omit<
+  TaskExecutionRuntimeParticipantsInput,
+  | 'db'
+  | 'persistence'
+  | 'runtimeSessionLeases'
+  | 'memoryInjectionQueries'
+  | 'runtimeRegistry'
+  | 'childLaunchWorkgroup'
+> {
+  readonly childLaunchWorkgroup: TaskExecutionRuntimeParticipantsInput['childLaunchWorkgroup']
+  /** 装配方选定的凭据读取面；PostgreSQL 执行绝不回头开一条 SQLite 兜底。 */
+  readonly codeHostConnections: CodeHostConnectionsService
+  /** 落进所有权租约的确切进程代号。 */
+  readonly daemonGeneration: string
+  /** Source-control 选定的终态工作区收尾器。 */
+  readonly finalizeWorkspace: (taskId: string) => Promise<void>
+  /** 可选的预装实例，让一个 bootstrap 能共享同一批聚合。 */
+  readonly persistence?: TaskExecutionPersistence
+  readonly runtimeSessionLeases?: RuntimeSessionLeaseOperations
+  /** 让启动 / 取消装配共享同一道认领闸门与进程注册表。 */
+  readonly executionModule?: ProviderTaskExecutionModule
+}
+
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly runtime: Omit<PostgresqlTaskExecutionRuntimeDependencies, 'childLaunchWorkgroup'>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
@@ -381,11 +456,40 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   db: PostgresqlDatabaseClient,
   dependencies: PostgresqlTaskExecutionProviderRuntimeDependencies,
 ): SelectedPostgresqlTaskExecutionProviderRuntime {
-  const participants = createPostgresqlTaskExecutionRuntimeParticipants(db, {
-    ...dependencies.runtime,
-    childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
+  const persistence = dependencies.runtime.persistence ?? createTaskExecutionPersistence(db)
+  const executionModule =
+    dependencies.runtime.executionModule ??
+    createProviderTaskExecutionModule({
+      daemonGeneration: dependencies.runtime.daemonGeneration,
+      persistence,
+    })
+  // RFC-359 AC-1（第 12 刀）：这一支的部署形态——持久化租约认领 + 注入的执行模块注册表。
+  const activity = Object.freeze({
+    isActive: (taskId: string) => executionModule.runtimeRegistry.hasTask(taskId),
+    // 不能是空桩：共用实现靠它做两阶段停机的等待（见 `resumeTaskProjection` 的头注）。
+    awaitReleasedSettled: (taskId: string) =>
+      executionModule.runtimeRegistry.awaitReleasedSettled(taskId),
   })
-  const persistence = participants.persistence
+  const participants = createTaskExecutionRuntimeParticipants({
+    ...dependencies.runtime,
+    db,
+    persistence,
+    runtimeSessionLeases:
+      dependencies.runtime.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
+    memoryInjectionQueries: composePostgresqlMemoryInjectionQueries(db),
+    runtimeRegistry: composeRuntimeRegistryOperations(db),
+    childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
+    lifecycle: createTaskDriverLifecyclePort({
+      db,
+      module: executionModule,
+      claim: (intentId) => executionModule.claimPersisted({ intentId }),
+      persistence,
+      log: dependencies.runtime.log,
+      finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
+    }),
+    activity,
+    stop: executionModule.runtimeRegistry,
+  })
   const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
   const workspaceDependencies: TaskRouteWorkspaceDependencies = {
     db,
@@ -460,7 +564,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({
-    module: participants.executionModule,
+    module: executionModule,
     lifecycleRepair,
     autoResume,
     recovery: persistence.recoveryAdministration,
@@ -472,7 +576,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     participants,
     persistence,
     runtime,
-    executionModule: participants.executionModule,
+    executionModule,
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,
@@ -487,7 +591,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
       appHome: dependencies.fusion.appHome,
       schedulerDriver: runtime.schedulerDriver,
       persistence,
-      executionModule: participants.executionModule,
+      executionModule,
       finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
       log: dependencies.runtime.log,
     }),

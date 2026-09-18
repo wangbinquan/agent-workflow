@@ -493,14 +493,12 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(containing('composeWrapperRuntime')).toEqual([
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
       'packages/backend/src/modules/task-execution/composition/wrapperRuntime.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     ])
     expect(containing('composeExecutionMergeRecovery')).toEqual([
       'packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts',
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     ])
     expect(containing('createExecutionScopeIndex(')).toEqual([
       // RFC-354 T4: the one-shot frame backfill re-derives each stored

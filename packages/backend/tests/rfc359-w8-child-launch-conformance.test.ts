@@ -389,7 +389,7 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
       operations: createChildExecutionLaunchOperations({
         db,
         persistence,
-        // SQLite 组合根那一条（`sqliteTaskExecutionRuntimeParticipants.ts` 逐字同形）。
+        // SQLite 组合根那一条（`taskExecutionRuntimeParticipants.ts` 逐字同形）。
         lifecycle: createDatabaseTaskDriverLifecyclePort({
           db,
           log: logger(),

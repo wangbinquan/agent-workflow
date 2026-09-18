@@ -5,7 +5,11 @@ import type { SchedulerDriverPort } from '../../src/modules/task-execution/publi
 import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
 import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
-import { createSqliteTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import {
+  composeLegacyTaskActivityParticipant,
+  composeLegacyTaskStopRegistry,
+  createTaskExecutionRuntimeParticipants,
+} from '../../src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
@@ -85,6 +89,30 @@ export function composeTestChildLaunchWorkgroup(db: ProviderNeutralDatabase) {
   })
 }
 
+/**
+ * RFC-359 AC-1（第 12 刀）：单进程部署形态的那几格端口。
+ *
+ * 参与者合一之后，「谁在跑 / 怎么认领 / 怎么请它停」由装配方交；测试拓扑按**生产同形**取——
+ * 与 `composeSqliteTaskExecutionProviderRuntime` 逐字相同的进程级单例认领 + 进程内注册表。
+ */
+export function singleProcessDeploymentPorts(db: DbClient) {
+  const log = createLogger('task')
+  return {
+    taskDagCollaboration: createTaskDagCollaborationOperations(db),
+    processConcurrencyScope: db,
+    log,
+    lifecycle: createDatabaseTaskDriverLifecyclePort({
+      db,
+      log,
+      finalizeWorkspace: async (taskId: string) => {
+        await finishClaimedWebhookWorkspacePrune(db, taskId)
+      },
+    }),
+    activity: composeLegacyTaskActivityParticipant(),
+    stop: composeLegacyTaskStopRegistry(),
+  }
+}
+
 /** Shared direct-runtime helper: test schedulers use the same admitted owner. */
 export function composeTaskExecutionTestRuntime(
   db: DbClient,
@@ -94,8 +122,9 @@ export function composeTaskExecutionTestRuntime(
   const persistence = createTaskExecutionPersistence(db)
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
-    participants: createSqliteTaskExecutionRuntimeParticipants({
+    participants: createTaskExecutionRuntimeParticipants({
       db,
+      ...singleProcessDeploymentPorts(db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
       identityAccess: identity.resources,
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
@@ -228,8 +257,9 @@ export function runTaskWithRealTestTopology(
     })
   const runtime = composeTaskExecutionRuntime({
     readModels: persistence.reads,
-    participants: createSqliteTaskExecutionRuntimeParticipants({
+    participants: createTaskExecutionRuntimeParticipants({
       db: options.db,
+      ...singleProcessDeploymentPorts(options.db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(options.db),
       identityAccess,
       memoryInjectionQueries,

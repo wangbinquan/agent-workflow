@@ -125,8 +125,8 @@
       "id": "rfc294-review-off-dag-offered-edges",
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "baseline": 42,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。"
+      "baseline": 41,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。"
     },
     {
       "id": "rfc294-review-unconsumed-public-symbols",
@@ -384,8 +384,8 @@
       "id": "rfc359-w5-coverage-parity",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "COVERAGE_PARITY_LEDGER",
-      "baseline": 6,
-      "why": "RFC-359 W5-T19d：成对适配器两侧的测试引用 / 驱动数。倒挂说明一侧几乎没有行为覆盖。 RFC-359 AC-1（plan §5hn 批次二 ⑤）8 → 7：`ChildExecutionLaunchOperations` 这一对整行销账——SQLite 那半（87 行转发壳）删除，两个组合根叫同一个工厂，`classify()` 再也配不出这一对。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。"
+      "baseline": 5,
+      "why": "RFC-359 W5-T19d：成对适配器两侧的测试引用 / 驱动数。倒挂说明一侧几乎没有行为覆盖。 RFC-359 AC-1（plan §5hn 批次二 ⑤）8 → 7：`ChildExecutionLaunchOperations` 这一对整行销账——SQLite 那半（87 行转发壳）删除，两个组合根叫同一个工厂，`classify()` 再也配不出这一对。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。 （RFC-359 AC-1 第 12 刀：运行时参与者这一对合一，配对本身不存在了。）基线 6 → 5。"
     },
     {
       "id": "rfc359-w5-dead-provider-adapter",
@@ -405,8 +405,8 @@
       "id": "rfc359-w5-inverted-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
-      "baseline": 4,
-      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。 RFC-359 AC-1（plan §5hn 批次二 ⑦）4 → 5：`TaskRouteOperations` 入名单。**这一条是命名债的读数，不是新的倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除后，一批源码文本锁改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 的命名债）。真正的处置是把那两个文件改成中立名，不是往 SQLite 那侧硬凑用例。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。"
+      "baseline": 3,
+      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。 RFC-359 AC-1（plan §5hn 批次二 ⑦）4 → 5：`TaskRouteOperations` 入名单。**这一条是命名债的读数，不是新的倾斜**——`startExecution` 门面与 `services/multipartTaskStart.ts` 整份删除后，一批源码文本锁改锚到了**共用实现**上，而共用实现此刻还叫 `postgresql*`（§5hj 的命名债）。真正的处置是把那两个文件改成中立名，不是往 SQLite 那侧硬凑用例。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。 （RFC-359 AC-1 第 12 刀：运行时参与者这一对合一，配对本身不存在了。）基线 4 → 3。"
     },
     {
       "id": "rfc359-w5-name-collision-definition-drift",
@@ -447,15 +447,15 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 31,
-      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。 RFC-359：`sqliteNodeRunMintParticipant.ts` 退役——它只是 `nodeRunMintProgram` 的同步解释器，src 侧唯一的到达路径是 `mintLegacySqliteNodeRunInTx` → `services/nodeRunMint.ts#mintNodeRunTx`，而后者生产零调用方；事务内铸行的调用方本来就走中立的 `createNodeRunMintParticipantInTx`，50 → 49。。RFC-359（2026-09-13）49 → 48：同上，那条死门面连同它的三处账本条目一起删。RFC-359（2026-09-13，apply 引擎合一 §5dw）48 → 47：`modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts` 退役——它的四个同步 `*InTx` 只服务 legacy 提交路径，随 `legacyResourcePackageCommit.ts` 一起删；两个 async 读早就由中立的 `packageResourceRows.ts` 提供。RFC-359 AC-12（2026-09-14，plan §5ek）44 → 39：intent apply 合一后 `legacy*` 孪生已整条退役，PG 侧那五个文件成为两个 provider 唯一的实现，provider 前缀名不副实，随之改名——`intentApplyEngine` / `intentApplyArtifactLifecycle` / `aggregateAdapters/intentApply{ResourceParticipants,ResourcePorts,ArtifactOwners}` RFC-359 AC-1（plan §5fx）39 → 38：`sqliteWebhookTriggerValidation.ts` 整个删除——它是一层**只原样转交、而且根本不碰数据库**的间接层（两个导出都只是把实参转给 `composition/webhookAdmission` 的同名函数）。名字里的 `sqlite` 纯属噪音，消费者改为直接用 admission 里那一份。 RFC-359 AC-1（plan §5hm）38 → 37：`postgresqlTaskDriverLifecycle.ts` 退役——驱动生命周期端口两个引擎合成一份，认领方式由装配方交闭包决定。顺带关掉一个真缺口：PG 那份的 attach 此前不走评审变更锁（`rfc359-w5hm-attach-review-lock-parity` 合一前在 PG 上是红的）。 RFC-359 AC-1（plan §5hn 批次二 ⑤）37 → 36：`sqliteChildExecutionLaunchOperations.ts` 随子任务启动合一删除。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。同一波第二批 32 → 31：`taskRouteRepairOperations` 去前缀（它的依赖面注释早就写着句柄是中立的、名字里的 `postgresql` 只是历史）。"
+      "baseline": 29,
+      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。 RFC-359：`modules/task-execution/infrastructure/sqliteTaskOwnership.ts` 退役——归属写面只剩中立的 `DrizzleTaskOwnershipPersistence` 一份，`heartbeat` / `read` / `revokeExact` / `markRecoveryRequired` 四个同步调用点改从 `taskExecutionModule.ownershipFor(db)` 取（PG 侧的驱动生命周期本来就是这个形状），55 → 54。 RFC-359：`sqliteTaskExecutionEffect.ts` 同批退役——`planCodeHostAttempt` / `nextOperationGeneration` 的生产消费者早就走中立的 `DrizzleTaskExecutionEffectPersistence`（`opts.persistence.effects`），`linkWorkspaceRollbackTx` 全仓零调用方，组合根上那个同步单例是纯挂件，54 → 53。 RFC-359：`sqliteTaskExecutionIntentAdmission.ts` 同批退役——它只剩事务内的同步参与者 `submitTaskContinuationTx`，而唯一调用方 `sqliteTaskDecisionParticipant.ts` 已随同步人工门链删除；中立孪生 `taskContinuationAdmission.ts#submitTaskContinuation` 签名逐字相同，53 → 52。 RFC-359：`sqliteTaskExecutionIntent.ts` 与它的端口 `taskExecutionIntentTransactionStore.ts` / 已 deprecated 的 `ports/taskExecutionIntentStore.ts` 一起退役——`submitTx` 的 src 调用方随准入适配器删除后归零，`hasPendingGateSuccessor` 的生产消费者早就走中立的 `DrizzleTaskExecutionIntentPersistence`，52 → 51。 RFC-359：`sqliteTerminalizeExecutionIntent.ts` 与转发层 `composition/intentTerminalization.ts` 退役——同步的 `terminalizeTaskExecutionIntentsTx` 在 src 侧从来只有转出、没有调用方，生产的启动收割走中立的 `terminalizeTaskExecutionIntentsUncheckedInTx`（宽判据那一支，逐字同义），51 → 50。 RFC-359：`sqliteNodeRunMintParticipant.ts` 退役——它只是 `nodeRunMintProgram` 的同步解释器，src 侧唯一的到达路径是 `mintLegacySqliteNodeRunInTx` → `services/nodeRunMint.ts#mintNodeRunTx`，而后者生产零调用方；事务内铸行的调用方本来就走中立的 `createNodeRunMintParticipantInTx`，50 → 49。。RFC-359（2026-09-13）49 → 48：同上，那条死门面连同它的三处账本条目一起删。RFC-359（2026-09-13，apply 引擎合一 §5dw）48 → 47：`modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts` 退役——它的四个同步 `*InTx` 只服务 legacy 提交路径，随 `legacyResourcePackageCommit.ts` 一起删；两个 async 读早就由中立的 `packageResourceRows.ts` 提供。RFC-359 AC-12（2026-09-14，plan §5ek）44 → 39：intent apply 合一后 `legacy*` 孪生已整条退役，PG 侧那五个文件成为两个 provider 唯一的实现，provider 前缀名不副实，随之改名——`intentApplyEngine` / `intentApplyArtifactLifecycle` / `aggregateAdapters/intentApply{ResourceParticipants,ResourcePorts,ArtifactOwners}` RFC-359 AC-1（plan §5fx）39 → 38：`sqliteWebhookTriggerValidation.ts` 整个删除——它是一层**只原样转交、而且根本不碰数据库**的间接层（两个导出都只是把实参转给 `composition/webhookAdmission` 的同名函数）。名字里的 `sqlite` 纯属噪音，消费者改为直接用 admission 里那一份。 RFC-359 AC-1（plan §5hm）38 → 37：`postgresqlTaskDriverLifecycle.ts` 退役——驱动生命周期端口两个引擎合成一份，认领方式由装配方交闭包决定。顺带关掉一个真缺口：PG 那份的 attach 此前不走评审变更锁（`rfc359-w5hm-attach-review-lock-parity` 合一前在 PG 上是红的）。 RFC-359 AC-1（plan §5hn 批次二 ⑤）37 → 36：`sqliteChildExecutionLaunchOperations.ts` 随子任务启动合一删除。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。同一波第二批 32 → 31：`taskRouteRepairOperations` 去前缀（它的依赖面注释早就写着句柄是中立的、名字里的 `postgresql` 只是历史）。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 31 → 29。"
     },
     {
       "id": "rfc359-w5-provider-pair-conformance",
       "file": "packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts",
       "symbol": "PROVIDER_PAIR_CONFORMANCE_LEDGER",
-      "baseline": 6,
-      "why": "RFC-359：成对 provider 适配器的清单 + 对拍覆盖状态位。这个数就是合一进度，降到 0 是完工线。 RFC-359 AC-1（plan §5hn 批次二 ⑤）8 → 7：同上，`ChildExecutionLaunchOperations` 销账；见证测试 `rfc359-w8-child-launch-conformance` 留任，本分从「见证分叉」翻成「锁住合一」。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。"
+      "baseline": 5,
+      "why": "RFC-359：成对 provider 适配器的清单 + 对拍覆盖状态位。这个数就是合一进度，降到 0 是完工线。 RFC-359 AC-1（plan §5hn 批次二 ⑤）8 → 7：同上，`ChildExecutionLaunchOperations` 销账；见证测试 `rfc359-w8-child-launch-conformance` 留任，本分从「见证分叉」翻成「锁住合一」。RFC-359 AC-1（命名债收尾 §5hj）：四份 provider 中立的实现去掉 `postgresql` 前缀，于是不再与 `sqlite*` 那一半配成「成对适配器」，也不再算 provider 命名文件。是改名带来的销账，不是删覆盖。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 6 → 5。"
     },
     {
       "id": "rfc359-w5-provider-runtime-unexercised",
@@ -804,7 +804,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1672,
+      "baseline": 1671,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -839,7 +839,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5086,
+      "baseline": 5082,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -860,8 +860,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4572,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4573,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（第 12 刀）：净 +1。运行时参与者两个引擎合一，退役两个 provider 命名工厂（`create{Sqlite,Postgresql}TaskExecutionRuntimeParticipants`）并整份删除 PG 那个文件，换成一份中立实现；新增的导出是**端口化本身带来的**——`createTaskExecutionRuntimeParticipants` / `TaskExecutionRuntimeParticipantsInput` / `ChildTaskLifecycleRuntimePorts` / `composeLegacyTaskStopRegistry`。最后那个是进程级停机票据注册表的唯一取用点，与既有的 `composeLegacyTaskActivityParticipant` 成对；不给它名字的替代是让两个组合根各自裸取 `taskExecutionModule.runtimeRegistry`，而那正是本账本旁边注释反复警告的「同名不同物」陷阱（参与者输入里的 `runtimeRegistry` 是运行时**档案**注册表）。一次性豁免，下一笔不涨的提交上删除。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -895,12 +898,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24563,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24564,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（第 12 刀）：净 +1。运行时参与者两个引擎合一，退役两个 provider 命名工厂（`create{Sqlite,Postgresql}TaskExecutionRuntimeParticipants`）并整份删除 PG 那个文件，换成一份中立实现；新增的导出是**端口化本身带来的**——`createTaskExecutionRuntimeParticipants` / `TaskExecutionRuntimeParticipantsInput` / `ChildTaskLifecycleRuntimePorts` / `composeLegacyTaskStopRegistry`。最后那个是进程级停机票据注册表的唯一取用点，与既有的 `composeLegacyTaskActivityParticipant` 成对；不给它名字的替代是让两个组合根各自裸取 `taskExecutionModule.runtimeRegistry`，而那正是本账本旁边注释反复警告的「同名不同物」陷阱（参与者输入里的 `runtimeRegistry` 是运行时**档案**注册表）。一次性豁免，下一笔不涨的提交上删除。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:330d7c791e0997a658815298942c34d99227d4f7bce9e5777543fac55eb4c726",
+    "sourceDigest": "sha256:10a9d855edbabf63d6d3c08c3a26455f7a8b5b79522b3bdddbc0b371d7894448",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +919,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1fdb0011708f4316c08aeb30d237b585ef81d3fa",
-    "contentDigest": "sha256:f8ab09b0fc960b6ad8a44b5213e06d7699eedf298584582a9451c983da1245ba",
+    "currentSnapshotSha": "a2ee5c127aca3cde18e80a8f42a5433aa58d91b5",
+    "contentDigest": "sha256:5cd69c510dddd57dbdbf91e8539dc88fa513122662f2a1421957713810002357",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

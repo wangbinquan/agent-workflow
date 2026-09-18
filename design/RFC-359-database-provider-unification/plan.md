@@ -23,7 +23,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 
 | AC    | 判据                                              | 实测                                                                                                                                                                                                                                                                                                     | 状态   |
 | ----- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录153→9对已登记；W55将两个读取owner的三对完整资源快照投影共享，保原7调用及完整冻结/返回合同。三个SQLite原语的落位单独记为T17 59→56，不计业务合一。**W57 收掉两条内联真实重复**：①`/api/overview` 的两套完整实现（SQLite `buildOverview` / PG `composeSystemOverviewQuery`，逐个聚合键语义等价）收成一份，删 316 行；②任务可见性判据 `or(owner=我, id IN 我参与的)` 的**七份**逐字副本（含一份 provider 专属）收成一份，连带四份分块 `visibleTaskIds`（其中两份逐字相同、三份硬写字面量 500）；两条都带新守卫，可见性那条在收敛前 HEAD 上验红 6/6。**2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定——PG 侧此前**根本没有** `inspectHumanReview`，闸门在 PostgreSQL 上永远报不出 `waiting`（§5dm）；③**找到本仓最大的一处重复，且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS`，并按 RFC 自己的办法**先补对拍**（`rfc359-w13-resource-package-apply-conformance.test.ts`，三种资源类型 / 16 格双引擎全绿，§5dp）。**跨目录真实重复缺口仍开**：那一对本身尚未合一。**2026-09-13 再续（§5dv）**：**那一对已合一**——先把 `rfc359-w13` 的 SQLite 泳道换成 PG 那台原子 apply 引擎实跑（22 格全绿、一格没改），确认「这一对从来不是两台机器，是一台中立引擎加一条 SQLite 专属老路」（七臂参与者 2977 行里 `PostgresqlDatabaseClient` / `DbClient` / `DbTxSync` 零处出现，唯一品牌痕迹是三个形参标注）；再把 `main.ts` / `server.ts` 两个 `provider === 'sqlite' ? …` 三元删成一条，退役两个零生产消费者的 SQLite 专属装配。**2026-09-14（§5dy / §5ea）AC-1 的成对面收口**：①通用 bundle 引擎整条退役（约 2800 行）；②**intent apply 引擎整条退役**（`sqliteIntentApplyOperations` 762 + `sqliteIntentApplyArtifactLifecycle` 178 + `legacyIntentApplyResourceParticipants` 1062 + 依赖表 141 + 提交期句柄 61），两个 bootstrap 根调同一个 `composeIntentApplyOperations`。账本 10 对 → **8 对**，剩下的八对已逐条判不合（迁移器 / 落盘格式 / 运行时引擎 / journal 事务包装）或已是薄转交。合一照出**三处 PostgreSQL 上一直存在的用户可见缺陷**（名字域 dangle 容忍写反、特权节点回填整段没有、in-place 改名两侧不一致），逐条修复并加双引擎判据 `rfc359-w41-intent-apply-provider-parity`（先红后绿实测）。                                                                                         **2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定，PG 侧此前**根本没有** `inspectHumanReview`（§5dm）；③**找到本仓最大的一处重复且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），因为成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS` 并补上 16 格双引擎对拍（§5dp）。**跨目录真实重复缺口仍开**：那一对尚未合一。 **2026-09-15 对账（§5fh）**：跨目录对已空、未验证对拍数为 0、仍成对共存 8 对且逐条判过「不合」并各有双引擎对拍。**但「完工线」有两份互相矛盾的定义**——AC 判据原文是「已登记的机制差异**保留对拍**，其余重复实现合一」（按此已满足），而 `PROVIDER_PAIR_COUNT` 的注释写「降到 **0** 才是合一完工线」（按此还差 8 对，含两套落盘工件格式与两台迁移器）。**2026-09-15 裁决（§5fq）**：这条矛盾不该靠「选一个数字」解，靠**判据**解——一对孪生必须合一，除非差异源于引擎本身，而「源于引擎本身」只有三种：①只有一个引擎有的原语（advisory lock / PRAGMA / `$client` / `dbTxSync` / PG 的只读可重复读快照）；②只有一个引擎有的资源形态（SQLite 是一个**文件**，PostgreSQL 是一台**服务器**）；③驱动强加的线上差异（占位符 / 类型编解码）。**其余一律是漂移，处方是各取更强的一半合成一份。**于是 `PROVIDER_PAIR_COUNT` 的「降到 0」注释作废：留下来的对必须**指名命中哪一条**，指不出来就得合。按这条判据，落盘工件格式与迁移器两对命中②（文件 vs 服务器），是真差异不是债。**2026-09-15（§5fp）AC-1 第一条按新判据执行的真合一**：`create{,Postgresql}ExecutionContractResourceAdapter` 两份都只是 `select` + 解码，三条都不命中 ⇒ 必须合。合之前先把两份接到**同一个真 PostgreSQL 库**上量差异，量出两处：①交给 `implicitAgentDeclarations` 的 `frontmatterExtra`，中立那份剥掉了 sidecar 键、PG 那份没剥（今天两个消费者都不读 sidecar 键，**属潜伏**）；②`definition` 存成坏 JSON 时，中立那份抛 `ValidationError('workflow-definition-corrupt')`、PG 那份抛**裸 `SyntaxError``**——**这一处是活的，用户看到的错误码取决于管理员选了哪种数据库**。合一取各自更强的一半（投影取 PG 的窄投影、解码取中立的两个口，并把解码抽成 `exposedFrontmatterExtra` / `decodeStoredWorkflowDefinition` 让整行路径与窄投影路径共用），三条新判据双引擎各自单独咬。 | 进行中 |
+| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录153→9对已登记；W55将两个读取owner的三对完整资源快照投影共享，保原7调用及完整冻结/返回合同。三个SQLite原语的落位单独记为T17 59→56，不计业务合一。**W57 收掉两条内联真实重复**：①`/api/overview` 的两套完整实现（SQLite `buildOverview` / PG `composeSystemOverviewQuery`，逐个聚合键语义等价）收成一份，删 316 行；②任务可见性判据 `or(owner=我, id IN 我参与的)` 的**七份**逐字副本（含一份 provider 专属）收成一份，连带四份分块 `visibleTaskIds`（其中两份逐字相同、三份硬写字面量 500）；两条都带新守卫，可见性那条在收敛前 HEAD 上验红 6/6。**2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定——PG 侧此前**根本没有** `inspectHumanReview`，闸门在 PostgreSQL 上永远报不出 `waiting`（§5dm）；③**找到本仓最大的一处重复，且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS`，并按 RFC 自己的办法**先补对拍**（`rfc359-w13-resource-package-apply-conformance.test.ts`，三种资源类型 / 16 格双引擎全绿，§5dp）。**跨目录真实重复缺口仍开**：那一对本身尚未合一。**2026-09-13 再续（§5dv）**：**那一对已合一**——先把 `rfc359-w13` 的 SQLite 泳道换成 PG 那台原子 apply 引擎实跑（22 格全绿、一格没改），确认「这一对从来不是两台机器，是一台中立引擎加一条 SQLite 专属老路」（七臂参与者 2977 行里 `PostgresqlDatabaseClient` / `DbClient` / `DbTxSync` 零处出现，唯一品牌痕迹是三个形参标注）；再把 `main.ts` / `server.ts` 两个 `provider === 'sqlite' ? …` 三元删成一条，退役两个零生产消费者的 SQLite 专属装配。**2026-09-14（§5dy / §5ea）AC-1 的成对面收口**：①通用 bundle 引擎整条退役（约 2800 行）；②**intent apply 引擎整条退役**（`sqliteIntentApplyOperations` 762 + `sqliteIntentApplyArtifactLifecycle` 178 + `legacyIntentApplyResourceParticipants` 1062 + 依赖表 141 + 提交期句柄 61），两个 bootstrap 根调同一个 `composeIntentApplyOperations`。账本 10 对 → **8 对**，剩下的八对已逐条判不合（迁移器 / 落盘格式 / 运行时引擎 / journal 事务包装）或已是薄转交。合一照出**三处 PostgreSQL 上一直存在的用户可见缺陷**（名字域 dangle 容忍写反、特权节点回填整段没有、in-place 改名两侧不一致），逐条修复并加双引擎判据 `rfc359-w41-intent-apply-provider-parity`（先红后绿实测）。                                                                                         **2026-09-13 续**：①退役一族**零生产调用方**的 SQLite 孪生——`transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates` / `ConcurrentMergeStateTransition` / `MergeStateUpdateExtra`（213 行），生产早已跑在中立的 `mergeStateLifecyclePersistence` 与 `nodeRunMintParticipant` 上（§5dj）；②合一「计划人审闸门」的判定，PG 侧此前**根本没有** `inspectHumanReview`（§5dm）；③**找到本仓最大的一处重复且它此前不在任何账本里**——资源包 apply 引擎（SQLite 侧约 1448 行 / PG 侧约 976 行），因为成对判据是「同目录 + 同名」而它是**跨目录 + 改名**；已登记进 `DECLARED_CROSS_DIRECTORY_PAIRS` 并补上 16 格双引擎对拍（§5dp）。**跨目录真实重复缺口仍开**：那一对尚未合一。 **2026-09-15 对账（§5fh）**：跨目录对已空、未验证对拍数为 0、仍成对共存 8 对且逐条判过「不合」并各有双引擎对拍。**但「完工线」有两份互相矛盾的定义**——AC 判据原文是「已登记的机制差异**保留对拍**，其余重复实现合一」（按此已满足），而 `PROVIDER_PAIR_COUNT` 的注释写「降到 **0** 才是合一完工线」（按此还差 8 对，含两套落盘工件格式与两台迁移器）。**2026-09-15 裁决（§5fq）**：这条矛盾不该靠「选一个数字」解，靠**判据**解——一对孪生必须合一，除非差异源于引擎本身，而「源于引擎本身」只有三种：①只有一个引擎有的原语（advisory lock / PRAGMA / `$client` / `dbTxSync` / PG 的只读可重复读快照）；②只有一个引擎有的资源形态（SQLite 是一个**文件**，PostgreSQL 是一台**服务器**）；③驱动强加的线上差异（占位符 / 类型编解码）。**其余一律是漂移，处方是各取更强的一半合成一份。**于是 `PROVIDER_PAIR_COUNT` 的「降到 0」注释作废：留下来的对必须**指名命中哪一条**，指不出来就得合。按这条判据，落盘工件格式与迁移器两对命中②（文件 vs 服务器），是真差异不是债。**2026-09-15（§5fp）AC-1 第一条按新判据执行的真合一**：`create{,Postgresql}ExecutionContractResourceAdapter` 两份都只是 `select` + 解码，三条都不命中 ⇒ 必须合。合之前先把两份接到**同一个真 PostgreSQL 库**上量差异，量出两处：①交给 `implicitAgentDeclarations` 的 `frontmatterExtra`，中立那份剥掉了 sidecar 键、PG 那份没剥（今天两个消费者都不读 sidecar 键，**属潜伏**）；②`definition` 存成坏 JSON 时，中立那份抛 `ValidationError('workflow-definition-corrupt')`、PG 那份抛**裸 `SyntaxError``**——**这一处是活的，用户看到的错误码取决于管理员选了哪种数据库**。合一取各自更强的一半（投影取 PG 的窄投影、解码取中立的两个口，并把解码抽成 `exposedFrontmatterExtra` / `decodeStoredWorkflowDefinition` 让整行路径与窄投影路径共用），三条新判据双引擎各自单独咬。**2026-09-18（第 12 刀）`PROVIDER_PAIR_COUNT` 6 → 5**：`TaskExecutionRuntimeParticipants` 这一对合一——账本上那条「判不合」的理由（「两台 children 引擎 + 两个 registry」）前半句早已被第 10 / 11 刀与批次二 ⑤ 抹掉；逐格量完真差异只剩三格（认领策略 / 进程内活跃度 / 停机票据），三格命中的都是**部署形态**而非 §5fq 的 ①②③，所以处方是端口 + 两个绑定。**其余十来格根本不是引擎差异，是「谁来构造」**——SQLite 那份由装配方交齐、PG 那份在工厂体内现造，现造漏出来的形状连返回类型都不一样（PG 额外回 `persistence` / `executionModule`），而 W8 的对拍当年真把这句「两侧连返回形状都不同」写成了判不合的证据。装配回到组合根之后两侧逐字相同。PG 那份文件整份删除，对拍留任并从「见证分叉」翻成「锁住合一」。详见 plan §「AC-1 第 12 刀落地」。 | 进行中 |
 | AC-2  | 一个 boot 序列，无 provider literal 执行分支      | `servePostgresqlDaemon` 已删除，入口 provider literal 分支为 0                                                                                                                                                                                                                                           | ✅     |
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
@@ -17961,3 +17961,65 @@ SQLite 那一份 composition，PG 的对等物是另一支 composition」——*
 把 `db` 改成必填只是把计数从 helper 挪到它身上，净额不变，要真销得先迁 t109）与
 `rfc257-webhook-error-codes`（被测状态是「装配里没有 dispatcher」，PG 根自建一个、
 那边按构造不存在）。
+
+## AC-1 第 12 刀落地　运行时参与者合一：`TaskExecutionRuntimeParticipants` 这一对销账
+
+**起点是一条过期的理由。** `PROVIDER_PAIR_CONFORMANCE_LEDGER` 里这一对写着「判**不合**（两台
+children 引擎 + 两个 registry）」——那是 W8 写的，而 W8 之后发生过三件事：第 10 / 11 刀把
+`resume` / `cancel` 合成了 `resumeTaskProjection` / `cancelTaskProjection`，批次二 ⑤ 把子任务铸造机
+合成了 `createChildExecutionLaunchOperations`，`drive` 的内核本来就是同一个
+`driveTaskEngineApplication`。**「两台 children 引擎」今天一台都不剩**，理由的前半句已经不成立。
+
+**逐格量完，真差异只剩三格，而且三格说的是同一件事**——「这台部署里，谁在跑、怎么认领、
+怎么请它停」：
+
+| 格 | 单进程形态（此前的 SQLite 侧） | 持久化租约形态（此前的 PG 侧） |
+| --- | --- | --- |
+| `lifecycle` | `createDatabaseTaskDriverLifecyclePort`（进程级单例的同步认领，执行上下文带 `legacyConnection`） | `createTaskDriverLifecyclePort` + `claimPersisted({ intentId })` |
+| `activity` | `composeLegacyTaskActivityParticipant()`（进程内注册表 + 测试专用旁路） | `executionModule.runtimeRegistry.hasTask` / `awaitReleasedSettled` |
+| `stop` | `taskExecutionModule.runtimeRegistry`（同一套进程内注册表的停机面） | `executionModule.runtimeRegistry` |
+
+按 §5fq 的判据，这三格命中的是**部署形态**，不是「①单引擎原语 / ②单引擎资源形态 /
+③驱动强加的线上差异」里的任何一条 ⇒ **必须合，处方是端口 + 两个绑定**。
+
+**其余十来格根本不是引擎差异，是「谁来构造」。** 这是本刀最该带走的一条：两份文件看起来差很多
+（189 行 vs 160 行），但差的大头是 SQLite 那份由装配方交齐依赖、PG 那份在工厂体内现造
+（`createTaskExecutionPersistence` / `createProviderTaskExecutionModule` /
+`createRuntimeSessionLeaseOperations` / `composePostgresqlMemoryInjectionQueries` /
+`composeRuntimeRegistryOperations`）。**现造漏出来的形状连返回类型都不一样**——PG 那份额外回
+`persistence` / `executionModule`（`PostgresqlTaskExecutionRuntimeAggregate`），于是 W8 的对拍里
+真写着一句「两侧连返回形状都不同，这也是判不合的证据之一」。**那不是证据，那是装配错位。**
+装配回到组合根之后，两侧的返回形状逐字相同。
+
+### 做法
+
+1. `sqliteTaskExecutionRuntimeParticipants.ts` → `taskExecutionRuntimeParticipants.ts`（唯一实现，
+   `db: ProviderNeutralDatabase`，`taskDagCollaboration` / `processConcurrencyScope` / `log` 由输入交）；
+   `postgresqlTaskExecutionRuntimeParticipants.ts` **整份删除**。
+2. `createChildTaskLifecycleParticipant` 的依赖面从 `{executionModule, finalizeWorkspace}` 换成
+   `ChildTaskLifecycleRuntimePorts = {lifecycle, activity, stop}`。此前它在工厂体内 `createTaskDriverLifecyclePort(...)`
+   现拼，**那一拼把「认领走哪条路」锁死在 PG 一侧**，SQLite 因此只能另写一份 `children`。
+3. 两条绑定回到 `composition/providerRuntime.ts`（按 RFC-294：装配归 composition），
+   `server.ts` 那条不装配完整 runtime 的回退路也照同一形状交。
+4. 新增 `composeLegacyTaskStopRegistry()`，与既有的 `composeLegacyTaskActivityParticipant()` 成对——
+   进程内注册表两个面各有一个具名取用点。**不给它名字的代价是真的**：参与者输入里那个
+   `runtimeRegistry` 是 `platform/runtime-registry` 的运行时**档案**注册表（`getRuntime(name)`），
+   与停机票据注册表**同名不同物**，裸取极易抓错。
+
+### 账
+
+- `PROVIDER_PAIR_COUNT` **6 → 5**；T19d 的两条配对条目销账；`PROVIDER_NAMED_FILE_DEBT` 31 → 29。
+- provider 适配器语料 70 → 68、provider 命名函数语料 73 → 71（**是合一不是删覆盖**）。
+- `rfc294-review-off-dag-offered-edges` 42 → 41（PG 那份文件没了）；
+  RFC-328 的 `taskDagCollaborationOperations` 桥从 infrastructure 挪到组合根（**债没增，换了持有人**）；
+  `server.ts` 改从 `collaboration/composition/decisionCommands` 取那个工厂，**没有新增 legacy inbound 边**。
+- `module-symbol-owners` / `architecture-exceptions` 各 +1（端口化新增的导出多于退役的两个工厂），
+  已按 `allowGrowth` 一次性声明，下一笔不涨的提交上删除。
+
+### 判据
+
+对拍文件 `rfc359-w8-runtime-participants-conformance` **留任并翻面**——从「见证分叉」改成
+「锁住合一」：两份 provider 前缀文件不得复活（`existsSync` 直接判）、两个组合根必须调同一个工厂
+（正则数到 2）、共用实现体内不得出现 `createTaskDriverLifecyclePort` / `claimPersisted` /
+`isTaskActive`（三格只能是注入的）、两条绑定各自的拼法在组合根里逐条钉住。
+行为面照旧在两个引擎上各跑一遍（`activity` 的未知任务语义 + 完整 provider 的动态工作流重入）。

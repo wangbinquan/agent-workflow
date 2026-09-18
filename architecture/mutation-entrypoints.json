@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1672,
+    "entries": 1671,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24660,7 +24660,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
@@ -24670,6 +24670,7 @@
         "audit",
         "authority",
         "event",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#createChildTaskLifecycleParticipant",
@@ -25397,28 +25398,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#createPostgresqlTaskExecutionRuntimeParticipants",
-      "missingControls": [
-        "audit",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#createPostgresqlTaskExecutionRuntimeParticipants",
-      "symbol": "createPostgresqlTaskExecutionRuntimeParticipants",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": true,
@@ -25612,28 +25591,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#createTaskSourceTerminationParticipant",
       "symbol": "createTaskSourceTerminationParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "request",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#createSqliteTaskExecutionRuntimeParticipants",
-      "missingControls": [
-        "audit",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#createSqliteTaskExecutionRuntimeParticipants",
-      "symbol": "createSqliteTaskExecutionRuntimeParticipants",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -26391,6 +26348,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding",
       "symbol": "createTaskExecutionResourceBinding",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#createTaskExecutionRuntimeParticipants",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#createTaskExecutionRuntimeParticipants",
+      "symbol": "createTaskExecutionRuntimeParticipants",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -39954,7 +39934,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:330d7c791e0997a658815298942c34d99227d4f7bce9e5777543fac55eb4c726",
+  "sourceDigest": "sha256:10a9d855edbabf63d6d3c08c3a26455f7a8b5b79522b3bdddbc0b371d7894448",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -40448,8 +40428,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#323:tasks",
-        "line": 323,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#345:tasks",
+        "line": 345,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#admitResume",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -40464,8 +40444,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#702:tasks",
-        "line": 702,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#724:tasks",
+        "line": 724,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -40480,8 +40460,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionOwners",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#718:taskExecutionOwners",
-        "line": 718,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#740:taskExecutionOwners",
+        "line": 740,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -40496,8 +40476,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#749:tasks",
-        "line": 749,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#771:tasks",
+        "line": 771,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -40512,8 +40492,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#777:nodeRuns",
-        "line": 777,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#799:nodeRuns",
+        "line": 799,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

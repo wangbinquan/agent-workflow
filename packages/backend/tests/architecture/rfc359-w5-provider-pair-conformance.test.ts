@@ -122,8 +122,12 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // RFC-359 W12：共同流程和每目标事务 atom 已合一，两个 applyOne 副本退役。
   // 留下两侧既有的提交后事件/停止位置与 SQLite 无 driver 收尾机制，真实对拍继续锁定。
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — verified by rfc359-w12-source-termination-atom.test.ts, rfc359-w8-source-termination-conformance.test.ts',
-  // RFC-359 W8：判**不合**（两台 children 引擎 + 两个 registry，见对拍文件头注释），只补对拍。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite + postgresql — verified by rfc359-w8-runtime-participants-conformance.test.ts',
+  // RFC-359 AC-1（第 12 刀）**销账**：`TaskExecutionRuntimeParticipants` 这一对已合一。
+  // W8 判「不合」的理由（「两台 children 引擎 + 两个 registry」）前半句早已被第 10 / 11 刀
+  // 与批次二 ⑤ 抹掉；后半句为真，但那是**部署形态**——按 §5fq 的三条判据一条也不命中，
+  // 所以处方是端口（`ChildTaskLifecycleRuntimePorts`：认领策略 / 活跃度 / 停机票据）+
+  // 两个绑定，而不是两份实现。两份 provider 前缀文件退役，换成中立的
+  // `taskExecutionRuntimeParticipants.ts`；对拍文件保留并从「见证分叉」翻成「锁住合一」。
   // RFC-359 W12：TaskLifecycleAutoRepairCommand 已合为中立循环；PG 自动修复借用人工修复的
   // 原选项/前置检查/执行引擎，第三份 S4 算法同时删除。W8 对拍继续锁用户可见结果与副作用。
   // RFC-359 AC-1（命名债收尾 §5hj）**销账**：`postgresqlTaskRouteLaunchOperations.ts` 去掉前缀
@@ -236,7 +240,7 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 // 触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块（子 agent prompt 里
 // `{{event_type}}` 随之展不开）。见证测试 `rfc359-w8-child-launch-conformance` 留任，
 // 本分从「见证分叉」翻成「锁住合一」。
-export const PROVIDER_PAIR_COUNT = 6
+export const PROVIDER_PAIR_COUNT = 5
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

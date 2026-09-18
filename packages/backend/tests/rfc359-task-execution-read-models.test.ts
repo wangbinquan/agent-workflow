@@ -28,8 +28,11 @@ import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resourc
 import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
-import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import { composeTestChildLaunchWorkgroup } from './helpers/taskExecutionTestTopology'
+import { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
+import {
+  composeTestChildLaunchWorkgroup,
+  singleProcessDeploymentPorts,
+} from './helpers/taskExecutionTestTopology'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
@@ -204,8 +207,9 @@ describe('RFC-359 任务执行读模型的装配身份（SQLite 组合根）', (
     const readModels = createTaskExecutionReadModels(sqlite)
     const runtime = composeTaskExecutionRuntime({
       readModels,
-      participants: createSqliteTaskExecutionRuntimeParticipants({
+      participants: createTaskExecutionRuntimeParticipants({
         db: sqlite,
+        ...singleProcessDeploymentPorts(sqlite),
         childLaunchWorkgroup: composeTestChildLaunchWorkgroup(sqlite),
         identityAccess: createTaskExecutionTestIdentity(sqlite).resources,
         memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
