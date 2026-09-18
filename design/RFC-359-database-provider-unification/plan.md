@@ -18385,3 +18385,42 @@ AC-8 要守的不是「一个字都没变」（见记分板那一行的口径更
 3. **本轮四刀改掉的四处用户可见行为，逐条是弱侧向强侧收敛**，且每一处都带先红后绿的双引擎判据：
    被取消任务的工作树回收（此前共用取消实现整个缺这一步）/ 工作流被删后的手动执行（SQLite 放行
    → 统一 404）/ `syncWorkflow` 的回滚基线跨行零副作用预检 / 源终止无 driver 时的同步工作区收尾。
+
+## §5fr 收口后补：D14 的 Agent 删除闸合成了**弱的那一半**（2026-09-19）
+
+RFC-359 收口（`55676871c`）之后清 CI 时，`e2e-full-nightly` / `e2e-webkit-nightly` 两条夜跑
+**自 2026-09-06 起连红十三晚**（最后一次绿是 2026-09-05 的 `40d618f40` / `b4a002f0b`）。
+逐条追下来，第一组四条红是本 RFC 自己的回归，来自 `a507b13ea`（2026-09-05，W4-D14
+「Agent 聚合一份实现」）：
+
+`assertNotReferenced` 把合一前 SQLite 侧的**五档**删除拒绝压成了两条不带 details 的
+`agent-in-use`——
+
+| 合一前（`legacy/agent.ts` 的 `deleteAgent`） | D14 之后（live 路径） | 用户可见后果 |
+| --- | --- | --- |
+| `agent-launching`（RFC-175 §2e ABA 闸） | **没有** | 启动窗口里删掉再同名重建，任务会跑上另一个代理 |
+| `agent-in-use` + `discloseRefsSync`（点名工作流） | 只有 code，无 details | 详情页只剩一条笼统红条，用户不知道该去改哪个工作流 |
+| `agent-dependency-still-referenced` + 点名依赖方 | 退化成 `agent-in-use`，无 details | 用户会去翻工作流，翻不到，然后放弃 |
+| `agent-tasks-active` + `taskIds` | **没有**（返回 204） | **跑着任务的代理被删掉，任务当场失去它的定义** |
+| `agent-scheduled-referenced` + 点名定时任务 | **没有**（返回 204） | **被定时任务引用的代理被删掉，到点在无人值守下失败** |
+
+这正是 §5fq 判据禁止的那种合并：差异**不是**引擎固有的（不是引擎独占原语、不是资源形态、
+不是驱动 wire 差异），处方是「各取更强的一半合成一份」，而这次取的是弱的一半。
+
+**为什么两周没人看见**：覆盖它的 e2e（AGENT-09~12）全带 `@nightly`，**推送档不跑**；而推送档里
+唯一覆盖这些拒绝的 `rfc223-pr3a-consumers.test.ts` 打的是 `legacy/agent.ts` 的 `deleteAgent`
+——那个函数自 D14 起**已无生产调用方**，它一直在绿地测一条死路径。更糟的是 D14 同期新增的
+`rfc359-w4-d14-adapters.test.ts` 把 `agent-in-use` 当成 dependsOn 的期望值**写成了基线**，
+等于把回归钉住了。
+
+**处置**：强的那一半补回唯一的一份实现（`infrastructure/agentPersistenceSemantics.ts` 的
+`assertNotReferenced`，判据与次序照 legacy），并把五档拒绝**连 details 一起**锁进**推送档**的
+双引擎测试（`rfc359-w4-d14-d15-regressions.test.ts` ③，`describeEachProvider`，两引擎各一遍）。
+五条闸逐条做了变异验证——五个变异（去掉 workflow details / dependency code 退回 `agent-in-use` /
+tasks-active 闸失效 / scheduled 闸失效 / launching 闸失效）**每一个都在两个引擎上各红一条**。
+`rfc359-w4-d14-adapters.test.ts` 里那条被写成基线的期望一并订正。
+
+**沉淀**：`@nightly` 档的行为若只有 e2e 覆盖，等于「合一时改坏了也要等一晚才知道，而没人天天看
+夜跑」。合一类改动的判据必须落在**推送档**的双引擎测试上；e2e 只作用户可见后果的端到端确认。
+另一条：**孪生对合一后要立刻确认旧那一半真的死了**——`legacy/agent.ts` 的 `deleteAgent` 留着
+不删，就会让打它的老测试继续绿着,给人「这条行为有覆盖」的假象。

@@ -1,22 +1,35 @@
-import type { Agent, AgentSkillRef, AclResourceType } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import {
+  TERMINAL_TASK_STATUSES,
+  type Agent,
+  type AgentSkillRef,
+  type AclResourceType,
+} from '@agent-workflow/shared'
+import { and, eq, inArray, notInArray } from 'drizzle-orm'
 
-import { agents, mcps, plugins, skills, workflows } from '@/db/schema'
+import { agents, mcps, plugins, scheduledTasks, skills, tasks, workflows } from '@/db/schema'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
 } from '@/modules/execution-contract/public/commands'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { ConflictError, ValidationError } from '@/util/errors'
+import { isAgentLaunching } from '@/services/agentLaunchReservation'
+import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 
 import { assertAgentResourceIntegrity } from '../application/agents/agentResourceIntegrity'
 import type { AgentResourceInventorySource } from '../application/agents/ports'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
-import { isVisibleRow, type AclRow } from '../domain/resourceAccess'
+import {
+  discloseRefsSync,
+  discloseScheduleRefs,
+  isVisibleRow,
+  type AclRow,
+} from '../domain/resourceAccess'
 import { grantedResourceIdsFor } from './resourceVisibility'
 import type { AgentOperationContext } from '../public/participants'
 import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
 import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
+import { agentsDependingOnIn } from '../application/agents/agentDependencyValidation'
 import type { AgentPersistenceSemantics } from './agentRepository'
 import { assertAgentDependencyTraversal } from './agentDependencyTraversal'
 import { parseAgentDependencyIds } from './agentDependencyJson'
@@ -230,29 +243,44 @@ async function assertSkillReferencesUsable(input: {
   })
 }
 
+/**
+ * 删除前的引用闸（RFC-359 §5fq 回补，2026-09-19）。
+ *
+ * D14（`a507b13ea`，2026-09-05）把 Agent 聚合合成「一份实现」时，这一组闸取的是**弱的那一
+ * 半**：四条各自不同的拒绝退化成一条不带 details 的 `agent-in-use`，非终态任务、定时任务、
+ * 启动占用三条闸整个消失。用户可见后果——跑着任务的代理能被删掉（任务当场失去它的定义）、
+ * 被定时任务引用的代理能被删掉（到点在无人值守下失败）、拒绝理由不点名拦路者（详情页只剩
+ * 一条笼统红条，用户不知道该去改哪个工作流 / 解哪条依赖）。
+ *
+ * 覆盖这些行为的 e2e（AGENT-09~12）都带 `@nightly`，推送档不跑，于是 e2e-full /
+ * e2e-webkit 两条夜跑从 2026-09-06 起天天红、连红十三晚没人认领。按 §5fq「各取更强的一半
+ * 合成一份」补回强的那一半，判据与次序照 legacy 的 `deleteAgent`（自 D14 起已无调用方）。
+ */
 async function assertNotReferenced(
   transaction: ResourceCatalogTransaction,
+  authority: AgentOperationContext,
   current: Agent,
 ): Promise<void> {
-  const agentRows = await transaction
-    .select({ id: agents.id, dependsOn: agents.dependsOn })
-    .from(agents)
-  const dependent = agentRows.find((row) => {
-    if (row.id === current.id) return false
-    try {
-      const decoded: unknown = JSON.parse(row.dependsOn)
-      return Array.isArray(decoded) && decoded.includes(current.id)
-    } catch {
-      return false
-    }
-  })
-  if (dependent !== undefined) {
-    throw new ConflictError('agent-in-use', `agent '${current.id}' is referenced by another agent`)
+  // RFC-175 §2e：单代理启动正握着这个 id 时先拒。启动按**名字**从冻结快照里解析代理，
+  // 删掉再同名重建会让任务跑上另一个代理（ABA）。同进程内存预订，与删除同一笔事务里查。
+  if (isAgentLaunching(current.id)) {
+    throw new ConflictError(
+      'agent-launching',
+      `agent '${current.name}' has a task launch in progress; retry after it completes`,
+    )
   }
+  // RFC-285 B2 档位：agent 对**任务**引用零检查即是统一中档（任务快照冻结定义），这里
+  // 的 agent-in-use 挡的是 **workflow 定义**引用——活的编辑面，删了就当场悬空。
   const workflowRows = await transaction
-    .select({ id: workflows.id, definition: workflows.definition })
+    .select({
+      id: workflows.id,
+      name: workflows.name,
+      definition: workflows.definition,
+      ownerUserId: workflows.ownerUserId,
+      visibility: workflows.visibility,
+    })
     .from(workflows)
-  const referenced = workflowRows.find((row) => {
+  const referencingWorkflows = workflowRows.filter((row) => {
     try {
       const decoded: unknown = JSON.parse(row.definition)
       return extractWorkflowAgentRefs(
@@ -261,11 +289,88 @@ async function assertNotReferenced(
           : {},
       ).has(current.id)
     } catch {
+      // 坏 JSON 按「无引用」算：保存期的工作流校验器才是它的归口。
       return false
     }
   })
-  if (referenced !== undefined) {
-    throw new ConflictError('agent-in-use', `agent '${current.id}' is referenced by a workflow`)
+  if (referencingWorkflows.length > 0) {
+    throw new ConflictError(
+      'agent-in-use',
+      `agent '${current.name}' is referenced by ${referencingWorkflows.length} workflow(s)`,
+      discloseRefsSync(
+        authority,
+        referencingWorkflows,
+        await grantedResourceIdsFor(transaction, authority, 'workflow'),
+      ),
+    )
+  }
+  // RFC-022 反向依赖闸：别的代理的 dependsOn 闭包里还提到它就拒，逼调用方先解上游，
+  // 免得运行期才炸 `agent-dependency-not-found`。
+  const agentRows = await transaction
+    .select({
+      id: agents.id,
+      name: agents.name,
+      dependsOn: agents.dependsOn,
+      ownerUserId: agents.ownerUserId,
+      visibility: agents.visibility,
+    })
+    .from(agents)
+  const dependents = agentsDependingOnIn(
+    agentRows.filter((row) => row.id !== current.id),
+    current.id,
+  )
+  if (dependents.length > 0) {
+    throw new ConflictError(
+      'agent-dependency-still-referenced',
+      `agent '${current.name}' is referenced by ${dependents.length} other agent(s)' dependsOn`,
+      discloseRefsSync(
+        authority,
+        dependents,
+        await grantedResourceIdsFor(transaction, authority, 'agent'),
+      ),
+    )
+  }
+  // RFC-165 §4：还有**非终态**单代理任务就拒——删了它们会半途失去定义。终态任务是接受的
+  // 限制（其 retry/resume 之后以 agent-not-found 收场）。RFC-223 PR-3a R3-3：按启动时冻结的
+  // 规范 `source_agent_id` 匹配，不按名字——否则 PR-8 放开全局同名后，**别人**的同名任务会
+  // 挡住这次删除。0091 之前的 legacy 任务 source_agent_id 为 NULL、本身已不可 resume，不拦。
+  const liveTasks = await transaction
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.sourceAgentId, current.id),
+        notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+      ),
+    )
+  if (liveTasks.length > 0) {
+    throw new ConflictError(
+      'agent-tasks-active',
+      `agent '${current.name}' has ${liveTasks.length} non-terminal single-agent task(s); cancel or wait before deleting`,
+      // 裸 id 数组、未经可见性过滤：按 ACL 铁律展示层只渲染计数，不点名（ErrorDetails.tsx）。
+      { taskIds: liveTasks.map((row) => row.id) },
+    )
+  }
+  const scheduledRows = await transaction
+    .select({
+      id: scheduledTasks.id,
+      name: scheduledTasks.name,
+      launchKind: scheduledTasks.launchKind,
+      launchPayload: scheduledTasks.launchPayload,
+      ownerUserId: scheduledTasks.ownerUserId,
+    })
+    .from(scheduledTasks)
+  const scheduledRefs = scheduledRowsReferencing(scheduledRows, {
+    launchKind: 'agent',
+    payloadKey: 'agentId',
+    id: current.id,
+  })
+  if (scheduledRefs.length > 0) {
+    throw new ConflictError(
+      'agent-scheduled-referenced',
+      `agent '${current.name}' is the target of ${scheduledRefs.length} scheduled task(s); delete or repoint them first`,
+      discloseScheduleRefs(authority, scheduledRefs),
+    )
   }
 }
 
@@ -373,8 +478,8 @@ export function createAgentPersistenceSemantics(input: {
       })
       await assertSkillReferencesUsable({ transaction, authority, candidate, previous: current })
     },
-    async assertDeleteInTransaction(transaction, _authority, current) {
-      await assertNotReferenced(transaction, current)
+    async assertDeleteInTransaction(transaction, authority, current) {
+      await assertNotReferenced(transaction, authority, current)
     },
     referenceLabels: labels,
   })

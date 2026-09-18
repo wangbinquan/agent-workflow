@@ -87,7 +87,8 @@
       "boundaryEdgeIds": [
         "import:0ed3ea807164ed762585",
         "import:61c8631d26b8dd909f94",
-        "import:987442ba7d22c688aaac"
+        "import:987442ba7d22c688aaac",
+        "import:d49650f18df9c23b7584"
       ],
       "exportedSymbols": [
         "acquireAgentLaunch",
@@ -4257,6 +4258,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:2fad3732ec070e998393",
         "import:6a8b2812872408cd48ad",
         "import:a7ebae678b4392704ecc",
         "import:bb4a901fe4e9c8c60018",
@@ -6321,5 +6323,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:17e72f262943c29598282abf4c1555ecdcfb827cc27344b1fc8f0daac1f62dca"
+  "sourceDigest": "sha256:51227a04f7f3deeaf5d1ec3f7b10cae0f7030538ec9799311e701e5867ed1dcf"
 }

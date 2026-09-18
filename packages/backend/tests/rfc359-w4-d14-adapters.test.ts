@@ -176,8 +176,12 @@ describeEachProvider('RFC-359 W4-D14 —— Agent 仓库', (harness) => {
       owner,
       agentInput(`dep-${ulid().slice(-6).toLowerCase()}`, { dependsOn: [renamed.id] }),
     )
+    // 2026-09-19 订正：这里原本钉的是 `agent-in-use`——那是 D14 合一时把四档拒绝压成一条的
+    // 产物，等于把回归写成了基线（覆盖它的 e2e AGENT-10 全带 @nightly，推送档看不见，于是
+    // e2e-full / e2e-webkit 连红十三晚）。反向依赖有自己的 code，理由见
+    // infrastructure/agentPersistenceSemantics.ts 的 assertNotReferenced 注释。
     expect(await codeOf(() => repository.delete(owner, renamed.id, fenceOf(renamed)))).toBe(
-      'agent-in-use',
+      'agent-dependency-still-referenced',
     )
     await repository.delete(owner, dependent.id, fenceOf(dependent))
     await repository.delete(owner, renamed.id, fenceOf(renamed))

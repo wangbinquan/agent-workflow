@@ -985,6 +985,33 @@ gh api repos/<owner>/<repo>/actions/artifacts/<id>/zip > a.zip && unzip -q a.zip
 是既有范例）。不然判据只能靠源码文本断言间接钉——本次那半条漏改就是因为源码断言只覆盖了
 语句那几行字面量。
 
+### 同一类红「只修了一侧」：双引擎 harness 的钩子预算连栽两次（2026-09-19 定位）
+
+`describeEachProvider` 的两条泳道都在 `beforeEach` 里干真活——PG 侧对一台真 PostgreSQL 做整库
+快照恢复，SQLite 侧新建内存库并重放全部迁移。bun 的**钩子默认预算只有 5s**，两侧都会在 runner
+一忙时偶尔越线，随机某条用例以 `a beforeEach/afterEach hook timed out for this test` 收场，
+**与被测代码无关**。这一类红栽了两次，两次都只修了当时那一侧：
+
+- 2026-09-11：real-PostgreSQL 泳道红（`rfc359-w14-legacy-mission-execution`）→ 给 PG 侧的
+  `beforeAll` / `beforeEach` / `afterAll` 补了显式预算；
+- 2026-09-18：`Backend tests (macos-latest shard 4/6)` 红（`rfc258-file-symbols` 的第一条用例，
+  5254.97ms）→ SQLite 侧的 `beforeEach` **一直吃默认值**，同一类红换个泳道又来一次。
+
+**两条可推广的规律：**
+
+1. **别被「SQLite 建库很快」骗了：贵的是进程内第一次。** 同进程连续六次
+   `createInMemoryDb(MIGRATIONS)`（73 个迁移）本机实测 **354.0 / 3.0 / 2.7 / 2.8 / 2.9 / 2.7 ms**
+   ——首次比之后贵两个数量级（JIT / 语句准备 / 模块初始化都摊在它头上）。而
+   `bun test --isolate` 每个文件一个新进程，于是**每个测试文件的第一条用例**都要付这一次。
+   任何「本机几毫秒，怎么会超 5s」的直觉，先量一次首调。
+2. **修抖动类红时先问「同形的地方还有几处」。** 判据不要写成「这一侧记得加」，要写成**结构律**
+   并落成守卫。本次落的是 `packages/backend/tests/rfc359-harness-hook-budgets.test.ts`：按 AST
+   找出 harness 里所有钩子注册点，**钩子体里出现建库 / 恢复库 / 拆库符号的**必须带第二个实参
+   （预算），并且预算常量不许小于 10s。将来新增泳道忘了给预算会当场红，不必等某晚某分片随机红。
+   注意守卫要**照着已有的判断划界**：纯同步清理的 `afterEach` 是
+   `rfc359-w39-provider-harness-lifecycle-diagnostics` 里写明「不做 IO，给预算无意义」的，
+   一刀切成「所有钩子都要预算」会把那条既有判断推红——我第一版就是这么写的，被它当场咬了一口。
+
 ## zsh 里 `path=` 会当场毁掉 `PATH`（2026-08-25 实撞，正好撞在上面那套 commit-tree 姿势里）
 
 zsh 把 `path` 绑定成 `PATH` 的**数组视图**（`cdpath` / `fpath` / `manpath` 同理）。于是一句再普通不过的循环变量赋值：

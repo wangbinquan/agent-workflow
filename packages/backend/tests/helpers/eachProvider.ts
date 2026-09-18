@@ -68,6 +68,21 @@ const POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS = 90_000
  * 判据不变（超时仍然会失败），变的只是预算与它实际要做的事相称。
  */
 const POSTGRESQL_DATABASE_RESET_TIMEOUT_MS = 30_000
+/**
+ * SQLite 泳道每个用例前的建库预算。**同样必须显式给**——上面那段注释只把 PG 泳道的
+ * 5s 默认值修掉了，SQLite 这一侧一直吃默认值，于是同一类红在 2026-09-18 的
+ * `Backend tests (macos-latest shard 4/6)` 上换个泳道又来了一次（`rfc258-file-symbols`
+ * 的第一条用例以「a beforeEach/afterEach hook timed out for this test」收场，5254.97ms，
+ * 与被测代码无关——同文件紧随其后的三条用例各自 393 / 113 / 120ms 就过了）。
+ *
+ * 成因不是「SQLite 建库慢」，而是**进程内第一次**建库要付一次性成本：本机实测同一进程里
+ * 连续六次 `createInMemoryDb(MIGRATIONS)`（73 个迁移）是 354.0 / 3.0 / 2.7 / 2.8 / 2.9 / 2.7 ms
+ * ——首次比之后贵两个数量级。`bun test --isolate` 每个文件一个新进程，于是**每个文件的第一条
+ * 用例**都要付这一次；runner 一忙，这 354ms 越过 5s 并不需要多离谱的抖动。
+ *
+ * 判据不变（超时仍然失败），变的只是预算与它实际要做的事相称。
+ */
+const SQLITE_DATABASE_RESET_TIMEOUT_MS = 30_000
 
 /** 纯函数：从环境解析要跑的引擎集合。缺省两个都跑；只接受 sqlite / postgresql。 */
 export function resolveTestProviders(
@@ -493,7 +508,8 @@ function registerSqlite(
       states.forEach(clearState)
       throw error
     }
-  })
+  }, databaseCount * SQLITE_DATABASE_RESET_TIMEOUT_MS)
+  // 纯同步清理，不建库、不连库——与 PG 泳道的 `afterEach` 同口径，不给预算。
   afterEach(() => {
     restoreProvider?.()
     restoreProvider = undefined

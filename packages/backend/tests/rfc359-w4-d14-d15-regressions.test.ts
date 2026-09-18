@@ -6,12 +6,13 @@
 //      拿到新的控件（e2e/rfc324-graded-grants.spec.ts「升档后徽标必须自己消失」红的来源）。
 
 import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { CreateAgentSchema, CreateWorkflowSchema, type CreateAgent } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { users } from '@/db/schema'
+import { scheduledTasks, tasks, users, workflows } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { WorkflowAccessRow } from '@/modules/resource-catalog/application/workflows/ports'
 import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -21,6 +22,7 @@ import { createAgentPersistenceSemantics } from '@/modules/resource-catalog/infr
 import { createAgentRepository } from '@/modules/resource-catalog/infrastructure/agentRepository'
 import { createWorkflowPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/workflowPersistenceSemantics'
 import { createWorkflowRepository } from '@/modules/resource-catalog/infrastructure/workflowRepository'
+import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
 import { registerRevalidationTrigger } from '@/ws/revalidationHook'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -68,6 +70,14 @@ function agentRepositoryFor(db: ProviderNeutralDatabase) {
     },
   })
   return createAgentRepository({ db, semantics })
+}
+
+/** delete 的 OCC 围栏：拒删不改代理行，所以创建时拿到的那一份一直有效。 */
+function fenceOf(agent: { readonly updatedAt: number; readonly aclRevision?: number | null }): {
+  expectedUpdatedAt: number
+  expectedAclRevision: number
+} {
+  return { expectedUpdatedAt: agent.updatedAt, expectedAclRevision: agent.aclRevision ?? 0 }
 }
 
 async function errorOf(fn: () => Promise<unknown>): Promise<{ code?: string; details?: unknown }> {
@@ -149,5 +159,141 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     } finally {
       registerRevalidationTrigger(async () => {})
     }
+  })
+  // ③ 2026-09-19 补：D14 把删除前的引用闸也合成了**弱的那一半**——四条各自不同的拒绝退化成
+  // 一条不带 details 的 `agent-in-use`，非终态任务 / 定时任务 / 启动占用三条闸整个消失。
+  // 用户可见后果：跑着任务的代理能被删（任务当场失去定义）、被定时任务引用的代理能被删（到点
+  // 在无人值守下失败）、拒绝理由不点名拦路者（详情页只剩一条笼统红条）。
+  // 覆盖它的 e2e（AGENT-09~12）全带 `@nightly`，推送档不跑，于是 e2e-full / e2e-webkit 从
+  // 2026-09-06 起连红十三晚。这一条把四档拒绝**连 details 一起**锁在推送档里，两引擎各跑一遍。
+  test('③ 删除前的四档引用拒绝各自回到自己的 code，并带上能让用户下手的 details', async () => {
+    const db = harness.db
+    const repository = agentRepositoryFor(db)
+    const name = () => `agent-${ulid().slice(-6).toLowerCase()}`
+    const { id: ownerId, authority: owner } = await seedUser(db)
+
+    // 负向对照：零引用的代理必须删得掉，否则下面每一条 409 都可能只是「删除整个坏了」。
+    const loner = await repository.create(owner, agentInput(name()))
+    await repository.delete(owner, loner.id, fenceOf(loner))
+
+    // (0) 启动占用中 ⇒ agent-launching。RFC-175 §2e 的 ABA 闸：启动按**名字**从冻结快照
+    // 里解析代理，删了再同名重建会让任务跑上另一个代理。引用计数由最后一个持有者释放。
+    const launching = await repository.create(owner, agentInput(name()))
+    acquireAgentLaunch(launching.id)
+    try {
+      const refused = await errorOf(() =>
+        repository.delete(owner, launching.id, fenceOf(launching)),
+      )
+      expect(refused.code).toBe('agent-launching')
+    } finally {
+      releaseAgentLaunch(launching.id)
+    }
+    // 放开之后同一笔删除必须放行，否则这条闸等于永久锁死。
+    await repository.delete(owner, launching.id, fenceOf(launching))
+
+    // (a) 被工作流定义引用 ⇒ agent-in-use，并点名那个工作流。
+    const byWorkflow = await repository.create(owner, agentInput(name()))
+    const workflowId = ulid()
+    const workflowName = `wf-${workflowId.slice(-6).toLowerCase()}`
+    await db.insert(workflows).values({
+      id: workflowId,
+      name: workflowName,
+      definition: JSON.stringify({
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          {
+            id: 'agent_main',
+            kind: 'agent-single',
+            agentId: byWorkflow.id,
+            agentName: byWorkflow.name,
+            promptTemplate: 'x',
+            position: { x: 0, y: 0 },
+          },
+        ],
+        edges: [],
+      }),
+      ownerUserId: ownerId,
+      visibility: 'private',
+    })
+    const inUse = await errorOf(() => repository.delete(owner, byWorkflow.id, fenceOf(byWorkflow)))
+    expect(inUse.code).toBe('agent-in-use')
+    expect(inUse.details).toMatchObject({
+      visible: [{ id: workflowId, name: workflowName }],
+      hiddenCount: 0,
+    })
+
+    // (b) 被别的代理 dependsOn 引用 ⇒ 专属 code，不是笼统的 agent-in-use。
+    const byDependency = await repository.create(owner, agentInput(name()))
+    const dependent = await repository.create(
+      owner,
+      agentInput(name(), { dependsOn: [byDependency.id] }),
+    )
+    const stillReferenced = await errorOf(() =>
+      repository.delete(owner, byDependency.id, fenceOf(byDependency)),
+    )
+    expect(stillReferenced.code).toBe('agent-dependency-still-referenced')
+    expect(stillReferenced.details).toMatchObject({
+      visible: [{ id: dependent.id, name: dependent.name }],
+      hiddenCount: 0,
+    })
+
+    // (c) 还有非终态单代理任务 ⇒ agent-tasks-active，details 带裸 task id 数组
+    // （未经可见性过滤，展示层只渲染计数——这里锁的是后端确实把它交出来了）。
+    const byTask = await repository.create(owner, agentInput(name()))
+    const taskId = ulid()
+    await db.insert(tasks).values({
+      id: taskId,
+      name: 'live',
+      workflowId,
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/x',
+      worktreePath: '/tmp/x',
+      baseBranch: 'main',
+      branch: `aw/${taskId}`,
+      status: 'running',
+      inputs: '{}',
+      startedAt: T0,
+      sourceAgentName: byTask.name,
+      sourceAgentId: byTask.id,
+      ownerUserId: ownerId,
+    })
+    const tasksActive = await errorOf(() => repository.delete(owner, byTask.id, fenceOf(byTask)))
+    expect(tasksActive.code).toBe('agent-tasks-active')
+    expect(tasksActive.details).toMatchObject({ taskIds: [taskId] })
+    // 终态任务不拦（RFC-165 §4 接受的限制），否则代理会被永久锁死。
+    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
+    await repository.delete(owner, byTask.id, fenceOf(byTask))
+
+    // (d) 被定时任务引用 ⇒ agent-scheduled-referenced，并点名那条定时任务。
+    const bySchedule = await repository.create(owner, agentInput(name()))
+    const scheduleId = ulid()
+    const scheduleName = `sched-${scheduleId.slice(-6).toLowerCase()}`
+    await db.insert(scheduledTasks).values({
+      id: scheduleId,
+      name: scheduleName,
+      ownerUserId: ownerId,
+      launchKind: 'agent',
+      launchPayload: JSON.stringify({ kind: 'agent', agentId: bySchedule.id }),
+      scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 60_000, tz: 'UTC' }),
+      createdAt: T0,
+      updatedAt: T0,
+    })
+    const scheduled = await errorOf(() =>
+      repository.delete(owner, bySchedule.id, fenceOf(bySchedule)),
+    )
+    expect(scheduled.code).toBe('agent-scheduled-referenced')
+    expect(scheduled.details).toMatchObject({
+      visible: [{ id: scheduleId, name: scheduleName }],
+      hiddenCount: 0,
+    })
+
+    // 解引用后必须放行——否则「引用拒删」等于永久锁死。
+    await db.delete(scheduledTasks).where(eq(scheduledTasks.id, scheduleId))
+    await repository.delete(owner, bySchedule.id, fenceOf(bySchedule))
+    await repository.delete(owner, dependent.id, fenceOf(dependent))
+    await repository.delete(owner, byDependency.id, fenceOf(byDependency))
+    await db.delete(workflows).where(eq(workflows.id, workflowId))
+    await repository.delete(owner, byWorkflow.id, fenceOf(byWorkflow))
   })
 })
