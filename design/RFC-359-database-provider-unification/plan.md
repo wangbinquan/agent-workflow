@@ -17496,3 +17496,54 @@ W10 第九格（工作区正被 GC 回收）合并后自己红 ⇒ 改成相等�
 - 上半声明的四条 `allowGrowth` 按约回落退役。
 - `rfc359-w8-runtime-participants` 那条反向锚（「这一侧不得再长回自己那份 `resumeTask`」）
   现在钉的是一个**已经不存在的符号**，判据因此更强了：它连「把退役那份复活回来」都挡得住。
+
+## 第 11 刀的勘察　`cancel`　——**「判不合」的那条证据早就不成立了，而且它绿在注释上**
+
+`cancel` 是 `ChildTaskLifecycleParticipant` 剩下的那一半：SQLite 的 `children.cancel` 转给
+`services/task.ts` 的 `cancelTask`（251 行），PostgreSQL 转给自己的 `cancelCascade`（151 行）。
+
+W8 当年把这一对判为**不合**，机械证据只有一条：
+
+> `cancelTask` 的准入预检是 bun:sqlite 的**同步读**（`.all()[0]`），
+> 它在 PostgreSQL 客户端上跑不出正确结果 —— 所以两侧不能互换。
+
+**这条证据已经不成立**。RFC-359 自己在更早的某一刀里把那句同步读换掉了：取号与入队解耦
+（`reserveTaskReviewMutationSlot`）之后排队位置在**函数入口**就定死，预检 await 多久都不影响顺序，
+于是它改成了 `await db.select({ status: tasks.status })`——**provider 中立**。
+
+### 它为什么一直是绿的：判据绿在**注释**上
+
+那次改动在原地留下了一段解释这件事的注释，注释里带着 `` `.all()[0]` `` 这几个字，
+而判据是纯文本 `toContain`。加一层 `codeOnly()`（去掉块注释与行注释）之后它**当场红**。
+
+**判据教训（记进 `docs/dev-gotchas.md`）**：源码文本判据不过滤注释，就可能绿在
+**「解释这条证据为什么已经不在了的那段话」**上。这是「零与合规同形」的近亲，而且更隐蔽——
+前者至少还能靠语料下限兜底，后者连语料都是满的。
+
+### 改锚
+
+那条断言改成钉**当前事实**的正面锚：
+
+```
+expect(cancelStatements).toContain('reserveTaskReviewMutationSlot(id)')
+expect(cancelStatements).toContain('await db.select({ status: tasks.status })')
+expect(cancelStatements, '准入预检不得退回 bun:sqlite 的同步读').not.toContain('.all()[0]')
+```
+
+用例标题也从「W8 判不合 · cancel 仍是两台引擎」改成「W8 · cancel 仍是两份实现
+（合并是第 11 刀的事，不再宣称「不能合」）」——**两份实现还在是事实，「不能合」不是**。
+
+### 两侧的形状其实已经很接近
+
+逐段对读（SQLite `cancelTask` / PG `cancelCascade`）：准入（状态可取消 + 任务存在）→
+撤销执行归属 → 状态 CAS → 关掉打开的 node_run → 终结意图 → 落生命周期事件 →
+停掉运行时（stop token + 等停）→ 级联子任务。**两边的段落一一对应**，
+差异集中在事务原语与归属撤销的写法上。
+
+### 第 11 刀的次序（沿用配方）
+
+① 先立 `cancel` 的双引擎准入 / 级联对拍基线（错误码 + 事后任务与 node_run 形状 + 子任务级联），
+把两侧现在各自的答案钉成显式的相等或分叉；②变异实证；③合并；④销账。
+
+**注意**：`cancelTask` 还有 `beforeStatusCas` 这个注入点（`retry-cascade-kind-matrix` 的两条并发
+判据靠它）。合并时它要跟着实现走——那两条判据也就能随之转双引擎（见第 9 刀留下的那条说明）。

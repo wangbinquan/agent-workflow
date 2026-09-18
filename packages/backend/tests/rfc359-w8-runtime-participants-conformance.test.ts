@@ -103,6 +103,22 @@ const INFRASTRUCTURE = resolve(
 const read = (name: string): string => readFileSync(resolve(INFRASTRUCTURE, name), 'utf8')
 
 /**
+ * RFC-359 AC-1（第 11 刀勘察）—— **去注释**之后再做源码断言。
+ *
+ * 为什么加这个：下面那条「`cancel` 两侧不能互换」的机械证据原本是
+ * `expect(cancelStatements.slice(0, 600)).toContain('.all()[0]')`——它要证的是
+ * `cancelTask` 的准入预检是 bun:sqlite 的**同步读**。而 RFC-359 自己在更早的某一刀里
+ * 把那句同步读改成了 `await db.select(...)`，同时**在原地留下一段解释这件事的注释**，
+ * 注释里带着 `` `.all()[0]` `` 这几个字。于是判据继续绿——**绿在注释上**。
+ *
+ * 「零与合规同形」的近亲：**「证据」与「解释证据为什么已经不在了的那段话」同形**。
+ * 源码文本判据一律先过这一层。
+ */
+function codeOnly(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
+/**
  * 只被工厂**存下来、不被本文件驱动**的依赖。两个工厂都只在构造时把它们收进闭包，
  * `activity` 一条也用不到；写成占位是为了让「构造这一步」本身也在两个引擎上跑一遍。
  */
@@ -429,9 +445,19 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
 // 合并前八格逐字相同，第九格的归因差异随合并收敛）。两个引擎唯一的真差异（认领策略）
 // 收进了 `lifecycle` 端口：SQLite 走进程级单例的同步认领，PostgreSQL 走持久化租约。
 //
-// `cancel` 那一半**仍然成立**，判据照旧钉着——它下面那条 `.all()[0]` 的机械证据说的就是
-// `cancelTask` 的准入预检是 bun:sqlite 的同步读，在 PostgreSQL 客户端上跑不出正确结果。
-test('W8 判不合 · cancel 仍是两台引擎：SQLite 转发 services/task，PostgreSQL 转发自己的参与者', () => {
+// `cancel` 那一半**仍然是两份实现**，但「判不合」这个结论已经**不成立了**（第 11 刀勘察）：
+// 它当年的机械证据是「`cancelTask` 的准入预检是 bun:sqlite 的同步读，在 PostgreSQL 客户端上
+// 跑不出正确结果」——而 RFC-359 自己在更早的某一刀里把那句同步读改成了 `await db.select(...)`
+//（取号与入队解耦之后排队位置在函数入口就定死，预检 await 多久都不影响顺序）。
+//
+// 那条判据之所以一直绿，是因为改动**在原地留下了一段解释这件事的注释**，注释里带着
+// `` `.all()[0]` `` 这几个字，而判据是纯文本 `toContain`。加上 `codeOnly()` 之后它当场红——
+// 这就是它被改锚的由来。**记一条判据教训**：源码文本判据不过滤注释，就可能绿在
+// 「解释证据为什么已经不在了的那段话」上（「零与合规同形」的近亲）。
+//
+// 现在这条钉的是**当前事实**（两份实现还在，各自转给谁），不再宣称「不能合」。
+// 合并本身是第 11 刀的事，那一刀会让这条自己红。
+test('W8 · cancel 仍是两份实现（合并是第 11 刀的事，不再宣称「不能合」）', () => {
   const sqlite = read('sqliteTaskExecutionRuntimeParticipants.ts')
   const postgresql = read('postgresqlTaskExecutionRuntimeParticipants.ts')
 
@@ -446,20 +472,25 @@ test('W8 判不合 · cancel 仍是两台引擎：SQLite 转发 services/task，
   expect(postgresql).toContain('createPostgresqlChildTaskLifecycleParticipant')
   expect(postgresql).not.toContain("from '@/services/task'")
 
-  // `cancelTask` 的准入预检是 bun:sqlite 的同步读——它在 PostgreSQL 客户端上跑不出正确结果，
-  // 这一条就是「两侧 children 不能互换」的机械证据。
+  // **准入预检已经是 provider 中立的了**（第 11 刀勘察实证）：进门第一件事是同步取号
+  // （`reserveTaskReviewMutationSlot`，排队位置在函数入口就定死），随后那条状态预检是
+  // `await db.select(...)`——不再是 bun:sqlite 的同步读。这一条正面钉住它，
+  // 免得有人为了「更快一点」把同步读改回来，那会重新把顺序正确性挂在一个引擎的特性上。
   const cancelTaskSource = readFileSync(
     resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
     'utf8',
   )
   // 锚点从函数**签名**起算会被选项对象的文档注释推开（RFC-359 给 `beforeStatusCas` 加注释时实撞：
-  // 1200 字窗口一下就不够了）。改从**函数体开始**起算——判据要的是「进门第一件事就是同步读」，
-  // 与签名有多长无关。
+  // 1200 字窗口一下就不够了）。改从**函数体开始**起算，并且先去注释。
   const cancelBody = cancelTaskSource.slice(
     cancelTaskSource.indexOf('export async function cancelTask('),
   )
-  const cancelStatements = cancelBody.slice(cancelBody.indexOf('): Promise<Task> {'))
-  expect(cancelStatements.slice(0, 600)).toContain('.all()[0]')
+  const cancelStatements = codeOnly(
+    cancelBody.slice(cancelBody.indexOf('): Promise<Task> {')),
+  ).slice(0, 600)
+  expect(cancelStatements).toContain('reserveTaskReviewMutationSlot(id)')
+  expect(cancelStatements).toContain('await db.select({ status: tasks.status })')
+  expect(cancelStatements, '准入预检不得退回 bun:sqlite 的同步读').not.toContain('.all()[0]')
 })
 
 test('W8 判不合 · activity 读的是两个不同的 registry：进程级单例 vs 注入的 executionModule', () => {
