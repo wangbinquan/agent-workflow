@@ -490,7 +490,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *   modules/task-execution/infrastructure/effectQuiescence.ts: 1
  *     :312 taskExecutionLineageOperationRecords。why —— 接过句柄的助手；调用方是
  *       task-execution 的 SERIALIZABLE 事务面。removeWhen —— 调用方降级时重判。
- *   modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts: 1
+ *   modules/task-execution/infrastructure/childExecutionLaunchOperations.ts: 1
  *     :579 tasks（`idx_tasks_event_delivery_unique`）。
  *     why —— opener 是 `withSerializableTaskExecution`。removeWhen —— 同上。
  *   modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts: 1
@@ -544,8 +544,8 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts: 2',
   'modules/resource-catalog/infrastructure/workflowRepository.ts: 1',
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts: 1',
+  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts: 1',
   'modules/task-execution/infrastructure/effectQuiescence.ts: 1',
-  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts: 1',
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 刀）：**这一行销账**——那处「先查存在、
   // 再插 task_collaborators」的形状随 PG 侧内联 `replaceTaskMembers` 一起删除，
   // 成员替换现在走共用的 `updateTaskMembersLocked`（聚合根锁内重读 + 全量替换）。

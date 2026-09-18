@@ -408,10 +408,13 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：80 → 79。触发器参与者两个引擎合成
       // 一份，退役 `createSqliteTaskExecutionTriggerParticipant`。**是合一不是删覆盖**，分母少一。
       // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）：79 → 78。子任务启动两个引擎共用
-      // `createPostgresqlChildExecutionLaunchOperations`，退役
+      // `createChildExecutionLaunchOperations`，退役
       // `createSqliteChildExecutionLaunchOperations`（连同整个 87 行的转发壳文件）。
       // **是合一不是删覆盖**，分母少一。
-    ).toBeGreaterThanOrEqual(78)
+      // RFC-359 AC-1（命名债收尾 §5hj）：78 → 71。四份 provider 中立的实现去掉 `postgresql`
+      // 前缀，它们的 8 个 `createPostgresql*` 工厂随之改名、离开本分母。
+      // **是改名不是删覆盖**：函数一个没少，只是不再自称属于某个 provider。
+    ).toBeGreaterThanOrEqual(71)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

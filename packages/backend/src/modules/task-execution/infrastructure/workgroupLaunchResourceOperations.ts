@@ -7,7 +7,7 @@ import { canViewResource } from '@/modules/resource-catalog/composition/resource
 import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { ensureWorkgroupHostWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
-import type { PostgresqlWorkgroupRouteLaunchResources } from './postgresqlTaskRouteLaunchOperations'
+import type { WorkgroupRouteLaunchResources } from './taskRouteLaunchOperations'
 
 /**
  * RFC-359 AC-1（plan §5hn 批次二 ①）—— 工作组启动的资源面，**两个 provider 唯一的一份**。
@@ -34,7 +34,7 @@ import type { PostgresqlWorkgroupRouteLaunchResources } from './postgresqlTaskRo
 export function createWorkgroupLaunchResourceOperations(input: {
   readonly db: ProviderNeutralDatabase
   readonly integrity: AgentLaunchResourceIntegrityParticipant
-}): PostgresqlWorkgroupRouteLaunchResources {
+}): WorkgroupRouteLaunchResources {
   const { db } = input
   return Object.freeze({
     async loadVisible(actor: Actor, workgroupId: string) {

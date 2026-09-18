@@ -9,9 +9,9 @@ import type { TaskDriveSubmission } from '@/modules/task-execution/application/d
 import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
   createPostgresqlRepositoryPreparationRetryCommand,
-  createPostgresqlTaskWorkspaceMaterializer,
+  createTaskWorkspaceMaterializer,
 } from '@/modules/task-execution/composition/taskExecutionRuntime'
-import type { PostgresqlTaskRoutePreparedWorkspace } from '@/modules/task-execution/composition/taskRouteLaunch'
+import type { TaskRoutePreparedWorkspace } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -216,7 +216,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     const fixture = postgresqlFixture([])
     const appHome = await mkdtemp(join(tmpdir(), 'rfc349-workspace-pg-'))
     try {
-      const materializer = createPostgresqlTaskWorkspaceMaterializer({
+      const materializer = createTaskWorkspaceMaterializer({
         db: fixture.db,
         appHome,
       })
@@ -256,7 +256,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
       },
       nudge() {},
     })
-    const prepared: PostgresqlTaskRoutePreparedWorkspace = Object.freeze({
+    const prepared: TaskRoutePreparedWorkspace = Object.freeze({
       taskId: 'task-1',
       kind: 'single',
       spaceKind: 'remote',
@@ -358,10 +358,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
   test('composition exposes production workspace and retry factories without SQLite escape hatches', () => {
     const backend = resolve(import.meta.dir, '..', 'src')
     const workspace = readFileSync(
-      resolve(
-        backend,
-        'modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts',
-      ),
+      resolve(backend, 'modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts'),
       'utf8',
     )
     const retry = readFileSync(
@@ -375,14 +372,12 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
       resolve(backend, 'modules/task-execution/composition/providerRuntime.ts'),
       'utf8',
     )
-    expect(workspace).toContain('createPostgresqlTaskWorkspaceMaterializer')
+    expect(workspace).toContain('createTaskWorkspaceMaterializer')
     expect(workspace).toContain('materializeSpaceWithProvider')
     expect(retry).toContain('createPostgresqlRepositoryPreparationRetryCommand')
     expect(retry).toContain('submitTaskContinuation')
     expect(retry).toContain('await publishCommittedEventsAfterCommit')
-    expect(provider).toContain(
-      'createPostgresqlTaskRouteWorkspaceParticipant(workspaceDependencies)',
-    )
+    expect(provider).toContain('createTaskRouteWorkspaceParticipant(workspaceDependencies)')
     expect(provider).toContain('createPostgresqlRepositoryPreparationRetryCommand({')
     expect(`${workspace}\n${retry}`).not.toContain("from '@/db/client'")
     expect(`${workspace}\n${retry}`).not.toContain('createSqlite')

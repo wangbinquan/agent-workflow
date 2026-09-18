@@ -97990,9 +97990,9 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:094310af10dafa636874",
         "import:3b3f93b0eaac09288cdd",
-        "import:c455a417e109065601c3",
+        "import:ae02f791cee0e8ea9b80",
+        "import:f5e2b0213caf1c40ff1b",
         "import:f5fa653da3465d788d75"
       ],
       "context": "resource-catalog",
@@ -98002,8 +98002,8 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:094310af10dafa636874",
-            "import:c455a417e109065601c3"
+            "import:ae02f791cee0e8ea9b80",
+            "import:f5e2b0213caf1c40ff1b"
           ],
           "fieldPath": "$method:assertUsable.$parameter:input.rootAgentIds",
           "type": "readonly string[]"
@@ -98023,8 +98023,8 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:094310af10dafa636874",
-            "import:c455a417e109065601c3"
+            "import:ae02f791cee0e8ea9b80",
+            "import:f5e2b0213caf1c40ff1b"
           ],
           "name": "assertUsable",
           "signatureDigest": "sha256:b2af1246abe221602f6fb4f62345b24702fc669543842e8e6d0db0acea75362f"
@@ -98034,21 +98034,21 @@
       "productionConsumers": [
         {
           "context": "task-execution",
-          "edgeId": "import:094310af10dafa636874",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#$file"
-        },
-        {
-          "context": "task-execution",
           "edgeId": "import:3b3f93b0eaac09288cdd",
           "file": "packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workgroupLaunchResources.ts#$file"
         },
         {
           "context": "task-execution",
-          "edgeId": "import:c455a417e109065601c3",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts#$file"
+          "edgeId": "import:ae02f791cee0e8ea9b80",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:f5e2b0213caf1c40ff1b",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#$file"
         },
         {
           "context": "task-execution",
@@ -159680,7 +159680,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9473aceb1403bdf73660ae6196b1202bfd92181dc17a057db12aea4d2f2caf3a",
+  "sourceDigest": "sha256:e596b3bcacadc30b0b7035e17c5738c85208a19625ed8bee77f386bc6a82a713",
   "targetContexts": [
     "collaboration",
     "development-automation",

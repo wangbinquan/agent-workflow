@@ -7,16 +7,16 @@ import type {
 } from '../public/commands'
 import {
   createAgentRouteLaunch,
-  createPostgresqlTaskExecutionLaunchParticipant,
+  createTaskExecutionLaunchParticipant,
   createWorkgroupRouteLaunch,
   type AgentRouteLaunchDependencies,
-  type PostgresqlTaskExecutionLaunchParticipant,
+  type TaskExecutionLaunchParticipant,
   type WorkgroupRouteLaunchDependencies,
-} from './postgresqlTaskRouteLaunchOperations'
+} from './taskRouteLaunchOperations'
 import {
-  createPostgresqlTaskRouteWorkspaceParticipant,
-  type PostgresqlTaskRouteWorkspaceDependencies,
-} from './postgresqlTaskRouteWorkspaceParticipant'
+  createTaskRouteWorkspaceParticipant,
+  type TaskRouteWorkspaceDependencies,
+} from './taskRouteWorkspaceParticipant'
 import { resolveUploadLimits } from '@/services/launchMultipart'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 
@@ -30,9 +30,9 @@ export interface SqliteTaskRouteLaunchDependencies
    * **物化输入**，参与者由模块自己造。组合根因此不必深挖 `infrastructure/`
    * ——RFC-331 的分层判据会逐条抓出那种 deep import（本刀实撞过一次）。
    */
-  readonly routeWorkspace: Omit<PostgresqlTaskRouteWorkspaceDependencies, 'db'>
+  readonly routeWorkspace: Omit<TaskRouteWorkspaceDependencies, 'db'>
   /**
-   * 路由面独有的那一格（见 `PostgresqlTaskRouteLaunchDependencies`）：把 admitted actor
+   * 路由面独有的那一格（见 `TaskRouteLaunchDependencies`）：把 admitted actor
    * 绑成资源目录鉴权句柄。臂与启动参与者都不读它——它们收的是请求上带来的 `resources`。
    */
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
@@ -46,7 +46,7 @@ export function createSqliteTaskRouteLaunchOperations(
 }> {
   const withWorkspace = {
     ...input,
-    workspace: createPostgresqlTaskRouteWorkspaceParticipant({
+    workspace: createTaskRouteWorkspaceParticipant({
       db: input.db,
       ...input.routeWorkspace,
     }),
@@ -113,10 +113,10 @@ export function createSqliteTaskRouteLaunchOperations(
  */
 export function createSqliteTaskExecutionLaunchParticipant(
   input: SqliteTaskRouteLaunchDependencies,
-): PostgresqlTaskExecutionLaunchParticipant {
-  return createPostgresqlTaskExecutionLaunchParticipant({
+): TaskExecutionLaunchParticipant {
+  return createTaskExecutionLaunchParticipant({
     ...input,
-    workspace: createPostgresqlTaskRouteWorkspaceParticipant({
+    workspace: createTaskRouteWorkspaceParticipant({
       db: input.db,
       ...input.routeWorkspace,
     }),

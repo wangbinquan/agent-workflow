@@ -14,7 +14,7 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createLogger } from '@/util/log'
 
-import { cancelTaskProjection } from '../infrastructure/postgresqlChildTaskLifecycleParticipant'
+import { cancelTaskProjection } from '../infrastructure/childTaskLifecycleParticipant'
 import { taskExecutionModule } from '../public/participants'
 import { createTaskExecutionPersistence } from './taskExecutionPersistence'
 

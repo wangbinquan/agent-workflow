@@ -13,11 +13,11 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
 import {
-  createPostgresqlRootTaskLaunchKernel,
-  type PostgresqlRootTaskLaunchDependencies,
-  type PostgresqlRootTaskLaunchKernel,
-} from '../infrastructure/postgresqlTaskRouteLaunchOperations'
-import { createPostgresqlTaskRouteWorkspaceParticipant } from '../infrastructure/postgresqlTaskRouteWorkspaceParticipant'
+  createRootTaskLaunchKernel,
+  type RootTaskLaunchDependencies,
+  type RootTaskLaunchKernel,
+} from '../infrastructure/taskRouteLaunchOperations'
+import { createTaskRouteWorkspaceParticipant } from '../infrastructure/taskRouteWorkspaceParticipant'
 
 export interface HostTaskLaunchKernelDependencies {
   readonly db: ProviderNeutralDatabase
@@ -27,17 +27,17 @@ export interface HostTaskLaunchKernelDependencies {
    * 只走 scratch / 借用工作区的测试装配可以不给——底层参与者本来就把它声明成可选。
    */
   readonly secretBox?: SecretBox
-  readonly gitCommitIdentity: PostgresqlRootTaskLaunchDependencies['gitCommitIdentity']
+  readonly gitCommitIdentity: RootTaskLaunchDependencies['gitCommitIdentity']
   readonly coordinator: TaskDriveCoordinator
 }
 
 export function composeHostTaskLaunchKernel(
   input: HostTaskLaunchKernelDependencies,
-): PostgresqlRootTaskLaunchKernel {
-  return createPostgresqlRootTaskLaunchKernel({
+): RootTaskLaunchKernel {
+  return createRootTaskLaunchKernel({
     db: input.db,
     gitCommitIdentity: input.gitCommitIdentity,
-    workspace: createPostgresqlTaskRouteWorkspaceParticipant({
+    workspace: createTaskRouteWorkspaceParticipant({
       db: input.db,
       appHome: input.appHome,
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),

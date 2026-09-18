@@ -8488,6 +8488,29 @@
     },
     {
       "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$setTimeout:833",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:833",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
         "db"
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
@@ -8593,29 +8616,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts#InMemoryTaskRuntimeRegistry",
       "phase": "execution",
       "symbol": "InMemoryTaskRuntimeRegistry",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$setTimeout:833",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:833",
       "targetContext": "task-execution"
     },
     {
@@ -12755,5 +12755,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9473aceb1403bdf73660ae6196b1202bfd92181dc17a057db12aea4d2f2caf3a"
+  "sourceDigest": "sha256:e596b3bcacadc30b0b7035e17c5738c85208a19625ed8bee77f386bc6a82a713"
 }

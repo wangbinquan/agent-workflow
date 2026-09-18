@@ -20,13 +20,13 @@ export {
   type WorkgroupTaskRoomTaskParticipantFactory,
 } from './workgroupTaskRoomTask'
 export {
-  createPostgresqlChildTaskLifecycleParticipant,
-  type PostgresqlChildTaskLifecycleDependencies,
+  createChildTaskLifecycleParticipant,
+  type ChildTaskLifecycleDependencies,
 } from './childTaskLifecycle'
 export {
-  createPostgresqlChildExecutionLaunchOperations,
-  type PostgresqlChildExecutionLaunchDependencies,
-  type PostgresqlChildWorkgroupLaunchResources,
+  createChildExecutionLaunchOperations,
+  type ChildExecutionLaunchDependencies,
+  type ChildWorkgroupLaunchResources,
 } from './childExecutionLaunch'
 export { composeTaskClarifyDirectiveRouteOperations } from './taskClarifyDirectiveRoutes'
 export { composeTaskAutoResumeCommand } from './taskAutoResume'
@@ -45,12 +45,12 @@ export {
   type PostgresqlRepositoryPreparationRetryDependencies,
 } from '../infrastructure/postgresqlRepositoryPreparationRetryCommand'
 export {
-  createPostgresqlTaskRouteWorkspaceParticipant,
-  createPostgresqlTaskWorkspaceMaterializer,
-  type PostgresqlTaskRouteWorkspaceDependencies,
-  type PostgresqlTaskWorkspaceMaterializer,
-  type PostgresqlTaskWorkspacePreparation,
-} from '../infrastructure/postgresqlTaskRouteWorkspaceParticipant'
+  createTaskRouteWorkspaceParticipant,
+  createTaskWorkspaceMaterializer,
+  type TaskRouteWorkspaceDependencies,
+  type TaskWorkspaceMaterializer,
+  type TaskWorkspacePreparation,
+} from '../infrastructure/taskRouteWorkspaceParticipant'
 export {
   composePostgresqlTaskExecutionProviderRuntime,
   composeSqliteTaskExecutionProviderRuntime,

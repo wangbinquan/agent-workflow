@@ -1203,27 +1203,6 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/server.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant",
-      "specifier": "@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 AC-1（第 10 刀）`resume` 两份实现合一之后，`server.ts` 这条**不装配完整 runtime** 的组合根直接 import 共用实现与它要的生命周期端口。与本文件既有的 19 条 `server.ts → 模块内部` 同形同类：**剩下的是纯分层债**——bootstrap 仍直接 import owner 的 infrastructure，而不是走 owner 的 public/composition 合同。零成本的替代只有「让这条路继续跑退役那份 `resumeTask`」，那正是本 RFC 要消灭的东西（同一个请求两个部署给不同答案）。",
-      "introducedByRFC": "RFC-359 AC-1（第 10 刀，resume 合一）",
-      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:4168c8846337f00e7685"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#resumeTaskProjection"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/server.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle",
       "specifier": "@/modules/task-execution/infrastructure/taskDriverLifecycle",
       "edgeKind": "value",
@@ -6729,6 +6708,27 @@
         "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun"
       ],
       "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant",
+      "specifier": "@/modules/task-execution/infrastructure/childTaskLifecycleParticipant",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 AC-1（命名债收尾 §5hj）：这条边**一直就在**（`server.ts` 的人工门续跑直接取 `resumeTaskProjection`），只是此前那个文件叫 `postgresqlChildTaskLifecycleParticipant.ts`，被 R1 当成 provider 命名基础设施让过去了（那类由 W5-T17 的 provider-命名文件账本管）。去掉前缀之后它落回 R1 的视野——**是判据看见了真相，不是新开的债**。随人工门续跑离开 legacy 层一起消失。",
+      "introducedByRFC": "RFC-359 AC-1（命名债收尾 §5hj）",
+      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:87cb16e4c9c6aeb6a297"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#resumeTaskProjection"
+      ],
+      "canonicalFacadeIds": []
     }
   ],
   "registeredFindings": [
@@ -7909,15 +7909,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9473aceb1403bdf73660ae6196b1202bfd92181dc17a057db12aea4d2f2caf3a",
+    "sourceDigest": "sha256:e596b3bcacadc30b0b7035e17c5738c85208a19625ed8bee77f386bc6a82a713",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "f2e06209229c426736efe677ff7cd3df79a178a1",
-    "contentDigest": "sha256:57ce68e437f67c3e19b98321097db9ec1b765ef9eca5dc046a6ca1a53c707676",
+    "currentSnapshotSha": "1477d4f09cbd2adf65d281fad99387e80bb8e7cd",
+    "contentDigest": "sha256:cb0d157e25a8ff68e2fa72baa9b3fb8d04e2cef319d51599004fd8dee84e8bd8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

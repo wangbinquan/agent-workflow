@@ -126,7 +126,11 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite + postgresql — verified by rfc359-w8-runtime-participants-conformance.test.ts',
   // RFC-359 W12：TaskLifecycleAutoRepairCommand 已合为中立循环；PG 自动修复借用人工修复的
   // 原选项/前置检查/执行引擎，第三份 S4 算法同时删除。W8 对拍继续锁用户可见结果与副作用。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts',
+  // RFC-359 AC-1（命名债收尾 §5hj）**销账**：`postgresqlTaskRouteLaunchOperations.ts` 去掉前缀
+  // 改叫 `taskRouteLaunchOperations.ts`（实现本来就 provider 中立：零 `PostgresqlDatabaseClient`、
+  // 零 provider 分支，两个引擎的根绑的是同一份）。孪生键靠 `{sqlite,postgresql}<Name>` 的文件名
+  // 配对，前缀一去这一对就不再成立——SQLite 那半 `sqliteTaskRouteLaunchOperations.ts` 仍在，
+  // 但它现在配不出「成对适配器」，因为另一半已经不是 provider 命名文件了。
   // RFC-359 W8：这一对多了第二份双引擎对拍——W7 只驱动到各方法的**前置门**为止，W8 补的是
   // 门后的语义（retry 的三道前置门 / sync 的 canceled 回滚 / delete 的父链排序列重算）。
   'modules/task-execution/infrastructure/TaskRouteOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts, rfc359-w8-task-route-capability-parity.test.ts',
@@ -232,7 +236,7 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 // 触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块（子 agent prompt 里
 // `{{event_type}}` 随之展不开）。见证测试 `rfc359-w8-child-launch-conformance` 留任，
 // 本分从「见证分叉」翻成「锁住合一」。
-export const PROVIDER_PAIR_COUNT = 7
+export const PROVIDER_PAIR_COUNT = 6
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

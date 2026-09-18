@@ -232,7 +232,7 @@ describe('RFC-165 T1 — applySpaceFields shared assembly point', () => {
         'modules',
         'task-execution',
         'infrastructure',
-        'postgresqlTaskRouteLaunchOperations.ts',
+        'taskRouteLaunchOperations.ts',
       ),
       'utf8',
     )

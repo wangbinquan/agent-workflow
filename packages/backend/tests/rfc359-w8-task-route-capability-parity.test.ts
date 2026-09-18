@@ -17,7 +17,7 @@
 // # 为什么 `children.resume` 在本文件里是**记录型空实现**
 //
 // 生产里 PG 的 `retry` / `syncWorkflow` 收尾都调 `children.resume`
-// （`postgresqlChildTaskLifecycleParticipant.rollbackForResume`），它确实带一套
+// （`childTaskLifecycleParticipant.rollbackForResume`），它确实带一套
 // **resume 选择器**的回滚兜底。那份兜底对下面每一条都够不着，所以把它换成空实现
 // 不会把红「制造」出来：
 //   · ② 的 canceled 行**不在** resume 选择器里（`selectResumeRollbackTargets` 只收
@@ -800,7 +800,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     // （services/task.ts:1380「rolling it back would undo completed inner work」）。
     // PG 侧的绿**不是**桩 `children.resume` 骗来的（口径见文件头）：生产里那一侧的回滚兜底
     // 是 `selectResumeRollbackTargets`，它只收 failed / interrupted
-    // （postgresqlChildTaskLifecycleParticipant.ts），canceled 的 wrapper 行本来就不在选择器
+    // （childTaskLifecycleParticipant.ts），canceled 的 wrapper 行本来就不在选择器
     // 里，真实现同样不会回滚它。这条锁的是 SQLite 那一侧多出来的无条件回滚。
     expect(readFileSync(join(repoPath, 'a.txt'), 'utf8')).toBe('half-written-by-canceled-node\n')
     expect(existsSync(join(repoPath, 'leftover.txt'))).toBe(true)

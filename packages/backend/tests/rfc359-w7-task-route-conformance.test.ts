@@ -73,7 +73,7 @@ import {
   createPostgresqlTaskRouteOperations,
   type PostgresqlTaskRouteOperationsDependencies,
 } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
-import { createPostgresqlTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+import { createTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type {
   AgentRouteTaskLaunchOperations,
   WorkgroupRouteTaskLaunchOperations,
@@ -292,7 +292,7 @@ interface LaunchArms {
 function launchOperations(harness: ProviderHarness): LaunchArms {
   const configPath = join(APP_HOME, 'config.json')
   if (harness.capabilities.provider === 'postgresql') {
-    return createPostgresqlTaskRouteLaunchOperations({
+    return createTaskRouteLaunchOperations({
       db: harness.db as unknown as PostgresqlDatabaseClient,
       configPath,
     } as never)
@@ -1089,7 +1089,7 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
 //
 // 这一对的 `launch` **驱不动**：它两侧各自要一整台启动机器（SQLite = `startExecution` →
 // `startTask` / `startAgentTask` / `startWorkgroupTask` 加工作区物化 + git worktree；
-// PG = `createPostgresqlRootTaskLaunchKernel` 的 `createRootLaunch`），落到磁盘和 git 上，
+// PG = `createRootTaskLaunchKernel` 的 `createRootLaunch`），落到磁盘和 git 上，
 // 不是一个对拍能覆盖的面。端口上**判据型**的两个方法可以，而它们恰好就是这一对唯一自带
 // 判据的部分——其余全是转发。
 // ═════════════════════════════════════════════════════════════════════════════

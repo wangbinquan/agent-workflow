@@ -45,7 +45,7 @@ import { Paths } from '@/util/paths'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 import type { TaskRouteOperations } from '../public/taskRoutes'
-import type { PostgresqlTaskExecutionLaunchParticipant } from './postgresqlTaskRouteLaunchOperations'
+import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 import { tasks as taskRows, type LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
 import { NotFoundError } from '@/util/errors'
 
@@ -60,7 +60,7 @@ export interface SqliteTaskRouteOperationsDependencies {
    * 此前这里转 `startExecution` → `startTask`——`startExecution` 那个三分支 switch 的最后一条
    * 生产调用路。
    */
-  readonly launches: PostgresqlTaskExecutionLaunchParticipant
+  readonly launches: TaskExecutionLaunchParticipant
   /**
    * RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：列表行的 owner 身份投影。**由组合根注入**，
    * 与 PostgreSQL 那一侧同形——这层是 infrastructure，不该自己去 compose 另一个模块

@@ -36,7 +36,7 @@ import {
 } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
-import { createPostgresqlRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+import { createRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import { createTestHostTaskLaunchKernel } from './hostTaskLaunchKernel'
 import type { ActionExecutionEnvironment } from '@/modules/task-execution/composition/actionExecutionRunners'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
@@ -180,7 +180,7 @@ export async function createEachProviderTaskExecution(
       .limit(1)
     if (workflow === undefined) throw new Error('kernel-launch fixture workflow missing')
     const submitted: string[] = []
-    const kernel = createPostgresqlRootTaskLaunchKernel({
+    const kernel = createRootTaskLaunchKernel({
       db,
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       // 借用工作区的启动走 `internal.workspace`，这个物化面不会被调用到。
@@ -190,7 +190,7 @@ export async function createEachProviderTaskExecution(
           submitted.push(request.taskId)
         },
       },
-    } as unknown as Parameters<typeof createPostgresqlRootTaskLaunchKernel>[0])
+    } as unknown as Parameters<typeof createRootTaskLaunchKernel>[0])
     const launched = await kernel.launch({
       actor,
       resourceAuthority: launchResources,

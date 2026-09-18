@@ -26,10 +26,10 @@ import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWor
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
-import { createPostgresqlChildExecutionLaunchOperations } from './postgresqlChildExecutionLaunchOperations'
-import type { PostgresqlChildWorkgroupLaunchResources } from './postgresqlChildExecutionLaunchOperations'
+import { createChildExecutionLaunchOperations } from './childExecutionLaunchOperations'
+import type { ChildWorkgroupLaunchResources } from './childExecutionLaunchOperations'
 import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
-import { resumeTaskProjection } from './postgresqlChildTaskLifecycleParticipant'
+import { resumeTaskProjection } from './childTaskLifecycleParticipant'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { createLogger } from '@/util/log'
 
@@ -62,7 +62,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
    * （`childLaunchWorkgroup`），交的是路由启动那份 `composeWorkgroupLaunchResourceOperations`
    * 的产物——两个组合根同一份实现。
    */
-  readonly childLaunchWorkgroup: PostgresqlChildWorkgroupLaunchResources
+  readonly childLaunchWorkgroup: ChildWorkgroupLaunchResources
 }): TaskExecutionRuntimeParticipants {
   const runtimeComponents = Object.freeze({
     wrapperRuntimeFactory: composeWrapperRuntime,
@@ -92,7 +92,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
       await finishClaimedWebhookWorkspacePrune(input.db, taskId)
     },
   })
-  const childLaunch = createPostgresqlChildExecutionLaunchOperations({
+  const childLaunch = createChildExecutionLaunchOperations({
     db: input.db,
     persistence: input.persistence,
     lifecycle: taskDriverLifecycle,

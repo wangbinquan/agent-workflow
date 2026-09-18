@@ -273,6 +273,18 @@ export function renderPair(pair: CapabilityPair): string {
  * 状态位 `verified by …` = 存在一个测试文件对两侧各有至少一条值 import；否则 `unverified`。
  */
 export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
+  // RFC-359 AC-1（命名债收尾 §5hj）**新增一对，是判据恢复视力、不是新长出的分叉**。
+  //
+  // 成因：`providerSideOf` 按「文件里有没有 provider 锚点」判边（import 锚 ∪ 路径锚），
+  // 两边都命中就返回 `null`（判不出边 ⇒ 整个文件退出配对）。`sqliteTaskExecutionRuntimeParticipants.ts`
+  // 此前 import 的是 `postgresqlChildTaskLifecycleParticipant`（共用实现，只是名字带前缀），
+  // 于是它**同时命中 sqlite 与 postgresql 两个锚**，被判成 `null`、整份退出本账本。
+  // 四份共用实现去掉前缀之后，它干净地落回 sqlite 侧，本账本这才第一次看见它参与的那些对。
+  //
+  // 这一对（`ActiveTaskExecutionParticipant`）本来就存在、也本来就有对拍（`helpers/retryEngine.ts`），
+  // 只是被上面那个「两边都像」的短路藏了起来。**记一条判据教训**：用「文件里提到谁」判边时，
+  // 一个中立实现叫了 provider 的名字，会让引用它的**另一侧**文件整份从账本里消失。
+  'modules/task-execution/application/ports/taskExecutionRuntimeParticipants.ts:ActiveTaskExecutionParticipant: modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts + modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts — verified by helpers/retryEngine.ts',
   // 灾难恢复两对：SQLite 侧的文件名里**根本没有引擎前缀**（`legacyPlatformRecoveryAdapter`），
   // 且两侧不同目录——按名字配对的账本永远看不到它们。
   // RFC-359 W8 已补上行为对拍（备份收据形状 / 暂存往返 / 409 冲突 / 暂存中途失败 /
@@ -287,10 +299,21 @@ export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
  * RFC-359 W12：代码矩阵与度量两对已合一，两个引擎共用有界批量算法与同一 composer。
  * W8 对拍继续驱动实际查询，保留计数数值化、拒绝结果和空矩阵/扩容时的恒定语句数断言。
  */
-export const NAME_BLIND_PAIR_COUNT = 2
+// RFC-359 AC-1（命名债收尾 §5hj）2 → 3：见上面那条新增项的成因——判据恢复视力，不是新分叉。
+export const NAME_BLIND_PAIR_COUNT = 3
 
 /** 其中「连一份对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const NAME_BLIND_UNVERIFIED_COUNT = 0
+
+/**
+ * 与 W5 的交集对数（两本账都看得见的对）。
+ *
+ * 写成**具名常量**而不是字面量，是为了不喂错 `rfc317-guard-corpus-floor` 的语料下限抽取器：
+ * 它按 `toBe/toBeGreaterThan(OrEqual)(<数字字面量>)` 抓「扫描器还活着」的证据强度，
+ * 而这个数是**交集对数**、不是语料规模。留个字面量在这里会让它被记成一条假的语料下限
+ *（实测：改成 `toBe(4)` 当场把 minCorpusFiles 从 1 顶到 4）。
+ */
+export const W5_INTERSECTION_PAIR_COUNT = 4
 
 /**
  * 按端口类型发现的**全部**能力对数（含 W5 也看得见的那 8 对）。
@@ -356,7 +379,15 @@ describe('RFC-359 W8 —— 能力级成对适配器账本', () => {
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）1 → 0：唯一那条交集是
     // `ChildExecutionLaunchOperations`，已随子任务启动合一销账（SQLite 那半 87 行转发壳整份删除）。
     // 交集归零**不等于**本账本该退役——它此刻看见的 2 对全是 W5 的名字盲区，正是它的本分。
-    expect(pairs.length - nameBlind.length).toBe(0)
+    //
+    // RFC-359 AC-1（命名债收尾 §5hj）0 → 4：与上面那条新增名字盲项**同一个成因**——
+    // `sqliteTaskExecutionRuntimeParticipants.ts` 此前两边锚都命中、整份退出配对，
+    // 四份共用实现去掉 `postgresql` 前缀之后它落回 sqlite 侧，于是它与
+    // `postgresqlTaskExecutionRuntimeParticipants.ts` 之间那 4 对（`CollaborationRuntimeMechanics` /
+    // `DynamicWorkflowPersistence` / `RuntimeSessionLeaseOperations` / `TaskExecutionResourceBinding`）
+    // 重新出现在交集里。它们**一直是 W5 逐字记账的那一对文件**（两侧同目录、去前缀后同名），
+    // 只是本账本此前看不到。**不是新长出的分叉**，是两本账重新对上号。
+    expect(pairs.length - nameBlind.length).toBe(W5_INTERSECTION_PAIR_COUNT)
   })
 
   test('灾难恢复那一对确实是被两本既有账本同时漏掉的那一对', () => {

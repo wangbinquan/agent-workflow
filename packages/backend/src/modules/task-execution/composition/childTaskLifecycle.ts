@@ -1,5 +1,5 @@
 export {
-  createPostgresqlChildTaskLifecycleParticipant,
-  type PostgresqlChildTaskLifecycleDependencies,
-} from '../infrastructure/postgresqlChildTaskLifecycleParticipant'
+  createChildTaskLifecycleParticipant,
+  type ChildTaskLifecycleDependencies,
+} from '../infrastructure/childTaskLifecycleParticipant'
 export type { ChildTaskLifecycleParticipant } from '../application/ports/taskExecutionRuntimeParticipants'

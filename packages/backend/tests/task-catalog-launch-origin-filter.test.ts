@@ -14,7 +14,7 @@
 //      `domain/taskLaunchOrigin.ts` 的 `task-launch-direct-metadata-invalid`）；
 //   3. 选「定时」会漏掉定时任务的**子任务** —— 子执行插入时带的是
 //      `launchOrigin: parent.launchOrigin`、`scheduled_task_id` 留空
-//      （`postgresqlChildExecutionLaunchOperations.ts:614` 的 values 里没有该列），
+//      （`childExecutionLaunchOperations.ts:614` 的 values 里没有该列），
 //      于是一个 `launch_origin='scheduled'` 的行被猜成 manual。
 //
 // 修法：来源→存储值的映射进 domain（`taskListOriginMatches`，单一事实源），两个

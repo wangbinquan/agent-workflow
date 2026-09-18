@@ -5,7 +5,7 @@ import {
   composeDeferredRepositoryPreparationStep,
   type WorkspaceCleanupHookEvent,
 } from '@/services/task'
-import { loadFrozenSpaceLayout } from '../infrastructure/postgresqlTaskRouteWorkspaceParticipant'
+import { loadFrozenSpaceLayout } from '../infrastructure/taskRouteWorkspaceParticipant'
 import type { PersistedRepositoryPreparationStep } from '../application/drive/repositoryPreparationStep'
 
 /**

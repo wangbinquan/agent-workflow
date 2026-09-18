@@ -59,7 +59,7 @@ export interface RollbackOutcome {
  * `snapshot-missing` 那一类失败的合并说明；没有这类失败时返回 null。
  *
  * RFC-359 W57：此前 `postgresqlTaskRouteOperations.ts`（叫 `snapshotLostDetail`）与
- * `postgresqlChildTaskLifecycleParticipant.ts`（叫 `snapshotLost`）各存一份**逐字相同**的
+ * `childTaskLifecycleParticipant.ts`（叫 `snapshotLost`）各存一份**逐字相同**的
  * 实现——两个名字、一段代码。它格式化的是本文件的 `RollbackOutcome`，落在类型旁边是它本来
  * 该在的地方；两个调用点原本就从这里 import 那个类型，共享它不新增任何一条 import 边。
  *

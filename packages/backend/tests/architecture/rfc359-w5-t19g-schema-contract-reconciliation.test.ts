@@ -397,8 +397,8 @@ export const SQLITE_ONLY_PROTECTIONS: readonly string[] = [
   //     都是 `WHEN … IS NULL` / `WHEN 父子不一致` 的**兜底填充**，而 AST 清点确认：全仓
   //     **四个** `insert(tasks)` 站点**全部**显式提供 `executionLineageId` /
   //     `lineageSlotPathJson` / `launchOrigin`（`postgresqlFusionEngineTaskOperations.ts:110`、
-  //     `postgresqlChildExecutionLaunchOperations.ts:585`、
-  //     `postgresqlTaskRouteLaunchOperations.ts:762`、`services/task.ts:3482`）。
+  //     `childExecutionLaunchOperations.ts:585`、
+  //     `taskRouteLaunchOperations.ts:762`、`services/task.ts:3482`）。
   //     也就是说这三个触发器的触发条件在**任何**生产路径上都不成立——它们在 SQLite 上是纯冗余，
   //     PG 缺它们不改变任何行为。（消费侧另有确定性兜底，见
   //     `composition/nodeMechanics.ts:2418-2426`，那是第二道保险，本判断不依赖它。）

@@ -51,7 +51,7 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
   // RFC-359 W1-T1：human-gate 任务跃迁的一份中立实现（SQLite/PG 共用），CAS on lifecycleEventRevision。
   'modules/task-execution/infrastructure/humanGateTaskTransition.ts': 1,
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 2,
-  'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts': 2,
+  'modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts': 2,
 }
 
 /**
@@ -63,7 +63,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': 1,
   // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts': 1,
+  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts': 1,
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 / 5 刀）：`postgresqlTaskRouteOperations.ts`
   // **整行销账**（2 → 1 → 0）。第 4 刀删掉 PG 内联的 `replaceTaskMembers`（那处
   // `update(tasks).set({ownerUserId})` 随成员替换走共用的 `updateTaskMembersLocked`）；
@@ -94,7 +94,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 随实现搬到共用那份。RFC-243 §4.3：父任务崩溃后恢复要靠这个标记分清「我自己级联取消的」
   // 与「别人取消了我的子任务」。只写 `error_message`，且写入门是 `status='canceled'`——
   // 不翻状态，抢不到就是空操作，与上面 taskIdleTimeoutPersistence 那条同形。
-  'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts': 1,
+  'modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts': 1,
   'platform/persistence/sqlite/systemWorkspaceGc.ts': 8,
   'platform/persistence/sqlite/taskLifecycle.ts': 1,
   'services/task.ts': 2,

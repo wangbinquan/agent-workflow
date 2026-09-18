@@ -3,7 +3,7 @@
  *
  * 在这之前它有两份**逐字相同**的副本：`services/task.ts` 的 `selectResumeRollbackTargets`
  * （resume / sync / gate-continuation 三条路共用）与
- * `postgresqlChildTaskLifecycleParticipant.ts` 里的同名私有函数。两份都在做同一件事，
+ * `childTaskLifecycleParticipant.ts` 里的同名私有函数。两份都在做同一件事，
  * 谁也没跟谁比过——正是本 RFC 反复在收的那类分叉。
  *
  * 它是纯函数、零 provider 依赖，所以落在 `application/`：两个引擎的 resume 都从这里取。

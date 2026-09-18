@@ -16,7 +16,7 @@ import { composeAgentLaunchResourceOperations } from '../../src/modules/task-exe
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
 import { createSqliteTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { PostgresqlTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+import type { TaskExecutionLaunchParticipant } from '../../src/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { TaskDriveCompletionMode } from '../../src/modules/task-execution/application/drive/taskDriveTypes'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -71,7 +71,7 @@ export interface TestLaunchParticipantInput {
 
 export function createTestTaskExecutionLaunchParticipant(
   input: TestLaunchParticipantInput,
-): PostgresqlTaskExecutionLaunchParticipant {
+): TaskExecutionLaunchParticipant {
   const configPath = input.configPath ?? `${input.appHome}/config.json`
   const resourceCatalog = composeResourceCatalogFor({ db: input.db })
   const integrity = composeDatabaseAgentResourceIntegrity({
@@ -131,7 +131,7 @@ export function createTestTaskExecutionLaunchParticipant(
 
 /** 旧 `startAgentTask(resources, actor, agentId, payload, deps, uploads)` 的等价调用面。 */
 export async function launchAgentTaskViaParticipant(
-  participant: PostgresqlTaskExecutionLaunchParticipant,
+  participant: TaskExecutionLaunchParticipant,
   db: DbClient,
   actor: Actor,
   agentId: string,
@@ -147,7 +147,7 @@ export async function launchAgentTaskViaParticipant(
 
 /** 旧 `startWorkgroupTask(db, actor, workgroupId, payload, deps)` 的等价调用面。 */
 export async function launchWorkgroupTaskViaParticipant(
-  participant: PostgresqlTaskExecutionLaunchParticipant,
+  participant: TaskExecutionLaunchParticipant,
   db: DbClient,
   actor: Actor,
   workgroupId: string,

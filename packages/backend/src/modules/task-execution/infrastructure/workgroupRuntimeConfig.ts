@@ -1,7 +1,7 @@
 // RFC-359 W57 —— 工作组运行时配置的构建：**一份**，两个启动臂共用。
 //
-// 此前 `postgresqlTaskRouteLaunchOperations.ts`（收 `Workgroup` 资源行）与
-// `postgresqlChildExecutionLaunchOperations.ts`（收任务快照里的 `FrozenWorkgroupGroup`）
+// 此前 `taskRouteLaunchOperations.ts`（收 `Workgroup` 资源行）与
+// `childExecutionLaunchOperations.ts`（收任务快照里的 `FrozenWorkgroupGroup`）
 // 各存一份**逐字相同**的实现——连字段顺序都一样，唯一的差别是形参标注。
 // 两侧都在往同一个 `WorkgroupRuntimeConfigSchema` 里 parse，分开写只是分开漂的机会：
 // 这份配置是引擎**唯一**读的那份（design §8.4，引擎从不读 workgroups 资源行），

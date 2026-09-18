@@ -2,7 +2,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 
 import { createWorkgroupLaunchResourceOperations } from '../infrastructure/workgroupLaunchResourceOperations'
-import type { PostgresqlWorkgroupRouteLaunchResources } from '../infrastructure/postgresqlTaskRouteLaunchOperations'
+import type { WorkgroupRouteLaunchResources } from '../infrastructure/taskRouteLaunchOperations'
 
 /**
  * 组合根取工作组启动资源面的**唯一入口**（与 `agentLaunchResources.ts` 同形）：
@@ -11,6 +11,6 @@ import type { PostgresqlWorkgroupRouteLaunchResources } from '../infrastructure/
 export function composeWorkgroupLaunchResourceOperations(input: {
   readonly db: ProviderNeutralDatabase
   readonly integrity: AgentLaunchResourceIntegrityParticipant
-}): PostgresqlWorkgroupRouteLaunchResources {
+}): WorkgroupRouteLaunchResources {
   return createWorkgroupLaunchResourceOperations(input)
 }

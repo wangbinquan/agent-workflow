@@ -535,7 +535,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflowLaunchInputs.ts',
-    'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
+    'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts',
     ['assertWorkflowLaunchInputs'],
     // RFC-359 W8-A：子任务启动的输入门原本只长在 legacy 引擎里（同一个 facade 的
     // `services/task.ts` 消费者），PG 的子任务铸造机根本不看 inputs。补齐用的是**同一个**
@@ -545,7 +545,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflowLaunchInputs.ts',
-    'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
+    'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
     ['assertWorkflowLaunchInputs'],
     // RFC-359 AC-1（plan §5hn 批次二 ④）：启动输入契约原本只长在 `services/task.ts` 的
     // `startTask` 那一侧，共用的启动参与者上没有——**PostgreSQL 从来没执行过这条契约**

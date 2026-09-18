@@ -47,7 +47,7 @@ describe('RFC-287 T13 — materializeSpace 的 taskId 可由调用方预定', ()
         'modules',
         'task-execution',
         'infrastructure',
-        'postgresqlTaskRouteLaunchOperations.ts',
+        'taskRouteLaunchOperations.ts',
       ),
       'utf8',
     )

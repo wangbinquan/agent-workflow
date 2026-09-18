@@ -32,10 +32,10 @@ import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransact
 import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import type {
-  PostgresqlTaskRoutePreparedWorkspace,
-  PostgresqlTaskRouteWorkspaceRepository,
-} from './postgresqlTaskRouteLaunchOperations'
-import type { PostgresqlTaskWorkspaceMaterializer } from './postgresqlTaskRouteWorkspaceParticipant'
+  TaskRoutePreparedWorkspace,
+  TaskRouteWorkspaceRepository,
+} from './taskRouteLaunchOperations'
+import type { TaskWorkspaceMaterializer } from './taskRouteWorkspaceParticipant'
 
 const RETRYABLE_TASK_STATUSES = ['failed', 'canceled', 'interrupted'] as const
 const RETRYABLE_PREP_STATUSES = ['failed', 'interrupted'] as const
@@ -71,7 +71,7 @@ type PrepRow = Pick<typeof nodeRuns.$inferSelect, 'id' | 'retryIndex' | 'status'
 export interface PostgresqlRepositoryPreparationRetryDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
-  readonly workspace: PostgresqlTaskWorkspaceMaterializer
+  readonly workspace: TaskWorkspaceMaterializer
   readonly coordinator: TaskDriveCoordinator
   readonly isTaskActive: (taskId: string) => boolean
   readonly awaitTaskSettled: (taskId: string) => Promise<void>
@@ -133,10 +133,7 @@ function retryGitIdentity(task: TaskRow): Readonly<{ name: string; email: string
   return { name: task.gitUserName, email: task.gitUserEmail }
 }
 
-function workspaceRepoRows(
-  taskId: string,
-  repositories: readonly PostgresqlTaskRouteWorkspaceRepository[],
-) {
+function workspaceRepoRows(taskId: string, repositories: readonly TaskRouteWorkspaceRepository[]) {
   return repositories.map((repository) => ({
     taskId,
     repoIndex: repository.repoIndex,
@@ -435,7 +432,7 @@ async function recordPreparationFailure(
 async function commitPreparedWorkspace(
   dependencies: PostgresqlRepositoryPreparationRetryDependencies,
   snapshot: { readonly task: TaskRow; readonly prep: PrepRow },
-  workspace: PostgresqlTaskRoutePreparedWorkspace,
+  workspace: TaskRoutePreparedWorkspace,
 ): Promise<string> {
   const now = dependencies.now?.() ?? Date.now()
   const nextId = dependencies.id ?? ulid
@@ -559,7 +556,7 @@ export function createPostgresqlRepositoryPreparationRetryCommand(
         )
       }
       inFlight.add(taskId)
-      let workspace: PostgresqlTaskRoutePreparedWorkspace | undefined
+      let workspace: TaskRoutePreparedWorkspace | undefined
       let committed = false
       try {
         const snapshot = await loadRetrySnapshot(dependencies, taskId)

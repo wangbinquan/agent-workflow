@@ -23,11 +23,11 @@ import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { driveTaskEngineApplication } from '../composition/taskEngineApplication'
 import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import { composeWrapperRuntime } from '../composition/wrapperRuntime'
-import { createPostgresqlChildTaskLifecycleParticipant } from './postgresqlChildTaskLifecycleParticipant'
+import { createChildTaskLifecycleParticipant } from './childTaskLifecycleParticipant'
 import {
-  createPostgresqlChildExecutionLaunchOperations,
-  type PostgresqlChildWorkgroupLaunchResources,
-} from './postgresqlChildExecutionLaunchOperations'
+  createChildExecutionLaunchOperations,
+  type ChildWorkgroupLaunchResources,
+} from './childExecutionLaunchOperations'
 import { createRuntimeSessionLeaseOperations } from './runtimeSessionLeaseOperations'
 
 /**
@@ -39,7 +39,7 @@ export interface PostgresqlTaskExecutionRuntimeDependencies {
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations
-  readonly childLaunchWorkgroup: PostgresqlChildWorkgroupLaunchResources
+  readonly childLaunchWorkgroup: ChildWorkgroupLaunchResources
   readonly identityAccess: Readonly<{
     readonly delegatedRequests: DelegatedRequestAuthorityFactory
     readonly taskExecutionResources: TaskExecutionResourceBinding
@@ -90,7 +90,7 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
     dependencies.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db)
   const memoryInjectionQueries = composePostgresqlMemoryInjectionQueries(db)
   const runtimeRegistry = composeRuntimeRegistryOperations(db)
-  const childLaunch = createPostgresqlChildExecutionLaunchOperations({
+  const childLaunch = createChildExecutionLaunchOperations({
     db,
     persistence,
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**，认领走哪条路由组合根决定。
@@ -137,7 +137,7 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
       )
     },
   })
-  const children = createPostgresqlChildTaskLifecycleParticipant({
+  const children = createChildTaskLifecycleParticipant({
     db,
     persistence,
     executionModule,

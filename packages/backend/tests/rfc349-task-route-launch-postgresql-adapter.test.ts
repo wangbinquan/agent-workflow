@@ -24,14 +24,14 @@ import type { TaskExecutionResourceAuthority } from '@/modules/task-execution/ap
 import type { AgentLaunchResourceOperations } from '@/modules/task-execution/application/ports/agentLaunchResourceOperations'
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import {
-  createPostgresqlRootTaskLaunchKernel,
-  createPostgresqlTaskExecutionLaunchParticipant,
-  createPostgresqlTaskRouteLaunchOperations,
-  type PostgresqlRootTaskLaunchDependencies,
-  type PostgresqlRootTaskLaunchRequest,
-  type PostgresqlTaskRouteLaunchDependencies,
-  type PostgresqlTaskRoutePreparedWorkspace,
-  type PostgresqlTaskRouteWorkspaceParticipant,
+  createRootTaskLaunchKernel,
+  createTaskExecutionLaunchParticipant,
+  createTaskRouteLaunchOperations,
+  type RootTaskLaunchDependencies,
+  type RootTaskLaunchRequest,
+  type TaskRouteLaunchDependencies,
+  type TaskRoutePreparedWorkspace,
+  type TaskRouteWorkspaceParticipant,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
@@ -234,13 +234,13 @@ async function workspaceParticipant(input: {
   readonly rolledBack: string[]
   readonly sourceTerminationSignals: Array<AbortSignal | undefined>
   readonly trace: string[]
-}): Promise<PostgresqlTaskRouteWorkspaceParticipant> {
+}): Promise<TaskRouteWorkspaceParticipant> {
   const root = await mkdtemp(join(tmpdir(), 'rfc349-task-route-launch-'))
   temporaryRoots.push(root)
   return Object.freeze({
     async prepare(
-      request: Parameters<PostgresqlTaskRouteWorkspaceParticipant['prepare']>[0],
-    ): Promise<PostgresqlTaskRoutePreparedWorkspace> {
+      request: Parameters<TaskRouteWorkspaceParticipant['prepare']>[0],
+    ): Promise<TaskRoutePreparedWorkspace> {
       input.trace.push('workspace:prepare')
       input.sourceTerminationSignals.push(request.sourceTerminationSignal)
       const worktreePath = join(root, request.taskId)
@@ -362,7 +362,7 @@ async function harness(input: {
       }),
     })
   const ids = ['task-agent', 'intent-agent', 'task-workgroup', 'intent-workgroup']
-  const dependencies: PostgresqlTaskRouteLaunchDependencies = {
+  const dependencies: TaskRouteLaunchDependencies = {
     db: postgres.db,
     configPath: join(configRoot, 'config.json'),
     resourceAuthorityFor,
@@ -415,8 +415,8 @@ async function harness(input: {
     now: () => 1_700_000_000_000,
   }
   return {
-    operations: createPostgresqlTaskRouteLaunchOperations(dependencies),
-    participant: createPostgresqlTaskExecutionLaunchParticipant(dependencies),
+    operations: createTaskRouteLaunchOperations(dependencies),
+    participant: createTaskExecutionLaunchParticipant(dependencies),
     resources: resourceAuthorityFor(actor),
     executions: postgres.executions,
     committed,
@@ -800,7 +800,7 @@ function gitMetadataHarness(
 ) {
   const trace: string[] = []
   const postgres = postgresqlFixture({ activeUserIds: [launchActor.user.id], trace })
-  const preparations: Array<Parameters<PostgresqlTaskRouteWorkspaceParticipant['prepare']>[0]> = []
+  const preparations: Array<Parameters<TaskRouteWorkspaceParticipant['prepare']>[0]> = []
   const resourceAuthority: TaskExecutionResourceAuthority = Object.freeze({
     actor: launchActor,
     authority: new AuthorityClaimRegistry().mintLocalAuthority({
@@ -817,7 +817,7 @@ function gitMetadataHarness(
     }),
   })
   let sequence = 0
-  const dependencies: PostgresqlRootTaskLaunchDependencies = {
+  const dependencies: RootTaskLaunchDependencies = {
     db: postgres.db,
     gitCommitIdentity: { execute: lookup },
     workspace: {
@@ -859,7 +859,7 @@ function gitMetadataHarness(
     id: () => `git-metadata-${++sequence}`,
     now: () => 1_700_000_000_000,
   }
-  const request: PostgresqlRootTaskLaunchRequest = {
+  const request: RootTaskLaunchRequest = {
     actor: launchActor,
     resourceAuthority,
     invoker: { type: 'user', launchKind: 'direct-json' },
@@ -873,7 +873,7 @@ function gitMetadataHarness(
       workflowSnapshot: workflow.definition,
     },
   }
-  const kernel = createPostgresqlRootTaskLaunchKernel(dependencies)
+  const kernel = createRootTaskLaunchKernel(dependencies)
   return {
     launch: () => kernel.launch(request),
     executions: postgres.executions,

@@ -13,10 +13,10 @@ import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID } from '../domain/digitalEmployeeHost'
 import type {
-  PostgresqlRootTaskLaunchKernel,
-  PostgresqlTaskRoutePreparedWorkspace,
-  PostgresqlTaskRouteWorkspaceParticipant,
-} from '../infrastructure/postgresqlTaskRouteLaunchOperations'
+  RootTaskLaunchKernel,
+  TaskRoutePreparedWorkspace,
+  TaskRouteWorkspaceParticipant,
+} from '../infrastructure/taskRouteLaunchOperations'
 import type { TaskExecutionReadModels } from '../public/types'
 import type { ActionExecutionEnvironment, ActionHostTaskLaunch } from './actionExecutionRunners'
 
@@ -27,11 +27,11 @@ import type { ActionExecutionEnvironment, ActionHostTaskLaunch } from './actionE
 export function borrowedPostgresqlWorkspace(input: {
   readonly workspacePath: string
   readonly baselineSha: string
-}): PostgresqlTaskRouteWorkspaceParticipant {
+}): TaskRouteWorkspaceParticipant {
   return Object.freeze({
     async prepare(
-      request: Parameters<PostgresqlTaskRouteWorkspaceParticipant['prepare']>[0],
-    ): Promise<PostgresqlTaskRoutePreparedWorkspace> {
+      request: Parameters<TaskRouteWorkspaceParticipant['prepare']>[0],
+    ): Promise<TaskRoutePreparedWorkspace> {
       let state: 'open' | 'committed' | 'rolled-back' = 'open'
       return Object.freeze({
         taskId: request.taskId,
@@ -73,8 +73,8 @@ export interface ActionExecutionEnvironmentDependencies {
   readonly resolveActor: () => Promise<Actor>
   readonly resourceAuthorityFor: (
     actor: Actor,
-  ) => Parameters<PostgresqlRootTaskLaunchKernel['launch']>[0]['resourceAuthority']
-  readonly launch: PostgresqlRootTaskLaunchKernel
+  ) => Parameters<RootTaskLaunchKernel['launch']>[0]['resourceAuthority']
+  readonly launch: RootTaskLaunchKernel
   readonly cancelTask: (taskId: string) => Promise<unknown>
   readonly readModels: Pick<TaskExecutionReadModels, 'executionOutcome' | 'statusProjection'>
   readonly agents: ActionExecutionEnvironment['agents']

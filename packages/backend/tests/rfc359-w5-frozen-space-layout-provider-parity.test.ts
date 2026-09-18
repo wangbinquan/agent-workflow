@@ -2,13 +2,13 @@
 //
 // 为什么这条测试存在，以及它**不是**在锁什么（这段是有意写下来的，防止下一个人重走我这趟弯路）：
 //
-// 本轮放宽 `PostgresqlTaskRouteWorkspaceDependencies.db` 时，`tsc` 指到这里一处调用，
+// 本轮放宽 `TaskRouteWorkspaceDependencies.db` 时，`tsc` 指到这里一处调用，
 // 顺着看见 `services/task.ts` 的 `loadFrozenSpaceLayout` 是**同步**函数、用 bun:sqlite 的同步终结符
 // `.all()`。而实测（本轮 probe）同一句 `.all()` 在 SQLite 上交回**数组**、在 PostgreSQL 上交回
 // **Promise**（`length` 为 `undefined`）。于是我判断：PG 上 `rows.length === 0` 恒假、
 // 「源任务没有冻结快照」这条校验被跳过、紧接着 `rows.filter(...)` 抛 TypeError——一个真缺陷。
 //
-// **这个判断是错的，写了这条用例才发现。** `postgresqlTaskRouteWorkspaceParticipant.ts` 有**自己的**
+// **这个判断是错的，写了这条用例才发现。** `taskRouteWorkspaceParticipant.ts` 有**自己的**
 // `async function loadFrozenSpaceLayout`（同文件第 66 行），根本没用 `services/task.ts` 那份；
 // 它 `await` 取行，行为正确。两个引擎跑下来都是同一个 `source-task-not-replayable`。
 //
@@ -32,7 +32,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createPostgresqlTaskWorkspaceMaterializer } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant'
+import { createTaskWorkspaceMaterializer } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -45,7 +45,7 @@ describeEachProvider('RFC-359 —— 冻结空间布局的重放拒绝在两个�
   test('源任务没有冻结仓快照时，抛的是 source-task-not-replayable 而不是 TypeError', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc359-frozen-layout-'))
     roots.push(appHome)
-    const materializer = createPostgresqlTaskWorkspaceMaterializer({
+    const materializer = createTaskWorkspaceMaterializer({
       db: harness.db as never,
       appHome,
     })

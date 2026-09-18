@@ -7,14 +7,14 @@
 //
 // | 参与者 | SQLite 侧转发到 | PostgreSQL 侧转发到 |
 // |---|---|---|
-// | `drive` | `composition/taskEngineApplication.driveTaskEngineApplication`（**同一份**）+ 现场 `createTaskDagCollaborationOperations(db)` + `postgresqlChildExecutionLaunchOperations`（**同一份**，RFC-359 AC-1 批次二 ⑤ 合一） | 同一份 drive + bootstrap 注入的 `taskDagCollaboration` + 同一份 childLaunch |
+// | `drive` | `composition/taskEngineApplication.driveTaskEngineApplication`（**同一份**）+ 现场 `createTaskDagCollaborationOperations(db)` + `childExecutionLaunchOperations`（**同一份**，RFC-359 AC-1 批次二 ⑤ 合一） | 同一份 drive + bootstrap 注入的 `taskDagCollaboration` + 同一份 childLaunch |
 //
 // **RFC-359 AC-1（plan §5hn 批次二 ⑤）勘误**：上表 `drive` 那一行原本记的是「两侧各有一台
 // 子任务启动引擎（87 行 vs 770 行）」。那一格**已经合了**：两侧叫同一个工厂，差别只剩装配方
 // 交进去的驱动生命周期端口（SQLite 绑进程级单例的 `claim({ db, intentId })` 且带
 // `legacyConnection`，PG 绑实例的 `claimPersisted({ intentId })`）。合一当场照出一条真缺陷：
 // PG 的铸造机把子任务的触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块。
-// | `children` | `services/task.ts` 的 `cancelTask`（232 行）/ `resumeTask` → `resumeKick`（245 行） | `postgresqlChildTaskLifecycleParticipant.ts`（774 行，自带 `cancelCascade` / `assertResumeAdmission` / `DefaultTaskDriveCoordinator`） |
+// | `children` | `services/task.ts` 的 `cancelTask`（232 行）/ `resumeTask` → `resumeKick`（245 行） | `childTaskLifecycleParticipant.ts`（774 行，自带 `cancelCascade` / `assertResumeAdmission` / `DefaultTaskDriveCoordinator`） |
 // | `activity` | 进程级单例 `taskExecutionModule.runtimeRegistry`（经 `services/task.isTaskActive` + `taskDriverLifecycle.awaitTaskDriverReleasedSettled`），外加只在测试里用的 `testActiveControllers` 旁路 | **注入的** `executionModule.runtimeRegistry` |
 //
 // 只有 `drive` 的内核（`driveTaskEngineApplication` + `composeWrapperRuntime` +
@@ -25,7 +25,7 @@
 //     也就是说 SQLite 侧的 `children` **物理上跑不到 PostgreSQL 上**，反之亦然。
 //   · 两侧 `activity` 读的是**两个不同的 registry 实例**：SQLite 读进程级单例，PG 读注入的那个。
 // 合一这一对的前置条件是先合 `services/task.ts` 的 cancel / resume 引擎与
-// `postgresqlChildTaskLifecycleParticipant.ts`——那是另一对、量级大一个数量级，且 `services/**`
+// `childTaskLifecycleParticipant.ts`——那是另一对、量级大一个数量级，且 `services/**`
 // 不在本轮作业面内。**本轮判不合，只补对拍。**
 //
 // # 这份对拍覆盖什么
@@ -486,7 +486,7 @@ test('W8 · children 这一对已合一：resume / cancel 两侧都转给同一�
   )
 
   // PostgreSQL 侧照旧走自己那份参与者（它内部调的就是同一个 `cancelTaskProjection`）。
-  expect(postgresql).toContain('createPostgresqlChildTaskLifecycleParticipant')
+  expect(postgresql).toContain('createChildTaskLifecycleParticipant')
   expect(postgresql).not.toContain("from '@/services/task'")
 
   // 共用实现的准入预检是 provider 中立的：进门第一件事是同步取号
@@ -501,7 +501,7 @@ test('W8 · children 这一对已合一：resume / cancel 两侧都转给同一�
         'modules',
         'task-execution',
         'infrastructure',
-        'postgresqlChildTaskLifecycleParticipant.ts',
+        'childTaskLifecycleParticipant.ts',
       ),
       'utf8',
     ),
@@ -543,7 +543,7 @@ test('W8 判不合 · drive 的内核已经是一份实现：两侧都调同一�
   // 差别只剩装配方交进去的驱动生命周期端口（认领走哪条路 + 要不要带 legacy 连接）。
   // 于是这一格从「见证分叉」翻成「锁住合一」——任何一侧再长出第二台铸造机都要先把这条改红。
   for (const source of [sqlite, postgresql]) {
-    expect(source).toContain('createPostgresqlChildExecutionLaunchOperations({')
+    expect(source).toContain('createChildExecutionLaunchOperations({')
   }
   expect(sqlite).not.toContain('createSqliteChildExecutionLaunchOperations')
   // 端口由各自组合根拼：SQLite 绑进程级单例（含 `legacyConnection`），PG 绑实例的 `claimPersisted`。

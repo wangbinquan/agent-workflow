@@ -155,7 +155,7 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 按 proposal AC-1 第三款是**命名债**，该改成中立名——那一刀连着整个文件的
   // 路由级 PG 类型，单独立一批做（plan §5hj）。
   // RFC-359 AC-1（plan §5hl）：`7/3 → 7/2`。测试侧的内核装配助手改成**转调生产那个组合入口**
-  // （`composeHostTaskLaunchKernel`），不再直呼带品牌名的 `createPostgresqlRootTaskLaunchKernel`——
+  // （`composeHostTaskLaunchKernel`），不再直呼带品牌名的 `createRootTaskLaunchKernel`——
   // 于是直接驱动这个品牌符号的地方少一处，引用数不变。**这是收敛，不是覆盖变少**：
   // 同一批用例现在驱动的是生产那台内核的装配路径。
   // RFC-359 AC-1（plan §5hn 批次一）：`7/2 → 8/2`。新用例
@@ -203,7 +203,10 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 再 +1（同一笔）：`rfc165-contract-v2` 的 `applySpaceFields` 源码锁也改锚到了启动参与者的
   // 两条臂——`startWorkgroupTask` 删除后，原来那句「`workgroup/launch.ts` 里必须有
   // `applySpaceFields(`」不再成立，同一个不变量的新家就在共用实现里。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 7/3, postgresql 19/3',
+  // RFC-359 AC-1（命名债收尾 §5hj）**销账**：`postgresqlTaskRouteLaunchOperations.ts` 去掉
+  // `postgresql` 前缀。它是本账本连着三提读出假信号的那一格——「PG 侧 19 次引用」数的其实是
+  // **共用实现**被引用的次数，倒挂 7 vs 19 从来就不是注意力倾斜。名字一改，配对不再成立，
+  // 这一格连同它的深度倒挂观察一起消失。这正是 §5hj 要的结果：让这两本账重新说真话。
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
@@ -315,7 +318,6 @@ export const INVERTED_PAIRS: readonly string[] = [
   // 多出来的那一条引用是兼容债账本里的一次文件名提及（见上一格的注释），不是新判据。
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：5 vs 12 → 6 vs 16，来源见上（命名债的读数）。
   // RFC-359 AC-1（plan §5hn 批次二 ⑧）：6 vs 16 → 7 vs 17，**差额不变**（两侧同步 +1）。
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 7 vs 19',
   // 新入名单，同样是命名债的读数：共用的那条 multipart 编排（`launchMultipartTask`）住在
   // `postgresqlTaskRouteOperations.ts` 里，改锚过去的几条源码锁都提到了它。
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 刀）：9 vs 14 → 9 vs 19，来源同上一格

@@ -100,7 +100,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // funnel; provenance comes from the injected startDeps (SYSTEM user at
       // both assembly sites), never invented here.
       // RFC-359 AC-1（plan §5hi）：这一行**删除**——agent / script 动作的宿主任务启动
-      // 从 `startTask` 改走启动内核（`createPostgresqlRootTaskLaunchKernel`），
+      // 从 `startTask` 改走启动内核（`createRootTaskLaunchKernel`），
       // 两个 provider 共用一份 composer，`actionExecutionEnvironment.ts` 里已无 startTask 调用。
       // 少一个 startTask 调用点就是这条棘轮要的方向。
       // RFC-359 AC-1（plan §5hl）：这一行**删除**——数字员工执行的两份 composer 合成一份，
@@ -132,7 +132,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       'modules/knowledge-evolution/inbound/fusionRoutes.ts': 2,
       // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 那一处随门面删除。
       // 直连启动的 initiator 映射现在只有内核这一处（`rootLaunchMetadata`）。
-      'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts': 1,
+      'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts': 1,
     })
   })
 
@@ -153,7 +153,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
         'modules',
         'task-execution',
         'infrastructure',
-        'postgresqlTaskRouteLaunchOperations.ts',
+        'taskRouteLaunchOperations.ts',
       ),
       'utf8',
     )

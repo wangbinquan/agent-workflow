@@ -42,17 +42,17 @@ import { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'
 import { createPostgresqlFusionEngineTaskOperations } from '../infrastructure/postgresqlFusionEngineTaskOperations'
 import { createSqliteFusionEngineTaskOperations } from '../infrastructure/fusionEngineTaskOperations'
 import {
-  createPostgresqlRootTaskLaunchKernel,
-  createPostgresqlTaskExecutionLaunchParticipant,
-  createPostgresqlTaskRouteLaunchOperations,
-  type PostgresqlRootTaskLaunchKernel,
-  type PostgresqlTaskRouteLaunchDependencies,
-} from '../infrastructure/postgresqlTaskRouteLaunchOperations'
+  createRootTaskLaunchKernel,
+  createTaskExecutionLaunchParticipant,
+  createTaskRouteLaunchOperations,
+  type RootTaskLaunchKernel,
+  type TaskRouteLaunchDependencies,
+} from '../infrastructure/taskRouteLaunchOperations'
 import {
-  createPostgresqlTaskRouteWorkspaceParticipant,
-  createPostgresqlTaskWorkspaceMaterializer,
-  type PostgresqlTaskRouteWorkspaceDependencies,
-} from '../infrastructure/postgresqlTaskRouteWorkspaceParticipant'
+  createTaskRouteWorkspaceParticipant,
+  createTaskWorkspaceMaterializer,
+  type TaskRouteWorkspaceDependencies,
+} from '../infrastructure/taskRouteWorkspaceParticipant'
 import { createPostgresqlRepositoryPreparationRetryCommand } from '../infrastructure/postgresqlRepositoryPreparationRetryCommand'
 import {
   createSqliteTaskExecutionLaunchParticipant,
@@ -115,7 +115,7 @@ interface SelectedTaskExecutionProviderRuntimeBase {
     agent: AgentRouteTaskLaunchOperations
     workgroup: WorkgroupRouteTaskLaunchOperations
     /** Workflow route performs its own workflow/OCC checks before this kernel. */
-    workflow?: PostgresqlRootTaskLaunchKernel
+    workflow?: RootTaskLaunchKernel
   }>
   readonly routes: Readonly<{
     readonly tasks: TaskRouteOperations
@@ -137,7 +137,7 @@ export interface SelectedSqliteTaskExecutionProviderRuntime<
 export interface SelectedPostgresqlTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
   readonly provider: 'postgresql'
   readonly routeLaunch: SelectedTaskExecutionProviderRuntimeBase['routeLaunch'] & {
-    readonly workflow: PostgresqlRootTaskLaunchKernel
+    readonly workflow: RootTaskLaunchKernel
   }
   /**
    * RFC-359 W5-T19b —— PG 这一支的模块**必定**已经拿到持久化：它由
@@ -348,8 +348,8 @@ export function composeSqliteTaskExecutionProviderRuntime<
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly runtime: Omit<PostgresqlTaskExecutionRuntimeDependencies, 'childLaunchWorkgroup'>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
-  readonly routeLaunch: Omit<PostgresqlTaskRouteLaunchDependencies, 'db' | 'workspace'>
-  readonly routeWorkspace: Omit<PostgresqlTaskRouteWorkspaceDependencies, 'db'>
+  readonly routeLaunch: Omit<TaskRouteLaunchDependencies, 'db' | 'workspace'>
+  readonly routeWorkspace: Omit<TaskRouteWorkspaceDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     PostgresqlTaskRouteOperationsDependencies,
     | 'db'
@@ -387,26 +387,26 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   })
   const persistence = participants.persistence
   const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
-  const workspaceDependencies: PostgresqlTaskRouteWorkspaceDependencies = {
+  const workspaceDependencies: TaskRouteWorkspaceDependencies = {
     db,
     ...dependencies.routeWorkspace,
   }
-  const routeWorkspace = createPostgresqlTaskRouteWorkspaceParticipant(workspaceDependencies)
-  const taskRouteLaunchDependencies: Omit<PostgresqlTaskRouteLaunchDependencies, 'db'> = {
+  const routeWorkspace = createTaskRouteWorkspaceParticipant(workspaceDependencies)
+  const taskRouteLaunchDependencies: Omit<TaskRouteLaunchDependencies, 'db'> = {
     workspace: routeWorkspace,
     ...dependencies.routeLaunch,
   }
-  const routeLaunchDependencies: PostgresqlTaskRouteLaunchDependencies = {
+  const routeLaunchDependencies: TaskRouteLaunchDependencies = {
     db,
     ...taskRouteLaunchDependencies,
   }
-  const routeLaunch = createPostgresqlTaskRouteLaunchOperations(routeLaunchDependencies)
+  const routeLaunch = createTaskRouteLaunchOperations(routeLaunchDependencies)
   // RFC-359 AC-1（plan §5hn 批次二 ⑥）：装配一次，路由（JSON / multipart）与触发器三处共用。
-  const launches = createPostgresqlTaskExecutionLaunchParticipant(routeLaunchDependencies)
+  const launches = createTaskExecutionLaunchParticipant(routeLaunchDependencies)
   const repositoryPreparationRetry = createPostgresqlRepositoryPreparationRetryCommand({
     db,
     appHome: dependencies.routeWorkspace.appHome,
-    workspace: createPostgresqlTaskWorkspaceMaterializer(workspaceDependencies),
+    workspace: createTaskWorkspaceMaterializer(workspaceDependencies),
     coordinator: dependencies.routeLaunch.coordinator,
     isTaskActive: participants.activity.isActive,
     awaitTaskSettled: participants.activity.awaitReleasedSettled,
@@ -498,7 +498,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     }),
     routeLaunch: Object.freeze({
       ...routeLaunch,
-      workflow: createPostgresqlRootTaskLaunchKernel(routeLaunchDependencies),
+      workflow: createRootTaskLaunchKernel(routeLaunchDependencies),
     }),
     routes: Object.freeze({
       tasks: taskRoutes,

@@ -79,16 +79,14 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
   })
 
   test('PostgreSQL child launch is owner-native and selected inside the provider aggregate', () => {
-    const adapter = read(
-      'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
-    )
+    const adapter = read('modules/task-execution/infrastructure/childExecutionLaunchOperations.ts')
     const participants = read(
       'modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
     )
     const provider = read('modules/task-execution/composition/providerRuntime.ts')
     const port = read('modules/task-execution/application/ports/childExecutionLaunchOperations.ts')
 
-    expect(adapter).toContain('createPostgresqlChildExecutionLaunchOperations')
+    expect(adapter).toContain('createChildExecutionLaunchOperations')
     expect(adapter).toContain('withSerializableTaskExecution')
     for (const write of [
       'tx.insert(tasks)',
@@ -108,8 +106,8 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(adapter).not.toContain("from '@/db/client'")
     expect(adapter).not.toContain('createSqliteChildExecutionLaunchOperations')
     expect(port).toContain('readonly frozenWorkflowVersion: number')
-    expect(participants).toContain('createPostgresqlChildExecutionLaunchOperations({')
-    expect(participants).toContain('childLaunchWorkgroup: PostgresqlChildWorkgroupLaunchResources')
+    expect(participants).toContain('createChildExecutionLaunchOperations({')
+    expect(participants).toContain('childLaunchWorkgroup: ChildWorkgroupLaunchResources')
     expect(participants).not.toContain('readonly childLaunch: ChildExecutionLaunchOperations')
     expect(provider).toContain('childLaunchWorkgroup: dependencies.routeLaunch.workgroup')
   })

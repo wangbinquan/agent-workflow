@@ -3,7 +3,7 @@
 // 这一对**不是**一份实现被抄了两遍，对拍就是用来把这一点钉住的证据（判定与逐条差额见
 // `design/RFC-359-.../` 与本波报告）：
 //
-//   · PostgreSQL 侧 `postgresqlChildExecutionLaunchOperations.ts`（770 行）是一台**只做子任务**
+//   · PostgreSQL 侧 `childExecutionLaunchOperations.ts`（770 行）是一台**只做子任务**
 //     的铸造机：自带 parent 快照 / 准入门 / tasks·task_repos·task_space_nodes·task_collaborators·
 //     task_execution_intents·workgroup_task_state 的一次性插入 / branchStartedAt 上冒 /
 //     committed event / 自己的 drive coordinator。
@@ -64,7 +64,7 @@ import { createProviderTaskExecutionModule } from '@/modules/task-execution/comp
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 // 两侧实现各值 import 一条：这一对的对拍见证判据就锁在这里（`rfc359-w5-provider-pair-conformance`），
 // 走 composition 的再导出会让这份对拍在账本里看不见。
-import { createPostgresqlChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations'
+import { createChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,
@@ -386,7 +386,7 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
   let finalized = false
   if (harness.capabilities.isolation === 'exclusive') {
     return {
-      operations: createPostgresqlChildExecutionLaunchOperations({
+      operations: createChildExecutionLaunchOperations({
         db,
         persistence,
         // SQLite 组合根那一条（`sqliteTaskExecutionRuntimeParticipants.ts` 逐字同形）。
@@ -410,7 +410,7 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
     daemonGeneration: 'daemon-rfc359-w8',
     persistence,
   })
-  const operations = createPostgresqlChildExecutionLaunchOperations({
+  const operations = createChildExecutionLaunchOperations({
     db,
     persistence,
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**。PG 这一侧绑实例的

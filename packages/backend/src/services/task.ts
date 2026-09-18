@@ -809,7 +809,7 @@ export interface DeferredRepositoryPreparationDependencies extends Pick<
   readonly repositoryWorkspace: RepositoryWorkspaceStore
   /**
    * 重放（`sourceTaskId`）用的冻结布局读取。SQLite 那份在本文件里是同步 `.all()`，
-   * PostgreSQL 那份在 `postgresqlTaskRouteWorkspaceParticipant.ts` 里是中立异步——
+   * PostgreSQL 那份在 `taskRouteWorkspaceParticipant.ts` 里是中立异步——
    * 两份都已存在，让装配方交自己那一份，这一步就不必认识任何一个引擎。
    */
   readonly loadFrozenSpaceLayout: (sourceTaskId: string) => Promise<PlannedSpaceLayout>
@@ -1509,7 +1509,7 @@ const missingMemoryDistillEnqueuer: MemoryDistillEnqueuer = Object.freeze({
 /**
  * RFC-359 AC-1（plan §5ha 第 ① 步）—— 「造一台任务驱动协调器」需要的**确切**依赖面。
  *
- * 为什么把它从 `StartTaskDeps` 里摘出来：这台协调器是 `PostgresqlRootTaskLaunchKernel`
+ * 为什么把它从 `StartTaskDeps` 里摘出来：这台协调器是 `RootTaskLaunchKernel`
  * 的四件入参之一，PostgreSQL daemon 在自己那边**就地**造一台
  * （`cli/postgresqlDaemonApplication.ts:953`），与 `StartTaskDeps` 无关；
  * 而 SQLite 侧唯一的造法锁在本文件里、且以 legacy 启动路的那个大依赖包为入参，
@@ -4145,7 +4145,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
 }
 
 // RFC-359 AC-1（第 11 刀）：`cancelTask` 已删除。取消只有**一份**实现
-// （`modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts`
+// （`modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts`
 // 的 `cancelTaskProjection`），生产装配走 `modules/task-execution/composition/taskCancellation.ts`，
 // 测试装配走 `tests/helpers/cancelEngine.ts`。RFC-202 T3 的那条判据
 //（awaiting_review / awaiting_human 可取消）跟着实现搬到了共用那份的

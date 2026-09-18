@@ -14,8 +14,8 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import type { SchedulerDriverPort } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
-  createPostgresqlChildExecutionLaunchOperations,
-  type PostgresqlChildExecutionLaunchDependencies,
+  createChildExecutionLaunchOperations,
+  type ChildExecutionLaunchDependencies,
 } from '@/modules/task-execution/composition/childExecutionLaunch'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
@@ -272,7 +272,7 @@ describe('RFC-349 PostgreSQL child execution launch', () => {
         return false
       },
     }
-    const dependencies: PostgresqlChildExecutionLaunchDependencies = {
+    const dependencies: ChildExecutionLaunchDependencies = {
       db: fixture.db,
       persistence,
       // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**——`executionModule` /
@@ -316,7 +316,7 @@ describe('RFC-349 PostgreSQL child execution launch', () => {
       edges: [],
     })
 
-    await createPostgresqlChildExecutionLaunchOperations(dependencies).launchWorkflow({
+    await createChildExecutionLaunchOperations(dependencies).launchWorkflow({
       actor,
       parentTaskId: 'parent-task',
       parentNodeRunId: 'parent-run',

@@ -167,7 +167,7 @@ import {
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
-import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant'
+import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
@@ -326,7 +326,7 @@ import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-executi
 import {
   createSqliteTaskExecutionLaunchParticipant,
   createSqliteTaskRouteLaunchOperations,
-  type PostgresqlTaskExecutionLaunchParticipant,
+  type TaskExecutionLaunchParticipant,
   type SqliteTaskRouteLaunchDependencies,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
@@ -2621,7 +2621,7 @@ function composeSqliteApiRouteMounts(
     // 这里是**转发面**——真参与者是同一作用域后面那个 const（它依赖的 `taskRouteLaunchDependencies`
     // 在本函数更下方才装配得起来），与协调器转发面同一个词法闭环手法。
     launches: Object.freeze({
-      launch: (request: Parameters<PostgresqlTaskExecutionLaunchParticipant['launch']>[0]) =>
+      launch: (request: Parameters<TaskExecutionLaunchParticipant['launch']>[0]) =>
         sqliteTaskExecutionLaunches.launch(request),
     }),
     appHome,

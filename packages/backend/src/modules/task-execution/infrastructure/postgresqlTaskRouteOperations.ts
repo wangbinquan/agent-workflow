@@ -101,10 +101,10 @@ import { DrizzleBranchTraceSnapshotReader } from './branchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
 import {
-  createPostgresqlTaskExecutionLaunchParticipant,
-  type PostgresqlTaskExecutionLaunchParticipant,
-  type PostgresqlTaskRouteLaunchDependencies,
-} from './postgresqlTaskRouteLaunchOperations'
+  createTaskExecutionLaunchParticipant,
+  type TaskExecutionLaunchParticipant,
+  type TaskRouteLaunchDependencies,
+} from './taskRouteLaunchOperations'
 import {
   createPostgresqlTaskRouteRepairOperations,
   type PostgresqlTaskRepairOperations,
@@ -174,14 +174,14 @@ export interface TaskRouteUserDirectory {
 export interface PostgresqlTaskRouteOperationsDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
-  readonly launch: Omit<PostgresqlTaskRouteLaunchDependencies, 'db'>
+  readonly launch: Omit<TaskRouteLaunchDependencies, 'db'>
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
    * multipart 路由从此只解析表单 + 跑路由级门，「冻结快照 → 版本围栏 → 静态校验 →
    * 启动输入契约 → 根内核」那一串交给参与者——SQLite 的 JSON 路由（批次二 ④）
    * 已经是这个形状，这里让 multipart 也接上去，两条路由因此共用同一份编排。
    */
-  readonly launches: PostgresqlTaskExecutionLaunchParticipant
+  readonly launches: TaskExecutionLaunchParticipant
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
@@ -807,7 +807,7 @@ function workflowLaunchSnapshot(snapshots: readonly FrozenTaskExecutionResourceS
  */
 export interface TaskRouteMultipartLaunchDependencies {
   readonly db: ProviderNeutralDatabase
-  readonly launches: PostgresqlTaskExecutionLaunchParticipant
+  readonly launches: TaskExecutionLaunchParticipant
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
 }
 
@@ -1524,7 +1524,7 @@ async function assertRollbackBaselinesPresent(
  *
  * 与 SQLite 的 `reapRunBeforeWorktreeReset` 的差别只有一处，且是**刻意**的：held native
  * session 租约的围栏与修复留在紧随其后的 `children.resume`
- * （`postgresqlChildTaskLifecycleParticipant.rollbackForResume` 对整棵任务做同一件事，
+ * （`childTaskLifecycleParticipant.rollbackForResume` 对整棵任务做同一件事，
  * 且它持有 `RuntimeSessionLeaseOperations`）。本处只做 SQLite 在**没有**租约那一支的判据：
  * 杀不掉就失败关闭。
  */
@@ -2125,7 +2125,7 @@ export async function retryNodeProjection(
       await dependencies.cancelChildTaskForCascade(childTaskId, input.taskId)
     } catch (error) {
       // RFC-359 AC-1（第 9 刀）：**已经收场的子任务是幂等空操作，不是失败**。
-      // 参与者对终态子任务抛 `task-not-cancelable`（`postgresqlChildTaskLifecycleParticipant`
+      // 参与者对终态子任务抛 `task-not-cancelable`（`childTaskLifecycleParticipant`
       // 的 `cancel`），而它自己的级联 helper 早就把这个码与 NotFound 一并 continue；
       // SQLite 的 `retryNode` 也是两个都 continue。只有这条路是例外，后果是用户可见的：
       // 重试一个子任务已完成的调用节点，PostgreSQL 上会报 `retry-child-cancel-failed`
@@ -2265,7 +2265,7 @@ export async function retryNodeProjection(
 export function createPostgresqlTaskRouteOperations(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
 ): TaskRouteOperations & Pick<PostgresqlTaskRepairOperations, 'automaticRepair'> {
-  const launches = createPostgresqlTaskExecutionLaunchParticipant({
+  const launches = createTaskExecutionLaunchParticipant({
     db: dependencies.db,
     ...dependencies.launch,
   })

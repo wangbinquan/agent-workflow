@@ -14,7 +14,7 @@ import {
   composeHostTaskLaunchKernel,
   type HostTaskLaunchKernelDependencies,
 } from '@/modules/task-execution/composition/hostTaskLaunch'
-import type { PostgresqlRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+import type { RootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import { createTaskDriveCoordinator, type TaskDriveCoordinatorDependencies } from '@/services/task'
 
@@ -25,7 +25,7 @@ export function createTestHostTaskLaunchKernel(input: {
   readonly coordinatorDeps: TaskDriveCoordinatorDependencies
   readonly persistence: Pick<TaskExecutionPersistence, 'runtimeLifecycle'>
   readonly completionMode: TaskDriveCompletionMode
-}): PostgresqlRootTaskLaunchKernel {
+}): RootTaskLaunchKernel {
   const drive = createTaskDriveCoordinator({
     deps: input.coordinatorDeps,
     appHome: input.appHome,

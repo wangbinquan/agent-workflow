@@ -689,8 +689,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // **装配图确实变了，是有意的**：这条路此前跑的是 `services/task.ts` 的 `cancelTask`
     //（retry / resume 之外的第三处两份实现，且它自己就是装配点），现在与 PostgreSQL 共用
     // 同一份 `cancelTaskProjection`，薄壳整个删除。
+    // RFC-359 AC-1（命名债收尾 §5hj）：摘要随**纯改名**更新——四份 provider 中立的实现去掉
+    // `postgresql` 前缀（`childExecutionLaunchOperations` / `childTaskLifecycleParticipant` /
+    // `taskRouteLaunchOperations` / `taskRouteWorkspaceParticipant`），本函数体里那些
+    // `createPostgresql*` 调用随之改名。**装配图一格没变**，变的只有标识符。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'f2435076f66eda023d3e2fe10f3d4a6aaf26fecd5cacc819369e5b947dc8f570',
+      '83431fa3308880e01d34a25a781ecadbdb83e7b16b1edeac0a326737e20c84ba',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

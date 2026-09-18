@@ -277,7 +277,7 @@ describeEachProvider('RFC-359 W8-T29 —— 同一个任务上两次并发续跑
           intentId: `intent_${ulid()}`,
         })
       const settled = await Promise.allSettled([submit('resume'), submit('retry-node')])
-      // 生产路径（`postgresqlChildTaskLifecycleParticipant.admitResume` / `services/task.ts` 的
+      // 生产路径（`childTaskLifecycleParticipant.admitResume` / `services/task.ts` 的
       // `resumeKick`）在同一笔事务里更早还有一次 task 行 CAS（status + lifecycleEventRevision），
       // 输家在那儿就被判 `task-not-resumable`。这里直接打端口，测的是**最里面那道**判据：
       // 活跃 intent 检查 + 部分唯一索引 `idx_task_execution_intents_pending_task`。

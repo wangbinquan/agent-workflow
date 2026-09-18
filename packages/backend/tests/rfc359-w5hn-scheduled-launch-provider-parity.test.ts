@@ -2,7 +2,7 @@
 //
 // 为什么这条测试存在：批次一 / 批次二 ③ 只统一了**路由**那两条启动路。剩下的入口
 //（定时 / webhook / 子任务 / multipart）在 SQLite 上仍走 `services/execution/executor.ts#startExecution`
-// ——那是一份和 `postgresqlTaskRouteLaunchOperations#createPostgresqlTaskExecutionLaunchParticipant`
+// ——那是一份和 `taskRouteLaunchOperations#createTaskExecutionLaunchParticipant`
 // **逐格对得上的三分支 switch**（workflow / agent / workgroup），只是终端不同：
 // SQLite 转 `startTask` / `startAgentTask` / `startWorkgroupTask`，PG 转
 // `launchRoot` / `arms.launchAgent` / `arms.launchWorkgroup`。

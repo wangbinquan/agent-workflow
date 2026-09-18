@@ -2,7 +2,7 @@
 //
 // 为什么这条测试存在：单代理启动（`POST /api/agents/:id/tasks`）在两个 provider 上走的是
 // **两份各约 200 行的编排**——SQLite 走 `services/agentLaunch.ts#startAgentTask`（末端 `startTask`），
-// PostgreSQL 走 `postgresqlTaskRouteLaunchOperations.ts#launchAgent`（末端启动内核）。
+// PostgreSQL 走 `taskRouteLaunchOperations.ts#launchAgent`（末端启动内核）。
 // plan §5hn 的先行对账把十二步前置链逐项点过：十一步对得上，连宿主快照都用**同一个**
 // `buildAgentHostSnapshot`（PG 从 `services/agentLaunch` import 它），唯一差别是最后怎么落库。
 //

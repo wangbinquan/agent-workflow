@@ -923,7 +923,7 @@ describe('RFC-107 — source anchors', () => {
         'modules',
         'task-execution',
         'infrastructure',
-        'postgresqlTaskRouteLaunchOperations.ts',
+        'taskRouteLaunchOperations.ts',
       ),
       'utf8',
     )

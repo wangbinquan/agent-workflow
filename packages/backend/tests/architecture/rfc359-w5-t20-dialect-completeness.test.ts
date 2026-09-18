@@ -410,7 +410,7 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
   // 不是事实。销账前先把「谁在用它」按 import 逐条验一遍——`why` 说得越具体，越容易让人
   // 跳过这一步。
   // ──────────────────────────────────────────────────────────────────────────
-  // RFC-359 W11 销账：`modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:
+  // RFC-359 W11 销账：`modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:
   // pg-greatest ×1` —— 祖先链「只前进不后退」的分支时间戳回填改调 `engineOf(tx).greatest(...)`，
   // 可空侧的 `coalesce(...)` 留在调用方（两个引擎都认的写法）。
   //

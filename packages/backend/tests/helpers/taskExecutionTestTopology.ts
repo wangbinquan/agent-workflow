@@ -21,7 +21,7 @@ import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/mod
 import { composeWorkgroupTurnsOperations } from '../../src/modules/resource-catalog/composition/workgroupTurns'
 import { composeWorkgroupHostLedgerParticipantFactory } from '../../src/modules/task-execution/composition/workgroupHostLedger'
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
-import { createPostgresqlChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations'
+import { createChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import { createDatabaseTaskDriverLifecyclePort } from '../../src/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { createTaskExecutionPersistence as createChildPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { finishClaimedWebhookWorkspacePrune } from '../../src/platform/persistence/sqlite/systemWorkspaceGc'
@@ -271,7 +271,7 @@ export function runTaskWithRealTestTopology(
         ),
       childLaunch:
         options.childLaunch ??
-        createPostgresqlChildExecutionLaunchOperations({
+        createChildExecutionLaunchOperations({
           db: options.db,
           persistence: createChildPersistence(options.db),
           lifecycle: createDatabaseTaskDriverLifecyclePort({

@@ -2720,7 +2720,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget|taskRouteLaunchOperations|childExecutionLaunchOperations|childTaskLifecycleParticipant|taskRouteWorkspaceParticipant)/.test(
       value,
     )
   ) {
@@ -2834,7 +2834,7 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
     // RFC-359 AC-1（第 11 刀）：取消合一，网关从 legacy 的 `cancelTask` 搬到共用实现。
     // 写面一格没变（同三张表、同三条转移、同一条 revision 判据）——搬的是家，不是判据。
     subtype: 'terminal-control',
-    file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
+    file: 'packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts',
     symbol: 'cancelTaskProjection',
     allowedTables: ['tasks', 'taskExecutionOwners', 'taskExecutionIntents'],
     allowedTransitions: ['task->canceled', 'owner-claimed->revoked', 'intent->canceled'],

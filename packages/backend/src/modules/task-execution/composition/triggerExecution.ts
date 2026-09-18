@@ -8,7 +8,7 @@ import type { WebhookTaskExecutionParticipant } from '@/modules/integration/appl
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { ExecutionInvoker, TaskCancellationCommand } from '../public/commands'
-import type { PostgresqlTaskExecutionLaunchParticipant } from '../infrastructure/postgresqlTaskRouteLaunchOperations'
+import type { TaskExecutionLaunchParticipant } from '../infrastructure/taskRouteLaunchOperations'
 
 export type TaskExecutionTriggerParticipant = WebhookTaskExecutionParticipant<
   TaskExecutionResourceAuthority,
@@ -30,7 +30,7 @@ export type TaskExecutionTriggerParticipant = WebhookTaskExecutionParticipant<
  *（MR 中途关闭时那次克隆不会被打断）。现在两侧都把 guard 原样交给启动内核。
  */
 export function createTaskExecutionTriggerParticipant(input: {
-  readonly launches: PostgresqlTaskExecutionLaunchParticipant
+  readonly launches: TaskExecutionLaunchParticipant
   readonly cancellation: TaskCancellationCommand
 }): TaskExecutionTriggerParticipant {
   return Object.freeze({

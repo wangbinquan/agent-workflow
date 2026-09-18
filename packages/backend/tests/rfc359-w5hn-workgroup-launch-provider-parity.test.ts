@@ -2,7 +2,7 @@
 //
 // 为什么这条测试存在：工作组启动是 §5hn 批次二里最大的一对——
 // `legacy/workgroup/launch.ts#startWorkgroupTask`（470 行，直接读库：`getWorkgroupById`
-// + `canViewResource`）对 `postgresqlTaskRouteLaunchOperations#arms.launchWorkgroup`
+// + `canViewResource`）对 `taskRouteLaunchOperations#arms.launchWorkgroup`
 // （收端口：`workgroup.loadVisible` / `loadExistingAgentIds` / `ensureHostWorkflow` / `integrity`）。
 // 检查项（`expectedWorkgroupId` / `expectedWorkgroupVersion` / `memberAgentIds` 派生）逐项对得上，
 // 差别还是那一处：**读库的那半只服务一个引擎**。

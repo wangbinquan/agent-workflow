@@ -1,7 +1,7 @@
 // RFC-359 AC-1（第 10 刀）—— `resume` 的**唯一**测试装配点。
 //
 // 为什么存在：`resume` 曾经有两份实现（`services/task.ts` 的 `resumeTask` 与
-// `postgresqlChildTaskLifecycleParticipant` 的那份），各自有测试、各自都绿，谁也没跟谁比过。
+// `childTaskLifecycleParticipant` 的那份），各自有测试、各自都绿，谁也没跟谁比过。
 // 合成一份之后行为套件也只该有一个装配点——否则下一次分叉会从测试侧长出来
 //（同 `retry` 那一刀留下的 `tests/helpers/retryEngine.ts`）。
 //
@@ -20,7 +20,7 @@ import {
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant'
+import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { getTask } from '@/services/task'
 import { createLogger } from '@/util/log'

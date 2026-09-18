@@ -4,7 +4,7 @@
 // 那个「统一执行门面」的核心 `startExecution` 是**启动编排的第二份写法**——同一个
 // workflow / agent / workgroup 三分支 switch，只是终端转 `startTask` / `startAgentTask` /
 // `startWorkgroupTask`。两个引擎的启动路合一之后，唯一的编排是启动参与者
-//（`createPostgresqlTaskExecutionLaunchParticipant`）→ 根启动内核，门面的生产消费者归零。
+//（`createTaskExecutionLaunchParticipant`）→ 根启动内核，门面的生产消费者归零。
 //
 // 本文件因此只剩三类锁（原第 1、2、4 类），第 3 类按下面各自的注释重新落位：
 //   1. Source-text: the launch call faces (routes/tasks.ts incl. the
@@ -29,7 +29,7 @@ import { tasks, workflows } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
 import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
-import { createPostgresqlTaskExecutionLaunchParticipant } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import {
   notifyTaskTerminal,
   resetTaskTerminalWatchersForTests,
@@ -92,9 +92,7 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
   // 这条锁的意图（**启动编排只有一处**）改由下面这条承担：三个 legacy 启动服务
   // 在生产里已经没有任何「同时调用它们」的模块，启动参与者一个都不 import。
   test('启动参与者不 import 任何 legacy 启动服务——编排只有一处', () => {
-    const text = srcText(
-      'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
-    )
+    const text = srcText('modules/task-execution/infrastructure/taskRouteLaunchOperations.ts')
     for (const legacy of ['startTask', 'startAgentTask', 'startWorkgroupTask']) {
       expect(new RegExp(`\\b${legacy}\\(`).test(text), `${legacy} 不该出现在启动参与者里`).toBe(
         false,
@@ -179,14 +177,12 @@ describe('RFC-359 AC-1 —— 启动参与者继承了门面的 ref/payload 一�
   //     参与者的 `target` 联合类型里压根没有 node 形状，子任务走的是另一条有自己准入门的入口
   //     （`ChildExecutionLaunchOperations`，5 道亲子准入由 `rfc359-w8-child-launch-conformance`
   //     双引擎锁着）。删除，而不是留一条测不到东西的断言。
-  const stubDeps = {} as unknown as Parameters<
-    typeof createPostgresqlTaskExecutionLaunchParticipant
-  >[0]
+  const stubDeps = {} as unknown as Parameters<typeof createTaskExecutionLaunchParticipant>[0]
   const stubActor = { user: { id: 'u1' } } as unknown as Actor
 
   test('workflow ref/payload mismatch → execution-ref-mismatch', async () => {
     await expect(
-      createPostgresqlTaskExecutionLaunchParticipant(stubDeps).launch({
+      createTaskExecutionLaunchParticipant(stubDeps).launch({
         actor: stubActor,
         target: {
           kind: 'workflow',

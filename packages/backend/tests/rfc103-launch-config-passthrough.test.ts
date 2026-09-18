@@ -152,7 +152,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     const kernel = readFileSync(
       join(
         import.meta.dir,
-        '../src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
+        '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
       ),
       'utf8',
     )

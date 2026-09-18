@@ -17762,3 +17762,32 @@ log
 「下界 8（预算被完整耗尽，少于 8 是真回归）+ 按 `capabilities.isolation` 分叉的上界」；
 上界原本是为了抓「钩子被无关路径触发」，而那件事现在**由构造保证**（钩子只作为子任务那笔取消的
 `beforeStatusCas` 传进去，且只在子任务处于 awaiting_* 时计数），所以上界只需兜住序列化重放本身。
+
+### 命名债收尾（§5hj）第一批　四份 provider 中立实现去掉 `postgresql` 前缀
+
+**判据**（比 §5gw 的「无孪生 ⇒ 改名」更严，§5hj 的那条补正就是为此）：只改**实现本身已经
+provider 中立**的那些——零 `PostgresqlDatabaseClient`、零 provider 分支，且**两个引擎的根都绑同一份**。
+按这条逐份点过，`modules/task-execution/infrastructure/` 下 10 个 `postgresql*` 文件分成三类：
+
+| 类 | 文件 | 处置 |
+| --- | --- | --- |
+| **中立实现，只是名字没改** | `postgresqlChildExecutionLaunchOperations` / `postgresqlChildTaskLifecycleParticipant` / `postgresqlTaskRouteLaunchOperations` / `postgresqlTaskRouteWorkspaceParticipant` | **本批改名**（连同 8 个 `createPostgresql*` 工厂与 18 个 `Postgresql*` 类型） |
+| **仍带 PG 耦合**（`PostgresqlDatabaseClient`） | `postgresqlTaskLifecycleTransaction`(2) / `postgresqlTaskRouteRepairOperations`(1) / `postgresqlTaskRouteOperations`(4) | **下一批**：`postgresqlTaskRouteOperations` 按 plan 早先的裁决要**先把共用出口提到自己的中立文件**再改名，不能直接重命名一个混合文件 |
+| **真有孪生，不是命名债** | `postgresqlFusionEngineTaskOperations`（孪 `fusionEngineTaskOperations`）/ `postgresqlSourceTerminationParticipant`（孪 `sqliteSourceTerminationParticipant`）/ `postgresqlRepositoryPreparationRetryCommand` | 不动，等各自的合一刀 |
+
+**改名照出两处判据失明**（这正是 §5hj 说「账本级问题」的意思）：
+
+1. **`rfc317` R1 的越界边**：`server.ts → childTaskLifecycleParticipant` 这条边**一直就在**
+   （人工门续跑直接取 `resumeTaskProjection`），只是此前那个文件叫 `postgresql*`，被 R1 当成
+   provider 命名基础设施让了过去（那类归 W5-T17 管）。前缀一去它落回 R1 视野，已带
+   why + removeAfterWave 入账。
+2. **`rfc359-w8` 能力对账本整份看漏一个文件**：它按「文件里有没有 provider 锚点」判边，
+   两边都命中就返回 `null`、该文件**整份退出配对**。`sqliteTaskExecutionRuntimeParticipants.ts`
+   因为 import 了名字带 `postgresql` 的**共用实现**而两边都像，于是它参与的 5 对（1 对名字盲 +
+   4 对与 W5 的交集）此前一对都看不见。**记一条判据教训**：用「文件里提到谁」判边时，
+   一个中立实现叫了 provider 的名字，会让引用它的**另一侧**文件整份从账本里消失。
+
+**销账**：`rfc359-w5-provider-named-file-location` 36 → 32、`rfc359-w5-provider-pair-conformance`
+7 → 6、`rfc359-w5-coverage-parity` 7 → 6、`rfc359-w5-inverted-pairs` 5 → 4——最后两条正是
+plan 连着三提在写「这是命名债的读数，不是倾斜」的那一格（`TaskRouteLaunchOperations` 的
+7 vs 19），**它现在消失了，两本账重新说真话**。

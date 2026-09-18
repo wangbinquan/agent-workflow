@@ -48,9 +48,9 @@ import {
 import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
 import type { DigitalEmployeeWorkspacePort } from './required-ports'
 import type {
-  PostgresqlRootTaskLaunchKernel,
-  PostgresqlRootTaskLaunchSubject,
-} from '../infrastructure/postgresqlTaskRouteLaunchOperations'
+  RootTaskLaunchKernel,
+  RootTaskLaunchSubject,
+} from '../infrastructure/taskRouteLaunchOperations'
 import type { TaskExecutionReadModels } from '../public/types'
 import type { TaskRouteOperations } from '../public/taskRoutes'
 
@@ -297,8 +297,8 @@ export interface DigitalEmployeeExecutionDependencies {
   readonly resolveActor: () => Promise<Actor>
   readonly resourceAuthorityFor: (
     actor: Actor,
-  ) => Parameters<PostgresqlRootTaskLaunchKernel['launch']>[0]['resourceAuthority']
-  readonly launch: PostgresqlRootTaskLaunchKernel
+  ) => Parameters<RootTaskLaunchKernel['launch']>[0]['resourceAuthority']
+  readonly launch: RootTaskLaunchKernel
   readonly tasks: Pick<TaskRouteOperations, 'get' | 'cancel'>
   readonly readModels: Pick<TaskExecutionReadModels, 'executionOutcome'>
   readonly resourceUsage: Readonly<{
@@ -456,7 +456,7 @@ export function composeDigitalEmployeeExecution(
               : { repoGroupId: environment.repoGroupId }),
       }
 
-      let subject: PostgresqlRootTaskLaunchSubject
+      let subject: RootTaskLaunchSubject
       if (implementation.kind === 'workflow') {
         const workflow = await deps.workflows.get(implementation.workflowRef.id)
         if (workflow === null || workflow.version !== implementation.workflowRef.revision) {

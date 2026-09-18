@@ -155,10 +155,15 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // 一份（`createTaskExecutionTriggerParticipant`），退役
       // `createSqliteTaskExecutionTriggerParticipant`。**是合一不是删覆盖**，分母少一。
       // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）：83 → 82。子任务启动两个引擎共用
-      // `createPostgresqlChildExecutionLaunchOperations`，退役
+      // `createChildExecutionLaunchOperations`，退役
       // `createSqliteChildExecutionLaunchOperations`（连同整个 87 行的转发壳文件）。
       // **是合一不是删覆盖**，分母少一。
-    ).toBeGreaterThanOrEqual(82)
+      // RFC-359 AC-1（命名债收尾 §5hj）：82 → 74。四份 provider 中立的实现去掉 `postgresql`
+      // 前缀（`childExecutionLaunchOperations` / `childTaskLifecycleParticipant` /
+      // `taskRouteLaunchOperations` / `taskRouteWorkspaceParticipant`），它们导出的 8 个
+      // `createPostgresql*` 工厂随之改名，于是离开「provider 命名的函数」这个分母。
+      // **是改名不是删覆盖**：函数一个没少，只是不再自称属于某个 provider。
+    ).toBeGreaterThanOrEqual(74)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

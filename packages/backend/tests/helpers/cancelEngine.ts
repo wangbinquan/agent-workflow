@@ -1,7 +1,7 @@
 // RFC-359 AC-1（第 11 刀）—— `cancel` 的**唯一**测试装配点。
 //
 // 为什么存在：`cancel` 曾经有两份实现（`services/task.ts` 的 `cancelTask` 与
-// `postgresqlChildTaskLifecycleParticipant` 的 `cancelCascade`），各自有测试、各自都绿，
+// `childTaskLifecycleParticipant` 的 `cancelCascade`），各自有测试、各自都绿，
 // 谁也没跟谁比过。合成一份之后行为套件也只该有一个装配点——否则下一次分叉会从测试侧长出来
 //（同 `retry` / `resume` 两刀留下的 `retryEngine.ts` / `resumeEngine.ts`）。
 //
@@ -14,7 +14,7 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { taskExecutionModule } from '@/services/taskExecutionParticipants'
-import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant'
+import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { __abortActiveTaskForTesting, getTask } from '@/services/task'
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'

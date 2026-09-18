@@ -715,13 +715,7 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
     )
     expect(sharedMultipart).toContain('dependencies.launches.launch(')
     const participant = readFileSync(
-      resolve(
-        SRC,
-        'modules',
-        'task-execution',
-        'infrastructure',
-        'postgresqlTaskRouteLaunchOperations.ts',
-      ),
+      resolve(SRC, 'modules', 'task-execution', 'infrastructure', 'taskRouteLaunchOperations.ts'),
       'utf-8',
     )
     expect((participant.match(/validateHostWorkflow\(/g) ?? []).length).toBeGreaterThanOrEqual(1)

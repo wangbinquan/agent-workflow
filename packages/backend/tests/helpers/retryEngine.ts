@@ -35,7 +35,7 @@ export interface RetryEngineOptions {
    * 复活。**缺省会忠实地把任务从 `interrupted` 推到 `pending`**，但不起任何进程。
    *
    * 「忠实」包含**清掉上一次失败的三个错误字段**（`errorSummary` / `errorMessage` /
-   * `failedNodeId`）——生产的 resume 就是这么写的（`postgresqlChildTaskLifecycleParticipant`
+   * `failedNodeId`）——生产的 resume 就是这么写的（`childTaskLifecycleParticipant`
    * 的准入 CAS；退役那份 `retryNode` 在自己的准入 CAS 里一并清）。不清的话任务能跑到 `done`
    * 却还挂着上一轮的 `errorSummary`，于是所有「终态 + 无错」的既有断言都读到
    * `done:boom` / `done:task canceled` 这种半截状态。

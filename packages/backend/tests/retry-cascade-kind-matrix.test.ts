@@ -247,7 +247,7 @@ function retryVia(
 //
 // 它当年之所以是单引擎：下面两条并发判据要往级联取消里注入失败，而那个缝
 // （`beforeStatusCas`）只长在 SQLite 根绑的 `cancelTask` 上，PostgreSQL 根绑的是
-// `postgresqlChildTaskLifecycleParticipant.cancel`，是**另一份实现**——把 `cancelTask`
+// `childTaskLifecycleParticipant.cancel`，是**另一份实现**——把 `cancelTask`
 // 喂给 PG 库能跑，但那不是 PG 部署里真正会执行的那份，双引擎跑出来的绿是假的。
 // 原注释写着：「真正的处置是把 `ChildTaskLifecycleParticipant` 这一对也合一，
 // 那时注入点会和 `retry` 一样落在依赖面上，这一份自然能转双引擎。」合一已经做完

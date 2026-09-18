@@ -135,8 +135,11 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts',
   'modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts',
   'modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts',
-  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
-  'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
+  // RFC-359 AC-1（第 11 刀之后的命名债收尾，§5hj）**四条销账**：
+  // `childExecutionLaunchOperations` / `childTaskLifecycleParticipant` /
+  // `taskRouteLaunchOperations` / `taskRouteWorkspaceParticipant` 四份文件的实现早就是
+  // provider 中立的（零 `PostgresqlDatabaseClient`、零 provider 分支，两个引擎的根都绑同一份），
+  // 只是名字还留着 `postgresql` 前缀。去掉前缀之后它们不再是「provider 命名文件」。
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
   'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts',
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts',
@@ -144,10 +147,8 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // （`taskDriverLifecycle.ts`），PG 专属那份已退役。少一个 provider 命名文件。
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts',
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
   'modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',

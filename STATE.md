@@ -2,6 +2,24 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 84，**命名债收尾第一批：四份中立实现去掉 `postgresql` 前缀**）
+>
+> 判据比 §5gw 更严：只改**实现本身已经 provider 中立**的（零 `PostgresqlDatabaseClient`、零 provider
+> 分支、两个引擎的根都绑同一份）。`modules/task-execution/infrastructure/` 下 10 个 `postgresql*`
+> 逐份点过分三类——4 份本批改名，3 份仍带 PG 耦合（其中 `postgresqlTaskRouteOperations` 要先把
+> 共用出口提到中立文件再改名），3 份真有孪生不是命名债。
+>
+> **改名照出两处判据失明**：①`rfc317` R1 的 `server.ts → childTaskLifecycleParticipant` 这条越界边
+> 一直就在，只是此前被当成 provider 命名基础设施让了过去；②`rfc359-w8` 能力对账本按「文件里有没有
+> provider 锚点」判边，两边都命中就整份退出配对——`sqliteTaskExecutionRuntimeParticipants.ts` 因为
+> import 了名字带 `postgresql` 的**共用实现**而两边都像，它参与的 5 对此前一对都看不见。
+>
+> **销账**：provider 命名文件 36 → 32、成对适配器 7 → 6、覆盖对等 7 → 6、深度倒挂 5 → 4——
+> 最后两条正是 plan 连着三提在写「这是命名债的读数，不是倾斜」的那一格（`TaskRouteLaunchOperations`
+> 的 7 vs 19），**它现在消失了，两本账重新说真话**。
+>
+> `f2e062092` / `1477d4f09` **CI 均已绿**。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 83，**第 11 刀收口：三份判据转双引擎，单引擎待办 13 → 11**）
 >
 > 上一提把 cancel 合一照出的四份单引擎判据先记进 `OPEN_MIGRATION_DEBT`（13 → 17）以保证提交可复核。
