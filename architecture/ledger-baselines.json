@@ -777,10 +777,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w8-capability-pair-conformance.test.ts",
       "symbol": "NAME_BLIND_CAPABILITY_PAIRS",
       "baseline": 3,
-      "why": "RFC-359 W8：**按端口类型**（而非文件名）发现的 provider 能力对里，W5 的「同词干 + 同目录」判据结构上看不见的那些。W5 账本量「按文件名配到的对」，本账本量「按端口类型配到、而 W5 看不见的对」，两本互不包含、交集交给 W5 记以避免双重记账。条目只许降——降的方式是把两侧合一，或证明其中一侧是死代码。RFC-359 AC-1（命名债收尾 §5hj）2 → 3：`sqliteTaskExecutionRuntimeParticipants.ts` 此前因为 import 了名字带 `postgresql` 前缀的**共用实现**而同时命中两个 provider 锚，被 `providerSideOf` 判成 `null`、整份退出配对。前缀一去它落回 sqlite 侧，本账本才第一次看见它参与的 `ActiveTaskExecutionParticipant` 那一对（该对本来就有对拍）。是判据恢复视力，不是新分叉。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（命名债收尾 §5hj）：+1 是**判据恢复视力**——共用实现去掉 provider 前缀后，引用它的 SQLite 侧文件不再两边锚都命中，于是它参与的那一对重新可见。对与对拍都早就存在。"
-      }
+      "why": "RFC-359 W8：**按端口类型**（而非文件名）发现的 provider 能力对里，W5 的「同词干 + 同目录」判据结构上看不见的那些。W5 账本量「按文件名配到的对」，本账本量「按端口类型配到、而 W5 看不见的对」，两本互不包含、交集交给 W5 记以避免双重记账。条目只许降——降的方式是把两侧合一，或证明其中一侧是死代码。RFC-359 AC-1（命名债收尾 §5hj）2 → 3：`sqliteTaskExecutionRuntimeParticipants.ts` 此前因为 import 了名字带 `postgresql` 前缀的**共用实现**而同时命中两个 provider 锚，被 `providerSideOf` 判成 `null`、整份退出配对。前缀一去它落回 sqlite 侧，本账本才第一次看见它参与的 `ActiveTaskExecutionParticipant` 那一对（该对本来就有对拍）。是判据恢复视力，不是新分叉。"
     },
     {
       "id": "rfc359-w8-unnormalized-unique-insert",
@@ -864,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4566,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（命名债收尾 §5hj）：四份文件改名后，census 对它们的 depcheck / 循环例外按**新路径**重新登记（旧路径条目同批消失），净 +2 是改名过程中拆分出的两条同源例外，不是新开的绕过口。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -919,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1477d4f09cbd2adf65d281fad99387e80bb8e7cd",
-    "contentDigest": "sha256:fbcbf6a5e2609536a217eda8cb3a87e3f2b0878cbcd3294e436f36691bd40ef8",
+    "currentSnapshotSha": "172fbc7c75d3c3ecbd4818d2d698cfda89cf1f54",
+    "contentDigest": "sha256:56e3015619fab1ba7c1772003617b8177d3246ea1da7d22b5b460217a083ed76",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
