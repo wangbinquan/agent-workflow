@@ -17547,3 +17547,34 @@ expect(cancelStatements, '准入预检不得退回 bun:sqlite 的同步读').not
 
 **注意**：`cancelTask` 还有 `beforeStatusCas` 这个注入点（`retry-cascade-kind-matrix` 的两条并发
 判据靠它）。合并时它要跟着实现走——那两条判据也就能随之转双引擎（见第 9 刀留下的那条说明）。
+
+## 第 11 刀第 1 步落地　`cancel` 的准入 / 级联对拍——**七格逐字相同，一处分叉都没有**
+
+`rfc359-w11-cancel-parity` 建七格，全部走**生产装配**（`provider.cancellation.cancel`）、
+真 git 工作树，断言 `(错误码, 事后任务状态, 事后 node_run 状态)`：
+
+| 格 | 场景 | 两侧答案 |
+| --- | --- | --- |
+| A | 任务不存在 | `task-not-found` / absent |
+| B | 已终态（done） | `task-not-cancelable`，任务与 node_run 原样不动 |
+| C | 已 canceled 再取消一次 | `task-not-cancelable`，不得二次改写 |
+| D | running | 放行：任务 canceled，打开的 node_run 一并关掉 |
+| E | awaiting_human | 同样放行（人工闸上的任务也能取消） |
+| F | 级联 | 活着的子任务也 canceled，并留下 `canceled-by-parent-cascade` |
+| G | 级联撞上已终态子任务 | 幂等空操作，父仍然取消成功，子的 `done` 不被改写 |
+
+**七格两侧逐字相同**——这一对比 `retry` / `resume` 合并前更接近。
+
+### 变异实证（一侧一条，落在不同的格上）
+
+- 短路 SQLite `cancelTask` 的可取消状态门 ⇒ **只有 sqlite lane 的 B / C 红**；
+- 短路 PostgreSQL `cancelCascade` 对子任务的递归 ⇒ **只有 postgresql lane 的 F 红**。
+
+两条都证明这份对拍有预言力，不是「因为都没跑到所以都绿」。
+
+### 下一步（第 11 刀第 2 步）
+
+真合并。**注意它比 `resume` 那一刀重**：`cancelTask` 在生产上有 **8 个调用点**
+（`server.ts` / `cli/start.ts` / 资源上限 / 空闲超时收割 / 数字员工 / fusion 引擎 /
+SQLite 参与者……），测试上有 **37 处 / 40 个文件**。按第 9 / 10 刀的做法拆成两半：
+上半把生产接线改指共用实现并留下退役那份，下半迁测试面再删。

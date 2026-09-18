@@ -1,0 +1,270 @@
+// RFC-359 AC-1（第 11 刀第 1 步）—— **`cancel` 的准入与级联，两个引擎给同一个答案吗**。
+//
+// 为什么这条测试存在
+// ------------------
+// `cancel` 是 `ChildTaskLifecycleParticipant` 剩下的那一半：SQLite 转给 `services/task.ts` 的
+// `cancelTask`（251 行），PostgreSQL 转给自己的 `cancelCascade`（151 行）。两份实现各自有测试、
+// 各自都绿，**谁也没跟谁比过**——与 `retry` / `resume` 合并前是同一个形状。
+//
+// W8 当年把这一对判为「不合」，机械证据是「`cancelTask` 的准入预检是 bun:sqlite 的同步读」。
+// 第 11 刀的勘察实证那条证据**早就不成立**（RFC-359 自己把它换成了 `await db.select(...)`），
+// 而且它一直绿在一段解释这件事的**注释**上。所以这一对现在是待合，不是不能合。
+//
+// 判据形态（沿用第 9 / 10 刀的配方）
+// --------------------------------
+// 每一格都走**生产装配**（`createEachProviderTaskExecution` 交出的
+// `provider.cancellation.cancel`），两条 lane 上跑的正是各自部署里真正会执行的那份实现；
+// 断言的是 `(错误码, 事后任务状态, 事后 node_run 形状)`——**同一个常量喂给两条 lane**。
+// 任一侧不同 ⇒ 那条 lane 当场红，逼出一次显式的产品判断。
+//
+// 实测结论与变异实证
+// ------------------
+// **七格两侧逐字相同**，一处分叉都没有——这一对比 `retry` / `resume` 合并前更接近。
+//
+// 变异实证两次（一侧一条，落在不同的格上，证明它确实有预言力而不是「都没跑到所以都绿」）：
+//   · 短路 SQLite `cancelTask` 的可取消状态门 ⇒ **只有 sqlite lane 的 B / C 红**；
+//   · 短路 PostgreSQL `cancelCascade` 对子任务的递归 ⇒ **只有 postgresql lane 的 F 红**。
+import { afterEach, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
+
+import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { nodeRuns, tasks, users, workflows } from '@/db/schema'
+import { runGit } from '@/util/git'
+import { describeEachProvider } from './helpers/eachProvider'
+import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
+
+const USER_ID = 'u_rfc359_w11'
+
+const DEFINITION: WorkflowDefinition = {
+  $schema_version: 2,
+  inputs: [],
+  nodes: [
+    { id: 'doc', kind: 'agent-single', agentName: 'doc', promptTemplate: '' } as WorkflowNode,
+  ],
+  edges: [],
+}
+
+interface Fixture {
+  readonly appHome: string
+  readonly repoPath: string
+  readonly taskId: string
+  readonly nodeRunId: string
+  readonly cleanup: () => void
+}
+
+interface SeedOptions {
+  readonly status?: string
+  /** 打开着的 node_run 状态；缺省 `running`（取消要把它一并关掉）。 */
+  readonly runStatus?: string
+  /** 再挂一个处于该状态的子任务（级联那几格用）。 */
+  readonly childStatus?: string
+}
+
+async function seedFixture(
+  db: ProviderNeutralDatabase,
+  options: SeedOptions = {},
+): Promise<Fixture & { childTaskId: string | null }> {
+  const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc359-w11-'))
+  const appHome = join(tmp, 'appHome')
+  const repoPath = join(tmp, 'repo')
+  mkdirSync(appHome, { recursive: true })
+  mkdirSync(repoPath, { recursive: true })
+  await runGit(repoPath, ['init', '-q', '-b', 'main'])
+  await runGit(repoPath, ['config', 'user.email', 'w11@test.invalid'])
+  await runGit(repoPath, ['config', 'user.name', 'w11'])
+  writeFileSync(join(repoPath, 'README.md'), '# w11\n')
+  await runGit(repoPath, ['add', '.'])
+  await runGit(repoPath, ['commit', '-q', '-m', 'init'])
+
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, USER_ID))
+    .limit(1)
+  if (existing.length === 0) {
+    await db.insert(users).values({
+      id: USER_ID,
+      username: USER_ID,
+      displayName: USER_ID,
+      role: 'admin',
+      status: 'active',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+  }
+  const workflowId = ulid()
+  await db
+    .insert(workflows)
+    .values({ id: workflowId, name: `w11-${workflowId}`, definition: JSON.stringify(DEFINITION) })
+
+  const taskId = ulid()
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'w11',
+    workflowId,
+    workflowSnapshot: JSON.stringify(DEFINITION),
+    repoPath,
+    worktreePath: repoPath,
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: (options.status ?? 'running') as 'running',
+    inputs: '{}',
+    startedAt: Date.now() - 1000,
+    ownerUserId: USER_ID,
+    executionLineageId: taskId,
+  })
+  const nodeRunId = ulid()
+  await db.insert(nodeRuns).values({
+    id: nodeRunId,
+    taskId,
+    nodeId: 'doc',
+    status: (options.runStatus ?? 'running') as 'running',
+    retryIndex: 0,
+    iteration: 0,
+    startedAt: Date.now() - 900,
+  })
+
+  let childTaskId: string | null = null
+  if (options.childStatus !== undefined) {
+    childTaskId = ulid()
+    await db.insert(tasks).values({
+      id: childTaskId,
+      name: 'w11-child',
+      workflowId,
+      workflowSnapshot: JSON.stringify(DEFINITION),
+      repoPath,
+      worktreePath: repoPath,
+      baseBranch: 'main',
+      branch: `agent-workflow/${childTaskId}`,
+      status: options.childStatus as 'running',
+      inputs: '{}',
+      startedAt: Date.now() - 800,
+      ownerUserId: USER_ID,
+      executionLineageId: taskId,
+      parentTaskId: taskId,
+      parentNodeRunId: nodeRunId,
+      invocationDepth: 1,
+    })
+    await db.update(nodeRuns).set({ childTaskId }).where(eq(nodeRuns.id, nodeRunId))
+  }
+
+  return {
+    appHome,
+    repoPath,
+    taskId,
+    nodeRunId,
+    childTaskId,
+    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+  }
+}
+
+function codeOf(error: unknown): string {
+  const value =
+    error !== null && typeof error === 'object' && 'code' in error
+      ? Reflect.get(error, 'code')
+      : null
+  return typeof value === 'string' ? value : `no-code:${String(error)}`
+}
+
+/** 调一次生产的取消，返回 `(错误码, 事后任务状态, 事后被点 node_run 状态)`。 */
+async function cancelOutcome(
+  harness: Parameters<Parameters<typeof describeEachProvider>[1]>[0],
+  fixture: Fixture,
+  taskId?: string,
+): Promise<{ code: string; status: string; run: string }> {
+  const execution = await createEachProviderTaskExecution(
+    harness,
+    { appHome: fixture.appHome, defaultNodeRetries: 0 },
+    USER_ID,
+  )
+  const target = taskId ?? fixture.taskId
+  let code = 'no-throw'
+  try {
+    await execution.provider.cancellation.cancel({ taskId: target, cause: { kind: 'user' } })
+  } catch (error) {
+    code = codeOf(error)
+  }
+  const after = (await harness.db.select().from(tasks).where(eq(tasks.id, target)).limit(1))[0]
+  const run = (
+    await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.nodeRunId)).limit(1)
+  )[0]
+  return { code, status: after?.status ?? 'absent', run: run?.status ?? 'absent' }
+}
+
+describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harness) => {
+  let fixture: { cleanup: () => void } | undefined
+  afterEach(() => {
+    fixture?.cleanup()
+    fixture = undefined
+  })
+
+  test('A 不存在的任务 → 404 task-not-found', async () => {
+    const seeded = await seedFixture(harness.db)
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded, ulid())
+    expect(outcome.code).toBe('task-not-found')
+    expect(outcome.status).toBe('absent')
+  })
+
+  test('B 已终态（done）→ 拒，且任务与 node_run 原样不动', async () => {
+    const seeded = await seedFixture(harness.db, { status: 'done', runStatus: 'done' })
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome).toEqual({ code: 'task-not-cancelable', status: 'done', run: 'done' })
+  })
+
+  test('C 已 canceled 再取消一次 → 拒（幂等面：不得二次改写）', async () => {
+    const seeded = await seedFixture(harness.db, { status: 'canceled', runStatus: 'canceled' })
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome).toEqual({ code: 'task-not-cancelable', status: 'canceled', run: 'canceled' })
+  })
+
+  test('D running 的任务 → 放行：任务 canceled，打开的 node_run 一并关掉', async () => {
+    const seeded = await seedFixture(harness.db)
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome).toEqual({ code: 'no-throw', status: 'canceled', run: 'canceled' })
+  })
+
+  test('E awaiting_human 的任务 → 同样放行（人工闸上的任务也能取消）', async () => {
+    const seeded = await seedFixture(harness.db, {
+      status: 'awaiting_human',
+      runStatus: 'awaiting_human',
+    })
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome).toEqual({ code: 'no-throw', status: 'canceled', run: 'canceled' })
+  })
+
+  test('F 级联：父取消 ⇒ 活着的子任务也 canceled，并留下 parent-cascade 标记', async () => {
+    const seeded = await seedFixture(harness.db, { childStatus: 'running' })
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome.code).toBe('no-throw')
+    expect(outcome.status).toBe('canceled')
+    const child = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.childTaskId!)).limit(1)
+    )[0]
+    expect(child?.status).toBe('canceled')
+    expect(child?.errorMessage).toBe('canceled-by-parent-cascade')
+  })
+
+  test('G 级联撞上已终态的子任务 → 幂等空操作，父仍然取消成功', async () => {
+    const seeded = await seedFixture(harness.db, { childStatus: 'done' })
+    fixture = seeded
+    const outcome = await cancelOutcome(harness, seeded)
+    expect(outcome.code).toBe('no-throw')
+    expect(outcome.status).toBe('canceled')
+    const child = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.childTaskId!)).limit(1)
+    )[0]
+    // 已收场的子任务不被改写——它的 done 是真实结果，不是「被父取消」。
+    expect(child?.status).toBe('done')
+  })
+})
