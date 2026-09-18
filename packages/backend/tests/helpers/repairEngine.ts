@@ -1,7 +1,7 @@
 // RFC-359 AC-1（第 8 刀）—— 修复引擎的**唯一**测试装配点。
 //
 // 为什么存在：修复这件事曾经有两份实现（`platform/persistence/sqlite/taskLifecycleRepair.ts`
-// 与 `postgresqlTaskRouteRepairOperations.ts`），各自有测试、各自都绿，谁也不知道它们同不同
+// 与 `taskRouteRepairOperations.ts`），各自有测试、各自都绿，谁也不知道它们同不同
 // 答案。第 8 刀把它们合成一份之后，行为套件也只该有一个装配点——否则下一次分叉会从测试侧长出来。
 //
 // 它把合并后那份实现包成**既有行为套件熟悉的两个入口**（`listRepairOptionsForAlert` /
@@ -22,12 +22,12 @@ import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/inf
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
-  createPostgresqlTaskRouteRepairOperations,
-  type PostgresqlTaskRepairOperations,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
+  createTaskRouteRepairOperations,
+  type TaskRepairOperations,
+} from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/taskRoutes'
 
-type Dependencies = Parameters<typeof createPostgresqlTaskRouteRepairOperations>[0]
+type Dependencies = Parameters<typeof createTaskRouteRepairOperations>[0]
 
 /** 没被这条用例驱动到的依赖一律炸——「悄悄用了个空实现」是假绿的常见来源。 */
 export function unusedDependency<T extends object>(methods: Partial<T> = {}): T {
@@ -54,7 +54,7 @@ export interface RepairEngineOptions {
 }
 
 export interface RepairEngine {
-  readonly repairs: PostgresqlTaskRepairOperations
+  readonly repairs: TaskRepairOperations
   readonly persistence: ReturnType<typeof createTaskExecutionPersistence>
   readonly appHome: string
   /** 被 `resume` 复活过的任务，按调用顺序。 */
@@ -63,7 +63,7 @@ export interface RepairEngine {
     readonly taskId: string
     readonly alertId: string
     readonly actorUserId?: string | null
-  }): Promise<Awaited<ReturnType<PostgresqlTaskRepairOperations['repairOptions']>>>
+  }): Promise<Awaited<ReturnType<TaskRepairOperations['repairOptions']>>>
   applyRepairOption(input: {
     readonly taskId: string
     readonly alertId: string
@@ -71,7 +71,7 @@ export interface RepairEngine {
     readonly actorUserId?: string | null
     readonly onAlert?: (row: TaskRouteLifecycleAlertNotice, transition: 'new' | 'promoted') => void
     readonly onResolved?: (taskId: string) => void
-  }): Promise<Awaited<ReturnType<PostgresqlTaskRepairOperations['applyRepair']>>>
+  }): Promise<Awaited<ReturnType<TaskRepairOperations['applyRepair']>>>
 }
 
 /**
@@ -102,7 +102,7 @@ export function createRepairEngine(
     isActive: options.isActive ?? (() => false),
     awaitReleasedSettled: async () => {},
   }
-  const repairs = createPostgresqlTaskRouteRepairOperations({
+  const repairs = createTaskRouteRepairOperations({
     db,
     persistence,
     activity,

@@ -68,7 +68,7 @@ const PROVIDER_PREFIX = /^(sqlite|postgresql)(?=[A-Z])/
  * 上面那条正则要求两侧叫 `sqliteFoo.ts` / `postgresqlFoo.ts`。真实的成对适配器并不总是
  * 这么自述：修复这件事的两份实现叫 `platform/persistence/sqlite/taskLifecycleRepair.ts`
  * （靠**目录**表明引擎，基名里根本没有前缀）与
- * `modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts`
+ * `modules/task-execution/infrastructure/taskRouteRepairOperations.ts`
  * ——基名对不上，`pairs` 配不出这一对，于是那处覆盖倒挂**从来没进过本账本**，
  * 直到有人手工对读才发现。按名字配对与按名字筛棘轮是同一类脆弱性。
  *

@@ -284,7 +284,7 @@ export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
   // 这一对（`ActiveTaskExecutionParticipant`）本来就存在、也本来就有对拍（`helpers/retryEngine.ts`），
   // 只是被上面那个「两边都像」的短路藏了起来。**记一条判据教训**：用「文件里提到谁」判边时，
   // 一个中立实现叫了 provider 的名字，会让引用它的**另一侧**文件整份从账本里消失。
-  'modules/task-execution/application/ports/taskExecutionRuntimeParticipants.ts:ActiveTaskExecutionParticipant: modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts + modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts — verified by helpers/retryEngine.ts',
+  'modules/task-execution/application/ports/taskExecutionRuntimeParticipants.ts:ActiveTaskExecutionParticipant: modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts + modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts — verified by helpers/retryEngine.ts',
   // 灾难恢复两对：SQLite 侧的文件名里**根本没有引擎前缀**（`legacyPlatformRecoveryAdapter`），
   // 且两侧不同目录——按名字配对的账本永远看不到它们。
   // RFC-359 W8 已补上行为对拍（备份收据形状 / 暂存往返 / 409 冲突 / 暂存中途失败 /

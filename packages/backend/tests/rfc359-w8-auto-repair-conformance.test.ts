@@ -32,7 +32,7 @@ import { createProviderTaskExecutionModule } from '@/modules/task-execution/comp
 import { createDaemonLockProof } from '@/modules/task-execution/composition/bootRecovery'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskLifecycleAutoRepairCommand } from '@/modules/task-execution/composition/taskLifecycleRepair'
-import { createPostgresqlTaskRouteRepairOperations } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
+import { createTaskRouteRepairOperations } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -103,7 +103,7 @@ function repairEngineFor(
     isActive: options.isActive ?? (() => false),
     awaitReleasedSettled: async () => {},
   }
-  const repairs = createPostgresqlTaskRouteRepairOperations({
+  const repairs = createTaskRouteRepairOperations({
     db: harness.db,
     persistence,
     activity,

@@ -642,7 +642,7 @@ export const sourceFiles = [
   'packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleAutoRepairCommand.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts',

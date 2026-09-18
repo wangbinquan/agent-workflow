@@ -19,7 +19,7 @@
 // # 抽象层错位（本刀只记录，不动手）
 //
 // `ClarifyRepairParticipant` 这个端口**只有 PG 在消费**（`task-execution/composition/providerRuntime.ts`
-// 装配进 `postgresqlTaskRouteRepairOperations`）。SQLite 侧的 S3 修复能力根本不走这个端口，而在
+// 装配进 `taskRouteRepairOperations`）。SQLite 侧的 S3 修复能力根本不走这个端口，而在
 // `platform/persistence/sqlite/taskLifecycleRepair/options-S3.ts`（S3.resurrect-clarify-run，经
 // `taskLifecycleRepair.ts` 注册），且比 participant 更全：带 preflight 复检、`setNodeRunStatus` /
 // `setTaskStatus` 的生命周期 CAS 与 before/after 审计快照。合一只消掉了那份生产零调用方的重复实现，

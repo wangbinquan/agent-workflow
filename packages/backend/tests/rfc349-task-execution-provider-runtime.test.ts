@@ -9,14 +9,12 @@ const read = (path: string): string => readFileSync(resolve(backend, path), 'utf
 
 describe('RFC-349 TaskExecution selected-provider runtime', () => {
   test('PostgreSQL repair owns the complete option matrix without SQLite or Collaboration rows', () => {
-    const source = read(
-      'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
-    )
+    const source = read('modules/task-execution/infrastructure/taskRouteRepairOperations.ts')
 
     for (const ids of Object.values(REPAIR_OPTION_IDS)) {
       for (const id of ids) expect(source).toContain(`'${id}'`)
     }
-    expect(source).toContain('createPostgresqlTaskRouteRepairOperations')
+    expect(source).toContain('createTaskRouteRepairOperations')
     expect(source).toContain('ClarifyRepairParticipant')
     expect(source).toContain('ReviewRepairParticipant')
     expect(source).toContain('CollaborationRuntimeMechanics')
@@ -28,7 +26,7 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
 
   test('route composition constructs the owner-native repair face instead of accepting one', () => {
     const source = read('modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts')
-    expect(source).toContain('createPostgresqlTaskRouteRepairOperations({')
+    expect(source).toContain('createTaskRouteRepairOperations({')
     expect(source).toContain('repairOptions: (input) => repairs.repairOptions(input)')
     expect(source).toContain('applyRepair: (input) => repairs.applyRepair(input)')
     expect(source).not.toContain('dependencies.repairs')

@@ -20,7 +20,7 @@
 // # 抽象层错位（本刀只记录，不动手）
 //
 // `ReviewRepairParticipant` 这个端口**只有 PG 在消费**（`task-execution/composition/providerRuntime.ts`
-// 装配进 `postgresqlTaskRouteRepairOperations`）。SQLite 侧的 R1 修复能力根本不走这个端口，而在
+// 装配进 `taskRouteRepairOperations`）。SQLite 侧的 R1 修复能力根本不走这个端口，而在
 // `platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts`（经 `taskLifecycleRepair.ts` 注册），
 // 且比 participant **更全**：多一层 preflight 复检、节点状态 CAS（`setNodeRunStatus` 走 allowTerminal）、
 // 任务级评审互斥锁（`withTaskReviewMutationLock`）、以及 before/after 审计快照。

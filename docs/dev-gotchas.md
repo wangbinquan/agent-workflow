@@ -942,6 +942,47 @@ done
 3. 脚本里做了一串命令后，**别只看最后一句的 echo**——它可能是 shell 内建、在 PATH 毁掉之后
    照样打印。判据取实际结果（这里是 `git log --oneline -1` 有没有变），不是脚本自己的口播。
 
+## 改名时 `git commit -- <pathspec>` 会把「旧文件的删除」整个漏掉（2026-09-18 实撞，14 个 shard 全红）
+
+本仓强制「按路径精确提交」（`git commit -F msg -- <你的路径…>`，见 `CLAUDE.md`）。把路径清单
+用下面这句凑出来，**改名就会出事**：
+
+```sh
+MINE=("${(@f)$(git status --porcelain | awk '{print $NF}')}")   # ← 陷阱在这里
+git add -- "${MINE[@]}"
+git commit -F msg -- "${MINE[@]}"
+```
+
+`git status --porcelain` 对改名打印的是 **`R  <旧路径> -> <新路径>`**，`awk '{print $NF}'`
+只取到**新**路径。于是：
+
+- `git mv` 早就把「删旧 + 加新」一起放进了 index —— `git diff --cached --name-status` 当时
+  显示的确实是 `R098 old -> new`，看起来一切正常；
+- 但 `git commit -- <pathspec>` **按 pathspec 重新解析**要提交什么，旧路径不在清单里，
+  于是那几条删除**整个不在提交范围内**。
+
+**症状极具迷惑性**：本地工作树里旧文件已经没了，所以 typecheck、全部架构守卫、全部行为用例
+**统统绿**；而 CI 的干净 checkout 上**新旧两份同时存在**，于是「provider 命名文件账本」
+之类按文件树清点的判据当场红，14 个 shard 全红，红的还是一条你刚刚在本地看着它变绿的判据。
+
+**回执里就有证据**：改名提交的回执只有 `create mode …`，**一条 `delete mode` 都没有**。
+
+三条处置，按可靠性排序：
+
+1. **路径清单必须用 `git diff --cached --name-only --no-renames`**。
+   ⚠️ **`--no-renames` 不能省**：`git diff --cached --name-only` 默认开着改名检测（`-M`），
+   对一次改名**只打印新路径**——与 `$NF` 一模一样的漏法。2026-09-18 当天第二次撞就是这么撞的：
+   以为换成 index 视角就安全了，回执里照样只有 `create mode`。
+   加上 `--no-renames` 之后改名被还原成「删旧 + 加新」两条，清单才是完整的；
+2. **改名提交别加 pathspec**：先把别人的东西从 index 里择干净，然后 `git commit`（裸提交
+   整个暂存区）。但共享工作树上这条很危险，见 `CLAUDE.md` 的「提交时也必须带 pathspec」；
+3. **推之前看回执**：改名提交必须同时出现 `create mode` 与 `delete mode`，只有一半就是漏了。
+
+配套自查（一秒，**改名提交必做**）：
+`git ls-tree -r --name-only HEAD <目录> | grep <旧名>` —— 有输出就是没删干净。
+已经提交但**还没推**的，`git commit --amend -- <完整清单>` 就地补上（回执会从
+`create mode` 变成 `rename … (98%)`）。
+
 ## zsh 不对未加引号的 `$FILES` 做分词：`git add $FILES` 整串当一个路径（2026-09-04 一天撞两次；**2026-09-07 第四次**）
 
 bash 里 `FILES="a b c"; git add $FILES` 是三个路径，zsh 里是**一个**叫 `a b c` 的路径：

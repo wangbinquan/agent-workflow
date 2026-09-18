@@ -54,13 +54,7 @@ const RETRY_SRC = readFileSync(
 // RFC-359 AC-1（第 8 刀）：修复原来有两份实现，这条 fork 探针盯的是退役那一份的
 // `helpers.ts`。锚点换到留下的那一份——「这个 fork 不得回来」的对象随实现走。
 const REPAIR_SRC = readFileSync(
-  join(
-    SRC_ROOT,
-    'modules',
-    'task-execution',
-    'infrastructure',
-    'postgresqlTaskRouteRepairOperations.ts',
-  ),
+  join(SRC_ROOT, 'modules', 'task-execution', 'infrastructure', 'taskRouteRepairOperations.ts'),
   'utf-8',
 )
 const FRESHNESS_SRC = readFileSync(join(SRC_ROOT, 'services', 'freshness.ts'), 'utf-8')

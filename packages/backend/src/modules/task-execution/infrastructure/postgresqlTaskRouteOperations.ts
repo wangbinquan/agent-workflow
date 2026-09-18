@@ -106,9 +106,9 @@ import {
   type TaskRouteLaunchDependencies,
 } from './taskRouteLaunchOperations'
 import {
-  createPostgresqlTaskRouteRepairOperations,
-  type PostgresqlTaskRepairOperations,
-} from './postgresqlTaskRouteRepairOperations'
+  createTaskRouteRepairOperations,
+  type TaskRepairOperations,
+} from './taskRouteRepairOperations'
 import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
@@ -2264,12 +2264,12 @@ export async function retryNodeProjection(
 /** Complete PostgreSQL binding for the classic `/api/tasks` surface. */
 export function createPostgresqlTaskRouteOperations(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
-): TaskRouteOperations & Pick<PostgresqlTaskRepairOperations, 'automaticRepair'> {
+): TaskRouteOperations & Pick<TaskRepairOperations, 'automaticRepair'> {
   const launches = createTaskExecutionLaunchParticipant({
     db: dependencies.db,
     ...dependencies.launch,
   })
-  const repairs = createPostgresqlTaskRouteRepairOperations({
+  const repairs = createTaskRouteRepairOperations({
     db: dependencies.db,
     persistence: dependencies.persistence,
     activity: dependencies.activity,

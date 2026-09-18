@@ -444,7 +444,7 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     'modules',
     'task-execution',
     'infrastructure',
-    'postgresqlTaskRouteRepairOperations.ts',
+    'taskRouteRepairOperations.ts',
   )
 
   test('review.ts never touches task.worktreePath (AC-7)', () => {

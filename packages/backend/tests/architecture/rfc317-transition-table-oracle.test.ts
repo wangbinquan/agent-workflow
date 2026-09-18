@@ -271,17 +271,17 @@ interface OffTableDeviation {
  */
 const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
   {
-    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts:interrupted',
+    site: 'modules/task-execution/infrastructure/taskRouteRepairOperations.ts:interrupted',
     offTable: ['done', 'failed'],
     why: '修复动作把已经走到终态的任务打回 interrupted 续跑：CR-1 从 failed（误判失败）、T3 / S3 从 done（误判完成）。表里 `interrupt` 只允许从 pending|running 出发——修复动作的存在前提正是「行已经走到了表说不该到的地方」。RFC-359 第 8 刀把两份修复实现合成一份，同一批边此前记在退役那一份的逐选项站点上。',
   },
   {
-    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts:awaiting_review',
+    site: 'modules/task-execution/infrastructure/taskRouteRepairOperations.ts:awaiting_review',
     offTable: ['done'],
     why: 'R2 修复：评审行丢失时把 done 的任务退回 awaiting_review 重新评审。同上，来源是合并前记在 options-R2.ts 上的那条。',
   },
   {
-    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts:failed',
+    site: 'modules/task-execution/infrastructure/taskRouteRepairOperations.ts:failed',
     offTable: ['done'],
     why: 'T3 / S3 的 mark-task-failed：把误判为完成的任务改判失败。表里 `fail` 不允许从 done 出发；这条边只由人工修复产生。',
   },

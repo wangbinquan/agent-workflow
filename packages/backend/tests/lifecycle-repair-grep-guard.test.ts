@@ -25,7 +25,7 @@ import {
   type LifecycleAlertRule,
 } from '@agent-workflow/shared'
 
-import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
+import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/taskRouteRepairOperations'
 
 const ENGINE_FILE = resolve(
   import.meta.dir,
@@ -34,7 +34,7 @@ const ENGINE_FILE = resolve(
   'modules',
   'task-execution',
   'infrastructure',
-  'postgresqlTaskRouteRepairOperations.ts',
+  'taskRouteRepairOperations.ts',
 )
 
 function loadEngineSources(): { path: string; content: string }[] {

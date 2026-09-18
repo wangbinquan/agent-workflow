@@ -38,7 +38,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
+import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import {
   StartAgentTaskSchema,
   WorkflowDefinitionSchema,
@@ -771,7 +771,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
         'modules',
         'task-execution',
         'infrastructure',
-        'postgresqlTaskRouteRepairOperations.ts',
+        'taskRouteRepairOperations.ts',
       ),
       'utf8',
     )

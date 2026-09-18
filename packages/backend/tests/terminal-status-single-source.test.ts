@@ -30,7 +30,7 @@ describe('终态集合单源化（flag-audit W0）', () => {
       'services/gc.ts',
       'services/stuckTaskDetector.ts',
       'modules/knowledge-evolution/application/fusionOrchestration.ts',
-      'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+      'modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
     ]) {
       expect(HAND_COPIED_TERMINAL.test(SRC(rel)), `${rel} still hand-copies the terminal set`).toBe(
         false,

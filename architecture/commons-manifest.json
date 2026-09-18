@@ -1040,14 +1040,14 @@
       "core": false,
       "files": [
         "packages/shared/src/lifecycle-alerts.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts"
+        "packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts"
       ],
       "singleSourceOf": "Rule universe shared across backend detectors, repair-option registry and frontend; the backend option table is `satisfies Record<RepairOptionId, OptionDefinition>` keyed by the shared `REPAIR_OPTION_IDS`, with a runtime cross-check in lifecycle-repair-grep-guard. RFC-359 cut 8 merged the two repair implementations, so there is exactly one option table again.",
       "claimAudit": "Holds. Adding a rule to the shared list fails compilation until the backend table covers it, and `lifecycle-repair-grep-guard` cross-checks every backend option id against the shared taxonomy at runtime. A compile-time union equality assert also lives in packages/backend/src/services/lifecycleInvariants.ts.",
       "auditedBy": "lifecycle-state",
       "guards": [],
       "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts#$file",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#$file",
         "owner:packages/shared/src/lifecycle-alerts.ts#$file"
       ]
     },
@@ -1395,13 +1395,13 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e596b3bcacadc30b0b7035e17c5738c85208a19625ed8bee77f386bc6a82a713",
+    "sourceDigest": "sha256:f20c2e8de9ebeba737798d060ae8d717ff25982a465b5e819e1bcafa243eb56c",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "172fbc7c75d3c3ecbd4818d2d698cfda89cf1f54",
-    "contentDigest": "sha256:907deda331c5b53ba3540c7e212726056f37a62293791965b22eb1cb130a0834",
+    "currentSnapshotSha": "871883c5e9b8a861595bddb7e32284cff88d36be",
+    "contentDigest": "sha256:3e3129b9a327817e2566b6ce13e6f70bed7afe846c59f75c888b3e2970ec065c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

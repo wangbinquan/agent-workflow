@@ -51,7 +51,7 @@ export interface AutomaticTaskRepairOptions {
   readonly now?: () => number
 }
 
-export type PostgresqlTaskRepairOperations = RepairOperations & {
+export type TaskRepairOperations = RepairOperations & {
   automaticRepair(options: AutomaticTaskRepairOptions): TaskLifecycleAutoRepairBinding
 }
 
@@ -331,7 +331,7 @@ const ACTIVITY_GATED_OPTIONS = new Set<RepairOptionId>([
   'S4.cancel-task',
 ])
 
-export interface PostgresqlTaskRouteRepairOperationsDependencies {
+export interface TaskRouteRepairOperationsDependencies {
   /**
    * RFC-359 AC-1（第 8 刀）：句柄是**中立**的。这份实现合并前就已经在两个引擎上被驱动
    *（`rfc359-w8-auto-repair-conformance` 的两条 lane），合并后更是两个部署共用的唯一一份，
@@ -560,7 +560,7 @@ function taskStatusPreflight(
 }
 
 async function reviewCandidate(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  dependencies: TaskRouteRepairOperationsDependencies,
   ctx: RepairContext,
 ): Promise<RepairNodeRun | null> {
   if (ctx.definition === null) return null
@@ -585,7 +585,7 @@ async function reviewCandidate(
  * 这一份直接传 `ctx.task.worktreePath`，正是 `rfc193-wrapper-review` case 8d 钉死禁止的写法。
  */
 async function deriveScopeRoot(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  dependencies: TaskRouteRepairOperationsDependencies,
   ctx: RepairContext,
   reviewNodeId: string,
 ): Promise<string> {
@@ -611,7 +611,7 @@ async function deriveScopeRoot(
 }
 
 async function clarifyCandidate(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  dependencies: TaskRouteRepairOperationsDependencies,
   ctx: RepairContext,
 ): Promise<RepairNodeRun | null> {
   if (ctx.definition === null) return null
@@ -620,7 +620,7 @@ async function clarifyCandidate(
 }
 
 async function preflight(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  dependencies: TaskRouteRepairOperationsDependencies,
   optionId: RepairOptionId,
   ctx: RepairContext,
 ): Promise<Preflight> {
@@ -1122,7 +1122,7 @@ async function preflight(
 }
 
 async function setTask(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  dependencies: TaskRouteRepairOperationsDependencies,
   input: Readonly<{
     taskId: string
     optionId: RepairOptionId
@@ -1156,7 +1156,7 @@ async function setTask(
 }
 
 async function applyAction(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  dependencies: TaskRouteRepairOperationsDependencies,
   ctx: RepairContext,
   optionId: RepairOptionId,
   action: RepairAction,
@@ -1346,7 +1346,7 @@ async function applyAction(
 }
 
 async function writeAudit(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
+  dependencies: TaskRouteRepairOperationsDependencies,
   input: Readonly<{
     alert: ParsedAlert
     optionId: string
@@ -1430,9 +1430,9 @@ function optionForPreflight(definition: OptionDefinition, result: Preflight): Re
  * node-run, alert and audit rows while delegating review/clarify facts through
  * Collaboration's selected-provider participants.
  */
-export function createPostgresqlTaskRouteRepairOperations(
-  dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
-): PostgresqlTaskRepairOperations {
+export function createTaskRouteRepairOperations(
+  dependencies: TaskRouteRepairOperationsDependencies,
+): TaskRepairOperations {
   async function context(taskId: string, alertId: string): Promise<RepairContext> {
     const [alert, task] = await Promise.all([
       loadAlert(dependencies.db, taskId, alertId),

@@ -50,7 +50,7 @@ import {
 import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
 import { DISABLED_RESOURCE_POLICY } from '@/services/execution/resourcePolicy'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
-import { OPTION_DEFINITIONS } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
+import { OPTION_DEFINITIONS } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { INVARIANT_RULES, STUCK_RULES } from '@/services/lifecycleInvariants'
 
@@ -129,7 +129,7 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
   {
     symbol: 'OPTION_DEFINITIONS',
     declaringFile:
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
     keys: Object.keys(OPTION_DEFINITIONS),
     consumption: { via: 'repairOptions' },
     why: '每个修复选项的元数据；路由经 repairOptions 取，不直接读表。RFC-359 第 8 刀合并两份修复实现后，这是唯一的一张。',

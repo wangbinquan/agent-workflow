@@ -2720,7 +2720,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget|taskRouteLaunchOperations|childExecutionLaunchOperations|childTaskLifecycleParticipant|taskRouteWorkspaceParticipant)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget|taskRouteLaunchOperations|childExecutionLaunchOperations|childTaskLifecycleParticipant|taskRouteWorkspaceParticipant|taskRouteRepairOperations)/.test(
       value,
     )
   ) {

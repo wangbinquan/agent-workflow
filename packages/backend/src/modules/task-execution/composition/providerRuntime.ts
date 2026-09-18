@@ -35,7 +35,7 @@ import {
 } from '../infrastructure/postgresqlTaskExecutionRuntimeParticipants'
 import { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '../infrastructure/taskArchiveMaintenanceCommand'
-import type { AutomaticTaskRepairOptions } from '../infrastructure/postgresqlTaskRouteRepairOperations'
+import type { AutomaticTaskRepairOptions } from '../infrastructure/taskRouteRepairOperations'
 import { createTaskLifecycleAutoRepairCommand } from './taskLifecycleRepair'
 import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
 import { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'

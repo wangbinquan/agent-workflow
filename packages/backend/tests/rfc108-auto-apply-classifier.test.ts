@@ -16,7 +16,7 @@ import {
   type RepairOption,
 } from '@agent-workflow/shared'
 
-import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
+import { OPTION_DEFINITIONS } from '../src/modules/task-execution/infrastructure/taskRouteRepairOperations'
 
 // RFC-359 第 8 刀：两份修复实现合成一份，这里读的就是那唯一一张元数据表。
 const ALL_OPTIONS: RepairOption[] = Object.values(OPTION_DEFINITIONS) as RepairOption[]

@@ -78,7 +78,7 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
     rewrites: 'resumeTask / syncTaskWorkflow 两条——正是头注释点名的持有者中的两个，终态→pending。',
   },
   {
-    file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+    file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
     count: 11,
     rewrites:
       'PostgreSQL C1/R1/R2/S1/S2/T2/U1 等生命周期修复分支，与 SQLite repair options 等价地显式越过终态保护；只允许在 provider-owned repair command 内持有。',

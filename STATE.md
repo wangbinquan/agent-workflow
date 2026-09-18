@@ -2,6 +2,24 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 85，**命名债收尾第二批 + 一条提交纪律的教训**）
+>
+> 第五份 `taskRouteRepairOperations` 去前缀——它全文里 `PostgresqlDatabaseClient` 唯一一次出现
+> 就在「解释为什么不标它」的那段注释里。provider 命名文件账本 32 → 31。
+>
+> **剩下两份要先做结构改动**：`postgresqlTaskLifecycleTransaction`（中立的
+> `withSerializableTaskExecution` 与一个仍收 PG 句柄的函数同文件）与
+> `postgresqlTaskRouteOperations`（四处 PG 句柄）——都要**先把共用出口提到中立文件再改名**。
+>
+> **提交纪律教训（`172fbc7c7` 推红 14 个 shard，`871883c5e` 修）**：本仓强制按路径精确提交，
+> 而 `git status --porcelain` 对改名打印 `R <旧> -> <新>`，`awk '{print $NF}'` 只取到**新**路径，
+> 于是 `git commit -- <pathspec>` 把旧文件的删除整个漏掉——本地全绿、CI 干净 checkout 上新旧两份
+> 同时存在。**改名提交的回执必须同时有 `create mode` 与 `delete mode`**；路径清单改用
+> `git diff --cached --name-only --no-renames`（**`--no-renames` 不能省**：不加它 `git diff` 默认开着
+> 改名检测，同样只打印新路径——当天第二次就是这么撞的，靠 `--amend` 补上）。已落 `docs/dev-gotchas.md`。
+>
+> `871883c5e` **CI 已绿**。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 84，**命名债收尾第一批：四份中立实现去掉 `postgresql` 前缀**）
 >
 > 判据比 §5gw 更严：只改**实现本身已经 provider 中立**的（零 `PostgresqlDatabaseClient`、零 provider

@@ -28,10 +28,10 @@ import {
 import { retryNodeProjection } from './postgresqlTaskRouteOperations'
 import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
 import {
-  createPostgresqlTaskRouteRepairOperations,
-  type PostgresqlTaskRepairOperations,
-  type PostgresqlTaskRouteRepairOperationsDependencies,
-} from './postgresqlTaskRouteRepairOperations'
+  createTaskRouteRepairOperations,
+  type TaskRepairOperations,
+  type TaskRouteRepairOperationsDependencies,
+} from './taskRouteRepairOperations'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
@@ -88,7 +88,7 @@ export interface SqliteTaskRouteOperationsDependencies {
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
   readonly cancelChildTaskForCascade: (childTaskId: string, parentTaskId: string) => Promise<void>
   readonly repair: Pick<
-    PostgresqlTaskRouteRepairOperationsDependencies,
+    TaskRouteRepairOperationsDependencies,
     'collaborationRuntime' | 'clarify' | 'review'
   >
   readonly appHome?: string
@@ -124,9 +124,9 @@ async function assertManualExecutionAllowed(
 
 export function createSqliteTaskRouteOperations(
   dependencies: SqliteTaskRouteOperationsDependencies,
-): TaskRouteOperations & Pick<PostgresqlTaskRepairOperations, 'automaticRepair'> {
+): TaskRouteOperations & Pick<TaskRepairOperations, 'automaticRepair'> {
   const { db } = dependencies
-  const repairs = createPostgresqlTaskRouteRepairOperations({
+  const repairs = createTaskRouteRepairOperations({
     db,
     persistence: dependencies.persistence,
     activity: dependencies.activity,

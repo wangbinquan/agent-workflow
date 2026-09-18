@@ -135,7 +135,11 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts',
   'modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts',
   'modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts',
-  // RFC-359 AC-1（第 11 刀之后的命名债收尾，§5hj）**四条销账**：
+  // RFC-359 AC-1（第 11 刀之后的命名债收尾，§5hj）**第二批再销一条**：
+  // `taskRouteRepairOperations` —— 它的依赖面注释早就写着「句柄是中立的……文件名与符号名里的
+  // `postgresql` 仍是历史（naming debt §5hj）」，全文里 `PostgresqlDatabaseClient` 唯一一次出现
+  // 就在那段解释「为什么不标它」的注释里。
+  // **第一批四条销账**：
   // `childExecutionLaunchOperations` / `childTaskLifecycleParticipant` /
   // `taskRouteLaunchOperations` / `taskRouteWorkspaceParticipant` 四份文件的实现早就是
   // provider 中立的（零 `PostgresqlDatabaseClient`、零 provider 分支，两个引擎的根都绑同一份），
@@ -148,7 +152,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
   'modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',

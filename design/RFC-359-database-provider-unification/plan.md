@@ -17791,3 +17791,29 @@ provider 中立**的那些——零 `PostgresqlDatabaseClient`、零 provider �
 7 → 6、`rfc359-w5-coverage-parity` 7 → 6、`rfc359-w5-inverted-pairs` 5 → 4——最后两条正是
 plan 连着三提在写「这是命名债的读数，不是倾斜」的那一格（`TaskRouteLaunchOperations` 的
 7 vs 19），**它现在消失了，两本账重新说真话**。
+
+### 命名债收尾（§5hj）第二批　`taskRouteRepairOperations`
+
+同一条判据下的第五份：`postgresqlTaskRouteRepairOperations.ts` 全文里
+`PostgresqlDatabaseClient` 唯一一次出现就在**解释「为什么不标它」的那段注释**里——
+依赖面注释早就写着「句柄是**中立**的……文件名与符号名里的 `postgresql` 仍是历史
+（naming debt §5hj），与句柄类型无关」。去前缀，连同 `createPostgresqlTaskRouteRepairOperations`
+与两个 `Postgresql*` 类型。
+
+**剩下的两份要先做结构改动，不能纯改名**：
+
+- `postgresqlTaskLifecycleTransaction.ts` —— 混合文件：`withSerializableTaskExecution`
+  已是中立的（`ProviderNeutralDatabase`，共用取消实现在跑它），同文件另一个函数仍收
+  `PostgresqlDatabaseClient`。先把中立那半提出去，剩下的保持 PG 名。
+- `postgresqlTaskRouteOperations.ts` —— 四处 `PostgresqlDatabaseClient`（依赖面一处、
+  两个内部函数各一处）。plan 早先的裁决仍然成立：**先把共用出口提到自己的中立文件里再改名**，
+  不能直接重命名一个混合文件。
+
+**一条提交纪律的教训**（`172fbc7c7` 推红 14 个 shard，`871883c5e` 修）：本仓强制
+「按路径精确提交」，而 `git status --porcelain` 对改名打印 `R <旧> -> <新>`，
+`awk '{print $NF}'` 只取到**新**路径 —— `git commit -- <pathspec>` 于是把旧文件的删除整个漏掉，
+本地（工作树里旧文件已没）全绿、CI 干净 checkout 上新旧两份同时存在。
+**改名提交的回执必须同时有 `create mode` 与 `delete mode`**，路径清单改用
+`git diff --cached --name-only --no-renames` —— **`--no-renames` 不能省**，不加它 `git diff` 默认
+开着改名检测，同样只打印新路径（当天第二次撞就是这么撞的，靠 `--amend` 就地补上）。
+已落 `docs/dev-gotchas.md`。

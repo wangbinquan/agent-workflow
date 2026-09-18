@@ -414,7 +414,8 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // RFC-359 AC-1（命名债收尾 §5hj）：78 → 71。四份 provider 中立的实现去掉 `postgresql`
       // 前缀，它们的 8 个 `createPostgresql*` 工厂随之改名、离开本分母。
       // **是改名不是删覆盖**：函数一个没少，只是不再自称属于某个 provider。
-    ).toBeGreaterThanOrEqual(71)
+      // 同一波第二批：71 → 70，`taskRouteRepairOperations` 去前缀（同一条判据）。
+    ).toBeGreaterThanOrEqual(70)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {
