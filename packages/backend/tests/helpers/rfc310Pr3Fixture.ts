@@ -54,7 +54,6 @@ import {
   createRequirementSourceAdapter,
 } from '../../src/modules/integration/infrastructure/developmentRequirementSourceAdapter'
 
-
 export const ADAPTER_CLI = Bun.resolveSync(
   '@agent-workflow/system-mocks/development/requirement-adapter-cli',
   import.meta.dir,
