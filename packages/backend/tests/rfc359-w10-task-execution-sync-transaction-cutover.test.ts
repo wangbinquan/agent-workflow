@@ -45,7 +45,6 @@ import ts from 'typescript'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   committedEvents,
@@ -58,7 +57,7 @@ import {
 } from '@/db/schema'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationEffectInput } from '@/modules/task-execution/application/applySourceTerminationEffect'
-import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
+import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import { revokeExactOwnerInTx } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import {
   appendTaskCreatedCommittedEvent,
@@ -212,7 +211,7 @@ async function applySourceTermination(
   input: TaskSourceTerminationEffectInput,
 ): Promise<void> {
   // **两个引擎上都构造这一个** SQLite 命名的参与者：它跑得动 PostgreSQL 正是本波的判据。
-  const participant = createTaskSourceTerminationParticipant(h.db as unknown as DbClient)
+  const participant = createTaskSourceTerminationParticipant({ db: h.db })
   await participant.apply(mintSourceTerminationEffectCapability(input), input)
 }
 
@@ -743,7 +742,7 @@ const TERMINALS = new Set(['run', 'get', 'all'])
 
 const AUDITED = [
   'services/task.ts',
-  'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
+  'modules/task-execution/infrastructure/sourceTerminationParticipant.ts',
 ] as const
 
 interface Unawaited {

@@ -522,7 +522,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
 
   const terminalControl = composeMrTerminalControl({
     db,
-    taskTermination: composeTaskSourceTermination(db),
+    taskTermination: composeTaskSourceTermination({ db }),
   })
   await terminalControl.reconcileOnBoot()
   const identityDependencies = integrationTriggerWebhookAuthorityDependencies(

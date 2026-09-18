@@ -146,7 +146,8 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // 只是名字还留着 `postgresql` 前缀。去掉前缀之后它们不再是「provider 命名文件」。
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
   'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts',
-  'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts',
+  // RFC-359 AC-1（第 14 刀）**两条一起销账**：源终止参与者两个引擎合成一份中立实现
+  //（`sourceTerminationParticipant.ts`），两份 provider 命名文件退役。
   // RFC-359 AC-1（plan §5hm）：**删除**——驱动生命周期端口两个引擎合成一份
   // （`taskDriverLifecycle.ts`），PG 专属那份已退役。少一个 provider 命名文件。
   // RFC-359 AC-1（第 12 刀）：**这一对整个销账**——运行时参与者合成中立的
@@ -155,7 +156,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
   // RFC-359 AC-1（第 13 刀收尾）**两条一起销账**：`/api/tasks` 的两个 provider 绑定合成
   // 一个中立工厂（`taskRouteOperations.ts`），两份 provider 命名文件退役。
-  'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
   'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',
 ]
 

@@ -2421,7 +2421,14 @@ async function composeSqliteProviderSession(
   // （PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
   const webhookTerminalControl = composeMrTerminalControl({
     db,
-    taskTermination: composeTaskSourceTermination(db),
+    // RFC-359 AC-1（第 14 刀）：无 driver 时的工作区收尾由**装配方**交——这一支交的是它
+    // 自己那份 GC 收尾（与本文件 durable 消费者 `nudgeWorkspacePrune` 用的同一个）。
+    taskTermination: composeTaskSourceTermination({
+      db,
+      finalizeWithoutDriver: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(db, taskId)
+      },
+    }),
   })
   await webhookTerminalControl.reconcileOnBoot()
   const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)

@@ -420,7 +420,8 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // `createPostgresqlTaskExecutionRuntimeParticipants`（认领策略 / 活跃度 / 停机票据
       // 收成端口，绑定回到各自组合根）。**是合一不是删覆盖**，分母少二。
       // RFC-359 AC-1（第 13 刀收尾）：68 → 66。同上，两个路由绑定合成一份中立实现。
-    ).toBeGreaterThanOrEqual(66)
+      // RFC-359 AC-1（第 14 刀）：66 → 64。同上，源终止的参与者与装配各自合一。
+    ).toBeGreaterThanOrEqual(64)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

@@ -114,7 +114,7 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 倒挂随之从 +1 变成 +2，但方向是「弱侧 PG 的那份原生重写更该退役」，不是新债。
   // W12：共用 atom 的真实回滚、终态 CAS 赢家、提交后停止回归，两侧各加 1 ref/drive。
   // 第八批：非状态写入快照转到共有 writeFence，旧 SQLite 文件少一条文本引用；驱动数不变。
-  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 4/4, postgresql 3/2',
+  // RFC-359 AC-1（第 14 刀）**销账**：这一对已合一，配对本身不存在了。
   // W12：真实执行夹具提升到 providerRuntime 整体装配，底层 PG participants / launch 的
   // 直接 import 各少一条，但 factory 的返回对象驱动同一真实任务；不以直接引用数冒充行为覆盖。
   // W12 第十三批：完整 dynamicWorkflow 类型负例新增 PG participants 引用；

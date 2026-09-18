@@ -121,7 +121,12 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — verified by rfc359-w8-resource-package-maintenance-conformance.test.ts, rfc359-w9-resource-package-skill-recovery-conformance.test.ts',
   // RFC-359 W12：共同流程和每目标事务 atom 已合一，两个 applyOne 副本退役。
   // 留下两侧既有的提交后事件/停止位置与 SQLite 无 driver 收尾机制，真实对拍继续锁定。
-  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — verified by rfc359-w12-source-termination-atom.test.ts, rfc359-w8-source-termination-conformance.test.ts',
+  // RFC-359 AC-1（第 14 刀）**销账**：`SourceTerminationParticipant` 这一对已合一。W12 判
+  //「不合」的三条理由逐条量过，一条也不是引擎差异：①发布 / 请求停机相对评审锁的位置是**时序
+  // 选择**（合并取强的一半：非阻塞的 `requestStop` 进锁内与状态写入原子，久等的
+  // `awaitStopped` 两侧本来就在锁外）；②运行时注册表是部署形态（同第 12 刀，做成参数）；
+  // ③无 driver 时的工作区收尾器两侧确实不是同一个函数，但那正是它该做成**注入端口**的理由
+  // ——「要不要收尾」两侧一致，收尾器各交各的。对拍两份留任并翻面。
   // RFC-359 AC-1（第 12 刀）**销账**：`TaskExecutionRuntimeParticipants` 这一对已合一。
   // W8 判「不合」的理由（「两台 children 引擎 + 两个 registry」）前半句早已被第 10 / 11 刀
   // 与批次二 ⑤ 抹掉；后半句为真，但那是**部署形态**——按 §5fq 的三条判据一条也不命中，
@@ -245,7 +250,7 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 // 触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块（子 agent prompt 里
 // `{{event_type}}` 随之展不开）。见证测试 `rfc359-w8-child-launch-conformance` 留任，
 // 本分从「见证分叉」翻成「锁住合一」。
-export const PROVIDER_PAIR_COUNT = 4
+export const PROVIDER_PAIR_COUNT = 3
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

@@ -58,7 +58,6 @@ import { afterEach, expect, test } from 'bun:test'
 import { and, desc, eq, sql as sqlExpr } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { committedEvents, nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
 import type { EventObservationParticipant } from '@/modules/event-center/public/participants'
@@ -73,10 +72,8 @@ import { createTaskLifecycleDurableConsumerDefinitions } from '@/modules/task-ex
 // 两侧实现各值 import 一条：这一对的对拍见证判据就锁在这里
 // （`tests/architecture/rfc359-w5-provider-pair-conformance.test.ts`）——走 composition 的
 // 再导出会让这份对拍在账本里看不见。
-import { createPostgresqlTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant'
-import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
+import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import type { CommittedEventEnvelopeV1 } from '@/platform/events/committed/types'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -84,12 +81,10 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 const BINDING = 'gitlab:group/proj!42'
 const DELIVERY = 'dlv-rfc359-w8'
 
+// RFC-359 AC-1（第 14 刀）：参与者两个引擎合成一份，两条泳道从此是**同一个工厂**，
+// 唯一按引擎变的是库句柄（由 harness 给）。
 function participantFor(harness: ProviderHarness): TaskSourceTerminationParticipant {
-  return harness.capabilities.isolation === 'exclusive'
-    ? createTaskSourceTerminationParticipant(harness.db as unknown as DbClient)
-    : createPostgresqlTaskSourceTerminationParticipant(
-        harness.db as unknown as PostgresqlDatabaseClient,
-      )
+  return createTaskSourceTerminationParticipant({ db: harness.db })
 }
 
 /**

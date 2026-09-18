@@ -6,7 +6,6 @@ import { and, eq } from 'drizzle-orm'
 import { SQLiteSelectBase } from 'drizzle-orm/sqlite-core'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   committedEvents,
@@ -22,15 +21,13 @@ import {
   createOwnershipToken,
   createWorkerIdentity,
 } from '@/modules/task-execution/domain/ownership'
-import { createPostgresqlTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant'
-import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
+import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import { applySourceTerminationTarget } from '@/modules/task-execution/infrastructure/sourceTerminationTarget'
 import {
   DrizzleTaskRuntimeLifecyclePersistence,
   writeTaskRuntimeLifecycleInTx,
 } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { __hasTaskReviewMutationQueueForTesting } from '@/services/reviewMutationCoordinator'
 import { ConflictError } from '@/util/errors'
@@ -142,12 +139,8 @@ function effect(kind: TaskSourceTerminationEffectInput['kind'] = 'fence-closed')
 }
 
 async function apply(harness: ProviderHarness, input = effect()) {
-  const participant =
-    harness.capabilities.isolation === 'exclusive'
-      ? createTaskSourceTerminationParticipant(harness.db as unknown as DbClient)
-      : createPostgresqlTaskSourceTerminationParticipant(
-          harness.db as unknown as PostgresqlDatabaseClient,
-        )
+  // RFC-359 AC-1（第 14 刀）：两条泳道同一个工厂。
+  const participant = createTaskSourceTerminationParticipant({ db: harness.db })
   return await participant.apply(mintSourceTerminationEffectCapability(input), input)
 }
 
@@ -733,8 +726,12 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     expect(publishedRows?.intents[0]?.state).toBe('canceled')
     expect(publishedRows?.events).toHaveLength(1)
     expect(order).toEqual(['publish', 'stop', 'wait'])
-    const publishInsideLock = harness.capabilities.isolation === 'exclusive'
-    expect(heldAt).toEqual([publishInsideLock, publishInsideLock, false])
+    // RFC-359 AC-1（第 14 刀）：**两侧同一档**。合并之前这里写的是
+    // `const publishInsideLock = harness.capabilities.isolation === 'exclusive'`
+    // ——SQLite 在评审锁内发布 + 取停机票据，PostgreSQL 三样全在锁外。合并取强的那一半：
+    // `requestStop` 只是取一张票据（非阻塞），放在锁内让「状态写入」与「停机请求」相对任务
+    // 评审 FIFO 是原子的；真正会久等的 `awaitStopped` 两侧本来就在锁外。
+    expect(heldAt).toEqual([true, true, false])
     registry.release({ token: seeded.token, controller })
     registry.settle(seeded.token)
     expect((await pending)[0]).toMatchObject({ releaseOutcome: 'released', errorCode: null })

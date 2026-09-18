@@ -59,7 +59,7 @@ import {
 import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
-import { composePostgresqlTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
+import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -534,7 +534,8 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
     const endpointId = await seedEndpoint(harness.db)
     // 任务终止参与者也是本轮要还的债；PostgreSQL 侧的事务体只在 wake/drain 时才走，
     // 这里驱动的是预留路径（中立持久化 + 引擎的 advisory lock）。
-    const taskTermination = composePostgresqlTaskSourceTermination(asPostgresql(harness.db))
+    // RFC-359 AC-1（第 14 刀）：源终止的装配两个引擎合成一份。
+    const taskTermination = composeTaskSourceTermination({ db: harness.db })
     const control = composeMrTerminalControl({
       db: asPostgresql(harness.db),
       taskTermination,
@@ -733,7 +734,7 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
     composeWebhookIngressPersistenceFor,
     composeWebhookDeliveryRuntimeFor,
     composeMrTerminalControl,
-    composePostgresqlTaskSourceTermination,
+    composeTaskSourceTermination,
   ]
   // RFC-359 AC-1（plan §5gb）：19 → 18。`composeSqlite/PostgresqlWebhookTriggerServiceDependencies`
   // 两个品牌入口合成一个 `composeWebhookTriggerServiceDependenciesFor`，清单里两条变一条。

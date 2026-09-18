@@ -824,14 +824,22 @@ test('W12：来源终止两个宿主只委托一个中立事务 atom', () => {
     visit(scope)
     return names
   }
+  // RFC-359 AC-1（第 14 刀）：两个宿主合成一份。判据的意图不变——**参与者只委托那个中立
+  // atom，自己不碰运行时生命周期写入**；锚点跟着实现走，从「两个品牌文件各查一遍」变成
+  // 「唯一那份查一遍」。
+  const participant = unitOf(
+    'modules/task-execution/infrastructure/sourceTerminationParticipant.ts',
+  )
+  expect(participant).not.toBeNull()
+  expect(calls(participant!.source).has('applySourceTerminationTarget')).toBe(true)
+  expect(calls(participant!.source).has('writeTaskRuntimeLifecycleInTx')).toBe(false)
+  expect(identifierTexts(participant!.source).has('applyOne')).toBe(false)
+  // 两份 provider 前缀的宿主不得复活。
   for (const provider of ['sqlite', 'postgresql']) {
-    const unit = unitOf(
-      `modules/task-execution/infrastructure/${provider}SourceTerminationParticipant.ts`,
-    )
-    expect(unit).not.toBeNull()
-    expect(calls(unit!.source).has('applySourceTerminationTarget')).toBe(true)
-    expect(calls(unit!.source).has('writeTaskRuntimeLifecycleInTx')).toBe(false)
-    expect(identifierTexts(unit!.source).has('applyOne')).toBe(false)
+    expect(
+      unitOf(`modules/task-execution/infrastructure/${provider}SourceTerminationParticipant.ts`),
+      `${provider}SourceTerminationParticipant.ts 不得复活：源终止参与者只有一份实现`,
+    ).toBeNull()
   }
   const shared = unitOf('modules/task-execution/infrastructure/sourceTerminationTarget.ts')
   expect(shared).not.toBeNull()

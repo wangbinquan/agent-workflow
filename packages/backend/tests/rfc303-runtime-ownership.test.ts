@@ -9,7 +9,7 @@ import { nodeRuns, tasks, webhookMrLaunchGuards, webhookMrStreamStates } from '@
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { InMemoryWebhookLaunchSupervisor } from '@/modules/integration/infrastructure/inMemoryWebhookLaunchSupervisor'
 import { createMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
-import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
+import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { sourceTerminationCapabilityMatches } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { TaskClaimGate } from '@/modules/task-execution/application/taskClaimGate'
@@ -216,7 +216,7 @@ describe('RFC-303 source termination capability', () => {
         },
       ])
 
-      const receipts = await createTaskSourceTerminationParticipant(db).apply(
+      const receipts = await createTaskSourceTerminationParticipant({ db }).apply(
         mintSourceTerminationEffectCapability(input),
         input,
       )

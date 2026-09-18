@@ -12,8 +12,6 @@ import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import type { PostgresqlDatabaseClient } from '../src/platform/persistence/postgresqlDatabaseClient'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import {
@@ -43,10 +41,7 @@ import {
   createMrLaunchGuardPersistence,
   createMrTerminalEffectPersistence,
 } from '../src/modules/integration/infrastructure/mrTerminalControlPersistence'
-import {
-  composePostgresqlTaskSourceTermination,
-  composeTaskSourceTermination,
-} from '../src/modules/task-execution/composition/sourceTermination'
+import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
 import type { MrTerminalControl } from '../src/modules/integration/public/mrTerminalControl'
 import { composeEventCenter } from '../src/modules/event-center/composition'
 import {
@@ -77,16 +72,11 @@ async function waitFor<T>(fn: () => Promise<T | null>, ms = 4000): Promise<T> {
 }
 
 /**
- * 生产上这一对由各自的组合根选：SQLite 根走 `composeTaskSourceTermination`，PostgreSQL 根走
- * `composePostgresqlTaskSourceTermination`。harness 有意不交出 provider 名，所以按能力分派
- * （`isolation === 'exclusive'` 即 SQLite）。
+ * RFC-359 AC-1（第 14 刀）：两个组合根合成一份，两条泳道从此调**同一个** `composeTaskSourceTermination`。
+ * 合并之前这里按能力分派（`isolation === 'exclusive'` 即 SQLite）——那条分派现在没有了。
  */
 function taskSourceTerminationFor(providerHarness: ProviderHarness) {
-  return providerHarness.capabilities.isolation === 'exclusive'
-    ? composeTaskSourceTermination(providerHarness.db as unknown as DbClient)
-    : composePostgresqlTaskSourceTermination(
-        providerHarness.db as unknown as PostgresqlDatabaseClient,
-      )
+  return composeTaskSourceTermination({ db: providerHarness.db })
 }
 
 async function seedFixture(providerHarness: ProviderHarness) {

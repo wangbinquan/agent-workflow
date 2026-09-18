@@ -109,7 +109,8 @@ export const SAME_FILE_PROVIDER_PAIRS: readonly string[] = [
   'modules/system-operations/composition.ts::composeSystemOperations = composePostgresqlSystemOperations + composeSystemOperations — ②：备份 / 恢复：SQLite 是 copy 一个文件，PostgreSQL 是 pg_dump / pg_restore 一台服务器',
   'modules/system-operations/composition/maintenanceDisk.ts::composeMaintenanceDiskOperations = composePostgresqlMaintenanceDiskOperations + composeSqliteMaintenanceDiskOperations — ②：SQLite 量的是一个**文件**的磁盘占用，PostgreSQL 要问**服务器**要；资源形态不同',
   'modules/task-execution/composition/providerRuntime.ts::composeTaskExecutionProviderRuntime = composePostgresqlTaskExecutionProviderRuntime + composeSqliteTaskExecutionProviderRuntime — 漂移待合：按 §5fq 三条判据均未指名，但**挡在下层**——下层仍是品牌实现：`composePostgresqlTaskExecutionProviderRuntime` / `createPostgresqlClarifyRepairParticipant` / `createPostgresqlFusionEngineTaskOperations`。先合下层，这一层自然塌成一份。',
-  'modules/task-execution/composition/sourceTermination.ts::composeTaskSourceTermination = composePostgresqlTaskSourceTermination + composeTaskSourceTermination — 漂移待合：按 §5fq 三条判据均未指名，但**挡在下层**——下层仍是品牌实现：`composePostgresqlTaskSourceTermination` / `createPostgresqlTaskSourceTerminationParticipant`。先合下层，这一层自然塌成一份。',
+  // RFC-359 AC-1（第 14 刀）**销账**：账本原话「先合下层，这一层自然塌成一份」——下层
+  //（`createTaskSourceTerminationParticipant`）合一之后，这一层的两个同义 `compose*` 也塌成一个。
   // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`triggerExecution.ts` 那一对**已销账**。
   // 它此前的理由是「挡在下层」——SQLite 那半自己调 `startExecution`（启动参与者的第二份写法）。
   // 下层的启动参与者一合，这一层果然自然塌成一份（PG 那半本来就只是八行转发）。

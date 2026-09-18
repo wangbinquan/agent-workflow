@@ -210,7 +210,7 @@ import { composeIntentContextResourceAuthorizationFactory } from '@/modules/reso
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import { composePostgresqlFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
-import { composePostgresqlTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
+import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import {
   composeWebhookLaunchAdmission,
@@ -1209,7 +1209,13 @@ export async function composePostgresqlApplication(
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
   const webhookTerminalControl = composeMrTerminalControl({
     db: input.db,
-    taskTermination: composePostgresqlTaskSourceTermination(input.db),
+    // RFC-359 AC-1（第 14 刀）：参与者与装配都合一了；这一支交的收尾是 source-control 的
+    // `finalizeClaimedWorkspace`（与本文件驱动生命周期端口用的同一个）。此前这一格是空的，
+    // 无 driver 的源终止只能靠 durable 消费者异步收尾，回执返回时工作区还没真收掉。
+    taskTermination: composeTaskSourceTermination({
+      db: input.db,
+      finalizeWithoutDriver: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
+    }),
   })
   if (phase.kind === 'daemon') {
     await webhookTerminalControl.reconcileOnBoot()

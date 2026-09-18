@@ -169,7 +169,10 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // **是合一不是删覆盖**，分母少二。
       // RFC-359 AC-1（第 13 刀收尾）：71 → 69。`/api/tasks` 的两个 provider 绑定合成一个
       // 中立工厂，`create{Sqlite,Postgresql}TaskRouteOperations` 退役。**是合一不是删覆盖**。
-    ).toBeGreaterThanOrEqual(69)
+      // RFC-359 AC-1（第 14 刀）：69 → 67。源终止参与者与它的装配各自合一，
+      // `createPostgresqlTaskSourceTerminationParticipant` / `composePostgresqlTaskSourceTermination`
+      // 退役。**是合一不是删覆盖**。
+    ).toBeGreaterThanOrEqual(67)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

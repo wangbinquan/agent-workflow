@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1669,
+    "entries": 1668,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -25376,28 +25376,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "effect",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#createPostgresqlTaskSourceTerminationParticipant",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#createPostgresqlTaskSourceTerminationParticipant",
-      "symbol": "createPostgresqlTaskSourceTerminationParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": true,
@@ -25436,6 +25414,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
       "symbol": "createRuntimeSessionLeaseOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "effect",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationParticipant.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationParticipant.ts#createTaskSourceTerminationParticipant",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationParticipant.ts#createTaskSourceTerminationParticipant",
+      "symbol": "createTaskSourceTerminationParticipant",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -25547,27 +25547,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#StopOwner",
       "symbol": "StopOwner",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "effect",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#createTaskSourceTerminationParticipant",
-      "missingControls": [
-        "audit",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#createTaskSourceTerminationParticipant",
-      "symbol": "createTaskSourceTerminationParticipant",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -39892,7 +39871,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:07186b6ddc25e1b950cece8c41922d33b1d2bba4e410c30df0f6c9a44de920e4",
+  "sourceDigest": "sha256:17e72f262943c29598282abf4c1555ecdcfb827cc27344b1fc8f0daac1f62dca",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
