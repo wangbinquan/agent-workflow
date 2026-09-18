@@ -455,7 +455,7 @@ async function loadTask(db: ProviderNeutralDatabase, taskId: string): Promise<Ta
   return rows[0] === undefined ? null : await taskProjection(db, rows[0])
 }
 
-async function requireTaskRow(db: PostgresqlDatabaseClient, taskId: string): Promise<TaskRow> {
+async function requireTaskRow(db: ProviderNeutralDatabase, taskId: string): Promise<TaskRow> {
   const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   const row = rows[0]
   if (row === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
@@ -1431,7 +1431,7 @@ function assertNotSourceTerminated(task: Pick<TaskRow, 'id' | 'sourceTermination
  * （`errorSummary='snapshot-lost'` / `'live-child-survived'`），调用方拿 409。返回 `never`。
  */
 async function escalateUnsafeContinuation(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+  dependencies: Pick<TaskRetryDependencies, 'db' | 'persistence' | 'now' | 'id'>,
   input: Readonly<{
     taskId: string
     run: Pick<NodeRunRow, 'id' | 'nodeId'>
@@ -1478,7 +1478,7 @@ async function escalateUnsafeContinuation(
  * `git cat-file`，不碰任何工作树，所以它可以安全地放在准入 CAS **之前**。
  */
 async function assertRollbackBaselinesPresent(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+  dependencies: Pick<TaskRetryDependencies, 'db' | 'persistence' | 'now' | 'id'>,
   input: Readonly<{
     taskId: string
     runs: readonly NodeRunRow[]
@@ -1878,7 +1878,7 @@ function inheritanceSourceInFrame(
  * （被删 / 老数据）都算可驱动。
  */
 async function finalizedParentCallRowStatus(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   task: Pick<TaskRow, 'parentTaskId' | 'parentNodeRunId'>,
 ): Promise<string | null> {
   const callRowId = task.parentNodeRunId ?? null
@@ -1893,8 +1893,29 @@ async function finalizedParentCallRowStatus(
   return isTerminalNodeRunStatus(row.status as NodeRunStatus) ? row.status : null
 }
 
-async function retryNode(
-  dependencies: PostgresqlTaskRouteOperationsDependencies,
+/**
+ * RFC-359 AC-1（第 9 刀）—— `retry` 这个动词**真正需要的**依赖面。
+ *
+ * 它是 `PostgresqlTaskRouteOperationsDependencies` 的一个子集，加上两处**收窄**：
+ * 原来的 `children.resume` + `resumeRuntimeFor` + `topology` 三样只组合成一句
+ * 「以这个 actor 把这个任务拉起来」，`children.cancel` 只用来「按父级联取消一个子任务」。
+ * 收成两个端口之后，**没有装配完整 runtime 的组合根**（`server.ts` 那条）也接得上同一份实现
+ * ——否则这一刀在那条路上根本落不了地。与第 8 刀给修复做的收窄同形。
+ */
+export interface TaskRetryDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly persistence: TaskExecutionPersistence
+  readonly activity: ActiveTaskExecutionParticipant
+  readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
+  readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
+  /** 终态子任务是幂等空操作——实现方按各自的参与者处理，抛 `task-not-cancelable` 即可。 */
+  readonly cancelChildTaskForCascade: (childTaskId: string, parentTaskId: string) => Promise<void>
+  readonly now?: () => number
+  readonly id?: () => string
+}
+
+export async function retryNodeProjection(
+  dependencies: TaskRetryDependencies,
   input: Parameters<TaskRouteOperations['retry']>[0],
 ): Promise<Task> {
   const task = await requireTaskRow(dependencies.db, input.taskId)
@@ -1935,6 +1956,44 @@ async function retryNode(
     )
   }
   if (target.nodeId === '__repo_prep__') {
+    // RFC-359 AC-1（第 9 刀）：**三道门随合并从退役那份移植过来**。合并前这条路只有一句
+    // 「整条转交给 `RepositoryPreparationRetryCommand`」（它自己只认最新那一行），
+    // 于是三种情形在 PostgreSQL 上都会**对一个已经准备好的任务重做准备**：
+    //
+    //   ① 被点的准备行已经 `done`（AC-16：对已有工作树的任务再物化一次）；
+    //   ② 被点的是一条**过期**的准备行——自然序列 `r1 failed → r2 done → n1 failed` 下，
+    //      r1 自身确实是 failed，只看状态的门会放行；
+    //   ③ 任务已经有工作树。
+    //
+    // 判据用 `retryIndex` 而不是全仓的 id 序比较器，理由见退役那份的原注：`__repo_prep__`
+    // 没有 clarify / parent / iteration 任何一种分叉，`nextRetryIndex` 严格递增分配的
+    // `retryIndex` **就是**因果尝试序；而 `nodeRunMint` 用的是普通 `ulid()`，同毫秒内近半数
+    // 逆序，按 id 序判会把真正过期的那一行当成最新。
+    const RETRYABLE_PREP_STATUSES = ['failed', 'interrupted'] as const
+    if (!(RETRYABLE_PREP_STATUSES as readonly string[]).includes(target.status)) {
+      throw new ConflictError(
+        'repo-prep-not-retryable',
+        `repository preparation for task '${input.taskId}' is '${target.status}'; ` +
+          `only ${RETRYABLE_PREP_STATUSES.join(' / ')} preparation can be retried`,
+      )
+    }
+    const newer = runs.filter(
+      (row) => row.nodeId === '__repo_prep__' && row.retryIndex > target.retryIndex,
+    )
+    if (newer.length > 0) {
+      throw new ConflictError(
+        'repo-prep-superseded',
+        `node_run '${target.id}' is a superseded repository-preparation attempt ` +
+          `(${newer.length} newer attempt(s) exist); retry the latest one instead`,
+      )
+    }
+    if (task.worktreePath !== '') {
+      throw new ConflictError(
+        'repo-prep-already-complete',
+        `task '${input.taskId}' already has a worktree at '${task.worktreePath}'; ` +
+          'repository preparation cannot be re-run over a prepared task',
+      )
+    }
     await dependencies.repositoryPreparationRetry.retry(input.taskId)
     const prepared = await loadTask(dependencies.db, input.taskId)
     if (prepared === null) {
@@ -2115,10 +2174,7 @@ async function retryNode(
   await publishCommittedEventsAfterCommit(committed)
   for (const childTaskId of childTaskIds) {
     try {
-      await dependencies.children.cancel({
-        taskId: childTaskId,
-        cause: { kind: 'parent-cascade', parentTaskId: input.taskId },
-      })
+      await dependencies.cancelChildTaskForCascade(childTaskId, input.taskId)
     } catch (error) {
       // RFC-359 AC-1（第 9 刀）：**已经收场的子任务是幂等空操作，不是失败**。
       // 参与者对终态子任务抛 `task-not-cancelable`（`postgresqlChildTaskLifecycleParticipant`
@@ -2151,13 +2207,7 @@ async function retryNode(
       )
     }
   }
-  await dependencies.children.resume(
-    {
-      taskId: input.taskId,
-      runtime: dependencies.resumeRuntimeFor(input.actor, input.taskId),
-    },
-    dependencies.topology,
-  )
+  await dependencies.resumeTaskAs(input.actor, input.taskId)
   const updated = await loadTask(dependencies.db, input.taskId)
   if (updated === null)
     throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)
@@ -2256,7 +2306,25 @@ export function createPostgresqlTaskRouteOperations(
       if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       return task
     },
-    retry: (input) => retryNode(dependencies, input),
+    retry: (input) =>
+      retryNodeProjection(
+        {
+          ...dependencies,
+          resumeTaskAs: async (actor, taskId) => {
+            await dependencies.children.resume(
+              { taskId, runtime: dependencies.resumeRuntimeFor(actor, taskId) },
+              dependencies.topology,
+            )
+          },
+          cancelChildTaskForCascade: async (childTaskId, parentTaskId) => {
+            await dependencies.children.cancel({
+              taskId: childTaskId,
+              cause: { kind: 'parent-cascade', parentTaskId },
+            })
+          },
+        },
+        input,
+      ),
     nodeRuns: (taskId) => taskNodeRunsProjection(dependencies, taskId),
     diff: (taskId) => taskDiffProjection(dependencies, taskId),
     stdout: (taskId, nodeRunId) => nodeRunStdoutProjection(dependencies, taskId, nodeRunId),

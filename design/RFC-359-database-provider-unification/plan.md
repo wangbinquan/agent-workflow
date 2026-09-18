@@ -17133,3 +17133,46 @@ SQLite 的 `retryNode` 也是两个都 continue——**只有这条路是例外*
 修法是把这条路对齐另外两处。红绿依据就是这条对拍：修之前 PostgreSQL lane 红、SQLite lane 绿。
 
 至此 retry 的对拍面 **10 格 / 22 条**，共照出 **1 处真缺陷**（本条）。
+
+## 盘后第 9 刀落地（上半）　`retry` 两个引擎共用一份实现——**并补回 PG 侧缺的三道门**
+
+10 格对拍证明两份实现在用户可见面上无分叉之后做真合并：**留 PG 那份**（在正确模块），
+SQLite 路由的 `retry` 改为转给它。生产侧只有一个调用点（`sqliteTaskRouteOperations.ts`）。
+
+### 依赖面收窄：三样 → 两个端口
+
+共用 `retryNode` 原来要 `children` / `topology` / `resumeRuntimeFor` 三样，而它们只组合成两件事：
+「以这个 actor 把任务拉起来」与「按父级联取消一个子任务」。收成
+`resumeTaskAs(actor, taskId)` + `cancelChildTaskForCascade(childTaskId, parentTaskId)` 之后，
+**没有装配完整 runtime 的组合根**（`server.ts` 那条）也接得上同一份实现——与第 8 刀给修复做的收窄同形。
+函数改名为 `retryNodeProjection`，依赖类型 `TaskRetryDependencies` 是原依赖的一个子集。
+
+### 合并顶红了钉住的 B5——照出 PG 侧**三道门的缺口**
+
+`rfc359-w7` 的 B5 原本钉着：「过期的仓库准备行，SQLite 拒、PG 直接转交准备重试命令」。
+合并后它当场红——而顺着它查下去，PG 那条 `__repo_prep__` 路径上**只有一句转交**，
+退役那份有三道门它全没有：
+
+| 门 | 缺了会怎样 |
+| --- | --- |
+| `repo-prep-not-retryable` | 对一条已 `done` 的准备行重试 = 对一个已有工作树的任务**再物化一次**（AC-16） |
+| `repo-prep-superseded` | 自然序列 `r1 failed → r2 done → n1 failed` 下点 r1：它自己确实 failed，只看状态的门放行 ⇒ 对已准备好的任务重做准备 |
+| `repo-prep-already-complete` | 同上，从工作树那一侧兜底 |
+
+三道门随合并移植进共用实现（含原注里那条判据理由：这里用 `retryIndex` 而不是全仓 id 序比较器，
+因为 `__repo_prep__` 没有 clarify / parent / iteration 分叉，而 `nodeRunMint` 的普通 `ulid()`
+同毫秒内近半数逆序）。B5 随之从「钉住的分叉」改成**相等断言**销账。
+
+### 对拍面扩到 12 格 / 26 条
+
+新增两格盯移植进来的门（已 done 的准备行、任务已有工作树）。
+**变异实证有个额外收获**：关掉 `repo-prep-not-retryable` 那道门 ⇒ **两条 lane 同时红**
+——两条一起红本身就是「SQLite 侧确实已经走在共用实现上」的证据。
+
+### 记账
+
+- `rfc294-module-symbol-owners` 24551 → 24552，**一次性 `allowGrowth`**：共用实现要被接上必须先
+  导出 `retryNodeProjection`；退役那份（`services/task.ts` 的 `retryNode`，485 行）的导出
+  要等它的行为套件重挂完才删得掉，**下一提回落**。
+- 踩坑记一笔：`allowGrowth` 的形状是 `{ why }` **对象**，写成字符串会被 census 静默丢弃
+  （我第一次就是这么写的，census 一跑就没了，而守卫报的是「字段缺失」而不是「形状错了」）。

@@ -25,6 +25,8 @@ import {
   taskListSummariesProjection,
   taskNodeRunsProjection,
 } from './postgresqlTaskRouteOperations'
+import { retryNodeProjection } from './postgresqlTaskRouteOperations'
+import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
 import {
   createPostgresqlTaskRouteRepairOperations,
   type PostgresqlTaskRepairOperations,
@@ -39,7 +41,6 @@ import {
   cancelTask,
   getTask,
   resumeTask,
-  retryNode,
   syncTaskWorkflow,
   type StartTaskDeps,
 } from '@/services/task'
@@ -84,6 +85,12 @@ export interface SqliteTaskRouteOperationsDependencies {
    */
   readonly persistence: TaskExecutionPersistence
   readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
+  /**
+   * RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用**同一份**实现，这两样是它的依赖面。
+   * 合并前这一侧转给 `services/task.ts` 的 `retryNode`（485 行，retry 的第二份实现）。
+   */
+  readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
+  readonly cancelChildTaskForCascade: (childTaskId: string, parentTaskId: string) => Promise<void>
   readonly repair: Pick<
     PostgresqlTaskRouteRepairOperationsDependencies,
     'collaborationRuntime' | 'clarify' | 'review'
@@ -194,16 +201,22 @@ export function createSqliteTaskRouteOperations(
         actorUserId: actor.user.id,
       })
     },
-    async retry({ actor, taskId, nodeRunId, cascade }) {
-      return await retryNode(db, taskId, nodeRunId, {
-        cascade,
-        deps: {
-          ...dependencies.startDepsFor(actor),
-          taskRecoveryOperations: dependencies.recovery,
-          actorUserId: actor.user.id,
+    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用**同一份**实现。
+    // 等价性由 `rfc359-w9-retry-rollback-parity` 的 10 格对拍作证（回滚基线升级、级联形状、
+    // 不级联、帧继承、任务收尾、归属门早于 CAS、kind 矩阵、wrapper 复活豁免、终态子任务），
+    // 每格都有变异实证；合并前的对拍还照出一处 PG 侧真缺陷并已修。
+    retry: (input) =>
+      retryNodeProjection(
+        {
+          db,
+          persistence: dependencies.persistence,
+          activity: dependencies.activity,
+          repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
+          resumeTaskAs: dependencies.resumeTaskAs,
+          cancelChildTaskForCascade: dependencies.cancelChildTaskForCascade,
         },
-      })
-    },
+        input,
+      ),
     // RFC-359 AC-1（plan §5hn 之后的盘点，第 1 刀）：node-runs 投影与 PostgreSQL 共用**同一份**。
     // 等价性由 `rfc359-w5hn-task-read-route-provider-parity` 作证（同一批
     // `node_runs` / `doc_versions` / `clarify_rounds` 播种下两侧响应体逐字相同，

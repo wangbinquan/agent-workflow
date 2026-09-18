@@ -168,6 +168,9 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     // RFC-359 AC-1（第 8 刀）：修复两个动词与 PostgreSQL 共用同一份实现；本对拍不驱动它们。
     persistence: createTaskExecutionPersistence(db),
     resumeTaskAs: async () => unusedDependency('resumeTaskAs'),
+    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现，这两样是它的依赖面。
+    repositoryPreparationRetry: { retry: async () => {} },
+    cancelChildTaskForCascade: async () => {},
     repair: {
       collaborationRuntime: {} as never,
       clarify: {} as never,
@@ -1037,7 +1040,12 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     ).toBe('worktree-missing')
   })
 
-  test('B5 retry 一条过期的仓库准备行：SQLite 拒，PG 直接转交准备重试命令', async () => {
+  // **账已销**（RFC-359 AC-1，第 9 刀）：`retry` 两个引擎共用一份实现之后，
+  // `__repo_prep__` 这条路上的三道门（不可重试的状态 / 过期的准备行 / 任务已有工作树）
+  // 随合并从退役那份移植进来。合并前 PG 只有一句「整条转交给 `RepositoryPreparationRetryCommand`」
+  // （它自己只认最新那一行），于是点一条早已被取代的准备行也会照跑——**对一个已经准备好、
+  // 工作树就在那儿的任务重做准备**。这条从 B 段（实测分叉）变成了相等断言。
+  test('B5→A 过期的仓库准备行两侧同样被拒（三道门随合并补齐）', async () => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db, { status: 'failed' })
     const stale = await seedRun(harness.db, taskId, {
@@ -1050,16 +1058,10 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
       status: 'done',
       retryIndex: 1,
     })
-    const outcome = await code(
-      ops.retry({ actor: actorOf(OWNER), taskId, nodeRunId: stale, cascade: false }),
-    )
-    if (isPostgresql()) {
-      // PG 的 route 层不看被点的是哪一行，整条重试转交给 `RepositoryPreparationRetryCommand`
-      // （它自己只认**最新**那一行）——于是点一条早已被取代的准备行也会照跑。
-      expect(outcome).toBe('rfc359-w7-repository-preparation-retry-called')
-    } else {
-      expect(outcome).toBe('repo-prep-superseded')
-    }
+    expect(
+      await code(ops.retry({ actor: actorOf(OWNER), taskId, nodeRunId: stale, cascade: false })),
+      '两个引擎都必须拒——合并前 PG 会照跑，等于对一个已准备好的任务重做准备',
+    ).toBe('repo-prep-superseded')
   })
 
   // **账已销**（RFC-359 AC-1，plan §5hn 之后的盘点第 3 刀）：`get` 两个引擎共用

@@ -726,3 +726,64 @@ describeEachProvider('RFC-359 W9 —— 级联取消撞上已终态的子任务'
     })
   })
 })
+
+// RFC-287 G7 / AC-11 + AC-16 —— `__repo_prep__` 那条**自己的**重试路径上的三道门。
+// 合并前只有退役那份有它们；PG 那份只有一句「整条转交给 `RepositoryPreparationRetryCommand`」
+// （它自己只认最新那一行），于是三种情形都会**对一个已经准备好、工作树就在那儿的任务重做准备**。
+// 三道门随第 9 刀的合并移植过来，这里是它们的双引擎对拍。
+// 变异实证：把 `repo-prep-not-retryable` 那道门关掉 ⇒ **两条 lane 同时红**。
+// 两条一起红本身就是「SQLite 侧确实已经走在共用实现上」的证据。
+describeEachProvider('RFC-359 W9 —— 仓库准备行的三道重试门', (harness) => {
+  const fixtures: Fixture[] = []
+  afterEach(() => {
+    for (const item of fixtures) item.cleanup()
+    fixtures.length = 0
+  })
+
+  const PREP_DEFINITION = {
+    $schema_version: 5,
+    inputs: [],
+    nodes: [{ id: 'doc', kind: 'agent-single', agentName: 'a', promptTemplate: '' }],
+    edges: [],
+  } as unknown as WorkflowDefinition
+
+  async function retryCode(fixture: Fixture, nodeRunId: string): Promise<string> {
+    const execution = await executionFor(harness, fixture)
+    try {
+      await execution.provider.routes.tasks.retry({
+        actor: execution.actor,
+        taskId: fixture.taskId,
+        nodeRunId,
+        cascade: false,
+      })
+    } catch (error) {
+      const value =
+        error !== null && typeof error === 'object' && 'code' in error
+          ? Reflect.get(error, 'code')
+          : null
+      return typeof value === 'string' ? value : `no-code:${String(error)}`
+    }
+    return 'no-throw'
+  }
+
+  test('已 done 的准备行不可重试（AC-16：等于对已有工作树的任务再物化一次）', async () => {
+    const fixture = await seedFixture(harness.db, {
+      definition: PREP_DEFINITION,
+      status: 'failed',
+      runs: [{ nodeId: '__repo_prep__', status: 'done' }],
+    })
+    fixtures.push(fixture)
+    expect(await retryCode(fixture, fixture.nodeRunId)).toBe('repo-prep-not-retryable')
+  })
+
+  test('任务已经有工作树时，准备行不可重跑', async () => {
+    const fixture = await seedFixture(harness.db, {
+      definition: PREP_DEFINITION,
+      status: 'failed',
+      runs: [{ nodeId: '__repo_prep__', status: 'failed' }],
+    })
+    fixtures.push(fixture)
+    // `seedFixture` 建的任务 worktreePath 就是那棵真仓库——正是「已经准备好了」的形态。
+    expect(await retryCode(fixture, fixture.nodeRunId)).toBe('repo-prep-already-complete')
+  })
+})

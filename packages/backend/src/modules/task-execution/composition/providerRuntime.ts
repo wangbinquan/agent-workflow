@@ -204,6 +204,8 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     | 'activity'
     | 'persistence'
     | 'resumeTaskAs'
+    | 'repositoryPreparationRetry'
+    | 'cancelChildTaskForCascade'
     | 'repair'
   > & {
     readonly collaboration: C
@@ -257,6 +259,14 @@ export function composeSqliteTaskExecutionProviderRuntime<
         { taskId, runtime: dependencies.rootResumeRuntime(taskId) },
         runtime.topology,
       )
+    },
+    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现，这两样是它的依赖面。
+    repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
+    cancelChildTaskForCascade: async (childTaskId, parentTaskId) => {
+      await participants.children.cancel({
+        taskId: childTaskId,
+        cause: { kind: 'parent-cascade', parentTaskId },
+      })
     },
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,

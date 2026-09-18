@@ -25654,26 +25654,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
-      "missingControls": [
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
-      "symbol": "retryNode",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
@@ -25694,6 +25674,26 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNodeIds",
       "symbol": "retryNodeIds",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNodeProjection",
+      "missingControls": [
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNodeProjection",
+      "symbol": "retryNodeProjection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -26137,7 +26137,7 @@
         "authority": "system",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
@@ -26145,7 +26145,6 @@
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#createSqliteTaskRouteOperations",
       "missingControls": [
         "audit",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#createSqliteTaskRouteOperations",
@@ -39948,7 +39947,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a115fe1fc7e7165a0a17654e33e7617971ee806dea6d055a625b81bf72aa9c7e",
+  "sourceDigest": "sha256:d4e5c08cce19c54a62dc7107a3a9cd392ea378b1c5a035ad06e91e7bd4fa436e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41190,16 +41189,16 @@
           "tasks"
         ],
         "authorityKind": "control-revision",
-        "consumer": "retryNode",
+        "consumer": "retryNodeProjection",
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1995:tasks",
-        "line": 1995,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2054:tasks",
+        "line": 2054,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNodeProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "retryNode"
+        "symbol": "retryNodeProjection"
       },
       {
         "allowedTables": [

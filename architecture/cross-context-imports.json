@@ -17700,23 +17700,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:39698f8b2ddd2a2e44b3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#retryNode",
-      "toPath": "packages/backend/src/services/task.ts",
-      "toSymbol": "retryNode",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "fromSymbol": "$file",
@@ -77590,9 +77573,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4564,
+    "architectureExceptions": 4563,
     "implementationSccs": 0,
-    "observedEdges": 5081,
+    "observedEdges": 5080,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -95903,22 +95886,6 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#composeDevelopmentEmployeeWorkspace"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
-      "id": "import:39698f8b2ddd2a2e44b3",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/task",
-      "syntax": "static-import",
-      "targetSymbol": "retryNode",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/task.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#retryNode"
     },
     {
       "edgeKind": "value",
@@ -159434,7 +159401,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a115fe1fc7e7165a0a17654e33e7617971ee806dea6d055a625b81bf72aa9c7e",
+  "sourceDigest": "sha256:d4e5c08cce19c54a62dc7107a3a9cd392ea378b1c5a035ad06e91e7bd4fa436e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

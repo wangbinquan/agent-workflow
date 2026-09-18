@@ -6,7 +6,7 @@
     "moduleFiles": 1182,
     "productionFiles": 2516,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24551
+    "symbolsIncludingFileRoots": 24552
   },
   "entries": [
     {
@@ -128416,22 +128416,22 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNodeIds",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "retryNode",
+      "symbol": "retryNodeIds",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNodeIds",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNodeProjection",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "retryNodeIds",
+      "symbol": "retryNodeProjection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -128684,6 +128684,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskReadProjectionDependencies",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#TaskRetryDependencies",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskRetryDependencies",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -295289,5 +295301,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a115fe1fc7e7165a0a17654e33e7617971ee806dea6d055a625b81bf72aa9c7e"
+  "sourceDigest": "sha256:d4e5c08cce19c54a62dc7107a3a9cd392ea378b1c5a035ad06e91e7bd4fa436e"
 }

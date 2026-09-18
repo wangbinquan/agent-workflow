@@ -32,7 +32,12 @@ import {
 import type { SecretBox } from '@/auth/secretBox'
 import { actorOfDirectAuthority, admitDaemonIdentity, multiAuth } from '@/auth/session'
 import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
-import { cancelTask, createTaskDriveCoordinator, resumeTask } from '@/services/task'
+import {
+  cancelTask,
+  createTaskDriveCoordinator,
+  resumeTask,
+  retryRepositoryPreparation,
+} from '@/services/task'
 import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -2558,6 +2563,30 @@ function composeSqliteApiRouteMounts(
       collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),
       clarify: createClarifyRepairParticipant(deps.db),
       review: createReviewRepairParticipant(deps.db),
+    },
+    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现。这条路不装配完整 runtime，
+    // 两样依赖都用本文件既有的同一句写法：仓库准备重试与 `cli/start.ts` 同形，
+    // 级联取消走 `cancelTask(..., cascadeFromParent)`——与合并前 `services/task.ts` 的
+    // `retryNode` 在这条路上逐字相同（终态子任务由 `cancelTask` 自己抛
+    // `task-not-cancelable`，共用实现按幂等空操作处理）。
+    repositoryPreparationRetry: Object.freeze({
+      async retry(taskId: string) {
+        await retryRepositoryPreparation(
+          deps.db,
+          taskId,
+          buildStartTaskDeps(
+            deps.db,
+            schedulerDriver,
+            deps.configPath,
+            SYSTEM_USER_ID,
+            deps.secretBox,
+            identityAccess,
+          ),
+        )
+      },
+    }),
+    cancelChildTaskForCascade: async (childTaskId) => {
+      await cancelTask(deps.db, childTaskId, { cascadeFromParent: true })
     },
     resourceAuthorityFor: (actor) =>
       Object.freeze({
