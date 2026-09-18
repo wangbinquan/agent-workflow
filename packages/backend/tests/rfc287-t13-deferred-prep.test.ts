@@ -1964,7 +1964,7 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
     // 结果同毫秒铸出的两条准备行会被判反、两边都点不动。
     // `__repo_prep__` 没有 clarify/parent/iteration 分叉，retryIndex 就是因果序。
     // RFC-359 AC-1（第 9 刀）改锚：`retry` 两份实现合一，这道门随之搬进**留下的那一份**
-    // （`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`，两个 provider 共用）。
+    // （`taskRouteOperations.ts` 的 `retryNodeProjection`，两个 provider 共用）。
     // 判据一个字没改，锚跟着实现走——不改锚的后果是**假绿**：`indexOf` 取不到就是 -1，
     // 上面那条 `toBeGreaterThan(-1)` 会红（这次红了），但下面那条 `not.toContain` 会永远绿。
     const src = readSrc(
@@ -1975,7 +1975,7 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
         'modules',
         'task-execution',
         'infrastructure',
-        'postgresqlTaskRouteOperations.ts',
+        'taskRouteOperations.ts',
       ),
       'utf8',
     )

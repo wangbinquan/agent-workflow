@@ -5,7 +5,7 @@
 // only their model output is deterministic system-mock data.
 
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'

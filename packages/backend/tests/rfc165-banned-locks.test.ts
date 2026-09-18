@@ -142,7 +142,7 @@ describe('RFC-165 — raw-key guard wiring (source lock)', () => {
     const routeSrc = read('packages/backend/src/routes/tasks.ts')
     expect(countOf(routeSrc, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
     const sharedMultipart = read(
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
     )
     expect(countOf(sharedMultipart, 'rejectRetiredStartTaskKeys(')).toBeGreaterThanOrEqual(1)
   })

@@ -66,7 +66,7 @@ const TASK_DIFF_SRC = readFileSync(
     'modules',
     'task-execution',
     'infrastructure',
-    'postgresqlTaskRouteOperations.ts',
+    'taskRouteOperations.ts',
   ),
   'utf-8',
 )

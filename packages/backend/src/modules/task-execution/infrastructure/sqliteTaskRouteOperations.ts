@@ -24,8 +24,8 @@ import {
   taskListItemsProjection,
   taskListSummariesProjection,
   taskNodeRunsProjection,
-} from './postgresqlTaskRouteOperations'
-import { retryNodeProjection } from './postgresqlTaskRouteOperations'
+} from './taskRouteOperations'
+import { retryNodeProjection } from './taskRouteOperations'
 import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
 import {
   createTaskRouteRepairOperations,

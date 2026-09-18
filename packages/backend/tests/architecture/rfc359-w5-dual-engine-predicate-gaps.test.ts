@@ -331,7 +331,7 @@ type AcceptedDivergence = Readonly<{
  * **RFC-359 AC-1（第 9 刀）起为空。** 唯一那条 `retry-held-session-reap-order` 记的是
  * 「攥着 native runtime session 租约的行在哪一段被围栏」：SQLite 在 `retryNode` 的准入延续里
  * 第一件事就做，PG 放在交棒之后的 `rollbackForResume` 里。`retry` 两份实现合一之后这条不成立了——
- * 留下的那份（`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`）两个引擎共用，
+ * 留下的那份（`taskRouteOperations.ts` 的 `retryNodeProjection`）两个引擎共用，
  * 它把复活整段交给 `resumeTaskAs`，于是**两侧都**在 resume 那一段围栏：SQLite 走
  * `services/task.ts` 的 `resumeKick`（`reapHeldRuntimeSessionOwnersForTask`），PG 走
  * `rollbackForResume`。分叉是被消灭的，不是被挪走的。

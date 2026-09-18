@@ -247,7 +247,7 @@ export const TOPLEVEL_COLUMN_CAPTURE_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/mcpRepository.ts: 5',
   'modules/resource-catalog/infrastructure/pluginRepository.ts: 5',
   'modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts: 3',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts: 22',
+  'modules/task-execution/infrastructure/taskRouteOperations.ts: 22',
 ]
 
 /**

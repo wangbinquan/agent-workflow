@@ -222,7 +222,7 @@ describeEachProviderHttpApplication(
 //
 // 与第 1 刀同样的次序：**先把等价性钉住，再合并**。合并前这三件在两个引擎上是两份独立源码
 // （SQLite 侧 `services/task.ts` 的 `getTaskDiff` / `getNodeRunStdout` / `getNodeRunEvents`，
-// PostgreSQL 侧 `postgresqlTaskRouteOperations.ts` 的 `taskDiff` / `nodeRunStdout` /
+// PostgreSQL 侧 `taskRouteOperations.ts` 的 `taskDiff` / `nodeRunStdout` /
 // `nodeRunEventsPage`），逐字读下来算法一致，但 `diff` 的**单仓 410 文案**是真分叉：
 // SQLite 分「目录还在但已不是 git 仓」与「目录根本不存在」两句话，PostgreSQL 只有一句
 // 「unavailable」。当时把这两格显式钉成分叉，合并后它自己红了，于是改成相等断言——账已销，

@@ -22,7 +22,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
 import { createResumeEngine } from './helpers/resumeEngine'
-import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { mkdirSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'

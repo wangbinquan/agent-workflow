@@ -297,7 +297,7 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
   },
   {
     // RFC-359 AC-1（第 9 刀）新增。`trySet` 补进语料后，20 个中立端口站点里**只有这一条**越界。
-    site: 'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts:failed',
+    site: 'modules/task-execution/infrastructure/taskRouteOperations.ts:failed',
     offTable: ['interrupted'],
     why: '`retry` 合并后用 `interrupted` 当中转态（`pending` 不在 RESUMABLE_TASK_STATUSES 里，会被 resume 准入当场拒掉），而级联取消旧世代子任务失败时任务必须失败关闭并留下 `retry-child-cancel-failed`。表里 `interrupted` 是终态、没有出边，所以这条靠 `allowTerminal: true` 越闸——见 allowTerminal 账本同址条目。退役那份实现同一处是 `pending → failed`（表内），中转态换了，这条边才浮出来。',
   },

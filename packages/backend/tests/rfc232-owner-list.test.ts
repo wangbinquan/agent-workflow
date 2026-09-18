@@ -1,7 +1,7 @@
 // RFC-232 — owner projection batching + scheduled-list mapper parity.
 
 import { expect, test } from 'bun:test'
-import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'

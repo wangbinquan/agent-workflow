@@ -201,7 +201,7 @@ describe('RFC-247 — every redactor has an outlet', () => {
     //（`rowToTask` 及其仓库分支），共用那份 4 处（详情 / 列表 / 仓库 / 冻结布局）。
     const total = [
       read('services/task.ts'),
-      read('modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts'),
+      read('modules/task-execution/infrastructure/taskRouteOperations.ts'),
     ].reduce((sum, source) => sum + source.split('redactGitUrl(row.repoUrl)').length - 1, 0)
     expect(total).toBeGreaterThanOrEqual(7)
   })

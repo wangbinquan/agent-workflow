@@ -17852,3 +17852,41 @@ kernel 本体钉「不许自己铸回收原因」与语料下限，端口文件�
 
 **还剩最后一份**：`postgresqlTaskRouteOperations.ts`（四处 PG 句柄 + 四五个共用出口），
 按 plan 早先的裁决**先把共用出口提到中立文件再改名**。
+
+### 命名债收尾（§5hj）第四批　`/api/tasks` 路由面——**最后一份**
+
+`postgresqlTaskRouteOperations.ts` 2416 行，22 个导出里 **15 个被 `sqliteTaskRouteOperations.ts`
+直接消费**——它早就不是「PostgreSQL 的那一份」，而是两个引擎共用的那一份，只有名字还钉在 PG 上。
+plan 早先的裁决「先把共用出口提到中立文件再改名」按**实际比例**反过来做更省：
+把**装配**搬出去，实现留在原地改名。
+
+| 文件 | 行数 | 内容 |
+| --- | --- | --- |
+| `taskRouteOperations.ts` | 2273 | 共用实现（15 个投影 + 内部 helper） |
+| `postgresqlTaskRouteOperations.ts` | 215 | PG 绑定：依赖面 + 工厂 |
+| `sqliteTaskRouteOperations.ts` | （未动） | SQLite 绑定 |
+
+形状因此对称：**一份实现，两个绑定**。
+
+**顺带修掉三处过紧标注 / 一处过松判据**：
+
+1. `builtinCandidateWorkflow` / `syncRunSummary` 的形参标的是 `PostgresqlDatabaseClient`，
+   而函数体只用中立 drizzle 面——放宽到 `ProviderNeutralDatabase`；
+2. 三个共用函数（`loadVisibleWorkflow` / `syncWorkflow` / `rollbackRunsForContinuation`）收整个
+   依赖对象，此前收的是 PG 那个具名类型。新增中立的 `TaskRouteOperationsDependencies`，
+   PG 绑定的依赖面 `extends Omit<…,'db'>` 只把 `db` 收窄；
+3. **`rfc359-w8` 的 `implementsPort` 太松**：它认任何 `: Port`，于是**依赖面里的字段声明**
+   （消费端口）也被当成实现。收紧成「返回类型位 / `const x: Port =` / implements / extends」。
+
+第 3 条还**订正了上一刀的一个错判**：取消合一那一提我往名字盲账本加过一条
+`ActiveTaskExecutionParticipant`、并把与 W5 的交集从 0 抬到 4，当时写的理由是「判据恢复视力」。
+**那个判断是错的**——那 5 条全是 `implementsPort` 松判据的假阳性
+（`sqliteTaskExecutionRuntimeParticipants` 只是在依赖面上声明了这些端口的字段）。
+判据收紧后名字盲回到 2、交集回到 0，也就是它们一直以来的真实值。
+**记一条教训**：账本涨了先别急着写「判据恢复视力」——**先确认新看见的那条是不是真的**，
+否则就是把一条假阳性用一段合理的解释固定了下来。
+
+**命名债至此清零**：`modules/task-execution/infrastructure/` 下剩余的 `postgresql*` 文件
+（`FusionEngineTaskOperations` / `SourceTerminationParticipant` / `RepositoryPreparationRetryCommand` /
+`TaskLifecycleTransaction` / `TaskRouteOperations` / `TaskExecutionRuntimeParticipants`）
+**每一个都名副其实**：要么真有 sqlite 孪生、要么只服务 PostgreSQL、要么是 PG 的装配绑定。

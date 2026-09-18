@@ -5,7 +5,7 @@
 // startTask threading (deps.scheduledTaskId → row) is source-locked here and
 // exercised end-to-end by the scheduler fire path.
 import { describeEachProvider } from './helpers/eachProvider'
-import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'

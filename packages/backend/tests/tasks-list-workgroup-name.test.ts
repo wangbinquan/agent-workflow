@@ -19,7 +19,7 @@
 // Frontend wiring is locked by tasks-workgroup-badge.test.ts.
 
 import { expect, test } from 'bun:test'
-import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'

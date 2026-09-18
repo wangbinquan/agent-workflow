@@ -17,7 +17,7 @@
 //   1. 只差一个筛选项的并发查询**不得**被合并（逐项过一遍，新加的筛选项漏了就红）；
 //   2. 完全同形的并发查询**仍然**被合并（别把性能特性一起修没了）。
 import { beforeEach, expect, test } from 'bun:test'
-import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import type { TaskRouteListFilters } from '@/modules/task-execution/public/taskRoutes'
 import { ulid } from 'ulid'
 

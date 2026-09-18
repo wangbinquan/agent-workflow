@@ -493,7 +493,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *   modules/task-execution/infrastructure/childExecutionLaunchOperations.ts: 1
  *     :579 tasks（`idx_tasks_event_delivery_unique`）。
  *     why —— opener 是 `withSerializableTaskExecution`。removeWhen —— 同上。
- *   modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts: 1
+ *   modules/task-execution/infrastructure/taskRouteOperations.ts: 1
  *     :814 taskCollaborators。why —— `withPostgresqlTaskAggregateTransaction`（事务头对 task 行
  *       取 `for update`），且插入前先整体 `delete` 同任务的成员行。removeWhen —— 那两条前提任一
  *       消失时重判。

@@ -1,5 +1,5 @@
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-298 — task detail derives a minimal webhook source link from the task's
 // own frozen context. Raw context remains private, historical flat rows are

@@ -375,12 +375,12 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   // 判），它对 `canViewResource` 的依赖随之消失。上一刀记的「过渡态净增 2」回落了一条；
   // 另一条（`getWorkflow`）SQLite 侧的 `assertManualExecutionAllowed` 还在用，随那一刀走。
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：`workflowSyncPreview` 两个引擎合一后，
-  // 共用实现住在 `postgresqlTaskRouteOperations.ts` 里，于是这条边在那个文件上**新出现**。
+  // 共用实现住在 `taskRouteOperations.ts` 里，于是这条边在那个文件上**新出现**。
   // SQLite 那一侧没有减少（它的 `syncWorkflow` 写侧还在用同一个）——**过渡态**，
   // 随写侧那一刀一起回落（同 `cross-context-observed-imports` 那笔 allowGrowth 的理由）。
   edge(
     'services/resourceAcl.ts',
-    'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    'modules/task-execution/infrastructure/taskRouteOperations.ts',
     ['canViewResource'],
     'shared task route resource visibility (preview)',
     REMOVE_OWNERS.taskExecutionResources,
@@ -483,7 +483,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   // RFC-359 AC-1（同上，第 6 刀）：共用预览在 PG 命名的文件里查工作流行；过渡态，随写侧那一刀回落。
   edge(
     'services/workflow.ts',
-    'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    'modules/task-execution/infrastructure/taskRouteOperations.ts',
     ['getWorkflow'],
     'shared task route Workflow lookup (preview)',
     REMOVE_OWNERS.taskExecutionResources,

@@ -4706,8 +4706,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:696b1cda7036fd2f4b81",
-        "import:9a65b5113ea0cb66f3c6"
+        "import:9a65b5113ea0cb66f3c6",
+        "import:e29b86c5367d5d7c187a"
       ],
       "context": "collaboration",
       "dataClass": "metadata",
@@ -4716,16 +4716,16 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:696b1cda7036fd2f4b81",
-            "import:9a65b5113ea0cb66f3c6"
+            "import:9a65b5113ea0cb66f3c6",
+            "import:e29b86c5367d5d7c187a"
           ],
           "fieldPath": "$method:hasOpenForNodeRun.$parameter:input.nodeRunId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:696b1cda7036fd2f4b81",
-            "import:9a65b5113ea0cb66f3c6"
+            "import:9a65b5113ea0cb66f3c6",
+            "import:e29b86c5367d5d7c187a"
           ],
           "fieldPath": "$method:hasOpenForNodeRun.$parameter:input.taskId",
           "type": "string"
@@ -4737,16 +4737,16 @@
         },
         {
           "consumerEdgeIds": [
-            "import:696b1cda7036fd2f4b81",
-            "import:9a65b5113ea0cb66f3c6"
+            "import:9a65b5113ea0cb66f3c6",
+            "import:e29b86c5367d5d7c187a"
           ],
           "fieldPath": "$method:latestClosedForNodeRun.$parameter:input.nodeRunId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:696b1cda7036fd2f4b81",
-            "import:9a65b5113ea0cb66f3c6"
+            "import:9a65b5113ea0cb66f3c6",
+            "import:e29b86c5367d5d7c187a"
           ],
           "fieldPath": "$method:latestClosedForNodeRun.$parameter:input.taskId",
           "type": "string"
@@ -4795,8 +4795,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:696b1cda7036fd2f4b81",
-            "import:9a65b5113ea0cb66f3c6"
+            "import:9a65b5113ea0cb66f3c6",
+            "import:e29b86c5367d5d7c187a"
           ],
           "fieldPath": "$method:reopen.$parameter:input.occurredAt",
           "type": "number"
@@ -4810,8 +4810,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:696b1cda7036fd2f4b81",
-            "import:9a65b5113ea0cb66f3c6"
+            "import:9a65b5113ea0cb66f3c6",
+            "import:e29b86c5367d5d7c187a"
           ],
           "fieldPath": "$method:reopen.$parameter:input.taskId",
           "type": "string"
@@ -4852,15 +4852,15 @@
       "productionConsumers": [
         {
           "context": "task-execution",
-          "edgeId": "import:696b1cda7036fd2f4b81",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
-        },
-        {
-          "context": "task-execution",
           "edgeId": "import:9a65b5113ea0cb66f3c6",
           "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:e29b86c5367d5d7c187a",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -8870,8 +8870,8 @@
         "import:4bfc322fdf6e54abad56",
         "import:70048a417014b7a273ec",
         "import:b4f584cdff29e8b03ffc",
-        "import:ee4052e939f76db203e4",
-        "import:fd588ef079a3308acfbf"
+        "import:e5f00e57c366d14491b0",
+        "import:ee4052e939f76db203e4"
       ],
       "context": "collaboration",
       "dataClass": "metadata",
@@ -8896,7 +8896,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:buildClarifyQueueContext.$parameter:input.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
@@ -8920,7 +8920,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:buildClarifyQueueContext.$parameter:input.iteration",
           "type": "number"
@@ -8942,8 +8942,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:buildClarifyQueueContext.$parameter:input.taskId",
           "type": "string"
@@ -8970,7 +8970,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:buildReviewPromptContext.$parameter:input.appHome",
           "type": "string"
@@ -8980,7 +8980,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:buildReviewPromptContext.$parameter:input.iteration",
           "type": "number"
@@ -8992,8 +8992,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:buildReviewPromptContext.$parameter:input.taskId",
           "type": "string"
@@ -9044,7 +9044,7 @@
         {
           "consumerEdgeIds": [
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:dismissOpenClarifyParksForAutonomous.$parameter:input.mode",
           "type": "string"
@@ -9056,8 +9056,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:dismissOpenClarifyParksForAutonomous.$parameter:input.taskId",
           "type": "string"
@@ -9084,7 +9084,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:dispatchReviewNode.$parameter:input.appHome",
           "type": "string"
@@ -9103,7 +9103,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:dispatchReviewNode.$parameter:input.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
@@ -9153,8 +9153,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:dispatchReviewNode.$parameter:input.executionContext.token.taskId",
           "type": "string"
@@ -9164,7 +9164,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:dispatchReviewNode.$parameter:input.iteration",
           "type": "number"
@@ -9175,7 +9175,7 @@
             "import:28a0269bd3af1c50a75b",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:dispatchReviewNode.$parameter:input.node",
           "type": "z.infer<typeof WorkflowNodeSchema>"
@@ -9202,8 +9202,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:dispatchReviewNode.$parameter:input.taskId",
           "type": "string"
@@ -9233,7 +9233,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:dispatchReviewNode.$return.message",
           "type": "string"
@@ -9242,7 +9242,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:dispatchReviewNode.$return.summary",
           "type": "string"
@@ -9251,7 +9251,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:getNodeClarifyDirective.$parameter:input.nodeId",
           "type": "string"
@@ -9273,8 +9273,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:getNodeClarifyDirective.$parameter:input.taskId",
           "type": "string"
@@ -9300,7 +9300,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:inspectCrossClarify.$parameter:input.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
@@ -9350,8 +9350,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:inspectCrossClarify.$parameter:input.executionContext.token.taskId",
           "type": "string"
@@ -9360,7 +9360,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:inspectCrossClarify.$parameter:input.nodeRunId",
           "type": "string"
@@ -9372,8 +9372,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:inspectCrossClarify.$parameter:input.taskId",
           "type": "string"
@@ -9397,7 +9397,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:isTaskClarifySuppressed.$parameter:input.nodeId",
           "type": "string"
@@ -9419,8 +9419,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:isTaskClarifySuppressed.$parameter:input.taskId",
           "type": "string"
@@ -9499,8 +9499,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.executionContext.token.taskId",
           "type": "string"
@@ -9520,7 +9520,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.frame.iteration",
           "type": "number"
@@ -9537,7 +9537,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.iteration",
           "type": "number"
@@ -9547,7 +9547,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.kind",
           "type": "'self'"
@@ -9576,8 +9576,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.taskId",
           "type": "string"
@@ -9648,8 +9648,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.executionContext.token.taskId",
           "type": "string"
@@ -9669,7 +9669,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.frame.iteration",
           "type": "number"
@@ -9686,7 +9686,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.kind",
           "type": "'cross'"
@@ -9722,8 +9722,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.taskId",
           "type": "string"
@@ -9738,7 +9738,7 @@
         {
           "consumerEdgeIds": [
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:openAgentClarify.$return.intermediaryNodeRunId",
           "type": "string"
@@ -9747,7 +9747,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:resolveBorrowForNode.$parameter:input.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
@@ -9757,7 +9757,7 @@
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:resolveBorrowForNode.$parameter:input.iteration",
           "type": "number"
@@ -9766,7 +9766,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:4bfc322fdf6e54abad56",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0"
           ],
           "fieldPath": "$method:resolveBorrowForNode.$parameter:input.nodeId",
           "type": "string"
@@ -9778,8 +9778,8 @@
             "import:4bfc322fdf6e54abad56",
             "import:70048a417014b7a273ec",
             "import:b4f584cdff29e8b03ffc",
-            "import:ee4052e939f76db203e4",
-            "import:fd588ef079a3308acfbf"
+            "import:e5f00e57c366d14491b0",
+            "import:ee4052e939f76db203e4"
           ],
           "fieldPath": "$method:resolveBorrowForNode.$parameter:input.taskId",
           "type": "string"
@@ -9900,15 +9900,15 @@
         },
         {
           "context": "task-execution",
-          "edgeId": "import:ee4052e939f76db203e4",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#$file"
+          "edgeId": "import:e5f00e57c366d14491b0",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         },
         {
           "context": "task-execution",
-          "edgeId": "import:fd588ef079a3308acfbf",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
+          "edgeId": "import:ee4052e939f76db203e4",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -10667,7 +10667,7 @@
       },
       "consumerEdgeIds": [
         "import:22a060bcf5ef27ab6212",
-        "import:72eb5fd6cc53bff83442"
+        "import:24b7af43028bbfebe3f8"
       ],
       "context": "collaboration",
       "dataClass": "metadata",
@@ -10684,7 +10684,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:completeApproved.$parameter:input.nodeRunId",
           "type": "string"
@@ -10692,7 +10692,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:completeApproved.$parameter:input.occurredAt",
           "type": "number"
@@ -10700,7 +10700,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:completeApproved.$parameter:input.taskId",
           "type": "string"
@@ -10720,7 +10720,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:inspect.$parameter:input.nodeRunId",
           "type": "string"
@@ -10728,7 +10728,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:inspect.$parameter:input.taskId",
           "type": "string"
@@ -10771,7 +10771,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:inspect.$return.$variant:0.reviewIteration",
           "type": "number"
@@ -10788,7 +10788,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:inspect.$return.$variant:0.versionIndex",
           "type": "number"
@@ -10808,7 +10808,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:unapprove.$parameter:input.nodeRunId",
           "type": "string"
@@ -10816,7 +10816,7 @@
         {
           "consumerEdgeIds": [
             "import:22a060bcf5ef27ab6212",
-            "import:72eb5fd6cc53bff83442"
+            "import:24b7af43028bbfebe3f8"
           ],
           "fieldPath": "$method:unapprove.$parameter:input.taskId",
           "type": "string"
@@ -10863,9 +10863,9 @@
         },
         {
           "context": "task-execution",
-          "edgeId": "import:72eb5fd6cc53bff83442",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
+          "edgeId": "import:24b7af43028bbfebe3f8",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -14094,9 +14094,9 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:39b837e82913d484bb16",
         "import:42e5f91985a55d2e9ad3",
         "import:7ed923683179506285e6",
+        "import:8f4d3d0942212798fd0c",
         "import:c30ce29cb74d0c6d47aa"
       ],
       "context": "collaboration",
@@ -14112,12 +14112,6 @@
       "productionConsumers": [
         {
           "context": "task-execution",
-          "edgeId": "import:39b837e82913d484bb16",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
-        },
-        {
-          "context": "task-execution",
           "edgeId": "import:42e5f91985a55d2e9ad3",
           "file": "packages/backend/src/modules/task-execution/composition/taskClarifyDirectiveRoutes.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskClarifyDirectiveRoutes.ts#$file"
@@ -14127,6 +14121,12 @@
           "edgeId": "import:7ed923683179506285e6",
           "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:8f4d3d0942212798fd0c",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         },
         {
           "context": "legacy",
@@ -45682,8 +45682,8 @@
       "consumerEdgeIds": [
         "import:2b00e36c99d5b6751c24",
         "import:3b49e4cc59dba49edde8",
-        "import:74230d814389db0a96d2",
         "import:9ec8d7cb92d07a0009d3",
+        "import:a91df96b342dc871cbd2",
         "import:bdfa34e226c762309da6",
         "import:e8a4132e0a20bd59b8f0"
       ],
@@ -45720,8 +45720,8 @@
         {
           "consumerEdgeIds": [
             "import:3b49e4cc59dba49edde8",
-            "import:74230d814389db0a96d2",
-            "import:9ec8d7cb92d07a0009d3"
+            "import:9ec8d7cb92d07a0009d3",
+            "import:a91df96b342dc871cbd2"
           ],
           "name": "loadOwnerIdentities",
           "signatureDigest": "sha256:365da8531a5c5550e9b8caf455f17b4e848ca23d6cd8840ac2caeba79fcee3a5"
@@ -45742,16 +45742,16 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts#$file"
         },
         {
-          "context": "task-execution",
-          "edgeId": "import:74230d814389db0a96d2",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
-        },
-        {
           "context": "legacy",
           "edgeId": "import:9ec8d7cb92d07a0009d3",
           "file": "packages/backend/src/services/ownerIdentity.ts",
           "ownerEntryId": "owner:packages/backend/src/services/ownerIdentity.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:a91df96b342dc871cbd2",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         },
         {
           "context": "task-execution",
@@ -74791,7 +74791,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:4d24fb166a62f0ded862",
+        "import:567d3fc8036f54f4d309",
         "import:6bf62bbba05495414805"
       ],
       "context": "memory",
@@ -74834,9 +74834,9 @@
       "productionConsumers": [
         {
           "context": "task-execution",
-          "edgeId": "import:4d24fb166a62f0ded862",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
+          "edgeId": "import:567d3fc8036f54f4d309",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         },
         {
           "context": "legacy",
@@ -109380,7 +109380,7 @@
         "import:2eca83b560488a3f0c27",
         "import:43255f578eedae8ef03e",
         "import:4aa235ff209007de7fd5",
-        "import:e1c7f8d659a1d25dcc4c"
+        "import:a467690a9ac9425287a1"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -109391,7 +109391,7 @@
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:0.kind",
           "type": "'workflow-launch'"
@@ -109400,7 +109400,7 @@
           "consumerEdgeIds": [
             "import:2eca83b560488a3f0c27",
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:0.workflow.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
@@ -109409,7 +109409,7 @@
           "consumerEdgeIds": [
             "import:2eca83b560488a3f0c27",
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:0.workflow.id",
           "type": "string"
@@ -109418,7 +109418,7 @@
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:0.workflow.name",
           "type": "string"
@@ -109426,7 +109426,7 @@
         {
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:0.workflow.version",
           "type": "number"
@@ -109442,7 +109442,7 @@
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:1.kind",
           "type": "'agent-injection'"
@@ -109466,7 +109466,7 @@
             "import:2eca83b560488a3f0c27",
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:1.root",
           "type": "Pick<\n  Agent,\n  | 'id'\n  | 'name'\n  | 'description'\n  | 'outputs'\n  | 'outputKinds'\n  | 'branchPorts'\n  | 'inputs'\n  | 'outputWrapperPortNames'\n  | 'role'\n  | 'syncOutputsOnIterate'\n  | 'runtime'\n  | 'permission'\n  | 'skills'\n  | 'dependsOn'\n  | 'mcp'\n  | 'plugins'\n  | 'frontmatterExtra'\n  | 'bodyMd'\n  | 'schemaVersion'\n  | 'createdAt'\n  | 'updatedAt'\n>"
@@ -109482,7 +109482,7 @@
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:2.kind",
           "type": "'call-workflow'"
@@ -109490,7 +109490,7 @@
         {
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:2.nodeId",
           "type": "string"
@@ -109506,7 +109506,7 @@
           "consumerEdgeIds": [
             "import:2eca83b560488a3f0c27",
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:2.workflow.definition",
           "type": "z.infer<typeof WorkflowDefinitionSchema>"
@@ -109515,7 +109515,7 @@
           "consumerEdgeIds": [
             "import:2eca83b560488a3f0c27",
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:2.workflow.id",
           "type": "string"
@@ -109524,7 +109524,7 @@
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:2.workflow.name",
           "type": "string"
@@ -109532,7 +109532,7 @@
         {
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:2.workflow.version",
           "type": "number"
@@ -109541,7 +109541,7 @@
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:3.kind",
           "type": "'call-workgroup'"
@@ -109549,7 +109549,7 @@
         {
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:3.nodeId",
           "type": "string"
@@ -109564,7 +109564,7 @@
         {
           "consumerEdgeIds": [
             "import:43255f578eedae8ef03e",
-            "import:e1c7f8d659a1d25dcc4c"
+            "import:a467690a9ac9425287a1"
           ],
           "fieldPath": "$variant:3.workgroup",
           "type": "Pick<\n  Workgroup,\n  | 'id'\n  | 'name'\n  | 'description'\n  | 'instructions'\n  | 'mode'\n  | 'outputContract'\n  | 'leaderMemberId'\n  | 'switches'\n  | 'maxRounds'\n  | 'completionGate'\n  | 'clarifyBudget'\n  | 'fanOut'\n  | 'members'\n  | 'version'\n>"
@@ -109596,9 +109596,9 @@
         },
         {
           "context": "task-execution",
-          "edgeId": "import:e1c7f8d659a1d25dcc4c",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
+          "edgeId": "import:a467690a9ac9425287a1",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -115249,7 +115249,7 @@
       },
       "consumerEdgeIds": [
         "import:4df8104a9c1a569f81a8",
-        "import:f9ebfe680cc057b1bd15"
+        "import:fc81991e44a5fd839a0c"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -115276,9 +115276,9 @@
         },
         {
           "context": "task-execution",
-          "edgeId": "import:f9ebfe680cc057b1bd15",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
+          "edgeId": "import:fc81991e44a5fd839a0c",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -159680,7 +159680,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b79e2acaab0c7047dd02c9743d182ec639da5e7d164f812657b1f598c86169a9",
+  "sourceDigest": "sha256:b6bc79a84eed453b9ab4f4028a2843c6311a287005b03da8764c588653fa467e",
   "targetContexts": [
     "collaboration",
     "development-automation",

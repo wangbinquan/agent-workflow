@@ -20,7 +20,7 @@
 // 修法：来源→存储值的映射进 domain（`taskListOriginMatches`，单一事实源），两个
 // provider 的列表查询都按它下推到 SQL；目录源只做校验与透传。
 
-import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   TASK_LIST_ORIGINS,

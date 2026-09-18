@@ -1,7 +1,7 @@
 // RFC-359 AC-1（第 9 刀）—— `retry` 的**唯一**测试装配点。
 //
 // 为什么存在：`retry` 曾经有两份实现（`services/task.ts` 的 `retryNode` 与
-// `postgresqlTaskRouteOperations.ts` 的那份），各自有测试、各自都绿，谁也没跟谁比过。
+// `taskRouteOperations.ts` 的那份），各自有测试、各自都绿，谁也没跟谁比过。
 // 合成一份之后行为套件也只该有一个装配点——否则下一次分叉会从测试侧长出来（同修复那一刀）。
 //
 // 它把共用实现包成既有套件熟悉的调用形状，并把两个端口（复活 / 级联取消）暴露成可注入项：
@@ -16,7 +16,7 @@ import { buildActor, type Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import { retryNodeProjection } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { retryNodeProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { retryRepositoryPreparation, type StartTaskDeps } from '@/services/task'
 import { runTaskWithRealTestTopology } from './taskExecutionTestTopology'
 import type { Task } from '@agent-workflow/shared'

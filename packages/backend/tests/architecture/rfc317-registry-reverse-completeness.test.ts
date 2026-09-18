@@ -99,7 +99,7 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
     // 读——frontier 不再按列直读（pass-2 已删），链上的活消费者是 stuckTaskDetector。
     // RFC-359 AC-1（第 9 刀）：`retryCascade` 列转成同一形态。`retry` 的两份实现合一后，
     // 按列直读的那一处（`services/task.ts` 的 `retryNode`）随整份实现删除，留下的那份
-    // （`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`）读的是访问器
+    // （`taskRouteOperations.ts` 的 `retryNodeProjection`）读的是访问器
     // `nodeKindParticipatesInRetryCascade`——链两半都活着：访问器确实读这一列
     // （node-kind-behavior.ts:230），它自己也确实有声明文件之外的生产消费者。
     keyExemptions: {

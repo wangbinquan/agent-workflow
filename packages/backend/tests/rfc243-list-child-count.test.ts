@@ -13,7 +13,7 @@
 // ever diverge, the arrow starts promising rows the viewer cannot open.
 
 import { describe, expect, test } from 'bun:test'
-import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { Database } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'

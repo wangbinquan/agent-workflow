@@ -137,10 +137,7 @@ describe('RFC-349 single-aggregate task transaction', () => {
     )
     // 跨聚合不变量仍然必须留在 SERIALIZABLE 上；别把这次替换扩大成全面降级。
     const routes = readFileSync(
-      resolve(
-        backendRoot,
-        'src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
-      ),
+      resolve(backendRoot, 'src/modules/task-execution/infrastructure/taskRouteOperations.ts'),
       'utf8',
     )
     expect(routes).toContain('withSerializableTaskExecution(')

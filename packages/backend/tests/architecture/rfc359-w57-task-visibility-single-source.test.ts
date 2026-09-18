@@ -10,7 +10,7 @@
 //   3. `modules/collaboration/infrastructure/collaborationTaskAccess.ts`
 //   4. `modules/collaboration/infrastructure/reviewTaskAccess.ts`（与 3 **逐字相同**）
 //   5. `modules/task-execution/infrastructure/taskOverviewQuery.ts`（预编译占位符形态）
-//   6. `modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`
+//   6. `modules/task-execution/infrastructure/taskRouteOperations.ts`
 //      —— **provider 专属**的那一份，正是本 RFC 要消灭的形状
 //   7. `modules/task-execution/infrastructure/taskAuthorization.ts`（已先行收敛）
 //

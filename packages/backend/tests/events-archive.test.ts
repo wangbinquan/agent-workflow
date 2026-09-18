@@ -13,7 +13,7 @@ import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive
 import {
   nodeRunEventsProjection,
   nodeRunStdoutProjection,
-} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+} from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 
 interface Harness {
   db: ProviderNeutralDatabase

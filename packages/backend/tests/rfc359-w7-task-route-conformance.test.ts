@@ -2,7 +2,7 @@
 //
 // # 这一对**不合**（判定见文件末尾的账本注释，逐方法结论写在 plan.md 的 W7 段）
 //
-// 成对账本上它记着 `sqliteTaskRouteOperations.ts`(292) / `postgresqlTaskRouteOperations.ts`(2048)，
+// 成对账本上它记着 `sqliteTaskRouteOperations.ts`(292) / `taskRouteOperations.ts`(2048)，
 // 看上去是「薄壳 + 重写」的典型形态。逐方法核对后不是：
 //
 //   · SQLite 那 292 行**不是**实现，是一层转发；它背后的实现是 `services/task.ts`（7,742 行，
@@ -28,7 +28,7 @@
 // # B 段只收「架构不同」，不收「一侧更弱」
 //
 // 第一轮对拍照出的**弱侧欠账**已按强侧抬齐并搬进 A 段（改的都在
-// `postgresqlTaskRouteOperations.ts` 内）：
+// `taskRouteOperations.ts` 内）：
 //   · `assertNotBuiltin`：内置工作流在 PG 上可被手动执行 / 被 sync（判据缺口账本 01a / 01b）；
 //   · `call-row-finalized`：父调用节点已终结的子任务在 PG 上仍可 retry（判据缺口账本 02）；
 //   · `workflowName`：PG 的任务投影与列表投影**恒为 null**，详情页 / 列表 / sync 预览的工作流名

@@ -102,7 +102,7 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
     // 「daemon 重启，可恢复」渲染——而调用方拿到的却是一个 409。退役那份实现同一处
     // 是从 `pending` 收场的（它的中转态就是 `pending`），所以不需要这个开关；
     // 中转态换成 `interrupted` 就必须补上。目标态 `failed` 本身是终态，`isRevival` 为 false。
-    file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
     count: 2,
     rewrites:
       'RFC-098 WP-9 的 snapshot-lost / live-child-survived 升级（终态→failed，写 error_summary 让用户看得见「基线没了」而不是只拿一个 409）；以及 RFC-359 第 9 刀的 retry-child-cancel-failed 收场（interrupted→failed，同样是让失败可见而不是卡在可恢复态）。',

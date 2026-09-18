@@ -113,13 +113,7 @@ describe('RFC-292 trigger namespace source locks', () => {
     }
     const task = readFileSync(resolve(BACKEND_SRC, 'services/task.ts'), 'utf8')
     const shared = readFileSync(
-      resolve(
-        BACKEND_SRC,
-        'modules',
-        'task-execution',
-        'infrastructure',
-        'postgresqlTaskRouteOperations.ts',
-      ),
+      resolve(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'taskRouteOperations.ts'),
       'utf8',
     )
     // 详情投影：两条路各自都要把冻结的 trigger JSON **只**折成派生链接。

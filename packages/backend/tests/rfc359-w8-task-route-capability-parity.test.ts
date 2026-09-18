@@ -26,7 +26,7 @@
 //     之前，而前置门（trigger 预检、终结栅栏）按 SQLite 的口径必须落在准入 CAS 之前。
 //     兜底再强也只能在任务已经被改坏之后才发言。
 //   · ③ 根本不经过 resume。
-// 换句话说：下面锁的全是 `postgresqlTaskRouteOperations.ts` 自己必须保证的 durable 状态
+// 换句话说：下面锁的全是 `taskRouteOperations.ts` 自己必须保证的 durable 状态
 // 与副作用顺序。
 //
 // # 断言口径

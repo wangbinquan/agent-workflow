@@ -42,7 +42,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
  */
 const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
   'modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 2,
+  'modules/task-execution/infrastructure/taskRouteOperations.ts': 2,
   'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts': 3,
   'modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
@@ -64,7 +64,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,
   'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts': 1,
-  // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 / 5 刀）：`postgresqlTaskRouteOperations.ts`
+  // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 / 5 刀）：`taskRouteOperations.ts`
   // **整行销账**（2 → 1 → 0）。第 4 刀删掉 PG 内联的 `replaceTaskMembers`（那处
   // `update(tasks).set({ownerUserId})` 随成员替换走共用的 `updateTaskMembersLocked`）；
   // 第 5 刀删掉 PG 内联的 `deleteTask`，它那处沿父链重算 `branch_started_at`

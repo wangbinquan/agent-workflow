@@ -162,10 +162,25 @@ export function declaredPorts(source: string): string[] {
 }
 
 /** 这个文件有没有把某个值绑定到端口类型上（= 它实现了这个端口）。 */
+/**
+ * 这个文件**实现**了这个端口吗。
+ *
+ * RFC-359 AC-1（命名债收尾 §5hj）**收紧**：原判据认任何 `: Port`，于是
+ * **依赖面里的一个字段声明**（`readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand`）
+ * 也被当成实现。那是**消费**端口，不是实现它——`sqliteTaskRouteOperations.ts` 就是这么被判成
+ * `RepositoryPreparationRetryCommand` 的 SQLite 实现的，再与真正的 PG 实现配成一对**假适配器对**
+ *（而且没有对拍，直接顶穿 `NAME_BLIND_UNVERIFIED_COUNT` 这条只降不升的棘轮）。
+ *
+ * 收紧后只认三种「这里产出一个该端口的值」的写法：
+ *   · 返回类型位（`): Port`）——工厂函数，本仓的主流写法；
+ *   * `const/let x: Port = …`——直接标注的值；
+ *   · `implements Port` / `extends Port`——类与接口继承。
+ * 依赖面字段（`name: Port` / `readonly name: Port`）不再算数。
+ */
 export function implementsPort(source: string, port: string): boolean {
   if (!source.includes(port)) return false
   return new RegExp(
-    `(?::\\s*(?:readonly\\s+)?${port}\\b)|(?:implements\\s+[^{]*\\b${port}\\b)|(?:extends\\s+${port}\\b)`,
+    `(?:\\)\\s*:\\s*${port}\\b)|(?:\\b(?:const|let|var)\\s+[\\w$]+\\s*:\\s*${port}\\s*=)|(?:implements\\s+[^{]*\\b${port}\\b)|(?:extends\\s+${port}\\b)`,
   ).test(source)
 }
 
@@ -273,18 +288,11 @@ export function renderPair(pair: CapabilityPair): string {
  * 状态位 `verified by …` = 存在一个测试文件对两侧各有至少一条值 import；否则 `unverified`。
  */
 export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
-  // RFC-359 AC-1（命名债收尾 §5hj）**新增一对，是判据恢复视力、不是新长出的分叉**。
-  //
-  // 成因：`providerSideOf` 按「文件里有没有 provider 锚点」判边（import 锚 ∪ 路径锚），
-  // 两边都命中就返回 `null`（判不出边 ⇒ 整个文件退出配对）。`sqliteTaskExecutionRuntimeParticipants.ts`
-  // 此前 import 的是 `postgresqlChildTaskLifecycleParticipant`（共用实现，只是名字带前缀），
-  // 于是它**同时命中 sqlite 与 postgresql 两个锚**，被判成 `null`、整份退出本账本。
-  // 四份共用实现去掉前缀之后，它干净地落回 sqlite 侧，本账本这才第一次看见它参与的那些对。
-  //
-  // 这一对（`ActiveTaskExecutionParticipant`）本来就存在、也本来就有对拍（`helpers/retryEngine.ts`），
-  // 只是被上面那个「两边都像」的短路藏了起来。**记一条判据教训**：用「文件里提到谁」判边时，
-  // 一个中立实现叫了 provider 的名字，会让引用它的**另一侧**文件整份从账本里消失。
-  'modules/task-execution/application/ports/taskExecutionRuntimeParticipants.ts:ActiveTaskExecutionParticipant: modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts + modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts — verified by helpers/retryEngine.ts',
+  // RFC-359 AC-1（命名债收尾 §5hj）**撤回一条**：上一刀往这里加过一条
+  // `ActiveTaskExecutionParticipant`，当时判成「判据恢复视力」。**那个判断是错的**——
+  // 它是 `implementsPort` 松判据的假阳性：原判据认任何 `: Port`，于是**依赖面里的字段声明**
+  //（消费端口）也被当成实现。判据收紧成「只认返回类型位 / `const x: Port =` / implements /
+  // extends」之后，那一条与另外 4 条 W5 交集一起消失——它们从来就不是成对适配器。
   // 灾难恢复两对：SQLite 侧的文件名里**根本没有引擎前缀**（`legacyPlatformRecoveryAdapter`），
   // 且两侧不同目录——按名字配对的账本永远看不到它们。
   // RFC-359 W8 已补上行为对拍（备份收据形状 / 暂存往返 / 409 冲突 / 暂存中途失败 /
@@ -299,8 +307,9 @@ export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
  * RFC-359 W12：代码矩阵与度量两对已合一，两个引擎共用有界批量算法与同一 composer。
  * W8 对拍继续驱动实际查询，保留计数数值化、拒绝结果和空矩阵/扩容时的恒定语句数断言。
  */
-// RFC-359 AC-1（命名债收尾 §5hj）2 → 3：见上面那条新增项的成因——判据恢复视力，不是新分叉。
-export const NAME_BLIND_PAIR_COUNT = 3
+// RFC-359 AC-1（命名债收尾 §5hj）3 → 2：上一刀那条 `ActiveTaskExecutionParticipant` 撤回
+// （`implementsPort` 的假阳性，见上面那段），回到只剩灾难恢复那两对的真实状态。
+export const NAME_BLIND_PAIR_COUNT = 2
 
 /** 其中「连一份对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const NAME_BLIND_UNVERIFIED_COUNT = 0
@@ -313,7 +322,10 @@ export const NAME_BLIND_UNVERIFIED_COUNT = 0
  * 而这个数是**交集对数**、不是语料规模。留个字面量在这里会让它被记成一条假的语料下限
  *（实测：改成 `toBe(4)` 当场把 minCorpusFiles 从 1 顶到 4）。
  */
-export const W5_INTERSECTION_PAIR_COUNT = 4
+// RFC-359 AC-1（命名债收尾 §5hj）4 → 0：那 4 条也是 `implementsPort` 的假阳性
+// （`sqliteTaskExecutionRuntimeParticipants` 只是在依赖面上声明了这些端口的字段，不是实现它们）。
+// 判据收紧后交集回到 0——这才是它一直以来的真实值。
+export const W5_INTERSECTION_PAIR_COUNT = 0
 
 /**
  * 按端口类型发现的**全部**能力对数（含 W5 也看得见的那 8 对）。

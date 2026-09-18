@@ -1077,7 +1077,7 @@
         "import:32c80f7bbec8ec08d008",
         "import:3bdd0a3f60f431a57790",
         "import:5cd2429ca9f560a06c20",
-        "import:a70daf0e8300162a804d",
+        "import:9cd1ecd28bee8f231dc8",
         "import:e49c91328fdbaa749ab7"
       ],
       "exportedSymbols": [
@@ -1574,11 +1574,11 @@
         "import:148598fd0873a3d483b9",
         "import:8971d64f80968c97c8e8",
         "import:ba6798542bde21eb8907",
+        "import:bcfb11294fec171af049",
         "import:c5257d39d96f7ff825ff",
         "import:d332b424b409118c6bbd",
         "import:e5c904c89f9aedea7d19",
-        "import:f3c487b0eac753a32fce",
-        "import:fe663f8e52bc4c04641e"
+        "import:f3c487b0eac753a32fce"
       ],
       "exportedSymbols": [
         "assertTriggerPreflight",
@@ -1636,7 +1636,7 @@
         "import:0fb88f3544e800a5e388",
         "import:172d50fef3cf7269e4b7",
         "import:1e1318c00e5a2ae13adb",
-        "import:200c3dc8f20a352edee7",
+        "import:2c1f247af58dfc9c0718",
         "import:32a7c14ea579504f17e1",
         "import:3f1fe872794501929a62",
         "import:4a67c1e929e15639fb62",
@@ -1938,9 +1938,9 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:2de860cba69cb96c9546",
         "import:35ee74637cf6a94a4412",
         "import:77be69b117668ea8300a",
-        "import:79fd91c6ac422fef248e",
         "import:7cf862388c769249332d",
         "import:88b234d1b6b3837c6ebe",
         "import:95e07eaae23a1b35374e"
@@ -2359,19 +2359,19 @@
     {
       "boundaryEdgeIds": [
         "import:1752c3fec470dee560f6",
+        "import:26c2ed0b99c3448842ac",
         "import:2d2f5d3d9b8adb8c0c95",
         "import:2ee8db50244e2d468365",
         "import:3342e9645c9792a09c40",
         "import:8e569ddadff3d51b6e9a",
-        "import:95a7e13b34f4cb5f375b",
-        "import:9847b98735db84703ad4",
+        "import:9c3869023ab24f9e9d6b",
         "import:a11dc495c174c3dd4863",
-        "import:b5d44617eeddcf857eee",
         "import:d28779cca316098b7600",
         "import:d62f290f7dceec98885e",
         "import:d9127123cdef27f883d8",
         "import:e05ad997158ac33d4288",
-        "import:edd5ec62385afe42706d"
+        "import:edd5ec62385afe42706d",
+        "import:f0d6046ef38ed1de1868"
       ],
       "exportedSymbols": [
         "PlannedNodeRunRollbackTarget",
@@ -2448,7 +2448,7 @@
     {
       "boundaryEdgeIds": [
         "import:5b30eee8a2e36ca0b4a4",
-        "import:c547ca49cc940e2c334d"
+        "import:7ced36a6d99c2aee4672"
       ],
       "exportedSymbols": [
         "PromptStorage",
@@ -3029,7 +3029,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:a4d52c84b1b4996c6949"
+        "import:67cbd56846b4247fb8b0"
       ],
       "exportedSymbols": [
         "RepoForKey",
@@ -3065,13 +3065,13 @@
         "import:25deaaafbd1db91d2ad5",
         "import:2d09b8b47cc2de192282",
         "import:2d63b721547484271a65",
-        "import:34feec27d1e7a41a11d4",
         "import:36208ac1b75a47c06dbc",
         "import:3f35d2c9577e6f3f0408",
         "import:4670e3e0fba296cd1cca",
         "import:5699b094e3f16fefbf5e",
         "import:5e3c73beac359f1fc7d3",
         "import:62f60319640475124d8e",
+        "import:65fea4d35b2a08eec274",
         "import:6c3ec33a8e3fa135a9a6",
         "import:6cee441cb150cfaa0ed2",
         "import:6ddc62a9fefbc7c3d891",
@@ -3462,8 +3462,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:5ec798da9b681284d1dc",
-        "import:b502a89d2de354e73810"
+        "import:157f3a0eee317575ed41",
+        "import:64165b0fcca5796751e9"
       ],
       "exportedSymbols": [
         "ReviewRoundTiming",
@@ -5153,6 +5153,7 @@
       "boundaryEdgeIds": [
         "import:0914b94109309ba4de84",
         "import:38768ff1ccb8e083d344",
+        "import:3f12c85cd8f26336b9a7",
         "import:4d3215216440a2a42aee",
         "import:559760e71bc2afc03569",
         "import:6222591edf7ab4185f0c",
@@ -5190,6 +5191,7 @@
     {
       "boundaryEdgeIds": [
         "import:00900c316b35de4079e1",
+        "import:0291a25c9caf8fbf0a09",
         "import:0638db74ff3f8dfe034a",
         "import:0a9581d0aef59eb57717",
         "import:0b34cb2312a6b6708fe7",
@@ -5218,6 +5220,7 @@
         "import:5b606183aa8ac08a98fa",
         "import:5b61552fce6c72aa3783",
         "import:5f7f6d2675fbf43a322d",
+        "import:641188b172a245f73a43",
         "import:64746f05d652dbf0ec5c",
         "import:65e97c8a6f12eaa82b01",
         "import:6695adac0aea33d43c69",
@@ -5233,6 +5236,7 @@
         "import:97c531fe52763d6b60f8",
         "import:9b52076344e4d0aad288",
         "import:9fabe1c5d40f0886cfef",
+        "import:a0c485e85a34342c71fd",
         "import:a2b3e36a2be24b42b10d",
         "import:a5e82a1ac5a6bab9b85d",
         "import:a6c457f3889b48ccb192",
@@ -5247,7 +5251,7 @@
         "import:c31b46594670e78f8791",
         "import:c35a5bf56849c2bd96bc",
         "import:c7d2fef58587259c99c9",
-        "import:c85c6809159c9f65d090",
+        "import:c8a1c3024a577ff39c07",
         "import:c920441e58d6c83f5086",
         "import:cf5f570227949209b5ec",
         "import:d3878ef3405d8ba0d432",
@@ -5256,15 +5260,12 @@
         "import:d82791d6089f7ea1803a",
         "import:de17d18a53431aaefb1a",
         "import:e2108a9d295860cd209c",
-        "import:e229c7c4d249ca54b6c8",
         "import:f3ac5955c9cea167f6b8",
         "import:f4bbeed18f5ade6b0a66",
         "import:f85e59d321501b8d5c82",
         "import:f96695582381ac496ce2",
         "import:f9c0f42c30b13bf58133",
         "import:fb38b7958d8b4c8551ba",
-        "import:fde638536bf9785fab38",
-        "import:ff1cdec7a213b2cfa37d",
         "import:ffa4a1eec74d8b9f1819"
       ],
       "exportedSymbols": [
@@ -5461,14 +5462,14 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:17601512dd9aeaed5e23",
+        "import:5610745fdffd9c5c6c11",
         "import:56584bfddf18aed8607e",
         "import:5b3e497b08867a624a12",
-        "import:74bf4f478a541c44ad8d",
+        "import:7071bc02112630d485aa",
+        "import:9e2c49720513ba96898b",
         "import:b0320a3e61a1af5c6068",
-        "import:bd17391b1ee737bf420d",
-        "import:df189dbac11a61cd26d1",
-        "import:e4a970d41eea51b4b43e",
-        "import:fab7ac10dff524f60151"
+        "import:df189dbac11a61cd26d1"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/taskCollab.ts",
@@ -6165,10 +6166,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:7e434b15c5a46cd36efe",
         "import:a62165f141e79339620c",
         "import:cf2542962d358dfae239",
-        "import:eb8a3488d786d9a3fa72",
-        "import:f69d05165a4d98930ffa"
+        "import:eb8a3488d786d9a3fa72"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/workflow.ts",
@@ -6333,5 +6334,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b79e2acaab0c7047dd02c9743d182ec639da5e7d164f812657b1f598c86169a9"
+  "sourceDigest": "sha256:b6bc79a84eed453b9ab4f4028a2843c6311a287005b03da8764c588653fa467e"
 }

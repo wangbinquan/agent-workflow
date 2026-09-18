@@ -9,7 +9,7 @@
 //
 // 为什么只在 PostgreSQL 上炸：两侧写入方的计划形状不同。
 //   - SQLite   `services/taskDelete.ts` 写 `{ v: 2, …, directories: [...] }`         → 恒通过；
-//   - PostgreSQL `infrastructure/postgresqlTaskRouteOperations.ts` 写
+//   - PostgreSQL `infrastructure/taskRouteOperations.ts` 写
 //     `JSON.stringify({ v: 1, taskId, taskIds, worktrees })` —— **无 directories** → 恒 null。
 //
 // 用户可见后果（顺 `recoverInterruptedTaskDeletes` 代码确认过）：PG 上删任务中途崩溃后，
@@ -64,7 +64,7 @@ const WORKTREE = { repoPath: '/tmp/repo', worktreePath: '/tmp/wt' }
 // ---------------------------------------------------------------------------
 
 test('v1 计划（PG 形状：无 directories）能被解析，directories 按 members 推导出三个根', () => {
-  // `postgresqlTaskRouteOperations.ts` 的原样载荷：{ v, taskId, taskIds, worktrees }。
+  // `taskRouteOperations.ts` 的原样载荷：{ v, taskId, taskIds, worktrees }。
   const json = JSON.stringify({
     v: 1,
     taskId: 'task_root',

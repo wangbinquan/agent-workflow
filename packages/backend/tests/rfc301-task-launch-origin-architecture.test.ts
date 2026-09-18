@@ -160,13 +160,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：`services/multipartTaskStart.ts` 整份删除——
     // multipart 那条车道现在由**共用的** `launchMultipartTask` 声明（两个引擎同一处）。
     const sharedMultipart = readFileSync(
-      resolve(
-        BACKEND_SRC,
-        'modules',
-        'task-execution',
-        'infrastructure',
-        'postgresqlTaskRouteOperations.ts',
-      ),
+      resolve(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'taskRouteOperations.ts'),
       'utf8',
     )
 

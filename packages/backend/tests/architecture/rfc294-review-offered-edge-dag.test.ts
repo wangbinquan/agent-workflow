@@ -368,7 +368,7 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W9-E（物理恢复生成协议独立 RFC）',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
     to: 'memory',
     why: 'RFC-352 T2 把 `node_runs.injected_memories_json` 的解码器从 legacy `services/memoryInject.ts` 迁进 memory 并经 public/types 提供，于是这条本来就存在的依赖第一次以 offered 边出现在图里（此前是 legacy→legacy，不计跨域）。目标形态是 task-execution 经自己的 TaskMemoryInjectionPort 拿这份编解码，属 TE 侧 adapter 收口。',
     removeAfterWave:
@@ -555,6 +555,15 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    // RFC-359 AC-1（命名债收尾 §5hj）：`/api/tasks` 的实现与 **PG 绑定**拆成两个文件之后，
+    // 这条 offered 边两边都有——实现里的投影用 collaboration 的 public 参与者，
+    // 绑定里的工厂装配时也用。逐文件精确锁定的口径不变，只是从一条变两条。
     from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
     to: 'collaboration',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',

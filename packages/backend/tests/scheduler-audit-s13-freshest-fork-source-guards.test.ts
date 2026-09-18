@@ -48,7 +48,7 @@ const NODE_MECHANICS_SRC = readFileSync(
 const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')
 // RFC-359 AC-1（第 9 刀）：`retry` 合并后**唯一**的那一份实现（两个 provider 共用）。
 const RETRY_SRC = readFileSync(
-  join(SRC_ROOT, 'modules', 'task-execution', 'infrastructure', 'postgresqlTaskRouteOperations.ts'),
+  join(SRC_ROOT, 'modules', 'task-execution', 'infrastructure', 'taskRouteOperations.ts'),
   'utf-8',
 )
 // RFC-359 AC-1（第 8 刀）：修复原来有两份实现，这条 fork 探针盯的是退役那一份的
@@ -147,7 +147,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // the seed (`if (!wrapperRevivalTarget) targets.add(runRow.nodeId)`).
     //
     // RFC-359 AC-1（第 9 刀）改锚：`retry` 的两份实现合一，**留下的那一份**是
-    // `modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts` 的
+    // `modules/task-execution/infrastructure/taskRouteOperations.ts` 的
     // `retryNodeProjection`（两个 provider 共用），`services/task.ts` 的 `retryNode` 已整份删除。
     // 锚跟着实现走——这正是本文件多次改锚的既有做法（见 G5 在第 8 刀的同类改锚）；
     // 不改锚的后果不是漏判而是**假绿**：`extractSection` 取不到就返回空串，
@@ -279,11 +279,11 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     //（本条注释上方原话：whitelist 刻意宽松，目标是任何新出现的至少被 review 看见）。
     // RFC-359 AC-1（第 9 刀）：`retry` 两份合一，`services/task.ts` 的 `retryNode` 整份删除，
     // 上面那条经 review 判定「本处该用 retryIndex」的 `__repo_prep__` 门随之搬进**留下的那一份**
-    // （`postgresqlTaskRouteOperations.ts` 的 `retryNodeProjection`）。判定未变，位置变了：
+    // （`taskRouteOperations.ts` 的 `retryNodeProjection`）。判定未变，位置变了：
     // 白名单跟着实现走，总数仍是 2。
     expect(srcInventory('retryIndex > ')).toEqual({
       'modules/task-execution/application/nextRetryIndex.ts': 1,
-      'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 1,
+      'modules/task-execution/infrastructure/taskRouteOperations.ts': 1,
     })
   })
 })

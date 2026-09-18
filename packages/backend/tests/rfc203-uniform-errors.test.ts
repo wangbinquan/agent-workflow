@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   taskListItemsProjection,
   taskListSummariesProjection,
-} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+} from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

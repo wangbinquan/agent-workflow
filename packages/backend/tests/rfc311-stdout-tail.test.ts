@@ -24,7 +24,7 @@ import {
   nodeRunStdoutProjection,
   STDOUT_OMITTED_MARKER,
   STDOUT_TAIL_BUDGET_BYTES,
-} from '../src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations'
+} from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 

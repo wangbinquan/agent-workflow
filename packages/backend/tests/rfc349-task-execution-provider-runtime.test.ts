@@ -25,6 +25,8 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
   })
 
   test('route composition constructs the owner-native repair face instead of accepting one', () => {
+    // RFC-359 AC-1（命名债收尾 §5hj）：本条钉的是**装配**（工厂自己造修复面，而不是收一个进来），
+    // 装配已随 PG 绑定拆到 `postgresqlTaskRouteOperations.ts`；共用实现那半只放投影。
     const source = read('modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts')
     expect(source).toContain('createTaskRouteRepairOperations({')
     expect(source).toContain('repairOptions: (input) => repairs.repairOptions(input)')

@@ -704,13 +704,7 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
     // 启动编排**做——multipart 路由把冻结快照 / 版本围栏 / 静态校验 / 启动输入契约整串
     // 交给启动参与者，内置工作流在冻结资源快照那一步就被 `assertNotBuiltin` 挡住。
     const sharedMultipart = readFileSync(
-      resolve(
-        SRC,
-        'modules',
-        'task-execution',
-        'infrastructure',
-        'postgresqlTaskRouteOperations.ts',
-      ),
+      resolve(SRC, 'modules', 'task-execution', 'infrastructure', 'taskRouteOperations.ts'),
       'utf-8',
     )
     expect(sharedMultipart).toContain('dependencies.launches.launch(')

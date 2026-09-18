@@ -125,8 +125,11 @@
       "id": "rfc294-review-off-dag-offered-edges",
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "baseline": 41,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。"
+      "baseline": 42,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（命名债收尾 §5hj）：+1 是**同一条边被拆成两个文件**，不是新开的跨域依赖。"
+      }
     },
     {
       "id": "rfc294-review-unconsumed-public-symbols",
@@ -776,8 +779,8 @@
       "id": "rfc359-w8-name-blind-capability-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w8-capability-pair-conformance.test.ts",
       "symbol": "NAME_BLIND_CAPABILITY_PAIRS",
-      "baseline": 3,
-      "why": "RFC-359 W8：**按端口类型**（而非文件名）发现的 provider 能力对里，W5 的「同词干 + 同目录」判据结构上看不见的那些。W5 账本量「按文件名配到的对」，本账本量「按端口类型配到、而 W5 看不见的对」，两本互不包含、交集交给 W5 记以避免双重记账。条目只许降——降的方式是把两侧合一，或证明其中一侧是死代码。RFC-359 AC-1（命名债收尾 §5hj）2 → 3：`sqliteTaskExecutionRuntimeParticipants.ts` 此前因为 import 了名字带 `postgresql` 前缀的**共用实现**而同时命中两个 provider 锚，被 `providerSideOf` 判成 `null`、整份退出配对。前缀一去它落回 sqlite 侧，本账本才第一次看见它参与的 `ActiveTaskExecutionParticipant` 那一对（该对本来就有对拍）。是判据恢复视力，不是新分叉。"
+      "baseline": 2,
+      "why": "RFC-359 W8：**按端口类型**（而非文件名）发现的 provider 能力对里，W5 的「同词干 + 同目录」判据结构上看不见的那些。W5 账本量「按文件名配到的对」，本账本量「按端口类型配到、而 W5 看不见的对」，两本互不包含、交集交给 W5 记以避免双重记账。条目只许降——降的方式是把两侧合一，或证明其中一侧是死代码。RFC-359 AC-1（命名债收尾 §5hj）2 → 3：`sqliteTaskExecutionRuntimeParticipants.ts` 此前因为 import 了名字带 `postgresql` 前缀的**共用实现**而同时命中两个 provider 锚，被 `providerSideOf` 判成 `null`、整份退出配对。前缀一去它落回 sqlite 侧，本账本才第一次看见它参与的 `ActiveTaskExecutionParticipant` 那一对（该对本来就有对拍）。是判据恢复视力，不是新分叉。RFC-359 AC-1（命名债收尾 §5hj）3 → 2：上一刀加的那条 `ActiveTaskExecutionParticipant` 撤回——它是 `implementsPort` 松判据的假阳性（依赖面里的**字段声明**被当成了实现）。判据收紧后回到只剩灾难恢复那两对的真实状态。"
     },
     {
       "id": "rfc359-w8-unnormalized-unique-insert",
@@ -839,8 +842,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5083,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5086,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（命名债收尾 §5hj，最后一份）：`/api/tasks` 路由面的**共用实现**与 **PG 绑定**拆成两个文件（22 个导出里 15 个被 SQLite 侧直接消费，它早就是共用的那一份）。净增来自「同一份代码换了住处 + 多了一个绑定文件」：多一个模块的 owner 条目、跨上下文 import 边与 depcheck 例外，零行为改动。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,8 +866,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4567,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4572,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（命名债收尾 §5hj，最后一份）：`/api/tasks` 路由面的**共用实现**与 **PG 绑定**拆成两个文件（22 个导出里 15 个被 SQLite 侧直接消费，它早就是共用的那一份）。净增来自「同一份代码换了住处 + 多了一个绑定文件」：多一个模块的 owner 条目、跨上下文 import 边与 depcheck 例外，零行为改动。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -895,12 +904,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24561,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24563,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 AC-1（命名债收尾 §5hj，最后一份）：`/api/tasks` 路由面的**共用实现**与 **PG 绑定**拆成两个文件（22 个导出里 15 个被 SQLite 侧直接消费，它早就是共用的那一份）。净增来自「同一份代码换了住处 + 多了一个绑定文件」：多一个模块的 owner 条目、跨上下文 import 边与 depcheck 例外，零行为改动。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b79e2acaab0c7047dd02c9743d182ec639da5e7d164f812657b1f598c86169a9",
+    "sourceDigest": "sha256:b6bc79a84eed453b9ab4f4028a2843c6311a287005b03da8764c588653fa467e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -913,8 +925,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "57b636d81b9f54898c94b479f9550e8d4f6cb0d5",
-    "contentDigest": "sha256:a5a20c8001960cfbd1727253234e6455848ed22b2511f9ffc06992cf7e3d0af7",
+    "currentSnapshotSha": "502bb6509c5dd80f7fb1189d06d97ca2daca79f4",
+    "contentDigest": "sha256:5d6433ebe968ad4111843a2d0f5e6f1f2b5130d3e255a2a4b350850736642805",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
