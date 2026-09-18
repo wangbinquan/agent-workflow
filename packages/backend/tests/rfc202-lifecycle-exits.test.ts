@@ -25,7 +25,7 @@ import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
-import { cancelTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import {
   submitReviewDecision,
@@ -237,7 +237,7 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
     const { taskId } = seedTask(db, { status: 'awaiting_human' })
     const run = seedRun(db, taskId, 'clarify_x', 'awaiting_human')
     await seedClarifyRound(db, taskId, 'self', run)
-    const out = await cancelTask(db, taskId)
+    const out = await cancelViaEngine(db, taskId)
     expect(out.status).toBe('canceled')
     await Promise.all(terminalSweeps)
     const round = db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all()[0]!
@@ -253,13 +253,13 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
   test('awaiting_review task cancels', async () => {
     const { taskId } = seedTask(db, { status: 'awaiting_review' })
     seedRun(db, taskId, 'rev_x', 'awaiting_review')
-    const out = await cancelTask(db, taskId)
+    const out = await cancelViaEngine(db, taskId)
     expect(out.status).toBe('canceled')
   })
 
   test('terminal task still 409s with the terminal wording', async () => {
     const { taskId } = seedTask(db, { status: 'done' })
-    await expect(cancelTask(db, taskId)).rejects.toThrow(/already terminal/)
+    await expect(cancelViaEngine(db, taskId)).rejects.toThrow(/already terminal/)
   })
 })
 

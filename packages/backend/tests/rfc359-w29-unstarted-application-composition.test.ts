@@ -683,8 +683,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     //（retry 之外的第二处两份实现），现在与 PostgreSQL 共用同一份。依赖面反而更窄了
     //（六样，`executionModule` / `finalizeWorkspace` 都折进 `lifecycle`），
     // 而**两个引擎唯一的真差异（认领策略）就落在这里交进去的那个 `lifecycle` 上**。
+    // RFC-359 AC-1（第 11 刀）：摘要随 `cancel` 合一更新——这条路的 `cancelTask` 与
+    // `cancelChildTaskForCascade` 两处从 legacy 的 `cancelTask(deps.db, …)` 换成模块自己的
+    // 装配（`composeTaskCancellation(deps.db).cancel(…)`，级联那处直接交 `parent-cascade` cause）。
+    // **装配图确实变了，是有意的**：这条路此前跑的是 `services/task.ts` 的 `cancelTask`
+    //（retry / resume 之外的第三处两份实现，且它自己就是装配点），现在与 PostgreSQL 共用
+    // 同一份 `cancelTaskProjection`，薄壳整个删除。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '1e0ffc3b14282c3218e1c9c281e0da04dd55271b9689e1d97d4c8b1a16e111bb',
+      'f2435076f66eda023d3e2fe10f3d4a6aaf26fecd5cacc819369e5b947dc8f570',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

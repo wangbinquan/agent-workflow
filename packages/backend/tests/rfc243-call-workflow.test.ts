@@ -462,7 +462,7 @@ describe('RFC-243 e2e — 生命周期', () => {
     // worker 挂起：hang 计划项让子任务停在 running。
     writeFileSync(h.planFile, JSON.stringify({ worker: { hangMs: 120000 } }))
     const { parentTaskId } = await seedParentTask(h, workerId)
-    const { cancelTask } = await import('../src/services/task')
+    const { cancelViaEngine } = await import('./helpers/cancelEngine')
     const running = runTask({
       db: h.db,
       taskId: parentTaskId,
@@ -477,7 +477,7 @@ describe('RFC-243 e2e — 生命周期', () => {
       else await Bun.sleep(50)
     }
     expect(childId).not.toBeNull()
-    await cancelTask(h.db, parentTaskId)
+    await cancelViaEngine(h.db, parentTaskId)
     await running
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId!)))[0]!

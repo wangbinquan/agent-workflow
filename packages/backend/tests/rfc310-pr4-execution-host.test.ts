@@ -30,7 +30,7 @@ import {
   type TaskExecutionResourceAuthority,
 } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
-import { cancelTask } from '@/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks } from '../src/db/schema'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
@@ -206,7 +206,7 @@ function runner(
       persistence: h.persistence,
       completionMode: (extra.awaitScheduler ?? true) ? 'await-settle' : 'background',
     }),
-    cancelTask: (taskId) => cancelTask(h.db, taskId),
+    cancelTask: (taskId) => cancelViaEngine(h.db, taskId),
     readModels: h.persistence.reads,
     ...(extra.onTerminal !== undefined ? { onTerminal: extra.onTerminal } : {}),
     terminalPollMs: 25,

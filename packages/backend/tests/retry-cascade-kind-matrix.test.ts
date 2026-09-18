@@ -23,7 +23,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { cancelTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
@@ -221,7 +221,7 @@ function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void
  * RFC-359 AC-1（第 9 刀）—— 本文件的 `retry` 入口：共用实现 + 生产同形的级联取消。
  *
  * 级联取消在共用实现里是一个**依赖**（`cancelChildTaskForCascade`），生产由 `server.ts`
- * 绑成 `cancelTask(db, childTaskId, { cascadeFromParent: true })`——这里绑的是同一句，
+ * 绑成 `cancelViaEngine(db, childTaskId, { cascadeFromParent: true })`——这里绑的是同一句，
  * 只是多穿一个 `beforeStatusCas` 给下面两条并发判据用。注入点仍然跟着实现走：
  * 合并前它是被测代码内部的 `retryNode.childCancelBeforeStatusCas`，合并后它就是这条依赖本身。
  */
@@ -233,7 +233,7 @@ function retryVia(
   return createRetryEngine(harness.db, {
     appHome: harness.appHome,
     cancelChildTaskForCascade: async (childTaskId) => {
-      await cancelTask(harness.db, childTaskId, {
+      await cancelViaEngine(harness.db, childTaskId, {
         cascadeFromParent: true,
         ...(childCancelBeforeStatusCas === undefined
           ? {}

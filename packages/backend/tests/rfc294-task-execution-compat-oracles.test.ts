@@ -37,12 +37,12 @@ import {
 } from '../src/db/schema'
 import {
   abortAllActiveTasks,
-  cancelTask,
   isTaskActive,
   startTask,
   startTaskWithLocalRepo,
   type MaterializedSpace,
 } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
 import {
   createTaskExecutionTestTopology,
@@ -244,7 +244,7 @@ afterEach(async () => {
       ['pending', 'running', 'awaiting_review', 'awaiting_human'].includes(row.status)
     ) {
       try {
-        await cancelTask(current.db, taskId)
+        await cancelViaEngine(current.db, taskId)
       } catch {
         // A concurrently settling scheduler can legitimately win this cleanup race.
       }
@@ -318,7 +318,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
     const retryWon = results[1]?.status === 'fulfilled'
     expect(placeholders).toHaveLength(retryWon ? 1 : 0)
 
-    await cancelTask(h.db, seeded.taskId)
+    await cancelViaEngine(h.db, seeded.taskId)
     const final = await waitForStatus(h.db, seeded.taskId, 'canceled')
     expect(final.status).toBe('canceled')
     await waitFor(() => !isTaskActive(seeded.taskId), 'mixed-race owner release')

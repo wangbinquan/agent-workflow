@@ -26,7 +26,8 @@ import type { WebhookTaskExecutionParticipant } from '../../src/modules/integrat
 import type { TaskExecutionResourceAuthority } from '../../src/services/execution/taskExecutionResources'
 import type { ExecutionInvoker } from '../../src/services/execution/types'
 import { resolveLaunchRuntimeConfig } from '../../src/services/launchRuntimeConfig'
-import { cancelTask, createTaskDriveCoordinator } from '../../src/services/task'
+import { createTaskDriveCoordinator } from '../../src/services/task'
+import { cancelViaEngine } from './cancelEngine'
 import type { IntegrationTriggerIdentityAccess } from '../../src/server'
 import { Paths } from '../../src/util/paths'
 
@@ -122,7 +123,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
     launches,
     cancellation: {
       async cancel(request) {
-        await cancelTask(input.db, request.taskId)
+        await cancelViaEngine(input.db, request.taskId)
       },
     },
   })

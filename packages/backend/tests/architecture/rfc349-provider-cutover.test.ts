@@ -50,10 +50,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // RFC-359 AC-1（第 11 刀）：cancel 合一，`taskExecutionOwners` 随取消实现一起离开这条债
   //（回收任务持有者那一步现在只在共用的 `cancelTaskProjection` 里做）。债只降不升。
   'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,agents,and,asc,cachedRepos,clarifyRounds,desc,docVersions,eq,inArray,isNotNull,nodeRunOutputs,nodeRuns,runtimeSessionLeases,sql,taskCollaborators,taskExecutionIntents,taskRepos,taskSpaceNodes,tasks,users,workflows,workgroupTaskState',
-  // RFC-359 AC-1（第 11 刀）：`cancelTask` 只剩薄壳，它转发给共用实现。这条边随薄壳一起消失
-  //（下半刀迁完 37 处测试调用点后 `cancelTask` 整个删掉）。文件名带 `postgresql` 前缀是命名债
-  //（plan §5hj 记在案的重命名），实现本身是 provider 中立的。
-  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant :: cancelTaskProjection',
   // RFC-359 W4-B1：branchTraceSnapshotReader 已是一份中立实现，services/task.ts 对它的边不再是 provider 专属债。
   'packages/backend/src/services/taskArchive.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,and,asc,clarifyRounds,collaborationGateArtifacts,collaborationGateOperations,docVersions,eq,inArray,isNull,lifecycleAlerts,lte,nodeRunEvents,nodeRunOutputs,nodeRuns,or,recoveryEvents,reviewComments,reviewNodeReviewers,sql,taskArchiveAudit,taskCollaborators,taskExecutionEffectAttempts,taskExecutionEffectFences,taskExecutionEffects,taskExecutionIntents,taskExecutionLineageOperationRecords,taskExecutionMaintenanceClaims,taskExecutionMaintenanceMembers,taskExecutionOwners,taskFeedback,taskNodeClarifyDirectives,taskQuestions,taskRepos,taskSpaceNodes,tasks,workgroupAssignments,workgroupMemberCursors,workgroupMessages,workgroupTaskState',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: export:LegacySqliteTaskAuthorizationRef,export:LegacyTaskOwnershipScope',

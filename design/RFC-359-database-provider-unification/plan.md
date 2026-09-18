@@ -17699,3 +17699,39 @@ log
 
 **下半刀仍待做**：37 处 `cancelTask` 测试调用点（40 个文件）迁到共用实现，然后删薄壳——薄壳一删，
 上面那两条 inbound 边与 rfc349 的 +1 一起消失。
+
+### 第 11 刀下半落地　删掉 `cancelTask`，取消只剩一份实现 + 一个生产装配点 + 一个测试装配点
+
+上半把两个引擎都接到 `cancelTaskProjection` 之后，`services/task.ts` 的 `cancelTask` 就是一层薄壳。
+下半把它删干净：
+
+| 面 | 之前 | 现在 |
+| --- | --- | --- |
+| 实现 | 薄壳 + 共用实现 | **只有** `cancelTaskProjection` |
+| 生产装配 | 9 处各自 `cancelTask(db, …)`，薄壳自己就是装配点 | `modules/task-execution/composition/taskCancellation.ts` 一处 |
+| 测试装配 | 34 处 `cancelTask(db, …)` 散在 16 个文件 | `tests/helpers/cancelEngine.ts` 一处（同 `retryEngine` / `resumeEngine`） |
+
+**惰性 import 的理由随之消失**：`resourceLimits.ts` 原本写成 `await import('@/services/task')`，
+注释明写「PostgreSQL 装配绝不能加载或捕获 SQLite-only 的 legacy Task service」。实现搬进模块之后
+这层顾虑不存在了，`cli/start.ts` 的空闲超时那处同理，两处都改回普通静态装配。
+
+**两处路由要的是任务行**（`TaskRouteOperations['cancel']` 返回 `Task`），共用实现返回 void。
+回读那三行与 PG 路由**逐字同形**（`cancel` → `getTask` → `NotFoundError`），没有为此往装配点上加方法——
+装配点一旦 import `getTask` 就把 legacy Task service 拉回依赖图，正是上一段刚拆掉的那条。
+
+**`__abortActiveTaskForTesting`**：薄壳闭包里那条「没有停机票据时仍中止进程内控制器」的兜底只有测试
+需要（生产的取消一律有票据，没票据就是「没人在跑」）。它和既有的 `__setActiveTaskForTesting` /
+`__registerActiveTaskForTesting` 并列暴露，测试装配点从那里够到同一个注册表。
+
+**照出的分类变化（不是新债）**：`retry-cascade-kind-matrix` / `rfc202-lifecycle-exits` /
+`rfc268-webhook-scratch-launch` / `rfc350-idle-timeout-integration` 四份判据此前靠
+`sqlite-execution-engine` 这条机械理由挂账，而它们 import `services/task` 就是为了取 `cancelTask`。
+合一之后机械理由消失，它们露出本来面目：**四份还没迁的单引擎判据**。先进 `OPEN_MIGRATION_DEBT`
+（13 → 17，带一次性 allowGrowth），迁移成本在 sync → async（`.get()` / `.all()` / `.run()`），
+下一提做完回落。
+
+**账本**：`commons-debt` 的两条 inbound 边、`rfc349` 的 +1（24 → 25 → 24）随薄壳一起销掉；
+`rfc331-preexisting-deep-imports` 同理；RFC-294 的**终止控制网关**从
+`services/task.ts#cancelTask` 改指 `cancelTaskProjection`（写面一格没变：同三张表、同三条转移、
+同一条 revision 判据）——不改它 census 会直接抛 `control subtype is empty: terminal-control`；
+`rfc359-w29` 的 `composeSqliteApiRouteMounts` 摘要随装配图更新。

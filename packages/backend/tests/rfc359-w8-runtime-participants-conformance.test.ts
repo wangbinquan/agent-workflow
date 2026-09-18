@@ -458,13 +458,6 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
 // 这条现在钉的是**合一之后的当前事实**：两侧都转给同一份实现，且那份实现的准入预检是
 // provider 中立的（同步取号 + `await db.select(...)`），不许为了「更快一点」改回同步读——
 // 那会重新把顺序正确性挂在一个引擎的特性上。
-/** `services/task.ts` 里某个导出函数的**函数体**文本（从 `{` 起算到文件尾，判据只看前缀）。 */
-function shimBodyOf(name: string): string {
-  const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-  const body = source.slice(source.indexOf(`export async function ${name}(`))
-  return body.slice(body.indexOf('): Promise<Task> {'), body.indexOf('): Promise<Task> {') + 2000)
-}
-
 test('W8 · children 这一对已合一：resume / cancel 两侧都转给同一份实现', () => {
   const sqlite = read('sqliteTaskExecutionRuntimeParticipants.ts')
   const postgresql = read('postgresqlTaskExecutionRuntimeParticipants.ts')
@@ -473,15 +466,24 @@ test('W8 · children 这一对已合一：resume / cancel 两侧都转给同一�
   expect(sqlite).not.toContain('await resumeTask(input.db,')
   expect(sqlite).toContain('await resumeTaskProjection(')
 
-  // cancel 已合一。这一侧暂时仍经 `services/task.ts` 的 `cancelTask` 薄壳转发
-  //（薄壳只翻译 options → cause 并回读任务行；下半刀迁完调用点后删）。
-  expect(sqlite).toContain("import { cancelTask, isTaskActive } from '@/services/task'")
-  expect(sqlite).toContain('await cancelTask(input.db,')
-  const cancelShim = codeOnly(shimBodyOf('cancelTask'))
-  expect(cancelShim, 'cancelTask 必须只剩转发，不得长回自己那份取消引擎').toContain(
-    'await cancelTaskProjection(',
+  // cancel 已合一，而且**连薄壳都没了**（第 11 刀下半）：这一侧直接走模块自己的装配
+  // （`composeTaskCancellation`），`cause` 原样透传，不再翻译成 legacy 的 options 包。
+  expect(sqlite).toContain(
+    "import { composeTaskCancellation } from '../composition/taskCancellation'",
   )
-  expect(cancelShim, '薄壳不得自己写 tasks 行').not.toContain('update(tasks)')
+  expect(sqlite).toContain(
+    'composeTaskCancellation(input.db).cancel(request.taskId, request.cause)',
+  )
+  // `services/task.ts` 不得再长出任何一份取消实现——`cancelTask` 整个导出已删除。
+  const legacyTaskService = codeOnly(
+    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8'),
+  )
+  expect(legacyTaskService, 'legacy Task service 不得再导出 cancelTask').not.toContain(
+    'export async function cancelTask(',
+  )
+  expect(legacyTaskService, 'legacy Task service 不得再自己调取消实现').not.toContain(
+    'cancelTaskProjection(',
+  )
 
   // PostgreSQL 侧照旧走自己那份参与者（它内部调的就是同一个 `cancelTaskProjection`）。
   expect(postgresql).toContain('createPostgresqlChildTaskLifecycleParticipant')

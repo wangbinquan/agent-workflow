@@ -47,11 +47,8 @@ import {
   __hasTaskReviewMutationQueueForTesting,
   withTaskReviewMutationLock,
 } from '../src/services/reviewMutationCoordinator'
-import {
-  __registerActiveTaskForTesting,
-  __setActiveTaskForTesting,
-  cancelTask,
-} from '../src/services/task'
+import { __registerActiveTaskForTesting, __setActiveTaskForTesting } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import {
@@ -459,7 +456,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
       const h = (current = await seedHarness(harness.db))
       const [cancelResult, decisionResult] = await settleInOrder(
         h.taskId,
-        () => cancelTask(h.db, h.taskId),
+        () => cancelViaEngine(h.db, h.taskId),
         () => decide(h, decision),
       )
 
@@ -500,7 +497,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     const [decisionResult, cancelResult] = await settleInOrder(
       h.taskId,
       () => decide(h, 'approved'),
-      () => cancelTask(h.db, h.taskId),
+      () => cancelViaEngine(h.db, h.taskId),
     )
 
     expect(decisionResult.status).toBe('fulfilled')
@@ -564,7 +561,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     try {
       const [cancelResult, dispatchResult] = await settleInOrder(
         h.taskId,
-        () => cancelTask(h.db, h.taskId),
+        () => cancelViaEngine(h.db, h.taskId),
         () =>
           dispatchReviewNode({
             db: h.db,
@@ -628,7 +625,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
       }
       const [cancelResult, commentResult] = await settleInOrder(
         h.taskId,
-        () => cancelTask(h.db, h.taskId),
+        () => cancelViaEngine(h.db, h.taskId),
         mutate,
       )
 
@@ -649,7 +646,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     const [commentResult, cancelResult] = await settleInOrder(
       h.taskId,
       () => updateReviewCommentText(h.db, h.reviewRunId, h.commentId, 'landed first', OWNER_AUTHZ),
-      () => cancelTask(h.db, h.taskId),
+      () => cancelViaEngine(h.db, h.taskId),
     )
 
     expect(commentResult.status).toBe('fulfilled')
@@ -667,7 +664,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     const h = (current = await seedHarness(harness.db, { multiDoc: true }))
     const [cancelResult, selectionResult] = await settleInOrder(
       h.taskId,
-      () => cancelTask(h.db, h.taskId),
+      () => cancelViaEngine(h.db, h.taskId),
       () =>
         setDocumentSelection({
           db: h.db,
@@ -697,7 +694,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
           docVersionId: h.docVersionId,
           selection: 'accepted',
         }),
-      () => cancelTask(h.db, h.taskId),
+      () => cancelViaEngine(h.db, h.taskId),
     )
 
     expect(selectionResult.status).toBe('fulfilled')
@@ -876,7 +873,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
     let firstCasLost = false
 
-    const result = await cancelTask(
+    const result = await cancelViaEngine(
       loseFirstCancelCas(h.db, h.taskId, () => {
         firstCasLost = true
       }),
@@ -909,7 +906,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       listenerReentry = withTaskReviewMutationLock(h.taskId, async () => {})
     })
     try {
-      await cancelTask(h.db, h.taskId)
+      await cancelViaEngine(h.db, h.taskId)
       await listenerReentry
     } finally {
       unsubscribe()
@@ -969,7 +966,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       { once: true },
     )
 
-    const cancel = cancelTask(h.db, h.taskId)
+    const cancel = cancelViaEngine(h.db, h.taskId)
     await childAbortSeen
     let parentProbeEntered = false
     const parentProbe = withTaskReviewMutationLock(h.taskId, async () => {
@@ -1012,7 +1009,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       cancelCasAttempts += 1
     })
 
-    await expect(cancelTask(h.db, h.taskId, { beforeStatusCas })).rejects.toMatchObject({
+    await expect(cancelViaEngine(h.db, h.taskId, { beforeStatusCas })).rejects.toMatchObject({
       code: 'cancel-transition-starved',
     })
 

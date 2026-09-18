@@ -37,7 +37,8 @@ import type { TaskExecutionPersistence } from '../application/ports/taskExecutio
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { cancelTask, getTask, syncTaskWorkflow, type StartTaskDeps } from '@/services/task'
+import { composeTaskCancellation } from '../composition/taskCancellation'
+import { getTask, syncTaskWorkflow, type StartTaskDeps } from '@/services/task'
 import { deleteTask } from '@/services/taskDelete'
 import { getWorkflow } from '@/services/workflow'
 import { Paths } from '@/util/paths'
@@ -184,7 +185,15 @@ export function createSqliteTaskRouteOperations(
         request,
         actor,
       ),
-    cancel: (taskId) => cancelTask(db, taskId),
+    // RFC-359 AC-1（第 11 刀）：`cancel` 与 PostgreSQL 共用**同一份**实现
+    // （`cancelTaskProjection`），装配走模块自己的 `composeTaskCancellation`。
+    // 回读那三行与 PG 路由逐字同形——共用实现返回 void，路由契约要的是任务行。
+    async cancel(taskId) {
+      await composeTaskCancellation(db).cancel(taskId)
+      const task = await getTask(db, taskId)
+      if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      return task
+    },
     // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：`delete` 与 PostgreSQL 共用**同一份**
     //（PG 那侧 184 行的内联实现已删除）。合并同时统一了前置门次序——`task-internal`
     // 先于 `task-active`，先报永久性的主因再报暂时性的次因。

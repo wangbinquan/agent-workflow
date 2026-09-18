@@ -5,7 +5,8 @@ import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
-import { cancelTask, isTaskActive } from '@/services/task'
+import { composeTaskCancellation } from '../composition/taskCancellation'
+import { isTaskActive } from '@/services/task'
 import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type {
@@ -131,15 +132,11 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
     },
   })
   const children: TaskExecutionRuntimeParticipants['children'] = Object.freeze({
+    // RFC-359 AC-1（第 11 刀）：`cancel` 与 PostgreSQL 共用**同一份**实现
+    // （`cancelTaskProjection`）。等价性由 `rfc359-w11-cancel-parity` 的十一格对拍作证。
+    // `cause` 直接透传——合并之前这里要先翻译成 legacy 的 options 包再翻译回来。
     async cancel(request: Parameters<ChildTaskLifecycleParticipant['cancel']>[0]) {
-      await cancelTask(input.db, request.taskId, {
-        ...(request.cause.kind === 'parent-cascade'
-          ? {
-              cascadeFromParent: true,
-              cascadeParentTaskId: request.cause.parentTaskId,
-            }
-          : {}),
-      })
+      await composeTaskCancellation(input.db).cancel(request.taskId, request.cause)
     },
     // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用**同一份**实现
     // （`resumeTaskProjection`）。等价性由 `rfc359-w10-resume-admission-parity` 的九格对拍

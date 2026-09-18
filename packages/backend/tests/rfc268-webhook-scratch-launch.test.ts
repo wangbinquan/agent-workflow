@@ -25,7 +25,7 @@ import {
   webhookTriggers,
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { cancelTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
@@ -265,7 +265,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     for (const task of await db.select().from(tasks)) {
       if (isTerminalTaskStatus(task.status)) continue
       try {
-        await cancelTask(db, task.id)
+        await cancelViaEngine(db, task.id)
       } catch (error) {
         // runner 可在 select 与 cancel 之间自行失败；只吞已经确认的终态竞态。
         const current = (await db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]

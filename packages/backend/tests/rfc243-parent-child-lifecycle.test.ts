@@ -31,7 +31,8 @@ import { eq } from 'drizzle-orm'
 import type { StartTask } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { cancelTask, selectResumeRollbackTargets, startTask } from '../src/services/task'
+import { selectResumeRollbackTargets, startTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { deleteTask } from '../src/services/taskDelete'
 import { enforceLimits, parseCallHumanWait } from '../src/services/limits'
 import { runIsoWorktreeGc } from '../src/services/gc'
@@ -118,7 +119,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
     const grandchild = await seedTask(db, wf, { status: 'awaiting_human', parentTaskId: child })
-    await cancelTask(db, parent)
+    await cancelViaEngine(db, parent)
     const rows = new Map((await db.select().from(tasks)).map((t) => [t.id, t] as const))
     expect(rows.get(parent)?.status).toBe('canceled')
     expect(rows.get(child)?.status).toBe('canceled')
@@ -133,7 +134,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
-    await cancelTask(db, child)
+    await cancelViaEngine(db, child)
     const row = (await db.select().from(tasks).where(eq(tasks.id, child)))[0]
     expect(row?.status).toBe('canceled')
     expect(row?.errorMessage).not.toBe('canceled-by-parent-cascade')
@@ -150,7 +151,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
       status: 'running',
       childTaskId: childId,
     })
-    await cancelTask(db, parent)
+    await cancelViaEngine(db, parent)
 
     const childRoot = mkdtempSync(join(tmpdir(), 'aw-rfc243-late-child-'))
     const space: MaterializedSpace = {

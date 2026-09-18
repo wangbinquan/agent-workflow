@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1740,
+    "backendFiles": 1741,
     "frontendFiles": 622,
     "legacyFiles": 557,
-    "moduleFiles": 1183,
-    "productionFiles": 2517,
+    "moduleFiles": 1184,
+    "productionFiles": 2518,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24554
+    "symbolsIncludingFileRoots": 24559
   },
   "entries": [
     {
@@ -118719,6 +118719,66 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/taskCancellation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskCancellation.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/taskCancellation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskCancellation.ts#composeTaskCancellation",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeTaskCancellation",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/taskCancellation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskCancellation.ts#log",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "log",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/taskCancellation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskCancellation.ts#TaskCancelCause",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "TaskCancelCause",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/taskCancellation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskCancellation.ts#TaskCancellation",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "TaskCancellation",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/taskCatalogSources.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/taskCatalogSources.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -184062,6 +184122,18 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/task.ts",
+      "id": "owner:packages/backend/src/services/task.ts#__abortActiveTaskForTesting",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "__abortActiveTaskForTesting",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#__registerActiveTaskForTesting",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -184174,18 +184246,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "buildSyncRunSummary",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#cancelTask",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "cancelTask",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -295325,5 +295385,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9319205862c19eda8724ad9a42ca76e0241b9ecb8895a63355e958ee3324e602"
+  "sourceDigest": "sha256:48312a7b5b1587ae5db986e2cc3f406b0e933250baee992d55e85bbd0c843a57"
 }

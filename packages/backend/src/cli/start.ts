@@ -41,6 +41,7 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
 import type { TaskDriveCoordinator } from '@/modules/task-execution/public/commands'
+import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { createTaskDriveCoordinator } from '@/services/task'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
@@ -95,7 +96,6 @@ import {
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import {
-  cancelTask,
   composeHumanGateContinuationDriver,
   activeTaskIdsSnapshot,
   isTaskActive,
@@ -2551,7 +2551,7 @@ async function composeSqliteProviderSession(
         authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
         resources: taskExecutionResources,
       }),
-      cancelTask: (taskId: string) => cancelTask(db, taskId),
+      cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
       readModels: taskExecutionProvider.readModels,
     }
   })()
@@ -3003,14 +3003,11 @@ async function composeSqliteProviderSession(
   })
   // RFC-350 —— 不活跃超时收割（僵尸任务），DEFAULT OFF。同样是 provider-session
   // handle：它会 cancel 任务并杀进程，绝不能在迁移冻结窗口里跑（AC-15）。留在主线程
-  // 而不是进 RFC-338 的维护 Worker，因为 cancelTask 依赖进程内 scheduler 的
+  // 而不是进 RFC-338 的维护 Worker，因为取消依赖进程内 scheduler 的
   // AbortController / driver stop ticket / WS 广播，Worker 线程拿不到。
   const idleTimeoutOperations = composeTaskIdleTimeoutOperations({
     persistence: createSqliteTaskIdleTimeoutPersistence(db),
-    cancelTask: async (taskId: string) => {
-      const { cancelTask } = await import('@/services/task')
-      await cancelTask(db, taskId)
-    },
+    cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
   })
   const idleTimeoutRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'task-idle-timeout',

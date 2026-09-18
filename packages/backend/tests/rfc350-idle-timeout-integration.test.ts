@@ -18,7 +18,7 @@ import { mkdirSync, mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { cancelTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, recoveryEvents, taskRepos, tasks, users, workflows } from '../src/db/schema'
 import {
@@ -118,7 +118,7 @@ function operations() {
   return composeTaskIdleTimeoutOperations({
     persistence: createSqliteTaskIdleTimeoutPersistence(db),
     cancelTask: async (taskId: string) => {
-      await cancelTask(db, taskId)
+      await cancelViaEngine(db, taskId)
     },
     // 桩：不真发信号，只记录被要求终止的 run。
     async killRunProcessTree(run) {

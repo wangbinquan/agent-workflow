@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 82，**第 11 刀下半：`cancelTask` 删除，取消只剩一份实现**）
+>
+> 取消现在是「一份实现 + 一个生产装配点 + 一个测试装配点」：实现只有 `cancelTaskProjection`，
+> 生产走 `modules/task-execution/composition/taskCancellation.ts`（9 处调用点全部改指它），
+> 测试走 `tests/helpers/cancelEngine.ts`（34 处 / 16 个文件全部改指它，同 `retryEngine` / `resumeEngine`）。
+>
+> **惰性 import 的理由随之消失**：`resourceLimits.ts` / `cli/start.ts` 原本写成
+> `await import('@/services/task')`（注释明写「PG 装配绝不能加载 SQLite-only 的 legacy Task service」），
+> 实现搬进模块后两处都改回普通静态装配。
+>
+> **照出四份「其实早就不依赖那台引擎」的单引擎判据**（`retry-cascade-kind-matrix` /
+> `rfc202-lifecycle-exits` / `rfc268-webhook-scratch-launch` / `rfc350-idle-timeout-integration`）：
+> 它们此前靠 `sqlite-execution-engine` 这条机械理由挂账，而 import `services/task` 就是为了取
+> `cancelTask`。先进 `OPEN_MIGRATION_DEBT`（13 → 17，一次性 allowGrowth），**下一提迁到
+> `describeEachProvider` 后回落**——迁移成本在 sync → async。
+>
+> **两笔推红的复盘（都已修）**：`a6091d262` 漏登记薄壳的深 import（`rfc331` 拓扑判据是逐条相等，
+> 而它不在 `tests/architecture/` 下，那一轮只跑了那个目录）；随后那笔只加 4 行的 hotfix 又红，
+> 因为**没清上一笔的 allowGrowth、没重跑 census**——`docs/dev-gotchas.md` 已把「越急着修绿越要先走这两步」
+> 记成第四次实撞。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 81，**第 11 刀第 2 步：cancel 合一，照出第 8 个用户可见缺陷**）
 >
 > 留下的是 PG 的 `cancelCascade`（用户裁决），改名 `cancelTaskProjection`；`services/task.ts` 的

@@ -3,7 +3,8 @@ import type {
   FusionEngineTaskOperations,
 } from '@/modules/knowledge-evolution/public/participants'
 import type { DbClient } from '@/db/client'
-import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
+import { composeTaskCancellation } from '../composition/taskCancellation'
+import { getTask, startTask, type StartTaskDeps } from '@/services/task'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
 
 export function createSqliteFusionEngineTaskOperations(input: {
@@ -87,7 +88,9 @@ export function createSqliteFusionEngineTaskOperations(input: {
         ) {
           return
         }
-        await cancelTask(input.db, taskId).catch(() => undefined)
+        await composeTaskCancellation(input.db)
+          .cancel(taskId)
+          .catch(() => undefined)
       }
     },
   })

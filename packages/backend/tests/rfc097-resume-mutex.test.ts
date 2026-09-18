@@ -29,7 +29,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { cancelTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -367,7 +367,7 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
     expect(retryErr?.message ?? '').toContain('active scheduler')
 
     // 收尾：取消挂起的调度器，等它真正落终态（避免后台 runTask 泄漏到下个用例）。
-    await cancelTask(h.db, h.taskId)
+    await cancelViaEngine(h.db, h.taskId)
     const final = await waitForTerminalTask(h.db, h.taskId)
     expect(final.status).toBe('canceled')
   }, 30000)

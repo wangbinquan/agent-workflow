@@ -110,7 +110,6 @@ import {
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
-import type { TaskStopCause } from '@/modules/task-execution/domain/sourceTermination'
 import {
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
@@ -203,8 +202,6 @@ import {
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
 import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
-import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant'
-import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { DrizzleBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/branchTraceSnapshotReader'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
@@ -343,6 +340,18 @@ export function __setActiveTaskForTesting(taskId: string | undefined): void {
  *  drivers, so parent/child cancellation lock ordering can be exercised. */
 export function __registerActiveTaskForTesting(taskId: string, controller: AbortController): void {
   testActiveControllers.set(taskId, controller)
+}
+
+/**
+ * Test-only: abort one registered controller by task id.
+ *
+ * RFC-359 AC-1（第 11 刀下半）：取消合一之后，「没有停机票据时仍按历史行为中止进程内控制器」
+ * 这条兜底只有**测试**需要——生产的取消一律有票据，没票据就是「没人在跑」。它原本藏在
+ * `cancelTask` 薄壳的闭包里；薄壳删掉后，唯一的测试装配点（`tests/helpers/cancelEngine.ts`）
+ * 要能够到同一个注册表，所以把它和上面两个 `__*ForTesting` 并列暴露出来。
+ */
+export function __abortActiveTaskForTesting(taskId: string, reason: unknown): void {
+  testActiveControllers.get(taskId)?.abort(reason)
 }
 
 /**
@@ -4135,71 +4144,12 @@ async function reapHeldRuntimeSessionOwnersForTask(
   }
 }
 
-// RFC-202 T3: aligned with the shared lifecycle table's `cancel` event —
-// awaiting_review / awaiting_human ARE cancelable (a user who does not want
-// to answer an agent's questions must have an exit; audit P1 F-15). The old
-// pending/running-only gate predated the awaiting statuses.
-
-export async function cancelTask(
-  db: LegacyProviderNeutralDatabase,
-  id: string,
-  opts: {
-    /**
-     * RFC-243 §4.3 — set when this cancel is a parent-cascade. Lands a durable
-     * `canceled-by-parent-cascade` errorMessage marker so a parent resuming
-     * after a crash can still distinguish "my own cascade" (call node follows
-     * the parent's canceled outcome) from "someone canceled my child"
-     * (call node fails with `child-canceled`).
-     */
-    cascadeFromParent?: boolean
-    /** Internal exact parent id for the structured stop cause. */
-    cascadeParentTaskId?: string
-    /**
-     * RFC-359 —— 取消 CAS 之前的注入点。**生产从不传**；只有锁「CAS 被别的生命周期写者持续挤掉
-     * 时必须报 starved、而不是把失败当成功」的那条回归判据传。
-     *
-     * 为什么注入点要做进来、而不是像以前那样从外面包一层 db 代理：统一事务原语
-     * （`databaseSessionFor(db).transaction`）不走 drizzle 的 `db.transaction`，SQLite 上事务句柄
-     * 就是 db 对象本身，而且它会串行化写者——旧的代理注入器在新原语下**一次都不触发**，
-     * 用例照样绿但一个并发场景都没验（`docs/dev-gotchas.md` 有完整复盘）。注入点跟着实现走，
-     * 换事务原语不会再让判据静默失效。
-     */
-    beforeStatusCas?: () => void | Promise<void>
-  } = {},
-): Promise<Task> {
-  // RFC-359 AC-1（第 11 刀）：`cancel` 与 PostgreSQL 共用**同一份**实现
-  // （`cancelTaskProjection`）。这里只剩三件事：把 options 形态的来源翻译成 `cause`、
-  // 把两样「退役形态才有」的东西交进去（CAS 注入点、无票据时的历史兜底中止），
-  // 再把任务行重读一遍还给调用方（共用实现返回 void）。
-  //
-  // 等价性由 `rfc359-w11-cancel-parity` 的十一格对拍作证。合并同时销掉两处真分叉：
-  //   · 这一侧此前**没有取评审变更号**（与评审写入的落库会交错）——在建对拍那一步已修；
-  //   · 这一侧的 `error_message` 无条件写 `no active scheduler at cancel time`，
-  //     而用户取消一个**正在跑**的任务时那句话是错的；共用那份写 `canceled-by-user`。
-  await cancelTaskProjection(
-    {
-      db,
-      persistence: createTaskExecutionPersistence(db),
-      // ⚠️ 交的是**任务驱动**注册表（停机票据），不是 `platform/runtime-registry` 的运行时档案表。
-      stop: taskExecutionModule.runtimeRegistry,
-      log,
-    },
-    id,
-    opts.cascadeFromParent === true
-      ? { kind: 'parent-cascade', parentTaskId: opts.cascadeParentTaskId ?? id }
-      : { kind: 'user' },
-    {
-      ...(opts.beforeStatusCas === undefined ? {} : { beforeStatusCas: opts.beforeStatusCas }),
-      // 带 taskId：级联会把同一份 options 传给子任务，闭包捕获 `id` 会中止错的那个控制器。
-      abortWithoutStopTicket: (abortTaskId: string, cause: TaskStopCause) => {
-        testActiveControllers.get(abortTaskId)?.abort(cause)
-      },
-    },
-  )
-  const task = await getTask(db, id)
-  if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
-  return task
-}
+// RFC-359 AC-1（第 11 刀）：`cancelTask` 已删除。取消只有**一份**实现
+// （`modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts`
+// 的 `cancelTaskProjection`），生产装配走 `modules/task-execution/composition/taskCancellation.ts`，
+// 测试装配走 `tests/helpers/cancelEngine.ts`。RFC-202 T3 的那条判据
+//（awaiting_review / awaiting_human 可取消）跟着实现搬到了共用那份的
+// `CANCELABLE_TASK_STATUSES`。
 
 const pendingHumanGateContinuationHandoffs = new Map<string, Promise<void>>()
 

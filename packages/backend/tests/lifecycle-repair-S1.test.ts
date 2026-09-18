@@ -13,7 +13,7 @@ import { runGit } from '../src/util/git'
 
 import { docVersions, nodeRunOutputs } from '../src/db/schema'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
-import { cancelTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import {
   buildHarness,
   insertAlert,
@@ -150,7 +150,7 @@ describeEachProvider('RFC-057 — S1.recreate-doc-version', (provider) => {
     })
     await entered
 
-    const cancel = cancelTask(h.db, h.taskId)
+    const cancel = cancelViaEngine(h.db, h.taskId)
     const repair = h.engine.applyRepairOption({
       taskId: h.taskId,
       alertId,

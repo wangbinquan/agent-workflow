@@ -1,6 +1,7 @@
 // RFC-359 W7：持久化实现只有一份（`infrastructure/resourceLimitPersistence.ts`），
 // 两个 provider 的具名装配函数在这里只做绑定 —— 差的仅是客户端来源与 cancelTask 的取法。
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ResourceLimitOperations } from '../application/ports/resourceLimitPersistence'
 import { DrizzleResourceLimitPersistence } from '../infrastructure/resourceLimitPersistence'
@@ -11,12 +12,9 @@ export function composeLegacySqliteResourceLimitOperations(
 ): ResourceLimitOperations {
   return Object.freeze({
     persistence: new DrizzleResourceLimitPersistence(db),
-    cancelTask: async (taskId: string) => {
-      // The compatibility bridge is lazy so PostgreSQL composition never loads
-      // or captures the SQLite-only legacy Task service.
-      const { cancelTask } = await import('@/services/task')
-      await cancelTask(db, taskId)
-    },
+    // RFC-359 AC-1（第 11 刀下半）：取消实现已搬进 task-execution 模块，绑它不再连带
+    // 拉进 legacy Task service，于是惰性 import 的理由消失，改成普通静态装配。
+    cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
   })
 }
 

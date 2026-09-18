@@ -2831,9 +2831,11 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
     requiredBrandedProof: 'CanonicalContinuationRequest',
   },
   {
+    // RFC-359 AC-1（第 11 刀）：取消合一，网关从 legacy 的 `cancelTask` 搬到共用实现。
+    // 写面一格没变（同三张表、同三条转移、同一条 revision 判据）——搬的是家，不是判据。
     subtype: 'terminal-control',
-    file: 'packages/backend/src/services/task.ts',
-    symbol: 'cancelTask',
+    file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
+    symbol: 'cancelTaskProjection',
     allowedTables: ['tasks', 'taskExecutionOwners', 'taskExecutionIntents'],
     allowedTransitions: ['task->canceled', 'owner-claimed->revoked', 'intent->canceled'],
     revisionPredicate: 'task-lifecycle-event-revision+exact-owner-revision',

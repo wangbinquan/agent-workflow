@@ -24,7 +24,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { enforceLimits } from '../src/services/limits'
-import { cancelTask, isTaskActive } from '../src/services/task'
+import { isTaskActive } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
@@ -197,7 +198,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
 
     // cancelTask abort controller → runner SIGTERM 子进程 → runScope canceled →
     // cancelTaskRow CAS(from=running)。cancelTask 自身轮询到终态后返回赢家。
-    const returned = await cancelTask(h.db, h.taskId)
+    const returned = await cancelViaEngine(h.db, h.taskId)
     expect(returned.status).toBe('canceled')
 
     const final = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!

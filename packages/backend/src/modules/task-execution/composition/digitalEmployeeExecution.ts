@@ -28,7 +28,9 @@ import {
   type ExecutionContractProjectionParticipant,
   type ExecutionContractRuntimeView,
 } from '@/modules/execution-contract/public/types'
-import { cancelTask, getTask } from '@/services/task'
+import { composeTaskCancellation } from './taskCancellation'
+import { getTask } from '@/services/task'
+import { NotFoundError } from '@/util/errors'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { readTaskResourceUsage } from '@/services/limits'
 import { sha256Hex } from '@/util/hash'
@@ -728,7 +730,12 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
   return Object.freeze({
     tasks: {
       get: (taskId: string) => getTask(db, taskId),
-      cancel: (taskId: string) => cancelTask(db, taskId),
+      async cancel(taskId: string) {
+        await composeTaskCancellation(db).cancel(taskId)
+        const task = await getTask(db, taskId)
+        if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+        return task
+      },
     },
     readModels: createTaskExecutionReadModels(db),
     resourceUsage: {

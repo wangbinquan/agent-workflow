@@ -8,7 +8,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
 import { createRepairEngine } from './helpers/repairEngine'
 import { describeEachProvider } from './helpers/eachProvider'
-import { cancelTask } from '../src/services/task'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import {
@@ -424,7 +424,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
         },
       })
       // 运维那一侧真实发生的次序：别人刚把任务取消掉，诊断面板上的那个按钮还在，点下去。
-      await cancelTask(h.db, h.taskId)
+      await cancelViaEngine(h.db, h.taskId)
 
       let code: string | undefined
       try {
@@ -479,7 +479,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
         optionId,
         actorUserId: 'r1-repair-then-cancel',
       })
-      await cancelTask(h.db, h.taskId)
+      await cancelViaEngine(h.db, h.taskId)
 
       expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
         'canceled',

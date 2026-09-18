@@ -59,10 +59,6 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
-  // RFC-359 AC-1（第 11 刀）：cancel 合一，`cancelTask` 只剩一层薄壳转发给共用实现。
-  // **这条边随薄壳一起消失**——下半刀迁完测试调用点、把薄壳整个删掉之后，这一行要一并删除
-  //（本判据是逐条相等，多一行照样红）。与上面 `resumeRollbackTargets` 那条同形同命。
-  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/branchTraceSnapshotReader',
   // RFC-359 W8：`assertFrozenTaskTriggerPreflight` 的两份 provider 副本合一后落在 owner 的
   // infrastructure（`services/execution/triggerPreflight.ts` 那个更省边的落位被

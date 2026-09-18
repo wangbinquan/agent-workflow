@@ -1319,7 +1319,7 @@ describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
   test('准备中取消：任务落 canceled，且准备行不是永远 running 的孤儿', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
-    const { cancelTask } = await import('@/services/task')
+    const { cancelViaEngine } = await import('./helpers/cancelEngine')
     const task = await startTask(
       {
         workflowId: s.workflowId,
@@ -1345,7 +1345,7 @@ describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
       await new Promise((r) => setTimeout(r, 25))
     }
     const t0 = Date.now()
-    await cancelTask(db, task.id)
+    await cancelViaEngine(db, task.id)
     const cancelMs = Date.now() - t0
     // 取消不得等到 clone 自己超时才回来（60s）——那等于没打断。
     //
@@ -2217,8 +2217,8 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     }
     expect(code, '准备中的任务不可直接删除').toBe('task-not-terminal')
     // 收尾：取消掉，别把后台克隆留到别的用例里。
-    const { cancelTask } = await import('@/services/task')
-    await cancelTask(db, task.id).catch(() => {})
+    const { cancelViaEngine } = await import('./helpers/cancelEngine')
+    await cancelViaEngine(db, task.id).catch(() => {})
   }, 120_000)
 })
 
