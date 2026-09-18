@@ -17176,3 +17176,118 @@ SQLite 路由的 `retry` 改为转给它。生产侧只有一个调用点（`sql
   要等它的行为套件重挂完才删得掉，**下一提回落**。
 - 踩坑记一笔：`allowGrowth` 的形状是 `{ why }` **对象**，写成字符串会被 census 静默丢弃
   （我第一次就是这么写的，census 一跑就没了，而守卫报的是「字段缺失」而不是「形状错了」）。
+
+## 盘后第 9 刀落地（下半）　删掉退役那份，并把测试面跟着合一——**又照出两处真缺陷**
+
+上半只做到「两个引擎都接到共用实现上」，退役那份还留着（`services/task.ts` 的 `retryNode`，485 行），
+而且**推红了 main**（`ed996dfb1`，6 个 backend 分片）。下半把它删掉并修完全部红。
+
+### 合并与删除
+
+- `retryNode` 整份删除；随之死掉的 `parseSnapshot` 与两个只被它用的 import 一并删除。
+- `retryRepositoryPreparation` 不再绕回 `retryNode` 借那三道门：它是
+  `RepositoryPreparationRetryCommand` 端口的实现，**永远是下游**（两个组合根都把它绑在那个端口上），
+  门在共用投影里已经跑过，直接落到真正干活的 `retryRepoPreparation`。
+- 共用实现里那个私有 `freshestTopLevel` 删掉，改调 `services/freshness` 的 `pickFreshestRun`
+  ——两者逐值相同，而「同一个取新语义有第二份写法」正是 RFC-096 audit S-13 收敛掉的那类分叉
+  （`scheduler-audit-s13` 的 G3 就钉在这一句上）。
+
+### 对拍又照出两处真缺陷（本刀合计四处，全在留下的那份里）
+
+两处都由 `retry-cascade-kind-matrix` 的两条注入用例照出（子任务取消写失败 / 取消 CAS 被持续挤掉）
+——那两条是**合并前就存在的判据**，注入点随实现从「被测代码内部的 `childCancelBeforeStatusCas`」
+搬到了依赖面上的 `cancelChildTaskForCascade`。
+
+| # | 缺陷 | 用户可见后果 |
+| --- | --- | --- |
+| ③ | 失败关闭那笔 CAS **静默失效**：`interrupted` 是终态，收场 `trySet` 不带 `allowTerminal` 返回 false 而不抛 | 调用方拿到 409 `retry-child-cancel-failed`，任务却卡在 `interrupted`、`errorSummary` 空着，前端据此当「daemon 重启，可恢复」渲染 |
+| ④ | 取消旧世代子任务**失败时仍然铸了占位行**（准入 + 铸行同一笔事务，取消排在其后） | 占位行成为该调用节点的最新一代，而上一代子任务还活着；任务一旦被 resume，调度器按最新行重新派发，于是在旧子任务仍 `awaiting_human` 时**再开一个子任务** |
+
+③ 的根因是中转态换了：退役那份从 `pending` 收场（不需要 `allowTerminal`），共用那份的中转态是
+`interrupted`。顺带把「是哪个子任务」写回任务行的 `errorMessage`——那是用户唯一看得到这个 id 的地方
+（抛出的 `ConflictError` 只进 HTTP 响应，不落库）。
+
+④ 的处置是把一笔事务拆成**三段**：准入 CAS → 取消旧世代子任务 → 铸占位行。
+顺序两头都承重：取消放在铸行**之前**是退役那份写明的不变量（never reset/mint after a partially
+failed cancellation set）；放在准入 CAS **之后**同样必要，反过来会在一次最终被拒的重试里白杀一批子任务。
+事务拆成两笔，事件组 id 与 ordinal 不变（`appendProgram` 按 `(eventGroupId, eventGroupOrdinal)` 幂等）。
+
+### 测试面：四份行为套件转双引擎，并**销掉一条登记在案的行为分叉**
+
+- `lifecycle-property` / `lifecycle-transitions-current` / `retry-node-guard-order` /
+  `retry-node-no-review-cascade` 迁到 `describeEachProvider`。**触发点是合并本身**：它们此前靠
+  「import `services/task`」这条机械理由挂在 `rfc359-w5-t19f` 的单引擎账本上，合一之后那条理由消失，
+  守卫当场把它们推到「既无机械理由、也不在 open 名单」这一格。这正是那条守卫该做的事——
+  **实现合一了，测试面不跟上就立刻现形**。
+- `tasks.test.ts` 那 4 条 retry 判据去掉单引擎早返回。`docs/audit-backlog.md` 登记的
+  「两个组合根在 `/api/tasks` 上的行为分叉 ①」（空 `worktreePath` 时 SQLite 200 / PG 410）
+  **随合并消失**：两侧现在都走 resume 的准入。统一到 **410 那一侧**——一个既没有工作树、
+  也没有墓碑、也没有待跑 `__repo_prep__` 行的任务，重试出来的那一步没有任何地方可跑，
+  resume 早就对同一个任务这么答了。
+  夹具改成给任务一棵**真**工作树（判据本意是铸行的形状，与工作树无关），顺带把编造的
+  `preSnapshot: 'snap-abcdef'` 换成夹具仓真实 HEAD——RFC-098 WP-9 的基线存在性门此前因为空工作树
+  从没被这几条走到过。
+
+### 守卫与账本：锚跟着实现走
+
+`scheduler-audit-s13` 的 G3 / G8、`rfc287-t13` 的 F8 三把源码锁改锚到留下的那份。
+**不改锚的后果不是漏判而是假绿**：`extractSection` / `indexOf` 取不到就返回空串 / -1，
+正向断言会红（所以这次被发现），而同一条用例里的 `not.toContain` / `toBe(false)` 负向断言
+**会永远绿**。这是本轮第三次遇到同一形状（第 8 刀的 G5、本刀的 G3 与 F8）。
+
+顺手补了一处**守卫自己的语料缺口**（不是本刀引入的，是本刀让它现形的）：
+`rfc317-transition-table-oracle` 的 `TASK_WRITERS` 只认 `setTaskStatus` / `trySetTaskStatus`
+两个名字，而任务状态 CAS 的**中立端口**写法是 `persistence.runtimeLifecycle.trySet({ to, allowedFrom })`
+——于是 **20 个静态可知的站点整批在语料之外**，含 PostgreSQL daemon / 子任务启动 /
+子任务生命周期 / fusion 引擎的全部生命周期写点。补进来之后只有 1 条越界（就是上面 ③ 修的那笔），
+已逐条入偏离账本；其余 19 条本来就守着转移表，只是**没人看得见**。
+这与该文件里 `setNodeRunStatusInTransaction` 那条注释记的是同一件事，只是规模大得多：
+**每有一处从 `setTaskStatus` 迁到中立端口，这条预言的语料就少一处**，而下限判据只挡「抽空」，
+挡不住「慢慢漏光」。
+
+其余随之更新：`rfc317-allow-terminal-ledger`（`services/task.ts` 3 → 2、共用实现 1 → 2，全仓总数不变）、
+`rfc317-registry-reverse-completeness`（`NODE_KIND_BEHAVIORS.retryCascade` 转成
+`{ via: nodeKindParticipatesInRetryCascade }` 形态）、`w5-t19d` / `w5-t19f` / `w7` /
+`rfc103` / `rfc332` / `rfc359-w29` 的计数与摘要。
+
+### 一条已裁决分叉销账，账本清零
+
+`rfc359-w5-dual-engine-predicate-gaps` 的 `ACCEPTED_DUAL_ENGINE_DIVERGENCES` 唯一那条
+`retry-held-session-reap-order`（「攥着 native runtime session 租约的行在哪一段被围栏」）
+**随合并消失**：留下的那份把复活整段交给 `resumeTaskAs`，于是两侧**都**在 resume 那一段围栏
+——SQLite 走 `resumeKick` 的 `reapHeldRuntimeSessionOwnersForTask`，PG 走 `rollbackForResume`。
+分叉是被消灭的，不是被挪走的。该账本随之清零（锚点漂移那一路的活证据在文件末尾的
+「扫描面自证」describe 里，不受影响）。
+
+### 记账
+
+- `rfc294-module-symbol-owners` 24552 → **24549**，上半那条一次性 `allowGrowth` **按约回落退役**。
+- `rfc294-cross-context-observed-imports` 5080 → 5081 / `rfc294-architecture-exceptions` 4563 → 4564，
+  **新声明 allowGrowth**：删掉重复取新器多出的那条
+  `postgresqlTaskRouteOperations.ts → services/freshness#pickFreshestRun` 兼容边。
+  它与该文件既有的 9 条 `@/services/*` 边同形同 owner，随 RFC-294 W4-E1 cutover 一起退役；
+  零成本的替代只有「把重复的取新器留着」——那是用另一处分叉换一个数字不涨。
+- `rfc359-w5-test-engine-hardcoding` 326 → **322**（四份套件转双引擎）。
+- 踩坑记三笔（已落 `docs/dev-gotchas.md`）：①census 的产物是**一组**（8 份 json + `status.md`），
+  按文件名手点着 `git add` 必漏；②手改 `architecture/**` 一律在 census **之前**，
+  反过来会打坏 `ledger-baselines.json` 自己的 `contentDigest`；③`ledger-baselines.json` 里
+  `file` 指向**测试文件**的那些条目，census **不重算** baseline，要手改。
+
+### 一处**刻意留着**的单引擎（不是漏迁）
+
+`retry-cascade-kind-matrix` 里那两条并发判据（子任务取消写失败 / 取消 CAS 被持续挤掉）
+仍然只跑 SQLite。理由是**注入点只长在一侧**：那个缝是 `cancelTask` 的 `beforeStatusCas`，
+而 `cancelTask` 是 SQLite 根绑的那份；PostgreSQL 根绑的是
+`postgresqlChildTaskLifecycleParticipant.cancel`，是**另一份实现**。把 `cancelTask` 喂给 PG 库
+能跑，但那不是 PG 部署里真正会执行的那份——双引擎跑出来的绿是假的。
+
+级联取消的**正常**路径两个引擎都验（`rfc359-w9` 的「级联取消撞上已终态的子任务」那一格，
+两侧都用各自根的真绑定）；差的只是注入失败那两条。真正的处置是把
+`ChildTaskLifecycleParticipant` 这一对也合一（见剩余项），那时注入点会和 `retry` 一样落在
+依赖面上，这一份自然能转双引擎。**已在文件头注写明，避免下一个人当成漏迁去"修"。**
+
+### 第 9 刀剩余
+
+`resume` 那一半（路由动词本身：SQLite 的 `resumeTask` vs PG 的 `children.resume`）还没动。
+本刀先把 `retry` 收干净——它是两者里调用面更宽、分叉更多的那个，而且它的合并已经把
+`resumeTaskAs` 这个端口在两个组合根上都落实了，正好是 `resume` 合并的前置。

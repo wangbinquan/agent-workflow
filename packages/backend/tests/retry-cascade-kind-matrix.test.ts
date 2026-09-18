@@ -243,6 +243,16 @@ function retryVia(
   }).retry(input)
 }
 
+// RFC-359 AC-1（第 9 刀）**为什么这一份还是单引擎**（不是漏迁）：下面两条并发判据要往
+// 级联取消里注入失败，而那个缝（`cancelTask` 的 `beforeStatusCas`）只长在 SQLite 根绑的那份
+// `cancelTask` 上——PostgreSQL 根绑的是 `postgresqlChildTaskLifecycleParticipant.cancel`，
+// 是**另一份实现**。把 `cancelTask` 喂给 PG 库能跑，但那不是 PG 部署里真正会执行的那份，
+// 双引擎跑出来的绿是假的。
+//
+// 已经覆盖到的：级联取消的**正常**路径两个引擎都验（`rfc359-w9-retry-rollback-parity` 的
+// 「级联取消撞上已终态的子任务」那一格，两侧都用各自根的真绑定）。差的只是**注入失败**那两条。
+// 真正的处置是把 `ChildTaskLifecycleParticipant` 这一对也合一（plan 的剩余项），
+// 那时注入点会和 `retry` 一样落在依赖面上，这一份自然能转双引擎。
 describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
   let h: Harness
 

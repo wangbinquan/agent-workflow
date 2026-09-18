@@ -250,12 +250,20 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 第 6 刀的收尾：`36/20 → 37/20`。`rfc345-resource-acl-facade-retirement` 的兼容边账本
   // 登记了两条**过渡态**的边（共用预览住在 PG 命名的文件里），于是它提到了这个模块名。
   // 仍是命名债的读数，随写侧那一刀一起回落。
-  // RFC-359 AC-1（第 9 刀）：`37/20 → 39/21`。`retry` 合一，`services/task.ts` 的 `retryNode`
+  // RFC-359 AC-1（第 9 刀）：`37/20 → 42/21`。`retry` 合一，`services/task.ts` 的 `retryNode`
   // （485 行）整份删除，行为套件改按共用投影 import（`retryNodeProjection`）。
-  // **+2 ref / +1 drive 全部落在 postgresql 一侧，因为共用的那份住在
+  // **+5 ref / +1 drive 全部落在 postgresql 一侧，因为共用的那份住在
   // `postgresqlTaskRouteOperations.ts` 里**——与本格上面三次同形，仍是命名债的读数：
   // 涨上去的覆盖是两个引擎共享的同一份实现，SQLite 那一侧已经没有第二份可漂移。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 10/2, postgresql 39/21',
+  // 5 条里只有 1 条是真 import（`tests/helpers/retryEngine.ts` 取 `retryNodeProjection`），
+  // 另外 4 条是**改锚后的注释与路径常量**提到了这个文件名（`scheduler-audit-s13` 的 G3 锚、
+  // `rfc287-t13` 的 F8 锚、`rfc103` 的正面锚、`rfc359-w29` 的摘要说明）——本账本按**文本**
+  // 数引用，注释也算（同 `TaskExecutionRuntimeParticipants` 那格记过的同一件事）。
+  //
+  // **记账教训（第二次）**：这条棘轮要在**所有编辑做完之后**再跑一次。本刀第一次把它改成 39
+  // 之后又去修了四处守卫锚点，每一处都新提了一次文件名，于是 39 当场过时并把 main 推红
+  //（`d1ed812ca`）。同样的坑上一次是「批次二 ⑤ 中途跑绿、之后又改了注释」。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 10/2, postgresql 42/21',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -311,8 +319,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // 第 3 刀：9 vs 20 → 9 vs 35，来源同上一格（列表三件合一 + 十四个消费者改锚）。
   // 第 4 刀：9 vs 35 → 10 vs 36，差额不变（两侧同步 +1，来源见上一格）。
   // 第 6 刀的收尾：10 vs 36 → 10 vs 37，来源同上一格。
-  // RFC-359 AC-1（第 9 刀）：10 vs 37 → 10 vs 39，来源见上一格的注释（命名债的读数，随 §5hj 回落）。
-  'modules/task-execution/infrastructure/TaskRouteOperations: 10 vs 39',
+  // RFC-359 AC-1（第 9 刀）：10 vs 37 → 10 vs 42，来源见上一格的注释（命名债的读数，随 §5hj 回落）。
+  'modules/task-execution/infrastructure/TaskRouteOperations: 10 vs 42',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。

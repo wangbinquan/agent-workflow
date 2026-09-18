@@ -840,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5081,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 9 刀）+1（5080 → 5081）：合并后的那份 `retry` 不再自带本地取新器。`postgresqlTaskRouteOperations.ts` 里原有一个私有的 `freshestTopLevel`（filter 顶层 + id 序倒排取首），与 `services/freshness.ts` 的 `pickFreshestRun(rows, { topLevelOnly: true })` **逐值相同**——而「同一个取新语义有第二份写法」正是 RFC-096 audit S-13 收敛掉的那类分叉（`scheduler-audit-s13-*` 的 G3/G7 就为此存在）。把那份副本删掉、改调共用实现，于是多出这一条 `postgresqlTaskRouteOperations.ts → services/freshness.ts#pickFreshestRun` 的 legacy-outbound 边。它与该文件既有的 9 条 `@/services/*` 兼容边**同形同 owner**，随 RFC-294 W4-E1 cutover 一起退役；零成本的替代只有「把重复的取新器留着」——那是用另一处分叉换一个数字不涨。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -864,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4564,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1（第 9 刀）+1（4563 → 4564）：合并后的那份 `retry` 不再自带本地取新器。`postgresqlTaskRouteOperations.ts` 里原有一个私有的 `freshestTopLevel`（filter 顶层 + id 序倒排取首），与 `services/freshness.ts` 的 `pickFreshestRun(rows, { topLevelOnly: true })` **逐值相同**——而「同一个取新语义有第二份写法」正是 RFC-096 audit S-13 收敛掉的那类分叉（`scheduler-audit-s13-*` 的 G3/G7 就为此存在）。把那份副本删掉、改调共用实现，于是多出这一条 `postgresqlTaskRouteOperations.ts → services/freshness.ts#pickFreshestRun` 的 legacy-outbound 边。它与该文件既有的 9 条 `@/services/*` 兼容边**同形同 owner**，随 RFC-294 W4-E1 cutover 一起退役；零成本的替代只有「把重复的取新器留着」——那是用另一处分叉换一个数字不涨。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -919,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ed996dfb1ef5cbef8b60eec77d5ba792a18bff42",
-    "contentDigest": "sha256:415ba3f13d8fd7ea84c208ae9755fc20e1e0eb78eadcc9c6c8d2240d881cce6f",
+    "currentSnapshotSha": "d1ed812ca87c019542c1a412d04bcd96fef9e31c",
+    "contentDigest": "sha256:b823c457e068d31c5fe9748ff2830332b760099740dc55d20098b78f9b1e1d94",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -2,6 +2,47 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 77，**第 9 刀：`retry` 两份实现合一，照出四处真缺陷**）
+>
+> 留 PG 那份（在正确模块），删掉 `services/task.ts` 的 `retryNode`（**485 行**）。
+> 依赖面收窄成两个端口——`resumeTaskAs(actor, taskId)` + `cancelChildTaskForCascade(child, parent)`
+> ——于是**没有装配完整 runtime 的组合根**（`server.ts` 那条）也接得上同一份实现。
+>
+> **证据步**：`rfc359-w9-retry-rollback-parity` 建到 **12 格 / 26 条**（真 git 工作树、生产接线、
+> 每格变异实证）；行为套件改指共用入口 `tests/helpers/retryEngine.ts`。
+>
+> **四处真缺陷，全部在留下的那份里，全部已修**：
+> ①终态子任务的级联取消被当成失败（PG 上重试一个子任务已完成的调用节点会报
+> `retry-child-cancel-failed` 并把任务卡在 `interrupted`）；
+> ②`__repo_prep__` 路径上**三道门全缺**（对已 done / 已过期的准备行重试 = 对已有工作树的任务再物化）；
+> ③失败关闭那笔 CAS **静默失效**——`interrupted` 是终态，`trySet` 不带 `allowTerminal` 返回 false
+> 而不抛，于是调用方拿到 409、任务却卡在「可恢复」态、错误字段空着；
+> ④取消旧世代子任务**失败时仍然铸了占位行**——占位行成为最新一代，旧子任务还活着，
+> 任务一旦 resume 就会在旧子任务仍 `awaiting_human` 时**再开一个**。
+> ④ 的处置是把一笔事务拆成三段：准入 CAS → 取消 → 铸行（两个边界都承重）。
+>
+> **测试面也跟着合一**：四份行为套件（`lifecycle-property` / `lifecycle-transitions-current` /
+> `retry-node-guard-order` / `retry-node-no-review-cascade`）迁到 `describeEachProvider`——
+> 触发点是合并本身：它们靠「import `services/task`」这条机械理由挂在单引擎账本上，
+> 理由随合并消失，守卫当场把它们推出来。
+> `tasks.test.ts` 那 4 条 retry 判据去掉单引擎早返回，**`docs/audit-backlog.md` 登记的行为分叉 ①
+> （空 worktree 时 SQLite 200 / PG 410）随合并消失**，统一到 410 那一侧。
+>
+> **顺手补了一处守卫自己的语料缺口**：`rfc317` 转移表预言的 `TASK_WRITERS` 只认
+> `setTaskStatus` / `trySetTaskStatus`，而中立端口写法是 `runtimeLifecycle.trySet`——
+> **20 个静态可知站点整批在语料之外**（含 PG daemon / 子任务启动 / 子任务生命周期 / fusion 引擎）。
+> 补进来后只有 1 条越界（就是上面 ③ 修的那笔），已入账。
+>
+> **一条已裁决分叉销账**：`retry-held-session-reap-order` 随合并消失（两侧现在都在 resume
+> 那一段围栏租约），`ACCEPTED_DUAL_ENGINE_DIVERGENCES` 清零。
+>
+> **踩坑三笔已落 `docs/dev-gotchas.md`**：census 产物是**一组**（8 份 json + `status.md`，
+> 手点文件名必漏）；手改 `architecture/**` 一律在 census **之前**；`ledger-baselines.json` 里
+> `file` 指向测试文件的条目 census **不重算**。
+>
+> **下一步**：第 9 刀的另一半——`resume` 路由动词本身（SQLite `resumeTask` vs PG `children.resume`）；
+> 然后是 `ChildTaskLifecycleParticipant`，以及 plan §5hj 的命名债（`postgresql*` 共用文件改中立名）。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 76，**第 8 刀第 3 步：两份修复实现合一，照出三处真分叉**）
 >
 > 留 PG 那份（在正确模块、apply 分支覆盖全部 14 条规则的每个选项、且早被证明可移植），

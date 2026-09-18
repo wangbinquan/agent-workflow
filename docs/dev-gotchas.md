@@ -675,6 +675,37 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 **注意方向**：这类账本红的时候往往是**好事**——「少一个未受审调用点」「少一条 deep import」
 正是棘轮要的方向，处置是**删行销账**，不是放宽判据。
 
+### census 的产物是**一组**，不是「你改过的那几个文件」（2026-09-17 实撞，推红一次）
+
+`bun run scripts/architecture-census.ts --write` 一次写出 **8 份 `architecture/*.json`
+加上 `design/RFC-294-backend-layered-target-architecture/status.md`**，它们互相之间有
+`sourceDigest` / `contentDigest` 交叉引用。**按文件名手点着 `git add` 必漏**——实撞那次
+漏了两份只含 `sourceDigest` 变化的 json 与那份 `status.md`，本地全绿、CI 在
+`RFC-294 N1a/N1b` 上红，而红的内容（一个 digest 对不上）与本次改动毫无关系。
+
+**定式**：`git add architecture/ design/RFC-294-backend-layered-target-architecture/status.md`
+——**整目录加那一个文件，永远一起**。commit 时的 pathspec 同样写这两项。
+
+### 顺序是硬的：**手改 `architecture/**` 一律在 census 之前**（2026-09-18 实撞）
+
+`ledger-baselines.json` 的 `canonicalProjection.contentDigest` 覆盖它自己。于是
+「跑完 census 再手动加一条 `allowGrowth` / 改一个 baseline」会让 `RFC-294 N1a` 当场红
+（`contentDigest` 与文件内容对不上），而红的文案只说 digest 不符，不会告诉你是顺序错了。
+
+**定式**：所有手改（`allowGrowth` 增删、手工维护的 baseline 数字、`guard-manifest` 的种子格）
+先做完，**census 跑在最后一个编辑之后**；census 会原样保留这些手工格并重算 digest。
+
+### 指向**测试文件**的 baseline，census 不重算（2026-09-18 实撞）
+
+`ledger-baselines.json` 的条目分两类，看 `file` 字段：
+- `file` 指向 `architecture/*.json`（census 自己的产物）⇒ **census 重算** `baseline`；
+- `file` 指向 `packages/backend/tests/**`（例如 `TEST_ENGINE_HARDCODING_DEBT`、
+  `ACCEPTED_DUAL_ENGINE_DIVERGENCES`）⇒ **census 原样写回，要手改**。
+
+所以「删了账本数组里的四行 → 跑 census → 应该就对了」是错的：census 不动它，
+`RFC-317 T16 > 条目数与源码逐字相等` 会红在「源码 322 vs 基线 326」。
+处置是手把 `baseline` 改小并在 `why` 末尾追一句为什么销的账。
+
 
 两次主干红，同一个根因：自查命令**看上去绿，实际什么都没查**。
 
