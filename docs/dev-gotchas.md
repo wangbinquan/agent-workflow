@@ -8332,3 +8332,25 @@ SQLite 专有的东西。判据是整份源码 `not.toContain('sqlite')`，**注
 改法是**保留信息、换个写法**（「classic 侧 `taskLifecycleRepair.ts`」），不要去放宽守卫：
 它挡的那件事是真的。这与本仓另外几条「按文本/名字判断」的守卫是同一类代价——
 判据简单所以可靠，代价是**注释也在判据的射程内**。
+
+## 改了任一**组合根**之后，必须重跑 `rfc359-w29-unstarted-application-composition`
+
+它对三段装配体各钉了一个 **sha256 摘要**：`composeSqliteApplicationDeps` /
+`composeSqliteApiRouteMounts` / `cli/postgresqlDaemonApplication.ts` 的守护进程阶段。
+凡是碰过 `src/server.ts`、`src/cli/start.ts`、`src/cli/postgresqlDaemonApplication.ts`、
+`modules/**/composition/providerRuntime.ts` 的轮次，**推之前必须跑一遍它**——
+哪怕你觉得「只是换了个工厂名」「只是多交一格依赖」：摘要按**文本**算，换名字也会变。
+
+**实撞两次，都推红了 main**（2026-09-18 同一天）：
+
+- 一次改了 `server.ts` 的路由装配，只更新了 `composeSqliteApplicationDeps` 那一段的摘要，
+  漏了同文件里 `composeSqliteApiRouteMounts` 那一段；
+- 一次改了 `cli/postgresqlDaemonApplication.ts` 的一行装配（多交一个收尾器），
+  而我那一轮的定向测试清单里根本没有 W29——**上一轮跑过它**，于是想当然地以为还绿。
+
+两次都是同一个形状：**我核过的树 ≠ 我提交的树**。摘要判据的价值正在于此
+（它逼你承认「装配图确实变了」并写清变的是哪一格），但它只在**跑过**的时候有价值。
+
+顺带：摘要红了**不要直接抄新值了事**——先回答「装配出来的东西变了没有」。
+如果只是改名 / 换取用位置，在断言旁写清「装配图一格没动，动的是文本」；
+如果真的多交了一格依赖（本例就是），写清多的是哪一格、为什么是补齐而不是回归。
