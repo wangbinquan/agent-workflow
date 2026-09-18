@@ -391,7 +391,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'scheduler-default-retries.test.ts: 1',
   'scheduler.test.ts: 1',
   'session-capture-sqlite.test.ts: 4',
-  'start-task-deps.test.ts: 2',
   'start-task-multi-repo-gates.test.ts: 1',
   'start-task-url.test.ts: 1',
   'structural-diff-callchain-multi-repo.test.ts: 1',
@@ -581,7 +580,50 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
     holds: (_rel, code) =>
       /createInMemoryDb\s*\(\s*partial\b/.test(code) ||
       code.includes('partialMigrationsDir') ||
-      /_journal\.json/.test(code),
+      /_journal\.json/.test(code) ||
+      // RFC-359 AC-6 补一条同义拼法：冻结那段后来抽成了共享 helper
+      // `tests/migration-freeze.ts#freezeAt(idx)`（逐字同一件事：截断 journal + 拷贝前缀
+      // 到临时目录）。抽出去之后，消费它的文件里**不再出现** `partial` / `_journal.json`
+      // 这些内联痕迹，于是上面三条拼法一条都咬不到——**判据认拼法不认概念**的老毛病，
+      // 本 RFC 这一天里第三次撞（前两次见 `sqlite-execution-engine` 补 `composeTaskExecutionTestRuntime`、
+      // 与 `implementsPort` 收紧那两段）。
+      /(?<![A-Za-z0-9_.])freezeAt\s*\(/.test(code),
+  },
+  {
+    /**
+     * RFC-359 AC-6 —— 被测物是**某个 provider 自己的组合根 / 装配面**。
+     *
+     * `compose{Sqlite,Postgresql}<Name>` 这一族按定义只在一侧存在：SQLite 的
+     * `AppDeps`（`createApp` 收 `DbClient`）、`composeSqliteDynamicWorkflowValidationContext`
+     * （装的是 legacy 同步 loader）、`composeSqlitePostRestoreRecovery`（`recover` 签名点名
+     * `DbClient`）……另一侧的同名能力有**它自己的**组合根用例（`rfc359-w7-*-composition-roots`
+     * 两侧各一批）。把这种用例塞进 `describeEachProvider`，等于要求一侧去构造一个它按设计
+     * 就没有的装配面。
+     *
+     * **这一类与「还没迁」的区别在被测物**：如果被测的是**实现**（投影 / 命令 / 持久化），
+     * 那它该双引擎；只有当被测的就是「这一侧的装配长什么样」时才落这一类。
+     * 判据因此认的是「**调用**了 provider 具名的组合根」，不是「提到过」。
+     */
+    id: 'provider-composition-root',
+    holds: (_rel, code) =>
+      /(?<![A-Za-z0-9_.])compose(?:Sqlite|Postgresql)[A-Za-z]*\s*\(/.test(code),
+  },
+  {
+    /**
+     * RFC-359 AC-6 —— **一个 transcript 里同时驱动两个引擎**的跨 provider 对拍。
+     *
+     * `describeEachProvider` 的形状是「同一段 body 各跑一遍」，而这一类要的恰恰相反：
+     * 它在**同一条用例**里既建 SQLite 库、又建真 PostgreSQL 客户端，然后断言两侧对同一段
+     * 剧本给出同一个答案（RFC-349 AC-12 的行为 transcript、以及 T5/C2 的 Promise 归属
+     * 与 owner 元组围栏）。把它塞进双引擎 harness 等于把对拍拆成两半，判别力当场归零。
+     *
+     * 判据认「文件里**同时**出现 SQLite 建库与真 PG 客户端构造」——两者缺一都不算，
+     * 所以它咬不到「只跑 SQLite、顺便 import 了个 PG 类型」的普通单引擎判据。
+     */
+    id: 'cross-provider-oracle',
+    holds: (_rel, code) =>
+      /(?<![A-Za-z0-9_.])createInMemoryDb\s*\(/.test(code) &&
+      /(?<![A-Za-z0-9_.])createPostgresqlDatabaseClient\s*\(/.test(code),
   },
   {
     id: 'real-file-database',
@@ -772,6 +814,23 @@ function sanctionOf(rel: string): string | null {
  * **不要**为了让数字好看而往 `SANCTIONED_SINGLE_ENGINE` 里加一条只为某个文件量身定做的判据。
  */
 export const OPEN_MIGRATION_DEBT: readonly string[] = [
+  // RFC-359 AC-6（命名债清完后的一刀）**销四条**：
+  //   · `start-task-deps` —— **真迁**。它被卡住的唯一原因是 `StartTaskDeps.db` 钉着
+  //     `LegacySqliteTaskDatabase`，而被测的 `buildStartTaskDeps` 只是把句柄原样透传
+  //     （用例自己就断言 `expect(withCmd.db).toBe(db)`）。放宽那个字段后连带中立化了
+  //     `loadFrozenSpaceLayout` 与启动前的 `file://` 预筛（两处同步 `.all()` 转 await）。
+  //   · `rfc349-digital-employee-platform-tools-wiring` / `rfc359-w7-catalog-composition-roots`
+  //     / `rfc359-execution-contract-resource-adapter` —— **落进新的 `provider-composition-root`
+  //     机械理由**：被测物就是某一侧的**组合根 / 装配面**（`composeSqliteAppDeps` /
+  //     `composeSqliteDynamicWorkflowValidationContext` / `composeSqlitePostRestoreRecovery`），
+  //     那个面按定义只在一侧存在，另一侧的同名能力有它自己那批组合根用例。
+  //   · `rfc359-t19h-logical-backup-restore` / `rfc359-t19h-postgresql-upgrade.integration`
+  //     —— 落进 `frozen-migration-revision`：它们建库喂的是 `freezeAt(idx)` 截出来的
+  //     **冻结迁移前缀**（验的就是「那条迁移之前的行，恢复/升级之后该长什么样」）。
+  //     判据此前只认内联拼法，抽成共享 helper 之后咬不到，已补。
+  //   · `rfc349-dual-provider-behavior-oracle` / `rfc349-task-execution-provider-adapters`
+  //     —— 落进新的 `cross-provider-oracle`：它们在**同一条用例**里同时建 SQLite 库与真 PG
+  //     客户端做对拍，`describeEachProvider`「各跑一遍」的形状会把对拍拆成两半。
   // RFC-359 AC-1（第 11 刀下半）：cancel 合一摘掉了四份判据的 `from 'services/task'` 这条机械理由
   //（它们 import 它就是为了取 `cancelTask`）。摘掉之后**三份确实不再依赖那台执行引擎**，
   // 已就地迁到 `describeEachProvider`（`retry-cascade-kind-matrix` /
@@ -791,14 +850,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   // `rfc359-task-execution-read-models` 也**一直就属于那一类**（前者与 rfc268 同款装配，
   // 后者直接建 `createSqliteTaskExecutionRuntimeParticipants`），只是判据认的三种拼法都对不上。
   // 补上拼法之后它们离开本名单——「还剩多少要迁」少了两条**假待办**。
-  'rfc349-digital-employee-platform-tools-wiring.test.ts',
-  'rfc349-dual-provider-behavior-oracle.test.ts',
-  'rfc349-task-execution-provider-adapters.test.ts',
-  'rfc359-execution-contract-resource-adapter.test.ts',
-  'rfc359-t19h-logical-backup-restore.test.ts',
-  'rfc359-t19h-postgresql-upgrade.integration.test.ts',
-  'rfc359-w7-catalog-composition-roots.test.ts',
-  'start-task-deps.test.ts',
 ]
 
 describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降不升）', () => {

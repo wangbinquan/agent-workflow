@@ -62306,23 +62306,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "fromPath": "packages/backend/src/services/startTaskDeps.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cecb5da4299e2391e376",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts",
-      "toSymbol": "LegacySqliteTaskDatabase",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -62576,6 +62559,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskExecutionOwners",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
+      "fromPath": "packages/backend/src/services/startTaskDeps.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cfdf6c48434973f5e0f4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
+      "toSymbol": "LegacyProviderNeutralDatabase",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -142953,22 +142953,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionParticipant"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/startTaskDeps.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "id": "import:cecb5da4299e2391e376",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
-      "syntax": "static-import",
-      "targetSymbol": "LegacySqliteTaskDatabase",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -143239,6 +143223,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionOwners"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/startTaskDeps.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
+      "id": "import:cfdf6c48434973f5e0f4",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "syntax": "static-import",
+      "targetSymbol": "LegacyProviderNeutralDatabase",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -159650,7 +159650,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b6bc79a84eed453b9ab4f4028a2843c6311a287005b03da8764c588653fa467e",
+  "sourceDigest": "sha256:da1061c56862039aa7ac94f1b45d1e8a32c65aca5b308da0c051adb0d703feef",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

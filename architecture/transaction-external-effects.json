@@ -3088,7 +3088,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b6bc79a84eed453b9ab4f4028a2843c6311a287005b03da8764c588653fa467e",
+  "sourceDigest": "sha256:da1061c56862039aa7ac94f1b45d1e8a32c65aca5b308da0c051adb0d703feef",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4201,9 +4201,9 @@
         "effectKind": "workspace-prepare",
         "file": "packages/backend/src/services/task.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/task.ts#5351:workspace-prepare",
+        "id": "task-effect:packages/backend/src/services/task.ts#5356:workspace-prepare",
         "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 5351,
+        "line": 5356,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "recoveryClass": "local-probe-or-actor",

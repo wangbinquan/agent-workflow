@@ -43,6 +43,10 @@ import { composeAgentLaunchResourceOperations } from '../src/modules/task-execut
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 
+// RFC-359 AC-6：`StartTaskDeps.db` 放宽到中立句柄之后，这里**仍然要窄回 `DbClient`**——
+// 本夹具驱动的是 SQLite 那台执行引擎（`composeTaskExecutionTestRuntime`，W5-T19f 的
+// `sqlite-execution-engine` 那一类），它按定义只收 bun:sqlite 库。约束写在这里而不是靠强转，
+// 于是「哪个夹具真的需要 SQLite」在类型上说得出口。
 function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
   deps: T,
 ): T & Pick<StartTaskDeps, 'schedulerDriver'> {
@@ -56,7 +60,7 @@ function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
 /** Every start fixture in this file explicitly selects the real test topology. */
 function startTask(
   input: Parameters<typeof startTaskProduction>[0],
-  deps: Omit<StartTaskDeps, 'schedulerDriver'>,
+  deps: Omit<StartTaskDeps, 'schedulerDriver'> & { readonly db: DbClient },
 ): ReturnType<typeof startTaskProduction> {
   return startTaskProduction(input, withRealSchedulerDriver(deps))
 }

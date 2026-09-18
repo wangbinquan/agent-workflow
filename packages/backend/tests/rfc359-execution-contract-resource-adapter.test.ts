@@ -25,7 +25,7 @@ import { createInMemoryDb } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { createExecutionContractResourceAdapter } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
-import { createApp } from '@/server'
+import { composeSqliteAppDeps, createApp } from '@/server'
 import { resolve } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -194,6 +194,11 @@ describeEachProvider('RFC-359 执行合同资源读取（双引擎，单一实�
   })
 })
 
+// RFC-359 AC-6：本块被测的就是 **SQLite 那个组合根**（`AppDeps` 收 `DbClient`，
+// `createApp` 的单参重载内部正是 `composeSqliteAppDeps`），PostgreSQL 侧的同一件事由
+// `rfc359-w7-*-composition-roots` 各自那批覆盖。下面把那一步**显式写出来**而不是靠重载隐含，
+// 这样「被测物是某一侧的装配面」在源码上说得出口，也才落得进 `provider-composition-root`
+// 那一类机械理由（见 `rfc359-w5-t19f-test-engine-hardcoding`）。
 describe('RFC-359 执行合同装配（SQLite 组合根）', () => {
   test('HTTP bootstrap 保留注入进来的 provider-中立组合根', async () => {
     const executionContracts = composeExecutionContract({
@@ -205,15 +210,17 @@ describe('RFC-359 执行合同装配（SQLite 组合根）', () => {
         },
       },
     })
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: DAEMON_TOKEN,
-      configPath: '',
-      opencodeVersion: null,
-      dbVersion: 1,
-      db: createInMemoryDb(MIGRATIONS),
-      executionContracts,
-    })
+    const app = createApp(
+      composeSqliteAppDeps({
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+        token: DAEMON_TOKEN,
+        configPath: '',
+        opencodeVersion: null,
+        dbVersion: 1,
+        db: createInMemoryDb(MIGRATIONS),
+        executionContracts,
+      }),
+    )
 
     const response = await app.request('/api/execution-contracts', {
       headers: { Authorization: `Bearer ${DAEMON_TOKEN}` },

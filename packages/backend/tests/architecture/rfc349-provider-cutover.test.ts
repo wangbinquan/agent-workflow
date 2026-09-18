@@ -41,7 +41,10 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除，这条债随之销账。
   'packages/backend/src/services/startTaskDeps.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
-  'packages/backend/src/services/startTaskDeps.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
+  // RFC-359 AC-6：`StartTaskDeps.db` 放宽到中立句柄（被测的 `buildStartTaskDeps` 只把它原样
+  // 透传，用例自己就断言 `expect(withCmd.db).toBe(db)`），类型来源随之换成同目录的
+  // `legacySqliteTransportMechanisms`。这条债仍在——它随 legacy 启动面一起消失。
+  'packages/backend/src/services/startTaskDeps.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase',
   'packages/backend/src/services/task.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 / 3 刀）：纯读三件 + 列表三件合一，
   // `getTaskDiff` / `getNodeRunStdout` / `getNodeRunEvents` / `listTasks` / `listTaskItems`

@@ -429,7 +429,7 @@ export interface StartTaskDeps {
    * IS sealed and this is missing, the launch fails closed rather than guessing.
    */
   secretBox?: SecretBox
-  db: LegacySqliteTaskDatabase
+  db: LegacyProviderNeutralDatabase
   /**
    * RFC-349 provider-selected post-commit memory participant. Bootstrap must
    * bind this for production launches; the optional shape keeps legacy tests
@@ -1118,16 +1118,16 @@ async function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTas
       { url: redacted },
     )
   }
-  const checkCachedId = (id: unknown): void => {
+  const checkCachedId = async (id: unknown): Promise<void> => {
     if (typeof id !== 'string' || id.length === 0) return
-    const row = deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()[0]
+    const row = (await deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1))[0]
     // 行不存在这里不报——留给后台那条既有的 `cached-repo-not-found`，免得两处各报各的。
     const redacted = row?.urlRedacted ?? null
     if (typeof redacted === 'string' && isFileSchemeUrl(redacted)) reject(redacted)
   }
-  checkCachedId((input as { cachedRepoId?: unknown }).cachedRepoId)
+  await checkCachedId((input as { cachedRepoId?: unknown }).cachedRepoId)
   for (const r of (input as { repos?: readonly unknown[] }).repos ?? []) {
-    checkCachedId((r as { cachedRepoId?: unknown }).cachedRepoId)
+    await checkCachedId((r as { cachedRepoId?: unknown }).cachedRepoId)
   }
   // `sourceTaskId` 重放（前端「重启」多仓任务的**唯一**通道）此前完全没被预筛到
   // ——四轮门跨 RFC 面实测:以它启动一个存量 `file://` 多仓任务，同步段放行、返回
@@ -1136,7 +1136,7 @@ async function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTas
   // 冻结布局里每个仓都带 `cached_repo_id`，复用同一个判据即可（仍是零解封）。
   const sourceTaskId = (input as { sourceTaskId?: unknown }).sourceTaskId
   if (typeof sourceTaskId === 'string' && sourceTaskId.length > 0) {
-    for (const r of deps.db
+    for (const r of await deps.db
       .select({ cachedRepoId: taskRepos.cachedRepoId })
       .from(taskRepos)
       .where(eq(taskRepos.taskId, sourceTaskId))
@@ -1306,7 +1306,8 @@ export async function resolveRepoSourceSingle(
   return await resolveRepoSourceSingleWithProvider(spec, input, {
     appHome,
     repositoryWorkspace: repositoryWorkspaceFor(deps),
-    loadFrozenSpaceLayout: async (sourceTaskId) => loadFrozenSpaceLayout(deps.db, sourceTaskId),
+    loadFrozenSpaceLayout: async (sourceTaskId) =>
+      await loadFrozenSpaceLayout(deps.db, sourceTaskId),
     ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
     ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
     ...(deps.internalSource === undefined ? {} : { internalSource: deps.internalSource }),
@@ -2009,16 +2010,19 @@ function minimalNodePaths(mountPaths: readonly string[]): string[] {
   return [...paths.values()].sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
 }
 
-function loadFrozenSpaceLayout(
-  db: LegacySqliteTaskDatabase,
+// RFC-359 AC-6：句柄放宽到中立、函数转 async。它读的两张表（`task_repos` / `task_space_nodes`）
+// 都是普通 drizzle 查询，零方言；钉在 bun:sqlite 上的只有那两个 `.all()` 同步终结子。
+// 三个调用点本来就在 `async (sourceTaskId) => …` 里，加一个 await 即可。
+async function loadFrozenSpaceLayout(
+  db: LegacyProviderNeutralDatabase,
   sourceTaskId: string,
-): PlannedSpaceLayout {
-  const rows = db
+): Promise<PlannedSpaceLayout> {
+  const rows = await db
     .select()
     .from(taskRepos)
     .where(eq(taskRepos.taskId, sourceTaskId))
     .orderBy(taskRepos.repoIndex)
-    .all()
+
   if (rows.length === 0) {
     throw new ValidationError(
       'source-task-not-replayable',
@@ -2042,11 +2046,11 @@ function loadFrozenSpaceLayout(
     readonly: r.readonly,
     viaGroups: [],
   }))
-  const frozenNodes = db
+  const frozenNodes = await db
     .select({ path: taskSpaceNodes.nodePath })
     .from(taskSpaceNodes)
     .where(eq(taskSpaceNodes.taskId, sourceTaskId))
-    .all()
+
   const nodePaths =
     frozenNodes.length > 0
       ? frozenNodes
@@ -2680,7 +2684,8 @@ export async function materializeSpace(
     {
       appHome,
       repositoryWorkspace: repositoryWorkspaceFor(deps),
-      loadFrozenSpaceLayout: async (sourceTaskId) => loadFrozenSpaceLayout(deps.db, sourceTaskId),
+      loadFrozenSpaceLayout: async (sourceTaskId) =>
+        await loadFrozenSpaceLayout(deps.db, sourceTaskId),
       ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
       ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
       ...(deps.internalSource === undefined ? {} : { internalSource: deps.internalSource }),
@@ -3859,7 +3864,7 @@ async function startTaskImpl(
             ...deps,
             repositoryWorkspace: repositoryWorkspaceFor(deps),
             loadFrozenSpaceLayout: async (sourceTaskId) =>
-              loadFrozenSpaceLayout(deps.db, sourceTaskId),
+              await loadFrozenSpaceLayout(deps.db, sourceTaskId),
           },
           appHome,
         })

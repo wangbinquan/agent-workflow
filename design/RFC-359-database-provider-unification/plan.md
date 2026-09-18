@@ -17890,3 +17890,44 @@ plan 早先的裁决「先把共用出口提到中立文件再改名」按**实�
 （`FusionEngineTaskOperations` / `SourceTerminationParticipant` / `RepositoryPreparationRetryCommand` /
 `TaskLifecycleTransaction` / `TaskRouteOperations` / `TaskExecutionRuntimeParticipants`）
 **每一个都名副其实**：要么真有 sqlite 孪生、要么只服务 PostgreSQL、要么是 PG 的装配绑定。
+
+### AC-6 推进　单引擎待办 13 → 3（一条真迁 + 三类机械理由补全）
+
+命名债清完之后接着压 `OPEN_MIGRATION_DEBT`。**一条是真迁，七条是判据此前看不见**——
+后者与本 RFC 反复撞的那个毛病同源：**判据认拼法，不认概念**。
+
+**① 真迁：`start-task-deps`。** 它被卡住的唯一原因是 `StartTaskDeps.db` 钉着
+`LegacySqliteTaskDatabase`，而被测的 `buildStartTaskDeps` 只是把句柄**原样透传**
+（用例自己就断言 `expect(withCmd.db).toBe(db)`）。放宽那个字段之后连带中立化两处：
+
+- `loadFrozenSpaceLayout`（读 `task_repos` / `task_space_nodes`，零方言；钉在 bun:sqlite 上的
+  只有两个 `.all()` 同步终结子）转 async + 中立句柄，三个调用点本来就在 `async` 箭头里；
+- 启动前的 `file://` 预筛 `checkCachedId`（外层 `assertLaunchSourceSchemeSync` 早已 async）。
+
+`rfc287-t13` 的夹具**仍然要窄回 `DbClient`**——它驱动的是 SQLite 那台执行引擎，按定义只收
+bun:sqlite 库。约束写进类型而不是靠强转，于是「哪个夹具真的需要 SQLite」在类型上说得出口。
+
+**② 三类机械理由**（每一类都是概念，不是给某个文件量身定做）：
+
+| 类 | 判据 | 销掉 |
+| --- | --- | --- |
+| **`provider-composition-root`**（新增） | 文件**调用**了 `compose{Sqlite,Postgresql}*` 组合根 | 3 条 |
+| `frozen-migration-revision` | 补 `freezeAt(` 同义拼法 | 2 条 |
+| **`cross-provider-oracle`**（新增） | 同一文件里**同时**建 SQLite 库与真 PG 客户端 | 2 条 |
+
+- **组合根那一类的边界**：区别在**被测物**——被测的是**实现**（投影 / 命令 / 持久化）就该双引擎；
+  只有当被测的就是「这一侧的装配长什么样」时才落这一类（`AppDeps` 收 `DbClient`、
+  `composeSqliteDynamicWorkflowValidationContext` 装的是 legacy 同步 loader……那个面按定义只在
+  一侧存在，另一侧的同名能力有**它自己那批**组合根用例）。`rfc359-execution-contract-resource-adapter`
+  的那一块顺手把 `createApp(单参重载)` 改写成显式 `createApp(composeSqliteAppDeps(…))`——
+  重载内部本来就是这一句，写出来之后「被测物是某一侧的装配面」在源码上说得出口。
+- **`freezeAt` 那两条**：判据原本认 `partial` / `partialMigrationsDir` / `_journal.json` 三种**内联**
+  痕迹，而冻结那段后来抽成了共享 helper `tests/migration-freeze.ts#freezeAt(idx)`，
+  消费它的文件里一个痕迹都不剩。**同一天里第三次撞这个形状**
+  （前两次：`sqlite-execution-engine` 补 `composeTaskExecutionTestRuntime`、`implementsPort` 收紧）。
+- **跨 provider 对拍那一类**：`describeEachProvider` 是「同一段 body 各跑一遍」，而这两份要的恰恰
+  相反——在**同一条用例**里既建 SQLite 库又建真 PG 客户端，断言两侧对同一段剧本给出同一个答案。
+  塞进双引擎 harness 等于把对拍拆成两半，判别力当场归零。
+
+**还剩 3 条真债**：`execution-contract-platform` / `helpers/rfc310Pr3Fixture` /
+`rfc257-webhook-error-codes`——都是「被测的是实现、只是没人迁」，下一刀做。

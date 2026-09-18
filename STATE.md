@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 88，**AC-6 推进：单引擎待办 13 → 3**）
+>
+> 命名债清完之后接着压 `OPEN_MIGRATION_DEBT`。**一条真迁 + 七条判据此前看不见**。
+>
+> **真迁 `start-task-deps`**：它被卡住的唯一原因是 `StartTaskDeps.db` 钉着
+> `LegacySqliteTaskDatabase`，而被测的 `buildStartTaskDeps` 只是把句柄**原样透传**。放宽那个
+> 生产字段后连带中立化了 `loadFrozenSpaceLayout`（转 async）与启动前的 `file://` 预筛。
+> `rfc287-t13` 的夹具仍窄回 `DbClient`——它驱动 SQLite 那台执行引擎，约束写进类型不靠强转。
+>
+> **三类机械理由**（都是概念，不是量身定做）：新增 `provider-composition-root`（被测物就是
+> 某一侧的组合根 / 装配面）销 3 条、`frozen-migration-revision` 补 `freezeAt(` 同义拼法销 2 条、
+> 新增 `cross-provider-oracle`（同一条用例里同时驱动两个引擎的对拍）销 2 条。
+>
+> `freezeAt` 那条是**同一天第三次**撞「判据认拼法不认概念」——前两次是
+> `sqlite-execution-engine` 补 `composeTaskExecutionTestRuntime`、`implementsPort` 收紧。
+>
+> **还剩 3 条真债**：`execution-contract-platform` / `helpers/rfc310Pr3Fixture` /
+> `rfc257-webhook-error-codes`，都是「被测的是实现、只是没人迁」。
+>
+> `ab5d08414` → `15c2661f9`（命名债第四批 + 跨包锚）**CI 已绿**。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 87，**命名债收尾第四批：`/api/tasks` 路由面，命名债清零**）
 >
 > 最后一份 `postgresqlTaskRouteOperations.ts`（2416 行，22 个导出里 **15 个被 SQLite 侧直接消费**）。

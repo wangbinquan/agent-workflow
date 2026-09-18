@@ -7,7 +7,7 @@
 // so it is an explicit parameter (design.md R2-e).
 import { loadConfig } from '@/config'
 import type { SecretBox } from '@/auth/secretBox'
-import type { LegacySqliteTaskDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTaskDatabase'
+import type { LegacyProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type { StartTaskDeps } from '@/services/task'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
@@ -36,7 +36,7 @@ export function resolveSubagentLiveCapture(
  * (multipart's `preCreatedWorktree` / `preResolvedSource`) spread them on top.
  */
 export function buildStartTaskDeps(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   schedulerDriver: SchedulerDriverPort,
   configPath: string,
   actorUserId: string,
