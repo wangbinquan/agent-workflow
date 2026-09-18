@@ -14,22 +14,21 @@
 // the end-to-end continue semantics; the TARGET tests below pin the mint
 // matrix including the carve-out).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { cancelViaEngine } from './helpers/cancelEngine'
+import { describeEachProvider } from './helpers/eachProvider'
+import { POSTGRESQL_SERIALIZATION_ATTEMPTS } from '@/platform/persistence/postgresqlSerializationRetry'
 import { runGit } from '../src/util/git'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
 import { createRetryEngine } from './helpers/retryEngine'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const DOWNSTREAM_KINDS_MINT = [
   'agent-single',
@@ -51,13 +50,13 @@ const DOWNSTREAM_KINDS_SKIP = [
 ] as const satisfies readonly NodeKind[]
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-t1d-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -69,7 +68,6 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
-  const db = createInMemoryDb(MIGRATIONS)
   return {
     db,
     appHome,
@@ -203,17 +201,19 @@ async function seedLiveChildForCallRow(
  * 目标状态是**读当前值再翻**，不是固定轮换：搅动与 CAS 之间不再隔着事务边界，
  * 固定轮换会与 CAS 的期望值对上号，几轮之后反而让 CAS 赢了。
  */
-function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): () => void {
-  return () => {
-    const current = db
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get()?.status
+function starveTaskCancelCas(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  onAttempt: () => void,
+): () => Promise<void> {
+  return async () => {
+    const current = (
+      await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    )[0]?.status
     if (current !== 'awaiting_review' && current !== 'awaiting_human') return
     onAttempt()
     const next = current === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
-    db.update(tasks).set({ status: next }).where(eq(tasks.id, taskId)).run()
+    await db.update(tasks).set({ status: next }).where(eq(tasks.id, taskId))
   }
 }
 
@@ -243,21 +243,20 @@ function retryVia(
   }).retry(input)
 }
 
-// RFC-359 AC-1（第 9 刀）**为什么这一份还是单引擎**（不是漏迁）：下面两条并发判据要往
-// 级联取消里注入失败，而那个缝（`cancelTask` 的 `beforeStatusCas`）只长在 SQLite 根绑的那份
-// `cancelTask` 上——PostgreSQL 根绑的是 `postgresqlChildTaskLifecycleParticipant.cancel`，
-// 是**另一份实现**。把 `cancelTask` 喂给 PG 库能跑，但那不是 PG 部署里真正会执行的那份，
-// 双引擎跑出来的绿是假的。
+// RFC-359 AC-1（第 11 刀下半）**转双引擎**——上一版注释预告的那个前提已经到了。
 //
-// 已经覆盖到的：级联取消的**正常**路径两个引擎都验（`rfc359-w9-retry-rollback-parity` 的
-// 「级联取消撞上已终态的子任务」那一格，两侧都用各自根的真绑定）。差的只是**注入失败**那两条。
-// 真正的处置是把 `ChildTaskLifecycleParticipant` 这一对也合一（plan 的剩余项），
-// 那时注入点会和 `retry` 一样落在依赖面上，这一份自然能转双引擎。
-describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
+// 它当年之所以是单引擎：下面两条并发判据要往级联取消里注入失败，而那个缝
+// （`beforeStatusCas`）只长在 SQLite 根绑的 `cancelTask` 上，PostgreSQL 根绑的是
+// `postgresqlChildTaskLifecycleParticipant.cancel`，是**另一份实现**——把 `cancelTask`
+// 喂给 PG 库能跑，但那不是 PG 部署里真正会执行的那份，双引擎跑出来的绿是假的。
+// 原注释写着：「真正的处置是把 `ChildTaskLifecycleParticipant` 这一对也合一，
+// 那时注入点会和 `retry` 一样落在依赖面上，这一份自然能转双引擎。」合一已经做完
+// （`cancelTaskProjection` 是**唯一**一份，两个根都绑它），于是照着办。
+describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider) => {
   let h: Harness
 
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(provider.db)
   })
   afterEach(() => h.cleanup())
 
@@ -433,9 +432,24 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     // 取消前的状态写、releaseAfterStop……），数字一路从 13 → 12 → 11 地随「哪些事务走统一原语」往下掉；
     // 现在钩子只在**子任务那笔取消 CAS 之前**触发，于是它就等于子任务的取消尝试次数本身。
     //
-    // **承重的正是这个数**（不再是附带观测量）：8 = `services/task.ts` 里 `attempts++ >= 8` 的预算被
-    // 耗尽。少于 8 说明子任务的取消尝试变少了——那是真回归；多于 8 说明钩子被无关路径触发了。
-    expect(cancelCasAttempts).toBe(8)
+    // **承重的正是这个数**（不再是附带观测量）：8 = 共用取消实现里 `attempts++ >= 8` 的预算被
+    // 耗尽。少于 8 说明子任务的取消尝试变少了——那是真回归。
+    //
+    // RFC-359 AC-1（第 11 刀下半）转双引擎后**上界按引擎分叉**，原因是真实的、结构性的：
+    //   · SQLite 是 `exclusive` 写者，事务不会被重放 ⇒ 钩子调用数**就等于**取消尝试数 = 8；
+    //   · PostgreSQL 是多写并发：搅动那笔写落在**另一条连接**上，于是 SERIALIZABLE 事务会被
+    //     40001 打回，而 `databaseSessionFor(db).serializable` 把**整笔事务**当重试单元重放
+    //     （预算 `POSTGRESQL_SERIALIZATION_ATTEMPTS`），重放会再走一次 `beforeStatusCas`。
+    //     本机真库实测稳定 **10**（8 次取消尝试 + 2 次序列化重放），但那是「冲突点 × 重试预算」
+    //     的乘积，不是判据要锁的东西，所以不钉死这个数。
+    //
+    // 上界原本是为了抓「钩子被无关路径触发」。那件事现在**由构造保证**：钩子只作为子任务那笔
+    // 取消的 `beforeStatusCas` 传进去，且只在子任务处于 awaiting_* 时才计数——别的路径碰不到它。
+    // 于是上界只需兜住序列化重放本身。
+    expect(cancelCasAttempts).toBeGreaterThanOrEqual(8)
+    expect(cancelCasAttempts).toBeLessThanOrEqual(
+      provider.capabilities.isolation === 'exclusive' ? 8 : 8 + POSTGRESQL_SERIALIZATION_ATTEMPTS,
+    )
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(parent.status).toBe('failed')

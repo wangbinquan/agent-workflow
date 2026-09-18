@@ -2,6 +2,25 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 83，**第 11 刀收口：三份判据转双引擎，单引擎待办 13 → 11**）
+>
+> 上一提把 cancel 合一照出的四份单引擎判据先记进 `OPEN_MIGRATION_DEBT`（13 → 17）以保证提交可复核。
+> 这一提处理干净，**净降到 11**：`retry-cascade-kind-matrix` / `rfc202-lifecycle-exits` /
+> `rfc350-idle-timeout-integration` 三份**真迁到 `describeEachProvider`**；
+> `rfc268-webhook-scratch-launch` 由判据认领——它照生产装配跑的是 SQLite 的**启动参与者**，
+> 换 PG 要等启动面的 cutover。
+>
+> **判据补两条同义拼法**（`composeTaskExecutionTestRuntime` / `createSqlite*TaskExecutionParticipant`）：
+> 它认的是「驱动 SQLite 那台执行引擎」这个概念，此前只认三种拼法，同一概念换写法就看不见。
+> 补上之后顺带照出**两条假待办**（`rfc269-webhook-code-host-context-e2e` /
+> `rfc359-task-execution-read-models`），它们一直就属于那一类。
+>
+> **双引擎对拍当场照出一处真引擎差异**：饿死格的 `cancelCasAttempts` 在 SQLite 是 8、PG 稳定 10——
+> 搅动写落在另一条连接上，SERIALIZABLE 事务被 40001 打回，而 serializable 把**整笔事务**当重试单元
+> 重放，重放再走一次 `beforeStatusCas`。判据改成「下界 8 + 按 `capabilities.isolation` 分叉的上界」。
+>
+> 上一提（`f2e062092`）**CI 已绿**。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 82，**第 11 刀下半：`cancelTask` 删除，取消只剩一份实现**）
 >
 > 取消现在是「一份实现 + 一个生产装配点 + 一个测试装配点」：实现只有 `cancelTaskProjection`，

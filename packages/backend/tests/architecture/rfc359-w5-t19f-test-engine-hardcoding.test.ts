@@ -177,7 +177,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rerun-prior-output-e2e.test.ts: 1',
   'resume-multi-repo-rollback.test.ts: 1',
   'resume-task-idempotent.test.ts: 1',
-  'retry-cascade-kind-matrix.test.ts: 1',
   'review-cancel-concurrency.test.ts: 1',
   'review-clarify-question-phase-stranded.test.ts: 1',
   'review-iterate-comments-in-prompt.test.ts: 1',
@@ -246,7 +245,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc193-port-artifacts.test.ts: 1',
   'rfc193-wrapper-review.test.ts: 1',
   'rfc199-start-task-workflow-race.test.ts: 1',
-  'rfc202-lifecycle-exits.test.ts: 5',
   'rfc204-cached-repo-wire-and-reuse.test.ts: 3',
   'rfc204-cold-clone-seal.test.ts: 2',
   'rfc212-revalidation-behavior.test.ts: 13',
@@ -356,7 +354,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // 手搓孪生合成一条双引擎。`DrizzleRealtimeStore` 的形参本来就是 `ProviderNeutralDatabase`
   // （一份实现），两条用例只是喂了两种库；合并后同一份真数据、同一组断言跑两个引擎，
   // `sqlRows` / `postgresqlFixture` 假池随之删除。5 例 → 7 例。
-  'rfc350-idle-timeout-integration.test.ts: 1',
   'rfc351-sqlite-write-transaction-immediate.test.ts: 1',
   'rfc354-clarify-idle-skip.test.ts: 1',
   'rfc354-nested-depth3-frames.test.ts: 1',
@@ -540,10 +537,29 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
     holds: (rel) => /(^|\/)migration-\d/.test(rel) || /rfc\d+-migration-\d/.test(rel),
   },
   {
+    /**
+     * RFC-359 AC-1（第 11 刀下半）—— **补两条同义拼法**，理由与 `frozen-migration-revision`
+     * 那条一样：判据认的是「这条测试驱动的是 SQLite 那台执行引擎」这个**概念**，
+     * 而它此前只认三种拼法，于是同一个概念换个写法就看不见了。
+     *
+     * 触发点：cancel 合一把 `from 'services/task'` 这条拼法从四份判据上摘掉了
+     *（它们 import 它就是为了取 `cancelTask`）。其中三份摘掉之后**确实**不再依赖那台引擎，
+     * 已随本刀迁到 `describeEachProvider`；`rfc268-webhook-scratch-launch` 不然——
+     * 它照生产装配跑的是 `composeTaskExecutionTestRuntime` +
+     * `createSqliteTaskExecutionLaunchParticipant`（经 `createSqliteWebhookTaskExecutionParticipant`），
+     * 那是 SQLite 的**启动参与者**，换 PG 要等启动面的 cutover。
+     *
+     * 补的两条都是「名字里就写着 SQLite 执行面」的直接证据，不是为某个文件量身定做：
+     * `composeTaskExecutionTestRuntime` 与已认的 `createTaskExecutionTestTopology`
+     * 出自**同一个 helper 模块**；`createSqlite*TaskExecutionParticipant` 是具名的
+     * SQLite 启动装配。
+     */
     id: 'sqlite-execution-engine',
     holds: (_rel, code) =>
       /(?<![A-Za-z0-9_.])runTask\s*\(/.test(code) ||
       code.includes('createTaskExecutionTestTopology') ||
+      code.includes('composeTaskExecutionTestRuntime') ||
+      /createSqlite[A-Za-z]*TaskExecution[A-Za-z]*Participant/.test(code) ||
       /from\s*'(@\/|(\.\.\/)+src\/)services\/task'/.test(code),
   },
   {
@@ -756,35 +772,31 @@ function sanctionOf(rel: string): string | null {
  * **不要**为了让数字好看而往 `SANCTIONED_SINGLE_ENGINE` 里加一条只为某个文件量身定做的判据。
  */
 export const OPEN_MIGRATION_DEBT: readonly string[] = [
-  // RFC-359 AC-1（第 11 刀下半）新增 4 行，**成因是 cancel 合一本身**，不是有人新写了单引擎判据：
-  // 这四份此前都靠 `sqlite-execution-engine` 那条机械理由挂账（判据看的是「有没有 import
-  // `services/task`」），而它们 import 它就是为了取 `cancelTask`。取消合一、薄壳删除之后，
-  // 它们改从 `tests/helpers/cancelEngine.ts` 取共用实现——**于是机械理由消失了，它们露出本来面目：
-  // 就是四份还没迁的单引擎判据**。
-  // 与上面 `rfc268` 那条注释记的是同一类事，方向相反：门面消失会让这类源码判据**看见**真相，
-  // 这次是「依赖消失让判据看见它们其实已经不依赖那台引擎了」。
-  // 迁移成本在 sync → async（`.get()` / `.all()` / `.run()`），下一提做，做完这 4 行一并删掉。
+  // RFC-359 AC-1（第 11 刀下半）：cancel 合一摘掉了四份判据的 `from 'services/task'` 这条机械理由
+  //（它们 import 它就是为了取 `cancelTask`）。摘掉之后**三份确实不再依赖那台执行引擎**，
+  // 已就地迁到 `describeEachProvider`（`retry-cascade-kind-matrix` /
+  // `rfc202-lifecycle-exits` / `rfc350-idle-timeout-integration`，同批离开上面那本总账）；
+  // 第四份 `rfc268-webhook-scratch-launch` 仍真的驱动 SQLite 启动参与者，改由
+  // `sqlite-execution-engine` 新补的拼法认领。**这本名单一行没涨。**
   'execution-contract-platform.test.ts',
   'helpers/rfc310Pr3Fixture.ts',
-  'retry-cascade-kind-matrix.test.ts',
-  'rfc202-lifecycle-exits.test.ts',
   'rfc257-webhook-error-codes.test.ts',
-  'rfc268-webhook-scratch-launch.test.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`rfc268-webhook-scratch-launch.test.ts` **转为
   // sanctioned**（`sqlite-execution-engine` 那一类），不是迁移发生了，而是**它一直就属于那一类、
   // 只是被一层门面挡住了**：它原本从 `services/execution/executor.ts` 取 `cancelExecution`，
   // 而那个门面只是 `cancelTask` 的一行转交。门面整份删除、改直接 import `services/task` 之后，
   // 判据才看见它真正驱动的是 SQLite 那台执行引擎。
   // **记一条判据教训**：转交式门面会让「这条测试依赖哪台引擎」这类源码判据失明。
-  'rfc269-webhook-code-host-context-e2e.test.ts',
+  // RFC-359 AC-1（第 11 刀下半）同一课的第二遍：`rfc269-webhook-code-host-context-e2e` 与
+  // `rfc359-task-execution-read-models` 也**一直就属于那一类**（前者与 rfc268 同款装配，
+  // 后者直接建 `createSqliteTaskExecutionRuntimeParticipants`），只是判据认的三种拼法都对不上。
+  // 补上拼法之后它们离开本名单——「还剩多少要迁」少了两条**假待办**。
   'rfc349-digital-employee-platform-tools-wiring.test.ts',
   'rfc349-dual-provider-behavior-oracle.test.ts',
   'rfc349-task-execution-provider-adapters.test.ts',
-  'rfc350-idle-timeout-integration.test.ts',
   'rfc359-execution-contract-resource-adapter.test.ts',
   'rfc359-t19h-logical-backup-restore.test.ts',
   'rfc359-t19h-postgresql-upgrade.integration.test.ts',
-  'rfc359-task-execution-read-models.test.ts',
   'rfc359-w7-catalog-composition-roots.test.ts',
   'start-task-deps.test.ts',
 ]

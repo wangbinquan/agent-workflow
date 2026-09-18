@@ -7,12 +7,12 @@
 // tasks. These tests lock the fixes end-to-end at the service layer. If a
 // refactor turns any of these red, one of those audit P0/P1s is back.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { and, eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   clarifyRounds,
   docVersions,
@@ -37,64 +37,61 @@ import { deleteWorkflow, scheduledRowsReferencingWorkflow } from '../src/service
 import { ConflictError } from '../src/util/errors'
 import { buildActor } from '../src/auth/actor'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 type TaskStatusCol = (typeof tasks.$inferInsert)['status']
 type NodeRunStatusCol = (typeof nodeRuns.$inferInsert)['status']
 
-function seedTask(
-  db: DbClient,
+async function seedTask(
+  db: ProviderNeutralDatabase,
   opts: { status?: TaskStatusCol; ownerUserId?: string | null } = {},
-): { taskId: string; workflowId: string } {
+): Promise<{ taskId: string; workflowId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  db.insert(workflows)
-    .values({
-      id: workflowId,
-      name: `wf-${taskId.slice(-6)}`,
-      definition: '{}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: `task-${taskId.slice(-6)}`,
-      workflowId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: opts.status ?? 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-      ownerUserId: opts.ownerUserId ?? null,
-    })
-    .run()
+  await db.insert(workflows).values({
+    id: workflowId,
+    name: `wf-${taskId.slice(-6)}`,
+    definition: '{}',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
+  await db.insert(tasks).values({
+    id: taskId,
+    name: `task-${taskId.slice(-6)}`,
+    workflowId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/repo',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: opts.status ?? 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+    ownerUserId: opts.ownerUserId ?? null,
+  })
   return { taskId, workflowId }
 }
 
-function seedRun(db: DbClient, taskId: string, nodeId: string, status: NodeRunStatusCol): string {
+async function seedRun(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  nodeId: string,
+  status: NodeRunStatusCol,
+): Promise<string> {
   const id = ulid()
-  db.insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId,
-      status,
-      retryIndex: 0,
-      iteration: 0,
-      preSnapshot: null,
-      startedAt: Date.now(),
-    })
-    .run()
+  await db.insert(nodeRuns).values({
+    id,
+    taskId,
+    nodeId,
+    status,
+    retryIndex: 0,
+    iteration: 0,
+    preSnapshot: null,
+    startedAt: Date.now(),
+  })
   return id
 }
 
 async function seedClarifyRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   kind: 'self' | 'cross',
   intermediaryNodeRunId: string,
@@ -119,21 +116,21 @@ async function seedClarifyRound(
   return id
 }
 
-describe('RFC-202 T2 — terminal sweep', () => {
-  let db: DbClient
+describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
+  let db: ProviderNeutralDatabase
   let uninstallAfterCommitPump: (() => void) | null = null
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = provider.db
   })
   afterEach(async () => {
     uninstallAfterCommitPump?.()
   })
 
   test('mixed self+cross sweep: self→canceled, cross→abandoned (0031 CHECK safe), review parks canceled, one call', async () => {
-    const { taskId } = seedTask(db, { status: 'canceled' })
-    const selfRun = seedRun(db, taskId, 'clarify_x', 'awaiting_human')
-    const crossRun = seedRun(db, taskId, 'xclarify_x', 'awaiting_human')
-    const reviewRun = seedRun(db, taskId, 'rev_x', 'awaiting_review')
+    const { taskId } = await seedTask(db, { status: 'canceled' })
+    const selfRun = await seedRun(db, taskId, 'clarify_x', 'awaiting_human')
+    const crossRun = await seedRun(db, taskId, 'xclarify_x', 'awaiting_human')
+    const reviewRun = await seedRun(db, taskId, 'rev_x', 'awaiting_review')
     await seedClarifyRound(db, taskId, 'self', selfRun)
     await seedClarifyRound(db, taskId, 'cross', crossRun)
 
@@ -142,29 +139,29 @@ describe('RFC-202 T2 — terminal sweep', () => {
     expect(result.sealedSelfRounds).toBe(1)
     expect(result.abandonedCrossRounds).toBe(1)
 
-    const rounds = db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all()
+    const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(rounds.find((r) => r.kind === 'self')?.status).toBe('canceled')
     const cross = rounds.find((r) => r.kind === 'cross')
     expect(cross?.status).toBe('abandoned')
     expect(cross?.abandonedAt).not.toBeNull()
 
-    const runs = db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()
+    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(runs.find((r) => r.id === selfRun)?.status).toBe('canceled')
     expect(runs.find((r) => r.id === crossRun)?.status).toBe('canceled')
     expect(runs.find((r) => r.id === reviewRun)?.status).toBe('canceled')
     expect(runs.find((r) => r.id === reviewRun)?.errorMessage).toBe('task-canceled')
 
-    const sessions = db
+    const sessions = await db
       .select()
       .from(clarifyRounds)
       .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.kind, 'self')))
-      .all()
+
     expect(sessions[0]?.status).toBe('canceled')
-    const xsessions = db
+    const xsessions = await db
       .select()
       .from(clarifyRounds)
       .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.kind, 'cross')))
-      .all()
+
     expect(xsessions[0]?.status).toBe('abandoned')
 
     // idempotent: second sweep is a no-op
@@ -182,7 +179,7 @@ describe('RFC-202 T2 — terminal sweep', () => {
         throw new Error('projector boom — must not block')
       },
     })
-    const a = seedTask(db, { status: 'running' })
+    const a = await seedTask(db, { status: 'running' })
     const won = await trySetTaskStatus({
       db,
       taskId: a.taskId,
@@ -191,11 +188,11 @@ describe('RFC-202 T2 — terminal sweep', () => {
       reason: 'test',
     })
     expect(won).toBe(true)
-    const row = db.select().from(tasks).where(eq(tasks.id, a.taskId)).all()[0]!
+    const row = (await db.select().from(tasks).where(eq(tasks.id, a.taskId)))[0]!
     expect(row.status).toBe('canceled')
     expect(calls).toEqual([{ taskId: a.taskId, to: 'canceled' }])
 
-    const b = seedTask(db, { status: 'running' })
+    const b = await seedTask(db, { status: 'running' })
     await trySetTaskStatus({
       db,
       taskId: b.taskId,
@@ -208,14 +205,14 @@ describe('RFC-202 T2 — terminal sweep', () => {
   })
 })
 
-describe('RFC-202 T3 — cancel from awaiting_*', () => {
-  let db: DbClient
+describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
+  let db: ProviderNeutralDatabase
   let uninstallAfterCommitPump: (() => void) | null = null
   // RFC-359 W4-B3：终态清扫只有一份异步实现（统一事务原语），提交后钩子里是 fire-and-forget；
   // 用例要断言清扫结果就得等它落定，而不是假设 SQLite 侧仍是同步完成。
   let terminalSweeps: Promise<unknown>[] = []
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = provider.db
     terminalSweeps = []
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onTerminalTask(hookDb, taskId) {
@@ -234,15 +231,17 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
   })
 
   test('awaiting_human task cancels via the fallback CAS and its open round is sealed', async () => {
-    const { taskId } = seedTask(db, { status: 'awaiting_human' })
-    const run = seedRun(db, taskId, 'clarify_x', 'awaiting_human')
+    const { taskId } = await seedTask(db, { status: 'awaiting_human' })
+    const run = await seedRun(db, taskId, 'clarify_x', 'awaiting_human')
     await seedClarifyRound(db, taskId, 'self', run)
     const out = await cancelViaEngine(db, taskId)
     expect(out.status).toBe('canceled')
     await Promise.all(terminalSweeps)
-    const round = db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all()[0]!
+    const round = (
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    )[0]!
     expect(round.status).toBe('canceled')
-    const runRow = db.select().from(nodeRuns).where(eq(nodeRuns.id, run)).all()[0]!
+    const runRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, run)))[0]!
     expect(runRow.status).toBe('canceled')
     // RFC-328 cancels live node rows inside the task-status transaction. The
     // post-commit terminal sweep must still retain its transition-time cause
@@ -251,27 +250,27 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
   })
 
   test('awaiting_review task cancels', async () => {
-    const { taskId } = seedTask(db, { status: 'awaiting_review' })
-    seedRun(db, taskId, 'rev_x', 'awaiting_review')
+    const { taskId } = await seedTask(db, { status: 'awaiting_review' })
+    await seedRun(db, taskId, 'rev_x', 'awaiting_review')
     const out = await cancelViaEngine(db, taskId)
     expect(out.status).toBe('canceled')
   })
 
   test('terminal task still 409s with the terminal wording', async () => {
-    const { taskId } = seedTask(db, { status: 'done' })
+    const { taskId } = await seedTask(db, { status: 'done' })
     await expect(cancelViaEngine(db, taskId)).rejects.toThrow(/already terminal/)
   })
 })
 
-describe('RFC-202 T2-4 — write-path terminal guards', () => {
-  let db: DbClient
+describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = provider.db
   })
 
   test('sealRoundQuestions refuses answers into a done/canceled task BEFORE persisting', async () => {
-    const { taskId } = seedTask(db, { status: 'done' })
-    const run = seedRun(db, taskId, 'clarify_x', 'awaiting_human')
+    const { taskId } = await seedTask(db, { status: 'done' })
+    const run = await seedRun(db, taskId, 'clarify_x', 'awaiting_human')
     await seedClarifyRound(db, taskId, 'self', run)
     await expect(
       sealRoundQuestions({
@@ -288,29 +287,30 @@ describe('RFC-202 T2-4 — write-path terminal guards', () => {
       }),
     ).rejects.toMatchObject({ code: 'task-terminal' })
     // answers were NOT persisted
-    const round = db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all()[0]!
+    const round = (
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    )[0]!
     expect(round.status).toBe('awaiting_human')
     expect(round.answersJson ?? null).toBeNull()
   })
 
   test('submitReviewDecision refuses decisions on a canceled task', async () => {
-    const { taskId } = seedTask(db, { status: 'canceled' })
-    const run = seedRun(db, taskId, 'rev_x', 'awaiting_review')
-    db.insert(docVersions)
-      .values({
-        id: ulid(),
-        taskId,
-        reviewNodeId: 'rev_x',
-        reviewNodeRunId: run,
-        sourceNodeId: 'src',
-        sourcePortName: 'doc',
-        reviewIteration: 0,
-        versionIndex: 1,
-        bodyPath: '/tmp/nonexistent.md',
-        decision: 'pending',
-        createdAt: Date.now(),
-      })
-      .run()
+    const { taskId } = await seedTask(db, { status: 'canceled' })
+    const run = await seedRun(db, taskId, 'rev_x', 'awaiting_review')
+    await db.insert(docVersions).values({
+      id: ulid(),
+      taskId,
+      reviewNodeId: 'rev_x',
+      reviewNodeRunId: run,
+      sourceNodeId: 'src',
+      sourcePortName: 'doc',
+      reviewIteration: 0,
+      versionIndex: 1,
+      bodyPath: '/tmp/nonexistent.md',
+      decision: 'pending',
+      createdAt: Date.now(),
+    })
+
     await expect(
       submitReviewDecision({
         db,
@@ -323,21 +323,21 @@ describe('RFC-202 T2-4 — write-path terminal guards', () => {
   })
 })
 
-describe('RFC-202 T6 — inbox terminal filtering (before pagination)', () => {
-  let db: DbClient
+describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination)', (provider) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = provider.db
   })
 
   test('clarify awaiting list drops terminal-task rounds even when zombies fill the page window', async () => {
     // 3 zombie rounds on a FAILED task (newer), 1 live round on a running task (older).
-    const dead = seedTask(db, { status: 'failed' })
-    const live = seedTask(db, { status: 'running' })
-    const liveRun = seedRun(db, live.taskId, 'clarify_x', 'awaiting_human')
+    const dead = await seedTask(db, { status: 'failed' })
+    const live = await seedTask(db, { status: 'running' })
+    const liveRun = await seedRun(db, live.taskId, 'clarify_x', 'awaiting_human')
     await seedClarifyRound(db, live.taskId, 'self', liveRun)
     await Bun.sleep(2) // ensure zombies sort newer (createdAt desc)
     for (let i = 0; i < 3; i++) {
-      const r = seedRun(db, dead.taskId, `clarify_z${i}`, 'awaiting_human')
+      const r = await seedRun(db, dead.taskId, `clarify_z${i}`, 'awaiting_human')
       await seedClarifyRound(db, dead.taskId, 'self', r)
     }
     // limit=2 < zombie count: without filter-before-slice the live round vanishes.
@@ -350,29 +350,28 @@ describe('RFC-202 T6 — inbox terminal filtering (before pagination)', () => {
   })
 
   test('review pending list + count drop terminal-task rounds; count is exact past the page size', async () => {
-    const mk = (status: TaskStatusCol) => {
-      const t = seedTask(db, { status })
-      const run = seedRun(db, t.taskId, 'rev_x', 'awaiting_review')
-      db.insert(docVersions)
-        .values({
-          id: ulid(),
-          taskId: t.taskId,
-          reviewNodeId: 'rev_x',
-          reviewNodeRunId: run,
-          sourceNodeId: 'src',
-          sourcePortName: 'doc',
-          reviewIteration: 0,
-          versionIndex: 1,
-          bodyPath: '/tmp/x.md',
-          decision: 'pending',
-          createdAt: Date.now(),
-        })
-        .run()
+    const mk = async (status: TaskStatusCol) => {
+      const t = await seedTask(db, { status })
+      const run = await seedRun(db, t.taskId, 'rev_x', 'awaiting_review')
+      await db.insert(docVersions).values({
+        id: ulid(),
+        taskId: t.taskId,
+        reviewNodeId: 'rev_x',
+        reviewNodeRunId: run,
+        sourceNodeId: 'src',
+        sourcePortName: 'doc',
+        reviewIteration: 0,
+        versionIndex: 1,
+        bodyPath: '/tmp/x.md',
+        decision: 'pending',
+        createdAt: Date.now(),
+      })
+
       return t.taskId
     }
-    const liveIds = [mk('running'), mk('awaiting_review'), mk('running')]
-    mk('canceled')
-    mk('failed')
+    const liveIds = [await mk('running'), await mk('awaiting_review'), await mk('running')]
+    await mk('canceled')
+    await mk('failed')
     const pending = await listReviewSummaries(db, { status: 'pending', limit: 100 })
     expect(pending.map((p) => p.taskId).sort()).toEqual([...liveIds].sort())
     // pagination window: limit 2 returns 2 LIVE rounds (zombies must not consume the window)
@@ -383,27 +382,26 @@ describe('RFC-202 T6 — inbox terminal filtering (before pagination)', () => {
   })
 })
 
-describe('RFC-202 T5 — deleteWorkflow scheduled-task guard', () => {
-  let db: DbClient
+describeEachProvider('RFC-202 T5 — deleteWorkflow scheduled-task guard', (provider) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = provider.db
   })
 
-  function seedSchedule(workflowId: string, owner: string, name: string): string {
+  async function seedSchedule(workflowId: string, owner: string, name: string): Promise<string> {
     const id = ulid()
-    db.insert(scheduledTasks)
-      .values({
-        id,
-        name,
-        ownerUserId: owner,
-        enabled: true,
-        scheduleSpec: JSON.stringify({ kind: 'interval', everyMinutes: 60 }),
-        launchKind: 'workflow',
-        launchPayload: JSON.stringify({ workflowId, name: 'x', inputs: {} }),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      .run()
+    await db.insert(scheduledTasks).values({
+      id,
+      name,
+      ownerUserId: owner,
+      enabled: true,
+      scheduleSpec: JSON.stringify({ kind: 'interval', everyMinutes: 60 }),
+      launchKind: 'workflow',
+      launchPayload: JSON.stringify({ workflowId, name: 'x', inputs: {} }),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+
     return id
   }
 
@@ -419,24 +417,23 @@ describe('RFC-202 T5 — deleteWorkflow scheduled-task guard', () => {
 
   test('delete is 409-blocked; details list only principal-visible schedules + hiddenCount', async () => {
     const owner = 'user-owner'
-    const { workflowId } = (() => {
+    const { workflowId } = await (async () => {
       const workflowId = ulid()
-      db.insert(workflows)
-        .values({
-          id: workflowId,
-          name: 'wf-guarded',
-          definition: '{}',
-          version: 1,
-          ownerUserId: owner,
-          visibility: 'public',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        })
-        .run()
+      await db.insert(workflows).values({
+        id: workflowId,
+        name: 'wf-guarded',
+        definition: '{}',
+        version: 1,
+        ownerUserId: owner,
+        visibility: 'public',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+
       return { workflowId }
     })()
-    seedSchedule(workflowId, owner, 'mine-daily')
-    seedSchedule(workflowId, 'user-other', 'their-private')
+    await seedSchedule(workflowId, owner, 'mine-daily')
+    await seedSchedule(workflowId, 'user-other', 'their-private')
 
     const actor = buildActor({
       user: { id: owner, username: 'o', displayName: 'o', role: 'user', status: 'active' },
@@ -464,27 +461,26 @@ describe('RFC-202 T5 — deleteWorkflow scheduled-task guard', () => {
       expect(details.hiddenCount).toBe(1)
     }
     // workflow still present
-    expect(db.select().from(workflows).where(eq(workflows.id, workflowId)).all().length).toBe(1)
+    expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(1)
   })
 
   test('no referencing schedules → delete proceeds', async () => {
     const workflowId = ulid()
-    db.insert(workflows)
-      .values({
-        id: workflowId,
-        name: 'wf-free',
-        definition: '{}',
-        version: 1,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      .run()
+    await db.insert(workflows).values({
+      id: workflowId,
+      name: 'wf-free',
+      definition: '{}',
+      version: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+
     await deleteWorkflow(
       db,
       workflowId,
       { expectedVersion: 1, clientMutationId: ulid() },
       { kind: 'system', reason: 'test' },
     )
-    expect(db.select().from(workflows).where(eq(workflows.id, workflowId)).all().length).toBe(0)
+    expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(0)
   })
 })

@@ -17735,3 +17735,30 @@ log
 `services/task.ts#cancelTask` 改指 `cancelTaskProjection`（写面一格没变：同三张表、同三条转移、
 同一条 revision 判据）——不改它 census 会直接抛 `control subtype is empty: terminal-control`；
 `rfc359-w29` 的 `composeSqliteApiRouteMounts` 摘要随装配图更新。
+
+### 第 11 刀的收口　三份判据转双引擎 + 修掉判据的一处失明
+
+上一提为了让提交可复核，把 cancel 合一照出的四份单引擎判据先记进 `OPEN_MIGRATION_DEBT`
+（13 → 17）。这一提把它们处理干净，**账本净降到 11**：
+
+| 文件 | 处置 | 依据 |
+| --- | --- | --- |
+| `retry-cascade-kind-matrix` | **迁双引擎** | 它自己的头注释就预告了：「真正的处置是把 `ChildTaskLifecycleParticipant` 这一对也合一，那时注入点会和 `retry` 一样落在依赖面上，这一份自然能转双引擎」 |
+| `rfc202-lifecycle-exits` | **迁双引擎** | 依赖的是 `trySetTaskStatus` / 终态封口 / 评审列表，全部 provider 中立 |
+| `rfc350-idle-timeout-integration` | **迁双引擎** | 收割器两样依赖都中立（`createTaskIdleTimeoutPersistence` 自 W4-B1 起就是一份，`createSqlite*` / `createPostgresql*` 只是别名）。本刀刚改过它的认领门，正好两边都盯住 |
+| `rfc268-webhook-scratch-launch` | **判据认领** | 它照生产装配跑 `composeTaskExecutionTestRuntime` + `createSqliteTaskExecutionLaunchParticipant`，是真的 SQLite **启动参与者**——换 PG 要等启动面的 cutover |
+
+**`sqlite-execution-engine` 补两条同义拼法**（`composeTaskExecutionTestRuntime` 与
+`createSqlite*TaskExecutionParticipant`）。这不是给某个文件量身定做：判据认的是「这条测试
+驱动的是 SQLite 那台执行引擎」这个**概念**，而它此前只认三种拼法，同一概念换个写法就看不见。
+补上之后顺带照出**两条假待办**——`rfc269-webhook-code-host-context-e2e`（与 rfc268 同款装配）与
+`rfc359-task-execution-read-models`（直接建 `createSqliteTaskExecutionRuntimeParticipants`）
+一直就属于那一类，只是判据对不上，白白占了两年待办量。
+
+**一处真的引擎差异**（`retry-cascade-kind-matrix` 的饿死格，双引擎对拍当场照出）：
+`cancelCasAttempts` 在 SQLite 上是 8、PostgreSQL 上稳定 10。成因是结构性的——搅动那笔写落在
+**另一条连接**上，于是 SERIALIZABLE 事务被 40001 打回，而 `databaseSessionFor(db).serializable`
+把**整笔事务**当重试单元重放，重放会再走一次 `beforeStatusCas`。判据因此改成
+「下界 8（预算被完整耗尽，少于 8 是真回归）+ 按 `capabilities.isolation` 分叉的上界」；
+上界原本是为了抓「钩子被无关路径触发」，而那件事现在**由构造保证**（钩子只作为子任务那笔取消的
+`beforeStatusCas` 传进去，且只在子任务处于 awaiting_* 时计数），所以上界只需兜住序列化重放本身。

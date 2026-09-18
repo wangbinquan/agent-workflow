@@ -12,32 +12,30 @@
 // 进程终止在这里注入成桩：真去 kill 一个 pid 属于 util/process 的职责（它自己有
 // PID 复用窗口与身份门的测试），本文件要证的是收割链，不是信号。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { count, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, recoveryEvents, taskRepos, tasks, users, workflows } from '../src/db/schema'
 import {
   composeTaskIdleTimeoutOperations,
-  createSqliteTaskIdleTimeoutPersistence,
+  createTaskIdleTimeoutPersistence,
   runTaskIdleTimeoutSweep,
 } from '../src/modules/task-execution/composition/taskIdleTimeout'
 import { runTaskArchiveSweep } from '../src/services/taskArchive'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HOUR = 3_600_000
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 const IDLE_CONFIG = { enabled: true, idleHours: 24 }
 
-type Db = ReturnType<typeof createInMemoryDb>
-
-let db: Db
+let db: ProviderNeutralDatabase
 let uninstall: (() => void) | undefined
 
 function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
@@ -116,7 +114,7 @@ const killed: string[] = []
 
 function operations() {
   return composeTaskIdleTimeoutOperations({
-    persistence: createSqliteTaskIdleTimeoutPersistence(db),
+    persistence: createTaskIdleTimeoutPersistence(db),
     cancelTask: async (taskId: string) => {
       await cancelViaEngine(db, taskId)
     },
@@ -151,18 +149,24 @@ async function taskCount(): Promise<number> {
   return rows[0]?.n ?? 0
 }
 
-beforeEach(() => {
-  killed.length = 0
-  db = createInMemoryDb(MIGRATIONS)
-  uninstall = installTaskLifecycleAfterCommitTestPump(db, {})
-})
+// RFC-359 AC-1（第 11 刀下半）转双引擎。这一份此前靠 `sqlite-execution-engine` 那条机械理由
+// 挂在单引擎账本上，而它 import `services/task` 就是为了取 `cancelTask`；取消合一之后
+// 收割器的两样依赖都已 provider 中立：`createTaskIdleTimeoutPersistence`（W4-B1 起就是一份，
+// `createSqlite*` / `createPostgresql*` 只是同一个实现的两个别名）与共用的取消实现。
+// 于是「超时 → 终结 → 出库」这条端到端在两个引擎上各验一遍——本刀改过收割器的认领门
+// （`inArray(CLAIMABLE_CANCEL_SUMMARIES)`），正好要两边都盯住。
+describeEachProvider('RFC-350 端到端', (provider) => {
+  beforeEach(() => {
+    killed.length = 0
+    db = provider.db
+    uninstall = installTaskLifecycleAfterCommitTestPump(db, {})
+  })
 
-afterEach(() => {
-  uninstall?.()
-  uninstall = undefined
-})
+  afterEach(() => {
+    uninstall?.()
+    uninstall = undefined
+  })
 
-describe('RFC-350 端到端', () => {
   test('AC-2 / AC-5 / AC-7 / AC-8：整树静默超阈值 ⇒ 杀进程、判 canceled、写原因与审计', async () => {
     await seedBase()
     await seedTask({ id: 'root', status: 'running', startedAt: NOW - 40 * HOUR })

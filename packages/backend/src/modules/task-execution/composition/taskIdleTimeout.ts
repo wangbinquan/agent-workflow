@@ -1,8 +1,8 @@
 // RFC-350 —— 不活跃超时收割的装配出口（bootstrap 唯一入口）。
 //
-// `cancelTask` 由调用方注入：SQLite daemon 传既有的 legacy 桥（懒 import
-// `services/task.ts`，与 `composeLegacySqliteResourceLimitOperations` 同款），
-// PostgreSQL daemon 传它自己的 task-execution cancel 命令。这里**不伪造任何 provider
+// `cancelTask` 由调用方注入。RFC-359 AC-1（第 11 刀）之后两个 daemon 传的是**同一份**取消
+// 实现（`composeTaskCancellation(db).cancel`）——SQLite 那侧原本是懒 import `services/task.ts`
+// 的 legacy 桥，实现搬进本模块后那层顾虑消失，改回普通静态装配。这里仍**不伪造任何 provider
 // 兜底**——RFC-349 的准入纪律。
 
 import { killStaleRunProcessTree } from '@/util/process'
