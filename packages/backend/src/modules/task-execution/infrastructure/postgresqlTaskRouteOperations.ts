@@ -9,8 +9,8 @@ import type { TaskRouteOperations } from '../public/taskRoutes'
 import { createTaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 
 import {
+  assertManualExecutionAllowedProjection,
   assertTaskVisibleProjection,
-  builtinCandidateWorkflow,
   launchMultipartTask,
   listItems,
   loadTask,
@@ -24,8 +24,6 @@ import {
   taskMembersProjection,
   taskNodeRunsProjection,
   taskWorkflowSyncPreviewProjection,
-  requireTaskRow,
-  loadVisibleWorkflow,
   syncWorkflow,
 } from './taskRouteOperations'
 import { createTaskRouteRepairOperations } from './taskRouteRepairOperations'
@@ -36,16 +34,10 @@ import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/comma
 import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { assertNotBuiltin } from '@/services/systemResources'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { deleteTask } from '@/services/taskDelete'
 import { NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
-import {
-  isTurnEngineWorkgroupTask,
-  isWorkgroupTask,
-  taskExecutionKind,
-} from '@agent-workflow/shared'
 import type { TaskRouteOperationsDependencies } from './taskRouteOperations'
 
 /** PG 绑定的依赖面：与中立那份逐格相同，只把库句柄收窄成 PG 客户端。 */
@@ -172,27 +164,14 @@ export function createPostgresqlTaskRouteOperations(
     stdout: (taskId, nodeRunId) => nodeRunStdoutProjection(dependencies, taskId, nodeRunId),
     events: (taskId, nodeRunId, options) =>
       nodeRunEventsProjection(dependencies, taskId, nodeRunId, options),
-    async assertManualExecutionAllowed(actor, taskId) {
-      const task = await loadTask(dependencies.db, taskId)
-      if (task === null) return
-      const kind = taskExecutionKind(task)
-      if (kind === 'agent' || kind === 'code-round') return
-      if (
-        isWorkgroupTask(task) &&
-        !isTurnEngineWorkgroupTask({
-          workgroupId: task.workgroupId,
-          workgroupConfigJson: (await requireTaskRow(dependencies.db, taskId)).workgroupConfigJson,
-        })
-      ) {
-        return
-      }
-      // 判据缺口账本 01a —— 与 SQLite 的 `assertManualExecutionAllowed` 同判据：
-      // 内置工作流不可被手动执行（403 `builtin-readonly`）。可见性那一步是 PG 侧既有的
-      // 额外判据，保留在其后。
-      const candidate = await builtinCandidateWorkflow(dependencies.db, task.workflowId)
-      if (candidate !== null) assertNotBuiltin('workflow', candidate)
-      await loadVisibleWorkflow(dependencies, actor, task.workflowId)
-    },
+    // RFC-359 AC-1（第 13 刀）：手动执行门与 SQLite 共用**同一份**实现。
+    // 此前这段内联在这里，SQLite 那侧另有一份 27 行的本地版本（带 bun:sqlite 同步读）。
+    assertManualExecutionAllowed: (actor, taskId) =>
+      assertManualExecutionAllowedProjection(
+        { db: dependencies.db, resourceAuthorityFor: dependencies.launch.resourceAuthorityFor },
+        actor,
+        taskId,
+      ),
     // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：预览与 SQLite 共用**同一份**。
     // 授权路径统一成**可见性**（原 SQLite 那一档）——预览回答的是「同步会发生什么」，
     // 不是「我现在能不能启动它」；本文件原来那份走可启动性，于是不得不给内置工作流补一道

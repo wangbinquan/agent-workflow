@@ -473,13 +473,9 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'execution-contract Workflow projection',
     REMOVE_OWNERS.executionContractResources,
   ),
-  edge(
-    'services/workflow.ts',
-    'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
-    ['getWorkflow'],
-    'SQLite task route Workflow lookup',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
+  // RFC-359 AC-1（第 13 刀）**销账**：手动执行门两个引擎合一，SQLite 那份本地实现
+  //（`getWorkflow` 判内置）随之删除——共用那份走 `builtinCandidateWorkflow` +
+  // 资源权威，不再经 legacy Workflow 门面。债是还掉的，不是挪走的。
   // RFC-359 AC-1（同上，第 6 刀）：共用预览在 PG 命名的文件里查工作流行；过渡态，随写侧那一刀回落。
   edge(
     'services/workflow.ts',

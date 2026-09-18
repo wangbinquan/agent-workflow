@@ -1,15 +1,9 @@
-import {
-  isTurnEngineWorkgroupTask,
-  isWorkgroupTask,
-  taskExecutionKind,
-} from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
-
 import type { Actor } from '@/auth/actor'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
 import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 import {
+  assertManualExecutionAllowedProjection,
   assertTaskVisibleProjection,
   assertTaskWorkflowSyncable,
   launchMultipartTask,
@@ -36,17 +30,15 @@ import type { OwnerIdentityQueries } from '@/modules/identity-access/public/oper
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
-import { assertNotBuiltin } from '@/services/systemResources'
 import { composeTaskCancellation } from '../composition/taskCancellation'
 import { getTask, syncTaskWorkflow, type StartTaskDeps } from '@/services/task'
 import { deleteTask } from '@/services/taskDelete'
-import { getWorkflow } from '@/services/workflow'
 import { Paths } from '@/util/paths'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 import type { TaskRouteOperations } from '../public/taskRoutes'
 import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
-import { tasks as taskRows, type LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
+import type { LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
 import { NotFoundError } from '@/util/errors'
 
 export interface SqliteTaskRouteOperationsDependencies {
@@ -92,34 +84,6 @@ export interface SqliteTaskRouteOperationsDependencies {
     'collaborationRuntime' | 'clarify' | 'review'
   >
   readonly appHome?: string
-}
-
-async function assertManualExecutionAllowed(
-  db: LegacySqliteTaskDatabase,
-  taskId: string,
-): Promise<void> {
-  const task = await getTask(db, taskId)
-  if (task === null) return
-  const kind = taskExecutionKind(task)
-  if (kind === 'agent' || kind === 'code-round') return
-  if (isWorkgroupTask(task)) {
-    const row = db
-      .select({ workgroupConfigJson: taskRows.workgroupConfigJson })
-      .from(taskRows)
-      .where(eq(taskRows.id, taskId))
-      .limit(1)
-      .all()[0]
-    if (
-      !isTurnEngineWorkgroupTask({
-        workgroupId: task.workgroupId,
-        workgroupConfigJson: row?.workgroupConfigJson ?? null,
-      })
-    ) {
-      return
-    }
-  }
-  const workflow = await getWorkflow(db, task.workflowId)
-  if (workflow !== null) assertNotBuiltin('workflow', workflow)
 }
 
 export function createSqliteTaskRouteOperations(
@@ -237,7 +201,16 @@ export function createSqliteTaskRouteOperations(
     stdout: (taskId, nodeRunId) => nodeRunStdoutProjection({ db }, taskId, nodeRunId),
     events: (taskId, nodeRunId, options) =>
       nodeRunEventsProjection({ db }, taskId, nodeRunId, { ...options }),
-    assertManualExecutionAllowed: (_actor, taskId) => assertManualExecutionAllowed(db, taskId),
+    // RFC-359 AC-1（第 13 刀）：手动执行门与 PostgreSQL 共用**同一份**实现。
+    // 此前这一侧是本地 27 行（`getTask` + bun:sqlite 同步读取工作组配置 + `getWorkflow` 判内置），
+    // 合并取强的那一半——多出来的那道门是「工作流现在还在不在、我还看不看得见」
+    //（原 `rfc359-w7` 的 B3 记的就是这条差异）。
+    assertManualExecutionAllowed: (actor, taskId) =>
+      assertManualExecutionAllowedProjection(
+        { db, resourceAuthorityFor: dependencies.resourceAuthorityFor },
+        actor,
+        taskId,
+      ),
     // RFC-359 AC-1（plan §5hn 之后的盘点，第 6 刀）：预览与 PostgreSQL 共用**同一份**。
     // 授权路径就是这一侧原来的**可见性**；合并同时抬进 PG 那侧更强的两道门——
     // 非工作流任务不给同步横幅，以及进程内仍在跑时报 `task-active`

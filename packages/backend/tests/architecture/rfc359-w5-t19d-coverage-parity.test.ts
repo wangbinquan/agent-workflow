@@ -270,7 +270,7 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // **记账教训（第二次）**：这条棘轮要在**所有编辑做完之后**再跑一次。本刀第一次把它改成 39
   // 之后又去修了四处守卫锚点，每一处都新提了一次文件名，于是 39 当场过时并把 main 推红
   //（`d1ed812ca`）。同样的坑上一次是「批次二 ⑤ 中途跑绿、之后又改了注释」。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 10/2, postgresql 5/2',
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 9/2, postgresql 5/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   // W18: original SQLite copy/Worker and historical-contract fixtures add four
@@ -327,7 +327,7 @@ export const INVERTED_PAIRS: readonly string[] = [
   // 第 4 刀：9 vs 35 → 10 vs 36，差额不变（两侧同步 +1，来源见上一格）。
   // 第 6 刀的收尾：10 vs 36 → 10 vs 37，来源同上一格。
   // RFC-359 AC-1（第 9 刀）：10 vs 37 → 10 vs 42，来源见上一格的注释（命名债的读数，随 §5hj 回落）。
-  'modules/task-execution/infrastructure/TaskRouteOperations: 10 vs 5',
+  'modules/task-execution/infrastructure/TaskRouteOperations: 9 vs 5',
   // RFC-359 W58：新入名单。PG 侧 workflowSyncPreview 补内置分支所致；SQLite 侧的同一段判据
   // 早就有，只是它的实现更集中（`computeWorkflowSyncPreview` 一个函数里）。判据本身现在两侧
   // 共用 `domain/workflowSyncPreview.ts`，ref 差是形状差，不是覆盖差。

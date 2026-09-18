@@ -25,6 +25,8 @@ import {
   isTerminalNodeRunStatus,
   isWrapperKind,
   migrateWorkflowDefinitionToLatest,
+  isTurnEngineWorkgroupTask,
+  isWorkgroupTask,
   mountDepth,
   nodeKindParticipatesInRetryCascade,
   parseTriggerContextJson,
@@ -1354,6 +1356,54 @@ async function syncRunSummary(db: ProviderNeutralDatabase, taskId: string) {
     })
   }
   return summary
+}
+
+/**
+ * RFC-359 AC-1（第 13 刀）—— `assertManualExecutionAllowed` 的**唯一**实现，两个引擎共用。
+ *
+ * 合并之前这是 `TaskRouteOperations` 这一对里三处真分叉之一：SQLite 那半是本地 27 行
+ *（`getTask` + bun:sqlite 的同步读 `.all()[0]` 取 `workgroup_config_json` + `getWorkflow`
+ * 判内置），PostgreSQL 那半多一道**工作流当前可见 / 仍在**的判据（`rfc359-w7` 的 B3 当年
+ * 就是为这条差异开的账）。
+ *
+ * **取强的那一半**：内置判据两侧本来就有，多出来的那道门回答的是「这个工作流现在还在不在、
+ * 我还看不看得见」——手动执行要按当前定义跑，工作流已被删 / 已不可见时放行只会在更靠后的
+ * 地方炸，而且两个引擎给出的答案不一样，正是本 RFC 要消灭的形状。
+ *
+ * 依赖面刻意只收两样（库句柄 + 授权工厂），好让两条组合根都交得起——PG 那侧在
+ * `dependencies.launch.resourceAuthorityFor`，SQLite 那侧在 `dependencies.resourceAuthorityFor`，
+ * 同一个东西、两个位置。
+ */
+export async function assertManualExecutionAllowedProjection(
+  dependencies: Readonly<{
+    readonly db: ProviderNeutralDatabase
+    readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
+  }>,
+  actor: Actor,
+  taskId: string,
+): Promise<void> {
+  const task = await loadTask(dependencies.db, taskId)
+  if (task === null) return
+  const kind = taskExecutionKind(task)
+  if (kind === 'agent' || kind === 'code-round') return
+  if (
+    isWorkgroupTask(task) &&
+    !isTurnEngineWorkgroupTask({
+      workgroupId: task.workgroupId,
+      workgroupConfigJson: (await requireTaskRow(dependencies.db, taskId)).workgroupConfigJson,
+    })
+  ) {
+    return
+  }
+  // 判据缺口账本 01a —— 内置工作流不可被手动执行（403 `builtin-readonly`）。
+  const candidate = await builtinCandidateWorkflow(dependencies.db, task.workflowId)
+  if (candidate !== null) assertNotBuiltin('workflow', candidate)
+  const authority = dependencies.resourceAuthorityFor(actor)
+  workflowLaunchSnapshot(
+    await authority.resources.loadAuthorized(authority, [
+      { kind: 'workflow-launch', workflowId: task.workflowId },
+    ]),
+  )
 }
 
 export async function loadVisibleWorkflow(

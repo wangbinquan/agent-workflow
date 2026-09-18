@@ -5156,12 +5156,10 @@
         "import:559760e71bc2afc03569",
         "import:6222591edf7ab4185f0c",
         "import:6910412e65f0461cab90",
-        "import:8079d8361690363f51e7",
         "import:8f0c0ec479571bc0e59e",
         "import:b9dbfc66e1c0c1919a34",
         "import:bca0895c2fab5a5fdbb7",
         "import:bfa71a7f887457b8be12",
-        "import:c80e14e9497c5206a914",
         "import:d013e33a13b4230993b6",
         "import:d5b7af18fbc6fb9e80d3",
         "import:e280422b5e1e8d4440a3",
@@ -6166,8 +6164,7 @@
       "boundaryEdgeIds": [
         "import:7e434b15c5a46cd36efe",
         "import:a62165f141e79339620c",
-        "import:cf2542962d358dfae239",
-        "import:eb8a3488d786d9a3fa72"
+        "import:cf2542962d358dfae239"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/workflow.ts",
@@ -6332,5 +6329,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:10a9d855edbabf63d6d3c08c3a26455f7a8b5b79522b3bdddbc0b371d7894448"
+  "sourceDigest": "sha256:ea8f85f4ead38c1189332773535e1fce217bf098d9391daa09b119cade9f5b50"
 }

@@ -145,6 +145,53 @@ function unusedDependency(name: string): never {
   throw new Error(`rfc359-w7 对拍不驱动 ${name}`)
 }
 
+/**
+ * 两条泳道**共用**的资源权威替身：读的是同一张 `workflows` 表（生产里由 resource-catalog 提供）。
+ *
+ * RFC-359 AC-1（第 13 刀）：SQLite 泳道此前这一格是 `() => ({}) as never`，因为那一侧的
+ * `assertManualExecutionAllowed` 是本地实现、根本不碰资源权威。合一之后两侧走同一份实现，
+ * 替身也必须是同一个——**不然「两个引擎跑同一份代码」这句话在对拍里就是假的**。
+ */
+function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
+  return () =>
+    ({
+      resources: {
+        async loadAuthorized(
+          _authority: unknown,
+          requests: readonly { kind: string; workflowId: string }[],
+        ) {
+          const request = requests[0]
+          if (request === undefined) return []
+          const rows = await db
+            .select()
+            .from(workflows)
+            .where(eq(workflows.id, request.workflowId))
+            .limit(1)
+          const row = rows[0]
+          if (row === undefined) {
+            throw Object.assign(new Error('workflow-not-found'), {
+              code: 'workflow-not-found',
+            })
+          }
+          return [
+            {
+              kind: 'workflow-launch',
+              workflow: {
+                id: row.id,
+                name: row.name,
+                version: row.version,
+                definition: JSON.parse(row.definition) as WorkflowDefinition,
+              },
+            },
+          ]
+        },
+        async freezeCallClosure() {
+          return null
+        },
+      },
+    }) as never
+}
+
 function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
   return createSqliteTaskRouteOperations({
     db: db as unknown as DbClient,
@@ -160,8 +207,9 @@ function sqliteOperations(db: ProviderNeutralDatabase): TaskRouteOperations {
     // SQLite 壳在调用 `retryNode` / `resumeTask` **之前**就展开这个对象，所以它不能抛；
     // 本对拍只驱动到前置门为止，门后的驱动依赖一个都用不到。
     startDepsFor: () => ({ db }) as never,
-    // 同上：壳在进入服务之前就展开依赖，所以这里给空对象而不是抛。
-    resourceAuthorityFor: () => ({}) as never,
+    // RFC-359 AC-1（第 13 刀）：与 PostgreSQL 泳道**同一个**替身——手动执行门合一之后
+    // 这一侧也要走资源权威。
+    resourceAuthorityFor: resourceAuthorityFor(db),
     // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动改走共用参与者，路由不再自己持有
     // 静态校验那道门。本对拍只驱动到前置门为止，参与者一次都不会被调到。
     launches: { launch: async () => unusedDependency('launches.launch') } as never,
@@ -197,43 +245,7 @@ function postgresqlOperations(db: ProviderNeutralDatabase): TaskRouteOperations 
           validateHostWorkflow: async () => ({ ok: true, issues: [] }),
         },
       },
-      resourceAuthorityFor: () =>
-        ({
-          resources: {
-            async loadAuthorized(
-              _authority: unknown,
-              requests: readonly { kind: string; workflowId: string }[],
-            ) {
-              const request = requests[0]
-              if (request === undefined) return []
-              const rows = await db
-                .select()
-                .from(workflows)
-                .where(eq(workflows.id, request.workflowId))
-                .limit(1)
-              const row = rows[0]
-              if (row === undefined) {
-                throw Object.assign(new Error('workflow-not-found'), {
-                  code: 'workflow-not-found',
-                })
-              }
-              return [
-                {
-                  kind: 'workflow-launch',
-                  workflow: {
-                    id: row.id,
-                    name: row.name,
-                    version: row.version,
-                    definition: JSON.parse(row.definition) as WorkflowDefinition,
-                  },
-                },
-              ]
-            },
-            async freezeCallClosure() {
-              return null
-            },
-          },
-        }) as never,
+      resourceAuthorityFor: resourceAuthorityFor(db),
     },
     persistence: {} as never,
     children: {} as never,
@@ -979,8 +991,10 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
-  // `harness` 只能在 test 体内读——describe 体里读会抛（库还没建）。
-  const isPostgresql = (): boolean => harness.capabilities.provider === 'postgresql'
+  // RFC-359 AC-1（第 13 刀）：**B 段已经没有一条按引擎分叉的断言了**——原来那句
+  // `const isPostgresql = () => harness.capabilities.provider === 'postgresql'` 随最后一条
+  // （B3 手动执行门）销账而删除。本段现在整段是「不许再分家」的锁：每条都对两个引擎断言
+  // 同一个值，任何一侧单方面改动都要先来改这里。段名保留，好让历史读得出它曾经量的是什么。
 
   // **账已销**（RFC-359 AC-1，plan §5hn 之后的盘点第 4 刀）：访问门 + 成员四件两个引擎共用
   // `taskCollab` 那一份之后，下面两条从「实测分叉」变成「不许再分家」的锁。
@@ -1007,15 +1021,17 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     expect(await code(ops.requireOperator(actorOf(STRANGER), 't_missing'))).toBe('task-not-found')
   })
 
-  test('B3 assertManualExecutionAllowed：PG 额外要求工作流当前可见/仍在', async () => {
+  // **账已销**（RFC-359 AC-1 第 13 刀）：手动执行门两侧共用同一份实现之后，
+  // 「工作流现在还在不在」这道判据两个引擎同一档。合并取的是强的那一半——
+  // RFC-285 起 `tasks.workflow_id` 是软链，SQLite 那份本地实现用 `getWorkflow` 拿到 null
+  // 就放行，于是同一个「工作流已被删」的任务在 SQLite 上能手动执行、在 PG 上 404。
+  test('B3→A assertManualExecutionAllowed：工作流已不在时两侧同一档（404）', async () => {
     const ops = operations(harness)
     const workflowId = await seedWorkflow(harness.db)
     const taskId = await seedTask(harness.db, { workflowId })
     await harness.db.delete(workflows).where(eq(workflows.id, workflowId))
-    // RFC-285 起 `tasks.workflow_id` 是软链：SQLite 的 `getWorkflow` 回 null ⇒ 不拦；
-    // PG 的 `loadVisibleWorkflow` 走资源权威，工作流不在就抛。
     expect(await code(ops.assertManualExecutionAllowed(actorOf(OWNER), taskId))).toBe(
-      isPostgresql() ? 'workflow-not-found' : 'no-throw',
+      'workflow-not-found',
     )
   })
 
