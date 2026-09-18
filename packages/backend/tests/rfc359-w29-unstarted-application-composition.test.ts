@@ -677,8 +677,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // **装配图确实变了，是有意的**：这条路由此前转 `services/task.ts` 的 `retryNode`
     //（485 行，retry 的第二份实现），现在与 PostgreSQL 共用同一份 `retryNodeProjection`。
     // 两样依赖都用本文件既有的同一句写法（准备重试同 `cli/start.ts`，级联取消走 `cancelTask`）。
+    // RFC-359 AC-1（第 10 刀）：摘要随 `resume` 合一更新——`resumeTaskAs` 这一格从
+    // 「拼一份 `StartTaskDeps` 交给 `resumeTask`」变成「逐样交给共用的 `resumeTaskProjection`」。
+    // **装配图确实变了，是有意的**：这条路此前跑的是 `services/task.ts` 的 `resumeTask`
+    //（retry 之外的第二处两份实现），现在与 PostgreSQL 共用同一份。依赖面反而更窄了
+    //（六样，`executionModule` / `finalizeWorkspace` 都折进 `lifecycle`），
+    // 而**两个引擎唯一的真差异（认领策略）就落在这里交进去的那个 `lifecycle` 上**。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      'c4b7a0774e23bfdf63d48b1aa473a0f671a24b49b1438b1d62f29994e235f1a3',
+      '1e0ffc3b14282c3218e1c9c281e0da04dd55271b9689e1d97d4c8b1a16e111bb',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',

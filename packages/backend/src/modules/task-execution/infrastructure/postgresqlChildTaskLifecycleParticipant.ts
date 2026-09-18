@@ -25,7 +25,6 @@ import {
   tasks,
 } from '@/db/schema'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
   loadRollbackTargetFrom,
@@ -54,6 +53,10 @@ import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTermin
 import { withSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
+import { selectResumeRollbackTargets } from '../application/resumeRollbackTargets'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
+import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 
 const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
@@ -93,7 +96,7 @@ type ResumeTask = Readonly<{
 }>
 
 export interface PostgresqlChildTaskLifecycleDependencies {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
   readonly executionModule: ProviderTaskExecutionModule
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
@@ -102,16 +105,28 @@ export interface PostgresqlChildTaskLifecycleDependencies {
   readonly log: TaskExecutionTopologyLogger
 }
 
-function selectResumeRollbackTargets(runs: readonly ResumeRun[]): readonly ResumeRun[] {
-  const latest = new Map<string, ResumeRun>()
-  for (const run of runs) {
-    if (run.parentNodeRunId !== null) continue
-    const previous = latest.get(run.nodeId)
-    if (previous === undefined || run.id > previous.id) latest.set(run.nodeId, run)
-  }
-  return [...latest.values()].filter(
-    (run) => (run.status === 'failed' || run.status === 'interrupted') && run.childTaskId === null,
-  )
+/**
+ * RFC-359 AC-1（第 10 刀）—— `resume` 这条路**唯一**需要的依赖面。
+ *
+ * 比上面那份参与者依赖窄两样，而且窄得有道理：
+ *   · `executionModule` 只被两处用到——准入门里的「进程内是不是已经有人在跑」，
+ *     以及生命周期端口的认领。前者收成 `activity` 端口（第 5 刀立的那个，
+ *     两个引擎各自注入自己的注册表）；后者整个收进 `lifecycle`。
+ *   · `finalizeWorkspace` 同理，只被 `lifecycle` 用到。
+ *
+ * `lifecycle` 正是**两个引擎唯一真差异**的容身处：SQLite 走进程级单例的同步认领
+ * （`createDatabaseTaskDriverLifecyclePort`），PostgreSQL 走持久化租约认领
+ * （`claimPersisted`）。那是两种部署形态的真实差别、不是欠账，所以它该是端口而不是分支。
+ * 收窄之后 `server.ts` 那条**不装配完整 runtime** 的路也接得上同一份实现
+ *（与第 9 刀给 `retry` 做的收窄同形）。
+ */
+export interface TaskResumeDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly persistence: TaskExecutionPersistence
+  readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
+  readonly log: TaskExecutionTopologyLogger
+  readonly activity: ActiveTaskExecutionParticipant
+  readonly lifecycle: TaskDriverLifecyclePort
 }
 
 function validateFrozenTrigger(task: ResumeTask): void {
@@ -128,7 +143,7 @@ function validateFrozenTrigger(task: ResumeTask): void {
   }
 }
 
-async function loadResumeTask(db: PostgresqlDatabaseClient, taskId: string): Promise<ResumeTask> {
+async function loadResumeTask(db: ProviderNeutralDatabase, taskId: string): Promise<ResumeTask> {
   const row = (
     await db
       .select({
@@ -154,10 +169,10 @@ async function loadResumeTask(db: PostgresqlDatabaseClient, taskId: string): Pro
 }
 
 async function assertResumeAdmission(
-  dependencies: PostgresqlChildTaskLifecycleDependencies,
+  dependencies: TaskResumeDependencies,
   task: ResumeTask,
 ): Promise<void> {
-  if (dependencies.executionModule.runtimeRegistry.hasTask(task.id)) {
+  if (dependencies.activity.isActive(task.id)) {
     throw new ConflictError(
       'task-not-resumable',
       `task '${task.id}' is actively running (scheduler attached); cannot resume`,
@@ -246,7 +261,7 @@ async function assertResumeAdmission(
 }
 
 async function admitResume(
-  dependencies: PostgresqlChildTaskLifecycleDependencies,
+  dependencies: TaskResumeDependencies,
   task: ResumeTask,
   actorUserId: string | undefined,
 ): Promise<{
@@ -310,7 +325,7 @@ async function admitResume(
 }
 
 async function markUnsafeResume(
-  dependencies: PostgresqlChildTaskLifecycleDependencies,
+  dependencies: TaskResumeDependencies,
   input: {
     readonly taskId: string
     readonly nodeRunId: string
@@ -352,7 +367,7 @@ async function markUnsafeResume(
 }
 
 async function reapRun(
-  dependencies: PostgresqlChildTaskLifecycleDependencies,
+  dependencies: TaskResumeDependencies,
   input: {
     readonly taskId: string
     readonly run: ResumeRun
@@ -399,7 +414,7 @@ async function reapRun(
 }
 
 async function rollbackForResume(
-  dependencies: PostgresqlChildTaskLifecycleDependencies,
+  dependencies: TaskResumeDependencies,
   input: {
     readonly taskId: string
     readonly executionContext: Parameters<
@@ -695,69 +710,103 @@ export function createPostgresqlChildTaskLifecycleParticipant(
       input: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
       topology: Parameters<ChildTaskLifecycleParticipant['resume']>[1],
     ) {
-      const task = await loadResumeTask(dependencies.db, input.taskId)
-      await assertResumeAdmission(dependencies, task)
-      const admitted = await admitResume(dependencies, task, input.runtime.actorUserId)
-      const runtime = resolveTaskDriveConfig({
-        ...input.runtime.runConfig,
-        ensureWorkspaceProfiles: true,
-      })
-      const coordinator = new DefaultTaskDriveCoordinator({
-        runtime,
-        lifecycle,
-        admittedContinuation: {
-          async run(context) {
-            await rollbackForResume(dependencies, {
-              taskId: input.taskId,
-              executionContext: context.execution,
-            })
-            return { kind: 'ready' as const }
+      await resumeTaskProjection(
+        {
+          db: dependencies.db,
+          persistence: dependencies.persistence,
+          runtimeSessionLeases: dependencies.runtimeSessionLeases,
+          log: dependencies.log,
+          // 这一侧的「进程内是不是已经有人在跑」读的是 PG 运行时注册表；SQLite 那一侧
+          // 注入的是 legacy 进程注册表（`composeLegacyTaskActivityParticipant`）。
+          // 同一个角色、两份注册表——正是 `activity` 这个端口存在的理由。
+          activity: {
+            isActive: (taskId: string) =>
+              dependencies.executionModule.runtimeRegistry.hasTask(taskId),
+            awaitReleasedSettled: async () => {},
           },
+          lifecycle,
         },
-        repositoryPreparation: skipRepositoryPreparation,
-        engineOrchestrator: {
-          async drive(context) {
-            await topology.schedulerDriver.drive({
-              taskId: context.taskId,
-              appHome: context.runtime.appHome,
-              ...context.runtime.runtime,
-              ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
-              signal: context.signal,
-              executionContext: context.execution,
-            })
-          },
-        },
-        failureReporter: {
-          async report({ taskId, execution, error }) {
-            const now = Date.now()
-            await dependencies.persistence.runtimeLifecycle.trySet({
-              taskId,
-              to: 'failed',
-              allowedFrom: ['pending', 'running'],
-              extra: {
-                finishedAt: now,
-                errorSummary: 'task resume failed',
-                errorMessage: error instanceof Error ? error.message : String(error),
-              },
-              executionContext: execution,
-              now,
-              reason: 'postgresql-task-resume',
-            })
-            await dependencies.persistence.intentTerminalization.terminalize({
-              taskId,
-              state: 'failed',
-              failureCode: 'task-resume-failed',
-              now,
-              claimedOwnerEpoch: execution.token.epoch,
-            })
-          },
-        },
-      })
-      await coordinator.submit({
-        taskId: input.taskId,
-        intentId: admitted.intentId,
-        completionMode: 'background',
-      })
+        input,
+        topology,
+      )
     },
+  })
+}
+
+/**
+ * RFC-359 AC-1（第 10 刀）—— `resume` 的**唯一**实现，两个 provider 共用。
+ *
+ * 等价性由 `rfc359-w10-resume-admission-parity` 的九格对拍作证（合并前实测：八格逐字相同，
+ * 第九格是「工作区回收中」的归因差异，合并收敛到本实现这一侧——它说得出「正在被 GC 回收」，
+ * 退役那份只能给一个听起来像永久性的 `task-not-resumable`）。
+ */
+export async function resumeTaskProjection(
+  dependencies: TaskResumeDependencies,
+  input: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
+  topology: Parameters<ChildTaskLifecycleParticipant['resume']>[1],
+): Promise<void> {
+  const lifecycle = dependencies.lifecycle
+  const task = await loadResumeTask(dependencies.db, input.taskId)
+  await assertResumeAdmission(dependencies, task)
+  const admitted = await admitResume(dependencies, task, input.runtime.actorUserId)
+  const runtime = resolveTaskDriveConfig({
+    ...input.runtime.runConfig,
+    ensureWorkspaceProfiles: true,
+  })
+  const coordinator = new DefaultTaskDriveCoordinator({
+    runtime,
+    lifecycle,
+    admittedContinuation: {
+      async run(context) {
+        await rollbackForResume(dependencies, {
+          taskId: input.taskId,
+          executionContext: context.execution,
+        })
+        return { kind: 'ready' as const }
+      },
+    },
+    repositoryPreparation: skipRepositoryPreparation,
+    engineOrchestrator: {
+      async drive(context) {
+        await topology.schedulerDriver.drive({
+          taskId: context.taskId,
+          appHome: context.runtime.appHome,
+          ...context.runtime.runtime,
+          ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
+          signal: context.signal,
+          executionContext: context.execution,
+        })
+      },
+    },
+    failureReporter: {
+      async report({ taskId, execution, error }) {
+        const now = Date.now()
+        await dependencies.persistence.runtimeLifecycle.trySet({
+          taskId,
+          to: 'failed',
+          allowedFrom: ['pending', 'running'],
+          extra: {
+            finishedAt: now,
+            errorSummary: 'task resume failed',
+            errorMessage: error instanceof Error ? error.message : String(error),
+          },
+          executionContext: execution,
+          now,
+          reason: 'postgresql-task-resume',
+        })
+        await dependencies.persistence.intentTerminalization.terminalize({
+          taskId,
+          state: 'failed',
+          failureCode: 'task-resume-failed',
+          now,
+          claimedOwnerEpoch: execution.token.epoch,
+        })
+      },
+    },
+  })
+  await coordinator.submit({
+    taskId: input.taskId,
+    intentId: admitted.intentId,
+    completionMode: 'background',
   })
 }

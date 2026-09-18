@@ -176,19 +176,28 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // ——它们不再自己拼 `StartTaskDeps`，改为交给与 PostgreSQL 共用的那份修复实现。
     // RFC-359 AC-1（第 9 刀）：3 → 2。少掉的那一处是 `retry`——`retry` 两份实现合一，
     // 它不再自己拼 `StartTaskDeps`，复活整段交给注入的 `resumeTaskAs`。
+    // RFC-359 AC-1（第 10 刀）：2 → 1。少掉的那一处是 `resume` 自己——它也合一了，
+    // 同样只剩「交给注入的 `resumeTaskAs`，再把任务重读一遍」。剩下的那一处是 `syncWorkflow`。
     expect(
       (sqliteOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length,
-    ).toBe(2)
+    ).toBe(1)
     // **但启动配置在重试这条路上一个字都不能丢**——这才是 RFC-103 要锁的东西，数字只是它的
     // 影子。合并之后它的正面锚点是这两句：路由把 `retry` 交给共用投影，而共用投影的复活
     // 依赖由组合根绑成与 `resume` 动词**同一句** `buildStartTaskDeps`（后者内部
     // `resolveLaunchRuntimeConfig(configPath)`，由上面 `depsSrc` 那条锁着）。
     expect(sqliteOperations).toContain('retry: (input) =>\n      retryNodeProjection(')
     expect(sqliteOperations).toContain('resumeTaskAs: dependencies.resumeTaskAs')
+    // RFC-359 AC-1（第 10 刀）：`resume` 动词同形——启动配置经同一条复活端口进去。
+    expect(sqliteOperations).toContain('await dependencies.resumeTaskAs(actor, taskId)')
     const serverSrc = readFileSync(join(import.meta.dir, '../src/server.ts'), 'utf8')
     const boundResume = serverSrc.indexOf('resumeTaskAs: async (actor, taskId) => {')
     expect(boundResume, 'SQLite 组合根必须绑一份真的复活').toBeGreaterThan(-1)
-    expect(serverSrc.slice(boundResume, boundResume + 400)).toContain('buildStartTaskDeps(')
+    // RFC-359 AC-1（第 10 刀）改锚：这条绑定从「拼一份 `StartTaskDeps` 交给 `resumeTask`」
+    // 变成「逐样交给共用的 `resumeTaskProjection`」，启动配置因此改从 `runConfig` 那一格进去。
+    // 判据不变——**这条路上的复活必须带着本机的启动配置**，只是锚跟着实现走。
+    const boundResumeBlock = serverSrc.slice(boundResume, boundResume + 1200)
+    expect(boundResumeBlock).toContain('resumeTaskProjection(')
+    expect(boundResumeBlock).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {

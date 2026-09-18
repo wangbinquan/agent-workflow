@@ -422,16 +422,27 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
 // 不合一判定的源码锚点（不进 describeEachProvider：与引擎无关，跑一遍就够）
 // ---------------------------------------------------------------------------
 
-test('W8 判不合 · children 是两台引擎：SQLite 转发 services/task，PostgreSQL 转发自己的参与者', () => {
+// RFC-359 AC-1（第 10 刀）**销掉这条判据的一半**：`resume` 已经合一。
+//
+// 原判据钉的是「children 这一对是两台引擎」。`resume` 那一半不成立了——两侧现在都跑
+// `resumeTaskProjection`（等价性由 `rfc359-w10-resume-admission-parity` 的九格对拍作证，
+// 合并前八格逐字相同，第九格的归因差异随合并收敛）。两个引擎唯一的真差异（认领策略）
+// 收进了 `lifecycle` 端口：SQLite 走进程级单例的同步认领，PostgreSQL 走持久化租约。
+//
+// `cancel` 那一半**仍然成立**，判据照旧钉着——它下面那条 `.all()[0]` 的机械证据说的就是
+// `cancelTask` 的准入预检是 bun:sqlite 的同步读，在 PostgreSQL 客户端上跑不出正确结果。
+test('W8 判不合 · cancel 仍是两台引擎：SQLite 转发 services/task，PostgreSQL 转发自己的参与者', () => {
   const sqlite = read('sqliteTaskExecutionRuntimeParticipants.ts')
   const postgresql = read('postgresqlTaskExecutionRuntimeParticipants.ts')
 
-  // SQLite 的 cancel / resume 是 legacy services 引擎。
-  expect(sqlite).toContain("import { cancelTask, isTaskActive, resumeTask } from '@/services/task'")
+  // SQLite 的 cancel 仍是 legacy services 引擎。
+  expect(sqlite).toContain("import { cancelTask, isTaskActive } from '@/services/task'")
   expect(sqlite).toContain('await cancelTask(input.db,')
-  expect(sqlite).toContain('await resumeTask(input.db,')
+  // resume 已合一：这一侧不得再长回自己那份。
+  expect(sqlite).not.toContain('await resumeTask(input.db,')
+  expect(sqlite).toContain('await resumeTaskProjection(')
 
-  // PostgreSQL 的 cancel / resume 是自己那 774 行的参与者。
+  // PostgreSQL 的 cancel 是自己那份参与者。
   expect(postgresql).toContain('createPostgresqlChildTaskLifecycleParticipant')
   expect(postgresql).not.toContain("from '@/services/task'")
 

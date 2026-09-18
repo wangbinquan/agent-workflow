@@ -214,6 +214,7 @@ import {
   type TaskLaunchProvenance,
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
+import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
 import { DrizzleBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/branchTraceSnapshotReader'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
@@ -1354,31 +1355,10 @@ interface MaterializedRepo {
  * force a rollback to the wrong (child) `pre_snapshot`. Mirrors the authoritative
  * `pickFreshestRun` `topLevelOnly` default (freshness.ts).
  */
-export function selectResumeRollbackTargets<
-  R extends {
-    id: string
-    nodeId: string
-    parentNodeRunId: string | null
-    status: string
-    childTaskId?: string | null
-  },
->(runs: readonly R[]): R[] {
-  const latestPerNode = new Map<string, R>()
-  for (const r of runs) {
-    if (r.parentNodeRunId !== null) continue
-    const prev = latestPerNode.get(r.nodeId)
-    if (prev === undefined || r.id > prev.id) latestPerNode.set(r.nodeId, r)
-  }
-  return [...latestPerNode.values()].filter(
-    (r) =>
-      (r.status === 'failed' || r.status === 'interrupted') &&
-      // RFC-243 §4.2 — call rows have no canonical writes to roll back (the
-      // child works in the call-node iso); their interrupted rows are handled
-      // by the scheduler's adoption path (re-attach / merge_state-staged
-      // replay), never by pre_snapshot rollback + re-mint.
-      (r.childTaskId ?? null) === null,
-  )
-}
+// RFC-359 AC-1（第 10 刀）：实现搬到 `modules/task-execution/application/resumeRollbackTargets.ts`
+// ——那里是全仓唯一一份（PostgreSQL 的 resume 参与者原来有一份逐字相同的副本）。
+// 这里保留同名再导出，本文件既有的三条调用路与外部导入面一个字不用改。
+export { selectResumeRollbackTargets }
 
 /**
  * RFC-109 (Codex design-gate F4) — generalized rollback-target selector for the

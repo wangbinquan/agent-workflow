@@ -26,7 +26,8 @@
 //
 // 实测结论与变异实证
 // ------------------
-// **九格里八格两侧逐字相同**；唯一一格分叉（G，工作区回收中）钉在下面那条用例里。
+// 第 10 刀**之前**：九格里八格两侧逐字相同，唯一一格分叉（G，工作区回收中）是归因差异。
+// 第 10 刀合并 `resume` **之后**：九格全部相等——G 那一格随合并销账（见该用例的注释）。
 //
 // 变异实证两次（一侧一条，落在不同的格上，证明它确实有预言力而不是「都没跑到所以都绿」）：
 //   · 把 PG 的来源栅栏判据（`assertResumeAdmission` 里的 `task.sourceTerminationFence !== null`）
@@ -317,24 +318,16 @@ describeEachProvider('RFC-359 W10 —— resume 的准入面对拍', (harness) =
     expect(outcome).toEqual({ code: 'task-repo-prep-incomplete', status: 'failed' })
   })
 
-  // ⚠️ **本文件唯一一格钉住的分叉**（九格里八格两侧逐字相同）。
-  //
-  // 两侧都**拒**，也都不动任务——保护面没有差异，差的是**用户看到的原因**：
-  //   · PostgreSQL：`workspace-pruning`，文案说「工作区正在被 GC 回收」——**可操作**
-  //     （这是个瞬态，过一会儿再来；或者去看 GC）；
-  //   · SQLite：`task-not-resumable`——准入 CAS 被 `setTaskStatus` 的复活门挡下之后
-  //     统一映射成这个码，听起来像**永久性**的「这个任务不能恢复」。
-  //
-  // 同一个任务、同一个请求，两个部署给出两种归因。按本 RFC 已经用过多次的准则
-  //（取信息更全的一侧），合并时应当收敛到 PostgreSQL 那一侧。
-  // **钉在这里而不是掩盖**：合并那一刀会让这一格自己红，到时把它改成相等断言销账。
-  test('G 工作区正在被 GC 回收 → 两侧都拒，但归因不同（钉住的分叉）', async () => {
+  // ✅ **销账**（RFC-359 AC-1 第 10 刀）。这一格原本是本文件唯一钉住的分叉：
+  // 两侧都拒、都不动任务，差的是**用户看到的原因**——PG 报 `workspace-pruning`
+  //（文案说「工作区正在被 GC 回收」，**可操作**：瞬态，过会儿再来），SQLite 的准入 CAS
+  // 被 `setTaskStatus` 的复活门挡下后统一映射成 `task-not-resumable`，听起来像**永久性**的
+  // 「这个任务不能恢复」。`resume` 两份实现合一之后两侧走同一道门，归因收敛到更全的那一侧，
+  // 于是这条从「按 provider 分叉的断言」变回**相等断言**。
+  test('G 工作区正在被 GC 回收 → 拒，且任务原样不动', async () => {
     fixture = await seedFixture(harness.db, { workspacePruningAt: Date.now() - 100 })
     const outcome = await resumeOutcome(harness, fixture)
-    expect(outcome.status, '两侧都必须原样不动任务').toBe('failed')
-    expect(outcome.code).toBe(
-      harness.capabilities.provider === 'postgresql' ? 'workspace-pruning' : 'task-not-resumable',
-    )
+    expect(outcome).toEqual({ code: 'workspace-pruning', status: 'failed' })
   })
 
   test('H 来源已被 MR/PR 关闭事件栅栏 → 拒，且任务原样不动', async () => {

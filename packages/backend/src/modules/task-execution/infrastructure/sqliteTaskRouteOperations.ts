@@ -37,13 +37,7 @@ import type { TaskExecutionPersistence } from '../application/ports/taskExecutio
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { assertNotBuiltin } from '@/services/systemResources'
-import {
-  cancelTask,
-  getTask,
-  resumeTask,
-  syncTaskWorkflow,
-  type StartTaskDeps,
-} from '@/services/task'
+import { cancelTask, getTask, syncTaskWorkflow, type StartTaskDeps } from '@/services/task'
 import { deleteTask } from '@/services/taskDelete'
 import { getWorkflow } from '@/services/workflow'
 import { Paths } from '@/util/paths'
@@ -52,6 +46,7 @@ import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOp
 import type { TaskRouteOperations } from '../public/taskRoutes'
 import type { PostgresqlTaskExecutionLaunchParticipant } from './postgresqlTaskRouteLaunchOperations'
 import { tasks as taskRows, type LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
+import { NotFoundError } from '@/util/errors'
 
 export interface SqliteTaskRouteOperationsDependencies {
   readonly db: LegacySqliteTaskDatabase
@@ -194,12 +189,15 @@ export function createSqliteTaskRouteOperations(
     //（PG 那侧 184 行的内联实现已删除）。合并同时统一了前置门次序——`task-internal`
     // 先于 `task-active`，先报永久性的主因再报暂时性的次因。
     delete: (taskId) => deleteTask(db, taskId, { activity: dependencies.activity }),
+    // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用**同一份**实现。
+    // 这一层只剩「交给注入的复活端口，再把任务重读一遍」——与 PG 那一侧的路由壳逐字同形
+    //（复活本身返回 void，响应体必须重读才是真状态）。
+    // 等价性由 `rfc359-w10-resume-admission-parity` 的九格对拍作证。
     async resume({ actor, taskId }) {
-      return await resumeTask(db, taskId, {
-        ...dependencies.startDepsFor(actor),
-        taskRecoveryOperations: dependencies.recovery,
-        actorUserId: actor.user.id,
-      })
+      await dependencies.resumeTaskAs(actor, taskId)
+      const task = await getTask(db, taskId)
+      if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      return task
     },
     // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用**同一份**实现。
     // 等价性由 `rfc359-w9-retry-rollback-parity` 的 10 格对拍作证（回滚基线升级、级联形状、

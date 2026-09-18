@@ -17339,3 +17339,126 @@ failed cancellation set）；放在准入 CAS **之后**同样必要，反过来
 准入门的归因更全），SQLite 路由的 `resume` 改为转给它；G 那一格随之改成相等断言销账。
 `resumeKick` 还有两个调用方（`syncTaskWorkflow` 与 gate continuation），合并时要分清
 「路由动词 `resume`」与「`resumeKick` 这个内部原语」——**只合前者**，后者是另一条线。
+
+## 第 10 刀的勘察　`resume`（`ChildTaskLifecycleParticipant`）——**差异只有一处，而且已经是端口形状**
+
+有了 W10 的九格基线，逐段对读两份实现（SQLite：`children.resume` → `resumeTask` → `resumeKick`；
+PostgreSQL：`postgresqlChildTaskLifecycleParticipant.resume`）：
+
+| 段 | 两侧 | 结论 |
+| --- | --- | --- |
+| 准入门 | 各一套 | **W10 实测九格里八格逐字相同**；唯一分叉是「工作区回收中」的归因（PG 更全） |
+| 回滚目标选择 | `selectResumeRollbackTargets` | **两份逐字相同的副本**（`services/task.ts:1357` 与 `postgresqlChildTaskLifecycleParticipant.ts:105`）——纯重复，合并时去重 |
+| 驱动协调器 | 都是 `DefaultTaskDriveCoordinator` | **同一个类**，不是两份实现 |
+| 生命周期端口 | 都是 `createTaskDriverLifecyclePort` | **同一个工厂**，差在传进去的 `claim` 一行 |
+
+### 真正的差异只有一行：认领策略
+
+- SQLite：`claim: (intentId) => taskExecutionModule.claim({ db, intentId })`
+  ——**进程级单例**、同步认领（`createDatabaseTaskDriverLifecyclePort`，
+  `taskDriverLifecycle.ts:232`）。
+- PostgreSQL：`claim: (intentId) => executionModule.claimPersisted({ intentId })`
+  ——**持久化租约**认领。
+
+`providerRuntime.ts:142-148` 的原注已经把这件事写明了，而且是**刻意的**：
+「SQLite 那一支用的是进程级单例（没有持久化、走同步 `claim(db)`）」。
+
+**这不是欠账，是两个部署形态的真实差别**（单进程守护 vs 可多实例）。所以合并时**不要**去统一它
+——它本来就该是一个**端口**：把 `lifecycle: TaskDriverLifecyclePort` 作为依赖交进共用实现，
+两个组合根各自造自己那一份。这与第 8 / 9 刀把 `resumeTaskAs` / `cancelChildTaskForCascade` /
+`repositoryPreparationRetry` 收成端口是同一个手法。
+
+### 因此第 10 刀的形状
+
+共用实现 `resumeTaskProjection(dependencies, input, topology)`，依赖面收窄成六样：
+
+```
+db                     ProviderNeutralDatabase（PG 那份的 db 类型要先中立化，同第 8 刀）
+persistence            TaskExecutionPersistence（两侧都有）
+activity               ActiveTaskExecutionParticipant（第 5 刀立的那个端口；
+                       PG 传 runtimeRegistry.hasTask，SQLite 传 legacy 进程注册表）
+lifecycle              TaskDriverLifecyclePort（**认领策略的容身处**，见上）
+runtimeSessionLeases   两侧都有
+log
+```
+
+注意 `executionModule` 与 `finalizeWorkspace` **不在里面**：它们只被 `lifecycle` 用到，
+收进端口之后共用实现不再认识它们——依赖面因此比现在的参与者更窄，
+`server.ts` 那条不装配完整 runtime 的路也接得上（同第 9 刀 `retry` 的收窄）。
+
+### 次序
+
+① 把 `selectResumeRollbackTargets` 的两份副本去重（挪到 `modules/task-execution/application/`，
+两侧都 import——它是纯函数，没有任何 provider 依赖）；
+② 抽出 `resumeTaskProjection` 并把 `assertResumeAdmission` 的活跃度判据改读注入的 `activity`；
+③ SQLite 的 `children.resume` 与 `server.ts` 的路由 `resume` 都改指它；
+④ W10 的 G 格随之从「钉住的分叉」改成相等断言销账；
+⑤ 退役 `resumeTask` 的**路由那条调用路**——注意 `resumeKick` 还有 `syncTaskWorkflow` 与
+gate continuation 两个调用方，**只合路由动词**，`resumeKick` 这个内部原语是另一条线。
+
+### 顺带记一处：SQLite 有**两套**任务路由装配
+
+`server.ts` 的 `composeSqliteApiRouteMounts` 与 `providerRuntime.ts` 的
+`composeSqliteTaskExecutionProviderRuntime` 各自 `createSqliteTaskRouteOperations` 一次。
+守护进程的 HTTP 面走的是前者（`cli/start.ts` → `createComposedApp` → `mountApiRoutes`），
+后者的 `taskRoutes` 在生产上只被 `automaticRepair` 用到。
+这解释了为什么第 8 / 9 刀每次都要在 `server.ts` 里再绑一份同样的依赖——**两处装配根**。
+它本身是一笔结构债，按 plan §5hj 的命名/落位那一刀一并收。
+
+## 盘后第 10 刀落地（上半）　`resume` 两个引擎共用一份实现
+
+按上一节的勘察做真合并：留 PG 那份（在正确模块、准入门的归因更全），
+SQLite 的 `children.resume`、路由动词 `resume`、以及 `server.ts` 那条不装配完整 runtime 的路
+全部改指同一份 `resumeTaskProjection`。
+
+### 依赖面收窄：六样，而且 `executionModule` / `finalizeWorkspace` 都不在里面
+
+共用实现原来挂在 `PostgresqlChildTaskLifecycleDependencies` 上（六样，含 `executionModule`
+与 `finalizeWorkspace`）。逐处对读之后发现那两样**只被两个地方用到**：准入门里的
+「进程内是不是已经有人在跑」，以及生命周期端口的认领。于是
+
+- 前者收成 `activity` 端口（第 5 刀立的那个）——PG 传 `runtimeRegistry.hasTask`，
+  SQLite 传 legacy 进程注册表（`composeLegacyTaskActivityParticipant`）；
+- 后者整个收进 `lifecycle: TaskDriverLifecyclePort`。
+
+`TaskResumeDependencies` 因此只剩 `db / persistence / runtimeSessionLeases / log /
+activity / lifecycle` 六样，比原来的参与者依赖**更窄**，`server.ts` 那条路才接得上
+（与第 9 刀给 `retry` 做的收窄同形）。`db` 一并中立化成 `ProviderNeutralDatabase`。
+
+### 唯一的真差异留在端口里，不是分支
+
+两个引擎在 resume 上真正不同的只有**认领策略**：SQLite 走进程级单例的同步认领
+（`createDatabaseTaskDriverLifecyclePort` → `taskExecutionModule.claim`），
+PostgreSQL 走持久化租约（`claimPersisted`）。`providerRuntime.ts` 的原注早就写明这是**刻意**的
+——两种部署形态的真实差别（单进程守护 vs 可多实例），不是欠账。所以合并**不去统一它**，
+而是把它做成端口：两个组合根各造各的 `lifecycle` 交进来。
+
+### 顺带去重：回滚目标选择器的两份副本
+
+`selectResumeRollbackTargets` 原来有两份**逐字相同**的副本（`services/task.ts` 与
+PG 的 resume 参与者各一份）。唯一那份移到
+`modules/task-execution/application/resumeRollbackTargets.ts`——它是纯函数、零 provider 依赖，
+那里是它在目标架构里的家；`services/task.ts` 保留同名再导出，既有的三条调用路一个字不用改。
+
+### 钉住的分叉销账
+
+W10 第九格（工作区正被 GC 回收）合并后自己红 ⇒ 改成相等断言销账：两侧现在都报
+`workspace-pruning`（说得出「正在被 GC 回收」、可操作），而不是 SQLite 原来那个听起来像
+永久性的 `task-not-resumable`。**九格全部相等。**
+
+`rfc359-w8-runtime-participants-conformance` 的「children 是两台引擎」那条源码锚
+**销掉一半**：`resume` 已合一（并补上反向锚「这一侧不得再长回自己那份」），
+`cancel` 那一半仍然成立、判据照旧。
+
+### 记账
+
+- `services/task.ts` 的 `resumeTask` 现在**生产零调用点**（只剩定义与注释）。它的 46 处测试
+  调用点分布在 25 个文件里，按第 9 刀的做法**下半再迁**（那时才删得掉）。
+- 四条账本声明 `allowGrowth`（`mutation-entrypoints` / `cross-context-observed-imports` /
+  `architecture-exceptions` / `module-symbol-owners`）——都是「共用实现要被接上必须先导出」
+  的过渡态，随下半退役那份一起回落。
+- 三条 legacy→模块内部的 inbound 边逐条入 `commons-debt` 的 R1 账本
+  （`server.ts` 两条、`services/task.ts` 一条），随 RFC-294 W4-E1 cutover 退役。
+- `rfc103` 的接线断言改锚：SQLite 路由的 `...dependencies.startDepsFor(actor)` 2 → 1
+  （`resume` 也不再自己拼 `StartTaskDeps` 了），并给 `server.ts` 那条绑定加了正面锚
+  ——判据不变（**这条路上的复活必须带着本机的启动配置**），锚跟着实现走。

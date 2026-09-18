@@ -2,6 +2,36 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 📌 RFC-359 最新一段（2026-09-18 续 78，**第 10 刀上半：`resume` 两个引擎共用一份实现**）
+>
+> 先建九格对拍基线（`rfc359-w10-resume-admission-parity`，全部走生产装配 + 真 git 工作树）：
+> **八格两侧逐字相同**，唯一一格分叉是「工作区回收中」的**归因**——PG 报 `workspace-pruning`
+> （可操作的瞬态），SQLite 报 `task-not-resumable`（听起来像永久不可恢复）。变异实证两条，
+> 一侧一条、落在不同的格上。
+>
+> 然后做真合并：留 PG 那份，SQLite 的 `children.resume`、路由动词 `resume`、
+> 以及 `server.ts` 那条不装配完整 runtime 的路**全部改指同一份 `resumeTaskProjection`**。
+> 那一格分叉随之销账——九格现在全部相等。
+>
+> **依赖面收窄成六样**，而且 `executionModule` / `finalizeWorkspace` 都不在里面：
+> 前者收成 `activity` 端口（第 5 刀立的那个），后者整个收进 `lifecycle`。
+>
+> **两个引擎唯一的真差异（认领策略）留在端口里、不是分支**：SQLite 走进程级单例的同步认领，
+> PostgreSQL 走持久化租约。`providerRuntime.ts` 的原注早就写明这是刻意的——两种部署形态的
+> 真实差别，不是欠账，所以合并不去统一它。
+>
+> **顺带去重**：`selectResumeRollbackTargets` 的两份逐字相同副本合成一份，落在
+> `application/resumeRollbackTargets.ts`（纯函数、零 provider 依赖）。
+>
+> **守卫侧**：`w8-runtime-participants` 的「children 是两台引擎」锚销掉一半（`resume` 已合一，
+> 并补上反向锚；`cancel` 那一半仍成立）；`rfc103` 的接线断言改锚并加正面锚。
+>
+> `services/task.ts` 的 `resumeTask` 现在**生产零调用点**；它的 46 处测试调用点（25 个文件）
+> 按第 9 刀的做法**下半再迁**，那时才删得掉。
+>
+> **下一步**：第 10 刀下半（迁测试面 + 删 `resumeTask`）；然后是 `cancel` 那一半
+> （`ChildTaskLifecycleParticipant` 的另一半），以及 plan §5hj 的命名/落位债。
+
 > ## 📌 RFC-359 最新一段（2026-09-18 续 77，**第 9 刀：`retry` 两份实现合一，照出四处真缺陷**）
 >
 > 留 PG 那份（在正确模块），删掉 `services/task.ts` 的 `retryNode`（**485 行**）。

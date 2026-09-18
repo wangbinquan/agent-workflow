@@ -686,6 +686,23 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 **定式**：`git add architecture/ design/RFC-294-backend-layered-target-architecture/status.md`
 ——**整目录加那一个文件，永远一起**。commit 时的 pathspec 同样写这两项。
 
+### 同一条顺序律的第三种形态：**源码派生的数字 / 摘要，连「只改了个注释」也要重跑**
+
+除了 census 的产物，仓里还有两类判据是**直接从源码文本算出来的**：
+
+- **文本计数型棘轮**（例：成对适配器覆盖对等账本的 `ref` 数）——它数的是「提到这个模块名或
+  导出符号的文件数」，**注释也算、文档也算**。一次改锚就可能让某一格 +1。
+- **函数体摘要型锁**（例：组合根某个函数的 sha256 摘要）——它摘的是函数体全文，
+  **改一行注释摘要就变**。
+
+两者都在 2026-09-18 同一天各撞一次，形状一模一样：中途跑绿 → 又去改了几处注释 / 改了个锚 →
+推上去才红，而红的内容与本次功能改动毫无关系。
+
+**定式（与上面 census 那条合并成一句）**：**最后一次编辑之后**，重跑
+`bun run scripts/architecture-census.ts --write --snapshot-sha HEAD` **以及整个
+`tests/architecture/`**，再加上你改过的那几个源码锁所在的用例文件。
+「只改了个注释」「只补了文档」都不是豁免——它们恰恰是这两类判据最常见的红因。
+
 ### 顺序是硬的：**手改 `architecture/**` 一律在 census 之前**（2026-09-18 实撞）
 
 `ledger-baselines.json` 的 `canonicalProjection.contentDigest` 覆盖它自己。于是

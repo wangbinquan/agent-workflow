@@ -32,12 +32,7 @@ import {
 import type { SecretBox } from '@/auth/secretBox'
 import { actorOfDirectAuthority, admitDaemonIdentity, multiAuth } from '@/auth/session'
 import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
-import {
-  cancelTask,
-  createTaskDriveCoordinator,
-  resumeTask,
-  retryRepositoryPreparation,
-} from '@/services/task'
+import { cancelTask, createTaskDriveCoordinator, retryRepositoryPreparation } from '@/services/task'
 import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -171,6 +166,9 @@ import {
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
+import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant'
+import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
@@ -2543,21 +2541,42 @@ function composeSqliteApiRouteMounts(
       ),
     // RFC-359 AC-1（第 8 刀）：手动 / 自动修复与 PostgreSQL 共用同一份实现。
     // 这条路不装配完整 runtime，复活走的仍是本文件 `resume` 动词用的同一句
-    //（`resumeTask` + `startDepsFor`），与合并前这条路上的修复逐字同形。
+    //（第 10 刀之后那一句就是下面的共用 `resumeTaskProjection`），
+    // 与合并前这条路上的修复逐字同形。
     persistence: taskExecutionPersistence,
+    // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用**同一份**实现
+    // （`resumeTaskProjection`）。这条路不装配完整 runtime，所以依赖面是**逐样交**的——
+    // 收窄之后它只要六样，`executionModule` / `finalizeWorkspace` 都折进了 `lifecycle`。
+    // `lifecycle` 用的正是这一侧今天这条路上的那一个（进程级单例的同步认领 +
+    // `finishClaimedWebhookWorkspacePrune` 收尾），与 `services/task.ts` 的协调器逐字同形。
     resumeTaskAs: async (actor, taskId) => {
-      await resumeTask(deps.db, taskId, {
-        ...buildStartTaskDeps(
-          deps.db,
-          schedulerDriver,
-          deps.configPath,
-          actor.user.id,
-          deps.secretBox,
-          identityAccess,
-        ),
-        taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
-        actorUserId: actor.user.id,
-      })
+      await resumeTaskProjection(
+        {
+          db: deps.db,
+          persistence: taskExecutionPersistence,
+          runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
+          log: createLogger('task'),
+          activity: composeLegacyTaskActivityParticipant(),
+          lifecycle: createDatabaseTaskDriverLifecyclePort({
+            db: deps.db,
+            log: createLogger('task'),
+            finalizeWorkspace: async (id: string) => {
+              await finishClaimedWebhookWorkspacePrune(deps.db, id)
+            },
+          }),
+        },
+        {
+          taskId,
+          runtime: {
+            actorUserId: actor.user.id,
+            runConfig: {
+              appHome,
+              ...resolveLaunchRuntimeConfig(deps.configPath),
+            },
+          },
+        },
+        { schedulerDriver },
+      )
     },
     repair: {
       collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),

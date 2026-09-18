@@ -5,7 +5,7 @@ import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
-import { cancelTask, isTaskActive, resumeTask } from '@/services/task'
+import { cancelTask, isTaskActive } from '@/services/task'
 import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type {
@@ -28,6 +28,7 @@ import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTur
 import { createPostgresqlChildExecutionLaunchOperations } from './postgresqlChildExecutionLaunchOperations'
 import type { PostgresqlChildWorkgroupLaunchResources } from './postgresqlChildExecutionLaunchOperations'
 import { createDatabaseTaskDriverLifecyclePort } from './taskDriverLifecycle'
+import { resumeTaskProjection } from './postgresqlChildTaskLifecycleParticipant'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { createLogger } from '@/util/log'
 
@@ -80,16 +81,20 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
   // `finalizeWorkspace` 逐字沿用 SQLite 今天这条路上用的那一个（`services/task.ts` 的协调器
   // 装的就是它）——本刀是合一，不顺手改收尾语义。两个引擎的 finalize 绑的不是同一个函数，
   // 那条差异单独记在 plan 里待裁决。
+  // RFC-359 AC-1（第 10 刀）：这一侧的生命周期端口**只造一次**——子任务铸造机与 `resume`
+  // 共用它。第 10 刀之前只有铸造机需要，那时内联在下面那个调用里；`resume` 合一之后它
+  // 成了「认领策略」这件事在本组合根的唯一落点，内联第二份就等于又开一处分叉。
+  const taskDriverLifecycle = createDatabaseTaskDriverLifecyclePort({
+    db: input.db,
+    log: createLogger('task'),
+    finalizeWorkspace: async (taskId) => {
+      await finishClaimedWebhookWorkspacePrune(input.db, taskId)
+    },
+  })
   const childLaunch = createPostgresqlChildExecutionLaunchOperations({
     db: input.db,
     persistence: input.persistence,
-    lifecycle: createDatabaseTaskDriverLifecyclePort({
-      db: input.db,
-      log: createLogger('task'),
-      finalizeWorkspace: async (taskId) => {
-        await finishClaimedWebhookWorkspacePrune(input.db, taskId)
-      },
-    }),
+    lifecycle: taskDriverLifecycle,
     workgroup: input.childLaunchWorkgroup,
   })
 
@@ -136,22 +141,30 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
           : {}),
       })
     },
+    // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用**同一份**实现
+    // （`resumeTaskProjection`）。等价性由 `rfc359-w10-resume-admission-parity` 的九格对拍
+    // 作证——合并前实测八格逐字相同，第九格（工作区回收中）收敛到共用那一侧更全的归因。
+    //
+    // 两个引擎唯一的真差异是**认领策略**，它整个收在 `lifecycle` 这个端口里：
+    // 这一侧走进程级单例的同步认领（`createDatabaseTaskDriverLifecyclePort`），
+    // PostgreSQL 那一侧走持久化租约（`claimPersisted`）。那是两种部署形态的真实差别、
+    // 不是欠账，所以它是端口而不是实现里的分支。
     async resume(
       request: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
       topology: Parameters<ChildTaskLifecycleParticipant['resume']>[1],
     ) {
-      await resumeTask(input.db, request.taskId, {
-        db: input.db,
-        taskRecoveryOperations: input.persistence.recoveryAdministration,
-        schedulerDriver: topology.schedulerDriver,
-        ...(request.runtime.triggerContext === undefined
-          ? {}
-          : { triggerContext: request.runtime.triggerContext }),
-        ...(request.runtime.actorUserId === undefined
-          ? {}
-          : { actorUserId: request.runtime.actorUserId }),
-        ...request.runtime.runConfig,
-      })
+      await resumeTaskProjection(
+        {
+          db: input.db,
+          persistence: input.persistence,
+          runtimeSessionLeases: input.runtimeSessionLeases,
+          log: createLogger('task'),
+          activity: composeLegacyTaskActivityParticipant(),
+          lifecycle: taskDriverLifecycle,
+        },
+        request,
+        topology,
+      )
     },
   })
 

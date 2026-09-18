@@ -5204,6 +5204,7 @@
         "import:22d95f653425a0679593",
         "import:24ceb5dbbf49c553205a",
         "import:268b94cea09f3a658c55",
+        "import:2a593cdeafd6558a398a",
         "import:2b3bd7a4f1c1b2bface2",
         "import:2cd5c42cd1aa20653ae5",
         "import:33f1ba340a998147d3dd",
@@ -5232,7 +5233,6 @@
         "import:704d1fd2d3d305b188e0",
         "import:70e2c384abc62cae8ab5",
         "import:78bda158c8e1258eea34",
-        "import:799ae0a4f3877e45f9f2",
         "import:7ec17b34194429ad862d",
         "import:8b24b24e5abf279646e4",
         "import:8c4ac449d9754e21ddec",
@@ -5251,7 +5251,6 @@
         "import:b20c5073febb0f2fcfbe",
         "import:b5b002f79434bc4ab8c1",
         "import:b8a3c9d1a95156ea0367",
-        "import:bfb39283e479df4d86b1",
         "import:c07d7479e713e86827ac",
         "import:c31b46594670e78f8791",
         "import:c35a5bf56849c2bd96bc",
@@ -5325,7 +5324,6 @@
         "resumeTaskWithAtomicSideEffects",
         "retryRepositoryPreparation",
         "runtimeConfigOpts",
-        "selectResumeRollbackTargets",
         "selectSyncRollbackTargets",
         "shutdownActiveTaskExecutions",
         "startTask",
@@ -6344,5 +6342,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:136370071027722d537f122dcc8baa41e684520acd22eb2925ace8810d65a949"
+  "sourceDigest": "sha256:adeae4fef82667efeb44c8f7aebe17e1d0eb6358d0d34fe12c7fcdeb96e8b685"
 }
