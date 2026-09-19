@@ -76,7 +76,10 @@ const TASK_INSERT_SITES: readonly string[] = [
   // 三列一直没变，是上面删掉的纯读三件与列表三件让整份文件不断变短。
   // **行号键的账本就是这么被动的**——任何同文件的增删都要重跑它
   //（`docs/dev-gotchas.md` 的「半径盲区」第 5 条）。
-  'services/task.ts:3548 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // 2026-09-19：3548 → 3570。`createTaskDriveCoordinator` 的运行期配置改成每次 drive 现读
+  // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
+  // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
+  'services/task.ts:3570 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {
