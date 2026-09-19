@@ -840,10 +840,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5061,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1 回补（2026-09-19）：三条被合一顺手丢掉的装配步骤补回来，账本各涨 1。① `digitalEmployeeExecution.ts` 新增 `hostWorkflow` 端口 + 对 `actionExecutionRunners` 的 `ensureDigitalEmployeeHostWorkflow` 引用——合一（`c932bc8e8`）把合成宿主工作流行的幂等播种整个删掉了，于是数字员工执行任务落在一个**不存在的工作流**上，人工评审页只剩一句「Review not found.」（e2e DE-28）。② `postgresqlDaemonApplication.ts` 对同一个符号的引用（PG daemon 自己绑这个端口）。两条边与同模块既有的 `composition/*` → `composition/*` 引用同形，随 RFC-294 的 composition cutover 一起退役；零成本的替代只有「把评审页继续打不开留着」。判据在 `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`（双引擎 + 五处变异各红一条）。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -864,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4562,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1 回补（2026-09-19）：三条被合一顺手丢掉的装配步骤补回来，账本各涨 1。① `digitalEmployeeExecution.ts` 新增 `hostWorkflow` 端口 + 对 `actionExecutionRunners` 的 `ensureDigitalEmployeeHostWorkflow` 引用——合一（`c932bc8e8`）把合成宿主工作流行的幂等播种整个删掉了，于是数字员工执行任务落在一个**不存在的工作流**上，人工评审页只剩一句「Review not found.」（e2e DE-28）。② `postgresqlDaemonApplication.ts` 对同一个符号的引用（PG daemon 自己绑这个端口）。两条边与同模块既有的 `composition/*` → `composition/*` 引用同形，随 RFC-294 的 composition cutover 一起退役；零成本的替代只有「把评审页继续打不开留着」。判据在 `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`（双引擎 + 五处变异各红一条）。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -902,10 +896,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24559,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-1 回补（2026-09-19）：三条被合一顺手丢掉的装配步骤补回来，账本各涨 1。① `digitalEmployeeExecution.ts` 新增 `hostWorkflow` 端口 + 对 `actionExecutionRunners` 的 `ensureDigitalEmployeeHostWorkflow` 引用——合一（`c932bc8e8`）把合成宿主工作流行的幂等播种整个删掉了，于是数字员工执行任务落在一个**不存在的工作流**上，人工评审页只剩一句「Review not found.」（e2e DE-28）。② `postgresqlDaemonApplication.ts` 对同一个符号的引用（PG daemon 自己绑这个端口）。两条边与同模块既有的 `composition/*` → `composition/*` 引用同形，随 RFC-294 的 composition cutover 一起退役；零成本的替代只有「把评审页继续打不开留着」。判据在 `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`（双引擎 + 五处变异各红一条）。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -922,8 +913,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "910027e0e3a694ee90c5c5f913273dfab9d47730",
-    "contentDigest": "sha256:a3cd1b242c7ee2cf5043db5fa446862d15b87e8bda4111b2e32fb54ccb04f8f0",
+    "currentSnapshotSha": "a520adee61cf84484add4f3095f724ee5cce1b4d",
+    "contentDigest": "sha256:d4f16d5f088b0223b96f07eaa3bd274d620fd87471801bfbff321c4adabeac8f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
