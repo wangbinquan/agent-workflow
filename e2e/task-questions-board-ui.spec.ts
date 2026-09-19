@@ -83,6 +83,13 @@ const colOf = (page: Page, phase: string) =>
   page.locator(`.task-questions__col[data-phase="${phase}"]`)
 
 test.beforeAll(async () => {
+  // 这个 `beforeAll` 要真的把两轮澄清跑出来（起 daemon、种仓、启任务、等两个提问节点各自落到
+  // `awaiting_human`），而钩子默认继承的是**测试**的预算（上面那句 300s）。用例本身只要 3~5s
+  // ——时间全在这里。macOS + webkit 是最慢的一格：2026-09-19 的夜跑上 ubuntu 这一格 3s 通过、
+  // macOS 这一格以 `Test timeout of 300000ms exceeded` 收场，下面那条 180s 轮询还没等完
+  // （只看到 1 / 2 轮）。给钩子一份与它实际要做的事相称的预算；判据不变——超时仍然失败，
+  // 只是不再因为「最慢那一格的机器慢」而失败。
+  test.setTimeout(900_000)
   repoDir = mkdtempSync(join(tmpdir(), 'aw-rfc319-boardui-repo-'))
   writeFileSync(join(repoDir, 'README.md'), '# rfc319 board ui fixture\n', 'utf-8')
   initGitRepo(repoDir)
@@ -197,7 +204,9 @@ test.beforeAll(async () => {
         )
         return rows.length
       },
-      { timeout: 180_000 },
+      // 严格小于上面钩子的预算：越线要报在这条轮询上（「只等到 1 / 2 轮」），
+      // 而不是报成一条离病因很远的「钩子超时」。
+      { timeout: 600_000 },
     )
     .toBe(2)
   const a = rows.find((r) => r.intermediaryNodeId === 'clarify_a')!
