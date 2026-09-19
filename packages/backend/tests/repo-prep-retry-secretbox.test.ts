@@ -58,7 +58,12 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
     expect(startDeps).toContain('buildStartTaskDeps(')
     expect(startDeps).toContain('secretBox')
     expect(src).toContain('repositoryPreparationRetry: Object.freeze({')
-    expect(src).toContain('taskStartDepsFor(SYSTEM_USER_ID)')
+    // 2026-09-19 改锚：发起人不再写死。`continuationSource` 只有在 `actorUserId !== SYSTEM_USER_ID`
+    // 时才返回 `'rest'`，而 `mayAuthorizeReplay` 只授权 rest/mcp 的演员命令——写死 SYSTEM 时用户
+    // 点「重试准备」拿到的是 `task-execution-outcome-unknown`，卡在仓库准备的任务永远重试不了
+    // （e2e TASK-27）。本条要锁的仍是「重试拿得到完整启动依赖（带 secretBox）」这一点：它照旧
+    // 经同一个 `taskStartDepsFor`，只是发起人由调用方交进来，缺席才回落 SYSTEM（boot 自动恢复）。
+    expect(src).toContain('taskStartDepsFor(authorization?.actorUserId ?? SYSTEM_USER_ID)')
     expect(runtime).toContain('repositoryPreparation: dependencies.repositoryPreparationRetry')
     expect(autoResume).toContain('input.repositoryPreparation.retry(taskId)')
   })

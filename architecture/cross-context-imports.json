@@ -24056,6 +24056,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4e8ec054ef769f3d9102",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#ensureDigitalEmployeeHostWorkflow",
+      "toPath": "packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts",
+      "toSymbol": "ensureDigitalEmployeeHostWorkflow",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#$file",
@@ -77539,9 +77556,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4561,
+    "architectureExceptions": 4562,
     "implementationSccs": 0,
-    "observedEdges": 5060,
+    "observedEdges": 5061,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -102444,6 +102461,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:4e8ec054ef769f3d9102",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/actionExecutionRunners",
+      "syntax": "static-import",
+      "targetSymbol": "ensureDigitalEmployeeHostWorkflow",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#ensureDigitalEmployeeHostWorkflow"
     },
     {
       "edgeKind": "type",
@@ -159047,7 +159080,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d5fbecd1b1efe5d9845fe52533ac057a4988bffe8c5f13c54886a53c53956381",
+  "sourceDigest": "sha256:57a28fe8441b0a45f3012f2ff8145260dba1381b8dc5a3634c9115ca251696ce",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -1965,8 +1965,19 @@ async function composeSqliteProviderSession(
         },
       }),
       repositoryPreparationRetry: Object.freeze({
-        async retry(taskId: string) {
-          await retryRepositoryPreparation(db, taskId, taskStartDepsFor(SYSTEM_USER_ID))
+        // 2026-09-19：**发起人必须原样传下去**。`continuationSource` 只有在
+        // `actorUserId !== SYSTEM_USER_ID` 时才返回 `'rest'`，而 `mayAuthorizeReplay` 只授权
+        // `rest`/`mcp` 的演员命令。这里把它写死成 SYSTEM_USER_ID，于是用户点「重试准备」提交的
+        // 续跑拿不到重放授权，血缘上留着的 `requires-actor` 决定把这次重试判成
+        // `task-execution-outcome-unknown`（提示「use a manual resume/retry/sync command」——
+        // 而他用的就是那条命令）：卡在仓库准备的任务从界面上永远重试不了（e2e TASK-27）。
+        // 缺席授权 = boot 自动恢复那条路，它继续以 SYSTEM_USER_ID 走 `auto`。
+        async retry(taskId: string, authorization?: { readonly actorUserId: string }) {
+          await retryRepositoryPreparation(
+            db,
+            taskId,
+            taskStartDepsFor(authorization?.actorUserId ?? SYSTEM_USER_ID),
+          )
         },
       }),
     })
@@ -2521,6 +2532,10 @@ async function composeSqliteProviderSession(
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       coordinator: createTaskDriveCoordinator({
         deps: hostLaunchStartDeps,
+        // 2026-09-19：组合根装配一次、之后长驻——17 个运行期旋钮必须每次 drive 现读，
+        // 否则设置页改完配置对新任务不生效（e2e CFG-45 实撞，判据在
+        // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。
+        refreshLaunchConfig: () => resolveLaunchRuntimeConfig(Paths.config),
         appHome: Paths.root,
         engineFailureMessage: 'digital employee host task drive threw',
         failureReporter: {

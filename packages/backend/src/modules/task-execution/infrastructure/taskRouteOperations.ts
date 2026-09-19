@@ -2103,7 +2103,13 @@ export async function retryNodeProjection(
           'repository preparation cannot be re-run over a prepared task',
       )
     }
-    await dependencies.repositoryPreparationRetry.retry(input.taskId)
+    // 这是**演员发起**的重试，授权必须交进去：`taskContinuationAdmission` 对留着
+    // `requires-actor` 重放决定的血缘只接受演员命令（`mayAuthorizeReplay`）。不交的话这次重试
+    // 会被判成 `task-execution-outcome-unknown`，提示「use a manual resume/retry/sync command」
+    // ——而用户刚刚用的**就是**那条命令，于是卡在仓库准备的任务从界面上永远重试不了（e2e TASK-27）。
+    await dependencies.repositoryPreparationRetry.retry(input.taskId, {
+      actorUserId: input.actor.user.id,
+    })
     const prepared = await loadTask(dependencies.db, input.taskId)
     if (prepared === null) {
       throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)

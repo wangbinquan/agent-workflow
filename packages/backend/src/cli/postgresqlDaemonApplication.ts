@@ -141,6 +141,7 @@ import {
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
+import { ensureDigitalEmployeeHostWorkflow } from '@/modules/task-execution/composition/actionExecutionRunners'
 import {
   composeDigitalEmployeeExecution,
   inspectDigitalEmployeeHumanReviewState,
@@ -1428,6 +1429,9 @@ export async function composePostgresqlApplication(
       resources: taskExecutionResources,
     }),
     launch: taskLaunchKernel,
+    // 2026-09-19 回补：合成宿主工作流行的幂等播种（合一时丢了，见
+    // `composition/digitalEmployeeExecution.ts` 的 `hostWorkflow` 端口注释）。
+    hostWorkflow: { ensure: () => ensureDigitalEmployeeHostWorkflow(input.db) },
     tasks: taskExecutionProvider.routes.tasks,
     readModels: taskExecutionProvider.readModels,
     resourceUsage: {

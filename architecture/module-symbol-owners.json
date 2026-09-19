@@ -6,7 +6,7 @@
     "moduleFiles": 1182,
     "productionFiles": 2517,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24558
+    "symbolsIncludingFileRoots": 24559
   },
   "entries": [
     {
@@ -113264,6 +113264,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskAutoResumeCommand.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskAutoResumeCommand.ts#RepositoryPreparationRetryAuthorization",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryPreparationRetryAuthorization",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -295373,5 +295385,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d5fbecd1b1efe5d9845fe52533ac057a4988bffe8c5f13c54886a53c53956381"
+  "sourceDigest": "sha256:57a28fe8441b0a45f3012f2ff8145260dba1381b8dc5a3634c9115ca251696ce"
 }

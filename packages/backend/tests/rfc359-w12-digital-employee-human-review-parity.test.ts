@@ -147,6 +147,7 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
+      hostWorkflow: null as never,
       tasks: null as never,
       readModels: null as never,
       resourceUsage: null as never,

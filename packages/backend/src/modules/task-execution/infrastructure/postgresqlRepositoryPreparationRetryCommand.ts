@@ -23,7 +23,10 @@ import {
 import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
 import { nextRetryIndex } from '../application/nextRetryIndex'
-import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
+import type {
+  RepositoryPreparationRetryAuthorization,
+  RepositoryPreparationRetryCommand,
+} from '../application/ports/taskAutoResumeCommand'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
@@ -433,6 +436,7 @@ async function commitPreparedWorkspace(
   dependencies: PostgresqlRepositoryPreparationRetryDependencies,
   snapshot: { readonly task: TaskRow; readonly prep: PrepRow },
   workspace: TaskRoutePreparedWorkspace,
+  authorization: RepositoryPreparationRetryAuthorization | undefined,
 ): Promise<string> {
   const now = dependencies.now?.() ?? Date.now()
   const nextId = dependencies.id ?? ulid
@@ -505,12 +509,17 @@ async function commitPreparedWorkspace(
       iteration: 0,
       overrides: { startedAt: now, finishedAt: now },
     })
+    // 演员发起的重试必须以 `rest` + actorUserId 提交，否则 `mayAuthorizeReplay` 不授权重放，
+    // 血缘上留着的 `requires-actor` 重放决定会把这次重试判成
+    // `task-execution-outcome-unknown`——而它本身就是那条被要求使用的手动命令（e2e TASK-27）。
+    // 无授权时保持 `auto`：那是 boot 自动恢复那条路。
     await submitTaskContinuation(tx, {
       taskId: snapshot.task.id,
       intentId,
       kind: 'retry-repository-preparation',
-      source: 'auto',
-      actorUserId: null,
+      ...(authorization === undefined
+        ? { source: 'auto' as const, actorUserId: null }
+        : { source: 'rest' as const, actorUserId: authorization.actorUserId }),
       payload: { v: 1, phase: 'repository-preparation' },
       now,
       advanceOperationGeneration: true,
@@ -548,7 +557,10 @@ export function createPostgresqlRepositoryPreparationRetryCommand(
 ): RepositoryPreparationRetryCommand {
   const inFlight = new Set<string>()
   return Object.freeze({
-    async retry(taskId: string): Promise<void> {
+    async retry(
+      taskId: string,
+      authorization?: RepositoryPreparationRetryAuthorization,
+    ): Promise<void> {
       if (inFlight.has(taskId)) {
         throw new ConflictError(
           'task-still-running',
@@ -589,7 +601,12 @@ export function createPostgresqlRepositoryPreparationRetryCommand(
           await recordPreparationFailure(dependencies, snapshot, error)
           throw error
         }
-        const intentId = await commitPreparedWorkspace(dependencies, snapshot, workspace)
+        const intentId = await commitPreparedWorkspace(
+          dependencies,
+          snapshot,
+          workspace,
+          authorization,
+        )
         committed = true
         await dependencies.coordinator.submit({
           taskId,

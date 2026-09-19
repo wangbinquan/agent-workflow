@@ -553,7 +553,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。装配图变的是这一格，
     // 方向同样是补齐：此前这条路上「设为默认」对新任务不生效。
     expect(digest(restored, pg)).toBe(
-      'd0300882e70fbf1e460b04ad6347705e125e0bd2496b93729332a6a1ce28682a',
+      // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
+      // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把
+      // 发起人原样传下去、数字员工执行在 launch 前播种合成宿主工作流行。三条都是**补齐**，
+      // 判据分别在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts` 与
+      // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
+      '1d143f41c9f21c823eb21e0ea58accdb3813ee0e988b4bead48ed4b82d6cd354',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -718,7 +723,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // **装配出来的东西不变**：复活仍是同一条进程级单例认领 + 同一个收尾器，静态校验门仍指向
     // 同一份 `composeAgentLaunchResourceOperations`。
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
-      '43c0d0ddf2d71099906375d4ecb2d6e028776600f5289cccb6e92b9dccfd961e',
+      // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
+      // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把
+      // 发起人原样传下去、数字员工执行在 launch 前播种合成宿主工作流行。三条都是**补齐**，
+      // 判据分别在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts` 与
+      // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
+      '9de0ff1fbb9a1fdd0d8b3f86f780b7f9de2ab02c204352604957c8aa40944a53',
     )
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',
