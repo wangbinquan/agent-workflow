@@ -1,6 +1,10 @@
 import { ValidationError } from '@/util/errors'
 import type { RuntimeProfileConfigurationCommands } from '../public/commands'
-import type { RuntimeProfileInspectionQueries } from '../public/queries'
+import type { RuntimeProfileInspection } from '../public/types'
+
+interface RuntimeProfileInspectionQueries {
+  getRuntime(name: string): Promise<RuntimeProfileInspection | null>
+}
 
 /** Preserve config's existing validation-before-invalidation-before-file-write order. */
 export function createRuntimeProfileConfigurationCommands(

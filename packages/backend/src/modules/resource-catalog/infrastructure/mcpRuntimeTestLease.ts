@@ -11,12 +11,10 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   McpRuntimeTestLeaseError,
   type McpRuntimeTestLeaseOperations,
-} from '../public/participants'
-import type {
-  McpRuntimeProtocol,
-  McpRuntimeTestLeaseInput,
-  McpRuntimeTestLeaseToken,
-} from '../public/types'
+  type McpRuntimeTestLeaseInput,
+  type McpRuntimeTestLeaseToken,
+} from '../application/ports/mcpRuntimeTestLease'
+import type { McpRuntimeProtocol } from '../public/types'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,

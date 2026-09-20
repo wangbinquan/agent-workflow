@@ -20,8 +20,10 @@ import type { McpDiagnosticRunResult } from './runtimeDiagnosticsEffects'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { StaleRunKillOutcome } from '@/util/process'
-import type { McpRuntimeTestLeaseOperations } from '../../public/participants'
-import type { McpRuntimeTestLeaseToken } from '../../public/types'
+import type {
+  McpRuntimeTestLeaseOperations,
+  McpRuntimeTestLeaseToken,
+} from '../ports/mcpRuntimeTestLease'
 import type {
   McpRuntimeTestPersistence,
   McpRuntimeTestSessionRecord as SessionRow,

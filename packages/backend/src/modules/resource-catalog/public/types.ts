@@ -451,18 +451,6 @@ export interface McpProbeWrite {
 
 export type McpRuntimeProtocol = 'opencode' | 'claude-code'
 
-export interface McpRuntimeTestLeaseToken {
-  readonly protocol: McpRuntimeProtocol
-  readonly runtimeSessionId: string
-  readonly testSessionId: string
-  readonly turnId: string
-  readonly leaseNonceDigest: string
-}
-
-export interface McpRuntimeTestLeaseInput extends McpRuntimeTestLeaseToken {
-  readonly leasedAt?: number
-}
-
 /** T5-S aggregate contract. Filesystem roots and persistence rows stay private. */
 export type SkillCatalogResource = Skill
 export type SkillCatalogContent = SkillContent

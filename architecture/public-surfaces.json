@@ -3,10 +3,10 @@
     "consumers": 884,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1075,
+    "methods": 1069,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21011,
-    "symbols": 1023
+    "recursiveFields": 20921,
+    "symbols": 1018
   },
   "entries": [
     {
@@ -99993,353 +99993,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:McpRuntimeTestLeaseError",
-      "members": [
-        "code"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpRuntimeTestLeaseError",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:9124b31889f1e2b3302a1c3d3db0cd2c6e46b104f922f67542f6cf88c283555f",
-      "status": "target-context-current-surface",
-      "symbol": "McpRuntimeTestLeaseError",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "extends:Error"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 50,
-        "maxUnionVariants": 14
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$parameter:input.leasedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$parameter:input.leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$parameter:input.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$parameter:input.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$parameter:input.runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$parameter:input.testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$parameter:input.turnId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$return.leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$return.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$return.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$return.runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$return.testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:claimNew.$return.turnId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$parameter:input.leasedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$parameter:input.leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$parameter:input.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$parameter:input.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$parameter:input.runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$parameter:input.testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$parameter:input.turnId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$return.leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$return.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$return.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$return.runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$return.testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:preclaim.$return.turnId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:release.$parameter:token.leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:release.$parameter:token.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:release.$parameter:token.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:release.$parameter:token.runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:release.$parameter:token.testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:release.$parameter:token.turnId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:release.$return",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:repairAfterReap.$parameter:childReaped",
-          "type": "true"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:repairAfterReap.$parameter:testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:repairAfterReap.$parameter:turnId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:repairAfterReap.$return",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$parameter:nextRuntimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$parameter:token.leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$parameter:token.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$parameter:token.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$parameter:token.runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$parameter:token.testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$parameter:token.turnId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$return.leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$return.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$return.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$return.runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$return.testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:rotate.$return.turnId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:McpRuntimeTestLeaseOperations",
-      "members": [
-        "claimNew",
-        "preclaim",
-        "release",
-        "repairAfterReap",
-        "rotate"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "claimNew",
-          "signatureDigest": "sha256:bc65f7d7d11d6ca688204c2fd17c5dda801ed61e76f2adb0e2edbbfd82a87fe5"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "preclaim",
-          "signatureDigest": "sha256:f35ee97d45a6859a7e9d30e4fc478ce673a7791c0e1c15a0ba7e7a42836e9c93"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "release",
-          "signatureDigest": "sha256:aa93d3450324d0af59cd94d51c226ec0b555caee88174a4db14a985ced8bbf4c"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "repairAfterReap",
-          "signatureDigest": "sha256:8631e4b16906c760ca43d28f6bdd67f38cf25b7c4a0c934fc94be35a2f63a155"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "rotate",
-          "signatureDigest": "sha256:d49cf5c55ce94f748cd38c67cf8a269c2281f0226c0cdf1086a2cc5099bcac9e"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpRuntimeTestLeaseOperations",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:4f6faf6a1c621e67b16d557ebe55b89eae06cb5ba2d8398c4e9418a347df708f",
-      "status": "target-context-current-surface",
-      "symbol": "McpRuntimeTestLeaseOperations",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [
         "import:142f338dc3a057d75073",
         "import:afce3dad676a2269b0c1"
@@ -111883,11 +111536,7 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpRuntimeProtocol",
       "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:McpRuntimeTestLeaseOperations",
-        "public:resource-catalog:types:McpRuntimeTestLeaseInput",
-        "public:resource-catalog:types:McpRuntimeTestLeaseToken"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:fb44e34d0d15d91b199ee3828dd28fc242d5f8766ca6a34cda004edfbc16aefc",
@@ -111935,146 +111584,6 @@
       "unresolvedTypeRefs": [
         "z.infer"
       ],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "leasedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "turnId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "public:resource-catalog:types:McpRuntimeTestLeaseInput",
-      "members": [
-        "leasedAt"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpRuntimeTestLeaseInput",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:McpRuntimeTestLeaseOperations"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:c78f517b314826fcff0484dc232fbd9de4a85e2cc13b5424037590a33b13e24e",
-      "status": "target-context-current-surface",
-      "symbol": "McpRuntimeTestLeaseInput",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "secret",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "leaseNonceDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "runtimeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "testSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "turnId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "public:resource-catalog:types:McpRuntimeTestLeaseToken",
-      "members": [
-        "leaseNonceDigest",
-        "protocol",
-        "runtimeSessionId",
-        "testSessionId",
-        "turnId"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpRuntimeTestLeaseToken",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:McpRuntimeTestLeaseOperations",
-        "public:resource-catalog:types:McpRuntimeTestLeaseInput"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:94b655e0be6e2b502e6ad83707aca74d0918ed13bc70ccb3e87496a4ee671d97",
-      "status": "target-context-current-surface",
-      "symbol": "McpRuntimeTestLeaseToken",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -122658,180 +122167,6 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 27,
-        "maxUnionVariants": 22
-      },
-      "consumerEdgeIds": [],
-      "context": "runtime-management",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "queries",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$parameter:name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.binaryPath.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.binaryPath.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirEnv.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirEnv.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirName.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirName.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.extraArgs.$variant:0",
-          "type": "readonly string[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.extraArgs.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.isSandbox",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.maxSteps.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.maxSteps.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.model.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.model.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.probeFence",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.steps.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.steps.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.temperature.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.temperature.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.variant.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:0.variant.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:getRuntime.$return.$variant:1",
-          "type": "null"
-        }
-      ],
-      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
-      "id": "public:runtime-management:queries:RuntimeProfileInspectionQueries",
-      "members": [
-        "getRuntime"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "getRuntime",
-          "signatureDigest": "sha256:eb2d68c63720a74f53b372ae6daf8d7d108069b5de0063c58f1276291d080523"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeProfileInspectionQueries",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:b76f70997bdd35c4d03a1da4b14a3c5feb8ccfb81387fe16526aeac167699ba7",
-      "status": "target-context-current-surface",
-      "symbol": "RuntimeProfileInspectionQueries",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -123312,7 +122647,6 @@
         "public:runtime-management:commands:RuntimeProbeInput",
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:queries:RuntimeExecutionQueries",
-        "public:runtime-management:queries:RuntimeProfileInspectionQueries",
         "public:runtime-management:queries:isRuntimeMcpTestEligible",
         "public:runtime-management:types:ResolvedRuntimeProfile",
         "public:runtime-management:types:RuntimeMcpTestEligibilityInput",
@@ -123531,7 +122865,6 @@
       "publicTypeConsumerIds": [
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:queries:RuntimeExecutionQueries",
-        "public:runtime-management:queries:RuntimeProfileInspectionQueries",
         "public:runtime-management:types:ResolvedRuntimeProfile",
         "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeView"
@@ -123809,9 +123142,7 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfileInspection",
       "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:runtime-management:queries:RuntimeProfileInspectionQueries"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:dfdd19a53c34bdca31a768a5eab8188f04392e83afee9c528468c887fe26f924",
@@ -123864,7 +123195,6 @@
       "publicTypeConsumerIds": [
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:queries:RuntimeExecutionQueries",
-        "public:runtime-management:queries:RuntimeProfileInspectionQueries",
         "public:runtime-management:types:ResolvedRuntimeProfile",
         "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeView"
@@ -166116,7 +165446,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9f60903d51ec899ad528a1e49a30a51e6445a7fe908ac0f19c4bfad6dd668c27",
+  "sourceDigest": "sha256:782de5d2a7167b83c95c9dcf08a563ebabb184ac9b58b1b230cd77187e261328",
   "targetContexts": [
     "collaboration",
     "development-automation",

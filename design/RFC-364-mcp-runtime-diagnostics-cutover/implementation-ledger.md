@@ -32,3 +32,7 @@ T4/T5：四 commands + 三 queries 使用 IA context；锁内 fresh MCP lookup�
 新增真实 IA context + ResourceOperationCoordinator 并发 oracle，覆盖 start/message 等待 catalog 修改后使用新行、其余五操作共享锁、缺失仍404。原 RFC303 macOS fixture 的 registry 比较在 /var 与 /private/var 别名下会漏掉残留，现从 realpath 临时根构造，保留原三项 cleanup 结果断言和所有生产实现。
 
 本批只完成可上库候选；E6/AC-7 仍等待本批最终 SHA Main 与原生进程证据。RFC363 Task 两 lane 与生产 fence/admission 接线仍需继续，RFC365 后续范围不变。
+
+## T6 公开面清理
+
+`a8b9202085a16ece282958b0cf6c1862c02477e5` Main `35504112617` 报 C2：诊断 owner 切换后 MCP lease error/operations 与 RM inspection interface 仅剩本模块使用。它们现收回 application 私有端口；没有新增零 consumer 豁免或伪造调用。lease 参数、错误码及所有权算法不变，补反向公开面回归断言。最终 hosted 仍待本修复 SHA。

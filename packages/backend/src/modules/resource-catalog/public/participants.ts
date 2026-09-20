@@ -20,8 +20,6 @@ import type {
   McpAclIdentity,
   McpProbeRecord,
   McpProbeWrite,
-  McpRuntimeTestLeaseInput,
-  McpRuntimeTestLeaseToken,
   ParseSkillZipCatalogInput,
   ParseSkillZipCatalogReceipt,
   CommitSkillZipCatalogInput,
@@ -171,27 +169,6 @@ export interface McpProbeStore {
   list(): Promise<readonly McpProbeRecord[]>
   getByMcpId(mcpId: string): Promise<McpProbeRecord | null>
   upsert(mcpId: string, measurement: McpProbeWrite): Promise<McpProbeRecord>
-}
-
-export class McpRuntimeTestLeaseError extends Error {
-  readonly code = 'mcp-test-session-conflict' as const
-
-  constructor(readonly reason: string) {
-    super('mcp-test-session-conflict')
-    this.name = 'McpRuntimeTestLeaseError'
-  }
-}
-
-/** Provider-neutral single-writer lease participant for one MCP playground. */
-export interface McpRuntimeTestLeaseOperations {
-  claimNew(input: McpRuntimeTestLeaseInput): Promise<McpRuntimeTestLeaseToken>
-  preclaim(input: McpRuntimeTestLeaseInput): Promise<McpRuntimeTestLeaseToken>
-  rotate(
-    token: McpRuntimeTestLeaseToken,
-    nextRuntimeSessionId: string,
-  ): Promise<McpRuntimeTestLeaseToken>
-  release(token: McpRuntimeTestLeaseToken): Promise<boolean>
-  repairAfterReap(testSessionId: string, turnId: string, childReaped: true): Promise<boolean>
 }
 
 /** Provider-bound whole-tree ZIP import; route owns only multipart decoding. */

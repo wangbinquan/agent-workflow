@@ -3,7 +3,7 @@ import type { McpRuntimeTestPersistence } from '../application/mcps/runtimeTestP
 import { createMcpRuntimeTestPersistence } from '../infrastructure/mcpRuntimeTestPersistence'
 export { createMcpTransactionLifecycle } from '../infrastructure/mcpTransactionLifecycle'
 import { createMcpRuntimeTestLeaseOperations } from '../infrastructure/mcpRuntimeTestLease'
-import type { McpRuntimeTestLeaseOperations } from '../public/participants'
+import type { McpRuntimeTestLeaseOperations } from '../application/ports/mcpRuntimeTestLease'
 
 export interface McpRuntimeTestProviderPersistence {
   readonly persistence: McpRuntimeTestPersistence

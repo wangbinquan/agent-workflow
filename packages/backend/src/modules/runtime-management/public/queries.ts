@@ -1,4 +1,4 @@
-import type { ResolvedRuntimeProfile, RuntimeProfileInspection } from './types'
+import type { ResolvedRuntimeProfile } from './types'
 import type { RuntimeView } from './types'
 import type { RuntimeKind } from './types'
 
@@ -63,10 +63,6 @@ export interface RuntimeExecutionQueries {
     readonly deprecatedModel?: string | null
     readonly defaultRuntime?: string | null
   }): Promise<ResolvedRuntimeProfile>
-}
-
-export interface RuntimeProfileInspectionQueries {
-  getRuntime(name: string): Promise<RuntimeProfileInspection | null>
 }
 
 export { isRuntimeMcpTestEligible } from '../infrastructure/mcpTestEligibility'

@@ -1,5 +1,9 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-364 C2 内部合同收回
+
+Main `35504112617` 的 macOS 后端分片定位到三个公开声明迁后只剩模块内调用。本批将 MCP lease error/operations 与 RM inspection interface 收回私有端口，保留既有行为与全部断言，不添加债务豁免。RFC364 最终验收继续等待修复 SHA；RFC363 Task 接线继续，两个 RFC 均未宣称完成。
+
 ## 2026-09-20 RFC-364 公开操作与显式单实例装配候选
 
 七 HTTP 操作接 RC 四 commands/三 queries，IA context、同 coordinator 与锁内 fresh MCP lookup 保持；三根显式共享 diagnostics，RM/config 只拿 reconciliation。旧 service/lease 转发与实例 WeakMap 删除，生命周期/双库/进程 oracle 迁到真实 owner。

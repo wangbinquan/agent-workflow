@@ -23,6 +23,18 @@ function nodes(source: ts.SourceFile, predicate: (node: ts.Node) => boolean): ts
 }
 const compact = (node: ts.Node, source: ts.SourceFile) => node.getText(source).replace(/\s/g, '')
 describe('RFC-364 production bindings', () => {
+  test('module-private lease and registry inspection contracts are not offered publicly', () => {
+    const participants = parse('modules/resource-catalog/public/participants.ts')
+    expect(participants.text).not.toContain('McpRuntimeTestLeaseError')
+    expect(participants.text).not.toContain('McpRuntimeTestLeaseOperations')
+    expect(parse('modules/runtime-management/public/queries.ts').text).not.toContain(
+      'RuntimeProfileInspectionQueries',
+    )
+    expect(parse('modules/resource-catalog/application/mcps/runtimeDiagnostics.ts').text).toContain(
+      "from '../ports/mcpRuntimeTestLease'",
+    )
+  })
+
   for (const path of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
     test(
       path + ' binds one cold diagnostics instance to the same coordinator and admitted catalog',

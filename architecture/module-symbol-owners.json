@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1801,
+    "backendFiles": 1802,
     "frontendFiles": 622,
     "legacyFiles": 548,
-    "moduleFiles": 1253,
-    "productionFiles": 2578,
+    "moduleFiles": 1254,
+    "productionFiles": 2579,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24765
+    "symbolsIncludingFileRoots": 24766
   },
   "entries": [
     {
@@ -76803,6 +76803,66 @@
       "currentContext": "resource-catalog",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts#McpRuntimeTestLeaseError",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "McpRuntimeTestLeaseError",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts#McpRuntimeTestLeaseInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "McpRuntimeTestLeaseInput",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts#McpRuntimeTestLeaseOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "McpRuntimeTestLeaseOperations",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts#McpRuntimeTestLeaseToken",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "McpRuntimeTestLeaseToken",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/application/ports/pluginGenerationGc.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/pluginGenerationGc.ts#$file",
       "removeAfterWave": null,
@@ -100290,32 +100350,6 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpRuntimeTestLeaseError",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:9124b31889f1e2b3302a1c3d3db0cd2c6e46b104f922f67542f6cf88c283555f",
-      "status": "current-module",
-      "symbol": "McpRuntimeTestLeaseError",
-      "targetContext": "resource-catalog",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpRuntimeTestLeaseOperations",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:4f6faf6a1c621e67b16d557ebe55b89eae06cb5ba2d8398c4e9418a347df708f",
-      "status": "current-module",
-      "symbol": "McpRuntimeTestLeaseOperations",
-      "targetContext": "resource-catalog",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpRuntimeTestReconciliationParticipant",
       "removeAfterWave": null,
       "signatureDigest": "sha256:56630c08b0533895b1e4bb7bf0a6040289e108f14bbd0439a3429664f05ec9e9",
@@ -101826,32 +101860,6 @@
       "signatureDigest": "sha256:fb44e34d0d15d91b199ee3828dd28fc242d5f8766ca6a34cda004edfbc16aefc",
       "status": "current-module",
       "symbol": "McpRuntimeProtocol",
-      "targetContext": "resource-catalog",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpRuntimeTestLeaseInput",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:c78f517b314826fcff0484dc232fbd9de4a85e2cc13b5424037590a33b13e24e",
-      "status": "current-module",
-      "symbol": "McpRuntimeTestLeaseInput",
-      "targetContext": "resource-catalog",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpRuntimeTestLeaseToken",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:94b655e0be6e2b502e6ad83707aca74d0918ed13bc70ccb3e87496a4ee671d97",
-      "status": "current-module",
-      "symbol": "McpRuntimeTestLeaseToken",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -103544,6 +103552,18 @@
       "currentContext": "runtime-management",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/runtimeConfiguration.ts#RuntimeProfileInspectionQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RuntimeProfileInspectionQueries",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/application/runtimeManagement.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/application/runtimeManagement.ts#$file",
       "removeAfterWave": null,
@@ -104756,19 +104776,6 @@
       "signatureDigest": "sha256:d45960f202f59137b2f6306ed92714be58cd9b7b10bb7482cbad8c93625f44f8",
       "status": "current-module",
       "symbol": "RuntimeModelQueryResult",
-      "targetContext": "runtime-management",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeProfileInspectionQueries",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:b76f70997bdd35c4d03a1da4b14a3c5feb8ccfb81387fe16526aeac167699ba7",
-      "status": "current-module",
-      "symbol": "RuntimeProfileInspectionQueries",
       "targetContext": "runtime-management",
       "targetLayer": "public"
     },
@@ -297909,5 +297916,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9f60903d51ec899ad528a1e49a30a51e6445a7fe908ac0f19c4bfad6dd668c27"
+  "sourceDigest": "sha256:782de5d2a7167b83c95c9dcf08a563ebabb184ac9b58b1b230cd77187e261328"
 }
