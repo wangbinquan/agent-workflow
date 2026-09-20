@@ -1,5 +1,10 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 deferred Task 接线候选与 RFC-364 守卫修复
+
+Task admission 同事务保存 SC frozen source/operation 与 Task plan，现 owner 驱动 phase-0，receipt 与工作区投影同事务接受；SQLite/PG retry/cancel 复用 journal，避免旧 stale cleanup 删除可恢复产物。双库实际 kernel/Git/回滚/owner/group/receipt 测试随批提交，等待 hosted 验收。同步/上传/call/fusion/DE 的 pre-materialized journal 与剩余 facade 仍待 T5/T7，RFC363 不标 Done。
+SC 7 个真实进程窗口已在 `cb2ce5b56` Ubuntu 双库和 macOS SQLite 作业通过，仅为物理 driver 证据。RFC364 上一 SHA `ec5fe2e8b` 的 Main `35504767291` 报 C2 私有叶类型、旧 IA inventory 与 RFC201 route 锁计数；本批按真实 owner 修正，完整 CI 仍未绿。RFC365 继续只有 T1 已实施。
+
 ## 2026-09-20 RFC-364 C2 内部合同收回
 
 Main `35504112617` 的 macOS 后端分片定位到三个公开声明迁后只剩模块内调用。本批将 MCP lease error/operations 与 RM inspection interface 收回私有端口，保留既有行为与全部断言，不添加债务豁免。RFC364 最终验收继续等待修复 SHA；RFC363 Task 接线继续，两个 RFC 均未宣称完成。

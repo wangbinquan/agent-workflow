@@ -1,3 +1,4 @@
+import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation'
 // RFC-359 W8 —— effect 账本 / attempt 台账 / 资源围栏：**一份**实现，两个 provider 共用。
 //
 // 此前是一对同构引擎：
@@ -124,6 +125,7 @@ async function applyWorkspacePreparationProjection(
   tx: TaskExecutionTransaction,
   projection: WorkspacePreparationSettlementProjection,
 ): Promise<void> {
+  await acceptDurableRepositoryWorkspace(tx, projection.taskId)
   await tx.update(tasks).set(projection.task).where(eq(tasks.id, projection.taskId)).run()
   if (projection.repositories.length > 0) {
     await tx

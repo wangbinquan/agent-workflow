@@ -584,8 +584,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // the PostgreSQL task runtime reuses core.runtimeRegistry rather than creating another.
       // RFC-363: add only the Task workspace reader binding, verified below.
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
-      // Exact root bindings are guarded in rfc364-diagnostics-bindings.test.ts; lifecycle order is unchanged.
-      'fe210ef27c545bd8e824276689b0f82413fb4e5ad19d320e986c63119e52c1ba',
+      // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
+      // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
+      '39f0c0064cd3a193874fc34c567c1ff652b0101b3d6af691ba41475833c3756b',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -646,7 +647,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （`composeLegacyTaskActivityParticipant` 此前就住在同一个文件里）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
-      // Exact root bindings are guarded in rfc364-diagnostics-bindings.test.ts; lifecycle order is unchanged.
+      // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
+      // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
       '16a07147e2f02d084a1e3de0fdb41a59db7e445778c31065a0ed81d916809b56',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
@@ -760,8 +762,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-360: config uses the same management application and composition-bound probe fence.
       // RFC-363: add only the same-provider Task workspace reader, verified below.
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
-      // Exact root bindings are guarded in rfc364-diagnostics-bindings.test.ts; lifecycle order is unchanged.
-      '1285e4550b62d68784f1d702ee8c5acb1bef5cb6c2ddfc59543f39f2cf2e6f7e',
+      // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
+      // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
+      '2ed0a61dc50acb16247ac4dfd9bb8c424f9f5ca14d7c529d6e1fdeb0f6dde7c4',
     )
     expect(
       namedCalls(

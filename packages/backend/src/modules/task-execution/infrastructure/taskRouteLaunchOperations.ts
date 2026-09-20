@@ -251,6 +251,8 @@ export interface TaskRoutePreparedWorkspace {
   readonly earlyError: string | null
   readonly repositories: readonly TaskRouteWorkspaceRepository[]
   readonly nodePaths: readonly string[]
+  /** Private adapter joins source/plan admission to the existing Task transaction. */
+  admit?(transaction: ProviderNeutralDatabase): Promise<void>
   /** Non-throwing lease promotion after the owning database commit. */
   commit(): void
   rollback(): Promise<WorkspaceCleanupReport>
@@ -260,6 +262,7 @@ export interface TaskRouteWorkspaceParticipant {
   prepare(
     input: Readonly<{
       actor: Actor
+      authority: TaskExecutionResourceAuthority['authority']
       taskId: string
       task: StartTask
       gitCommitIdentity: GitCommitIdentity | null
@@ -761,6 +764,7 @@ function createRootLaunch(
       const preparedWorkspace = await (input.internal?.workspace ?? dependencies.workspace).prepare(
         {
           actor: input.actor,
+          authority: input.resourceAuthority.authority,
           taskId,
           task: input.task,
           gitCommitIdentity,
@@ -830,6 +834,7 @@ function createRootLaunch(
           ownerUserId: input.actor.user.id,
           collaboratorUserIds: memberIds,
         })
+        await preparedWorkspace.admit?.(tx)
         await tx.insert(tasks).values({
           id: taskId,
           name: input.task.name,

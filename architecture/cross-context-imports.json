@@ -1839,6 +1839,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:054c1d76df5f373354f4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W5",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#composeRepositoryPreparation",
+      "toPath": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "toSymbol": "composeRepositoryPreparation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "fromSymbol": "$file",
@@ -6410,6 +6427,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:139cd7b7b5c3cbf7764d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W5",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "toPath": "packages/backend/src/services/task.ts",
+      "toSymbol": "WorkspaceCleanupReport",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#$file",
@@ -6629,6 +6663,23 @@
       "toPath": "packages/backend/src/ws/broadcaster.ts",
       "toSymbol": "MEMORY_DISTILL_JOB_CHANNEL",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "fromPath": "packages/backend/src/services/task.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:143047fa3c93836edf3e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspacePreparationJournal.ts#createWorkspacePreparationJournal",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/workspacePreparationJournal.ts",
+      "toSymbol": "createWorkspacePreparationJournal",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -16372,6 +16423,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3254794fa5390ff9e9fd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupRepository.ts#$file",
@@ -17032,6 +17100,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskRepos",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskRepos",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:34285c3d546f87471e55",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -34581,6 +34666,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6d39de2548aeb212cf28",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "fromSymbol": "$file",
@@ -36872,6 +36974,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:74ef35a67e053ee0ec53",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W5",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#composeRepositoryPreparation",
+      "toPath": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "toSymbol": "composeRepositoryPreparation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -46921,6 +47040,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9670df90dbc5da747e31",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#$file",
@@ -47241,6 +47377,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskIdleTimeout.ts#composeTaskIdleTimeoutOperations",
       "toPath": "packages/backend/src/modules/task-execution/composition/taskIdleTimeout.ts",
       "toSymbol": "composeTaskIdleTimeoutOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "fromPath": "packages/backend/src/services/task.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9774662fbe048f6e3f96",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#cleanupDurableRepositoryWorkspace",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "toSymbol": "cleanupDurableRepositoryWorkspace",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -50867,6 +51020,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a21ceaa06283adc5f126",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W5",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#composeRepositoryPreparation",
+      "toPath": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "toSymbol": "composeRepositoryPreparation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourceAclRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/resourceAclRepository.ts",
       "fromSymbol": "$file",
@@ -51338,6 +51508,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineCommandOperation",
       "toPath": "packages/backend/src/platform/operations/definitions.ts",
       "toSymbol": "defineCommandOperation",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a355368ee6746c89fbd1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -54877,6 +55064,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "fromPath": "packages/backend/src/services/task.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b0bfc1d9f44ed70ca4f0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#TaskRepositoryPreparationBinding",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "toSymbol": "TaskRepositoryPreparationBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#$file",
@@ -55045,6 +55249,23 @@
       "toPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toSymbol": "runWithTaskExecutionContext",
       "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b1611385f62205eb76f2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "NotFoundError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -55520,6 +55741,40 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b2a2dd3855572c978ebe",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "DomainError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b2a3301853cd560ca6c5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "toPath": "packages/backend/src/services/task.ts",
+      "toSymbol": "MaterializedSpace",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -64091,6 +64346,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "fromPath": "packages/backend/src/services/task.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cce35bcc02bfc5e762ec",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#acceptDurableRepositoryWorkspace",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "toSymbol": "acceptDurableRepositoryWorkspace",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -64258,6 +64530,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#TimerApi",
       "toPath": "packages/backend/src/services/maintenanceTicker.ts",
       "toSymbol": "TimerApi",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cd56d383c438d1994b48",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -69480,6 +69769,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dbd40203971960ddbcf6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W4-E0",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#SecretBox",
+      "toPath": "packages/backend/src/auth/secretBox.ts",
+      "toSymbol": "SecretBox",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#$file",
@@ -71741,6 +72047,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e3ddb3ff7fb2d7c51300",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "toPath": "packages/backend/src/services/task.ts",
+      "toSymbol": "MaterializedSpace",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts#$file",
@@ -73815,6 +74138,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "fromPath": "packages/backend/src/services/task.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ea24ec7db498acdc39f7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#prepareDurableRepositoryWorkspace",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "toSymbol": "prepareDurableRepositoryWorkspace",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#$file",
@@ -75818,6 +76158,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#actionTemplateRevisions",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "actionTemplateRevisions",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f05773342124e92d8fba",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -80684,9 +81041,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4746,
+    "architectureExceptions": 4767,
     "implementationSccs": 0,
-    "observedEdges": 5283,
+    "observedEdges": 5314,
     "requiredPorts": 30,
     "targetEdges": 66
   },
@@ -82373,6 +82730,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:054c1d76df5f373354f4",
+      "owner": "bootstrap",
+      "removeAfterWave": "W5",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/source-control/composition/repositoryPreparation",
+      "syntax": "static-import",
+      "targetSymbol": "composeRepositoryPreparation",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#composeRepositoryPreparation"
     },
     {
       "edgeKind": "value",
@@ -87111,6 +87484,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#decideProtectedLaunch"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:139cd7b7b5c3cbf7764d",
+      "owner": "task-execution",
+      "removeAfterWave": "W5",
+      "role": "legacy-outbound",
+      "specifier": "@/services/task",
+      "syntax": "static-import",
+      "targetSymbol": "WorkspaceCleanupReport",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/task.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts",
@@ -87305,6 +87694,22 @@
     {
       "edgeKind": "type",
       "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "id": "import:14152c1154c0fb2f427b",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RequestAuthority",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#RequestAuthority"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#$file",
       "id": "import:142662a4a2b33e2fbd47",
@@ -87365,6 +87770,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpRuntimeTestReconciliationParticipant"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/task.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "id": "import:143047fa3c93836edf3e",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/workspacePreparationJournal",
+      "syntax": "static-import",
+      "targetSymbol": "createWorkspacePreparationJournal",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/workspacePreparationJournal.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspacePreparationJournal.ts#createWorkspacePreparationJournal"
     },
     {
       "edgeKind": "value",
@@ -97591,6 +98012,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/overview.ts#composeSystemOverviewQuery"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "id": "import:3254794fa5390ff9e9fd",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupRepository.ts",
@@ -98247,6 +98684,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskRepos"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "id": "import:34285c3d546f87471e55",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts",
@@ -98725,6 +99178,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:359b6d87cd86ff3c5762",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryPreparationEffectCapability",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -102341,6 +102810,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "id": "import:40ab175cae58d12e3cd3",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "type",
@@ -111431,6 +111916,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#resolveSyntheticTaskExecutionInjection"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:5c930430354706701eb6",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "FrozenRepositoryPreparationRef",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#FrozenRepositoryPreparationRef"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/developmentDeliveryDeps.ts",
@@ -112901,6 +113402,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:614b2b2d53a521ff5351",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryLaunchSnapshotInTx",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -116968,6 +117485,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "id": "import:6d39de2548aeb212cf28",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "tasks",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#$file",
@@ -118648,6 +119181,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:72b24d65488085050886",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryPreparationOperationRef",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryPreparationOperationRef"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts#$file",
@@ -119349,6 +119898,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:74ef35a67e053ee0ec53",
+      "owner": "task-execution",
+      "removeAfterWave": "W5",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/source-control/composition/repositoryPreparation",
+      "syntax": "static-import",
+      "targetSymbol": "composeRepositoryPreparation",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#composeRepositoryPreparation"
     },
     {
       "edgeKind": "type",
@@ -127463,6 +128028,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentMrClaims"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:8e9b49d40b137f341667",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryLaunchSource",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryLaunchSource"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -129847,6 +130428,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityBinding"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#$file",
+      "id": "import:9670df90dbc5da747e31",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "tasks",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/resourcePackages.ts",
@@ -130181,6 +130778,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/taskIdleTimeout.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskIdleTimeout.ts#composeTaskIdleTimeoutOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/task.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "id": "import:9774662fbe048f6e3f96",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/durableRepositoryPreparation",
+      "syntax": "static-import",
+      "targetSymbol": "cleanupDurableRepositoryWorkspace",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#cleanupDurableRepositoryWorkspace"
     },
     {
       "edgeKind": "value",
@@ -133960,6 +134573,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:a21ceaa06283adc5f126",
+      "owner": "bootstrap",
+      "removeAfterWave": "W5",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/source-control/composition/repositoryPreparation",
+      "syntax": "static-import",
+      "targetSymbol": "composeRepositoryPreparation",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#composeRepositoryPreparation"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/resourceAclRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourceAclRepository.ts#$file",
@@ -134421,6 +135050,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/operations/definitions.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineCommandOperation"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:a355368ee6746c89fbd1",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -138359,6 +139004,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/task.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "id": "import:b0bfc1d9f44ed70ca4f0",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/repositoryPreparationBinding",
+      "syntax": "static-import",
+      "targetSymbol": "TaskRepositoryPreparationBinding",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#TaskRepositoryPreparationBinding"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
@@ -138549,6 +139210,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "id": "import:b1611385f62205eb76f2",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "NotFoundError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
       "edgeKind": "value",
@@ -138997,6 +139674,38 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "id": "import:b2a2dd3855572c978ebe",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "DomainError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "id": "import:b2a3301853cd560ca6c5",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/task",
+      "syntax": "static-import",
+      "targetSymbol": "MaterializedSpace",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/task.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -143159,6 +143868,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:bf2dbd0ec9f038feba4c",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryPreparationParticipant",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
@@ -146519,6 +147244,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "id": "import:c8f92c950ff8b61e0dc6",
+      "owner": "source-control",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RequestAuthority",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#RequestAuthority"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts",
@@ -147831,6 +148572,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/task.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "id": "import:cce35bcc02bfc5e762ec",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/durableRepositoryPreparation",
+      "syntax": "static-import",
+      "targetSymbol": "acceptDurableRepositoryWorkspace",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#acceptDurableRepositoryWorkspace"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -148005,6 +148762,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/maintenanceTicker.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#TimerApi"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "id": "import:cd56d383c438d1994b48",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "type",
@@ -153495,6 +154268,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "id": "import:dbd40203971960ddbcf6",
+      "owner": "source-control",
+      "removeAfterWave": "W4-E0",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/secretBox",
+      "syntax": "static-import",
+      "targetSymbol": "SecretBox",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/secretBox.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#SecretBox"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
@@ -155879,6 +156668,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunOutputs"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:e3ddb3ff7fb2d7c51300",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/task",
+      "syntax": "static-import",
+      "targetSymbol": "MaterializedSpace",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/task.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts",
@@ -158071,6 +158876,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/task.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "id": "import:ea24ec7db498acdc39f7",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/durableRepositoryPreparation",
+      "syntax": "static-import",
+      "targetSymbol": "prepareDurableRepositoryWorkspace",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#prepareDurableRepositoryWorkspace"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts",
@@ -160053,6 +160874,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#actionTemplateRevisions"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "id": "import:f05773342124e92d8fba",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "type",
@@ -164471,6 +165308,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseMeteringReceipts"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "id": "import:fd78d9b333af6377cffe",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RequestAuthority",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#RequestAuthority"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
@@ -165840,7 +166693,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:782de5d2a7167b83c95c9dcf08a563ebabb184ac9b58b1b230cd77187e261328",
+  "sourceDigest": "sha256:8098d89214cc3ae7a44854ed050f577f746559ceededd03d0aff897f2a6d463f",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

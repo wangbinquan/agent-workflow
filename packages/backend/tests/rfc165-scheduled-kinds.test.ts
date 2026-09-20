@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // LOCKS: RFC-165 §9b (D11) — scheduled-task three-subject support
 // (design §11.16/.17/.19).
 //
@@ -94,7 +95,10 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
       integrity: integrity.launch,
     }),
     workgroup: composeWorkgroupLaunchResourceOperations({ db, integrity: integrity.launch }),
-    routeWorkspace: { appHome },
+    routeWorkspace: {
+      repositoryPreparation: composeRepositoryPreparation({ db: db, appHome: appHome }),
+      appHome,
+    },
     // 路由面才读它；定时这条路交的是 `fireSchedule` 带来的委派 `resources`。
     resourceAuthorityFor: () => {
       throw new Error('scheduled launch must use the delegated resources from fireSchedule')
@@ -103,6 +107,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
       deps: { db, schedulerDriver, configPath },
       appHome,
       repositoryPreparation: composeDeferredRepositoryPreparation({
+        repositoryPreparation: composeRepositoryPreparation({ db: db, appHome: appHome }),
         db,
         appHome,
         repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),

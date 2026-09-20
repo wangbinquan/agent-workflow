@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import { createWorkspaceContentScope } from '@/modules/source-control/composition'
@@ -976,6 +977,12 @@ export async function composePostgresqlApplication(
     },
     rootResumeRuntime: () => ({ runConfig: currentRunConfig() }),
     routeWorkspace: {
+      repositoryPreparation: composeRepositoryPreparation({
+        db: input.db,
+        appHome: input.appHome,
+        secretBox: input.secretBox,
+        cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
+      }),
       appHome: input.appHome,
       secretBox: input.secretBox,
       cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
@@ -1041,6 +1048,12 @@ export async function composePostgresqlApplication(
     // 此前这里是 `skipRepositoryPreparation`——于是 G7 在 PostgreSQL 上等于没实现：
     // 远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试。
     repositoryPreparation: composeDeferredRepositoryPreparation({
+      repositoryPreparation: composeRepositoryPreparation({
+        db: input.db,
+        appHome: input.appHome,
+        secretBox: input.secretBox,
+        cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
+      }),
       db: input.db,
       appHome: input.appHome,
       repositoryWorkspace: repositoryWorkspaceStore,

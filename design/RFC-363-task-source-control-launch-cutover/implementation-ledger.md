@@ -72,3 +72,19 @@ SC infrastructure 解析冻结事实并沿用原 cache/fetch、Git 物化路径�
 SC application cleanup 接受 Task-owned 当前 fence/binding 检查；每次效果与写库前后复查，不铸新 lease。部分失败持久化但不标 cleaned；重复恢复保留原 resolved commits/成功 receipt，成功后只重放已存 cleanup receipt。新双库 driver 测试验证陈旧 owner 不启动/不接受 cleanup、部分失败再进入与稳定回执；真实进程测试增加取消前/后 add、remove/restore 之间 SIGKILL、外部改写后的 cleanup 冲突。仍未证明生产 Task adapter，T4/T5/T7 不记完成。
 
 `97b1e45de` Main `35501905328` 类型检查报可选 baseBranch 不能赋给必填的 string|undefined、递归 participant 缺显式类型；本批精确修复。最终测试结论以包含本批的终态 hosted SHA 为准。
+
+## T4 延后入口生产接线候选
+
+基线 `ec5fe2e8b430e77ff01b1051ac5c23475b825f3c`。Task 根启动内核在原 Task transaction 内调用 private admission hook，使用 admitted authority 调用 SC snapshot participant，冻结当前 repository/group，创建 SC operation 与 Task plan；54 项 Task 投影及原 drive 顺序保留。此处没有 Git/FS。raw URL 仍由现 cache identity 先得到 repository ID；public URL seal 的命令 scope 接线继续保留声明债。
+
+三个根显式提供 SC preparation binding。现 Task owner 驱动 deferred phase-0，调用 public effect participant；每个阶段复用 Task owner CAS，并在 journal 记录对应 epoch。旧任务无 journal 时保留旧来源/物化；新 journal 缺 root binding 时明确拒绝，不静默回退。SC receipt 可在新 factory/进程恢复，prepared receipt 与 Task 工作区/成员仓/目录/合成准备行在原结算事务一起接受。
+
+已有 journal 的恢复不再执行旧的无差别 stale-worktree 删除。SQLite/PG manual retry 均使用当前 durable operation；失败清理完整后新 attempt 继续引用同一 frozen source。取消使用 durable cleanup，已 accepted 或被另一 Task owner 接管的工作区不能被此补偿删除；PG retry 的成功 CAS 与 receipt acceptance 同事务。组重试显示保留 Task 已保存的组名，不重读被修改/删除的 live group。
+
+新增 `rfc363-task-preparation-admission.test.ts` 使用真实双库、生产 root kernel、真实 HTTP Git：同事务建 plan/source、admission 回滚、活动 Task owner 拦截、组更新后的冻结布局、receipt 重用、projection 回滚/接受、取消清理重放；旧 G7/人工重试/上传 suites 保留。补 Task journal 的绑定、owner 单调移交与 operation version CAS 用例。测试尚待本批 hosted SHA。
+
+canonical 注销已进入 deferred 生产链的 snapshot/effect 合同及关联事实声明，剩余 PublicRepositorySourceSealPort / sealed source ref / input 三项继续有明确 owner/removeWave。此信用只覆盖 deferred 链，**不代表完整 RFC363/T5/T7**：同步 prepare-before-Task、multipart artifact、call/fusion/sourceTaskId/DE adapters、现 GC 对 pre-admission journal 的补偿及剩余 legacy facade 退役继续待完成。
+
+### 已有真实进程证据
+
+Main `35503125522`（`cb2ce5b566b754683505338c1e1979963e894051`）的 Ubuntu shard 11 job `106058374913`：SQLite/PG 各 7 个 SC 进程中断窗口全部 pass；macOS shard 4 job `106058374917`：SQLite 7 个窗口 pass。窗口为 before-add、post-add、working-branch-before-CAS、changed-prepared-branch、stop-before-add、stop-after-add、cleanup-after-remove。这证明 SC 物理 driver/cleanup；不把它倒签为本批 Task 接线验收，也不把有其他失败的 Main 称全绿。

@@ -12,11 +12,21 @@ const aggregate = readFileSync(
   resolve(SRC, 'modules/resource-catalog/application/mcps/mcpApplication.ts'),
   'utf8',
 )
+const diagnostics = readFileSync(
+  resolve(SRC, 'modules/resource-catalog/application/mcps/diagnosticsOperations.ts'),
+  'utf8',
+)
 const rawProbe = readFileSync(resolve(SRC, 'services/mcpProbe.ts'), 'utf8')
 
 describe('RFC-201 MCP production callsite ratchet', () => {
   test('PUT/delete/rename/probe and generic ACL all use the stable-id coordinator', () => {
-    expect(route.match(/mcpOperationCoordinator\.runExclusive/g)?.length).toBeGreaterThanOrEqual(5)
+    // RFC-364: seven diagnostic operations moved to the real application owner;
+    // the three remaining probe route locks and all aggregate locks remain.
+    expect(route.match(/mcpOperationCoordinator\.runExclusive/g)?.length).toBe(3)
+    expect(diagnostics.match(/coordinator\.runExclusive/g)?.length).toBe(7)
+    expect(diagnostics.match(/const fresh = await visible\(request, resolved.id\)/g)?.length).toBe(
+      2,
+    )
     expect(aggregate.match(/coordinator\.runExclusive/g)?.length).toBe(3)
     expect(route).toContain('runDeduplicatedOperation')
     // RFC-349: the transport now consumes closed query/identity ports. Keep

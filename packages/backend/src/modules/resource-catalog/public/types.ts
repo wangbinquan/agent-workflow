@@ -449,8 +449,6 @@ export interface McpProbeWrite {
   readonly finishedAt: number
 }
 
-export type McpRuntimeProtocol = 'opencode' | 'claude-code'
-
 /** T5-S aggregate contract. Filesystem roots and persistence rows stay private. */
 export type SkillCatalogResource = Skill
 export type SkillCatalogContent = SkillContent

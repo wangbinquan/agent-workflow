@@ -247,18 +247,10 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
     id: 'public:source-control:participants:RepositoryTransportCredentialSelectionParticipant',
     removeAfterWave: 'W5',
   },
-  // RFC-362 approved contract preparation: four offered seams, test providers only.
-  // Clear these exact IDs when RFC-362-E1-production-cutover binds real consumers.
+  // RFC-363: deferred admission and preparation now consume the two offered seams.
+  // Public URL sealing still awaits its production command-scope binding.
   {
     id: 'public:source-control:participants:PublicRepositorySourceSealPort',
-    removeAfterWave: 'W4-E1/W5',
-  },
-  {
-    id: 'public:source-control:participants:RepositoryLaunchSnapshotInTx',
-    removeAfterWave: 'W4-E1/W5',
-  },
-  {
-    id: 'public:source-control:participants:RepositoryPreparationParticipant',
     removeAfterWave: 'W4-E1/W5',
   },
   { id: 'public:source-control:participants:WorkspaceExcludeParticipant', removeAfterWave: 'W5' },

@@ -36,3 +36,7 @@ T4/T5：四 commands + 三 queries 使用 IA context；锁内 fresh MCP lookup�
 ## T6 公开面清理
 
 `a8b9202085a16ece282958b0cf6c1862c02477e5` Main `35504112617` 报 C2：诊断 owner 切换后 MCP lease error/operations 与 RM inspection interface 仅剩本模块使用。它们现收回 application 私有端口；没有新增零 consumer 豁免或伪造调用。lease 参数、错误码及所有权算法不变，补反向公开面回归断言。最终 hosted 仍待本修复 SHA。
+
+## T6 后续守卫修正
+
+`ec5fe2e8b` Main `35504767291` 的失败链已归因：C2 再揭示两个仅私有使用的叶类型（McpRuntimeProtocol / RuntimeProfileInspection），本批将前者归 lease 私有 port，后者收为 config 所需 enabled 投影；RFC305 import inventory 按真实 IA context consumer 更新；RFC201 锁守卫改为精确 3 个 probe route locks + 7 个 diagnostics application locks，并保留 aggregate 3 锁、create/message 两次 fresh recheck 与原其余断言。没有降低锁覆盖或放宽入口行为。

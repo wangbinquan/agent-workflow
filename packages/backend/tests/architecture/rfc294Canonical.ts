@@ -1677,22 +1677,9 @@ interface PublicSurfaceEntry {
 /** RFC-362 preparation only. Remove each exact ID when its approved successor
  * supplies a real production provider/callsite; type references are not cutover credit. */
 export const RFC362_DECLARED_PUBLIC_CONTRACT_IDS: readonly string[] = [
-  'public:source-control:participants:RepositoryLaunchSnapshotInTx',
-  'public:source-control:participants:RepositoryPreparationEffectCapability',
   'public:source-control:participants:PublicRepositorySourceSealPort',
-  'public:source-control:participants:RepositoryPreparationParticipant',
   'public:source-control:types:SealedPublicRepositorySourceRef',
-  'public:source-control:types:FrozenRepositoryPreparationRef',
-  'public:source-control:types:RepositoryPreparationOperationRef',
-  'public:source-control:types:RepositoryPreparationReceiptRef',
-  'public:source-control:types:RepositoryPreparationStopReceipt',
-  'public:source-control:types:RepositoryPreparationDiagnosticsRef',
-  'public:source-control:types:VersionedRepositoryRef',
-  'public:source-control:types:VersionedRepositoryGroupRef',
   'public:source-control:types:PublicRepositorySourceInput',
-  'public:source-control:types:RepositoryLaunchSource',
-  'public:source-control:types:RepositoryPreparationSafeCode',
-  'public:source-control:types:WorkspacePreparationExecutionOutcome',
 ]
 
 function publicSurfaceLifecycle(

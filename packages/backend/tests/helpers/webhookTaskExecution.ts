@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-1（plan §5hn 批次二 ⑦）—— webhook 触发的 TaskExecution 参与者，**照生产装配**。
 //
 // 为什么重写：这个 helper 原本自己调 `services/execution/executor.ts#startExecution`
@@ -65,7 +66,15 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       integrity,
     },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),
-    routeWorkspace: { appHome, secretBox: input.secretBox },
+    routeWorkspace: {
+      repositoryPreparation: composeRepositoryPreparation({
+        db: input.db,
+        appHome: appHome,
+        secretBox: input.secretBox,
+      }),
+      appHome,
+      secretBox: input.secretBox,
+    },
     // 参与者收的是请求上带来的 `resources`，这一格只被**路由包装**读——本 helper 不装路由。
     resourceAuthorityFor: (actor: Actor) =>
       Object.freeze({
@@ -111,6 +120,11 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       },
       // RFC-287 G7：webhook 触发延后仓库准备，第 0 步由这台协调器推进。
       repositoryPreparation: composeDeferredRepositoryPreparation({
+        repositoryPreparation: composeRepositoryPreparation({
+          db: input.db,
+          appHome: appHome,
+          secretBox: input.secretBox,
+        }),
         db: input.db,
         appHome,
         repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(input.db),

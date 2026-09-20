@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { afterEach, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -296,6 +297,10 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
   test('current materializer keeps repository deferral distinct from pre-materialized scratch', async () => {
     const f = await fixture()
     const materializer = createTaskWorkspaceMaterializer({
+      repositoryPreparation: composeRepositoryPreparation({
+        db: harness.db,
+        appHome: f.options.appHome,
+      }),
       db: harness.db,
       appHome: f.options.appHome,
     })

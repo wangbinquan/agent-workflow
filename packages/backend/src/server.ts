@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
@@ -1839,6 +1840,11 @@ function composeFallbackDevelopmentAutomation(
     deps.identityAccess,
   )
   const hostTaskLaunch = composeHostTaskLaunchKernel({
+    repositoryPreparation: composeRepositoryPreparation({
+      db: deps.db,
+      appHome: appHome,
+      secretBox: deps.secretBox,
+    }),
     db: deps.db,
     appHome,
     secretBox: deps.secretBox,
@@ -2643,10 +2649,8 @@ function composeSqliteApiRouteMounts(
       // 而他用的就是那条命令）：卡在仓库准备的任务从界面上永远重试不了（e2e TASK-27）。
       // 缺席授权 = boot 自动恢复那条路，它继续以 SYSTEM_USER_ID 走 `auto`。
       async retry(taskId: string, authorization?: { readonly actorUserId: string }) {
-        await retryRepositoryPreparation(
-          deps.db,
-          taskId,
-          buildStartTaskDeps(
+        await retryRepositoryPreparation(deps.db, taskId, {
+          ...buildStartTaskDeps(
             deps.db,
             schedulerDriver,
             deps.configPath,
@@ -2654,7 +2658,13 @@ function composeSqliteApiRouteMounts(
             deps.secretBox,
             identityAccess,
           ),
-        )
+          repositoryPreparation: composeRepositoryPreparation({
+            db: deps.db,
+            appHome,
+            secretBox: deps.secretBox,
+            cloneTimeoutMs: resolveLaunchRuntimeConfig(deps.configPath).cloneTimeoutMs,
+          }),
+        })
       },
     }),
     resourceAuthorityFor: (actor: Actor) =>
@@ -2792,6 +2802,11 @@ function composeSqliteApiRouteMounts(
             resources: identityAccess.taskExecutionResources,
           }),
           launch: composeHostTaskLaunchKernel({
+            repositoryPreparation: composeRepositoryPreparation({
+              db: deps.db,
+              appHome: appHome,
+              secretBox: deps.secretBox,
+            }),
             db: deps.db,
             appHome,
             secretBox: deps.secretBox,
@@ -2934,7 +2949,16 @@ function composeSqliteApiRouteMounts(
     // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL 同一份编排。
     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
     agent: agentLaunchResources,
-    routeWorkspace: { appHome, secretBox: deps.secretBox },
+    routeWorkspace: {
+      appHome,
+      secretBox: deps.secretBox,
+      repositoryPreparation: composeRepositoryPreparation({
+        db: deps.db,
+        appHome,
+        secretBox: deps.secretBox,
+        cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
+      }),
+    },
     resourceAuthorityFor: (actor: Actor) =>
       Object.freeze({
         actor,
@@ -3005,6 +3029,12 @@ function composeSqliteApiRouteMounts(
       // 换成显式装配后漏掉就等于把管理员调过的两个旋钮静默丢掉——实撞：G6 窗口退回默认
       // 60s，一个必然失败的准备要退避重试整整一分钟。
       repositoryPreparation: composeDeferredRepositoryPreparation({
+        repositoryPreparation: composeRepositoryPreparation({
+          db: deps.db,
+          appHome: appHome,
+          secretBox: deps.secretBox,
+          cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
+        }),
         db: deps.db,
         appHome,
         repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(deps.db),

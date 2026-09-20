@@ -230,10 +230,10 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     )
   })
 
-  test('RFC-363 workspace reader is active while remaining launch contracts stay explicit debt', () => {
+  test('RFC-363 workspace reader and deferred launch are active while URL sealing remains explicit debt', () => {
     const surfaces = generated.publicSurfaces.entries as Array<Record<string, unknown>>
     const offered = surfaces.filter((entry) => entry.status === 'declared-contract-debt')
-    expect(offered).toHaveLength(16)
+    expect(offered).toHaveLength(3)
     expect(
       offered.every(
         (entry) =>
@@ -249,11 +249,11 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     expect((port!.providerAdapters as unknown[]).length).toBeGreaterThan(0)
     const missingOwner = cloneArtifacts(generated)
     const missing = (missingOwner.publicSurfaces.entries as Array<Record<string, unknown>>).find(
-      (entry) => entry.id === 'public:source-control:participants:RepositoryPreparationParticipant',
+      (entry) => entry.id === 'public:source-control:participants:PublicRepositorySourceSealPort',
     )!
     missing.removeAfterWave = null
     expect(validateCanonicalArtifacts(missingOwner)).toContain(
-      'missing RFC-362 declared contract debt: public:source-control:participants:RepositoryPreparationParticipant',
+      'missing RFC-362 declared contract debt: public:source-control:participants:PublicRepositorySourceSealPort',
     )
   })
 

@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-6 —— 「从源任务重放」这条路在两个引擎上必须给出同一种拒绝。
 //
 // 为什么这条测试存在，以及它**不是**在锁什么（这段是有意写下来的，防止下一个人重走我这趟弯路）：
@@ -46,6 +47,10 @@ describeEachProvider('RFC-359 —— 冻结空间布局的重放拒绝在两个�
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc359-frozen-layout-'))
     roots.push(appHome)
     const materializer = createTaskWorkspaceMaterializer({
+      repositoryPreparation: composeRepositoryPreparation({
+        db: harness.db as never,
+        appHome: appHome,
+      }),
       db: harness.db as never,
       appHome,
     })

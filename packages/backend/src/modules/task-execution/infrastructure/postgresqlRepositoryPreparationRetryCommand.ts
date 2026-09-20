@@ -1,3 +1,5 @@
+import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation'
+import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 import {
   REPO_PREP_NODE_ID,
   StartTaskSchema,
@@ -487,6 +489,7 @@ async function commitPreparedWorkspace(
         `task '${snapshot.task.id}' changed during repository preparation`,
       )
     }
+    await acceptDurableRepositoryWorkspace(tx, snapshot.task.id)
     await tx.delete(taskRepos).where(eq(taskRepos.taskId, snapshot.task.id))
     await tx.delete(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, snapshot.task.id))
     await tx.insert(taskRepos).values(workspaceRepoRows(snapshot.task.id, workspace.repositories))
@@ -572,7 +575,8 @@ export function createPostgresqlRepositoryPreparationRetryCommand(
       let committed = false
       try {
         const snapshot = await loadRetrySnapshot(dependencies, taskId)
-        await reclaimStalePreparationArtifacts(dependencies, snapshot.task)
+        if ((await createWorkspacePreparationJournal(dependencies.db).forTask(taskId)) === null)
+          await reclaimStalePreparationArtifacts(dependencies, snapshot.task)
         const task = retryPreparationInput(snapshot.task)
         const gitCommitIdentity = retryGitIdentity(snapshot.task)
         try {

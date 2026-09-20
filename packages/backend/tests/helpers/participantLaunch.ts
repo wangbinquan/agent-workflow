@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-1（plan §5hn 批次二 ⑧）—— 测试侧的**启动参与者**装配，和生产同形。
 //
 // 为什么需要它：`startAgentTask` / `startWorkgroupTask` 这两个 legacy 启动服务在门面退役后
@@ -115,6 +116,11 @@ export function createTestTaskExecutionLaunchParticipant(
     agent: { resources: composeAgentLaunchResourceOperations({ db: input.db }), integrity },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),
     routeWorkspace: {
+      repositoryPreparation: composeRepositoryPreparation({
+        db: input.db,
+        appHome: input.appHome,
+        ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
+      }),
       appHome: input.appHome,
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
     },

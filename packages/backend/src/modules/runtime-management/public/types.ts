@@ -110,18 +110,6 @@ export interface ResolvedRuntimeProfile extends RuntimeProfile {
   readonly configDir: { readonly env: string; readonly name: string }
 }
 
-/** Purpose-specific projection for catalog references and MCP test target identity. */
-export interface RuntimeProfileInspection extends RuntimeProfile {
-  readonly id: string
-  readonly name: string
-  readonly protocol: RuntimeProtocol
-  readonly binaryPath: string | null
-  readonly enabled: boolean
-  readonly configDirEnv: string | null
-  readonly configDirName: string | null
-  readonly probeFence: number
-}
-
 /** Driver inspection facts used by MCP diagnostics; no runtime configuration or executable escapes. */
 export interface RuntimeMcpTestEligibilityInput {
   readonly protocol: RuntimeKind

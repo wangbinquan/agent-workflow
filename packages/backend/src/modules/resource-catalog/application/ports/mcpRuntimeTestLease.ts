@@ -1,4 +1,4 @@
-import type { McpRuntimeProtocol } from '../../public/types'
+export type McpRuntimeProtocol = 'opencode' | 'claude-code'
 
 export interface McpRuntimeTestLeaseToken {
   readonly protocol: McpRuntimeProtocol

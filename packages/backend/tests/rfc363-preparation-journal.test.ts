@@ -239,4 +239,75 @@ describeEachProvider('RFC-363 preparation journals', (harness) => {
       await createWorkspacePreparationJournal(harness.db).prepare({ ...input, id: ulid(), now: 5 }),
     ).toMatchObject({ id: input.id, state: 'admitted' })
   })
+  test('deferred Task binding and owner handoff retain the operation and reject stale versions', async () => {
+    const journal = createWorkspacePreparationJournal(harness.db)
+    const plan = await journal.prepare({
+      id: ulid(),
+      admissionKey: ulid(),
+      requestDigest: 'frozen-source',
+      lane: 'repository-preparation',
+      operationRef: 'operation-1',
+      ownerFence: 0,
+      now: 1,
+    })
+    const bound = await journal.bindTask({
+      id: plan.id,
+      expectedVersion: 0,
+      ownerFence: 0,
+      taskId: 'deferred-task',
+      now: 2,
+    })
+    expect(bound).toMatchObject({ state: 'preparing', admittedTaskId: 'deferred-task', version: 1 })
+    const owned = await journal.adoptOwner({
+      id: plan.id,
+      expectedVersion: 1,
+      previousFence: 0,
+      ownerFence: 2,
+      now: 3,
+    })
+    expect(owned).toMatchObject({ ownerFence: 2, operationRef: 'operation-1', version: 2 })
+    expect(
+      await journal.adoptOwner({
+        id: plan.id,
+        expectedVersion: 2,
+        previousFence: 2,
+        ownerFence: 1,
+        now: 4,
+      }),
+    ).toBeNull()
+    expect(
+      await journal.advance({
+        id: plan.id,
+        expectedVersion: 2,
+        ownerFence: 0,
+        from: 'preparing',
+        to: 'prepared',
+        artifactJson: 'stale',
+        now: 4,
+      }),
+    ).toBeNull()
+    expect(
+      await journal.replaceOperation({
+        id: plan.id,
+        expectedVersion: 1,
+        ownerFence: 2,
+        previousOperationRef: 'operation-1',
+        operationRef: 'bad',
+        now: 4,
+      }),
+    ).toBeNull()
+    expect(
+      await journal.replaceOperation({
+        id: plan.id,
+        expectedVersion: 2,
+        ownerFence: 2,
+        previousOperationRef: 'operation-1',
+        operationRef: 'operation-2',
+        now: 4,
+      }),
+    ).toMatchObject({ operationRef: 'operation-2', state: 'preparing', version: 3 })
+    expect(
+      (await createWorkspacePreparationJournal(harness.db).forTask('deferred-task'))?.operationRef,
+    ).toBe('operation-2')
+  })
 })

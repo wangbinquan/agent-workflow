@@ -339,6 +339,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/memory/public/catalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/agents/importPorts.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/application/mcps/diagnosticsOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/package/ports.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts -> @/modules/identity-access/public/participants',
@@ -352,6 +353,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/infrastructure/catalogQuery.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsContexts.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/public/queries.ts -> @/modules/identity-access/public/participants',
@@ -360,6 +363,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/runtime-management/composition.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/runtime-management/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/source-control/composition/repositoryPreparation.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',
@@ -370,6 +374,8 @@ describe('RFC-305 identity-access architecture', () => {
       // 别的 context 的 provider 才是被 RFC-328 判红的形状，这里刻意不那么做。
       // RFC-359 AC-1（第 13 刀）**销账**：`/api/tasks` 的两个 provider 绑定合成一个中立工厂，
       // SQLite 那半退役，这条边随之出账（共用实现那条 `taskRouteOperations.ts` 仍在下面）。
+      'packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> @/modules/identity-access/public/operations',
       // RFC-359 AC-1（第 12 刀）：运行时参与者合一后按新文件名重新落位（账本按字典序）。
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
@@ -387,6 +393,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/routes/developmentConfig.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/developmentMissions.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/digitalEmployees.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/routes/mcps.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/memories.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/operationAuthority.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/overview.ts -> @/modules/identity-access/public/participants',

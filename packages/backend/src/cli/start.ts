@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
@@ -1908,7 +1909,16 @@ async function composeSqliteProviderSession(
           resources: composeAgentLaunchResourceOperations({ db }),
           integrity: agentResourceIntegrity.launch,
         }),
-        routeWorkspace: { appHome: Paths.root, secretBox },
+        routeWorkspace: {
+          appHome: Paths.root,
+          secretBox,
+          repositoryPreparation: composeRepositoryPreparation({
+            db,
+            appHome: Paths.root,
+            secretBox,
+            cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+          }),
+        },
         resourceAuthorityFor: (actor) =>
           Object.freeze({
             actor,
@@ -1982,11 +1992,15 @@ async function composeSqliteProviderSession(
         // 而他用的就是那条命令）：卡在仓库准备的任务从界面上永远重试不了（e2e TASK-27）。
         // 缺席授权 = boot 自动恢复那条路，它继续以 SYSTEM_USER_ID 走 `auto`。
         async retry(taskId: string, authorization?: { readonly actorUserId: string }) {
-          await retryRepositoryPreparation(
-            db,
-            taskId,
-            taskStartDepsFor(authorization?.actorUserId ?? SYSTEM_USER_ID),
-          )
+          await retryRepositoryPreparation(db, taskId, {
+            ...taskStartDepsFor(authorization?.actorUserId ?? SYSTEM_USER_ID),
+            repositoryPreparation: composeRepositoryPreparation({
+              db,
+              appHome: Paths.root,
+              secretBox,
+              cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+            }),
+          })
         },
       }),
     })
@@ -2021,6 +2035,12 @@ async function composeSqliteProviderSession(
     // 占位行会永远停在 `pending`。直启路由不延后，那一步只会看到 `worktreePath !== ''`
     // 并直接返回 ready。两个旋钮从配置取（此前经 `buildStartTaskDeps` 隐式带过来）。
     repositoryPreparation: composeDeferredRepositoryPreparation({
+      repositoryPreparation: composeRepositoryPreparation({
+        db: db,
+        appHome: Paths.root,
+        secretBox: secretBox,
+        cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+      }),
       db,
       appHome: Paths.root,
       repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
@@ -2542,6 +2562,12 @@ async function composeSqliteProviderSession(
       identityAccess,
     )
     const hostTaskLaunch = composeHostTaskLaunchKernel({
+      repositoryPreparation: composeRepositoryPreparation({
+        db: db,
+        appHome: Paths.root,
+        secretBox: secretBox,
+        cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+      }),
       db,
       appHome: Paths.root,
       secretBox,

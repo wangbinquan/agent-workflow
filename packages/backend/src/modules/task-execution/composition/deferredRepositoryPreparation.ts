@@ -1,3 +1,4 @@
+import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/ports/repositoryWorkspaceStore'
@@ -18,6 +19,7 @@ import type { PersistedRepositoryPreparationStep } from '../application/drive/re
  * `repositoryWorkspace` 必填、`loadFrozenSpaceLayout` 用中立那份：这一步因此不认识任何引擎。
  */
 export function composeDeferredRepositoryPreparation(input: {
+  readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly repositoryWorkspace: RepositoryWorkspaceStore
@@ -29,6 +31,7 @@ export function composeDeferredRepositoryPreparation(input: {
   return composeDeferredRepositoryPreparationStep({
     deps: {
       db: input.db,
+      repositoryPreparation: input.repositoryPreparation,
       repositoryWorkspace: input.repositoryWorkspace,
       loadFrozenSpaceLayout: (sourceTaskId) => loadFrozenSpaceLayout(input.db, sourceTaskId),
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),

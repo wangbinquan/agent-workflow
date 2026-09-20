@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 // RFC-359 W5-T21b: construct the complete provider runtime, then use its real
 // launch, ownership, driver, read model and maintenance bindings on each engine.
@@ -235,7 +236,10 @@ export async function createEachProviderTaskExecution(
             resources: composeAgentLaunchResourceOperations({ db }),
             integrity: unusedCapability('agent route launch integrity'),
           },
-          routeWorkspace: { appHome },
+          routeWorkspace: {
+            appHome,
+            repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+          },
           resourceAuthorityFor: () => launchResources,
           coordinator: { submit: () => unavailable('agent route coordinator') },
           workgroup: unusedCapability('workgroup route launch resources'),
@@ -369,7 +373,10 @@ export async function createEachProviderTaskExecution(
         },
         workgroup: unusedCapability('workgroup route resources'),
       },
-      routeWorkspace: { appHome },
+      routeWorkspace: {
+        appHome,
+        repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+      },
       routes: () => ({
         collaboration: unusedCapability('collaboration route'),
         users: unusedCapability('task user directory'),

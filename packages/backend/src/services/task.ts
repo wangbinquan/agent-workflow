@@ -1,3 +1,10 @@
+import type { TaskRepositoryPreparationBinding } from '@/modules/task-execution/infrastructure/repositoryPreparationBinding'
+import {
+  prepareDurableRepositoryWorkspace,
+  cleanupDurableRepositoryWorkspace,
+  acceptDurableRepositoryWorkspace,
+} from '@/modules/task-execution/infrastructure/durableRepositoryPreparation'
+import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import {
   type ResolvedRepoSource,
   type RepoSourceSpec,
@@ -446,6 +453,8 @@ export async function finalizeCanceledTaskWithoutDriver(
 }
 
 export interface StartTaskDeps {
+  /** Required by bootstrap when recovering a journaled preparation; absent only for legacy tasks. */
+  repositoryPreparation?: TaskRepositoryPreparationBinding
   /** RFC-332: required instance-level TaskEngine application surface. */
   schedulerDriver: Pick<SchedulerDriverPort, 'drive'>
   /**
@@ -812,6 +821,7 @@ export interface DeferredRepositoryPreparationDependencies extends Pick<
   // 准备时才知道的那一格：占位行上冻结的提交身份由 descriptor 带回来。
   | 'gitCommitIdentity'
 > {
+  readonly repositoryPreparation?: TaskRepositoryPreparationBinding
   readonly db: LegacyProviderNeutralDatabase
   readonly repositoryWorkspace: RepositoryWorkspaceStore
   /**
@@ -1389,7 +1399,10 @@ function createPersistedRepositoryPreparationStep(input: {
     async prepare({ descriptor, context }) {
       const task = await getTask(input.deps.db, descriptor.taskId)
       if (task === null) return { kind: 'terminal-won' }
-      if (descriptor.hasPriorAttempt) {
+      if (
+        descriptor.hasPriorAttempt &&
+        (await createWorkspacePreparationJournal(input.deps.db).forTask(descriptor.taskId)) === null
+      ) {
         // RFC-359 W10 —— 这一笔**没有事务体**（`run: () => undefined`），它只是围栏：确认本
         // driver 仍是任务的活 owner（命中 `claimed` 的精确 owner 才放行并推进 revision），
         // 确认不了就不去动上一次准备留下的工件。中立原语一比一顶上——同一笔写事务里做同一次
@@ -4022,6 +4035,11 @@ async function runDeferredRepoPreparation(args: {
   ownership: StartTaskOwnership
 }): Promise<{ ok: boolean; preparedTask: Task | null }> {
   const { deps, input, appHome, signal, taskId, prepTaskId, task, space, ownership } = args
+  if (
+    deps.repositoryPreparation === undefined &&
+    (await createWorkspacePreparationJournal(deps.db).forTask(taskId)) !== null
+  )
+    throw new Error('journaled-repository-preparation-binding-missing')
   // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
   // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
   //
@@ -4122,24 +4140,37 @@ async function runDeferredRepoPreparation(args: {
       // RFC-359 AC-1（plan §5hn 批次二 ①）：直接打中立物化面。`materializeSpace` 是它的
       // SQLite 适配壳（`repositoryWorkspace` 缺省回落到 `composeSqliteRepositoryWorkspaceStore`），
       // 这一步的装配方**必须**自己交仓库工作区存储，才谈得上两个引擎共用。
-      prepared = await materializeSpaceWithProvider(
-        input,
-        {
-          appHome,
-          repositoryWorkspace: deps.repositoryWorkspace,
-          loadFrozenSpaceLayout: deps.loadFrozenSpaceLayout,
-          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-          ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
-          ...(deps.gitCommitIdentity === undefined
-            ? {}
-            : { gitCommitIdentity: deps.gitCommitIdentity }),
-          ...(deps.workspaceCleanupHook === undefined
-            ? {}
-            : { workspaceCleanupHook: deps.workspaceCleanupHook }),
-          sourceTerminationLaunchSignal: signal,
-        },
-        prepTaskId,
-      )
+      const durable =
+        deps.repositoryPreparation === undefined
+          ? null
+          : await prepareDurableRepositoryWorkspace({
+              db: deps.db,
+              binding: deps.repositoryPreparation,
+              taskId,
+              gitCommitIdentity: deps.gitCommitIdentity ?? null,
+              ...(input.workingBranch === undefined ? {} : { workingBranch: input.workingBranch }),
+              signal,
+            })
+      prepared =
+        durable ??
+        (await materializeSpaceWithProvider(
+          input,
+          {
+            appHome,
+            repositoryWorkspace: deps.repositoryWorkspace,
+            loadFrozenSpaceLayout: deps.loadFrozenSpaceLayout,
+            ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+            ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
+            ...(deps.gitCommitIdentity === undefined
+              ? {}
+              : { gitCommitIdentity: deps.gitCommitIdentity }),
+            ...(deps.workspaceCleanupHook === undefined
+              ? {}
+              : { workspaceCleanupHook: deps.workspaceCleanupHook }),
+            sourceTerminationLaunchSignal: signal,
+          },
+          prepTaskId,
+        ))
     } catch (err) {
       prepared = {
         ...space,
@@ -4331,10 +4362,20 @@ async function runDeferredRepoPreparation(args: {
     // 走既有的清理定式（同 startTask 的 catch 分支）：cleanup 是**账本数据**而不是
     // 函数，真正执行清理的是 `cleanupMaterializedSpaceLease`。
     try {
-      const report = await cleanupMaterializedSpaceLease(
-        prepared.cleanup,
-        deps.workspaceCleanupHook,
-      )
+      const durableCleanup =
+        deps.repositoryPreparation === undefined
+          ? null
+          : await cleanupDurableRepositoryWorkspace({
+              db: deps.db,
+              binding: deps.repositoryPreparation,
+              taskId,
+              gitCommitIdentity: deps.gitCommitIdentity ?? null,
+              ...(input.workingBranch === undefined ? {} : { workingBranch: input.workingBranch }),
+              signal,
+            })
+      const report =
+        durableCleanup ??
+        (await cleanupMaterializedSpaceLease(prepared.cleanup, deps.workspaceCleanupHook))
       if (!report.complete) {
         log.warn('orphaned materialized space only partially cleaned', {
           taskId,
@@ -4405,6 +4446,7 @@ async function runDeferredRepoPreparation(args: {
   // 体内每一条语句都必须 `await`：`.run()` 在 PostgreSQL 上不 await 就是一个没人等的 Promise，
   // 语句要么落在事务外、要么根本不发，而两边都不会抛。
   const persistPreparedProjection = async (tx: DatabaseTransaction): Promise<void> => {
+    await acceptDurableRepositoryWorkspace(tx, taskId)
     await tx
       .update(tasks)
       .set({

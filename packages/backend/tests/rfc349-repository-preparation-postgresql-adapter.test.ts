@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -217,6 +218,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     const appHome = await mkdtemp(join(tmpdir(), 'rfc349-workspace-pg-'))
     try {
       const materializer = createTaskWorkspaceMaterializer({
+        repositoryPreparation: composeRepositoryPreparation({ db: fixture.db, appHome: appHome }),
         db: fixture.db,
         appHome,
       })

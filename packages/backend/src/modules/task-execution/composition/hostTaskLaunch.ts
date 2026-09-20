@@ -1,3 +1,4 @@
+import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 // RFC-359 AC-1（plan §5hi）—— 宿主任务启动内核的**组合入口**。
 //
 // 数字员工的动作执行（agent / script）在三个组合根上装配：PostgreSQL daemon
@@ -20,6 +21,7 @@ import {
 import { createTaskRouteWorkspaceParticipant } from '../infrastructure/taskRouteWorkspaceParticipant'
 
 export interface HostTaskLaunchKernelDependencies {
+  readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   /**
@@ -39,6 +41,7 @@ export function composeHostTaskLaunchKernel(
     gitCommitIdentity: input.gitCommitIdentity,
     workspace: createTaskRouteWorkspaceParticipant({
       db: input.db,
+      repositoryPreparation: input.repositoryPreparation,
       appHome: input.appHome,
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
     }),

@@ -14,7 +14,7 @@ import {
   type McpRuntimeTestLeaseInput,
   type McpRuntimeTestLeaseToken,
 } from '../application/ports/mcpRuntimeTestLease'
-import type { McpRuntimeProtocol } from '../public/types'
+import type { McpRuntimeProtocol } from '../application/ports/mcpRuntimeTestLease'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,

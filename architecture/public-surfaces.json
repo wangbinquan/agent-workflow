@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 884,
+    "consumers": 893,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
     "methods": 1069,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20921,
-    "symbols": 1018
+    "recursiveFields": 20894,
+    "symbols": 1016
   },
   "entries": [
     {
@@ -50132,13 +50132,16 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:14152c1154c0fb2f427b",
         "import:1b2384502fc5997ff0a1",
         "import:1f1c41512df17330ca10",
         "import:4bf7e323e8218ac14c0f",
         "import:5cb81a2768a79730ff00",
         "import:ae9218baef05fc626909",
+        "import:c8f92c950ff8b61e0dc6",
         "import:de5c415b39b10df6f013",
-        "import:f68f17b951bbaa335946"
+        "import:f68f17b951bbaa335946",
+        "import:fd78d9b333af6377cffe"
       ],
       "context": "identity-access",
       "dataClass": "confidential",
@@ -50153,6 +50156,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#RequestAuthority",
       "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:14152c1154c0fb2f427b",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file"
+        },
         {
           "context": "resource-catalog",
           "edgeId": "import:1b2384502fc5997ff0a1",
@@ -50184,6 +50193,12 @@
           "ownerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file"
         },
         {
+          "context": "source-control",
+          "edgeId": "import:c8f92c950ff8b61e0dc6",
+          "file": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file"
+        },
+        {
           "context": "system-operations",
           "edgeId": "import:de5c415b39b10df6f013",
           "file": "packages/backend/src/modules/system-operations/public/queries.ts",
@@ -50194,6 +50209,12 @@
           "edgeId": "import:f68f17b951bbaa335946",
           "file": "packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:fd78d9b333af6377cffe",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -111521,47 +111542,6 @@
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:1",
-          "type": "'claude-code'"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "public:resource-catalog:types:McpRuntimeProtocol",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpRuntimeProtocol",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:fb44e34d0d15d91b199ee3828dd28fc242d5f8766ca6a34cda004edfbc16aefc",
-      "status": "target-context-current-surface",
-      "symbol": "McpRuntimeProtocol",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
           "fieldPath": "$value",
           "type": "z.infer<typeof McpRuntimeTestCreateReceiptSchema>"
         }
@@ -122650,7 +122630,6 @@
         "public:runtime-management:queries:isRuntimeMcpTestEligible",
         "public:runtime-management:types:ResolvedRuntimeProfile",
         "public:runtime-management:types:RuntimeMcpTestEligibilityInput",
-        "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeProtocol",
         "public:runtime-management:types:RuntimeView"
       ],
@@ -122866,7 +122845,6 @@
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:queries:RuntimeExecutionQueries",
         "public:runtime-management:types:ResolvedRuntimeProfile",
-        "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeView"
       ],
       "removeAfterWave": null,
@@ -122991,171 +122969,6 @@
       "authority": "none",
       "budget": {
         "maxMethods": 5,
-        "maxTopLevelFields": 15,
-        "maxTransitiveLeafFields": 25,
-        "maxUnionVariants": 20
-      },
-      "consumerEdgeIds": [],
-      "context": "runtime-management",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "binaryPath.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "binaryPath.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "configDirEnv.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "configDirEnv.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "configDirName.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "configDirName.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "extraArgs.$variant:0",
-          "type": "readonly string[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "extraArgs.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "isSandbox",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "maxSteps.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "maxSteps.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "model.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "model.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "name",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "probeFence",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "steps.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "steps.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "temperature.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "temperature.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "variant.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "variant.$variant:1",
-          "type": "null"
-        }
-      ],
-      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
-      "id": "public:runtime-management:types:RuntimeProfileInspection",
-      "members": [
-        "binaryPath",
-        "configDirEnv",
-        "configDirName",
-        "enabled",
-        "id",
-        "name",
-        "probeFence",
-        "protocol"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfileInspection",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:dfdd19a53c34bdca31a768a5eab8188f04392e83afee9c528468c887fe26f924",
-      "status": "target-context-current-surface",
-      "symbol": "RuntimeProfileInspection",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
@@ -123196,7 +123009,6 @@
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:queries:RuntimeExecutionQueries",
         "public:runtime-management:types:ResolvedRuntimeProfile",
-        "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeView"
       ],
       "removeAfterWave": null,
@@ -127114,14 +126926,18 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:614b2b2d53a521ff5351"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
       "entrypoint": "participants",
       "fields": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:614b2b2d53a521ff5351"
+          ],
           "fieldPath": "$method:resolveAuthorized.$parameter:source.$variant:0.base",
           "type": "string"
         },
@@ -127161,7 +126977,9 @@
           "type": "'sealed-public-repository'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:614b2b2d53a521ff5351"
+          ],
           "fieldPath": "$method:resolveAuthorized.$parameter:source.$variant:2.source",
           "type": "string"
         },
@@ -127182,14 +127000,19 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
-      "plannedConsumer": "task-execution",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:614b2b2d53a521ff5351",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:3288d11ba39b214ccb223e948a10b3947c8efcdc58879c24bb1b1f7f5dc691fa",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryLaunchSnapshotInTx",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
@@ -127203,7 +127026,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:359b6d87cd86ff3c5762"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
@@ -127214,16 +127039,21 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
-      "plannedConsumer": "task-execution",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:359b6d87cd86ff3c5762",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryPreparationParticipant"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:b5af4b58e3571524629d7e124b31a60b431634a9d6df965b697b90c67604f2d8",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryPreparationEffectCapability",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
@@ -127237,7 +127067,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:bf2dbd0ec9f038feba4c"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
@@ -127310,14 +127142,19 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
-      "plannedConsumer": "task-execution",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:bf2dbd0ec9f038feba4c",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:9ea7f54e7781860305af892d8ac3f02493e92fd50138427927946139a57f3a68",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryPreparationParticipant",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
@@ -128398,6 +128235,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:5c930430354706701eb6",
         "import:fbaa39d9415332bc859e"
       ],
       "context": "source-control",
@@ -128416,8 +128254,13 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#FrozenRepositoryPreparationRef",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:5c930430354706701eb6",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
+        },
         {
           "context": "task-execution",
           "edgeId": "import:fbaa39d9415332bc859e",
@@ -128429,11 +128272,10 @@
         "public:source-control:participants:RepositoryLaunchSnapshotInTx",
         "public:source-control:participants:RepositoryPreparationParticipant"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:0bcc6fe5f09cd619bb628b1cd863aeb8e0697f533adb9de57473683a277fc091",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "FrozenRepositoryPreparationRef",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -128815,14 +128657,18 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:8e9b49d40b137f341667"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:8e9b49d40b137f341667"
+          ],
           "fieldPath": "$variant:0.base",
           "type": "string"
         },
@@ -128862,7 +128708,9 @@
           "type": "'sealed-public-repository'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:8e9b49d40b137f341667"
+          ],
           "fieldPath": "$variant:2.source",
           "type": "string"
         }
@@ -128872,16 +128720,21 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryLaunchSource",
-      "plannedConsumer": "task-execution",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:8e9b49d40b137f341667",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryLaunchSnapshotInTx"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:9ef036541a36f738d92b73d5c0e85f8af0e2d6eac950a42d5a6f27154e412101",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryLaunchSource",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -128912,17 +128765,15 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryPreparationDiagnosticsRef",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryPreparationParticipant",
         "public:source-control:types:WorkspacePreparationExecutionOutcome"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:a6e5d55ccfc501a209d43f8047b14a620a9f56554a573f8871aaead309036949",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryPreparationDiagnosticsRef",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -128936,7 +128787,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:72b24d65488085050886"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
@@ -128953,16 +128806,21 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryPreparationOperationRef",
-      "plannedConsumer": "task-execution",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:72b24d65488085050886",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryPreparationParticipant"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:dd59a6d410deacc76c7279b9d1b235e51e7d084e8a25cadc6eecf7a66feb4301",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryPreparationOperationRef",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -128993,17 +128851,15 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryPreparationReceiptRef",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryPreparationParticipant",
         "public:source-control:types:WorkspacePreparationExecutionOutcome"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:f20949453c1b2a3d580ddcca2c63bb98d697adfa944131829557e1bf8b957f96",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryPreparationReceiptRef",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -129044,17 +128900,15 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryPreparationSafeCode",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryPreparationParticipant",
         "public:source-control:types:WorkspacePreparationExecutionOutcome"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:05a2707f77cab1fa77889ff194a5a1f4fee3ccbf7c4ce28c49420276ca4fdced",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryPreparationSafeCode",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -129085,17 +128939,15 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#RepositoryPreparationStopReceipt",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryPreparationParticipant",
         "public:source-control:types:WorkspacePreparationExecutionOutcome"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:abbcff527b2ba12619dce8f24f9e4e7adfa0720e150225e95910d4e4a235eafd",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "RepositoryPreparationStopReceipt",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -130040,17 +129892,15 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#VersionedRepositoryGroupRef",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryLaunchSnapshotInTx",
         "public:source-control:types:RepositoryLaunchSource"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:16a9391a6d5512931a5b0b1f1c1604e943240484b72d6df75eddfd3105bcf3c9",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "VersionedRepositoryGroupRef",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -130089,17 +129939,15 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#VersionedRepositoryRef",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryLaunchSnapshotInTx",
         "public:source-control:types:RepositoryLaunchSource"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:43e292725a13957477aeecf39235311a87e953395bedf9dce607634347cfec4b",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "VersionedRepositoryRef",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -130349,16 +130197,14 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#WorkspacePreparationExecutionOutcome",
-      "plannedConsumer": "task-execution",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:source-control:participants:RepositoryPreparationParticipant"
       ],
-      "removeAfterWave": "W4-E1/W5",
+      "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:5abbe757b09a5dd7491116efc3be25379dacd6d9b6f5d15f2321f49d486db49d",
-      "status": "declared-contract-debt",
-      "successorTask": "RFC-362-E1-production-cutover",
+      "status": "target-context-current-surface",
       "symbol": "WorkspacePreparationExecutionOutcome",
       "transaction": "none",
       "unresolvedTypeRefs": [],
@@ -165446,7 +165292,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:782de5d2a7167b83c95c9dcf08a563ebabb184ac9b58b1b230cd77187e261328",
+  "sourceDigest": "sha256:8098d89214cc3ae7a44854ed050f577f746559ceededd03d0aff897f2a6d463f",
   "targetContexts": [
     "collaboration",
     "development-automation",

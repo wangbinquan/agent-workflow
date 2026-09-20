@@ -1,3 +1,4 @@
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-287 T13（G7 核心）—— 仓库准备推迟到任务行落库之后。
 //
 // 用户可见的问题：今天物化发生在落行**之前**，于是「克隆超时 / 远端不可达 / 认证
@@ -1062,7 +1063,10 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
             db: db2,
             integrity: agentIntegrity.launch,
           }),
-          routeWorkspace: { appHome: home },
+          routeWorkspace: {
+            repositoryPreparation: composeRepositoryPreparation({ db: db2, appHome: home }),
+            appHome: home,
+          },
           resourceAuthorityFor: () => {
             throw new Error('scheduled launch uses the delegated resources from fireSchedule')
           },
@@ -1070,6 +1074,11 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
             deps: { db: db2, schedulerDriver: schedulerDriver2, configPath: cfgPath },
             appHome: home,
             repositoryPreparation: composeDeferredRepositoryPreparation({
+              repositoryPreparation: composeRepositoryPreparation({
+                db: db2,
+                appHome: home,
+                cloneTimeoutMs: 3000,
+              }),
               db: db2,
               appHome: home,
               repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db2),

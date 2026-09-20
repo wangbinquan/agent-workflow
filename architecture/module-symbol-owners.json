@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1802,
+    "backendFiles": 1805,
     "frontendFiles": 622,
     "legacyFiles": 548,
-    "moduleFiles": 1254,
-    "productionFiles": 2579,
+    "moduleFiles": 1257,
+    "productionFiles": 2582,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24766
+    "symbolsIncludingFileRoots": 24774
   },
   "entries": [
     {
@@ -76816,6 +76816,18 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts#McpRuntimeProtocol",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "McpRuntimeProtocol",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/mcpRuntimeTestLease.ts#McpRuntimeTestLeaseError",
       "removeAfterWave": null,
       "status": "current-module",
@@ -101855,19 +101867,6 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpRuntimeProtocol",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:fb44e34d0d15d91b199ee3828dd28fc242d5f8766ca6a34cda004edfbc16aefc",
-      "status": "current-module",
-      "symbol": "McpRuntimeProtocol",
-      "targetContext": "resource-catalog",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PackageResourceKind",
       "removeAfterWave": null,
       "signatureDigest": "sha256:166db8dfe07578b5b31b3a8082e98007ba6bbc5df29b80cf89ded9fe1e2a73e4",
@@ -104912,19 +104911,6 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/runtime-management/public/types.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfileInspection",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:dfdd19a53c34bdca31a768a5eab8188f04392e83afee9c528468c887fe26f924",
-      "status": "current-module",
-      "symbol": "RuntimeProfileInspection",
-      "targetContext": "runtime-management",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProtocol",
       "removeAfterWave": null,
       "signatureDigest": "sha256:39e5af71cbc9731c57d7d81177b6042894391159ad6639c7f42712a2fe9e4e8e",
@@ -106687,6 +106673,30 @@
       "symbol": "resolveRepositoryTransportCredentialsFromKeyFile",
       "targetContext": "source-control",
       "targetLayer": "composition"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#composeRepositoryPreparation",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "composeRepositoryPreparation",
+      "targetContext": "source-control",
+      "targetLayer": "application"
     },
     {
       "currentContext": "source-control",
@@ -129841,6 +129851,66 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#acceptDurableRepositoryWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "acceptDurableRepositoryWorkspace",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#admitDeferredRepositoryPreparation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "admitDeferredRepositoryPreparation",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#cleanupDurableRepositoryWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "cleanupDurableRepositoryWorkspace",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#prepareDurableRepositoryWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "prepareDurableRepositoryWorkspace",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowPersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowPersistence.ts#$file",
       "removeAfterWave": null,
@@ -131850,6 +131920,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "withPostgresqlTaskAggregateTransaction",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#TaskRepositoryPreparationBinding",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskRepositoryPreparationBinding",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -297916,5 +298010,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:782de5d2a7167b83c95c9dcf08a563ebabb184ac9b58b1b230cd77187e261328"
+  "sourceDigest": "sha256:8098d89214cc3ae7a44854ed050f577f746559ceededd03d0aff897f2a6d463f"
 }

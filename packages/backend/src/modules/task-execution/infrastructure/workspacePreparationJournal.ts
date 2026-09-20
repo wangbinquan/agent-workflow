@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull, inArray } from 'drizzle-orm'
 import { taskWorkspacePreparations } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { ConflictError } from '@/util/errors'
@@ -30,6 +30,84 @@ export function createWorkspacePreparationJournal(
             .where(eq(taskWorkspacePreparations.id, id))
         )[0] ?? null
       )
+    },
+    async forTask(taskId) {
+      return (
+        (
+          await db
+            .select()
+            .from(taskWorkspacePreparations)
+            .where(eq(taskWorkspacePreparations.admittedTaskId, taskId))
+        )[0] ?? null
+      )
+    },
+    async bindTask(input) {
+      const rows = await db
+        .update(taskWorkspacePreparations)
+        .set({
+          admittedTaskId: input.taskId,
+          version: input.expectedVersion + 1,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(taskWorkspacePreparations.id, input.id),
+            eq(taskWorkspacePreparations.version, input.expectedVersion),
+            eq(taskWorkspacePreparations.ownerFence, input.ownerFence),
+            eq(taskWorkspacePreparations.lane, 'repository-preparation'),
+            eq(taskWorkspacePreparations.state, 'preparing'),
+            isNull(taskWorkspacePreparations.admittedTaskId),
+          ),
+        )
+        .returning()
+      return rows[0] ?? null
+    },
+    async adoptOwner(input) {
+      if (input.ownerFence < input.previousFence) return null
+      const rows = await db
+        .update(taskWorkspacePreparations)
+        .set({
+          ownerFence: input.ownerFence,
+          version: input.expectedVersion + 1,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(taskWorkspacePreparations.id, input.id),
+            eq(taskWorkspacePreparations.version, input.expectedVersion),
+            eq(taskWorkspacePreparations.ownerFence, input.previousFence),
+            inArray(taskWorkspacePreparations.state, [
+              'preparing',
+              'prepared',
+              'compensating',
+              'failed',
+            ]),
+          ),
+        )
+        .returning()
+      return rows[0] ?? null
+    },
+    async replaceOperation(input) {
+      const rows = await db
+        .update(taskWorkspacePreparations)
+        .set({
+          operationRef: input.operationRef,
+          state: 'preparing',
+          artifactJson: null,
+          version: input.expectedVersion + 1,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(taskWorkspacePreparations.id, input.id),
+            eq(taskWorkspacePreparations.version, input.expectedVersion),
+            eq(taskWorkspacePreparations.ownerFence, input.ownerFence),
+            eq(taskWorkspacePreparations.operationRef, input.previousOperationRef),
+            inArray(taskWorkspacePreparations.state, ['preparing', 'prepared']),
+          ),
+        )
+        .returning()
+      return rows[0] ?? null
     },
     async prepare(input) {
       const { now, ...identity } = input

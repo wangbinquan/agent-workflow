@@ -1,3 +1,9 @@
+import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
+import {
+  admitDeferredRepositoryPreparation,
+  prepareDurableRepositoryWorkspace,
+  cleanupDurableRepositoryWorkspace,
+} from './durableRepositoryPreparation'
 import {
   redactGitUrl,
   type GitCommitIdentity,
@@ -10,7 +16,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
-import { taskRepos, taskSpaceNodes } from '@/db/schema'
+import { taskRepos, taskSpaceNodes, tasks } from '@/db/schema'
 import { composePostgresqlRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { ensureCachedRepoIdentity } from '@/services/gitRepoCache'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
@@ -31,6 +37,7 @@ import type {
 
 export interface TaskRouteWorkspaceDependencies {
   readonly db: ProviderNeutralDatabase
+  readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly appHome: string
   readonly secretBox?: SecretBox
   readonly cloneTimeoutMs?: number
@@ -246,34 +253,55 @@ export function createTaskWorkspaceMaterializer(
       if (deferralApplies(input)) {
         return await prepareDeferredWorkspace(dependencies, store, input)
       }
-      const space = await materializeSpaceWithProvider(
-        input.task,
-        {
-          appHome: dependencies.appHome,
-          repositoryWorkspace: store,
-          loadFrozenSpaceLayout: (sourceTaskId) =>
-            loadFrozenSpaceLayout(dependencies.db, sourceTaskId),
-          gitCommitIdentity: input.gitCommitIdentity,
-          ...(dependencies.secretBox === undefined ? {} : { secretBox: dependencies.secretBox }),
-          ...(dependencies.cloneTimeoutMs === undefined
-            ? {}
-            : { cloneTimeoutMs: dependencies.cloneTimeoutMs }),
-          ...(input.sourceTerminationSignal === undefined
-            ? {}
-            : { sourceTerminationLaunchSignal: input.sourceTerminationSignal }),
-          ...(dependencies.workspaceCleanupHook === undefined
-            ? {}
-            : { workspaceCleanupHook: dependencies.workspaceCleanupHook }),
-        },
-        input.taskId,
-      )
+      const durable = await prepareDurableRepositoryWorkspace({
+        db: dependencies.db,
+        binding: dependencies.repositoryPreparation,
+        taskId: input.taskId,
+        gitCommitIdentity: input.gitCommitIdentity,
+        ...(input.task.workingBranch === undefined
+          ? {}
+          : { workingBranch: input.task.workingBranch }),
+        signal: input.sourceTerminationSignal ?? new AbortController().signal,
+      })
+      const space =
+        durable ??
+        (await materializeSpaceWithProvider(
+          input.task,
+          {
+            appHome: dependencies.appHome,
+            repositoryWorkspace: store,
+            loadFrozenSpaceLayout: (sourceTaskId) =>
+              loadFrozenSpaceLayout(dependencies.db, sourceTaskId),
+            gitCommitIdentity: input.gitCommitIdentity,
+            ...(dependencies.secretBox === undefined ? {} : { secretBox: dependencies.secretBox }),
+            ...(dependencies.cloneTimeoutMs === undefined
+              ? {}
+              : { cloneTimeoutMs: dependencies.cloneTimeoutMs }),
+            ...(input.sourceTerminationSignal === undefined
+              ? {}
+              : { sourceTerminationLaunchSignal: input.sourceTerminationSignal }),
+            ...(dependencies.workspaceCleanupHook === undefined
+              ? {}
+              : { workspaceCleanupHook: dependencies.workspaceCleanupHook }),
+          },
+          input.taskId,
+        ))
       const repositories = space.repos.map((repo) =>
         repositoryProjection(repo, input.task.workingBranch ?? null),
       )
       const head = repositories[0]
       const repoGroupId = input.task.repoGroupId ?? null
       const repoGroupName =
-        repoGroupId === null ? null : (await resolveRepoGroupLayout(store, repoGroupId)).groupName
+        repoGroupId === null
+          ? null
+          : durable === null
+            ? (await resolveRepoGroupLayout(store, repoGroupId)).groupName
+            : ((
+                await dependencies.db
+                  .select({ name: tasks.repoGroupName })
+                  .from(tasks)
+                  .where(eq(tasks.id, input.taskId))
+              )[0]?.name ?? null)
       return Object.freeze({
         taskId: space.taskId,
         kind: space.kind,
@@ -296,7 +324,22 @@ export function createTaskWorkspaceMaterializer(
         repositories,
         nodePaths: [...space.nodePaths],
         commit: () => commitMaterializedSpace(space),
-        rollback: () => cleanupMaterializedSpace(space, dependencies.workspaceCleanupHook),
+        rollback: async () => {
+          const report =
+            durable === null
+              ? null
+              : await cleanupDurableRepositoryWorkspace({
+                  db: dependencies.db,
+                  binding: dependencies.repositoryPreparation,
+                  taskId: input.taskId,
+                  gitCommitIdentity: input.gitCommitIdentity,
+                  ...(input.task.workingBranch === undefined
+                    ? {}
+                    : { workingBranch: input.task.workingBranch }),
+                  signal: input.sourceTerminationSignal ?? new AbortController().signal,
+                })
+          return report ?? cleanupMaterializedSpace(space, dependencies.workspaceCleanupHook)
+        },
       })
     },
   })
@@ -312,7 +355,7 @@ export function createTaskRouteWorkspaceParticipant(
     async prepare(
       input: Parameters<TaskRouteWorkspaceParticipant['prepare']>[0],
     ): Promise<TaskRoutePreparedWorkspace> {
-      return await materializer.prepare({
+      const workspace = await materializer.prepare({
         taskId: input.taskId,
         task: input.task,
         gitCommitIdentity: input.gitCommitIdentity,
@@ -320,6 +363,20 @@ export function createTaskRouteWorkspaceParticipant(
         ...(input.sourceTerminationSignal === undefined
           ? {}
           : { sourceTerminationSignal: input.sourceTerminationSignal }),
+      })
+      if (!deferralApplies(input)) return workspace
+      return Object.freeze({
+        ...workspace,
+        admit: (transaction: ProviderNeutralDatabase) =>
+          admitDeferredRepositoryPreparation({
+            transaction,
+            binding: dependencies.repositoryPreparation,
+            authority: input.authority,
+            taskId: input.taskId,
+            cachedRepoId: workspace.cachedRepoId,
+            repoGroupId: workspace.repoGroupId,
+            base: workspace.baseBranch,
+          }),
       })
     },
   })

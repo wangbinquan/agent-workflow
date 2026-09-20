@@ -1,9 +1,8 @@
 import { ValidationError } from '@/util/errors'
 import type { RuntimeProfileConfigurationCommands } from '../public/commands'
-import type { RuntimeProfileInspection } from '../public/types'
 
 interface RuntimeProfileInspectionQueries {
-  getRuntime(name: string): Promise<RuntimeProfileInspection | null>
+  getRuntime(name: string): Promise<{ readonly enabled: boolean } | null>
 }
 
 /** Preserve config's existing validation-before-invalidation-before-file-write order. */
