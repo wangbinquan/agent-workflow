@@ -111,8 +111,11 @@
       "id": "rfc294-review-dead-required-ports",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "DEAD_REQUIRED_PORT_DEBT",
-      "baseline": 8,
-      "why": "RFC-294 review 2026-08-30 §C2：provider adapter=0 且 consumer=0 的 required SPI 死声明（全部在 development-automation）；W4-E8 接线或删除。只许降。"
+      "baseline": 9,
+      "why": "RFC-294 review 2026-08-30 §C2：provider adapter=0 且 consumer=0 的 required SPI 死声明（全部在 development-automation）；W4-E8 接线或删除。只许降。 RFC-362：TaskWorkspaceReadPort 仅测试装配，生产 Task consumer/adapter 留 W4-E1/W5，8 → 9。",
+      "allowGrowth": {
+        "why": "RFC-362 用户已批准先落合同、测试 provider 和行为 oracle，生产 E1 cutover 另号；本次显式登记计划内的未消费合同，保持判据不变，不用假生产 consumer 销账。"
+      }
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -132,8 +135,11 @@
       "id": "rfc294-review-unconsumed-public-symbols",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 136,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。**"
+      "baseline": 140,
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。** RFC-362：四个 SC offered seam 显式作为 W4-E1/W5 合同前置入账，136 → 140，生产接入后逐项删除。",
+      "allowGrowth": {
+        "why": "RFC-362 用户已批准先落合同、测试 provider 和行为 oracle，生产 E1 cutover 另号；本次显式登记计划内的未消费合同，保持判据不变，不用假生产 consumer 销账。"
+      }
     },
     {
       "id": "rfc310-top-level-allowed-dirs",
@@ -860,7 +866,7 @@
       "id": "rfc294-required-port-liveness",
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
-      "baseline": 29,
+      "baseline": 30,
       "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {

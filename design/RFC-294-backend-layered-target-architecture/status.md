@@ -293,10 +293,10 @@
 
 | status | 数量 |
 | --- | --- |
-| declared-debt | 20 |
+| declared-debt | 21 |
 | active | 9 |
 
-### 7.2 provider=0 且 consumer=0 的 required port（合计 8）
+### 7.2 provider=0 且 consumer=0 的 required port（合计 9）
 
 - `required:development-automation:AgentActionExecutionPort`
 - `required:development-automation:DevelopmentCodeHostEffectsPort`
@@ -306,3 +306,4 @@
 - `required:development-automation:RepositoryUploadPlacementPort`
 - `required:development-automation:RequirementAcquisitionPort`
 - `required:development-automation:RequirementInteractionPort`
+- `required:task-execution:TaskWorkspaceReadPort`

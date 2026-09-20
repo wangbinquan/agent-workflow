@@ -40,10 +40,12 @@ Task root 持有 tasks、taskRepos、taskSpaceNodes、collaborators、intent 与
 
 ## 3. 合同、测试 provider 与实际限制
 
-五个 offered 声明归 SC，TaskWorkspaceReadPort 与两条 lane 归 Task application ports。
+四个 offered port 与一个 effect capability 声明归 SC，TaskWorkspaceReadPort 与两条 lane 归 Task application ports。
 22 个新增 public 项由 canonical 标为 `declared-contract-debt`，owner TaskExecution，removeAfterWave=W4-E1/W5，
-后继任务 `RFC-362-E1-production-cutover`。5 个值类型被 Task port **以 type import 引用**；五个 offered
+后继任务 `RFC-362-E1-production-cutover`。5 个值类型被 Task port **以 type import 引用**；四个 offered
 port 均无生产调用/装配。不可把这些类型边计为运行时 liveness。
+canonical 同时登记 TaskWorkspaceReadPort 为 declared-debt；四个零 consumer offered port 与一个零 provider/consumer required port
+分别进入已有精确债务账本，基线 136→140、8→9，注明 RFC-362 授权与 E1/W5 清偿入口。
 
 测试装配在 `tests/helpers/repositoryLaunchContracts.ts`：
 

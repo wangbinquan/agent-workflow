@@ -864,6 +864,13 @@ function requiredPortLocation(path: string): { context: string } | null {
   const location = moduleLocation(path)
   if (location === null) return null
   if (location.rest === 'composition/required-ports') return { context: location.context }
+  // RFC-362: this application-owned Task port is declared without a production binding.
+  if (
+    location.context === 'task-execution' &&
+    location.rest === 'application/ports/workspaceLaunch'
+  ) {
+    return { context: location.context }
+  }
   if (
     location.context === 'system-operations' &&
     /^application\/ports\/[^/]+$/.test(location.rest)
@@ -2226,7 +2233,9 @@ function buildRequiredPorts(
             ? 'W4-E8/W5'
             : location.context === 'system-operations'
               ? 'W4-E7'
-              : 'W4-E9',
+              : location.context === 'task-execution'
+                ? 'W4-E1/W5'
+                : 'W4-E9',
       })
     }
   }

@@ -230,6 +230,35 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     )
   })
 
+  test('RFC-362 planned offered and required contracts remain explicit debt without runtime bindings', () => {
+    const surfaces = generated.publicSurfaces.entries as Array<Record<string, unknown>>
+    const offered = surfaces.filter((entry) => entry.status === 'declared-contract-debt')
+    expect(offered).toHaveLength(22)
+    expect(
+      offered.every(
+        (entry) =>
+          entry.removeAfterWave === 'W4-E1/W5' && entry.plannedConsumer === 'task-execution',
+      ),
+    ).toBe(true)
+    const ports = generated.crossContextImports.requiredPorts as Array<Record<string, unknown>>
+    const port = ports.find((entry) => entry.id === 'required:task-execution:TaskWorkspaceReadPort')
+    expect(port).toMatchObject({
+      status: 'declared-debt',
+      removeAfterWave: 'W4-E1/W5',
+      consumerOwnerEntryIds: [],
+      providerAdapters: [],
+      compositionFiles: [],
+    })
+    const missingOwner = cloneArtifacts(generated)
+    const missing = (missingOwner.publicSurfaces.entries as Array<Record<string, unknown>>).find(
+      (entry) => entry.id === 'public:source-control:participants:RepositoryPreparationParticipant',
+    )!
+    missing.removeAfterWave = null
+    expect(validateCanonicalArtifacts(missingOwner)).toContain(
+      'missing RFC-362 declared contract debt: public:source-control:participants:RepositoryPreparationParticipant',
+    )
+  })
+
   test('global foreign keys, required-port classification and implementation DAG are closed', () => {
     expect(validateCanonicalArtifacts(generated)).toEqual([])
     expect(generated.crossContextImports.implementationSccs).toEqual([])

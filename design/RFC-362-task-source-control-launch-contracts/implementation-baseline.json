@@ -383,9 +383,10 @@
   "requiredPort": {
     "file": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
     "symbol": "TaskWorkspaceReadPort",
-    "status": "declared-contract-debt",
+    "status": "declared-debt",
     "provider": "tests/helpers/repositoryLaunchContracts.ts",
     "productionConsumer": null,
-    "successorTask": "RFC-362-E1-production-cutover"
+    "successorTask": "RFC-362-E1-production-cutover",
+    "canonicalId": "required:task-execution:TaskWorkspaceReadPort"
   }
 }

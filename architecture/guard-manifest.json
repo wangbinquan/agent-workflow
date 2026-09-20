@@ -948,7 +948,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 781
+      "lines": 810
     },
     {
       "id": "rfc294-review-module-layer-rules",

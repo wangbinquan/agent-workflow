@@ -78715,7 +78715,7 @@
     "architectureExceptions": 4630,
     "implementationSccs": 0,
     "observedEdges": 5150,
-    "requiredPorts": 29,
+    "requiredPorts": 30,
     "targetEdges": 66
   },
   "finalCriterion": "Observed imports, offered/required/authority target edges and required-port liveness remain exact, referentially complete and role-preserving.",
@@ -161707,9 +161707,21 @@
       "id": "required:task-execution:DigitalEmployeeWorkspacePort",
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/required-ports.ts#DigitalEmployeeWorkspacePort",
       "providerAdapters": [],
-      "removeAfterWave": "W4-E9",
+      "removeAfterWave": "W4-E1/W5",
       "status": "declared-debt",
       "symbol": "DigitalEmployeeWorkspacePort"
+    },
+    {
+      "compositionFiles": [],
+      "compositionOwnerEntryIds": [],
+      "consumerOwnerEntryIds": [],
+      "context": "task-execution",
+      "id": "required:task-execution:TaskWorkspaceReadPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#TaskWorkspaceReadPort",
+      "providerAdapters": [],
+      "removeAfterWave": "W4-E1/W5",
+      "status": "declared-debt",
+      "symbol": "TaskWorkspaceReadPort"
     }
   ],
   "schemaVersion": 1,

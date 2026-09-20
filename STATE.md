@@ -1,5 +1,12 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-362 declared debt 完整对账
+
+`59c1fff1c` 的 Windows 原生流程 `35491113835` 已 success；Main 发现四个新增 SC offered seam 尚未进入既有零 consumer 精确账本。
+本批补四个 public 项和 TaskWorkspaceReadPort 的 declared-debt，明确 W4-E1/W5 后继，不添加假生产接线。
+新增 canonical 反例验证 owner/removeWave 不可省略；生产代码与上一候选一致，三个 RFC 仍等待最终 Main CI。
+
+
 ## 2026-09-20 RFC-362 合同准备候选与 360/361 CI 修复
 
 SC offered 与 Task required 合同、引用 codec、真实双库/Git 测试适配及后继切换清单已落档。
