@@ -1,0 +1,77 @@
+{
+  "sourceSha": "cae3e4ea2579bc1d13ff34008fa011d4073d8b59",
+  "status": "draft-source-inventory-not-implementation-evidence",
+  "capturedOn": "2026-09-20",
+  "canonicalSourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
+  "scope": "Read-only source fingerprints; no production edits, migrations, public-liveness claims or architecture credit. Revalidate touched facts before implementation.",
+  "productionFiles": [
+    {
+      "file": "packages/backend/src/services/mcpRuntimeTest.ts",
+      "sha256": "3cc279e0418d86ad2cf9d089ac008cabf4df16375e8a8a7d01bc36004c9b6e7b"
+    },
+    {
+      "file": "packages/backend/src/services/mcpRuntimeTestLease.ts",
+      "sha256": "a42fb6d84f07e29ff6f2dc4261b748e1666323a46849136f7876b91a20d036d1"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts",
+      "sha256": "3788b003ae7ba162cd0884a24f15200de7b666f20e5e4b80b5c5c7489af49db9"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "sha256": "ff066196e60ab0f6ad525cbe766073571af494e43c918c1af56183e24fd3b3b0"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts",
+      "sha256": "58f934bf211730a15ff88be5eb249016c247a7beedba16f9845ac7b6f1232b47"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/application/mcps/runtimeTestPersistence.ts",
+      "sha256": "66fe936d1c85fbc9b5c8b879091d5e45f95b7cd4059729617b8f14bdd3cd783f"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/application/runtimeProfileTestInvalidation.ts",
+      "sha256": "798fcf930b0c9e84f43adf0d6cf1b7f4dd0bb68e626176a44f50451ad1f0f0db"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/adapters/runtimeProfileParticipants.ts",
+      "sha256": "29f896af5bad4545f6d2782217321ced74ab21a0e537009f6b4c53e89d38d909"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "sha256": "53181f28c37364ada2eabbfd56a19ba9b8c61035a2d4eafe13f091065263c49b"
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts",
+      "sha256": "afae24d63392fe0e3b79802dd327eb071409b74edb4f091b7addf9e0b4f45386"
+    },
+    {
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts",
+      "sha256": "020366a170041a7ad9a9a38d51e7c5c212d4dc923a11471359a17fd0c13a41ec"
+    },
+    {
+      "file": "packages/backend/src/routes/mcps.ts",
+      "sha256": "8dd245e5586270025e41e4027485c093e1b7363c8eedda32ad1fee035667a0ea"
+    },
+    {
+      "file": "packages/backend/src/routes/config.ts",
+      "sha256": "f65ce4e8d704039995f4c4352588f6d7346114f49432da550076a3cc842f67a0"
+    },
+    {
+      "file": "packages/backend/src/server.ts",
+      "sha256": "c5ea090cb74f5fb744df9a2c7ebd04e9103c20bfa0e0390a732afa9884a07850"
+    },
+    {
+      "file": "packages/backend/src/cli/start.ts",
+      "sha256": "c13c05b28e797c7bbce03205f92793c5ffcc65e0e393cd64b2a70ff2d57db55d"
+    },
+    {
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "sha256": "56b34554920a2cb2dd0535c058ecab355b230b44aa5046b8628160dee6c9f2d7"
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "sha256": "184e40c71cdd8290b9db5e4d873fbad19640add3645e2be5ba92b50dbef725f0"
+    }
+  ]
+}

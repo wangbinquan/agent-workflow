@@ -1,0 +1,109 @@
+{
+  "sourceSha": "cae3e4ea2579bc1d13ff34008fa011d4073d8b59",
+  "status": "draft-source-inventory-not-implementation-evidence",
+  "capturedOn": "2026-09-20",
+  "canonicalSourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
+  "scope": "Read-only source fingerprints; no production edits, migrations, public-liveness claims or architecture credit. Revalidate touched facts before implementation.",
+  "productionFiles": [
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
+      "sha256": "047a486cc9035f58a23c7f5333022c7d3aee305da5a29422ec110156825bc6dd"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "sha256": "332053c21ddf7be1e3afad7aea26226cca1ce1c63942048da209e8c5db94cae1"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
+      "sha256": "387f8a32057b2d5d73d1f0ff8e16d05fff9b10a0271dff1372411cf90dbb0f72"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts",
+      "sha256": "d9f69beea54ac8ff6dccc52ce8be4160cde911bc69099f850d790669953c59c2"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts",
+      "sha256": "2bac25221f7e198f26c37125c6af860d46abb50c92713b8c65d01137a1ab77d0"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
+      "sha256": "715790c31a658a98053f74a01938116562b7ddb5f370c716b0cc5fb12e351bd2"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
+      "sha256": "3bb2bfbed755a11b6ee77c13a64ba8a64af9b4f20a006259a78f9a4aaf07f5f7"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/application/drive/repositoryPreparationStep.ts",
+      "sha256": "b9ee679270934489d3f3613f768f220ff7764a3461d5a8b4ca09f8c12fc07813"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts",
+      "sha256": "6b10cacb479c0b441a9b658db6134ba0b7a88465cef6b7765a9b496254dbf459"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/deferredRepositoryPreparation.ts",
+      "sha256": "ddb3da46f738c7866024a851553488178fa6b7a91d93baf6c0a1da17df03d03f"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/taskAutoResume.ts",
+      "sha256": "20f176716d7e4e5f83081035503fd8d0c9319c928788a678d8b412ba63d75404"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "sha256": "dc827e633c45383c2800d01d197ab5e3e1b95a966cdbcc23778b2f91872f365d"
+    },
+    {
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts",
+      "sha256": "bed69546b98db3eebd49311f26afd1459cfeec49c0b3a080003075881944cb92"
+    },
+    {
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "sha256": "32ddfa49c113f4204a7733a1fca6b3273a05a64b58025fbd0e93f12eea483c23"
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "sha256": "b9a9d0ba0d213784c91ec0bcbe6343d530a1a2ba72b75e2da4fe3e2982767d4e"
+    },
+    {
+      "file": "packages/backend/src/services/task.ts",
+      "sha256": "7f00253ae67d801862439a9b2f1966774b10d152b9567f8212f5ddd54c78753b"
+    },
+    {
+      "file": "packages/backend/src/services/gitRepoCache.ts",
+      "sha256": "0525464ac002ef210e9e436fedcd1c6960c7fd24dd74c7e7d4b3c516112c271c"
+    },
+    {
+      "file": "packages/backend/src/services/repoGroup.ts",
+      "sha256": "707bffb0d2cf62e01f44d2d70c8c369306bfc026c4c27ea89df3ca1ff8240dc5"
+    },
+    {
+      "file": "packages/backend/src/services/worktreeFiles.ts",
+      "sha256": "a534c2510271c203257f0469f4a82dacab31da2c3dd54678759bed69ff6e4abd"
+    },
+    {
+      "file": "packages/backend/src/routes/tasks.ts",
+      "sha256": "95efba9f7f6660ce2493b1d24c315d45257755d887c7475c485fcb9989c9636b"
+    },
+    {
+      "file": "packages/backend/src/db/schema.ts",
+      "sha256": "704cb34de6126ce5994505852c15b39171cd205cb41407958a38fff5d043f91e"
+    },
+    {
+      "file": "packages/backend/src/server.ts",
+      "sha256": "c5ea090cb74f5fb744df9a2c7ebd04e9103c20bfa0e0390a732afa9884a07850"
+    },
+    {
+      "file": "packages/backend/src/cli/start.ts",
+      "sha256": "c13c05b28e797c7bbce03205f92793c5ffcc65e0e393cd64b2a70ff2d57db55d"
+    },
+    {
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "sha256": "56b34554920a2cb2dd0535c058ecab355b230b44aa5046b8628160dee6c9f2d7"
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "sha256": "184e40c71cdd8290b9db5e4d873fbad19640add3645e2be5ba92b50dbef725f0"
+    }
+  ]
+}

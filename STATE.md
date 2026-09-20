@@ -1,5 +1,18 @@
 # 当前执行状态
 
+## 2026-09-20 进行中 RFC：363 / 364 / 365 后继设计落档（Draft）
+
+用户要求按 RFC-294 下一步推荐推进。本批仅新增三件套与当前源码指纹，生产代码、schema 和 canonical 未改；三项均未获具体设计实施批准，不记实现进度。
+
+- [RFC-363 Task/SC](design/RFC-363-task-source-control-launch-cutover/proposal.md)：优先主线，补 durable source/group/revision、两 launch lane、上传 journal 与工作区 reader；仅启动纵切，不倒签完整 E1/W5。
+- [RFC-364 MCP diagnostics](design/RFC-364-mcp-runtime-diagnostics-cutover/proposal.md)：C + E4b 已满足，可独立准备 E6；根装配与 RFC-363 短暂串行，timer 留 W9。
+- [RFC-365 Event providers](design/RFC-365-event-automation-target-providers/proposal.md)：先做现规则输入与 V1 集合/字节预算的兼容报告，再定稿/切换；不借迁移收缩现能力，Task provider 等 launch seam 稳定。
+- 修正 RFC-294 旧摘要：E4b 已 Done，background=333；RFC-362 声明已完成但生产接线未完成。母 RFC 仍 In Progress。
+
+基线 `cae3e4ea2579bc1d13ff34008fa011d4073d8b59`，Main CI [35493428853](https://github.com/wangbinquan/agent-workflow/actions/runs/35493428853) 46/46 success；仅为本批设计输入，不是新实现验收。
+共享 system-mocks CLI executable mode WIP 保留且不提交。后继具体设计批准后才开始生产实现。
+
+
 ## 2026-09-20 RFC-360 / RFC-361 / RFC-362 完成批准范围
 
 实现取证 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**，双库与多 OS binary/e2e 通过。

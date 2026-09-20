@@ -8,6 +8,9 @@
 > 旧 scope/receipt 的职责仍适用；本节后历史伪代码中的同步 DB participant 返回形状，实施时按 §4.3 升级为 Promise 并 await。
 > 同步纯函数不因此改为异步。RFC-360/361/362 已于 2026-09-20 完成批准范围：E4b 全纵切、EC provider 与 Task/SC 合同准备。E1、完整 E9 和 W5 等余项保持开放。
 
+> 后继 RFC-363/364/365 已落为 Draft，分别设计 Task/SC 启动生产纵切、MCP diagnostics、Event target providers。
+> Event V1 与当前规则的集合/字节计数差异在 RFC-365 单列兼容前置；本轮未修改目标合同、生产代码或 canonical。
+
 ## 1. 设计原则
 
 ### 1.1 Feature-first，模块内分层

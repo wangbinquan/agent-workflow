@@ -12,6 +12,10 @@
   [RFC-361 Execution Contract provider](../RFC-361-execution-contract-provider-cutover/proposal.md)、
   [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md) 均 Done。
   只抵扣 E4b 全纵切、E9 的 EC provider 与 E1/SC 合同准备；剩余 wave 不扩大认领。
+- 后继设计已落档：[RFC-363 Task/SC 生产切换](../RFC-363-task-source-control-launch-cutover/proposal.md)、
+  [RFC-364 MCP diagnostics](../RFC-364-mcp-runtime-diagnostics-cutover/proposal.md)、
+  [RFC-365 Event target providers](../RFC-365-event-automation-target-providers/proposal.md) 均为 Draft，尚未实施。
+  优先 363；364 可独立推进；365 先完成现输入能力与目标 V1 的兼容定稿，不增加完成信用。
 - 性质：目标架构总纲 + 迁移治理合同；未完成 wave 不因局部模块、单一 provider 实现或账本存在而倒签 Done。
   旧 measurement seed、历次 SHA 与 hosted 证据保留在 plan 历史章节；不得把历史数字当作当前新增债务额度。
 - 架构重采触发器：后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量/行为证据，不追着重算总体架构，也不给

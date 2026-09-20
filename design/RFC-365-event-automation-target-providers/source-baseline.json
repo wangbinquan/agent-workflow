@@ -1,0 +1,93 @@
+{
+  "sourceSha": "cae3e4ea2579bc1d13ff34008fa011d4073d8b59",
+  "status": "draft-source-inventory-not-implementation-evidence",
+  "capturedOn": "2026-09-20",
+  "canonicalSourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
+  "scope": "Read-only source fingerprints; no production edits, migrations, public-liveness claims or architecture credit. Revalidate touched facts before implementation.",
+  "productionFiles": [
+    {
+      "file": "packages/backend/src/modules/event-center/application/eventResponseRules.ts",
+      "sha256": "fdaa1357c27d2fe0bf6707505d9bbca205ce8d435e184dddeb68408f0e9ae3f9"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/application/eventCenterService.ts",
+      "sha256": "e8340195c0c352350cd044be876900c4547b6bdd285d3ddc56763a885badba2b"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/application/ports/eventStore.ts",
+      "sha256": "4a5681e81859114bdbb89f3f4c504f1921190327ccd94ca1c77d866c6996a788"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/infrastructure/eventStore.ts",
+      "sha256": "4e0046eabfe381ae32d8ae58fd1b39e11dc66a2ccf121fd3f516c25723ba8f0a"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/infrastructure/eventResponseRuleStore.ts",
+      "sha256": "877caf8f84ee5edcdeb535a33d81ff7eab0a58a875850171da240b00daf01d50"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/composition/required-ports.ts",
+      "sha256": "2afbab0c579e4697e8d6f353fe9ecb2a86f865b2a2a43c771b78870c729628c3"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/composition.ts",
+      "sha256": "492877906ef812b97ed73832972140c81e7835a3982cfeab6036e97c23133239"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/domain/responseRule.ts",
+      "sha256": "cf09b2fef0042add620e360f6071c4933c2d5ceec1c90dacbf4062203818ced6"
+    },
+    {
+      "file": "packages/backend/src/modules/event-center/domain/model.ts",
+      "sha256": "868b4c5ef9b6d3d84d396d2d4b262e3c3163558052929c701cabc0f94a3b8da1"
+    },
+    {
+      "file": "packages/backend/src/services/webhook/webhookDispatch.ts",
+      "sha256": "8d444172ccfcdac37045c014e33e54dd439e4e6c09b7ed1c74721c02fc4fe18b"
+    },
+    {
+      "file": "packages/backend/src/services/webhook/dispatcherTypes.ts",
+      "sha256": "22ed70d57e552bd8116b0f65d7faf68dda8380d22d86dace462cf898ba8270cb"
+    },
+    {
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookExecutionRuntime.ts",
+      "sha256": "12fb1da5d3a6de23c1e1614f89973b7e7c4a0088963af375675db4c91c1e8c05"
+    },
+    {
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDispatchPersistence.ts",
+      "sha256": "faa00263e3c820eba80aee7c0d36e857421e0b77ebaa74a0be3d765bd0c5d159"
+    },
+    {
+      "file": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
+      "sha256": "dc73d4b3b84439c1c8ae5d50b808749fcf70a040498141899cb18449e648c12e"
+    },
+    {
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "sha256": "30daf41b7d38d375fff8bf6f2def766df5b14d6346817b44b5e9d5971dea599c"
+    },
+    {
+      "file": "packages/backend/src/db/schema.ts",
+      "sha256": "704cb34de6126ce5994505852c15b39171cd205cb41407958a38fff5d043f91e"
+    },
+    {
+      "file": "packages/backend/src/server.ts",
+      "sha256": "c5ea090cb74f5fb744df9a2c7ebd04e9103c20bfa0e0390a732afa9884a07850"
+    },
+    {
+      "file": "packages/backend/src/cli/start.ts",
+      "sha256": "c13c05b28e797c7bbce03205f92793c5ffcc65e0e393cd64b2a70ff2d57db55d"
+    },
+    {
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "sha256": "56b34554920a2cb2dd0535c058ecab355b230b44aa5046b8628160dee6c9f2d7"
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "sha256": "184e40c71cdd8290b9db5e4d873fbad19640add3645e2be5ba92b50dbef725f0"
+    },
+    {
+      "file": "packages/backend/src/modules/digital-employee/domain/runtimeModel.ts",
+      "sha256": "bafaeb4f1acb52f0eaee7d29d6cc41f0f6c8aaeb0da754b15a995f79be2da4cb"
+    }
+  ]
+}

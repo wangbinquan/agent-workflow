@@ -393,6 +393,9 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-360](./RFC-360-runtime-management-context-cutover/proposal.md) | Runtime Management 管理与选择合同归位：W4-E4b profile/admin/probe/model-list/runtime selection 纵切，复用 RFC-359 中立事务，保留首次 dispatch 冻结、热配置和双库行为；同步本域 B/D 收缩。 | Done |
 | [RFC-361](./RFC-361-execution-contract-provider-cutover/proposal.md) | W4-E9 第一刀：Execution Contract 的 Agent/Workflow resource provider 归 RC、Script fixture provider 归 TE；保持 guide/check/receipt 和 DE 唯一 participant。Reaction、Event target 与其 transport cutover 留后继，不关闭完整 E9。 | Done |
 | [RFC-362](./RFC-362-task-source-control-launch-contracts/proposal.md) | W4-E1/W5 合同准备：基于 RFC-359 当前 launch kernel 定义 SC offered / Task required seam 与双库行为 oracle，保留 repository preparation、pre-materialized admission、取消恢复语义；生产 cutover 另号获批。 | Done |
+| [RFC-363](./RFC-363-task-source-control-launch-cutover/proposal.md) | Task/SC 启动与工作区生产切换：durable source/group/revision、两条 launch lane、真实 reader 与该纵切 B/D；完整 E1/W5 逐项另验。 | Draft |
+| [RFC-364](./RFC-364-mcp-runtime-diagnostics-cutover/proposal.md) | W4-E6：MCP diagnostics 编排、process effects、七 HTTP 操作与根实例归 RC；复用现 persistence/lease，timer 留 W9。 | Draft |
+| [RFC-365](./RFC-365-event-automation-target-providers/proposal.md) | W4-E9 Event target providers：先裁决输入预算兼容，再切 TE/DE 两 SPI、durable origin/claim/receipt；Reaction 与完整 E9 留后继。 | Draft |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
