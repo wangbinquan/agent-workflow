@@ -370,6 +370,24 @@ function namedCalls(node: ts.Node, source: ts.SourceFile, name: string): ts.Call
 }
 
 describe('RFC-359 W29 complete unstarted application composition', () => {
+  test('RFC-363 workspace readers reuse each root Task loader and the SC scope without starting effects', () => {
+    // The reviewed a5312d065 delta adds one property to each existing route
+    // binding. Keep the whole-body locks and the cold lifecycle tests below.
+    for (const [source, owner, loader] of [
+      [pg, 'composePostgresqlApplication', 'taskExecutionProvider.routes.tasks.get'],
+      [server, 'composeSqliteApiRouteMounts', 'taskRouteOperations.get'],
+    ] as const) {
+      const calls = namedCalls(functionBody(source, owner), source, 'composeTaskWorkspaceQueries')
+      expect(calls).toHaveLength(1)
+      const call = calls[0]!
+      expect(compact(call, source)).toBe(
+        `composeTaskWorkspaceQueries({load:${loader},contentScope:createWorkspaceContentScope,})`,
+      )
+      expect(ts.isPropertyAssignment(call.parent)).toBe(true)
+      expect(compact(call.parent, source)).toBe(`workspaceQueries:${compact(call, source)}`)
+    }
+  })
+
   test('exports both full unstarted entries while retaining the original daemon and sync entries', () => {
     const names = (source: ts.SourceFile) =>
       source.statements
@@ -564,7 +582,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
       // RFC-360: both runtime route families and config consume the same management instance;
       // the PostgreSQL task runtime reuses core.runtimeRegistry rather than creating another.
-      '284238424a99487bcacb708b6500588c66d86960b1a0a5e5d4c2cb4ae0ee866e',
+      // RFC-363: add only the Task workspace reader binding, verified below.
+      '787e5307948dfd2b694c9c65946247021d4199cd9d44434507439d822418b313',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -735,7 +754,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 判据分别在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts` 与
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
       // RFC-360: config uses the same management application and composition-bound probe fence.
-      'df6644949982ec3b86ed21cedc23e26cd8ed974553f20b001776b54ff3b09dfc',
+      // RFC-363: add only the same-provider Task workspace reader, verified below.
+      '48c744f93860ef1a6ad4b8d8321e39d828e91bc915589a0439c984ea12a001fa',
     )
     expect(
       namedCalls(

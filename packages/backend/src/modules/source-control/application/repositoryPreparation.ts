@@ -69,7 +69,9 @@ export async function prepareRepositoryWorkspace(input: {
   if (row.state === 'resolving') {
     const facts = await readRepositoryPreparationFactsFromJournal(journal, input.source)
     const resolved = await effects.resolveCommits(facts)
-    if (resolved.kind === 'failed') {
+    if (resolved.kind === 'stopped') {
+      await advance('stopped', { diagnosticsJson: resolved.receiptJson })
+    } else if (resolved.kind === 'failed') {
       await advance('failed', {
         failureCode: resolved.safeCode,
         diagnosticsJson: resolved.diagnosticsJson,

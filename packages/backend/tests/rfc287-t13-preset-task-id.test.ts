@@ -12,7 +12,19 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+// RFC-363: the same physical ID allocation now belongs to Source Control.
+const SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'source-control',
+    'infrastructure',
+    'workspaceMaterializer.ts',
+  ),
+  'utf8',
+)
 
 describe('RFC-287 T13 — materializeSpace 的 taskId 可由调用方预定', () => {
   test('签名带可选 presetTaskId，且 id 取「传入 ?? 自铸」', () => {

@@ -3,6 +3,7 @@
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { sha256Hex } from '@/util/hash'
+import { composeRepositoryPreparationParticipant } from '@/modules/source-control/infrastructure/repositoryPreparationParticipant'
 import { prepareRepositoryWorkspace } from '@/modules/source-control/application/repositoryPreparation'
 import type { RepositoryPreparationEffects } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
 import { createRepositoryPreparationJournal } from '@/modules/source-control/infrastructure/repositoryPreparationJournal'
@@ -176,5 +177,44 @@ describeEachProvider('RFC-363 preparation driver durability', (harness) => {
         kind === 'failed' ? 'git failed' : 'completed',
       )
     }
+  })
+  test('a live effect binding checks operation/source, expires, and coalesces concurrent calls', async () => {
+    const f = await fixture()
+    let resolves = 0,
+      physical = 0
+    const owner = composeRepositoryPreparationParticipant({ journal: f.journal })
+    const bound = owner.bindEffect({
+      operation: f.operation,
+      source: f.source,
+      effects: {
+        assertCurrent: async () => {},
+        resolveCommits: async () => {
+          resolves++
+          return { kind: 'resolved', planJson: 'commits' }
+        },
+        materialize: async () => {
+          physical++
+          return { kind: 'prepared', receiptJson: 'workspace' }
+        },
+      },
+    })
+    await expect(
+      owner.participant.prepare(
+        bound.capability,
+        decodeRepositoryLaunchRef('operation', `sc:operation:v1:${ulid()}`),
+        f.source,
+      ),
+    ).rejects.toThrow('repository-preparation-effect-scope-mismatch')
+    const results = await Promise.all(
+      [1, 2, 3].map(() => owner.participant.prepare(bound.capability, f.operation, f.source)),
+    )
+    expect(results[1]).toEqual(results[0])
+    expect(results[2]).toEqual(results[0])
+    expect(resolves).toBe(1)
+    expect(physical).toBe(1)
+    bound.close()
+    await expect(
+      owner.participant.prepare(bound.capability, f.operation, f.source),
+    ).rejects.toThrow('repository-preparation-effect-scope-ended')
   })
 })

@@ -38,6 +38,17 @@ import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 const log = createLogger('task')
 
+/** Physical source/options only. Legacy StartTask callers remain structurally compatible. */
+export interface WorkspaceMaterializationRequest {
+  readonly scratch?: boolean
+  readonly repoUrl?: string
+  readonly cachedRepoId?: string
+  readonly ref?: string
+  readonly repoGroupId?: string
+  readonly sourceTaskId?: string
+  readonly workingBranch?: string
+}
+
 export interface WorkspaceMaterializationDependencies {
   readonly secretBox?: SecretBox
   readonly cloneTimeoutMs?: number
@@ -46,6 +57,7 @@ export interface WorkspaceMaterializationDependencies {
   /** Durable preparation uses the whole frozen set, never a partial refetch. */
   readonly preResolvedSources?: readonly ResolvedRepoSource[]
   readonly frozenLayout?: PlannedSpaceLayout | null
+  readonly worktreeMaterializer?: typeof materializeWorktree
   readonly worktreeLifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
   readonly gitCommitIdentity?: GitCommitIdentity | null
   readonly sourceTerminationLaunchSignal?: AbortSignal
@@ -197,7 +209,9 @@ export type RepoSourceSpec =
   | { cachedRepoId: string; ref?: string }
   | { repoPath: string; baseBranch: string }
 
-export function normalizeStartTaskRepos(input: StartTask): RepoSourceSpec[] {
+export function normalizeStartTaskRepos(
+  input: StartTask | WorkspaceMaterializationRequest,
+): RepoSourceSpec[] {
   // RFC-204: an entry is `repoUrl` XOR `cachedRepoId` (refineRepoSourceFields),
   // but both are optional on the wire type — narrow to the discriminated
   // RepoSourceSpec here so nothing downstream has to re-guess.
@@ -219,7 +233,7 @@ export function normalizeStartTaskRepos(input: StartTask): RepoSourceSpec[] {
 
 export async function resolveRepoSourceSingleWithProvider(
   spec: RepoSourceSpec,
-  input: StartTask,
+  input: StartTask | WorkspaceMaterializationRequest,
   deps: WorkspaceMaterializationDependencies,
 ): Promise<ResolvedRepoSource> {
   if ('repoPath' in spec && spec.repoPath.length > 0) {
@@ -675,6 +689,7 @@ async function materializeGroupSpace(opts: {
   gitUserEmail: string | null
   signal?: AbortSignal
   lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
+  worktreeMaterializer?: typeof materializeWorktree
 }): Promise<MaterializedSpace> {
   const { planned, nodePaths, resolvedSources, taskId, appHome } = opts
   // `resolvedSources` 与 `planned` **同序**（它是按 repoSpecs 逐个 resolve 出来
@@ -748,7 +763,7 @@ async function materializeGroupSpace(opts: {
       }
       const abs = p.mountPath === '' ? groupRoot : join(groupRoot, p.mountPath)
       if (p.mountPath !== '') mkdirSync(join(abs, '..'), { recursive: true })
-      const wt = await materializeWorktree({
+      const wt = await (opts.worktreeMaterializer ?? materializeWorktree)({
         repoPath: src.repoPath,
         baseBranch: src.resolvedCommit ?? src.baseBranch,
         taskId,
@@ -867,7 +882,7 @@ async function materializeGroupSpace(opts: {
 }
 
 export async function materializeSpaceWithProvider(
-  input: StartTask,
+  input: StartTask | WorkspaceMaterializationRequest,
   deps: WorkspaceMaterializationDependencies,
   /**
    * RFC-287 G7 第一刀：让调用方能**先定 id、后物化**。
@@ -1082,6 +1097,9 @@ export async function materializeSpaceWithProvider(
       groupLayout.nodes[0]!.path === ''
     if (!onlyRootRepo) {
       return await materializeGroupSpace({
+        ...(deps.worktreeMaterializer === undefined
+          ? {}
+          : { worktreeMaterializer: deps.worktreeMaterializer }),
         planned: groupPlanned,
         nodePaths: groupLayout.nodes.map((node) => node.path),
         resolvedSources,
@@ -1117,7 +1135,7 @@ export async function materializeSpaceWithProvider(
         { mountPath: '', trackedPath: occupied.trackedPath, ref: selectedRef },
       )
     }
-    const wt = await materializeWorktree({
+    const wt = await (deps.worktreeMaterializer ?? materializeWorktree)({
       repoPath: source.repoPath,
       baseBranch: source.resolvedCommit ?? source.baseBranch,
       taskId,

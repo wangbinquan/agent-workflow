@@ -54,3 +54,13 @@ reader 批 CI 后续发现六个失败分片，归为四项：bootstrap 引用�
 物理 materializer 支持完整 pre-resolved source 集与 frozen group layout，拒绝部分 source 集；物化和 tracked-path 占用检查均使用 resolvedCommit，原 baseBranch 保持展示/Task 投影。真实 Git 测试覆盖分支后移并增加 reserved path 后仍检出旧 commit、live group 不存在后仍重放两 mount 的不同 commits 和目录节点。
 
 `rfc363-preparation-driver.test.ts` 是真实双库 + 注入故障窗口，**不是跨进程 Git 恢复证明**。完整 Git receipt/provenance 恢复、public effect capability、Task 两 lane、生产根仍待后续；T4 不标 Done。上一批已定位的 Task INSERT line oracle 仅更新 `3570 → 2427`，三列完整性断言不改。
+
+## T4 effect / 物理恢复候选（未生产接线）
+
+SC infrastructure 解析冻结事实并沿用原 cache/fetch、Git 物化路径；版本化 private plan 保存 task/path/working branch/identity/完整 source commits 和 layout。journaled materializer 在原 Git lifecycle mutation 前提交 exact branch-before/branch-after/path，逐仓结果继续 checkpoint；重复进入会验证原工作树 identity 并完成剩余步骤，不能从新 branch head 重新准备。
+
+`RepositoryPreparationParticipant` 的唯一 root-owned factory 用 live capability registry 绑定 operation/source 与现 Task fence；registry 不保存恢复结果。重复同进程调用只驱动一次物理效果，关闭后的 scope 不能继续调用。此时生产 Task adapter/根尚未切换，所以 16 项 launch 声明债仍全部保留。
+
+新增 `rfc363-preparation-process-recovery.test.ts`：使用真实 smart HTTP Git、SQLite 文件 / 真 PostgreSQL generation，在 before-add、post-add、working-branch-before-CAS 处等待持久化 checkpoint 后 SIGKILL；新进程读取同一 journal 后恢复。远端分支后移仍读旧 commit、已有目录标记保留、branchBefore 不被 retry 覆盖；对已改变的物化分支返回失败且保留其内容。测试已编写，尚待托管取证；不把测试存在记成验收通过。
+
+取消适配与 journal 补偿、Task repository/pre-materialized admission、全部 roots/legacy 退役仍是剩余 T4/T5/T7 工作；不领取完整 E1/W5。

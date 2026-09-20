@@ -109,7 +109,18 @@ describe('RFC-287 T13 — gitCloneTimeoutMs 接线到启动路径', () => {
   })
 
   test('startTask 把它透传给 resolveCachedRepo（不透传等于配置形同虚设）', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'workspaceMaterializer.ts',
+      ),
+      'utf8',
+    )
     expect(src).toMatch(/cloneTimeoutMs\?: number/)
     expect(src).toMatch(
       /resolveCachedRepo\(\s*\{[\s\S]{0,400}deps\.cloneTimeoutMs !== undefined \? \{ cloneTimeoutMs: deps\.cloneTimeoutMs \}/,

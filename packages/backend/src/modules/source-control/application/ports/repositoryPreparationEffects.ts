@@ -13,7 +13,9 @@ export interface RepositoryPreparationEffects {
   resolveCommits(
     facts: RepositoryPreparationFacts,
   ): Promise<
-    { readonly kind: 'resolved'; readonly planJson: string } | RepositoryPreparationEffectFailure
+    | { readonly kind: 'resolved'; readonly planJson: string }
+    | { readonly kind: 'stopped'; readonly receiptJson: string }
+    | RepositoryPreparationEffectFailure
   >
   materialize(input: {
     readonly planJson: string

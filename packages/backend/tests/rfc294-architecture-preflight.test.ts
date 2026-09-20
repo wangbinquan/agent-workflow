@@ -991,7 +991,8 @@ function capabilityForgeViolations(units: readonly SourceUnit[]): string[] {
           // declarations instead of treating their owner as an external forger.
           (location.context === 'source-control' &&
             location.rest === 'application/ports/repositoryLaunch' &&
-            statement.name.text === 'RepositoryLaunchSnapshotInTx') ||
+            (statement.name.text === 'RepositoryLaunchSnapshotInTx' ||
+              statement.name.text === 'RepositoryPreparationEffectCapability')) ||
           (location.context === 'task-execution' &&
             location.rest === 'application/ports/workspaceLaunch' &&
             statement.name.text === 'WorkspaceReadCapability'))

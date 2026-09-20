@@ -1,5 +1,12 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 物理恢复与 effect capability 候选
+
+上一批已发布 `b6cfd3e5355fd58c161c4531593575e11e7b0084`（Main `35500819972`）；Main 已终态 failure：旧 preset-task-id / clone timeout source guards 仍读 Task 原路径，W29 根装配摘要漏记 reader；本批迁到 SC 真 owner，并为 reader 同实例绑定补精确断言后更新摘要，原生命周期判据保留。
+本批以持久化 worktree intent/result 恢复真实 Git；已建树按 HEAD/branch/common-dir 验证后复用，未附着的已准备分支按原 CAS 凭据继续，改变后的分支报告冲突。SC offered preparation participant 的作用域与同进程 single-flight 已实现，仍未接入 Task 生产启动，launch declared debt 不销账。
+新增真实 SQLite 文件 / PostgreSQL 跨进程 kill-restart tests，包含远端分支后移、已建树标记保留、工作分支 CAS 和外部修改冲突；证据待本批 CI。Task cancel/补偿、两 lane admission/重试、全部根切换与 RFC364 仍需继续，不能标记 RFC363 完成。
+
+
 ## 2026-09-20 RFC-363 固定 commit 与持久化驱动候选
 
 物理 owner/reader 修复批已发布 `5663a01a66a9dde578e651b0ca8408e9758f2bce`，Main `35500245004` 已见一处 Task INSERT 行号 oracle 因物理提取漂移，本批精确同步；尚未全绿。
