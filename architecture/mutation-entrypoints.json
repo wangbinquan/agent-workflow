@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1702,
+    "entries": 1704,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -15516,6 +15516,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/resource-catalog/domain/mcps/runtimeDiagnostics.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/domain/mcps/runtimeDiagnostics.ts#applyPlaygroundVerification",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/domain/mcps/runtimeDiagnostics.ts#applyPlaygroundVerification",
+      "symbol": "applyPlaygroundVerification",
+      "targetContext": "resource-catalog",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/resource-catalog/domain/resourcePackageApplyReceipt.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/domain/resourcePackageApplyReceipt.ts#committedApplyReceiptIssue",
@@ -17606,6 +17631,27 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#saveWorkgroup",
       "symbol": "saveWorkgroup",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#createMcpDiagnosticsEffects",
+      "missingControls": [
+        "audit",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#createMcpDiagnosticsEffects",
+      "symbol": "createMcpDiagnosticsEffects",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -21389,6 +21435,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeKind",
       "symbol": "RuntimeKind",
+      "targetContext": "runtime-management",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeMcpTestEligibilityInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeMcpTestEligibilityInput",
+      "symbol": "RuntimeMcpTestEligibilityInput",
       "targetContext": "runtime-management",
       "targetLayer": "public"
     },
@@ -35515,31 +35586,6 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/mcpRuntimeTest.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/mcpRuntimeTest.ts#applyPlaygroundVerification",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#applyPlaygroundVerification",
-      "symbol": "applyPlaygroundVerification",
-      "targetContext": "runtime-management",
-      "targetLayer": "inbound"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
         "fenceOrOcc": true,
         "transaction": false
       },
@@ -40689,7 +40735,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:09f22085decce69c20f5359dbddb808d18c15c746ebbce7b7cf5c6fe059d7d47",
+  "sourceDigest": "sha256:49af403f4dc6cfcbd91b8cf4b68ab3d7bf11a9da8ffe684daed9845e00497ec4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

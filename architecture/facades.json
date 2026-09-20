@@ -1420,7 +1420,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:06aa1bdf37ab75b19788",
+        "import:6ed5193fb5a6157c46fc",
+        "import:c6e6a5a3f908a35d87cf"
+      ],
       "exportedSymbols": [
         "ClaudeInitObservation",
         "declaredHasContent",
@@ -2153,6 +2157,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:daaff8c447e135323bb2",
         "import:db754ee018f051e986cd"
       ],
       "exportedSymbols": [
@@ -2209,29 +2214,26 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:312fc350e0ada4ad51c5",
-        "import:5eae06720c6150e5cb64",
-        "import:60049d29d60866b8b8de",
-        "import:75a696ee4a4fc9f8066d",
-        "import:7662ac52c9e23327f379",
-        "import:c619d23edeebb3fcb72d",
-        "import:c627b586c75eb0c3f2b0"
+        "import:1b7a84d5e8553ba8659a",
+        "import:45aa3de5d0ff0fc59e6a",
+        "import:51aaccea29330d6f63a2",
+        "import:56b4a64998a74182359b",
+        "import:59e478aa99d3a029690d",
+        "import:68c1f03d7ab22aca75af",
+        "import:6fac3c64358ae0bfa17c",
+        "import:82000244ed5e7b103454",
+        "import:ab67e5078db94f0110a8",
+        "import:aef356f5a91f2519db73",
+        "import:afda18e30aba1b4f7830",
+        "import:b0b6316a31c51d0a68e7",
+        "import:d288fa0740b7f2997d80",
+        "import:d83d28be11f1cb191d5f",
+        "import:f915d14f757425d4986b"
       ],
       "exportedSymbols": [
-        "MCP_RUNTIME_TEST_EVENT_BYTES",
-        "MCP_RUNTIME_TEST_EVENT_ROWS",
-        "MCP_RUNTIME_TEST_IDLE_MS",
-        "MCP_RUNTIME_TEST_MAX_TURNS",
-        "MCP_RUNTIME_TEST_MESSAGE_BYTES",
-        "MCP_RUNTIME_TEST_RECEIPT_MS",
-        "MCP_RUNTIME_TEST_SINGLE_EVENT_BYTES",
-        "MCP_RUNTIME_TEST_TURN_TIMEOUT_MS",
         "McpRuntimeTestDependencies",
-        "McpRuntimeTestEventSink",
         "McpRuntimeTestService",
-        "applyPlaygroundVerification",
-        "getMcpRuntimeTestService",
-        "isRuntimeMcpTestEligible"
+        "getMcpRuntimeTestService"
       ],
       "file": "packages/backend/src/services/mcpRuntimeTest.ts",
       "id": "facade:packages/backend/src/services/mcpRuntimeTest.ts",
@@ -3759,10 +3761,12 @@
         "import:3b0939b8480fceab955a",
         "import:508585b40e2cf04f1432",
         "import:55e8e7319736fc529828",
+        "import:55f7c3a1e3e1628e4302",
         "import:6086843b83980e7f72de",
         "import:6d5a94d223636922c768",
         "import:70fef04c52ff0c283a17",
         "import:933405a99ca17491e5e0",
+        "import:9b40bf959bd20a789e88",
         "import:9b54bbf2ad1b84de8700",
         "import:ed4eeb7ac1111ebf2f6e"
       ],
@@ -4123,8 +4127,11 @@
         "import:2c57d5f26601e387e86e",
         "import:7bd3f93dd694207b26f4",
         "import:878817dd026ba03d55c6",
+        "import:9866049aeb621599bb0f",
         "import:a99307c8c8debf377c51",
+        "import:b2ab14f8e45292d8b3f7",
         "import:d0954856860ecf571010",
+        "import:deaf92636d39c1f1d373",
         "import:f06b8f7e6beb1bea9509",
         "import:fff3516f6ab19099a34d"
       ],
@@ -4488,7 +4495,11 @@
       "boundaryEdgeIds": [
         "import:12d3f0f99705bcfcc7d3",
         "import:44aa22593d2ee03168f2",
-        "import:71ce3d2a59f1295300bb"
+        "import:662345ce19825157d173",
+        "import:71ce3d2a59f1295300bb",
+        "import:8a2fbbee32bdd192466c",
+        "import:91999cb95df7221220ca",
+        "import:aedc4909ee96b32d2e93"
       ],
       "exportedSymbols": [
         "SessionCaptureIncompleteReason",
@@ -5094,13 +5105,20 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:09391e9041070a98f0f6",
         "import:249d06f167e02a472939",
         "import:2711368a4665ccb332af",
         "import:36fa4c83d3ffdf9f5e25",
+        "import:373f2405c35af6cd8dac",
         "import:48b3c18a0fdb0377aa32",
         "import:53e55db700007e9b1478",
+        "import:8d997d1153638cbf6d9e",
         "import:ab9070ad98812d5f5e5a",
-        "import:b46f36cab99cedaaf41c"
+        "import:b32d9d4d60af04eacedc",
+        "import:b46f36cab99cedaaf41c",
+        "import:c5a217a7da3a23f11087",
+        "import:cab426d1510e3863950c",
+        "import:f0f65a17d9689acc396b"
       ],
       "exportedSymbols": [
         "SystemAgentRunOptions",
@@ -6284,5 +6302,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:09f22085decce69c20f5359dbddb808d18c15c746ebbce7b7cf5c6fe059d7d47"
+  "sourceDigest": "sha256:49af403f4dc6cfcbd91b8cf4b68ab3d7bf11a9da8ffe684daed9845e00497ec4"
 }

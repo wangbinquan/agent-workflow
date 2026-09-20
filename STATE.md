@@ -1,5 +1,11 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-364 domain/application/effects 拆分候选
+
+RFC363 补偿批已推送 `4a3b3c5ae05ef93182329bb40a2930eebd48f79b`，Main `35502491149` / Windows `35502491170` 正在执行；尚无最终全绿结论。
+RFC364 MCP diagnostics 的状态/预算纯逻辑、业务编排、事件队列、process/workspace/runtime/clock effects 已分层归位；既有 lease participant 直接消费。RM/config 改用单方法 reconciliation public 合同，eligibility 归 RM driver inspection。
+AST 对拍确认 stream class、8 个纯函数体和 28 个 application 方法体保持一致（包含 start/dispose/pause/resume/shutdown/stop）；effects 适配方法另列证据。HTTP/三个根目前仍用明确 T4/T6 退出的临时 service 构造转发和原 WeakMap，后续必须完成 public commands/queries 与唯一实例切换，不能把本批记成 RFC364 Done。
+
 ## 2026-09-20 RFC-363 可重放补偿候选
 
 恢复批 `97b1e45dec6ede7f5b7c82f4d0d74d824d69b473` 已同步 origin/main；Main `35501905328` 定位三个 TypeScript 推断/可选属性错误，本批显式补齐类型，不改变合同。

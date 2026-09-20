@@ -121,3 +121,9 @@ export interface RuntimeProfileInspection extends RuntimeProfile {
   readonly configDirName: string | null
   readonly probeFence: number
 }
+
+/** Driver inspection facts used by MCP diagnostics; no runtime configuration or executable escapes. */
+export interface RuntimeMcpTestEligibilityInput {
+  readonly protocol: RuntimeKind
+  readonly model: string | null
+}

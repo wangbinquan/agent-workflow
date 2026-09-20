@@ -5454,11 +5454,11 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 9,
-    "entries": 333,
+    "entries": 332,
     "executionLocal": 41,
     "longRunning": 76,
     "managed": 11,
-    "periodic": 207
+    "periodic": 206
   },
   "entries": [
     {
@@ -7635,6 +7635,52 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/askerKey.ts#wgClarifyAskerKeyForRound",
       "phase": "unknown",
       "symbol": "wgClarifyAskerKeyForRound",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$setInterval:62",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setInterval:62",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$setTimeout:58",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:58",
       "targetContext": "resource-catalog"
     },
     {
@@ -11643,75 +11689,6 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/services/mcpRuntimeTest.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/mcpRuntimeTest.ts#$setInterval:549",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setInterval:549",
-      "targetContext": "runtime-management"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/services/mcpRuntimeTest.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/mcpRuntimeTest.ts#$setTimeout:1730",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:1730",
-      "targetContext": "runtime-management"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/services/mcpRuntimeTest.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/mcpRuntimeTest.ts#$setTimeout:588",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:588",
-      "targetContext": "runtime-management"
-    },
-    {
       "dependencies": [],
       "file": "packages/backend/src/services/mcpSurface.ts",
       "finalCriterion": "W9-B registry",
@@ -12800,5 +12777,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:09f22085decce69c20f5359dbddb808d18c15c746ebbce7b7cf5c6fe059d7d47"
+  "sourceDigest": "sha256:49af403f4dc6cfcbd91b8cf4b68ab3d7bf11a9da8ffe684daed9845e00497ec4"
 }

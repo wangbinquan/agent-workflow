@@ -51,7 +51,10 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
   })
 
   test('the readInventory proxy predicate is gone from both consumers', () => {
-    for (const rel of ['services/runner.ts', 'services/mcpRuntimeTest.ts']) {
+    for (const rel of [
+      'services/runner.ts',
+      'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
+    ]) {
       const text = read(rel)
       expect(text, `${rel} still discriminates on readInventory presence`).not.toContain(
         'readInventory !== undefined',
@@ -72,7 +75,10 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
     expect(text).toContain("case 'none':")
     expect(text).toContain("reason: 'runtime-has-no-observation'")
     // 两个消费方都不得再自己判——包括「换个写法判同一件事」。
-    for (const rel of ['services/runner.ts', 'services/mcpRuntimeTest.ts']) {
+    for (const rel of [
+      'services/runner.ts',
+      'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
+    ]) {
       const consumer = read(rel)
       expect(consumer, `${rel} still switches on startupObservation`).not.toContain(
         'switch (caps.startupObservation)',

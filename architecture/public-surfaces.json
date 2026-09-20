@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 872,
+    "consumers": 876,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1066,
+    "methods": 1068,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20940,
-    "symbols": 1008
+    "recursiveFields": 20950,
+    "symbols": 1011
   },
   "entries": [
     {
@@ -100047,6 +100047,69 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:142f338dc3a057d75073",
+        "import:afce3dad676a2269b0c1"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reconcileDurableIntents.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:McpRuntimeTestReconciliationParticipant",
+      "members": [
+        "reconcileDurableIntents"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:142f338dc3a057d75073",
+            "import:afce3dad676a2269b0c1"
+          ],
+          "name": "reconcileDurableIntents",
+          "signatureDigest": "sha256:04680c4b855d2aecd3ac0d338f4964427b0d4225ac8d410420a06c4a6754249c"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpRuntimeTestReconciliationParticipant",
+      "productionConsumers": [
+        {
+          "context": "runtime-management",
+          "edgeId": "import:142f338dc3a057d75073",
+          "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:afce3dad676a2269b0c1",
+          "file": "packages/backend/src/routes/config.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:56630c08b0533895b1e4bb7bf0a6040289e108f14bbd0439a3429664f05ec9e9",
+      "status": "target-context-current-surface",
+      "symbol": "McpRuntimeTestReconciliationParticipant",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:c4d8c93767321125dbaa"
       ],
       "context": "resource-catalog",
@@ -120898,6 +120961,84 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:335cabf05ae6260a399e",
+        "import:d288fa0740b7f2997d80"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:row.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:row.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:row.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:row.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "id": "public:runtime-management:queries:isRuntimeMcpTestEligible",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:5179c4ada0024e8874cded3027be823165015c1a0785de684778403551d793cf"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:335cabf05ae6260a399e",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:d288fa0740b7f2997d80",
+          "file": "packages/backend/src/services/mcpRuntimeTest.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:6db0a4910c32e2b5c842af7747431007d2b5097d31216af0742a74874cc8145f",
+      "status": "target-context-current-surface",
+      "symbol": "isRuntimeMcpTestEligible",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 75,
         "maxUnionVariants": 63
       },
@@ -121649,7 +121790,7 @@
         "maxUnionVariants": 22
       },
       "consumerEdgeIds": [
-        "import:5eae06720c6150e5cb64"
+        "import:bfda56b33dd1a81172e2"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -121693,7 +121834,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5eae06720c6150e5cb64"
+            "import:bfda56b33dd1a81172e2"
           ],
           "fieldPath": "$method:getRuntime.$return.$variant:0.enabled",
           "type": "boolean"
@@ -121710,14 +121851,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5eae06720c6150e5cb64"
+            "import:bfda56b33dd1a81172e2"
           ],
           "fieldPath": "$method:getRuntime.$return.$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:5eae06720c6150e5cb64"
+            "import:bfda56b33dd1a81172e2"
           ],
           "fieldPath": "$method:getRuntime.$return.$variant:0.isSandbox",
           "type": "boolean"
@@ -121744,14 +121885,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5eae06720c6150e5cb64"
+            "import:bfda56b33dd1a81172e2"
           ],
           "fieldPath": "$method:getRuntime.$return.$variant:0.name",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:5eae06720c6150e5cb64"
+            "import:bfda56b33dd1a81172e2"
           ],
           "fieldPath": "$method:getRuntime.$return.$variant:0.probeFence",
           "type": "number"
@@ -121810,7 +121951,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:5eae06720c6150e5cb64"
+            "import:bfda56b33dd1a81172e2"
           ],
           "name": "getRuntime",
           "signatureDigest": "sha256:eb2d68c63720a74f53b372ae6daf8d7d108069b5de0063c58f1276291d080523"
@@ -121819,10 +121960,10 @@
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeProfileInspectionQueries",
       "productionConsumers": [
         {
-          "context": "legacy",
-          "edgeId": "import:5eae06720c6150e5cb64",
-          "file": "packages/backend/src/services/mcpRuntimeTest.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file"
+          "context": "resource-catalog",
+          "edgeId": "import:bfda56b33dd1a81172e2",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -122321,7 +122462,9 @@
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:queries:RuntimeExecutionQueries",
         "public:runtime-management:queries:RuntimeProfileInspectionQueries",
+        "public:runtime-management:queries:isRuntimeMcpTestEligible",
         "public:runtime-management:types:ResolvedRuntimeProfile",
+        "public:runtime-management:types:RuntimeMcpTestEligibilityInput",
         "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeProtocol",
         "public:runtime-management:types:RuntimeView"
@@ -122331,6 +122474,62 @@
       "signatureDigest": "sha256:2c419578a0eebda3aa10898dff55c1e8060f4b0b1dbd841a3f1b73553f6d55d9",
       "status": "target-context-current-surface",
       "symbol": "RuntimeKind",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:1",
+          "type": "'claude-code'"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:RuntimeMcpTestEligibilityInput",
+      "members": [
+        "model",
+        "protocol"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeMcpTestEligibilityInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:queries:isRuntimeMcpTestEligible"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:8417be7c1702f9b384de9d3791ae5842cabb299ab726c989a14deb2ff777c81e",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeMcpTestEligibilityInput",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -122613,7 +122812,7 @@
         "maxUnionVariants": 20
       },
       "consumerEdgeIds": [
-        "import:c619d23edeebb3fcb72d"
+        "import:aa33a49ab70d827e2d0b"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -122651,9 +122850,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:c619d23edeebb3fcb72d"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "enabled",
           "type": "boolean"
         },
@@ -122668,16 +122865,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:c619d23edeebb3fcb72d"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:c619d23edeebb3fcb72d"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "isSandbox",
           "type": "boolean"
         },
@@ -122703,15 +122896,13 @@
         },
         {
           "consumerEdgeIds": [
-            "import:c619d23edeebb3fcb72d"
+            "import:aa33a49ab70d827e2d0b"
           ],
           "fieldPath": "name",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:c619d23edeebb3fcb72d"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "probeFence",
           "type": "number"
         },
@@ -122772,10 +122963,10 @@
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfileInspection",
       "productionConsumers": [
         {
-          "context": "legacy",
-          "edgeId": "import:c619d23edeebb3fcb72d",
-          "file": "packages/backend/src/services/mcpRuntimeTest.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file"
+          "context": "resource-catalog",
+          "edgeId": "import:aa33a49ab70d827e2d0b",
+          "file": "packages/backend/src/modules/resource-catalog/application/mcps/runtimeDiagnosticsEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/runtimeDiagnosticsEffects.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -165085,7 +165276,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:09f22085decce69c20f5359dbddb808d18c15c746ebbce7b7cf5c6fe059d7d47",
+  "sourceDigest": "sha256:49af403f4dc6cfcbd91b8cf4b68ab3d7bf11a9da8ffe684daed9845e00497ec4",
   "targetContexts": [
     "collaboration",
     "development-automation",

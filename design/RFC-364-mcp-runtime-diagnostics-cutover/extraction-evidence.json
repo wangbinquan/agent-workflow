@@ -1,0 +1,225 @@
+{
+  "baseline": "4a3b3c5ae05ef93182329bb40a2930eebd48f79b",
+  "sourceHash": "3cc279e0418d86ad2cf9d089ac008cabf4df16375e8a8a7d01bc36004c9b6e7b",
+  "eventSinkIdentical": true,
+  "pure": [
+    {
+      "name": "stableJson",
+      "identical": true
+    },
+    {
+      "name": "sha256",
+      "identical": true
+    },
+    {
+      "name": "requestDigest",
+      "identical": true
+    },
+    {
+      "name": "ensureMessage",
+      "identical": true
+    },
+    {
+      "name": "canResumeNativeSession",
+      "identical": true
+    },
+    {
+      "name": "assertSessionActor",
+      "identical": false
+    },
+    {
+      "name": "resultTurnStatus",
+      "identical": true
+    },
+    {
+      "name": "applyPlaygroundVerification",
+      "identical": true
+    },
+    {
+      "name": "resultFailureCode",
+      "identical": true
+    }
+  ],
+  "methods": [
+    {
+      "name": "start",
+      "identical": true
+    },
+    {
+      "name": "dispose",
+      "identical": true
+    },
+    {
+      "name": "shutdown",
+      "identical": true
+    },
+    {
+      "name": "pause",
+      "identical": true
+    },
+    {
+      "name": "resume",
+      "identical": true
+    },
+    {
+      "name": "stop",
+      "identical": true
+    },
+    {
+      "name": "installReconcileTimer",
+      "identical": false
+    },
+    {
+      "name": "clearBackgroundTimers",
+      "identical": false
+    },
+    {
+      "name": "drainRunningTurns",
+      "identical": false
+    },
+    {
+      "name": "assertAccepting",
+      "identical": true
+    },
+    {
+      "name": "create",
+      "identical": true
+    },
+    {
+      "name": "createReady",
+      "identical": false
+    },
+    {
+      "name": "message",
+      "identical": false
+    },
+    {
+      "name": "cancel",
+      "identical": false
+    },
+    {
+      "name": "end",
+      "identical": false
+    },
+    {
+      "name": "latest",
+      "identical": true
+    },
+    {
+      "name": "get",
+      "identical": false
+    },
+    {
+      "name": "sessionView",
+      "identical": false
+    },
+    {
+      "name": "invalidateMcp",
+      "identical": true
+    },
+    {
+      "name": "invalidateOwner",
+      "identical": true
+    },
+    {
+      "name": "markMcpConfigChanged",
+      "identical": true
+    },
+    {
+      "name": "markRuntimeProfileChanged",
+      "identical": true
+    },
+    {
+      "name": "invalidateRuntime",
+      "identical": true
+    },
+    {
+      "name": "prepareMcpDelete",
+      "identical": true
+    },
+    {
+      "name": "reconcile",
+      "identical": true
+    },
+    {
+      "name": "reconcileDurableIntents",
+      "identical": true
+    },
+    {
+      "name": "reconcileCore",
+      "identical": true
+    },
+    {
+      "name": "reconcileQuarantinedSessions",
+      "identical": false
+    },
+    {
+      "name": "reconcileExpiredTurns",
+      "identical": true
+    },
+    {
+      "name": "reconcileDurableIntentsCore",
+      "identical": true
+    },
+    {
+      "name": "bootRecover",
+      "identical": false
+    },
+    {
+      "name": "currentMcpHash",
+      "identical": false
+    },
+    {
+      "name": "resolveRuntime",
+      "identical": false
+    },
+    {
+      "name": "requireSession",
+      "identical": true
+    },
+    {
+      "name": "project",
+      "identical": true
+    },
+    {
+      "name": "broadcastSession",
+      "identical": false
+    },
+    {
+      "name": "enqueue",
+      "identical": true
+    },
+    {
+      "name": "drain",
+      "identical": true
+    },
+    {
+      "name": "executeTurn",
+      "identical": false
+    },
+    {
+      "name": "loadMcpForRun",
+      "identical": true
+    },
+    {
+      "name": "failBeforeRun",
+      "identical": true
+    },
+    {
+      "name": "settleTurn",
+      "identical": true
+    },
+    {
+      "name": "invalidateSession",
+      "identical": true
+    },
+    {
+      "name": "finishEndingSession",
+      "identical": false
+    },
+    {
+      "name": "scheduleIdleTimer",
+      "identical": false
+    }
+  ]
+}

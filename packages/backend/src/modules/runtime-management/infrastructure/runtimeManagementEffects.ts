@@ -4,7 +4,8 @@ import { createRuntimeRegistryApplication } from '../application/runtimeRegistry
 import { createRuntimeRegistryEffects } from './runtimeRegistryEffects'
 import { withRuntimeProbeConfigFence } from './runtimeProbeFence'
 import { smokeRuntime, type SmokeOptions, type SmokeResult } from '@/services/runtimeSmoke'
-import { isRuntimeMcpTestEligible, type McpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import type { McpRuntimeTestReconciliationParticipant } from '@/modules/resource-catalog/public/participants'
+import { isRuntimeMcpTestEligible } from './mcpTestEligibility'
 import type { RuntimeManagementDependencies } from '../application/ports/runtimeManagement'
 
 export interface RuntimeDiagnosticDependencies {
@@ -15,7 +16,7 @@ export interface RuntimeDiagnosticDependencies {
 
 export function createRuntimeManagementEffects(input: {
   readonly configPath: string
-  readonly runtimeTests: Pick<McpRuntimeTestService, 'reconcileDurableIntents'>
+  readonly runtimeTests: McpRuntimeTestReconciliationParticipant
   readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
 }): Omit<RuntimeManagementDependencies, 'registry'> {
   const { assertRuntimeSpawnCapabilities } = createRuntimeRegistryApplication(

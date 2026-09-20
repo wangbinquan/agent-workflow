@@ -70,7 +70,8 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
   })
 
   test('runtime-test leases are injected and awaited through the provider-neutral participant', () => {
-    const runtimeTest = source('services/mcpRuntimeTest.ts')
+    const runtimeTest = source('modules/resource-catalog/application/mcps/runtimeDiagnostics.ts')
+    const stream = source('modules/resource-catalog/application/mcps/runtimeTestEventSink.ts')
 
     expect(runtimeTest).toContain('leaseOperations: McpRuntimeTestLeaseOperations')
     expect(runtimeTest).toContain('loadMcp: (mcpId: string) => Promise<Mcp | null>')
@@ -78,16 +79,12 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     expect(runtimeTest).not.toContain('McpServiceBinding')
     expect(runtimeTest).not.toContain('this.deps.mcp.catalog')
     expect(runtimeTest).not.toContain('getMcpById(this.deps.db')
-    for (const operation of [
-      'claimNewMcpRuntimeTestSessionLease',
-      'preclaimMcpRuntimeTestSessionLease',
-      'rotateMcpRuntimeTestSessionLease',
-      'releaseMcpRuntimeTestSessionLease',
-      'repairMcpRuntimeTestSessionLeaseAfterReap',
-    ]) {
-      expect(runtimeTest, operation).toContain(`await ${operation}(`)
-      expect(runtimeTest, operation).not.toContain(`${operation}(this.deps.db`)
+    for (const operation of ['claimNew', 'preclaim', 'rotate', 'release', 'repairAfterReap']) {
+      expect(runtimeTest, operation).toContain(`await this.deps.leaseOperations.${operation}(`)
+      expect(runtimeTest, operation).not.toContain(
+        `this.deps.leaseOperations.${operation}(this.deps.db`,
+      )
     }
-    expect(runtimeTest).toContain('previousSessionId?: string,\n    ) => Promise<void>')
+    expect(stream).toContain('previousSessionId?: string,\n    ) => Promise<void>')
   })
 })

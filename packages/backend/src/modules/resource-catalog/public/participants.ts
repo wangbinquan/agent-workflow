@@ -317,3 +317,8 @@ export interface RuntimeProfileTestInvalidationInTx<Transaction> {
     },
   ): Promise<void>
 }
+
+/** RFC-364: post-commit invalidation reconciliation, shared with the one diagnostics lifecycle. */
+export interface McpRuntimeTestReconciliationParticipant {
+  reconcileDurableIntents(): Promise<void>
+}

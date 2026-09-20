@@ -68,3 +68,5 @@ export interface RuntimeExecutionQueries {
 export interface RuntimeProfileInspectionQueries {
   getRuntime(name: string): Promise<RuntimeProfileInspection | null>
 }
+
+export { isRuntimeMcpTestEligible } from '../infrastructure/mcpTestEligibility'

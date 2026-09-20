@@ -9,7 +9,7 @@ import { registerRoute } from '@/routes/registry'
 import type { RuntimeProtocol } from '@/modules/runtime-management/public/types'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { ValidationError } from '@/util/errors'
-import type { McpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import type { McpRuntimeTestReconciliationParticipant } from '@/modules/resource-catalog/public/participants'
 import { notifyConfigApplied } from '@/services/configAppliedListeners'
 import { configureLogger } from '@/util/log'
 
@@ -33,7 +33,7 @@ export interface ConfigRouteDependencies {
   readonly configPath: string
   readonly runtimeRegistry: RuntimeProfileConfigurationCommands
   readonly withRuntimeProbeConfigFence: <T>(operation: () => Promise<T>) => Promise<T>
-  readonly runtimeTests: Pick<McpRuntimeTestService, 'reconcileDurableIntents'>
+  readonly runtimeTests: McpRuntimeTestReconciliationParticipant
   readonly concurrencyHotApply: ConfigConcurrencyHotApplyCommand
 }
 
