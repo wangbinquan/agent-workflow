@@ -1,5 +1,12 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 固定 commit 与持久化驱动候选
+
+物理 owner/reader 修复批已发布 `5663a01a66a9dde578e651b0ca8408e9758f2bce`，Main `35500245004` 已见一处 Task INSERT 行号 oracle 因物理提取漂移，本批精确同步；尚未全绿。
+SC application driver 先落 concrete commit JSON 再执行物化，物理 checkpoint 用同一 operation version CAS；重放读取 durable operation，不用进程结果 Map。物化机制支持冻结 group layout/完整 source 集与 concrete commits，同时保留原 baseBranch 显示和占用校验语义。
+新增双库驱动故障窗口及真实 Git 分支移动/组缺失测试；目前仅为候选基础，完整物理 crash recovery、公开 effect capability 和 Task 启动接线仍未完成，不注销 launch 声明。RFC364 继续待实施；RFC365 保持 T1 范围。
+
+
 
 ## 2026-09-20 RFC-363 T4 物理 owner 归位候选
 

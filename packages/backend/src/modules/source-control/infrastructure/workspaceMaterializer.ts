@@ -43,6 +43,10 @@ export interface WorkspaceMaterializationDependencies {
   readonly cloneTimeoutMs?: number
   readonly internalSource?: { kind: 'local-path'; repoPath: string; baseBranch: string }
   readonly preResolvedSource?: ResolvedRepoSource
+  /** Durable preparation uses the whole frozen set, never a partial refetch. */
+  readonly preResolvedSources?: readonly ResolvedRepoSource[]
+  readonly frozenLayout?: PlannedSpaceLayout | null
+  readonly worktreeLifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
   readonly gitCommitIdentity?: GitCommitIdentity | null
   readonly sourceTerminationLaunchSignal?: AbortSignal
   readonly workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
@@ -160,6 +164,8 @@ export async function materializeWorktree(opts: {
 export interface ResolvedRepoSource {
   repoPath: string
   baseBranch: string | undefined
+  /** First concrete commit persisted by the preparation operation; display keeps baseBranch. */
+  resolvedCommit?: string
   /** RAW source URL — may carry credentials. Redact before logging/persisting. */
   repoUrl: string | null
   /** RFC-204: the cached mirror this resolved to (deterministic ref key). */
@@ -668,6 +674,7 @@ async function materializeGroupSpace(opts: {
   gitUserName: string | null
   gitUserEmail: string | null
   signal?: AbortSignal
+  lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
 }): Promise<MaterializedSpace> {
   const { planned, nodePaths, resolvedSources, taskId, appHome } = opts
   // `resolvedSources` 与 `planned` **同序**（它是按 repoSpecs 逐个 resolve 出来
@@ -704,7 +711,7 @@ async function materializeGroupSpace(opts: {
         ...kids.map((c) => (p.mountPath === '' ? c : c.slice(p.mountPath.length + 1))),
       ]
       const src = orderedPairs[i]!.src
-      const ref = src.baseBranch ?? 'HEAD'
+      const ref = src.resolvedCommit ?? src.baseBranch ?? 'HEAD'
       const hit = await findTrackedPathUnderMounts(src.repoPath, ref, rels)
       if (hit !== null) {
         if (hit.mountRel === PLATFORM_WORKSPACE_DIR) {
@@ -743,7 +750,7 @@ async function materializeGroupSpace(opts: {
       if (p.mountPath !== '') mkdirSync(join(abs, '..'), { recursive: true })
       const wt = await materializeWorktree({
         repoPath: src.repoPath,
-        baseBranch: src.baseBranch,
+        baseBranch: src.resolvedCommit ?? src.baseBranch,
         taskId,
         appHome,
         overrideWorktreePath: abs,
@@ -753,6 +760,7 @@ async function materializeGroupSpace(opts: {
         gitUserName: opts.gitUserName,
         gitUserEmail: opts.gitUserEmail,
         ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+        ...(opts.lifecycleHook === undefined ? {} : { lifecycleHook: opts.lifecycleHook }),
       })
       if (wt.cleanup !== null) cleanup.worktrees.push(wt.cleanup)
       if (wt.earlyError !== null) {
@@ -995,6 +1003,10 @@ export async function materializeSpaceWithProvider(
   }
 
   const groupLayout: PlannedSpaceLayout | null = await (async () => {
+    if (deps.frozenLayout !== undefined)
+      return deps.frozenLayout === null
+        ? null
+        : assertNonEmptyLayout(deps.frozenLayout, 'frozen preparation')
     if (typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0) {
       const layout = await resolveRepoGroupLayout(deps.repositoryWorkspace, input.repoGroupId)
       return assertNonEmptyLayout(
@@ -1028,14 +1040,18 @@ export async function materializeSpaceWithProvider(
   // RFC-066: per-repo source resolution. Each spec independently runs
   // path-mode opt-in fetch (RFC-068) or URL-mode FF; warnings collected per
   // repo and surfaced after materialization.
+  if (deps.preResolvedSources !== undefined && deps.preResolvedSources.length !== repoSpecs.length)
+    throw new Error('repository-preparation-source-count-mismatch')
   const resolvedSources: ResolvedRepoSource[] = []
   for (const [i, spec] of repoSpecs.entries()) {
     // RFC-107: reuse the route's pre-resolved source for the single repo so a
     // URL is cloned/resolved exactly once across the route → startTask handoff.
     const r =
-      deps.preResolvedSource !== undefined && repoSpecs.length === 1 && i === 0
-        ? deps.preResolvedSource
-        : await resolveRepoSourceSingleWithProvider(spec, input, deps)
+      deps.preResolvedSources !== undefined
+        ? deps.preResolvedSources[i]!
+        : deps.preResolvedSource !== undefined && repoSpecs.length === 1 && i === 0
+          ? deps.preResolvedSource
+          : await resolveRepoSourceSingleWithProvider(spec, input, deps)
     if (r.pathFetchError !== null) {
       log.warn('rfc068/path-fetch-failed', {
         repoPath: r.repoPath,
@@ -1072,6 +1088,9 @@ export async function materializeSpaceWithProvider(
         taskId,
         appHome,
         ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+        ...(deps.worktreeLifecycleHook === undefined
+          ? {}
+          : { lifecycleHook: deps.worktreeLifecycleHook }),
         gitUserName: deps.gitCommitIdentity?.name ?? null,
         gitUserEmail: deps.gitCommitIdentity?.email ?? null,
         ...(deps.sourceTerminationLaunchSignal !== undefined
@@ -1087,7 +1106,7 @@ export async function materializeSpaceWithProvider(
   // this comment so a future refactor cannot silently delete the branch.
   if (repoSpecs.length === 1) {
     const source = resolvedSources[0]!
-    const selectedRef = source.baseBranch ?? 'HEAD'
+    const selectedRef = source.resolvedCommit ?? source.baseBranch ?? 'HEAD'
     const occupied = await findTrackedPathUnderMounts(source.repoPath, selectedRef, [
       PLATFORM_WORKSPACE_DIR,
     ])
@@ -1100,9 +1119,12 @@ export async function materializeSpaceWithProvider(
     }
     const wt = await materializeWorktree({
       repoPath: source.repoPath,
-      baseBranch: source.baseBranch,
+      baseBranch: source.resolvedCommit ?? source.baseBranch,
       taskId,
       appHome,
+      ...(deps.worktreeLifecycleHook === undefined
+        ? {}
+        : { lifecycleHook: deps.worktreeLifecycleHook }),
       // RFC-075: working branch (task-level) + identity for the merge commit.
       ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
       gitUserName: deps.gitCommitIdentity?.name ?? null,

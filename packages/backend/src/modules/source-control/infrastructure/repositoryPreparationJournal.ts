@@ -97,6 +97,24 @@ export function createRepositoryPreparationJournal(
         )
       return row
     },
+    async checkpoint(input) {
+      const rows = await db
+        .update(scPreparationOperations)
+        .set({
+          diagnosticsJson: input.evidenceJson,
+          version: input.expectedVersion + 1,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(scPreparationOperations.id, input.id),
+            eq(scPreparationOperations.version, input.expectedVersion),
+            eq(scPreparationOperations.state, 'materializing'),
+          ),
+        )
+        .returning()
+      return rows[0] ?? null
+    },
     async advance(input) {
       if (!canAdvanceRepositoryPreparation(input.from, input.to))
         throw new ConflictError(

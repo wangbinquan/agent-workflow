@@ -46,3 +46,11 @@ SC 全量枚举并按原 comparator 加稳定 tie-break 排序，再切 offset �
 下一步将 concrete commit 集与物化前 provenance 记录到 operation，再接 Task launch/preparation/retry/cancel；当前只完成物理 owner 归位，跨进程 effect receipt 恢复仍未实现。
 
 reader 批 CI 后续发现六个失败分片，归为四项：bootstrap 引用需经 composition、route 缺失依赖顺序和覆盖、三条已消费 contract ledger 基线未缩小、5004 项真实目录测试在 5 秒内反复枚举 37 次超时。本批逐项修复；目录仍全量排序后分页，测试减少重复页数并给真实 FS 场景显式 30 秒预算。Windows `35499425753` 已 success，但不能代替 Main 全绿。
+
+## T4 固定 commits 与 application driver 候选
+
+私有 driver 在 operation 进入 materializing 前持久化完整 commits JSON；SC Git adapter 尚待装配。materializing 内进度单独作 version CAS，只更新 evidence，不能覆盖初始 commits/成功 receipt。重建 repository 后按 durable 状态跳过 resolve，prepared/failed/stopped 返回原引用；每个外部效果和落库前后均沿用调用方 Task fence 检验，不新增 SC lease。
+
+物理 materializer 支持完整 pre-resolved source 集与 frozen group layout，拒绝部分 source 集；物化和 tracked-path 占用检查均使用 resolvedCommit，原 baseBranch 保持展示/Task 投影。真实 Git 测试覆盖分支后移并增加 reserved path 后仍检出旧 commit、live group 不存在后仍重放两 mount 的不同 commits 和目录节点。
+
+`rfc363-preparation-driver.test.ts` 是真实双库 + 注入故障窗口，**不是跨进程 Git 恢复证明**。完整 Git receipt/provenance 恢复、public effect capability、Task 两 lane、生产根仍待后续；T4 不标 Done。上一批已定位的 Task INSERT line oracle 仅更新 `3570 → 2427`，三列完整性断言不改。

@@ -45,6 +45,13 @@ export interface RepositoryPreparationJournal {
     readonly snapshotRef: string
     readonly now: number
   }): Promise<RepositoryPreparationRecord>
+  /** Physical progress only; version CAS never replaces the frozen commit set or receipt. */
+  checkpoint(input: {
+    readonly id: string
+    readonly expectedVersion: number
+    readonly now: number
+    readonly evidenceJson: string
+  }): Promise<RepositoryPreparationRecord | null>
   advance(input: {
     readonly id: string
     readonly expectedVersion: number
