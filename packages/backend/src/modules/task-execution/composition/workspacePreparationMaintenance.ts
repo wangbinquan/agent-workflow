@@ -1,10 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskWorkspacePreparations } from '@/db/schema'
-import type {
-  WorkspaceMaintenanceCommand,
-  WorkspaceClaimFinalizationCommand,
-} from '@/modules/source-control/public/commands'
+import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/public/commands'
 import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 import {
   compensatePreMaterializedRepository,
@@ -16,17 +13,13 @@ const log = createLogger('workspace-preparation-maintenance')
 const MIN_AGE_MS = 24 * 60 * 60 * 1000
 
 /** Runs inside the existing workspace orphan job. It never schedules new work. */
-export function composeWorkspacePreparationMaintenance<
-  T extends
-    | WorkspaceMaintenanceCommand
-    | (WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand),
->(input: {
+export function composeWorkspacePreparationMaintenance(input: {
   db: ProviderNeutralDatabase
   appHome: string
   repositoryPreparation: TaskRepositoryPreparationBinding
-  maintenance: T
-}): T {
-  return Object.freeze({
+  maintenance: WorkspaceMaintenanceCommand
+}): WorkspaceMaintenanceCommand {
+  return Object.freeze<WorkspaceMaintenanceCommand>({
     ...input.maintenance,
     async runGcPhase(request: Parameters<WorkspaceMaintenanceCommand['runGcPhase']>[0]) {
       if (request.phase !== 'orphan') return input.maintenance.runGcPhase(request)
@@ -73,5 +66,5 @@ export function composeWorkspacePreparationMaintenance<
         skipped: receipt.skipped + plans.length - removed,
       }
     },
-  }) as T
+  })
 }

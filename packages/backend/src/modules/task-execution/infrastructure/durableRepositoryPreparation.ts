@@ -1,3 +1,4 @@
+import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -19,6 +20,7 @@ export async function admitDeferredRepositoryPreparation(input: {
   cachedRepoId: string | null
   repoGroupId: string | null
   base: string
+  sealedSource?: SealedPublicRepositorySourceRef
 }) {
   const now = Date.now()
   const scope = input.binding.snapshot({
@@ -31,6 +33,7 @@ export async function admitDeferredRepositoryPreparation(input: {
       cachedRepoId: input.cachedRepoId,
       repoGroupId: input.repoGroupId,
       base: input.base,
+      ...(input.sealedSource === undefined ? {} : { sealedSource: input.sealedSource }),
     }
     const source = await scope.participant.resolveAuthorized(
       input.authority,

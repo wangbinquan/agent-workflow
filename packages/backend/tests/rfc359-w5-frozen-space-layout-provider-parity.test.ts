@@ -47,6 +47,9 @@ describeEachProvider('RFC-359 —— 冻结空间布局的重放拒绝在两个�
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc359-frozen-layout-'))
     roots.push(appHome)
     const materializer = createTaskWorkspaceMaterializer({
+      sourceContexts: () => {
+        throw new Error('legacy materializer must not seal a request source')
+      },
       repositoryPreparation: composeRepositoryPreparation({
         db: harness.db as never,
         appHome: appHome,

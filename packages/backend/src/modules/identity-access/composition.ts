@@ -93,6 +93,8 @@ class RuntimePresenceConnections implements PresenceConnectionTracker {
 }
 
 export interface IdentityAccessRuntime {
+  /** Root-only context for an already admitted Task preparation subcommand. */
+  readonly taskPreparationContext: DirectOperationContextFactory['forTaskPreparation']
   readonly contexts: DirectCommandContextFactory & DirectQueryContextFactory
   readonly directAuthority: DirectAuthorityAdmission & DirectAuthorityBinding
   /** Composition-only local CLI participant; not an HTTP/MCP authority mint. */
@@ -198,6 +200,7 @@ function buildIdentityAccessRuntime(
 
   const runtime: IdentityAccessRuntime = Object.freeze({
     contexts: publicContexts,
+    taskPreparationContext: contexts.forTaskPreparation.bind(contexts),
     directAuthority,
     localOperator: new LocalOperatorContextFactory(resolveAuthority, contexts),
     delegatedRequests,

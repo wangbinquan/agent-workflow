@@ -1,5 +1,11 @@
+import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
+import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
+export { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 import { preparePreMaterializedRepository } from './preMaterializedRepositoryWorkspace'
-import type { RequestAuthority } from '@/modules/identity-access/public/participants'
+import type {
+  IdempotentCommandContext,
+  RequestAuthority,
+} from '@/modules/identity-access/public/participants'
 import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
 import {
   admitDeferredRepositoryPreparation,
@@ -9,8 +15,6 @@ import {
 import {
   redactGitUrl,
   type GitCommitIdentity,
-  type PlannedDirectoryNode,
-  type PlannedRepo,
   type SpaceKind,
   type StartTask,
 } from '@agent-workflow/shared'
@@ -18,7 +22,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
-import { taskRepos, taskSpaceNodes, tasks } from '@/db/schema'
+import { tasks } from '@/db/schema'
 import { composePostgresqlRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { ensureCachedRepoIdentity } from '@/services/gitRepoCache'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
@@ -26,11 +30,9 @@ import {
   cleanupMaterializedSpace,
   commitMaterializedSpace,
   materializeSpaceWithProvider,
-  type PlannedSpaceLayout,
   type WorkspaceCleanupHookEvent,
   type WorkspaceCleanupReport,
 } from '@/services/task'
-import { ValidationError } from '@/util/errors'
 import type {
   TaskRoutePreparedWorkspace,
   TaskRouteWorkspaceParticipant,
@@ -38,6 +40,7 @@ import type {
 } from './taskRouteLaunchOperations'
 
 export interface TaskRouteWorkspaceDependencies {
+  readonly sourceContexts: (authority: RequestAuthority, taskId: string) => IdempotentCommandContext
   readonly db: ProviderNeutralDatabase
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly appHome: string
@@ -70,69 +73,6 @@ export interface TaskWorkspacePreparation {
  * repository-preparation retry. Authorization remains at the calling use case. */
 export interface TaskWorkspaceMaterializer {
   prepare(input: TaskWorkspacePreparation): Promise<TaskRoutePreparedWorkspace>
-}
-
-function minimalNodePaths(mountPaths: readonly string[]): string[] {
-  const paths = new Map<string, string>([['', '']])
-  for (const mountPath of mountPaths) {
-    let current = ''
-    for (const segment of mountPath.split('/').filter(Boolean)) {
-      current = current === '' ? segment : `${current}/${segment}`
-      paths.set(current.toLowerCase(), current)
-    }
-  }
-  const depth = (path: string) => path.split('/').filter(Boolean).length
-  return [...paths.values()].sort(
-    (left, right) => depth(left) - depth(right) || left.localeCompare(right),
-  )
-}
-
-export async function loadFrozenSpaceLayout(
-  db: ProviderNeutralDatabase,
-  sourceTaskId: string,
-): Promise<PlannedSpaceLayout> {
-  const rows = await db
-    .select()
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, sourceTaskId))
-    .orderBy(taskRepos.repoIndex)
-  if (rows.length === 0) {
-    throw new ValidationError(
-      'source-task-not-replayable',
-      `task '${sourceTaskId}' has no frozen repo snapshot to relaunch from`,
-    )
-  }
-  const repos: PlannedRepo[] = []
-  for (const row of rows) {
-    if (row.cachedRepoId === null || row.cachedRepoId.length === 0) {
-      throw new ValidationError(
-        'source-task-not-replayable',
-        `task '${sourceTaskId}' has a repo with no cached mirror id; its space cannot be replayed`,
-      )
-    }
-    repos.push({
-      cachedRepoId: row.cachedRepoId,
-      repoUrlRedacted: row.repoUrl ?? '',
-      ref: row.baseBranch,
-      subdir: row.subdir,
-      mountPath: row.mountPath,
-      readonly: row.readonly,
-      viaGroups: [],
-    })
-  }
-  const frozenNodes = await db
-    .select({ path: taskSpaceNodes.nodePath })
-    .from(taskSpaceNodes)
-    .where(eq(taskSpaceNodes.taskId, sourceTaskId))
-  const paths =
-    frozenNodes.length > 0
-      ? frozenNodes.map((row) => row.path)
-      : minimalNodePaths(repos.map((repo) => repo.mountPath))
-  const depth = (path: string) => path.split('/').filter(Boolean).length
-  const nodes: PlannedDirectoryNode[] = paths
-    .sort((left, right) => depth(left) - depth(right) || left.localeCompare(right))
-    .map((path) => ({ path, origins: [] }))
-  return { repos, nodes }
 }
 
 function persistedSpaceKind(kind: SpaceKind): TaskRoutePreparedWorkspace['spaceKind'] {
@@ -196,19 +136,32 @@ async function prepareDeferredWorkspace(
   dependencies: TaskRouteWorkspaceDependencies,
   store: ReturnType<typeof composePostgresqlRepositoryWorkspaceStore>,
   input: TaskWorkspacePreparation,
-): Promise<TaskRoutePreparedWorkspace> {
+): Promise<
+  TaskRoutePreparedWorkspace & { readonly sealedSource: SealedPublicRepositorySourceRef | null }
+> {
   const task = input.task
   let cachedRepoId: string | null = null
+  let sealedSource: SealedPublicRepositorySourceRef | null = null
   if (typeof task.repoUrl === 'string' && task.repoUrl.length > 0) {
-    const identity = await ensureCachedRepoIdentity(
-      {
-        store,
-        appHome: dependencies.appHome,
-        ...(dependencies.secretBox === undefined ? {} : { secretBox: dependencies.secretBox }),
-      },
-      { url: task.repoUrl },
-    )
-    cachedRepoId = identity.cachedRepoId
+    if (input.authority !== undefined) {
+      sealedSource = await dependencies.repositoryPreparation.sourceSeal.seal(
+        dependencies.sourceContexts(input.authority, input.taskId),
+        { url: task.repoUrl, ...(task.ref === undefined ? {} : { requestedRef: task.ref }) },
+      )
+      cachedRepoId = await dependencies.repositoryPreparation.sealedIdentity(sealedSource)
+    } else {
+      // Pre-journal retry fixtures have no request authority; production launch
+      // always supplies the root's admitted authority and source context factory.
+      const identity = await ensureCachedRepoIdentity(
+        {
+          store,
+          appHome: dependencies.appHome,
+          ...(dependencies.secretBox === undefined ? {} : { secretBox: dependencies.secretBox }),
+        },
+        { url: task.repoUrl },
+      )
+      cachedRepoId = identity.cachedRepoId
+    }
   } else if (typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0) {
     // 以 `cachedRepoId` 启动时它**本身就是身份**，直接落到占位行——漏掉这一支，
     // warm fetch 失败后点「重试准备」会撞 `repo-prep-source-unavailable`。
@@ -219,6 +172,7 @@ async function prepareDeferredWorkspace(
   const repoGroupName =
     repoGroupId === null ? null : (await resolveRepoGroupLayout(store, repoGroupId)).groupName
   return Object.freeze({
+    sealedSource,
     taskId: input.taskId,
     kind: 'single' as const,
     spaceKind: 'remote' as const,
@@ -254,7 +208,23 @@ export function createTaskWorkspaceMaterializer(
   return Object.freeze({
     async prepare(input: TaskWorkspacePreparation) {
       if (deferralApplies(input)) {
-        return await prepareDeferredWorkspace(dependencies, store, input)
+        const workspace = await prepareDeferredWorkspace(dependencies, store, input)
+        const authority = input.authority
+        if (authority === undefined) throw new Error('deferred-launch-authority-missing')
+        return Object.freeze({
+          ...workspace,
+          admit: (transaction: ProviderNeutralDatabase) =>
+            admitDeferredRepositoryPreparation({
+              transaction,
+              binding: dependencies.repositoryPreparation,
+              authority,
+              taskId: input.taskId,
+              cachedRepoId: workspace.cachedRepoId,
+              repoGroupId: workspace.repoGroupId,
+              base: workspace.baseBranch,
+              ...(workspace.sealedSource === null ? {} : { sealedSource: workspace.sealedSource }),
+            }),
+        })
       }
       const synchronous =
         input.authority !== undefined &&
@@ -262,8 +232,9 @@ export function createTaskWorkspaceMaterializer(
         typeof (input.task as { sourceTaskId?: unknown }).sourceTaskId !== 'string'
           ? await prepareDeferredWorkspace(dependencies, store, input)
           : null
+      const sourceTaskId = input.task.sourceTaskId
       const artifact =
-        synchronous === null || input.authority === undefined
+        input.authority === undefined || (synchronous === null && sourceTaskId === undefined)
           ? null
           : await preparePreMaterializedRepository({
               db: dependencies.db,
@@ -271,9 +242,13 @@ export function createTaskWorkspaceMaterializer(
               authority: input.authority,
               taskId: input.taskId,
               appHome: dependencies.appHome,
-              cachedRepoId: synchronous.cachedRepoId,
-              repoGroupId: synchronous.repoGroupId,
-              base: synchronous.baseBranch,
+              cachedRepoId: synchronous?.cachedRepoId ?? null,
+              repoGroupId: synchronous?.repoGroupId ?? null,
+              base: synchronous?.baseBranch ?? '',
+              ...(synchronous?.sealedSource == null
+                ? {}
+                : { sealedSource: synchronous.sealedSource }),
+              ...(sourceTaskId === undefined ? {} : { sourceTaskId }),
               gitCommitIdentity: input.gitCommitIdentity,
               ...(input.task.workingBranch === undefined
                 ? {}
@@ -401,20 +376,7 @@ export function createTaskRouteWorkspaceParticipant(
           ? {}
           : { sourceTerminationSignal: input.sourceTerminationSignal }),
       })
-      if (!deferralApplies(input)) return workspace
-      return Object.freeze({
-        ...workspace,
-        admit: (transaction: ProviderNeutralDatabase) =>
-          admitDeferredRepositoryPreparation({
-            transaction,
-            binding: dependencies.repositoryPreparation,
-            authority: input.authority,
-            taskId: input.taskId,
-            cachedRepoId: workspace.cachedRepoId,
-            repoGroupId: workspace.repoGroupId,
-            base: workspace.baseBranch,
-          }),
-      })
+      return workspace
     },
   })
 }

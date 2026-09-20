@@ -1840,6 +1840,7 @@ function composeFallbackDevelopmentAutomation(
     deps.identityAccess,
   )
   const hostTaskLaunch = composeHostTaskLaunchKernel({
+    sourceContexts: deps.identityAccess.taskPreparationContext,
     repositoryPreparation: composeRepositoryPreparation({
       db: deps.db,
       appHome: appHome,
@@ -2802,6 +2803,7 @@ function composeSqliteApiRouteMounts(
             resources: identityAccess.taskExecutionResources,
           }),
           launch: composeHostTaskLaunchKernel({
+            sourceContexts: identityAccess.taskPreparationContext,
             repositoryPreparation: composeRepositoryPreparation({
               db: deps.db,
               appHome: appHome,
@@ -2950,6 +2952,7 @@ function composeSqliteApiRouteMounts(
     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
     agent: agentLaunchResources,
     routeWorkspace: {
+      sourceContexts: identityAccess.taskPreparationContext,
       appHome,
       secretBox: deps.secretBox,
       repositoryPreparation: composeRepositoryPreparation({

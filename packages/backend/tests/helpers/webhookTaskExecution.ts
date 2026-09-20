@@ -67,6 +67,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
     },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),
     routeWorkspace: {
+      sourceContexts: input.identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
         db: input.db,
         appHome: appHome,

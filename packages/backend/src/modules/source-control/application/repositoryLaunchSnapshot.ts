@@ -1,4 +1,6 @@
 import {
+  type PlannedRepo,
+  type PlannedDirectoryNode,
   canonicalJson,
   flattenRepoGroup,
   RepoGroupLayoutError,
@@ -158,10 +160,7 @@ export function createRepositoryLaunchSnapshot(input: {
         'repository-version-changed',
         'repository source configuration changed before admission',
       )
-    const base =
-      source.kind === 'repository'
-        ? source.base
-        : (sealedFacts!.requestedRef ?? repository.defaultBranch ?? 'HEAD')
+    const base = source.kind === 'repository' ? source.base : (sealedFacts!.requestedRef ?? '')
     return {
       version: 1,
       kind: 'repository',
@@ -230,6 +229,43 @@ export function createRepositoryLaunchSnapshot(input: {
     close() {
       closed = true
       liveParticipants.delete(participant)
+    },
+    /** The Task owner supplies its historical layout in the same live transaction.
+     * This deliberately does not read the editable group definition. */
+    async frozenLayout(layout: {
+      readonly repos: readonly PlannedRepo[]
+      readonly nodes: readonly PlannedDirectoryNode[]
+    }): Promise<FrozenRepositoryPreparationRef> {
+      assertLive()
+      const repositories = []
+      for (const id of [...new Set(layout.repos.map((repo) => repo.cachedRepoId))])
+        repositories.push(repositoryFact(await row(id)))
+      const factsJson = repositoryPreparationFactsJson({
+        version: 1,
+        kind: 'repository-group',
+        repositories,
+        groups: [],
+        groupName: null,
+        layout: { repos: [...layout.repos], nodes: [...layout.nodes] },
+      })
+      const revision = `sha256:${sha256Hex(factsJson)}`
+      const sealed = await journal.seal({
+        id: `sc:source:v1:${ulid()}`,
+        requestKey: `frozen-task-layout:${revision}`,
+        requestDigest: revision,
+        kind: 'repository-group',
+        factsJson,
+        createdAt: input.now,
+      })
+      const frozen = await journal.freeze({
+        id: `sc:preparation:v1:${ulid()}`,
+        sourceRef: sealed.id,
+        revision,
+        factsJson,
+        createdAt: input.now,
+      })
+      assertLive()
+      return decodeRepositoryLaunchRef('preparation', frozen.id)
     },
     async currentRepository(id: string): Promise<VersionedRepositoryRef> {
       const current = await row(id)

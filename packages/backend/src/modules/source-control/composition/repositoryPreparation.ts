@@ -1,3 +1,5 @@
+import { createPublicRepositorySourceSeal } from '../infrastructure/publicRepositorySourceSeal'
+import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
@@ -11,7 +13,11 @@ import { composeRepositoryPreparationParticipant } from '../infrastructure/repos
 import { createRepositoryPreparationEffects } from '../infrastructure/repositoryPreparationEffects'
 import { composeRepositoryWorkspaceStore } from '../infrastructure/repositoryWorkspaceStore'
 import { cleanupRepositoryWorkspace } from '../application/repositoryPreparationCleanup'
-import type { FrozenRepositoryPreparationRef, RepositoryLaunchSource } from '../public/types'
+import type {
+  FrozenRepositoryPreparationRef,
+  RepositoryLaunchSource,
+  SealedPublicRepositorySourceRef,
+} from '../public/types'
 import type {
   MaterializedSpace,
   WorkspaceCleanupReport,
@@ -29,6 +35,16 @@ export function composeRepositoryPreparation(input: {
   const journal = createRepositoryPreparationJournal(input.db)
   const driver = composeRepositoryPreparationParticipant({ journal })
   return {
+    sourceSeal: createPublicRepositorySourceSeal({
+      db: input.db,
+      appHome: input.appHome,
+      ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
+    }),
+    async sealedIdentity(reference: SealedPublicRepositorySourceRef): Promise<string> {
+      const source = await journal.source(reference)
+      if (source === null) throw new Error('repository-source-unavailable')
+      return SealedRepositorySourceFactsSchema.parse(JSON.parse(source.factsJson)).cachedRepoId
+    },
     snapshot(request: {
       transaction: ProviderNeutralDatabase
       authority: RequestAuthority
@@ -44,11 +60,15 @@ export function composeRepositoryPreparation(input: {
       const inTx = createRepositoryPreparationJournal(request.transaction)
       return {
         participant: scope.participant,
+        frozenLayout: scope.frozenLayout,
         async source(selector: {
           cachedRepoId: string | null
           repoGroupId: string | null
           base: string
+          sealedSource?: SealedPublicRepositorySourceRef
         }): Promise<RepositoryLaunchSource> {
+          if (selector.sealedSource !== undefined)
+            return { kind: 'sealed-public-repository', source: selector.sealedSource }
           if (selector.repoGroupId !== null)
             return {
               kind: 'repository-group',

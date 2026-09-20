@@ -96,6 +96,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
     }),
     workgroup: composeWorkgroupLaunchResourceOperations({ db, integrity: integrity.launch }),
     routeWorkspace: {
+      sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({ db: db, appHome: appHome }),
       appHome,
     },

@@ -1676,11 +1676,7 @@ interface PublicSurfaceEntry {
 
 /** RFC-362 preparation only. Remove each exact ID when its approved successor
  * supplies a real production provider/callsite; type references are not cutover credit. */
-export const RFC362_DECLARED_PUBLIC_CONTRACT_IDS: readonly string[] = [
-  'public:source-control:participants:PublicRepositorySourceSealPort',
-  'public:source-control:types:SealedPublicRepositorySourceRef',
-  'public:source-control:types:PublicRepositorySourceInput',
-]
+export const RFC362_DECLARED_PUBLIC_CONTRACT_IDS: readonly string[] = []
 
 function publicSurfaceLifecycle(
   location: {

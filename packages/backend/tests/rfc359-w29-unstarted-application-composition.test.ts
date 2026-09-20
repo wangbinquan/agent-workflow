@@ -370,6 +370,26 @@ function namedCalls(node: ts.Node, source: ts.SourceFile, name: string): ts.Call
 }
 
 describe('RFC-359 W29 complete unstarted application composition', () => {
+  test('RFC-363 URL preparation uses the existing root IA authority context factory', () => {
+    for (const [source, expected] of [
+      [pg, 1],
+      [server, 3],
+      [parse('src/cli/start.ts'), 2],
+    ] as const) {
+      const bindings = descendants(
+        source,
+        (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'sourceContexts',
+      )
+      expect(bindings).toHaveLength(expected)
+      for (const node of bindings) {
+        expect([
+          'sourceContexts:identityAccess.taskPreparationContext',
+          'sourceContexts:deps.identityAccess.taskPreparationContext',
+        ]).toContain(compact(node, source))
+      }
+    }
+  })
+
   test('RFC-363 workspace readers reuse each root Task loader and the SC scope without starting effects', () => {
     // The reviewed a5312d065 delta adds one property to each existing route
     // binding. Keep the whole-body locks and the cold lifecycle tests below.
@@ -586,7 +606,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
       // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
-      '39f0c0064cd3a193874fc34c567c1ff652b0101b3d6af691ba41475833c3756b',
+      '2b6f16a61930c42bb37107c2445d06d4889f443b9c3f27ac1f618de35aa33d87',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -764,7 +784,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
       // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
-      '2ed0a61dc50acb16247ac4dfd9bb8c424f9f5ca14d7c529d6e1fdeb0f6dde7c4',
+      'fc88b76c225dd80b6c1e3ca85b8850fb16607e3b1c0738947f3799a85c7462ba',
     )
     expect(
       namedCalls(

@@ -237,6 +237,7 @@ export async function createEachProviderTaskExecution(
             integrity: unusedCapability('agent route launch integrity'),
           },
           routeWorkspace: {
+            sourceContexts: identityAccess.taskPreparationContext,
             appHome,
             repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
           },
@@ -374,6 +375,7 @@ export async function createEachProviderTaskExecution(
         workgroup: unusedCapability('workgroup route resources'),
       },
       routeWorkspace: {
+        sourceContexts: identityAccess.taskPreparationContext,
         appHome,
         repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
       },

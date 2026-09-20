@@ -7,10 +7,7 @@ import { ulid } from 'ulid'
 import { cachedRepos, repoGroups, repoGroupNodes, tasks } from '@/db/schema'
 import { admitDaemonIdentity } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import type {
-  IdempotentCommandContext,
-  ValidatedIdempotencyKey,
-} from '@/modules/identity-access/public/participants'
+import { trustedContextMetadata } from '@/modules/identity-access/application/operationContext'
 import { repositoryPreparationRevision } from '@/modules/source-control/domain/repositoryPreparationFacts'
 import { createPublicRepositorySourceSeal } from '@/modules/source-control/infrastructure/publicRepositorySourceSeal'
 import {
@@ -27,7 +24,8 @@ afterEach(() => {
 
 describeEachProvider('RFC-363 durable source facts', (harness) => {
   async function fixture() {
-    const identity = await admitDaemonIdentity(createIdentityAccessRuntime({ db: harness.db }))
+    const identityAccess = createIdentityAccessRuntime({ db: harness.db })
+    const identity = await admitDaemonIdentity(identityAccess)
     if (identity === null) throw new Error('daemon identity missing')
     const { authority } = identity
     const root = mkdtempSync(join(tmpdir(), 'rfc363-source-'))
@@ -66,7 +64,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
         }
       })
     }
-    return { identity, root, repository, scope }
+    return { identity, identityAccess, root, repository, scope }
   }
 
   test('configuration revision excludes cache paths and fetch telemetry', async () => {
@@ -201,25 +199,29 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
   test('new seal factory replays the same durable source without creating a mirror or Task', async () => {
     const f = await fixture()
     const input = { db: harness.db, appHome: join(f.root, 'home') }
-    const context: IdempotentCommandContext = {
-      authority: f.identity.authority,
-      operationId: ulid(),
-      correlationId: ulid(),
-      now: 1,
-      idempotencyKey: ulid() as ValidatedIdempotencyKey,
-    }
+    const launchId = ulid()
+    const context = f.identityAccess.taskPreparationContext(f.identity.authority, launchId)
+    const replayContext = f.identityAccess.taskPreparationContext(f.identity.authority, launchId)
+    expect(context.authority).toBe(f.identity.authority)
+    expect(replayContext.idempotencyKey).toBe(context.idempotencyKey)
+    expect(replayContext.operationId).not.toBe(context.operationId)
+    expect(context.correlationId).toBe(launchId)
+    expect(trustedContextMetadata(context)).toEqual({
+      source: 'task-execution',
+      transport: 'delegated',
+    })
+    expect(
+      f.identityAccess.taskPreparationContext(f.identity.authority, ulid()).idempotencyKey,
+    ).not.toBe(context.idempotencyKey)
     const source = {
       kind: 'url' as const,
       url: 'https://example.test/sealed.git',
       requestedRef: 'release',
     }
     const reference = await createPublicRepositorySourceSeal(input).seal(context, source)
-    expect(
-      await createPublicRepositorySourceSeal(input).seal(
-        { ...context, operationId: ulid(), now: 2 },
-        source,
-      ),
-    ).toBe(reference)
+    expect(await createPublicRepositorySourceSeal(input).seal(replayContext, source)).toBe(
+      reference,
+    )
     await expect(
       createPublicRepositorySourceSeal(input).seal(context, { ...source, requestedRef: 'changed' }),
     ).rejects.toMatchObject({ code: 'repository-source-request-mismatch' })

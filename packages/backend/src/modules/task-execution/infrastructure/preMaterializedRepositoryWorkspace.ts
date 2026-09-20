@@ -1,3 +1,5 @@
+import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
+import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -117,6 +119,8 @@ export async function preparePreMaterializedRepository(input: {
   cachedRepoId: string | null
   repoGroupId: string | null
   base: string
+  sealedSource?: SealedPublicRepositorySourceRef
+  sourceTaskId?: string
   workingBranch?: string
   gitCommitIdentity: GitCommitIdentity | null
   signal: AbortSignal
@@ -149,16 +153,22 @@ export async function preparePreMaterializedRepository(input: {
           cachedRepoId: input.cachedRepoId,
           repoGroupId: input.repoGroupId,
           base: input.base,
+          ...(input.sealedSource === undefined ? {} : { sealedSource: input.sealedSource }),
         }
-        const source = await scope.participant.resolveAuthorized(
-          input.authority,
-          await scope.source(selector),
-        )
+        const source =
+          input.sourceTaskId === undefined
+            ? await scope.participant.resolveAuthorized(
+                input.authority,
+                await scope.source(selector),
+              )
+            : await scope.frozenLayout(await loadFrozenSpaceLayout(tx, input.sourceTaskId))
         const operation = await scope.plan(source)
         await journal.prepare({
           id: input.taskId,
           admissionKey: `${preMaterializedAdmissionPrefix(input.appHome)}${input.taskId}`,
-          requestDigest: sha256Hex(JSON.stringify(selector)),
+          requestDigest: sha256Hex(
+            JSON.stringify({ ...selector, sourceTaskId: input.sourceTaskId ?? null }),
+          ),
           lane: 'pre-materialized',
           operationRef: operation,
           ownerFence: 0,

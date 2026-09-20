@@ -218,6 +218,9 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     const appHome = await mkdtemp(join(tmpdir(), 'rfc349-workspace-pg-'))
     try {
       const materializer = createTaskWorkspaceMaterializer({
+        sourceContexts: () => {
+          throw new Error('legacy materializer must not seal a request source')
+        },
         repositoryPreparation: composeRepositoryPreparation({ db: fixture.db, appHome: appHome }),
         db: fixture.db,
         appHome,

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1807,
+    "backendFiles": 1808,
     "frontendFiles": 622,
     "legacyFiles": 548,
-    "moduleFiles": 1259,
-    "productionFiles": 2584,
+    "moduleFiles": 1260,
+    "productionFiles": 2585,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24784
+    "symbolsIncludingFileRoots": 24785
   },
   "entries": [
     {
@@ -130415,6 +130415,42 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frozenWorkspaceLayout.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/frozenWorkspaceLayout.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frozenWorkspaceLayout.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/frozenWorkspaceLayout.ts#loadFrozenSpaceLayout",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "loadFrozenSpaceLayout",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frozenWorkspaceLayout.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/frozenWorkspaceLayout.ts#minimalNodePaths",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "minimalNodePaths",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#$file",
       "removeAfterWave": null,
@@ -137416,30 +137452,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "deferralApplies",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#loadFrozenSpaceLayout",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "loadFrozenSpaceLayout",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#minimalNodePaths",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "minimalNodePaths",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -298130,5 +298142,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2141b7175600eff067ff418c10a1cfa914621d2334e740d1eecdbf6471d99eaf"
+  "sourceDigest": "sha256:3d1903fc12867e3a40ed5c41fd5d46c33bf52a28cbf629aab9ee4a97f9cb82aa"
 }

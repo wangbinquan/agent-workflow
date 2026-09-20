@@ -41,6 +41,7 @@ import {
 import {
   tasks,
   workflows,
+  scRepositorySources,
   scRepositorySnapshots,
   scPreparationOperations,
   taskExecutionOwners,
@@ -93,6 +94,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       .values({ id: workflowId, name: workflowId, definition: JSON.stringify(definition) })
     const binding = composeRepositoryPreparation({ db: harness.db, appHome })
     const workspace = createTaskRouteWorkspaceParticipant({
+      sourceContexts: identityAccess.taskPreparationContext,
       db: harness.db,
       appHome,
       repositoryPreparation: binding,
@@ -161,7 +163,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
         signal,
       }
     }
-    return { appHome, kernel, request, submitted, effect, workspace, binding }
+    return { appHome, kernel, request, submitted, effect, workspace, binding, identityAccess }
   }
   test('Task admission atomically creates the frozen source and unmaterialized plan', async () => {
     const f = await fixture()
@@ -367,6 +369,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     expect(activeTaskIdsSnapshot()).toContain(taskId)
     writeFileSync(join(first.worktreePath, 'uploaded.txt'), 'before admission')
     const rebound = createTaskRouteWorkspaceParticipant({
+      sourceContexts: f.identityAccess.taskPreparationContext,
       db: harness.db,
       appHome: f.appHome,
       repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: f.appHome }),
@@ -374,6 +377,16 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     const replay = await rebound.prepare(input)
     expect(replay.worktreePath).toBe(first.worktreePath)
     expect(readFileSync(join(replay.worktreePath, 'uploaded.txt'), 'utf8')).toBe('before admission')
+    const sources = await harness.db.select().from(scRepositorySources)
+    expect(sources).toHaveLength(1)
+    expect(sources[0]?.kind).toBe('public-url')
+    const operations = await harness.db.select().from(scPreparationOperations)
+    expect(operations).toHaveLength(1)
+    const snapshots = await harness.db.select().from(scRepositorySnapshots)
+    expect(snapshots).toHaveLength(1)
+    expect(snapshots[0]?.sourceRef).toBe(sources[0]!.id)
+    expect(JSON.parse(snapshots[0]!.factsJson).layout.repos[0].ref).toBe('')
+
     const gcInputs: string[][] = []
     const maintenance = composeWorkspacePreparationMaintenance({
       db: harness.db,
@@ -443,5 +456,62 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       'admitted',
     )
     expect(materializingSpaces.has(task.id)).toBe(false)
+  }, 60_000)
+  test('sourceTaskId freezes the Task layout even after its live group is emptied', async () => {
+    const f = await fixture()
+    const identityTask = await f.kernel().launch(f.request)
+    const cachedRepoId = (
+      await harness.db.select().from(tasks).where(eq(tasks.id, identityTask.id))
+    )[0]!.cachedRepoId!
+    const groupId = ulid()
+    await harness.db
+      .insert(repoGroups)
+      .values({ id: groupId, name: 'replay-source-group', version: 1, createdAt: 1, updatedAt: 1 })
+    await harness.db.insert(repoGroupNodes).values([
+      { groupId, path: '', attachmentKind: null },
+      { groupId, path: 'code', attachmentKind: 'repo', cachedRepoId, ref: 'main' },
+      { groupId, path: 'docs', attachmentKind: null },
+    ])
+    const source = await f.kernel().launch({
+      ...f.request,
+      deferRepoPreparation: false,
+      task: StartTaskSchema.parse({
+        workflowId: f.request.task.workflowId,
+        name: 'source',
+        repoGroupId: groupId,
+        inputs: {},
+      }),
+    })
+    await harness.db.delete(repoGroupNodes).where(eq(repoGroupNodes.groupId, groupId))
+    await harness.db
+      .update(repoGroups)
+      .set({ version: 2, name: 'edited-empty-group' })
+      .where(eq(repoGroups.id, groupId))
+    const replay = await f.kernel().launch({
+      ...f.request,
+      task: StartTaskSchema.parse({
+        workflowId: f.request.task.workflowId,
+        name: 'replay',
+        sourceTaskId: source.id,
+        inputs: {},
+      }),
+    })
+    expect(replay.status).toBe('pending')
+    expect(readFileSync(join(replay.worktreePath, 'code', 'README.md'), 'utf8')).toBe(
+      'frozen source\n',
+    )
+    expect(existsSync(join(replay.worktreePath, 'docs'))).toBe(true)
+    const plan = await createWorkspacePreparationJournal(harness.db).forTask(replay.id)
+    expect(plan).toMatchObject({ state: 'admitted', lane: 'pre-materialized' })
+    const operation = await createRepositoryPreparationJournal(harness.db).operation(
+      plan!.operationRef!,
+    )
+    const frozen = await createRepositoryPreparationJournal(harness.db).snapshot(
+      operation!.snapshotRef,
+    )
+    expect(
+      JSON.parse(frozen!.factsJson).layout.nodes.map((node: { path: string }) => node.path),
+    ).toEqual(['', 'code', 'docs'])
+    expect(existsSync(source.worktreePath)).toBe(true)
   }, 60_000)
 })

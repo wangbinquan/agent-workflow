@@ -247,12 +247,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
     id: 'public:source-control:participants:RepositoryTransportCredentialSelectionParticipant',
     removeAfterWave: 'W5',
   },
-  // RFC-363: deferred admission and preparation now consume the two offered seams.
-  // Public URL sealing still awaits its production command-scope binding.
-  {
-    id: 'public:source-control:participants:PublicRepositorySourceSealPort',
-    removeAfterWave: 'W4-E1/W5',
-  },
   { id: 'public:source-control:participants:WorkspaceExcludeParticipant', removeAfterWave: 'W5' },
   {
     id: 'public:source-control:queries:OwnRepositoryTransportCredentialQueries',

@@ -101,3 +101,11 @@ Main `35503125522`（`cb2ce5b566b754683505338c1e1979963e894051`）的 Ubuntu sha
 前批 `c610e30db` Main `35505842902` 已定位测试夹具漏装真实 RC resource binding、两个 action-host fixture 缺 authority、legacy Task 越界读取三个 private imports，以及 C2/declaration 两项计数未缩小。本批修正真实装配，legacy 调用复用已有 `taskDriveLegacy` 组合入口，未增加边界豁免；计数收至 137 / 3，原行为断言保留。
 
 同一 Main 的 Ubuntu shard 1 / macOS shard 1 另报 AC-9 source anchor 仍要求 `prepared = await materializeSpace`。本批同时钉住循环内的 durable 调用和旧任务 fallback，成功退出、分类器顺序、窗口与退避断言原样保留。
+
+## T3/T5 公共来源封存与来源任务重放候选
+
+公共 URL 的同步及 deferred 启动使用实际 PublicRepositorySourceSealPort。IA 在 composition-only Task subcommand 工厂中保留已入场 authority，以预分配 Task ID 构造稳定 idempotency key；Task 不手铸 context。三个生产根与 host launch 显式接线，同一启动重建 adapter 复用同一 source/snapshot/operation，空 ref 仍在 fetch 后解析默认分支。最后三个 RFC362 声明债与 source seal 的零 consumer 债按实际生产接线注销；这不等于 T7/T8 验收。
+
+sourceTaskId 同步重放在 Task 短事务中读取来源任务保存的 task_repos/task_space_nodes，交 SC 冻结完整布局及当前缓存配置，随后走同一 pre-materialized durable driver。live group 的编辑/删除不影响原节点与 mount；旧无节点记录仍保留原 minimalNodePaths fallback。新增真实双库 kernel/Git、空目录、组变更和 source receipt 重用断言；context 测试使用真实 IA 工厂。
+
+`cc65514a3` Main `35506721647` 的 lint/typecheck 报 GC 泛型强制返回 T 不成立；两个 C2 分片报泛型冗余 union 使 WorkspaceClaimFinalizationCommand 被算作 consumer。本批把 GC 包装面收回实际消费的 WorkspaceMaintenanceCommand，删除无用泛型和断言；原 finalize 功能继续由既有 owner 实现，未领取该合同消费信用。源 seal 真实接线后 C2 基线为 136，RFC362 声明基线为 0。scratch/call/fusion/DE、T7 facade/lane 收口、Task/upload 跨进程窗口和最终托管验收继续待完成。

@@ -230,16 +230,13 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     )
   })
 
-  test('RFC-363 workspace reader and deferred launch are active while URL sealing remains explicit debt', () => {
+  test('RFC-363 reader, launch and public URL seal have production consumers', () => {
     const surfaces = generated.publicSurfaces.entries as Array<Record<string, unknown>>
-    const offered = surfaces.filter((entry) => entry.status === 'declared-contract-debt')
-    expect(offered).toHaveLength(3)
-    expect(
-      offered.every(
-        (entry) =>
-          entry.removeAfterWave === 'W4-E1/W5' && entry.plannedConsumer === 'task-execution',
-      ),
-    ).toBe(true)
+    expect(surfaces.filter((entry) => entry.status === 'declared-contract-debt')).toEqual([])
+    const seal = surfaces.find(
+      (entry) => entry.id === 'public:source-control:participants:PublicRepositorySourceSealPort',
+    )!
+    expect((seal.productionConsumers as unknown[]).length).toBeGreaterThan(0)
     const ports = generated.crossContextImports.requiredPorts as Array<Record<string, unknown>>
     const port = ports.find((entry) => entry.id === 'required:task-execution:TaskWorkspaceReadPort')
     expect(port).toMatchObject({
@@ -251,9 +248,10 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     const missing = (missingOwner.publicSurfaces.entries as Array<Record<string, unknown>>).find(
       (entry) => entry.id === 'public:source-control:participants:PublicRepositorySourceSealPort',
     )!
-    missing.removeAfterWave = null
+    ;(missing.productionConsumers as Array<Record<string, unknown>>)[0]!.ownerEntryId =
+      'owner:does-not-exist'
     expect(validateCanonicalArtifacts(missingOwner)).toContain(
-      'missing RFC-362 declared contract debt: public:source-control:participants:PublicRepositorySourceSealPort',
+      'missing public consumer owner: public:source-control:participants:PublicRepositorySourceSealPort',
     )
   })
 

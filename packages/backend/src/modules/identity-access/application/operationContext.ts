@@ -284,6 +284,24 @@ export class DirectOperationContextFactory
     )
   }
 
+  /** Composition-only Task subcommand: preserve the admitted authority and use
+   * the already allocated launch ID as its durable source-preparation key. */
+  forTaskPreparation(authority: RequestAuthority, taskId: string): IdempotentCommandContext {
+    const part = durableAttemptPart(taskId)
+    const operationId = this.deps.id()
+    return this.registry.mintContext<IdempotentCommandContext>(
+      {
+        authority,
+        operationId,
+        correlationId: taskId,
+        causationId: taskId,
+        now: this.deps.now(),
+        idempotencyKey: JSON.stringify(['task-repository-source', part]) as ValidatedIdempotencyKey,
+      },
+      { source: 'task-execution', transport: 'delegated' },
+    )
+  }
+
   queryFromAuthority(authority: DirectRequestAuthority, transport: DirectTransport): QueryContext {
     const claim = this.registry.directClaim(authority)
     const operationId = this.deps.id()

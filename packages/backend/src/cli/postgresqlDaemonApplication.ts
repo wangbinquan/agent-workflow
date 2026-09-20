@@ -977,6 +977,7 @@ export async function composePostgresqlApplication(
     },
     rootResumeRuntime: () => ({ runConfig: currentRunConfig() }),
     routeWorkspace: {
+      sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
         db: input.db,
         appHome: input.appHome,

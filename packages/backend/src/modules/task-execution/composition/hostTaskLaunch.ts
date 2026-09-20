@@ -18,9 +18,13 @@ import {
   type RootTaskLaunchDependencies,
   type RootTaskLaunchKernel,
 } from '../infrastructure/taskRouteLaunchOperations'
-import { createTaskRouteWorkspaceParticipant } from '../infrastructure/taskRouteWorkspaceParticipant'
+import {
+  type TaskRouteWorkspaceDependencies,
+  createTaskRouteWorkspaceParticipant,
+} from '../infrastructure/taskRouteWorkspaceParticipant'
 
 export interface HostTaskLaunchKernelDependencies {
+  readonly sourceContexts: TaskRouteWorkspaceDependencies['sourceContexts']
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
@@ -41,6 +45,7 @@ export function composeHostTaskLaunchKernel(
     gitCommitIdentity: input.gitCommitIdentity,
     workspace: createTaskRouteWorkspaceParticipant({
       db: input.db,
+      sourceContexts: input.sourceContexts,
       repositoryPreparation: input.repositoryPreparation,
       appHome: input.appHome,
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),

@@ -1064,6 +1064,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
             integrity: agentIntegrity.launch,
           }),
           routeWorkspace: {
+            sourceContexts: identityAccess2.taskPreparationContext,
             repositoryPreparation: composeRepositoryPreparation({ db: db2, appHome: home }),
             appHome: home,
           },

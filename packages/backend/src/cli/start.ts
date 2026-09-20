@@ -1910,6 +1910,7 @@ async function composeSqliteProviderSession(
           integrity: agentResourceIntegrity.launch,
         }),
         routeWorkspace: {
+          sourceContexts: identityAccess.taskPreparationContext,
           appHome: Paths.root,
           secretBox,
           repositoryPreparation: composeRepositoryPreparation({
@@ -2562,6 +2563,7 @@ async function composeSqliteProviderSession(
       identityAccess,
     )
     const hostTaskLaunch = composeHostTaskLaunchKernel({
+      sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
         db: db,
         appHome: Paths.root,

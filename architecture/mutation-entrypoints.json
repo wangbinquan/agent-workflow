@@ -21984,15 +21984,14 @@
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
-        "transaction": false
+        "transaction": true
       },
       "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshot",
       "missingControls": [
         "audit",
-        "event",
-        "transaction"
+        "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshot",
       "symbol": "createRepositoryLaunchSnapshot",
@@ -29325,7 +29324,7 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
-        "transaction": true
+        "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
       "finalCriterion": "W3/W4 owner cutover",
@@ -29335,7 +29334,8 @@
         "authority",
         "authorization",
         "event",
-        "fenceOrOcc"
+        "fenceOrOcc",
+        "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#createTaskRouteWorkspaceParticipant",
       "symbol": "createTaskRouteWorkspaceParticipant",
@@ -29349,7 +29349,7 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
-        "transaction": false
+        "transaction": true
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
       "finalCriterion": "W3/W4 owner cutover",
@@ -29359,8 +29359,7 @@
         "authority",
         "authorization",
         "event",
-        "fenceOrOcc",
-        "transaction"
+        "fenceOrOcc"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#createTaskWorkspaceMaterializer",
       "symbol": "createTaskWorkspaceMaterializer",
@@ -40853,7 +40852,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2141b7175600eff067ff418c10a1cfa914621d2334e740d1eecdbf6471d99eaf",
+  "sourceDigest": "sha256:3d1903fc12867e3a40ed5c41fd5d46c33bf52a28cbf629aab9ee4a97f9cb82aa",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

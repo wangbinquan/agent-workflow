@@ -116,6 +116,7 @@ export function createTestTaskExecutionLaunchParticipant(
     agent: { resources: composeAgentLaunchResourceOperations({ db: input.db }), integrity },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),
     routeWorkspace: {
+      sourceContexts: composeIdentityAccess(input.db).taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
         db: input.db,
         appHome: input.appHome,

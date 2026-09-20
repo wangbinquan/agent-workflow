@@ -86,7 +86,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
       repository: { id: row.id, revision: repositoryRevision(stored) },
       base: files.base,
     }
-    return { ...files, row: stored, source, identity, options, contract }
+    return { ...files, row: stored, source, identity, options, contract, runtime }
   }
   async function frozen(f: Awaited<ReturnType<typeof fixture>>) {
     return f.contract.withSnapshot((snapshot) =>
@@ -297,6 +297,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
   test('current materializer keeps repository deferral distinct from pre-materialized scratch', async () => {
     const f = await fixture()
     const materializer = createTaskWorkspaceMaterializer({
+      sourceContexts: f.runtime.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
         db: harness.db,
         appHome: f.options.appHome,
@@ -305,6 +306,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
       appHome: f.options.appHome,
     })
     const deferred = await materializer.prepare({
+      authority: f.identity.authority,
       taskId: ulid(),
       task: { workflowId: 'oracle', name: 'deferred', inputs: {}, cachedRepoId: f.row.id },
       gitCommitIdentity: null,
