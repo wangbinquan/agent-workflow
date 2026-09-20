@@ -398,14 +398,18 @@ export function createWorkspaceMaintenanceCommand(input: {
     return { scanned: taskIds.length, removed, skipped }
   }
 
-  async function runScratch(now: number): Promise<WorkspaceGcReceipt> {
+  async function runScratch(now: number, active: ReadonlySet<string>): Promise<WorkspaceGcReceipt> {
     const directories = filesystem.listScratchDirectories()
     if (directories.length === 0) return emptyReceipt()
     const anchored = await store.anchoredTaskIds(directories.map(({ taskId }) => taskId))
     let removed = 0
     let skipped = 0
     for (const directory of directories) {
-      if (anchored.has(directory.taskId) || filesystem.isMaterializingTask(directory.taskId)) {
+      if (
+        active.has(directory.taskId) ||
+        anchored.has(directory.taskId) ||
+        filesystem.isMaterializingTask(directory.taskId)
+      ) {
         skipped += 1
         continue
       }
@@ -528,7 +532,7 @@ export function createWorkspaceMaintenanceCommand(input: {
         case 'iso':
           return await runIso(gcInput, now)
         case 'scratch':
-          return await runScratch(now)
+          return await runScratch(now, new Set(gcInput.activeTaskIds))
         case 'orphan':
           return await runOrphan(now, new Set(gcInput.activeTaskIds))
         case 'partial': {

@@ -1,3 +1,4 @@
+import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
@@ -212,42 +213,6 @@ afterEach(() => {
 })
 
 describe('RFC-349 PostgreSQL repository preparation', () => {
-  test('production workspace materializer returns a real rollback lease', async () => {
-    selectDatabaseSchemaProvider('postgresql')
-    const fixture = postgresqlFixture([])
-    const appHome = await mkdtemp(join(tmpdir(), 'rfc349-workspace-pg-'))
-    try {
-      const materializer = createTaskWorkspaceMaterializer({
-        sourceContexts: () => {
-          throw new Error('legacy materializer must not seal a request source')
-        },
-        repositoryPreparation: composeRepositoryPreparation({ db: fixture.db, appHome: appHome }),
-        db: fixture.db,
-        appHome,
-      })
-      const prepared = await materializer.prepare({
-        taskId: 'task-scratch',
-        task: {
-          workflowId: 'workflow-1',
-          name: 'Scratch workspace',
-          inputs: {},
-          scratch: true,
-        },
-        gitCommitIdentity: { name: 'Owner', email: 'owner@example.test' },
-      })
-
-      expect(prepared.kind).toBe('scratch')
-      expect(prepared.earlyError).toBeNull()
-      expect(prepared.repositories).toHaveLength(1)
-      expect(existsSync(prepared.worktreePath)).toBe(true)
-      const report = await prepared.rollback()
-      expect(report.complete).toBe(true)
-      expect(existsSync(prepared.worktreePath)).toBe(false)
-    } finally {
-      await rm(appHome, { recursive: true, force: true })
-    }
-  })
-
   test('commits the real workspace projection and continuation before drive', async () => {
     selectDatabaseSchemaProvider('postgresql')
     const trace: string[] = []
@@ -387,5 +352,41 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     expect(`${workspace}\n${retry}`).not.toContain("from '@/db/client'")
     expect(`${workspace}\n${retry}`).not.toContain('createSqlite')
     expect(`${workspace}\n${retry}`).not.toContain('as DbClient')
+  })
+})
+
+describeEachProvider('RFC-363 real-provider scratch rollback lease', (harness) => {
+  test('production workspace materializer returns a real rollback lease', async () => {
+    const appHome = await mkdtemp(join(tmpdir(), 'rfc349-workspace-pg-'))
+    try {
+      const materializer = createTaskWorkspaceMaterializer({
+        sourceContexts: () => {
+          throw new Error('legacy materializer must not seal a request source')
+        },
+        repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: appHome }),
+        db: harness.db,
+        appHome,
+      })
+      const prepared = await materializer.prepare({
+        taskId: 'task-scratch',
+        task: {
+          workflowId: 'workflow-1',
+          name: 'Scratch workspace',
+          inputs: {},
+          scratch: true,
+        },
+        gitCommitIdentity: { name: 'Owner', email: 'owner@example.test' },
+      })
+
+      expect(prepared.kind).toBe('scratch')
+      expect(prepared.earlyError).toBeNull()
+      expect(prepared.repositories).toHaveLength(1)
+      expect(existsSync(prepared.worktreePath)).toBe(true)
+      const report = await prepared.rollback()
+      expect(report.complete).toBe(true)
+      expect(existsSync(prepared.worktreePath)).toBe(false)
+    } finally {
+      await rm(appHome, { recursive: true, force: true })
+    }
   })
 })

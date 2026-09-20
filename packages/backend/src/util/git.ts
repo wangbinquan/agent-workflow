@@ -120,6 +120,8 @@ export async function initScratchRepo(opts: {
   gitUserName?: string | null
   gitUserEmail?: string | null
   signal?: AbortSignal
+  /** Only a journaled preparation may resume its deterministic scratch directory. */
+  resumeExisting?: boolean
 }): Promise<{ ok: true; rootCommit: string } | { ok: false; error: string }> {
   try {
     await mkdir(opts.dir, { recursive: true })
@@ -141,6 +143,12 @@ export async function initScratchRepo(opts: {
   const init = await runGit(opts.dir, ['init', '-b', 'main'], { signal: opts.signal })
   if (init.exitCode !== 0) {
     return { ok: false, error: `scratch-init-failed: ${init.stderr.trim()}` }
+  }
+  if (opts.resumeExisting === true) {
+    const existing = await runGit(opts.dir, ['rev-parse', '--verify', 'HEAD'], {
+      signal: opts.signal,
+    })
+    if (existing.exitCode === 0) return { ok: true, rootCommit: existing.stdout.trim() }
   }
   const commit = await runGit(
     opts.dir,

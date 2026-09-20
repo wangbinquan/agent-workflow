@@ -1,5 +1,10 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 scratch 与上传回执候选
+
+scratch 使用无 SC repository operation 的 Task artifact journal，并复用原 Git 初始化/清理；现 scratch GC 双库接补偿。上传完成回执先于 Task admission 保存，重放复用 packed paths。四个生产 Task kernel 的双库 SIGKILL 窗口测试已补，等待本批 CI；逐文件上传中断窗口、call/fusion/DE 和 T7 仍待完成。
+前批 `fb0b97a28` Main `35507694692` 报 source input 缺固定 kind 字段，本批补齐。RFC363/364 均未标 Done，RFC365 仍仅 T1。
+
 ## 2026-09-20 RFC-363 public URL seal 与 sourceTaskId 候选
 
 三个根的 URL 启动接真实 source seal 与 IA-owned 稳定 Task context；sourceTaskId 在原 Task 事务中冻结历史布局后走 durable pre-materialized driver，组编辑不影响原目录节点。新增双库与幂等回执测试等待本批 hosted SHA。RFC362 声明债 3→0，仅记合同接线，不记 RFC363 Done。

@@ -514,4 +514,109 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     ).toEqual(['', 'code', 'docs'])
     expect(existsSync(source.worktreePath)).toBe(true)
   }, 60_000)
+  test('scratch preparation journals before Git, reuses its one root commit and protects an admitted workspace', async () => {
+    const f = await fixture()
+    const taskId = ulid()
+    const input = {
+      actor: f.request.actor,
+      authority: f.request.resourceAuthority.authority,
+      taskId,
+      task: StartTaskSchema.parse({
+        workflowId: f.request.task.workflowId,
+        name: 'scratch',
+        scratch: true,
+        inputs: {},
+      }),
+      gitCommitIdentity: null,
+    }
+    const first = await f.workspace.prepare(input)
+    writeFileSync(join(first.worktreePath, 'upload.txt'), 'scratch upload')
+    const replay = await f.workspace.prepare(input)
+    expect(replay.baseCommit).toBe(first.baseCommit)
+    expect(git('-C', replay.worktreePath, 'rev-list', '--count', 'HEAD')).toBe('1')
+    expect(readFileSync(join(replay.worktreePath, 'upload.txt'), 'utf8')).toBe('scratch upload')
+    expect(await harness.db.select().from(scRepositorySources)).toEqual([])
+    expect(await harness.db.select().from(scPreparationOperations)).toEqual([])
+    expect(await createWorkspacePreparationJournal(harness.db).read(taskId)).toMatchObject({
+      lane: 'pre-materialized',
+      state: 'prepared',
+      operationRef: null,
+    })
+    expect((await replay.rollback()).complete).toBe(true)
+    expect((await first.rollback()).complete).toBe(true)
+    expect(existsSync(first.worktreePath)).toBe(false)
+    const task = await f
+      .kernel()
+      .launch({ ...f.request, task: input.task, deferRepoPreparation: true })
+    expect(task.spaceKind).toBe('scratch')
+    expect(await createWorkspacePreparationJournal(harness.db).forTask(task.id)).toMatchObject({
+      state: 'admitted',
+      lane: 'pre-materialized',
+    })
+  }, 60_000)
+  test('scratch orphan maintenance resumes compensation after the preparing process disappears', async () => {
+    const f = await fixture()
+    const taskId = ulid()
+    const prepared = await f.workspace.prepare({
+      actor: f.request.actor,
+      authority: f.request.resourceAuthority.authority,
+      taskId,
+      task: StartTaskSchema.parse({
+        workflowId: f.request.task.workflowId,
+        name: 'scratch',
+        scratch: true,
+        inputs: {},
+      }),
+      gitCommitIdentity: null,
+    })
+    const maintenance = composeWorkspacePreparationMaintenance({
+      db: harness.db,
+      appHome: f.appHome,
+      repositoryPreparation: f.binding,
+      maintenance: {
+        async runGcPhase() {
+          return { scanned: 0, removed: 0, skipped: 0 }
+        },
+        async recover() {
+          return { completed: 0, failed: 0, skipped: 0, healed: 0 }
+        },
+      },
+    })
+    const request = {
+      phase: 'scratch' as const,
+      activeTaskIds: [taskId],
+      worktreeAutoGc: { enabled: false },
+      gitCloneTimeoutMs: 60_000,
+      now: Date.now() + 25 * 60 * 60 * 1000,
+    }
+    expect((await maintenance.runGcPhase(request)).removed).toBe(0)
+    expect(existsSync(prepared.worktreePath)).toBe(true)
+    materializingSpaces.delete(taskId)
+    expect((await maintenance.runGcPhase({ ...request, activeTaskIds: [] })).removed).toBe(1)
+    expect(existsSync(prepared.worktreePath)).toBe(false)
+    expect((await maintenance.runGcPhase({ ...request, activeTaskIds: [] })).removed).toBe(0)
+  }, 60_000)
+  test('scratch interrupted after its Git root but before the Task artifact retains files on reconstruction', async () => {
+    const f = await fixture()
+    const taskId = ulid()
+    const first = await f.binding.prepareScratch({
+      taskId,
+      gitCommitIdentity: null,
+      signal: new AbortController().signal,
+      assertCurrent: async () => {},
+    })
+    writeFileSync(join(first.worktreePath, 'upload.txt'), 'retained')
+    const rebound = composeRepositoryPreparation({ db: harness.db, appHome: f.appHome })
+    const second = await rebound.prepareScratch({
+      taskId,
+      gitCommitIdentity: null,
+      signal: new AbortController().signal,
+      assertCurrent: async () => {},
+    })
+    expect(second.baseCommit).toBe(first.baseCommit)
+    expect(git('-C', second.worktreePath, 'rev-list', '--count', 'HEAD')).toBe('1')
+    expect(readFileSync(join(second.worktreePath, 'upload.txt'), 'utf8')).toBe('retained')
+    await rebound.cleanupScratch({ taskId, assertCurrent: async () => {} })
+    materializingSpaces.delete(taskId)
+  }, 60_000)
 })

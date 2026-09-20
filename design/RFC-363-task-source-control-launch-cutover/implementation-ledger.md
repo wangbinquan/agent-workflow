@@ -109,3 +109,13 @@ Main `35503125522`（`cb2ce5b566b754683505338c1e1979963e894051`）的 Ubuntu sha
 sourceTaskId 同步重放在 Task 短事务中读取来源任务保存的 task_repos/task_space_nodes，交 SC 冻结完整布局及当前缓存配置，随后走同一 pre-materialized durable driver。live group 的编辑/删除不影响原节点与 mount；旧无节点记录仍保留原 minimalNodePaths fallback。新增真实双库 kernel/Git、空目录、组变更和 source receipt 重用断言；context 测试使用真实 IA 工厂。
 
 `cc65514a3` Main `35506721647` 的 lint/typecheck 报 GC 泛型强制返回 T 不成立；两个 C2 分片报泛型冗余 union 使 WorkspaceClaimFinalizationCommand 被算作 consumer。本批把 GC 包装面收回实际消费的 WorkspaceMaintenanceCommand，删除无用泛型和断言；原 finalize 功能继续由既有 owner 实现，未领取该合同消费信用。源 seal 真实接线后 C2 基线为 136，RFC362 声明基线为 0。scratch/call/fusion/DE、T7 facade/lane 收口、Task/upload 跨进程窗口和最终托管验收继续待完成。
+
+## T5 scratch 与 Task/upload 进程恢复候选
+
+scratch 在原 mkdir/Git 前写 Task-owned pre-materialized plan，operationRef 保持 null，不伪造 repository source。SC 接线复用原 scratch materializer/cleanup；仅 journaled scratch 恢复可复用已初始化的 HEAD，避免在 Git 完成、Task artifact 未写入的窗口重复空提交。既有 scratch GC 按原 24 小时条件重试未绑定 plan，活动/部分补偿记录传给原扫描器保护；已 admitted 不可被补偿。失败的 Task 投影与清理算法保留。
+
+Task 上传编排复用原 applyUploadsToWorktree，并在完整上传成功后、Task admission 前持久化 request digest 与 packed-path receipt。同 Task artifact 的相同上传重放复用路径，避免默认 rename 变成 `attachment (1).txt`。该回执覆盖完整上传结束后的窗口；逐文件写入中断到完成回执之间的细化恢复仍待补齐，不能声称全上传窗口已闭合。
+
+新增真实双库子进程测试使用生产 RootTaskLaunchKernel，分别在 repository prepared-before-upload、repository uploaded-before-admit、scratch root-before-artifact、scratch uploaded-before-admit 处 SIGKILL；新进程检查原目录/marker/commit、单一上传路径、唯一 Task 和 admitted 后拒绝补偿。待本批 hosted 验收，不能把源码存在记成通过。原 RFC349 scratch 假池测试迁到真实 eachProvider，保留全部物理 rollback 断言。
+
+`fb0b97a28` Main `35507694692` typecheck 暴露 public source input 漏填固定 `kind: 'url'`，本批补齐合同字段。T5 call/fusion/DE、T7 required lane/facade 和完整 AC 继续待完成。

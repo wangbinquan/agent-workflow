@@ -134,6 +134,45 @@ export function createWorkspacePreparationJournal(
         )
       return row
     },
+    async completeUploads(input) {
+      const current = (
+        await db
+          .select()
+          .from(taskWorkspacePreparations)
+          .where(eq(taskWorkspacePreparations.id, input.id))
+      )[0]
+      if (
+        current === undefined ||
+        current.artifactJson === null ||
+        current.state !== 'prepared' ||
+        current.admittedTaskId !== null
+      )
+        return null
+      const artifact = JSON.parse(current.artifactJson) as Record<string, unknown>
+      if (artifact.uploads !== undefined) return null
+      const rows = await db
+        .update(taskWorkspacePreparations)
+        .set({
+          artifactJson: JSON.stringify({
+            ...artifact,
+            uploads: { requestDigest: input.requestDigest, packedByKey: input.packedByKey },
+          }),
+          version: input.expectedVersion + 1,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(taskWorkspacePreparations.id, input.id),
+            eq(taskWorkspacePreparations.version, input.expectedVersion),
+            eq(taskWorkspacePreparations.ownerFence, input.ownerFence),
+            eq(taskWorkspacePreparations.state, 'prepared'),
+            eq(taskWorkspacePreparations.lane, 'pre-materialized'),
+            isNull(taskWorkspacePreparations.admittedTaskId),
+          ),
+        )
+        .returning()
+      return rows[0] ?? null
+    },
     async advance(input) {
       if (!next[input.from].includes(input.to))
         throw new ConflictError(

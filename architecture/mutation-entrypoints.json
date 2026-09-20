@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1709,
+    "entries": 1710,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -29369,6 +29369,28 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts#applyTaskWorkspaceUploads",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts#applyTaskWorkspaceUploads",
+      "symbol": "applyTaskWorkspaceUploads",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "internal-family",
         "authorization": false,
         "event": false,
@@ -40852,7 +40874,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3d1903fc12867e3a40ed5c41fd5d46c33bf52a28cbf629aab9ee4a97f9cb82aa",
+  "sourceDigest": "sha256:b60b679b16ce203a3c8d63d63fec7937f620c15756a81daa720069b687e9f07e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42866,8 +42888,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#838:tasks",
-        "line": 838,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#843:tasks",
+        "line": 843,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42882,8 +42904,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#923:taskExecutionIntents",
-        "line": 923,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#928:taskExecutionIntents",
+        "line": 928,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

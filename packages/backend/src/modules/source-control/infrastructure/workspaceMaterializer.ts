@@ -59,6 +59,7 @@ export interface WorkspaceMaterializationDependencies {
   readonly frozenLayout?: PlannedSpaceLayout | null
   readonly worktreeMaterializer?: typeof materializeWorktree
   readonly worktreeLifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
+  readonly resumeExistingScratch?: boolean
   readonly gitCommitIdentity?: GitCommitIdentity | null
   readonly sourceTerminationLaunchSignal?: AbortSignal
   readonly workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
@@ -921,6 +922,9 @@ export async function materializeSpaceWithProvider(
     materializingSpaces.set(taskId, { dir: scratchDir, startedAt: Date.now() })
     const init = await initScratchRepo({
       dir: scratchDir,
+      ...(deps.resumeExistingScratch === undefined
+        ? {}
+        : { resumeExisting: deps.resumeExistingScratch }),
       gitUserName: deps.gitCommitIdentity?.name ?? null,
       gitUserEmail: deps.gitCommitIdentity?.email ?? null,
       ...(deps.sourceTerminationLaunchSignal !== undefined

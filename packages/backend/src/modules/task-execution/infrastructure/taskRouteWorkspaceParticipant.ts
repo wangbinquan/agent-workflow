@@ -1,3 +1,4 @@
+import { prepareScratchWorkspace } from './scratchWorkspacePreparation'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 export { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
@@ -146,7 +147,11 @@ async function prepareDeferredWorkspace(
     if (input.authority !== undefined) {
       sealedSource = await dependencies.repositoryPreparation.sourceSeal.seal(
         dependencies.sourceContexts(input.authority, input.taskId),
-        { url: task.repoUrl, ...(task.ref === undefined ? {} : { requestedRef: task.ref }) },
+        {
+          kind: 'url',
+          url: task.repoUrl,
+          ...(task.ref === undefined ? {} : { requestedRef: task.ref }),
+        },
       )
       cachedRepoId = await dependencies.repositoryPreparation.sealedIdentity(sealedSource)
     } else {
@@ -234,27 +239,36 @@ export function createTaskWorkspaceMaterializer(
           : null
       const sourceTaskId = input.task.sourceTaskId
       const artifact =
-        input.authority === undefined || (synchronous === null && sourceTaskId === undefined)
-          ? null
-          : await preparePreMaterializedRepository({
+        input.task.scratch === true
+          ? await prepareScratchWorkspace({
               db: dependencies.db,
               binding: dependencies.repositoryPreparation,
-              authority: input.authority,
-              taskId: input.taskId,
               appHome: dependencies.appHome,
-              cachedRepoId: synchronous?.cachedRepoId ?? null,
-              repoGroupId: synchronous?.repoGroupId ?? null,
-              base: synchronous?.baseBranch ?? '',
-              ...(synchronous?.sealedSource == null
-                ? {}
-                : { sealedSource: synchronous.sealedSource }),
-              ...(sourceTaskId === undefined ? {} : { sourceTaskId }),
+              taskId: input.taskId,
               gitCommitIdentity: input.gitCommitIdentity,
-              ...(input.task.workingBranch === undefined
-                ? {}
-                : { workingBranch: input.task.workingBranch }),
               signal: input.sourceTerminationSignal ?? new AbortController().signal,
             })
+          : input.authority === undefined || (synchronous === null && sourceTaskId === undefined)
+            ? null
+            : await preparePreMaterializedRepository({
+                db: dependencies.db,
+                binding: dependencies.repositoryPreparation,
+                authority: input.authority,
+                taskId: input.taskId,
+                appHome: dependencies.appHome,
+                cachedRepoId: synchronous?.cachedRepoId ?? null,
+                repoGroupId: synchronous?.repoGroupId ?? null,
+                base: synchronous?.baseBranch ?? '',
+                ...(synchronous?.sealedSource == null
+                  ? {}
+                  : { sealedSource: synchronous.sealedSource }),
+                ...(sourceTaskId === undefined ? {} : { sourceTaskId }),
+                gitCommitIdentity: input.gitCommitIdentity,
+                ...(input.task.workingBranch === undefined
+                  ? {}
+                  : { workingBranch: input.task.workingBranch }),
+                signal: input.sourceTerminationSignal ?? new AbortController().signal,
+              })
       const durable =
         artifact?.space ??
         (await prepareDurableRepositoryWorkspace({

@@ -1,3 +1,9 @@
+import { join } from 'node:path'
+import {
+  materializeSpaceWithProvider,
+  createMaterializedSpaceCleanup,
+  cleanupMaterializedSpaceLease,
+} from '../infrastructure/workspaceMaterializer'
 import { createPublicRepositorySourceSeal } from '../infrastructure/publicRepositorySourceSeal'
 import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
@@ -35,6 +41,63 @@ export function composeRepositoryPreparation(input: {
   const journal = createRepositoryPreparationJournal(input.db)
   const driver = composeRepositoryPreparationParticipant({ journal })
   return {
+    async prepareScratch(request: {
+      taskId: string
+      gitCommitIdentity: GitCommitIdentity | null
+      signal: AbortSignal
+      assertCurrent(): Promise<void>
+    }): Promise<MaterializedSpace> {
+      await request.assertCurrent()
+      const space = await materializeSpaceWithProvider(
+        { scratch: true },
+        {
+          appHome: input.appHome,
+          repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
+          gitCommitIdentity: request.gitCommitIdentity,
+          sourceTerminationLaunchSignal: request.signal,
+          resumeExistingScratch: true,
+          ...(input.workspaceCleanupHook === undefined
+            ? {}
+            : { workspaceCleanupHook: input.workspaceCleanupHook }),
+          loadFrozenSpaceLayout: async () => {
+            throw new Error('scratch-has-no-frozen-layout')
+          },
+        },
+        request.taskId,
+      )
+      await request.assertCurrent()
+      return space
+    },
+    restoreScratch(taskId: string, artifactJson: string): MaterializedSpace {
+      const saved = JSON.parse(artifactJson) as { version: number; space: MaterializedSpace }
+      if (
+        saved.version !== 1 ||
+        saved.space.taskId !== taskId ||
+        saved.space.kind !== 'scratch' ||
+        (saved.space.worktreePath !== '' &&
+          saved.space.worktreePath !== join(input.appHome, 'scratch', taskId))
+      )
+        throw new Error('scratch-preparation-artifact-mismatch')
+      return saved.space
+    },
+    async cleanupScratch(request: {
+      taskId: string
+      assertCurrent(): Promise<void>
+    }): Promise<WorkspaceCleanupReport> {
+      await request.assertCurrent()
+      const report = await cleanupMaterializedSpaceLease(
+        createMaterializedSpaceCleanup(
+          request.taskId,
+          join(input.appHome, 'scratch', request.taskId),
+        ),
+        async (event) => {
+          await request.assertCurrent()
+          await input.workspaceCleanupHook?.(event)
+        },
+      )
+      await request.assertCurrent()
+      return report
+    },
     sourceSeal: createPublicRepositorySourceSeal({
       db: input.db,
       appHome: input.appHome,

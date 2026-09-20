@@ -17,6 +17,18 @@ import type { MaterializedSpace, WorkspaceCleanupReport } from '@/services/task'
 
 /** Provider-private binding assembled by the root. Task retains its transaction and owner. */
 export interface TaskRepositoryPreparationBinding {
+  prepareScratch(input: {
+    taskId: string
+    gitCommitIdentity: GitCommitIdentity | null
+    signal: AbortSignal
+    assertCurrent(): Promise<void>
+  }): Promise<MaterializedSpace>
+  restoreScratch(taskId: string, artifactJson: string): MaterializedSpace
+  cleanupScratch(input: {
+    taskId: string
+    assertCurrent(): Promise<void>
+  }): Promise<WorkspaceCleanupReport>
+
   readonly sourceSeal: PublicRepositorySourceSealPort
   sealedIdentity(reference: SealedPublicRepositorySourceRef): Promise<string>
   snapshot(input: {

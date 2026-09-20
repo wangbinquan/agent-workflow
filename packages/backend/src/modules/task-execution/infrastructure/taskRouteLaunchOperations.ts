@@ -67,7 +67,8 @@ import { assertNotBuiltin } from '@/services/systemResources'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
 import type { WorkspaceCleanupReport } from '@/services/task'
-import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
+import { validateUploadPlan } from '@/services/upload'
+import { applyTaskWorkspaceUploads } from './taskWorkspaceUploads'
 import {
   ConflictError,
   DomainError,
@@ -788,12 +789,16 @@ function createRootLaunch(
         preparedWorkspace.earlyError === null
       ) {
         try {
-          const landed = await applyUploadsToWorktree({
-            worktreePath: preparedWorkspace.worktreePath,
-            ...(preparedWorkspace.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
-            defs: input.uploads.definitions,
-            files: bufferedUploads,
-            limits: input.uploads.limits,
+          const landed = await applyTaskWorkspaceUploads({
+            db: dependencies.db,
+            taskId,
+            plan: {
+              worktreePath: preparedWorkspace.worktreePath,
+              ...(preparedWorkspace.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
+              defs: input.uploads.definitions,
+              files: bufferedUploads,
+              limits: input.uploads.limits,
+            },
           })
           for (const [key, paths] of landed.packedByKey.entries()) {
             persistedInputs[key] = paths.join('\n')

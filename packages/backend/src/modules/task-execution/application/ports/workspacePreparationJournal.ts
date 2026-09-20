@@ -54,6 +54,14 @@ export interface WorkspacePreparationJournal {
       'id' | 'admissionKey' | 'requestDigest' | 'lane' | 'operationRef' | 'ownerFence'
     > & { readonly now: number },
   ): Promise<WorkspacePreparationRecord>
+  completeUploads(input: {
+    readonly id: string
+    readonly expectedVersion: number
+    readonly ownerFence: number
+    readonly requestDigest: string
+    readonly packedByKey: readonly (readonly [string, readonly string[]])[]
+    readonly now: number
+  }): Promise<WorkspacePreparationRecord | null>
   advance(input: {
     readonly id: string
     readonly expectedVersion: number

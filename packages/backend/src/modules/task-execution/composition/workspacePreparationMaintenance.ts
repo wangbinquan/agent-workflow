@@ -1,3 +1,7 @@
+import {
+  compensateScratchWorkspace,
+  scratchAdmissionPrefix,
+} from '../infrastructure/scratchWorkspacePreparation'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskWorkspacePreparations } from '@/db/schema'
@@ -22,8 +26,12 @@ export function composeWorkspacePreparationMaintenance(input: {
   return Object.freeze<WorkspaceMaintenanceCommand>({
     ...input.maintenance,
     async runGcPhase(request: Parameters<WorkspaceMaintenanceCommand['runGcPhase']>[0]) {
-      if (request.phase !== 'orphan') return input.maintenance.runGcPhase(request)
-      const prefix = preMaterializedAdmissionPrefix(input.appHome)
+      if (request.phase !== 'orphan' && request.phase !== 'scratch')
+        return input.maintenance.runGcPhase(request)
+      const scratch = request.phase === 'scratch'
+      const prefix = scratch
+        ? scratchAdmissionPrefix(input.appHome)
+        : preMaterializedAdmissionPrefix(input.appHome)
       const plans = (
         await input.db
           .select()
@@ -41,7 +49,9 @@ export function composeWorkspacePreparationMaintenance(input: {
       for (const plan of plans) {
         if (active.has(plan.id) || now - plan.createdAt < MIN_AGE_MS) continue
         try {
-          const result = await compensatePreMaterializedRepository({
+          const result = await (
+            scratch ? compensateScratchWorkspace : compensatePreMaterializedRepository
+          )({
             db: input.db,
             binding: input.repositoryPreparation,
             taskId: plan.id,
