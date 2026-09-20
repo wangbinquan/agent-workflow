@@ -2140,7 +2140,10 @@ describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功',
     // 延后准备这一步收成两个引擎共用之后直接打中立面 `materializeSpaceWithProvider`。
     // 判据要锁的是「循环里真的会再物化一次」，所以两个名字都接受。
     expect(loop).toMatch(/for \(;;\) \{/)
-    expect(loop).toMatch(/prepared = await materializeSpace(WithProvider)?\(/)
+    // RFC-363: each iteration enters the durable participant; pre-journal Tasks
+    // retain the original materializer. Both calls must remain inside this loop.
+    expect(loop).toContain('await taskDriveComposition.prepareDurableRepositoryWorkspace(')
+    expect(loop).toMatch(/prepared\s*=\s*durable\s*\?\?\s*\(await materializeSpaceWithProvider\(/)
     // ②成功即出（earlyError 为 null 就 break）——否则会白转满窗口。
     expect(loop).toMatch(/if \(prepared\.earlyError === null\) break/)
     // ③**先判可重试、再看窗口**：反过来会让永久失败也白耗一次退避。

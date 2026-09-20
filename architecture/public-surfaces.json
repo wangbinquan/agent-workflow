@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 893,
+    "consumers": 897,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
     "methods": 1069,
@@ -50137,9 +50137,11 @@
         "import:1f1c41512df17330ca10",
         "import:4bf7e323e8218ac14c0f",
         "import:5cb81a2768a79730ff00",
+        "import:8510d9e3b47acc7c88d9",
         "import:ae9218baef05fc626909",
         "import:c8f92c950ff8b61e0dc6",
         "import:de5c415b39b10df6f013",
+        "import:f44e611f75b2d06e975a",
         "import:f68f17b951bbaa335946",
         "import:fd78d9b333af6377cffe"
       ],
@@ -50187,6 +50189,12 @@
           "ownerEntryId": "owner:packages/backend/src/modules/memory/public/catalog.ts#$file"
         },
         {
+          "context": "task-execution",
+          "edgeId": "import:8510d9e3b47acc7c88d9",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#$file"
+        },
+        {
           "context": "legacy",
           "edgeId": "import:ae9218baef05fc626909",
           "file": "packages/backend/src/services/webhook/webhookDispatch.ts",
@@ -50203,6 +50211,12 @@
           "edgeId": "import:de5c415b39b10df6f013",
           "file": "packages/backend/src/modules/system-operations/public/queries.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:f44e611f75b2d06e975a",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts#$file"
         },
         {
           "context": "memory",
@@ -123541,7 +123555,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:c3da3924319d51b6190f"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
@@ -123576,7 +123592,14 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/commands.ts#WorkspaceClaimFinalizationCommand",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:c3da3924319d51b6190f",
+          "file": "packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -123596,6 +123619,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:0724f489a290919ac5cd",
         "import:0b84cacfbaf651be0dde",
         "import:1608d07293904b654b32"
       ],
@@ -123606,6 +123630,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde",
             "import:1608d07293904b654b32"
           ],
@@ -123614,6 +123639,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde",
             "import:1608d07293904b654b32"
           ],
@@ -123652,6 +123678,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde",
             "import:1608d07293904b654b32"
           ],
@@ -123660,6 +123687,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde",
             "import:1608d07293904b654b32"
           ],
@@ -123675,6 +123703,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde",
             "import:1608d07293904b654b32"
           ],
@@ -123723,6 +123752,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde"
           ],
           "fieldPath": "$method:runGcPhase.$return.removed",
@@ -123730,6 +123760,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde"
           ],
           "fieldPath": "$method:runGcPhase.$return.scanned",
@@ -123737,6 +123768,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde",
             "import:1608d07293904b654b32"
           ],
@@ -123761,6 +123793,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0724f489a290919ac5cd",
             "import:0b84cacfbaf651be0dde",
             "import:1608d07293904b654b32"
           ],
@@ -123770,6 +123803,12 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/commands.ts#WorkspaceMaintenanceCommand",
       "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:0724f489a290919ac5cd",
+          "file": "packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:0b84cacfbaf651be0dde",
@@ -165292,7 +165331,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8098d89214cc3ae7a44854ed050f577f746559ceededd03d0aff897f2a6d463f",
+  "sourceDigest": "sha256:2141b7175600eff067ff418c10a1cfa914621d2334e740d1eecdbf6471d99eaf",
   "targetContexts": [
     "collaboration",
     "development-automation",

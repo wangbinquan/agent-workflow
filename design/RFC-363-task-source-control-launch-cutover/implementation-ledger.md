@@ -88,3 +88,16 @@ canonical 注销已进入 deferred 生产链的 snapshot/effect 合同及关联�
 ### 已有真实进程证据
 
 Main `35503125522`（`cb2ce5b566b754683505338c1e1979963e894051`）的 Ubuntu shard 11 job `106058374913`：SQLite/PG 各 7 个 SC 进程中断窗口全部 pass；macOS shard 4 job `106058374917`：SQLite 7 个窗口 pass。窗口为 before-add、post-add、working-branch-before-CAS、changed-prepared-branch、stop-before-add、stop-after-add、cleanup-after-remove。这证明 SC 物理 driver/cleanup；不把它倒签为本批 Task 接线验收，也不把有其他失败的 Main 称全绿。
+
+
+## T5 同步仓库与 multipart 候选
+
+同步 repository/group 先在短事务内保存 `pre-materialized` Task plan、SC snapshot/operation，再在事务外物化。上传仍位于 prepare 与 Task INSERT 之间；admission hook 在同一个 Task transaction 内接受 artifact。working branch、Git identity、错误码与 failed Task 投影保持原入口语义。没有 journal 的旧任务继续兼容读取；scratch/sourceTaskId/call/fusion/DE 内部空间仍待后续切换，T5/T7 不记完成。
+
+准备租约复用 `materializingSpaces`，通过既有维护任务的活动 ID 快照传给 worker，commit/rollback 释放。既有 orphan GC 在两个 provider 中先由 Task owner 选择同 appHome、超过原 24 小时阈值且不活动的未绑定 plan，再调用 SC durable cleanup；部分失败保留记录与原 Git provenance，不能落入普通目录删除。没有目录的 prepare 中断也由 journal 找到，不增加后台定时器/worker。Task 创建失败会直接执行同一补偿；已 admitted plan 不能被清理。
+
+新增双库生产 kernel/Git 用例：同步 Task 与 artifact 原子接受、Task transaction 回滚后物理补偿、重建 adapter 重用原 receipt/上传文件、活动租约保护、无 Task 的 GC 清理重放，以及实际 multipart 写文件早于 Task INSERT。测试尚待本批 hosted SHA；factory 重建用例不等同 SIGKILL 上传窗口取证。
+
+前批 `c610e30db` Main `35505842902` 已定位测试夹具漏装真实 RC resource binding、两个 action-host fixture 缺 authority、legacy Task 越界读取三个 private imports，以及 C2/declaration 两项计数未缩小。本批修正真实装配，legacy 调用复用已有 `taskDriveLegacy` 组合入口，未增加边界豁免；计数收至 137 / 3，原行为断言保留。
+
+同一 Main 的 Ubuntu shard 1 / macOS shard 1 另报 AC-9 source anchor 仍要求 `prepared = await materializeSpace`。本批同时钉住循环内的 durable 调用和旧任务 fallback，成功退出、分类器顺序、窗口与退避断言原样保留。

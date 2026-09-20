@@ -148,6 +148,7 @@ describeEachProvider('RFC-359 T3 —— 借用工作区的平台输入', (harnes
       const request = {
         taskId: ulid(),
         actor: actorOfDirectAuthority(admitted),
+        authority: admitted.authority,
         task: { workflowId, name: 'borrowed action host', inputs: {} },
         gitCommitIdentity: {
           name: 'Borrowed Workspace Fixture',

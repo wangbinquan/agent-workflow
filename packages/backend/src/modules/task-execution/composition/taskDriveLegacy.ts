@@ -24,3 +24,11 @@ export {
   createDatabaseTaskDriverLifecyclePort,
   isTaskDriverActive,
 } from '../infrastructure/taskDriverLifecycle'
+
+export type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
+export {
+  prepareDurableRepositoryWorkspace,
+  cleanupDurableRepositoryWorkspace,
+  acceptDurableRepositoryWorkspace,
+} from '../infrastructure/durableRepositoryPreparation'
+export { hasDurableRepositoryPreparation } from '../infrastructure/durableRepositoryPreparation'

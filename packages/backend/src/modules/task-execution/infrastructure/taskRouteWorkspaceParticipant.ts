@@ -1,3 +1,5 @@
+import { preparePreMaterializedRepository } from './preMaterializedRepositoryWorkspace'
+import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
 import {
   admitDeferredRepositoryPreparation,
@@ -46,6 +48,7 @@ export interface TaskRouteWorkspaceDependencies {
 
 export interface TaskWorkspacePreparation {
   readonly taskId: string
+  readonly authority?: RequestAuthority
   readonly task: StartTask
   readonly gitCommitIdentity: GitCommitIdentity | null
   readonly sourceTerminationSignal?: AbortSignal
@@ -253,16 +256,42 @@ export function createTaskWorkspaceMaterializer(
       if (deferralApplies(input)) {
         return await prepareDeferredWorkspace(dependencies, store, input)
       }
-      const durable = await prepareDurableRepositoryWorkspace({
-        db: dependencies.db,
-        binding: dependencies.repositoryPreparation,
-        taskId: input.taskId,
-        gitCommitIdentity: input.gitCommitIdentity,
-        ...(input.task.workingBranch === undefined
-          ? {}
-          : { workingBranch: input.task.workingBranch }),
-        signal: input.sourceTerminationSignal ?? new AbortController().signal,
-      })
+      const synchronous =
+        input.authority !== undefined &&
+        input.task.scratch !== true &&
+        typeof (input.task as { sourceTaskId?: unknown }).sourceTaskId !== 'string'
+          ? await prepareDeferredWorkspace(dependencies, store, input)
+          : null
+      const artifact =
+        synchronous === null || input.authority === undefined
+          ? null
+          : await preparePreMaterializedRepository({
+              db: dependencies.db,
+              binding: dependencies.repositoryPreparation,
+              authority: input.authority,
+              taskId: input.taskId,
+              appHome: dependencies.appHome,
+              cachedRepoId: synchronous.cachedRepoId,
+              repoGroupId: synchronous.repoGroupId,
+              base: synchronous.baseBranch,
+              gitCommitIdentity: input.gitCommitIdentity,
+              ...(input.task.workingBranch === undefined
+                ? {}
+                : { workingBranch: input.task.workingBranch }),
+              signal: input.sourceTerminationSignal ?? new AbortController().signal,
+            })
+      const durable =
+        artifact?.space ??
+        (await prepareDurableRepositoryWorkspace({
+          db: dependencies.db,
+          binding: dependencies.repositoryPreparation,
+          taskId: input.taskId,
+          gitCommitIdentity: input.gitCommitIdentity,
+          ...(input.task.workingBranch === undefined
+            ? {}
+            : { workingBranch: input.task.workingBranch }),
+          signal: input.sourceTerminationSignal ?? new AbortController().signal,
+        }))
       const space =
         durable ??
         (await materializeSpaceWithProvider(
@@ -294,14 +323,16 @@ export function createTaskWorkspaceMaterializer(
       const repoGroupName =
         repoGroupId === null
           ? null
-          : durable === null
-            ? (await resolveRepoGroupLayout(store, repoGroupId)).groupName
-            : ((
-                await dependencies.db
-                  .select({ name: tasks.repoGroupName })
-                  .from(tasks)
-                  .where(eq(tasks.id, input.taskId))
-              )[0]?.name ?? null)
+          : synchronous !== null
+            ? synchronous.repoGroupName
+            : durable === null
+              ? (await resolveRepoGroupLayout(store, repoGroupId)).groupName
+              : ((
+                  await dependencies.db
+                    .select({ name: tasks.repoGroupName })
+                    .from(tasks)
+                    .where(eq(tasks.id, input.taskId))
+                )[0]?.name ?? null)
       return Object.freeze({
         taskId: space.taskId,
         kind: space.kind,
@@ -323,8 +354,13 @@ export function createTaskWorkspaceMaterializer(
         earlyError: space.earlyError,
         repositories,
         nodePaths: [...space.nodePaths],
-        commit: () => commitMaterializedSpace(space),
+        ...(artifact === null ? {} : { admit: artifact.admit }),
+        commit: () => {
+          commitMaterializedSpace(space)
+          artifact?.commit()
+        },
         rollback: async () => {
+          if (artifact !== null) return artifact.rollback()
           const report =
             durable === null
               ? null
@@ -357,6 +393,7 @@ export function createTaskRouteWorkspaceParticipant(
     ): Promise<TaskRoutePreparedWorkspace> {
       const workspace = await materializer.prepare({
         taskId: input.taskId,
+        authority: input.authority,
         task: input.task,
         gitCommitIdentity: input.gitCommitIdentity,
         ...(input.defer === undefined ? {} : { defer: input.defer }),

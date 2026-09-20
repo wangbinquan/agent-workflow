@@ -1,3 +1,10 @@
+import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
+import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { composeWorkspacePreparationMaintenance } from '@/modules/task-execution/composition/workspacePreparationMaintenance'
+import { materializingSpaces } from '@/services/gc'
+import { activeTaskIdsSnapshot } from '@/services/task'
+import { compensatePreMaterializedRepository } from '@/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace'
 import type { ProviderNeutralDatabase } from '@/db/query'
 // RFC-363: exercise the production Task kernel, real provider transactions and Git adapter.
 // These cases protect the gap between source freezing, a durable SC receipt and Task acceptance.
@@ -91,24 +98,26 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       repositoryPreparation: binding,
     })
     const submitted: string[] = []
-    function kernel(rollback = false) {
+    function kernel(rollback = false, inspect?: (path: string, taskId: string) => Promise<void>) {
       return createRootTaskLaunchKernel({
         db: harness.db,
         gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-        workspace: rollback
-          ? {
-              async prepare(request) {
-                const prepared = await workspace.prepare(request)
-                return {
-                  ...prepared,
-                  async admit(tx: ProviderNeutralDatabase) {
-                    await prepared.admit!(tx)
-                    throw new Error('reject-after-source-freeze')
-                  },
-                }
-              },
-            }
-          : workspace,
+        workspace:
+          rollback || inspect !== undefined
+            ? {
+                async prepare(request) {
+                  const prepared = await workspace.prepare(request)
+                  return {
+                    ...prepared,
+                    async admit(tx: ProviderNeutralDatabase) {
+                      await inspect?.(prepared.worktreePath, prepared.taskId)
+                      await prepared.admit!(tx)
+                      if (rollback) throw new Error('reject-after-source-freeze')
+                    },
+                  }
+                },
+              }
+            : workspace,
         coordinator: {
           async submit(request) {
             submitted.push(request.taskId)
@@ -122,7 +131,10 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       resourceAuthority: {
         actor,
         authority: identity.authority,
-        resources: identityAccess.taskExecutionResources,
+        resources: createTaskExecutionResourceBinding(
+          harness.db,
+          composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
+        ),
       },
       invoker: { type: 'user' as const, launchKind: 'direct-json' as const },
       task: StartTaskSchema.parse({
@@ -149,7 +161,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
         signal,
       }
     }
-    return { appHome, kernel, request, submitted, effect }
+    return { appHome, kernel, request, submitted, effect, workspace, binding }
   }
   test('Task admission atomically creates the frozen source and unmaterialized plan', async () => {
     const f = await fixture()
@@ -307,5 +319,129 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       (await createRepositoryPreparationJournal(harness.db).operation(after!.operationRef!))
         ?.snapshotRef,
     ).toBe(original!.snapshotRef)
+  }, 60_000)
+  test('synchronous preparation is accepted in the Task INSERT transaction', async () => {
+    const f = await fixture()
+    const task = await f.kernel().launch({ ...f.request, deferRepoPreparation: false })
+    expect(task.status).toBe('pending')
+    expect(readFileSync(join(task.worktreePath, 'README.md'), 'utf8')).toBe('frozen source\n')
+    expect(await createWorkspacePreparationJournal(harness.db).forTask(task.id)).toMatchObject({
+      lane: 'pre-materialized',
+      state: 'admitted',
+      admittedTaskId: task.id,
+    })
+    expect(materializingSpaces.has(task.id)).toBe(false)
+    await expect(
+      compensatePreMaterializedRepository({ db: harness.db, binding: f.binding, taskId: task.id }),
+    ).rejects.toMatchObject({ code: 'workspace-preparation-owner-changed' })
+    expect(existsSync(task.worktreePath)).toBe(true)
+  }, 60_000)
+  test('synchronous admission rollback preserves the failed Task transaction and durably compensates Git', async () => {
+    const f = await fixture()
+    await expect(
+      f.kernel(true).launch({ ...f.request, deferRepoPreparation: false }),
+    ).rejects.toThrow('reject-after-source-freeze')
+    expect(await harness.db.select().from(tasks)).toEqual([])
+    const operations = await harness.db.select().from(scPreparationOperations)
+    expect(operations).toHaveLength(1)
+    expect(operations[0]?.state).toBe('cleaned')
+    expect(f.submitted).toEqual([])
+  }, 60_000)
+  test('before Task admission, a fresh adapter reuses the receipt and uploaded files; old orphan GC compensates once', async () => {
+    const f = await fixture()
+    const taskId = ulid()
+    const input = {
+      actor: f.request.actor,
+      authority: f.request.resourceAuthority.authority,
+      taskId,
+      task: f.request.task,
+      gitCommitIdentity: null,
+    }
+    const first = await f.workspace.prepare(input)
+    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await createWorkspacePreparationJournal(harness.db).read(taskId)).toMatchObject({
+      state: 'prepared',
+      lane: 'pre-materialized',
+      admittedTaskId: null,
+    })
+    expect(activeTaskIdsSnapshot()).toContain(taskId)
+    writeFileSync(join(first.worktreePath, 'uploaded.txt'), 'before admission')
+    const rebound = createTaskRouteWorkspaceParticipant({
+      db: harness.db,
+      appHome: f.appHome,
+      repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: f.appHome }),
+    })
+    const replay = await rebound.prepare(input)
+    expect(replay.worktreePath).toBe(first.worktreePath)
+    expect(readFileSync(join(replay.worktreePath, 'uploaded.txt'), 'utf8')).toBe('before admission')
+    const gcInputs: string[][] = []
+    const maintenance = composeWorkspacePreparationMaintenance({
+      db: harness.db,
+      appHome: f.appHome,
+      repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: f.appHome }),
+      maintenance: {
+        async runGcPhase(request) {
+          gcInputs.push([...request.activeTaskIds])
+          return { scanned: 0, removed: 0, skipped: 0 }
+        },
+        async recover() {
+          return { completed: 0, failed: 0, skipped: 0, healed: 0 }
+        },
+      },
+    })
+    const gc = {
+      phase: 'orphan' as const,
+      worktreeAutoGc: { enabled: false },
+      activeTaskIds: [taskId],
+      now: Date.now() + 25 * 60 * 60 * 1000,
+      gitCloneTimeoutMs: 60_000,
+    }
+    expect((await maintenance.runGcPhase(gc)).removed).toBe(0)
+    expect(existsSync(first.worktreePath)).toBe(true)
+    materializingSpaces.delete(taskId) // The original process no longer owns a preparation lease.
+    expect((await maintenance.runGcPhase({ ...gc, activeTaskIds: [] })).removed).toBe(1)
+    expect(existsSync(first.worktreePath)).toBe(false)
+    expect((await createWorkspacePreparationJournal(harness.db).read(taskId))?.state).toBe(
+      'cleaned',
+    )
+    expect(gcInputs[1]).toContain(taskId)
+    expect((await maintenance.runGcPhase({ ...gc, activeTaskIds: [] })).removed).toBe(0)
+    expect(await harness.db.select().from(tasks)).toEqual([])
+  }, 60_000)
+  test('multipart uploads land before Task admission and consume the same prepared receipt', async () => {
+    const f = await fixture()
+    let observed = false
+    const task = await f
+      .kernel(false, async (path, taskId) => {
+        expect(await harness.db.select().from(tasks).where(eq(tasks.id, taskId))).toEqual([])
+        expect(readFileSync(join(path, 'inputs', 'attachment.txt'), 'utf8')).toBe(
+          'uploaded before Task',
+        )
+        expect((await createWorkspacePreparationJournal(harness.db).read(taskId))?.state).toBe(
+          'prepared',
+        )
+        observed = true
+      })
+      .launch({
+        ...f.request,
+        uploads: {
+          parts: [
+            {
+              inputKey: 'refs',
+              filename: 'attachment.txt',
+              declaredMime: 'text/plain',
+              blob: new Blob(['uploaded before Task']),
+            },
+          ],
+          definitions: new Map([['refs', { key: 'refs', targetDir: 'inputs' }]]),
+          limits: { perFile: 1024, perRequest: 1024, perCount: 1 },
+        },
+      })
+    expect(observed).toBe(true)
+    expect(task.inputs.refs).toBe('inputs/attachment.txt')
+    expect((await createWorkspacePreparationJournal(harness.db).forTask(task.id))?.state).toBe(
+      'admitted',
+    )
+    expect(materializingSpaces.has(task.id)).toBe(false)
   }, 60_000)
 })

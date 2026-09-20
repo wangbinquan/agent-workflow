@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1805,
+    "backendFiles": 1807,
     "frontendFiles": 622,
     "legacyFiles": 548,
-    "moduleFiles": 1257,
-    "productionFiles": 2582,
+    "moduleFiles": 1259,
+    "productionFiles": 2584,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24774
+    "symbolsIncludingFileRoots": 24784
   },
   "entries": [
     {
@@ -123695,6 +123695,54 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts#composeWorkspacePreparationMaintenance",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeWorkspacePreparationMaintenance",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts#log",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "log",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts#MIN_AGE_MS",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "MIN_AGE_MS",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -129900,6 +129948,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#hasDurableRepositoryPreparation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "hasDurableRepositoryPreparation",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts#prepareDurableRepositoryWorkspace",
       "removeAfterWave": null,
       "status": "current-module",
@@ -131920,6 +131980,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "withPostgresqlTaskAggregateTransaction",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts#assertUnadmitted",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertUnadmitted",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts#compensatePreMaterializedRepository",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "compensatePreMaterializedRepository",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts#preMaterializedAdmissionPrefix",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "preMaterializedAdmissionPrefix",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts#preparePreMaterializedRepository",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "preparePreMaterializedRepository",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -298010,5 +298130,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8098d89214cc3ae7a44854ed050f577f746559ceededd03d0aff897f2a6d463f"
+  "sourceDigest": "sha256:2141b7175600eff067ff418c10a1cfa914621d2334e740d1eecdbf6471d99eaf"
 }

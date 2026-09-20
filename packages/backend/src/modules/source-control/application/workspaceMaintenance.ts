@@ -426,14 +426,18 @@ export function createWorkspaceMaintenanceCommand(input: {
     return { scanned: directories.length, removed, skipped }
   }
 
-  async function runOrphan(now: number): Promise<WorkspaceGcReceipt> {
+  async function runOrphan(now: number, active: ReadonlySet<string>): Promise<WorkspaceGcReceipt> {
     const leaves = filesystem.listWorktreeLeaves()
     if (leaves.length === 0) return emptyReceipt()
     const anchored = await store.anchoredTaskIds(leaves.map(({ taskId }) => taskId))
     let removed = 0
     let skipped = 0
     for (const leaf of leaves) {
-      if (anchored.has(leaf.taskId) || filesystem.isMaterializingTask(leaf.taskId)) {
+      if (
+        anchored.has(leaf.taskId) ||
+        active.has(leaf.taskId) ||
+        filesystem.isMaterializingTask(leaf.taskId)
+      ) {
         skipped += 1
         continue
       }
@@ -526,7 +530,7 @@ export function createWorkspaceMaintenanceCommand(input: {
         case 'scratch':
           return await runScratch(now)
         case 'orphan':
-          return await runOrphan(now)
+          return await runOrphan(now, new Set(gcInput.activeTaskIds))
         case 'partial': {
           const receipt = await filesystem.runPartialCloneGc(now, gcInput.gitCloneTimeoutMs)
           return {

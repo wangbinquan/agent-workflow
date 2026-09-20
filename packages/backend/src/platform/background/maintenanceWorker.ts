@@ -1,3 +1,5 @@
+import { composeWorkspacePreparationMaintenance } from '@/modules/task-execution/composition/workspacePreparationMaintenance'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-338 — long-lived maintenance Worker entrypoint. It owns a separate
 // bun:sqlite connection and serializes every heavy/recovery/checkpoint job.
 // There is intentionally no fallback that runs a failed Worker job on main.
@@ -546,12 +548,17 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       taskRecoveryOperations = taskExecution.recoveryAdministration
       taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(client)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
-        composeWorkspaceMaintenanceCommand({
+        composeWorkspacePreparationMaintenance({
           db: client,
           appHome,
-          terminalMaintenance: taskExecution.terminalMaintenance,
-          isMaterializingTask,
-          invalidateWorkspacePath: invalidateCallGraphIndex,
+          repositoryPreparation: composeRepositoryPreparation({ db: client, appHome }),
+          maintenance: composeWorkspaceMaintenanceCommand({
+            db: client,
+            appHome,
+            terminalMaintenance: taskExecution.terminalMaintenance,
+            isMaterializingTask,
+            invalidateWorkspacePath: invalidateCallGraphIndex,
+          }),
         }),
       )
       tokenCallAudit = createTokenCallAudit(client)
@@ -655,12 +662,17 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       taskRecoveryOperations = taskExecution.recoveryAdministration
       taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(sqliteDb)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
-        composeWorkspaceMaintenanceCommand({
+        composeWorkspacePreparationMaintenance({
           db: sqliteDb,
           appHome,
-          terminalMaintenance: taskExecution.terminalMaintenance,
-          isMaterializingTask,
-          invalidateWorkspacePath: invalidateCallGraphIndex,
+          repositoryPreparation: composeRepositoryPreparation({ db: sqliteDb, appHome }),
+          maintenance: composeWorkspaceMaintenanceCommand({
+            db: sqliteDb,
+            appHome,
+            terminalMaintenance: taskExecution.terminalMaintenance,
+            isMaterializingTask,
+            invalidateWorkspacePath: invalidateCallGraphIndex,
+          }),
         }),
       )
       systemOperations = Object.freeze({

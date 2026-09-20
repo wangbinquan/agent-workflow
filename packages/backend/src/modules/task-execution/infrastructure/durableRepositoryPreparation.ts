@@ -288,3 +288,10 @@ export async function cleanupDurableRepositoryWorkspace(input: {
     effect.close()
   }
 }
+
+export async function hasDurableRepositoryPreparation(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<boolean> {
+  return (await createWorkspacePreparationJournal(db).forTask(taskId)) !== null
+}

@@ -1,5 +1,11 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 同步 repository/multipart 与既有 GC 接线候选
+
+同步准备在 Git/FS 前保存 Task plan/SC operation，上传仍在 Task INSERT 前；artifact 与 Task 同事务接受。原 orphan worker 双库接入 Task-owned 未绑定 plan 补偿，沿用 24 小时阈值与现 preparation lease 活动快照，SC 保持 Git identity/CAS 清理。新增同步/上传/回滚/重建/GC 双库测试等待 hosted 验收。
+前批 `c610e30db` Main `35505842902` 暴露夹具资源/authority 装配、legacy private import 与债务计数漂移，本批修正，不弱化行为断言。RFC363 仍待 scratch/sourceTaskId/call/fusion/DE adapters、public URL seal 和 facade 收口；RFC364 待最终托管验收；RFC365 仅 T1。
+
+
 ## 2026-09-20 RFC-363 deferred Task 接线候选与 RFC-364 守卫修复
 
 Task admission 同事务保存 SC frozen source/operation 与 Task plan，现 owner 驱动 phase-0，receipt 与工作区投影同事务接受；SQLite/PG retry/cancel 复用 journal，避免旧 stale cleanup 删除可恢复产物。双库实际 kernel/Git/回滚/owner/group/receipt 测试随批提交，等待 hosted 验收。同步/上传/call/fusion/DE 的 pre-materialized journal 与剩余 facade 仍待 T5/T7，RFC363 不标 Done。

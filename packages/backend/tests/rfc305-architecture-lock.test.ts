@@ -375,6 +375,7 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-359 AC-1（第 13 刀）**销账**：`/api/tasks` 的两个 provider 绑定合成一个中立工厂，
       // SQLite 那半退役，这条边随之出账（共用实现那条 `taskRouteOperations.ts` 仍在下面）。
       'packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> @/modules/identity-access/public/operations',
       // RFC-359 AC-1（第 12 刀）：运行时参与者合一后按新文件名重新落位（账本按字典序）。
@@ -382,6 +383,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/accountRepositoryTransportCredentials.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',

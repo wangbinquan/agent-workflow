@@ -1,10 +1,3 @@
-import type { TaskRepositoryPreparationBinding } from '@/modules/task-execution/infrastructure/repositoryPreparationBinding'
-import {
-  prepareDurableRepositoryWorkspace,
-  cleanupDurableRepositoryWorkspace,
-  acceptDurableRepositoryWorkspace,
-} from '@/modules/task-execution/infrastructure/durableRepositoryPreparation'
-import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import {
   type ResolvedRepoSource,
   type RepoSourceSpec,
@@ -356,6 +349,7 @@ export function activeTaskIdsSnapshot(): string[] {
     ...new Set([
       ...taskDriverRegistry.activeTokens().map((token) => token.taskId),
       ...testActiveControllers.keys(),
+      ...materializingSpaces.keys(),
     ]),
   ]
 }
@@ -454,7 +448,7 @@ export async function finalizeCanceledTaskWithoutDriver(
 
 export interface StartTaskDeps {
   /** Required by bootstrap when recovering a journaled preparation; absent only for legacy tasks. */
-  repositoryPreparation?: TaskRepositoryPreparationBinding
+  repositoryPreparation?: taskDriveComposition.TaskRepositoryPreparationBinding
   /** RFC-332: required instance-level TaskEngine application surface. */
   schedulerDriver: Pick<SchedulerDriverPort, 'drive'>
   /**
@@ -821,7 +815,7 @@ export interface DeferredRepositoryPreparationDependencies extends Pick<
   // 准备时才知道的那一格：占位行上冻结的提交身份由 descriptor 带回来。
   | 'gitCommitIdentity'
 > {
-  readonly repositoryPreparation?: TaskRepositoryPreparationBinding
+  readonly repositoryPreparation?: taskDriveComposition.TaskRepositoryPreparationBinding
   readonly db: LegacyProviderNeutralDatabase
   readonly repositoryWorkspace: RepositoryWorkspaceStore
   /**
@@ -1401,7 +1395,10 @@ function createPersistedRepositoryPreparationStep(input: {
       if (task === null) return { kind: 'terminal-won' }
       if (
         descriptor.hasPriorAttempt &&
-        (await createWorkspacePreparationJournal(input.deps.db).forTask(descriptor.taskId)) === null
+        !(await taskDriveComposition.hasDurableRepositoryPreparation(
+          input.deps.db,
+          descriptor.taskId,
+        ))
       ) {
         // RFC-359 W10 —— 这一笔**没有事务体**（`run: () => undefined`），它只是围栏：确认本
         // driver 仍是任务的活 owner（命中 `claimed` 的精确 owner 才放行并推进 revision），
@@ -4037,7 +4034,7 @@ async function runDeferredRepoPreparation(args: {
   const { deps, input, appHome, signal, taskId, prepTaskId, task, space, ownership } = args
   if (
     deps.repositoryPreparation === undefined &&
-    (await createWorkspacePreparationJournal(deps.db).forTask(taskId)) !== null
+    (await taskDriveComposition.hasDurableRepositoryPreparation(deps.db, taskId))
   )
     throw new Error('journaled-repository-preparation-binding-missing')
   // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
@@ -4143,7 +4140,7 @@ async function runDeferredRepoPreparation(args: {
       const durable =
         deps.repositoryPreparation === undefined
           ? null
-          : await prepareDurableRepositoryWorkspace({
+          : await taskDriveComposition.prepareDurableRepositoryWorkspace({
               db: deps.db,
               binding: deps.repositoryPreparation,
               taskId,
@@ -4365,7 +4362,7 @@ async function runDeferredRepoPreparation(args: {
       const durableCleanup =
         deps.repositoryPreparation === undefined
           ? null
-          : await cleanupDurableRepositoryWorkspace({
+          : await taskDriveComposition.cleanupDurableRepositoryWorkspace({
               db: deps.db,
               binding: deps.repositoryPreparation,
               taskId,
@@ -4446,7 +4443,7 @@ async function runDeferredRepoPreparation(args: {
   // 体内每一条语句都必须 `await`：`.run()` 在 PostgreSQL 上不 await 就是一个没人等的 Promise，
   // 语句要么落在事务外、要么根本不发，而两边都不会抛。
   const persistPreparedProjection = async (tx: DatabaseTransaction): Promise<void> => {
-    await acceptDurableRepositoryWorkspace(tx, taskId)
+    await taskDriveComposition.acceptDurableRepositoryWorkspace(tx, taskId)
     await tx
       .update(tasks)
       .set({
