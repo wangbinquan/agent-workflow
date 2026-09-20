@@ -78714,7 +78714,7 @@
   "denominator": {
     "architectureExceptions": 4630,
     "implementationSccs": 0,
-    "observedEdges": 5143,
+    "observedEdges": 5150,
     "requiredPorts": 29,
     "targetEdges": 66
   },
@@ -88817,6 +88817,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts#$file",
+      "id": "import:1f1c41512df17330ca10",
+      "owner": "source-control",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "../../../identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RequestAuthority",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#RequestAuthority"
     },
     {
       "edgeKind": "type",
@@ -110980,6 +110996,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#$file",
+      "id": "import:6408b40b08cb3f521f37",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "../../../source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "BoundedWorkspaceContent",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#BoundedWorkspaceContent"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#$file",
@@ -126657,6 +126689,22 @@
       "toContext": "integration",
       "toFile": "packages/backend/src/modules/integration/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/participants.ts#DigitalEmployeeWorkStartPort"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#$file",
+      "id": "import:96a342491b15e8c5ba61",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "../../../source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkspaceEntryPage",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#WorkspaceEntryPage"
     },
     {
       "edgeKind": "value",
@@ -147252,6 +147300,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts#$file",
+      "id": "import:d5ed18e67f674628544e",
+      "owner": "source-control",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "../../../identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "IdempotentCommandContext",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#IdempotentCommandContext"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -152996,6 +153060,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#$file",
+      "id": "import:e6eb95b32e2bc02721d9",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "../../../source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkspaceListRequest",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#WorkspaceListRequest"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/mcps.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
@@ -153425,6 +153505,22 @@
       "toContext": "task-catalog",
       "toFile": "packages/backend/src/modules/task-catalog/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-catalog/composition.ts#TaskCatalogModule"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#$file",
+      "id": "import:e8a330c84a5b1928d76f",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "../../../source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkspaceReadRequest",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#WorkspaceReadRequest"
     },
     {
       "edgeKind": "value",
@@ -159699,6 +159795,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/workerDefinitions.ts#createWakeLatch"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#$file",
+      "id": "import:fbaa39d9415332bc859e",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "../../../source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "FrozenRepositoryPreparationRef",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#FrozenRepositoryPreparationRef"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -161601,7 +161713,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dbdc16abca352f2136ec0ded58721eb2152ef0600695492483ff263b7ac9794c",
+  "sourceDigest": "sha256:1b69690560d3d7b6963fe2e2304aab51a1efeb8541954a6f9662cd70730ef380",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

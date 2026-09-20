@@ -129,3 +129,102 @@ export interface RepositoryPublicationTransport {
     readonly remoteUrl: string
   }): Promise<OpenRepositoryPublicationSessionResult>
 }
+
+// RFC-362: declared contracts; production cutover remains W4-E1/W5.
+declare const sealedPublicRepositorySourceRefBrand: unique symbol
+export type SealedPublicRepositorySourceRef = string & {
+  readonly [sealedPublicRepositorySourceRefBrand]: 'SealedPublicRepositorySourceRef'
+}
+
+declare const frozenRepositoryPreparationRefBrand: unique symbol
+export type FrozenRepositoryPreparationRef = string & {
+  readonly [frozenRepositoryPreparationRefBrand]: 'FrozenRepositoryPreparationRef'
+}
+
+declare const repositoryPreparationOperationRefBrand: unique symbol
+export type RepositoryPreparationOperationRef = string & {
+  readonly [repositoryPreparationOperationRefBrand]: 'RepositoryPreparationOperationRef'
+}
+
+declare const repositoryPreparationReceiptRefBrand: unique symbol
+export type RepositoryPreparationReceiptRef = string & {
+  readonly [repositoryPreparationReceiptRefBrand]: 'RepositoryPreparationReceiptRef'
+}
+
+declare const repositoryPreparationStopReceiptBrand: unique symbol
+export type RepositoryPreparationStopReceipt = string & {
+  readonly [repositoryPreparationStopReceiptBrand]: 'RepositoryPreparationStopReceipt'
+}
+
+declare const repositoryPreparationDiagnosticsRefBrand: unique symbol
+export type RepositoryPreparationDiagnosticsRef = string & {
+  readonly [repositoryPreparationDiagnosticsRefBrand]: 'RepositoryPreparationDiagnosticsRef'
+}
+
+declare const authorizedWorkspaceSnapshotRefBrand: unique symbol
+export type AuthorizedWorkspaceSnapshotRef = string & {
+  readonly [authorizedWorkspaceSnapshotRefBrand]: 'AuthorizedWorkspaceSnapshotRef'
+}
+
+export interface VersionedRepositoryRef {
+  readonly id: string
+  /** Content revision, not lastFetchedAt. No production revision store exists yet. */
+  readonly revision: string
+}
+export interface VersionedRepositoryGroupRef {
+  readonly id: string
+  readonly version: number
+}
+export interface PublicRepositorySourceInput {
+  readonly kind: 'url'
+  readonly url: string
+  readonly requestedRef?: string
+}
+export type RepositoryLaunchSource =
+  | {
+      readonly kind: 'repository'
+      readonly repository: VersionedRepositoryRef
+      readonly base: string
+    }
+  | { readonly kind: 'repository-group'; readonly group: VersionedRepositoryGroupRef }
+  | { readonly kind: 'sealed-public-repository'; readonly source: SealedPublicRepositorySourceRef }
+export type RepositoryPreparationSafeCode =
+  | 'repository-unavailable'
+  | 'preparation-failed'
+  | 'replay-unavailable'
+export type WorkspacePreparationExecutionOutcome =
+  | { readonly kind: 'prepared'; readonly receipt: RepositoryPreparationReceiptRef }
+  | {
+      readonly kind: 'failed'
+      readonly safeCode: RepositoryPreparationSafeCode
+      readonly diagnostics: RepositoryPreparationDiagnosticsRef
+    }
+  | { readonly kind: 'stopped'; readonly receipt: RepositoryPreparationStopReceipt }
+export interface WorkspaceListRequest {
+  readonly relativeDirectory: string
+  readonly page: { readonly offset: number }
+  readonly maxEntries: number
+}
+export interface WorkspaceReadRequest {
+  readonly relativeFile: string
+  readonly offset: number
+  readonly maxBytes: number
+}
+export interface WorkspaceEntryPage {
+  readonly entries: readonly {
+    readonly name: string
+    readonly kind: 'file' | 'directory'
+    readonly size: number | null
+  }[]
+  readonly nextOffset: number | null
+  /** Existing listing cap can prevent later pages; do not imply a complete listing. */
+  readonly truncated: boolean
+}
+export interface BoundedWorkspaceContent {
+  readonly encoding: 'base64'
+  readonly content: string
+  readonly size: number
+  readonly offset: number
+  readonly nextOffset: number | null
+  readonly oversized: boolean
+}

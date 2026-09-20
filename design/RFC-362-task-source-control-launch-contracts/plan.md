@@ -32,3 +32,11 @@
 - [ ] declared-only 项单独计数，生产 liveness 不涨，route/root/legacy debt 不虚减。
 - [ ] 后继 E1 生产 RFC 可依据本批证据写出逐入口切换和回滚方案；独立获批后才实施。
 - [ ] exact-SHA Main CI 成功；W4-E1、W5 及 RFC-294 继续保持未关闭状态。
+
+## 4. 实施候选（2026-09-20）
+
+T1/T2/T3/T4/T5/T6 的代码与证据见 [implementation-ledger.md](implementation-ledger.md) 和
+[implementation-baseline.json](implementation-baseline.json)。21 个现有生产入口/算法文件与 `475fbb43c` 逐字相同；
+22 个新 public 声明单列 declared-contract-debt，Task required port 只有测试适配。
+新测试复用同一 DatabaseSession、SC scope reader、Git 和工作区读取；durable replay/group/revision 的限制明确刻画并交后继。
+未在本地运行 Bun 测试/服务/全门，T7 与所有运行时通过结论等待最终 exact-SHA 托管 CI。

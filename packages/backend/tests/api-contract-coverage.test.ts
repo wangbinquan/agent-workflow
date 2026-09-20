@@ -81,9 +81,11 @@ function listRouteFiles(): string[] {
   const files = listTsFilesRecursive(ROUTES_DIR)
   for (const entry of readdirSync(MODULES_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
-    const inbound = join(MODULES_DIR, entry.name, 'inbound')
-    if (!existsSync(inbound)) continue
-    files.push(...listTsFilesRecursive(inbound))
+    // RFC-360: owner HTTP adapters also live in infrastructure/http.
+    for (const relative of ['inbound', 'infrastructure/http']) {
+      const directory = join(MODULES_DIR, entry.name, relative)
+      if (existsSync(directory)) files.push(...listTsFilesRecursive(directory))
+    }
   }
   return files
 }

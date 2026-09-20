@@ -81,3 +81,11 @@ T1 精确列出相关 suite，避免因旧文件名变更漏覆盖。新合同�
 
 本 RFC 只增加合同和测试适配，回滚删除尚未接入的合同即可；不得回退 RFC-359 统一链。
 后继生产 cutover 必须另外设计 active task / prepared workspace 的 forward convergence，再取得实施批准。
+
+## 7. 候选对拍与接口细化
+
+具体字段、当前源码、测试能力边界和后继任务见 [implementation-ledger.md](implementation-ledger.md)。
+CurrentAuthorityInTx 尚未有已交付类型，本批合同使用已有 RequestAuthority，真实 live-scope 工厂留后继；
+SC 返回自身 RepositoryPreparationReceiptRef，由后继 Task adapter 转成 Task receipt，避免 SC 反依赖 Task。
+引用 codec 仅负责 `sc:<kind>:v1:<ULID>` 语法；绝不代表对应持久记录已实现。
+Workspace reader 保留现有 UTF-8 display text 与列表截断语义，不把测试 wrapper 当新 raw byte API。

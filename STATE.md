@@ -1,5 +1,14 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-362 合同准备候选与 360/361 CI 修复
+
+SC offered 与 Task required 合同、引用 codec、真实双库/Git 测试适配及后继切换清单已落档。
+22 个 public 项为 declared-contract-debt；21 个生产 launch/root/机制文件相对 `475fbb43c` 无改动。
+现有存储不能兑付跨进程 sealed/frozen ref；group/revision/raw-byte gaps 明确交后继，不领取 E1/W5 完成信用。
+该 SHA 的 Main CI 已发现 route source scan 路径、兼容债务高水位和示例合同版本三项遗漏，本批修复。
+RFC360/361/362 均仍 In Progress，等待本批最终 exact-SHA CI；system-mocks CLI mode WIP 原样保留。
+
+
 ## 2026-09-20 RFC-361 provider 归位候选
 
 RC 接管 Agent/Workflow projection；Task 接管原 Script fixture mechanism；EC 保留输入 pairing 与 exact-output 校验。

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1687,
+    "entries": 1689,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22072,6 +22072,56 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/public/types.ts#SealedPublicRepositorySourceRef",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#SealedPublicRepositorySourceRef",
+      "symbol": "SealedPublicRepositorySourceRef",
+      "targetContext": "source-control",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/public/types.ts#sealedPublicRepositorySourceRefBrand",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#sealedPublicRepositorySourceRefBrand",
+      "symbol": "sealedPublicRepositorySourceRefBrand",
+      "targetContext": "source-control",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -40331,7 +40381,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dbdc16abca352f2136ec0ded58721eb2152ef0600695492483ff263b7ac9794c",
+  "sourceDigest": "sha256:1b69690560d3d7b6963fe2e2304aab51a1efeb8541954a6f9662cd70730ef380",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

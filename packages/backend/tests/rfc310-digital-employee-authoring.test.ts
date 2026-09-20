@@ -79,10 +79,10 @@ function developmentExecutionContracts(): ExecutionContractParticipant {
         }
       },
     },
-    programFixtures: exampleProgramFixture(
-      developmentExecutionContractRegistrations,
-      'development.prepare-materials',
-    ),
+    programFixtures: exampleProgramFixture(developmentExecutionContractRegistrations, {
+      contractId: 'development.prepare-materials',
+      version: 3,
+    }),
   })
 }
 

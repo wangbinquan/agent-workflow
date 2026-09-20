@@ -145,3 +145,12 @@ export interface RepositoryScopeAuthorizationInTx<Transaction> {
     target: RepositoryScopeTarget,
   ): RepositoryScopeMaybePromise<boolean>
 }
+
+// RFC-362: type declarations only; tests wrap the existing owners. No production binding yet.
+export type {
+  RepositoryLaunchSnapshotInTx,
+  RepositoryPreparationEffectCapability,
+  PublicRepositorySourceSealPort,
+  RepositoryPreparationParticipant,
+  WorkspaceContentParticipant,
+} from '../application/ports/repositoryLaunch'

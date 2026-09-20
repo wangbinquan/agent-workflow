@@ -1658,14 +1658,61 @@ interface PublicSurfaceEntry {
     readonly maxTransitiveLeafFields: number
     readonly maxUnionVariants: number
   }
-  readonly status: 'legacy-context-debt' | 'target-context-current-surface'
+  readonly status:
+    | 'legacy-context-debt'
+    | 'target-context-current-surface'
+    | 'declared-contract-debt'
+  readonly plannedConsumer?: string
+  readonly successorTask?: string
   readonly removeAfterWave: string | null
 }
 
-function publicSurfaceLifecycle(location: {
-  context: string
-  entrypoint: string
-}): Pick<PublicSurfaceEntry, 'status' | 'removeAfterWave'> {
+/** RFC-362 preparation only. Remove each exact ID when its approved successor
+ * supplies a real production provider/callsite; type references are not cutover credit. */
+export const RFC362_DECLARED_PUBLIC_CONTRACT_IDS: readonly string[] = [
+  'public:source-control:participants:RepositoryLaunchSnapshotInTx',
+  'public:source-control:participants:RepositoryPreparationEffectCapability',
+  'public:source-control:participants:PublicRepositorySourceSealPort',
+  'public:source-control:participants:RepositoryPreparationParticipant',
+  'public:source-control:participants:WorkspaceContentParticipant',
+  'public:source-control:types:SealedPublicRepositorySourceRef',
+  'public:source-control:types:FrozenRepositoryPreparationRef',
+  'public:source-control:types:RepositoryPreparationOperationRef',
+  'public:source-control:types:RepositoryPreparationReceiptRef',
+  'public:source-control:types:RepositoryPreparationStopReceipt',
+  'public:source-control:types:RepositoryPreparationDiagnosticsRef',
+  'public:source-control:types:AuthorizedWorkspaceSnapshotRef',
+  'public:source-control:types:VersionedRepositoryRef',
+  'public:source-control:types:VersionedRepositoryGroupRef',
+  'public:source-control:types:PublicRepositorySourceInput',
+  'public:source-control:types:RepositoryLaunchSource',
+  'public:source-control:types:RepositoryPreparationSafeCode',
+  'public:source-control:types:WorkspacePreparationExecutionOutcome',
+  'public:source-control:types:WorkspaceListRequest',
+  'public:source-control:types:WorkspaceReadRequest',
+  'public:source-control:types:WorkspaceEntryPage',
+  'public:source-control:types:BoundedWorkspaceContent',
+]
+
+function publicSurfaceLifecycle(
+  location: {
+    context: string
+    entrypoint: string
+  },
+  symbol: string,
+): Pick<PublicSurfaceEntry, 'status' | 'removeAfterWave' | 'plannedConsumer' | 'successorTask'> {
+  if (
+    RFC362_DECLARED_PUBLIC_CONTRACT_IDS.includes(
+      `public:${location.context}:${location.entrypoint}:${symbol}`,
+    )
+  ) {
+    return {
+      status: 'declared-contract-debt',
+      removeAfterWave: 'W4-E1/W5',
+      plannedConsumer: 'task-execution',
+      successorTask: 'RFC-362-E1-production-cutover',
+    }
+  }
   const target = (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
   return {
     status: target ? 'target-context-current-surface' : 'legacy-context-debt',
@@ -1788,7 +1835,7 @@ function buildPublicSurfaces(
           maxTransitiveLeafFields: Math.max(24, shape.fields.length),
           maxUnionVariants: Math.max(12, shape.unionVariants),
         },
-        ...publicSurfaceLifecycle(location),
+        ...publicSurfaceLifecycle(location, item.name),
       })
     }
     for (const statement of unit.source.statements) {
@@ -1858,7 +1905,7 @@ function buildPublicSurfaces(
             maxTransitiveLeafFields: Math.max(24, shape.fields.length),
             maxUnionVariants: Math.max(12, shape.unionVariants),
           },
-          ...publicSurfaceLifecycle(location),
+          ...publicSurfaceLifecycle(location, symbol),
         })
       }
     }
@@ -4296,6 +4343,19 @@ export function validateCanonicalArtifacts(artifacts: CanonicalArtifacts): strin
     }
     if (surface.status === 'legacy-context-debt' && surface.removeAfterWave === null) {
       errors.push(`unowned legacy public surface: ${String(surface.id)}`)
+    }
+  }
+
+  for (const id of RFC362_DECLARED_PUBLIC_CONTRACT_IDS) {
+    const surface = surfaces.find((entry) => entry.id === id)
+    if (
+      surface === undefined ||
+      surface.status !== 'declared-contract-debt' ||
+      surface.removeAfterWave !== 'W4-E1/W5' ||
+      surface.plannedConsumer !== 'task-execution' ||
+      surface.successorTask !== 'RFC-362-E1-production-cutover'
+    ) {
+      errors.push(`missing RFC-362 declared contract debt: ${id}`)
     }
   }
 

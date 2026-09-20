@@ -1,0 +1,391 @@
+{
+  "sourceSha": "475fbb43c09b3be0eeb0dc036c41bcbe508fc277",
+  "scope": "contracts and test providers only; no production launch cutover",
+  "productionFiles": [
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
+      "sha256": "047a486cc9035f58a23c7f5333022c7d3aee305da5a29422ec110156825bc6dd",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "sha256": "332053c21ddf7be1e3afad7aea26226cca1ce1c63942048da209e8c5db94cae1",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
+      "sha256": "387f8a32057b2d5d73d1f0ff8e16d05fff9b10a0271dff1372411cf90dbb0f72",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts",
+      "sha256": "d9f69beea54ac8ff6dccc52ce8be4160cde911bc69099f850d790669953c59c2",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts",
+      "sha256": "2bac25221f7e198f26c37125c6af860d46abb50c92713b8c65d01137a1ab77d0",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
+      "sha256": "715790c31a658a98053f74a01938116562b7ddb5f370c716b0cc5fb12e351bd2",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
+      "sha256": "3bb2bfbed755a11b6ee77c13a64ba8a64af9b4f20a006259a78f9a4aaf07f5f7",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/application/drive/repositoryPreparationStep.ts",
+      "sha256": "b9ee679270934489d3f3613f768f220ff7764a3461d5a8b4ca09f8c12fc07813",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts",
+      "sha256": "6b10cacb479c0b441a9b658db6134ba0b7a88465cef6b7765a9b496254dbf459",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/deferredRepositoryPreparation.ts",
+      "sha256": "ddb3da46f738c7866024a851553488178fa6b7a91d93baf6c0a1da17df03d03f",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/taskAutoResume.ts",
+      "sha256": "20f176716d7e4e5f83081035503fd8d0c9319c928788a678d8b412ba63d75404",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "sha256": "dc827e633c45383c2800d01d197ab5e3e1b95a966cdbcc23778b2f91872f365d",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/services/task.ts",
+      "sha256": "7f00253ae67d801862439a9b2f1966774b10d152b9567f8212f5ddd54c78753b",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/services/gitRepoCache.ts",
+      "sha256": "0525464ac002ef210e9e436fedcd1c6960c7fd24dd74c7e7d4b3c516112c271c",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/services/repoGroup.ts",
+      "sha256": "707bffb0d2cf62e01f44d2d70c8c369306bfc026c4c27ea89df3ca1ff8240dc5",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/services/worktreeFiles.ts",
+      "sha256": "a534c2510271c203257f0469f4a82dacab31da2c3dd54678759bed69ff6e4abd",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/util/git.ts",
+      "sha256": "d99b0e87d9801c405f8ff54292066180a49e1b46f2050a9f22518605d6902249",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/routes/tasks.ts",
+      "sha256": "95efba9f7f6660ce2493b1d24c315d45257755d887c7475c485fcb9989c9636b",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/server.ts",
+      "sha256": "3d08f716f0cd8c3aa9bf92d94ec976ba90ee6c4dd03f59a45f485a9100ffdcc5",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/cli/start.ts",
+      "sha256": "c13c05b28e797c7bbce03205f92793c5ffcc65e0e393cd64b2a70ff2d57db55d",
+      "unchangedFromBaseline": true
+    },
+    {
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "sha256": "56b34554920a2cb2dd0535c058ecab355b230b44aa5046b8628160dee6c9f2d7",
+      "unchangedFromBaseline": true
+    }
+  ],
+  "rootWriters": [
+    {
+      "call": "tx.insert(tasks)",
+      "line": 833,
+      "fields": [
+        "id",
+        "name",
+        "workflowId",
+        "workflowSnapshot",
+        "workflowVersion",
+        "repoPath",
+        "repoUrl",
+        "cachedRepoId",
+        "repoGroupId",
+        "repoGroupName",
+        "worktreePath",
+        "baseBranch",
+        "branch",
+        "baseCommit",
+        "status",
+        "inputs",
+        "maxDurationMs",
+        "maxTotalTokens",
+        "startedAt",
+        "finishedAt",
+        "errorSummary",
+        "errorMessage",
+        "gitUserName",
+        "gitUserEmail",
+        "workingBranch",
+        "autoCommitPush",
+        "repoCount",
+        "ownerUserId",
+        "launchOrigin",
+        "catalogVisibility",
+        "scheduledTaskId",
+        "webhookTriggerId",
+        "webhookFireId",
+        "eventSubscriptionId",
+        "eventDeliveryId",
+        "triggerContextJson",
+        "platformInputPathsJson",
+        "sourceTerminationBinding",
+        "sourceTerminationLaunchRev",
+        "sourceTerminationFence",
+        "sourceTerminationEffectRev",
+        "workgroupId",
+        "workgroupConfigJson",
+        "sourceAgentId",
+        "sourceAgentName",
+        "digitalEmployeeRoundId",
+        "digitalEmployeeCaseId",
+        "spaceKind",
+        "workspacePrunedAt",
+        "branchStartedAt",
+        "rootTaskId",
+        "executionLineageId",
+        "lineageSlotPathJson",
+        "refClosureJson"
+      ]
+    }
+  ],
+  "declaredPublicContracts": [
+    {
+      "id": "public:source-control:participants:PublicRepositorySourceSealPort",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:participants:RepositoryLaunchSnapshotInTx",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:participants:RepositoryPreparationEffectCapability",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:participants:RepositoryPreparationParticipant",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:participants:WorkspaceContentParticipant",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:AuthorizedWorkspaceSnapshotRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:BoundedWorkspaceContent",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [
+        "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts"
+      ],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:FrozenRepositoryPreparationRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [
+        "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts"
+      ],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:PublicRepositorySourceInput",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:RepositoryLaunchSource",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:RepositoryPreparationDiagnosticsRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:RepositoryPreparationOperationRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:RepositoryPreparationReceiptRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:RepositoryPreparationSafeCode",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:RepositoryPreparationStopReceipt",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:SealedPublicRepositorySourceRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:VersionedRepositoryGroupRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:VersionedRepositoryRef",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:WorkspaceEntryPage",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [
+        "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts"
+      ],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:WorkspaceListRequest",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [
+        "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts"
+      ],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:WorkspacePreparationExecutionOutcome",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [],
+      "unresolvedTypeRefs": []
+    },
+    {
+      "id": "public:source-control:types:WorkspaceReadRequest",
+      "owner": "source-control",
+      "plannedConsumer": "task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "successorTask": "RFC-362-E1-production-cutover",
+      "productionConsumerFiles": [
+        "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts"
+      ],
+      "unresolvedTypeRefs": []
+    }
+  ],
+  "requiredPort": {
+    "file": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+    "symbol": "TaskWorkspaceReadPort",
+    "status": "declared-contract-debt",
+    "provider": "tests/helpers/repositoryLaunchContracts.ts",
+    "productionConsumer": null,
+    "successorTask": "RFC-362-E1-production-cutover"
+  }
+}

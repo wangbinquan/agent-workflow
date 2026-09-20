@@ -1,13 +1,20 @@
-import type { ExecutionContractRegistration } from '@/modules/execution-contract/public/types'
+import type {
+  ExecutionContractRegistration,
+  ExecutionContractRef,
+} from '@/modules/execution-contract/public/types'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
 import type { ExecutionContractProgramFixturePort } from '@/modules/execution-contract/composition/required-ports'
 
 /** Simulated mechanism for authoring-only tests; EC still validates the real guide and pairing. */
 export function exampleProgramFixture(
   registrations: readonly ExecutionContractRegistration[],
-  contractId: string,
+  contract: ExecutionContractRef,
 ): ExecutionContractProgramFixturePort {
-  const registration = registrations.find((r) => r.contractRef.contractId === contractId)
+  const registration = registrations.find(
+    (r) =>
+      r.contractRef.contractId === contract.contractId &&
+      r.contractRef.version === contract.version,
+  )
   if (!registration) throw new Error('missing test contract guide')
   const guide = executionContractGuideSchema.parse(JSON.parse(registration.guideJson))
   return {

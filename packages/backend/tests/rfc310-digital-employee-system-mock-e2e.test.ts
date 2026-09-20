@@ -899,10 +899,10 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
             }
           },
         },
-        programFixtures: exampleProgramFixture(
-          developmentExecutionContractRegistrations,
-          'development.prepare-materials',
-        ),
+        programFixtures: exampleProgramFixture(developmentExecutionContractRegistrations, {
+          contractId: 'development.prepare-materials',
+          version: 3,
+        }),
       })
       const employeeOs = composeDigitalEmployee({
         db,
