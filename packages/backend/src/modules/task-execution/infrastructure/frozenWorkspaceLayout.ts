@@ -2,7 +2,7 @@ import type { PlannedDirectoryNode, PlannedRepo } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { eq } from 'drizzle-orm'
 import { taskRepos, taskSpaceNodes } from '@/db/schema'
-import type { PlannedSpaceLayout } from '@/services/task'
+import type { PlannedSpaceLayout } from '../application/ports/preparedWorkspace'
 import { ValidationError } from '@/util/errors'
 
 function minimalNodePaths(mountPaths: readonly string[]): string[] {

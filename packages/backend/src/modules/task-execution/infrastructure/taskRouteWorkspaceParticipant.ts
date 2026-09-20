@@ -24,16 +24,11 @@ import { eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
 import { tasks } from '@/db/schema'
-import { composePostgresqlRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { ensureCachedRepoIdentity } from '@/services/gitRepoCache'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
-import {
-  cleanupMaterializedSpace,
-  commitMaterializedSpace,
-  materializeSpaceWithProvider,
-  type WorkspaceCleanupHookEvent,
-  type WorkspaceCleanupReport,
-} from '@/services/task'
+import type {
+  MaterializedRepo,
+  WorkspaceCleanupHookEvent,
+  WorkspaceCleanupReport,
+} from '../application/ports/preparedWorkspace'
 import type {
   TaskRoutePreparedWorkspace,
   TaskRouteWorkspaceParticipant,
@@ -73,6 +68,11 @@ export interface TaskWorkspacePreparation {
 /** Provider-bound filesystem materializer shared by initial launch and durable
  * repository-preparation retry. Authorization remains at the calling use case. */
 export interface TaskWorkspaceMaterializer {
+  reclaimLegacyArtifacts(
+    task: { id: string; cachedRepoId: string | null; repoGroupId: string | null },
+    log: { warn(message: string, context: Record<string, unknown>): void },
+  ): Promise<void>
+
   prepare(input: TaskWorkspacePreparation): Promise<TaskRoutePreparedWorkspace>
 }
 
@@ -84,7 +84,7 @@ function persistedSpaceKind(kind: SpaceKind): TaskRoutePreparedWorkspace['spaceK
 }
 
 function repositoryProjection(
-  repo: Awaited<ReturnType<typeof materializeSpaceWithProvider>>['repos'][number],
+  repo: MaterializedRepo,
   workingBranch: string | null,
 ): TaskRouteWorkspaceRepository {
   return Object.freeze({
@@ -135,8 +135,7 @@ function deferralApplies(input: TaskWorkspacePreparation): boolean {
  */
 async function prepareDeferredWorkspace(
   dependencies: TaskRouteWorkspaceDependencies,
-  store: ReturnType<typeof composePostgresqlRepositoryWorkspaceStore>,
-  input: TaskWorkspacePreparation,
+  input: TaskWorkspacePreparation & { readonly authority: RequestAuthority },
 ): Promise<
   Omit<TaskRoutePreparedWorkspace, 'admit'> & {
     readonly sealedSource: SealedPublicRepositorySourceRef | null
@@ -146,29 +145,15 @@ async function prepareDeferredWorkspace(
   let cachedRepoId: string | null = null
   let sealedSource: SealedPublicRepositorySourceRef | null = null
   if (typeof task.repoUrl === 'string' && task.repoUrl.length > 0) {
-    if (input.authority !== undefined) {
-      sealedSource = await dependencies.repositoryPreparation.sourceSeal.seal(
-        dependencies.sourceContexts(input.authority, input.taskId),
-        {
-          kind: 'url',
-          url: task.repoUrl,
-          ...(task.ref === undefined ? {} : { requestedRef: task.ref }),
-        },
-      )
-      cachedRepoId = await dependencies.repositoryPreparation.sealedIdentity(sealedSource)
-    } else {
-      // Pre-journal retry fixtures have no request authority; production launch
-      // always supplies the root's admitted authority and source context factory.
-      const identity = await ensureCachedRepoIdentity(
-        {
-          store,
-          appHome: dependencies.appHome,
-          ...(dependencies.secretBox === undefined ? {} : { secretBox: dependencies.secretBox }),
-        },
-        { url: task.repoUrl },
-      )
-      cachedRepoId = identity.cachedRepoId
-    }
+    sealedSource = await dependencies.repositoryPreparation.sourceSeal.seal(
+      dependencies.sourceContexts(input.authority, input.taskId),
+      {
+        kind: 'url',
+        url: task.repoUrl,
+        ...(task.ref === undefined ? {} : { requestedRef: task.ref }),
+      },
+    )
+    cachedRepoId = await dependencies.repositoryPreparation.sealedIdentity(sealedSource)
   } else if (typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0) {
     // 以 `cachedRepoId` 启动时它**本身就是身份**，直接落到占位行——漏掉这一支，
     // warm fetch 失败后点「重试准备」会撞 `repo-prep-source-unavailable`。
@@ -177,7 +162,7 @@ async function prepareDeferredWorkspace(
   const repoGroupId =
     typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0 ? task.repoGroupId : null
   const repoGroupName =
-    repoGroupId === null ? null : (await resolveRepoGroupLayout(store, repoGroupId)).groupName
+    repoGroupId === null ? null : await dependencies.repositoryPreparation.groupName(repoGroupId)
   return Object.freeze({
     sealedSource,
     taskId: input.taskId,
@@ -211,13 +196,13 @@ async function prepareDeferredWorkspace(
 export function createTaskWorkspaceMaterializer(
   dependencies: TaskRouteWorkspaceDependencies,
 ): TaskWorkspaceMaterializer {
-  const store = composePostgresqlRepositoryWorkspaceStore(dependencies.db)
   return Object.freeze({
+    reclaimLegacyArtifacts: dependencies.repositoryPreparation.legacy.reclaim,
     async prepare(input: TaskWorkspacePreparation) {
       if (deferralApplies(input)) {
-        const workspace = await prepareDeferredWorkspace(dependencies, store, input)
         const authority = input.authority
         if (authority === undefined) throw new Error('deferred-launch-authority-missing')
+        const workspace = await prepareDeferredWorkspace(dependencies, { ...input, authority })
         return Object.freeze({
           ...workspace,
           admit: (transaction: ProviderNeutralDatabase) =>
@@ -237,7 +222,7 @@ export function createTaskWorkspaceMaterializer(
         input.authority !== undefined &&
         input.task.scratch !== true &&
         typeof (input.task as { sourceTaskId?: unknown }).sourceTaskId !== 'string'
-          ? await prepareDeferredWorkspace(dependencies, store, input)
+          ? await prepareDeferredWorkspace(dependencies, { ...input, authority: input.authority })
           : null
       const sourceTaskId = input.task.sourceTaskId
       const artifact =
@@ -285,27 +270,23 @@ export function createTaskWorkspaceMaterializer(
         }))
       const space =
         durable ??
-        (await materializeSpaceWithProvider(
-          input.task,
-          {
-            appHome: dependencies.appHome,
-            repositoryWorkspace: store,
-            loadFrozenSpaceLayout: (sourceTaskId) =>
-              loadFrozenSpaceLayout(dependencies.db, sourceTaskId),
-            gitCommitIdentity: input.gitCommitIdentity,
-            ...(dependencies.secretBox === undefined ? {} : { secretBox: dependencies.secretBox }),
-            ...(dependencies.cloneTimeoutMs === undefined
-              ? {}
-              : { cloneTimeoutMs: dependencies.cloneTimeoutMs }),
-            ...(input.sourceTerminationSignal === undefined
-              ? {}
-              : { sourceTerminationLaunchSignal: input.sourceTerminationSignal }),
-            ...(dependencies.workspaceCleanupHook === undefined
-              ? {}
-              : { workspaceCleanupHook: dependencies.workspaceCleanupHook }),
-          },
-          input.taskId,
-        ))
+        (await dependencies.repositoryPreparation.legacy.prepare({
+          task: input.task,
+          taskId: input.taskId,
+          ...(dependencies.secretBox === undefined ? {} : { secretBox: dependencies.secretBox }),
+          ...(dependencies.cloneTimeoutMs === undefined
+            ? {}
+            : { cloneTimeoutMs: dependencies.cloneTimeoutMs }),
+          ...(dependencies.workspaceCleanupHook === undefined
+            ? {}
+            : { workspaceCleanupHook: dependencies.workspaceCleanupHook }),
+          gitCommitIdentity: input.gitCommitIdentity,
+          loadFrozenSpaceLayout: (sourceTaskId) =>
+            loadFrozenSpaceLayout(dependencies.db, sourceTaskId),
+          ...(input.sourceTerminationSignal === undefined
+            ? {}
+            : { signal: input.sourceTerminationSignal }),
+        }))
       const repositories = space.repos.map((repo) =>
         repositoryProjection(repo, input.task.workingBranch ?? null),
       )
@@ -317,7 +298,7 @@ export function createTaskWorkspaceMaterializer(
           : synchronous !== null
             ? synchronous.repoGroupName
             : durable === null
-              ? (await resolveRepoGroupLayout(store, repoGroupId)).groupName
+              ? await dependencies.repositoryPreparation.groupName(repoGroupId)
               : ((
                   await dependencies.db
                     .select({ name: tasks.repoGroupName })
@@ -352,7 +333,7 @@ export function createTaskWorkspaceMaterializer(
               }
             : artifact.admit,
         commit: () => {
-          commitMaterializedSpace(space)
+          dependencies.repositoryPreparation.legacy.commit(space)
           artifact?.commit()
         },
         rollback: async () => {
@@ -370,7 +351,13 @@ export function createTaskWorkspaceMaterializer(
                     : { workingBranch: input.task.workingBranch }),
                   signal: input.sourceTerminationSignal ?? new AbortController().signal,
                 })
-          return report ?? cleanupMaterializedSpace(space, dependencies.workspaceCleanupHook)
+          return (
+            report ??
+            dependencies.repositoryPreparation.legacy.cleanup(
+              space,
+              dependencies.workspaceCleanupHook,
+            )
+          )
         },
       })
     },

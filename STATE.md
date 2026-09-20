@@ -1,5 +1,10 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 Workspace adapter 边界与严格上传 journal 候选
+
+Task workspace/retry 移除 SC composition、cache/group service 和物理 Task facade import；根提供明确的旧任务恢复 adapter，原物理回收算法归 SC，Task 私有接收投影替代 legacy service 类型。上传缺 journal 不再落回无回执写盘，Agent 上传 oracle 改为真实双库/实际 scratch，新增缺 journal 零副作用拒绝测试。
+前批 `929db4dc0` Main `35509624994` 报两个旧源码锚仍找基础设施中的 prepare 赋值，以及 fusion fixture 缺 Git name；本批将锚移到 application 唯一 prepare/共享 artifact 消费并补真实身份字段。剩余 legacy facade 与完整 AC/CI 继续，RFC363/364 不记 Done。
+
 ## 2026-09-20 RFC-363 Task application 启动编排候选
 
 启动顺序与提交前/后补偿裁决归入 Task application，原 adapter 保留唯一 Task INSERT；AST 对拍确认字段和值未改。新增失败窗口单测，进程 fixture 的系统 Git identity 与生产一致。前批 `1827fbe7c` Main `35508969487` 报 DE admission 参数类型、旧 child recording-pool 缺 journal 与 Task writer 行号漂移；本批补类型、把 child oracle 改为真实双库并保留 commit-before-drive/终态赢家断言、精确更新行号。T7 owned facade/import 与完整验收继续，不记 RFC363/364 Done。

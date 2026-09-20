@@ -63,6 +63,25 @@ describe('RFC-287 T13 — materializeSpace 的 taskId 可由调用方预定', ()
       ),
       'utf8',
     )
-    expect(kernel).toContain('const preparedWorkspace = await (')
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'launch',
+        'launchTask.ts',
+      ),
+      'utf8',
+    )
+    expect(kernel).toContain('return await launchTask({')
+    expect(kernel).toContain(
+      'return await (input.internal?.workspace ?? dependencies.workspace).prepare(',
+    )
+    expect(application.match(/workspace = await ports\.prepare\(context\)/g)).toHaveLength(1)
+    expect(application).toContain('ports.applyUploads(context, workspace, inputs)')
+    expect(application).toContain('ports.admit(context, workspace, inputs)')
   })
 })

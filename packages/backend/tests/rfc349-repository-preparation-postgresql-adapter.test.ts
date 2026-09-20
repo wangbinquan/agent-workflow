@@ -278,6 +278,9 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
       db: fixture.db,
       appHome,
       workspace: {
+        async reclaimLegacyArtifacts() {
+          trace.push('workspace:reclaim')
+        },
         async prepare(input) {
           trace.push('workspace:prepare')
           expect(input.task).toMatchObject({
@@ -320,6 +323,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     expect(submissions).toEqual([
       { taskId: 'task-1', intentId: 'intent-1', completionMode: 'background' },
     ])
+    expect(trace.indexOf('workspace:reclaim')).toBeLessThan(trace.indexOf('workspace:prepare'))
     expect(trace.indexOf('db:commit')).toBeLessThan(trace.indexOf('workspace:commit'))
     expect(trace.indexOf('workspace:commit')).toBeLessThan(trace.indexOf('event:publish'))
     expect(trace.indexOf('event:publish')).toBeLessThan(trace.indexOf('coordinator'))
@@ -345,7 +349,9 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
       'utf8',
     )
     expect(workspace).toContain('createTaskWorkspaceMaterializer')
-    expect(workspace).toContain('materializeSpaceWithProvider')
+    expect(workspace).toContain('dependencies.repositoryPreparation.legacy.prepare')
+    expect(workspace).not.toContain("from '@/modules/source-control/composition'")
+    expect(retry).toContain('dependencies.workspace.reclaimLegacyArtifacts')
     expect(retry).toContain('createPostgresqlRepositoryPreparationRetryCommand')
     expect(retry).toContain('submitTaskContinuation')
     expect(retry).toContain('await publishCommittedEventsAfterCommit')

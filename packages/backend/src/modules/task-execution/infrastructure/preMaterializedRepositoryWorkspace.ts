@@ -8,7 +8,10 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { tasks } from '@/db/schema'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import { materializingSpaces } from '@/services/gc'
-import type { MaterializedSpace, WorkspaceCleanupReport } from '@/services/task'
+import type {
+  MaterializedSpace,
+  WorkspaceCleanupReport,
+} from '../application/ports/preparedWorkspace'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { createWorkspacePreparationJournal } from './workspacePreparationJournal'

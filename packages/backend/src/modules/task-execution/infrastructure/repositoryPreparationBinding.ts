@@ -1,4 +1,10 @@
-import type { PlannedRepo, PlannedDirectoryNode, GitCommitIdentity } from '@agent-workflow/shared'
+import type { SecretBox } from '@/auth/secretBox'
+import type {
+  PlannedRepo,
+  PlannedDirectoryNode,
+  GitCommitIdentity,
+  StartTask,
+} from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import type {
@@ -13,10 +19,40 @@ import type {
   RepositoryPreparationOperationRef,
   RepositoryLaunchSource,
 } from '@/modules/source-control/public/types'
-import type { MaterializedSpace, WorkspaceCleanupReport } from '@/services/task'
+import type {
+  MaterializedSpace,
+  WorkspaceCleanupReport,
+  WorkspaceCleanupHookEvent,
+  PlannedSpaceLayout,
+} from '../application/ports/preparedWorkspace'
 
 /** Provider-private binding assembled by the root. Task retains its transaction and owner. */
 export interface TaskRepositoryPreparationBinding {
+  groupName(groupId: string): Promise<string>
+  /** Explicit compatibility for persisted Tasks created before RFC-363. */
+  legacy: {
+    reclaim(
+      task: { id: string; cachedRepoId: string | null; repoGroupId: string | null },
+      log: { warn(message: string, context: Record<string, unknown>): void },
+    ): Promise<void>
+
+    prepare(input: {
+      task: StartTask
+      taskId: string
+      gitCommitIdentity: GitCommitIdentity | null
+      signal?: AbortSignal
+      secretBox?: SecretBox
+      cloneTimeoutMs?: number
+      workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
+      loadFrozenSpaceLayout(sourceTaskId: string): Promise<PlannedSpaceLayout>
+    }): Promise<MaterializedSpace>
+    commit(space: MaterializedSpace): void
+    cleanup(
+      space: MaterializedSpace,
+      hook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>,
+    ): Promise<WorkspaceCleanupReport>
+  }
+
   prepareScratch(input: {
     taskId: string
     gitCommitIdentity: GitCommitIdentity | null

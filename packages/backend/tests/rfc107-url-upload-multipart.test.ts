@@ -937,7 +937,26 @@ describe('RFC-107 — source anchors', () => {
     expect(kernel).not.toContain('if (startInput.repoUrl) {')
     // 一次物化、两条交接：写上传物那支与 earlyError 那支读的都是同一个 `preparedWorkspace`，
     // 内核**不得**自己再解析一次。
-    expect(kernel).toContain('const preparedWorkspace = await (')
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'launch',
+        'launchTask.ts',
+      ),
+      'utf8',
+    )
+    expect(kernel).toContain('return await launchTask({')
+    expect(kernel).toContain(
+      'return await (input.internal?.workspace ?? dependencies.workspace).prepare(',
+    )
+    expect(application.match(/workspace = await ports\.prepare\(context\)/g)).toHaveLength(1)
+    expect(application).toContain('ports.applyUploads(context, workspace, inputs)')
+    expect(application).toContain('ports.admit(context, workspace, inputs)')
     expect((kernel.match(/preparedWorkspace\.earlyError/g) ?? []).length).toBeGreaterThanOrEqual(2)
     for (const s of [kernel, routeSrc]) {
       expect(s).not.toContain('preResolvedSource: resolvedSource')

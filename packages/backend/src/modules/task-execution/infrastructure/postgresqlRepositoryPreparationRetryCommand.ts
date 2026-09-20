@@ -7,22 +7,17 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
-import { readdir, rm } from 'node:fs/promises'
-import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { nodeRuns, taskRepos, taskSpaceNodes, tasks } from '@/db/schema'
-import { composePostgresqlRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import {
   ConflictError,
   DomainError,
   NotFoundError,
   diagnosticTextOf as diagnosticText,
 } from '@/util/errors'
-import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
 import { nextRetryIndex } from '../application/nextRetryIndex'
 import type {
@@ -160,78 +155,6 @@ function workspaceRepoRows(taskId: string, repositories: readonly TaskRouteWorks
     submoduleInitOk: repository.submoduleInitOk,
     submoduleInitError: repository.submoduleInitError,
   }))
-}
-
-async function reclaimStalePreparationArtifacts(
-  dependencies: PostgresqlRepositoryPreparationRetryDependencies,
-  task: TaskRow,
-): Promise<void> {
-  if (!/^[0-9A-Za-z_-]+$/.test(task.id)) {
-    throw new ConflictError(
-      'task-id-filesystem-unsafe',
-      `task '${task.id}' cannot identify repository-preparation artifacts safely`,
-    )
-  }
-  const store = composePostgresqlRepositoryWorkspaceStore(dependencies.db)
-  const cachedRepoIds = new Set<string>()
-  if (task.cachedRepoId !== null && task.cachedRepoId.length > 0) {
-    cachedRepoIds.add(task.cachedRepoId)
-  }
-  if (task.repoGroupId !== null && task.repoGroupId.length > 0) {
-    try {
-      const layout = await resolveRepoGroupLayout(store, task.repoGroupId)
-      for (const repository of layout.repos) cachedRepoIds.add(repository.cachedRepoId)
-    } catch (error) {
-      dependencies.log.warn('could not resolve repository group while reclaiming retry artifacts', {
-        taskId: task.id,
-        error: diagnosticText(error),
-      })
-    }
-  }
-
-  const worktreesRoot = join(dependencies.appHome, 'worktrees')
-  try {
-    for (const directory of await readdir(worktreesRoot, { withFileTypes: true })) {
-      if (!directory.isDirectory()) continue
-      await rm(join(worktreesRoot, directory.name, task.id), { recursive: true, force: true })
-    }
-  } catch (error) {
-    const code = (error as { readonly code?: unknown }).code
-    if (code !== 'ENOENT') {
-      dependencies.log.warn('could not reclaim stale repository-preparation directories', {
-        taskId: task.id,
-        error: diagnosticText(error),
-      })
-    }
-  }
-
-  for (const cachedRepoId of cachedRepoIds) {
-    const repository = await store.findCachedRepoById(cachedRepoId)
-    if (repository === null) continue
-    try {
-      await withWorktreeRegistryLock(repository.localPath, async () => {
-        await runGit(repository.localPath, ['worktree', 'prune'])
-        const listed = await runGit(repository.localPath, [
-          'for-each-ref',
-          '--format=%(refname)',
-          `refs/heads/agent-workflow/${task.id}`,
-          `refs/heads/agent-workflow/${task.id}-*`,
-        ])
-        for (const ref of listed.stdout
-          .split('\n')
-          .map((value) => value.trim())
-          .filter(Boolean)) {
-          await runGit(repository.localPath, ['update-ref', '-d', ref])
-        }
-      })
-    } catch (error) {
-      dependencies.log.warn('could not reclaim stale repository-preparation Git state', {
-        taskId: task.id,
-        cachedRepoId,
-        error: diagnosticText(error),
-      })
-    }
-  }
 }
 
 async function loadRetrySnapshot(
@@ -576,7 +499,7 @@ export function createPostgresqlRepositoryPreparationRetryCommand(
       try {
         const snapshot = await loadRetrySnapshot(dependencies, taskId)
         if ((await createWorkspacePreparationJournal(dependencies.db).forTask(taskId)) === null)
-          await reclaimStalePreparationArtifacts(dependencies, snapshot.task)
+          await dependencies.workspace.reclaimLegacyArtifacts(snapshot.task, dependencies.log)
         const task = retryPreparationInput(snapshot.task)
         const gitCommitIdentity = retryGitIdentity(snapshot.task)
         try {

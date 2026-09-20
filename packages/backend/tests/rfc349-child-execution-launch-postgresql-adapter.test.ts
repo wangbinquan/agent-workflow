@@ -115,17 +115,15 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
     const fixture = { db: harness.db }
     inheritedSpace.cleanup.state = 'owned'
     const snapshot = JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] })
-    await fixture.db
-      .insert(users)
-      .values({
-        id: actor.user.id,
-        username: 'owner',
-        displayName: 'Owner',
-        role: 'user',
-        status: 'active',
-        createdAt: 1,
-        updatedAt: 1,
-      })
+    await fixture.db.insert(users).values({
+      id: actor.user.id,
+      username: 'owner',
+      displayName: 'Owner',
+      role: 'user',
+      status: 'active',
+      createdAt: 1,
+      updatedAt: 1,
+    })
     await fixture.db
       .insert(workflows)
       .values({ id: 'child-workflow', name: 'Child', definition: snapshot })
@@ -154,20 +152,18 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       gitUserName: 'Owner',
       gitUserEmail: 'owner@example.test',
     })
-    await fixture.db
-      .insert(nodeRuns)
-      .values({
-        id: 'parent-run',
-        taskId: 'parent-task',
-        nodeId: 'call-node',
-        status: 'running',
-        retryIndex: 0,
-        iteration: 0,
-        startedAt: 1,
-        childTaskId: 'child-task',
-        continuationSlotKey: 'call:node-1',
-        operationGeneration: 2,
-      })
+    await fixture.db.insert(nodeRuns).values({
+      id: 'parent-run',
+      taskId: 'parent-task',
+      nodeId: 'call-node',
+      status: 'running',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: 1,
+      childTaskId: 'child-task',
+      continuationSlotKey: 'call:node-1',
+      operationGeneration: 2,
+    })
     let publishedTask: typeof tasks.$inferSelect | undefined
     registerAfterCommitEventPump({
       async publishNow() {

@@ -29396,7 +29396,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": true
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
@@ -29405,8 +29405,7 @@
       "missingControls": [
         "audit",
         "authority",
-        "event",
-        "fenceOrOcc"
+        "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#createTaskWorkspaceMaterializer",
       "symbol": "createTaskWorkspaceMaterializer",
@@ -40941,7 +40940,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cdd9f1bb8ae75791f222d787b8f3c3f7988da42fb89e91095f13b384251d530e",
+  "sourceDigest": "sha256:cb3750d0087b25ec9318e875c44b2cae3d9ce5c3c8bc3da9cb4473717d13daac",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42123,8 +42122,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#340:tasks",
-        "line": 340,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#263:tasks",
+        "line": 263,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#recordPreparationFailure",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -42139,8 +42138,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#379:tasks",
-        "line": 379,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#302:tasks",
+        "line": 302,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#recordPreparationFailure",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -42155,8 +42154,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#449:tasks",
-        "line": 449,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#372:tasks",
+        "line": 372,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#commitPreparedWorkspace",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",

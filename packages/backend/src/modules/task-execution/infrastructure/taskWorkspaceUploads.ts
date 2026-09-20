@@ -30,10 +30,8 @@ export async function applyTaskWorkspaceUploads(input: {
   )
   const journal = createWorkspacePreparationJournal(input.db)
   const prepared = await journal.read(input.taskId)
-  // Only historical/custom adapters still lack a journal; production root lanes
-  // record one before filesystem effects. T7 removes this compatibility arm.
-  if (prepared === null) return applyUploadsToWorktree(input.plan)
   if (
+    prepared === null ||
     prepared.lane !== 'pre-materialized' ||
     prepared.state !== 'prepared' ||
     prepared.admittedTaskId !== null

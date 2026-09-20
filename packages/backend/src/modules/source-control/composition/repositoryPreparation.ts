@@ -1,12 +1,20 @@
+import {
+  reclaimLegacyWorkspaceArtifacts,
+  type LegacyWorkspaceRecoveryLog,
+} from '../infrastructure/legacyWorkspaceRecovery'
 import { join } from 'node:path'
 import {
   materializeSpaceWithProvider,
+  commitMaterializedSpace,
+  cleanupMaterializedSpace,
   createMaterializedSpaceCleanup,
   cleanupMaterializedSpaceLease,
 } from '../infrastructure/workspaceMaterializer'
 import { createPublicRepositorySourceSeal } from '../infrastructure/publicRepositorySourceSeal'
 import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
-import type { GitCommitIdentity } from '@agent-workflow/shared'
+import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import type { PlannedSpaceLayout } from '../infrastructure/workspaceMaterializer'
+import type { GitCommitIdentity, StartTask } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -41,6 +49,62 @@ export function composeRepositoryPreparation(input: {
   const journal = createRepositoryPreparationJournal(input.db)
   const driver = composeRepositoryPreparationParticipant({ journal })
   return {
+    async groupName(groupId: string): Promise<string> {
+      return (await resolveRepoGroupLayout(composeRepositoryWorkspaceStore(input.db), groupId))
+        .groupName
+    },
+    legacy: {
+      reclaim(
+        task: { id: string; cachedRepoId: string | null; repoGroupId: string | null },
+        log: LegacyWorkspaceRecoveryLog,
+      ) {
+        return reclaimLegacyWorkspaceArtifacts(
+          { appHome: input.appHome, store: composeRepositoryWorkspaceStore(input.db), log },
+          task,
+        )
+      },
+      async prepare(request: {
+        task: StartTask
+        taskId: string
+        gitCommitIdentity: GitCommitIdentity | null
+        signal?: AbortSignal
+        secretBox?: SecretBox
+        cloneTimeoutMs?: number
+        workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
+        loadFrozenSpaceLayout(sourceTaskId: string): Promise<PlannedSpaceLayout>
+      }): Promise<MaterializedSpace> {
+        return await materializeSpaceWithProvider(
+          request.task,
+          {
+            appHome: input.appHome,
+            repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
+            loadFrozenSpaceLayout: request.loadFrozenSpaceLayout,
+            gitCommitIdentity: request.gitCommitIdentity,
+            ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
+            ...(input.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: input.cloneTimeoutMs }),
+            ...(input.workspaceCleanupHook === undefined
+              ? {}
+              : { workspaceCleanupHook: input.workspaceCleanupHook }),
+            ...(request.secretBox === undefined ? {} : { secretBox: request.secretBox }),
+            ...(request.cloneTimeoutMs === undefined
+              ? {}
+              : { cloneTimeoutMs: request.cloneTimeoutMs }),
+            ...(request.workspaceCleanupHook === undefined
+              ? {}
+              : { workspaceCleanupHook: request.workspaceCleanupHook }),
+            ...(request.signal === undefined
+              ? {}
+              : { sourceTerminationLaunchSignal: request.signal }),
+          },
+          request.taskId,
+        )
+      },
+      commit: commitMaterializedSpace,
+      cleanup: (
+        space: MaterializedSpace,
+        hook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>,
+      ) => cleanupMaterializedSpace(space, hook ?? input.workspaceCleanupHook),
+    },
     async prepareScratch(request: {
       taskId: string
       gitCommitIdentity: GitCommitIdentity | null

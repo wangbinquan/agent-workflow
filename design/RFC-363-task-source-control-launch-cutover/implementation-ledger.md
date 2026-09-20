@@ -134,3 +134,11 @@ Root prepared workspace 的 admission 方法现为必填，返回闭合 TaskWork
 `application/launch/launchTask` 现在裁决 preflight、prepare、上传、Task admission、workspace commit、事件发布、drive 与 guard settled 的顺序。事务前失败补偿一次；事务后 guard/event/drive 失败不删除已绑定工作区。基础设施只供应具体预检/上传/事务/发布适配，原 54 字段 Task INSERT 经 TypeScript AST printer 对拍完全一致。新增 application 失败窗口测试；生产真实双库/进程 oracle 继续覆盖完整链。
 
 前批 `1827fbe7c` Main `35508969487` 已定位 DE adapter 参数类型、旧 child 假池没有 journal 和旧 service 行号 oracle 漂移。本批补类型并将 child oracle 改为真实双库，保留 inherited workspace、所有行集、提交后可见、终态赢家阻止 drive 的断言；上传 SIGKILL fixture 系统用户 identity 改为与真实 root 一致的 null。仍待 owned facade/import 清退、完整 AC 与最终托管结果。
+
+## T7 Workspace adapter 边界与上传 journal 候选
+
+Task workspace/retry 不再 import SC composition、cache identity/group services 或 Task 物理 facade。根的既有 preparation binding 显式供应 group display 和 pre-journal recovery，旧回收算法不改变，仅归入 SC infrastructure。Task 接收投影为私有结构数据，SC 不 import Task；public offered seams 不新增近义合同。旧 Task 的无 journal 恢复能力继续保留。
+
+根启动上传现在必须读到准备好的 Task artifact；删除缺 journal 时直接调用原 writer 的 fallback。旧 Agent multipart recording-pool oracle 改用真实双库和实际 scratch driver，保留全部内容、路径、身份、闭包、记录集、drive 断言；新增缺 journal 写前拒绝且目录不存在用例。旧 guard 更新到 application 的唯一 prepare，并确认上传/admission 消费同一个 workspace；fusion fixture 补 gitName（生产身份规则未改）。前批 `929db4dc0` Main `35509624994` 对应失败待本批验证。
+
+仍须清理剩余 service 导出/受控历史调用、逐 AC 汇总最终托管证据；不记 RFC363/364 Done。

@@ -1,3 +1,4 @@
+import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
@@ -64,6 +65,28 @@ function git(...args: string[]) {
 }
 
 describeEachProvider('RFC-363 Task preparation admission', (harness) => {
+  test('uploads cannot write a filesystem artifact without a prepared Task journal', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc363-missing-upload-journal-'))
+    try {
+      const target = join(root, 'unprepared')
+      await expect(
+        applyTaskWorkspaceUploads({
+          db: harness.db,
+          taskId: ulid(),
+          plan: {
+            worktreePath: target,
+            defs: [],
+            files: [],
+            limits: { perFile: 1024, perRequest: 2048, perCount: 2 },
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'workspace-preparation-owner-changed' })
+      expect(existsSync(target)).toBe(false)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   async function fixture() {
     const home = realpathSync(mkdtempSync(join(tmpdir(), 'rfc363-task-admission-')))
     roots.push(home)

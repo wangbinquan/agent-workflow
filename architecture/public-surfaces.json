@@ -126993,7 +126993,9 @@
           "type": "'repository'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:614b2b2d53a521ff5351"
+          ],
           "fieldPath": "$method:resolveAuthorized.$parameter:source.$variant:0.repository.id",
           "type": "string"
         },
@@ -127003,7 +127005,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:614b2b2d53a521ff5351"
+          ],
           "fieldPath": "$method:resolveAuthorized.$parameter:source.$variant:1.group.id",
           "type": "string"
         },
@@ -127182,7 +127186,9 @@
       "members": [],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:bf2dbd0ec9f038feba4c"
+          ],
           "name": "prepare",
           "signatureDigest": "sha256:d6893602a1095c34faef26d0c0783f50d361cfc75440ef018012eb2b57e13096"
         }
@@ -128729,7 +128735,9 @@
           "type": "'repository'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:8e9b49d40b137f341667"
+          ],
           "fieldPath": "$variant:0.repository.id",
           "type": "string"
         },
@@ -128739,7 +128747,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:8e9b49d40b137f341667"
+          ],
           "fieldPath": "$variant:1.group.id",
           "type": "string"
         },
@@ -165371,7 +165381,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cdd9f1bb8ae75791f222d787b8f3c3f7988da42fb89e91095f13b384251d530e",
+  "sourceDigest": "sha256:cb3750d0087b25ec9318e875c44b2cae3d9ce5c3c8bc3da9cb4473717d13daac",
   "targetContexts": [
     "collaboration",
     "development-automation",

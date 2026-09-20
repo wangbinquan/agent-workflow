@@ -68,7 +68,7 @@ import {
 import { assertNotBuiltin } from '@/services/systemResources'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
-import type { WorkspaceCleanupReport } from '@/services/task'
+import type { WorkspaceCleanupReport } from '../application/ports/preparedWorkspace'
 import { validateUploadPlan } from '@/services/upload'
 import { applyTaskWorkspaceUploads } from './taskWorkspaceUploads'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'

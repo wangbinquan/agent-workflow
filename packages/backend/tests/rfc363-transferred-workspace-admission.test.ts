@@ -85,6 +85,7 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       id: ownerUserId,
       username: ownerUserId,
       displayName: 'Fusion',
+      gitName: 'Fusion',
       role: 'admin',
       status: 'active',
       email: 'fixture@example.test',

@@ -16,7 +16,19 @@ import {
 } from '@agent-workflow/shared'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { eq } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  users,
+  tasks,
+  taskRepos,
+  taskCollaborators,
+  taskExecutionIntents,
+  committedEvents,
+} from '@/db/schema'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
@@ -26,6 +38,7 @@ import type { AgentLaunchResourceOperations } from '@/modules/task-execution/app
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import {
   createRootTaskLaunchKernel,
+  createTaskRouteWorkspaceParticipant,
   createTaskExecutionLaunchParticipant,
   createTaskRouteLaunchOperations,
   type RootTaskLaunchDependencies,
@@ -231,6 +244,7 @@ const workflow = Object.freeze({
 const temporaryRoots: string[] = []
 
 async function workspaceParticipant(input: {
+  readonly db?: ProviderNeutralDatabase
   readonly committed: string[]
   readonly rolledBack: string[]
   readonly sourceTerminationSignals: Array<AbortSignal | undefined>
@@ -238,12 +252,43 @@ async function workspaceParticipant(input: {
 }): Promise<TaskRouteWorkspaceParticipant> {
   const root = await mkdtemp(join(tmpdir(), 'rfc349-task-route-launch-'))
   temporaryRoots.push(root)
+  const real =
+    input.db === undefined
+      ? null
+      : createTaskRouteWorkspaceParticipant({
+          db: input.db,
+          appHome: root,
+          repositoryPreparation: composeRepositoryPreparation({ db: input.db, appHome: root }),
+          sourceContexts: () => {
+            throw new Error('scratch launch has no source seal')
+          },
+        })
   return Object.freeze({
     async prepare(
       request: Parameters<TaskRouteWorkspaceParticipant['prepare']>[0],
     ): Promise<TaskRoutePreparedWorkspace> {
       input.trace.push('workspace:prepare')
       input.sourceTerminationSignals.push(request.sourceTerminationSignal)
+      if (real !== null) {
+        const workspace = await real.prepare(request)
+        writeFileSync(
+          join(workspace.worktreePath, '.workspace-prepared'),
+          request.gitCommitIdentity?.email ?? '',
+        )
+        return {
+          ...workspace,
+          commit() {
+            workspace.commit()
+            input.trace.push('workspace:commit')
+            input.committed.push(request.taskId)
+          },
+          async rollback() {
+            input.trace.push('workspace:rollback')
+            input.rolledBack.push(request.taskId)
+            return workspace.rollback()
+          },
+        }
+      }
       const worktreePath = join(root, request.taskId)
       mkdirSync(worktreePath, { recursive: true })
       writeFileSync(
@@ -316,11 +361,27 @@ function integrity(calls: string[][]): AgentLaunchResourceIntegrityParticipant {
 }
 
 async function harness(input: {
+  readonly db?: ProviderNeutralDatabase
   readonly activeUserIds: readonly string[]
   readonly visibleTaskIds?: readonly string[]
 }) {
   const trace: string[] = []
-  const postgres = postgresqlFixture({ ...input, trace })
+  const postgres =
+    input.db === undefined
+      ? postgresqlFixture({ ...input, trace })
+      : { db: input.db, executions: [] }
+  if (input.db !== undefined)
+    await input.db.insert(users).values(
+      input.activeUserIds.map((id) => ({
+        id,
+        username: id,
+        displayName: id,
+        role: 'user' as const,
+        status: 'active' as const,
+        createdAt: 1,
+        updatedAt: 1,
+      })),
+    )
   const configRoot = await mkdtemp(join(tmpdir(), 'rfc349-task-route-launch-config-'))
   temporaryRoots.push(configRoot)
   const committed: string[] = []
@@ -375,6 +436,7 @@ async function harness(input: {
       },
     },
     workspace: await workspaceParticipant({
+      ...(input.db === undefined ? {} : { db: input.db }),
       committed,
       rolledBack,
       sourceTerminationSignals,
@@ -467,7 +529,6 @@ function launchGuard(input: {
 
 afterEach(() => {
   registerAfterCommitEventPump(null)
-  selectDatabaseSchemaProvider('sqlite')
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -490,77 +551,6 @@ describe('RFC-349 PostgreSQL task route launch operations', () => {
     )
     expect(reads).toHaveLength(2)
     expect(reads.every((execution) => execution.sql.includes('task_collaborators'))).toBe(true)
-  })
-
-  test('launches an Agent with upload landing, frozen authority, atomic rows and created event', async () => {
-    const testHarness = await harness({ activeUserIds: [actor.user.id] })
-    expect(testHarness.operations.agent.uploadLimits()).toMatchObject({
-      perFile: expect.any(Number),
-      perRequest: expect.any(Number),
-      perCount: expect.any(Number),
-    })
-
-    const task = await testHarness.operations.agent.launch(actor, {
-      agentId: agent.id,
-      payload: {
-        name: 'Agent task',
-        inputs: {},
-        allowClarify: true,
-        scratch: true,
-      },
-      uploads: {
-        parts: [
-          {
-            inputKey: 'artifact',
-            filename: 'note.txt',
-            declaredMime: 'text/plain',
-            blob: new Blob(['hello'], { type: 'text/plain' }),
-          },
-        ],
-        limits: { perFile: 1_024, perRequest: 2_048, perCount: 2 },
-      },
-    })
-
-    expect(task).toMatchObject({
-      id: 'task-agent',
-      status: 'pending',
-      sourceAgentId: agent.id,
-      sourceAgentName: agent.name,
-      gitUserName: 'Owner',
-      gitUserEmail: 'owner@example.test',
-      spaceKind: 'scratch',
-    })
-    expect(task.inputs['artifact']).toBe('.agent-workflow/inputs/agent/artifact/note.txt')
-    expect(readFileSync(join(task.worktreePath, task.inputs['artifact'] ?? ''), 'utf8')).toBe(
-      'hello',
-    )
-    expect(existsSync(join(task.worktreePath, '.workspace-prepared'))).toBe(true)
-    expect(testHarness.committed).toEqual(['task-agent'])
-    expect(testHarness.rolledBack).toEqual([])
-    expect(testHarness.closures).toEqual([{ actor, workflowId: '00000000000000AGENTHOST00' }])
-    expect(testHarness.integrityCalls).toEqual([[agent.id]])
-    expect(testHarness.submissions).toEqual([
-      { taskId: 'task-agent', intentId: 'intent-agent', completionMode: 'background' },
-    ])
-
-    const statements = testHarness.executions.map((execution) => execution.sql.toLowerCase())
-    expect(statements.some((sql) => sql.includes('insert into "agent_workflow"."tasks"'))).toBe(
-      true,
-    )
-    expect(
-      statements.some((sql) => sql.includes('insert into "agent_workflow"."task_repos"')),
-    ).toBe(true)
-    expect(
-      statements.some((sql) => sql.includes('insert into "agent_workflow"."task_collaborators"')),
-    ).toBe(true)
-    expect(
-      statements.some((sql) =>
-        sql.includes('insert into "agent_workflow"."task_execution_intents"'),
-      ),
-    ).toBe(true)
-    expect(
-      statements.some((sql) => sql.includes('insert into "agent_workflow"."committed_events"')),
-    ).toBe(true)
   })
 
   test('launches a Workgroup with human membership and frozen runtime state', async () => {
@@ -971,5 +961,82 @@ describe('RFC-359 W52 task Git metadata', () => {
     expect(lookups).toEqual([actor.user.id])
     expect(fixture.preparations).toEqual([])
     expect(fixture.executions).toEqual([])
+  })
+})
+
+// Actual provider persistence is required for the upload intent and receipt.
+describeEachProvider('RFC-363 Agent upload journal', (provider) => {
+  test('launches an Agent with upload landing, frozen authority, atomic rows and created event', async () => {
+    const testHarness = await harness({ db: provider.db, activeUserIds: [actor.user.id] })
+    expect(testHarness.operations.agent.uploadLimits()).toMatchObject({
+      perFile: expect.any(Number),
+      perRequest: expect.any(Number),
+      perCount: expect.any(Number),
+    })
+
+    const task = await testHarness.operations.agent.launch(actor, {
+      agentId: agent.id,
+      payload: {
+        name: 'Agent task',
+        inputs: {},
+        allowClarify: true,
+        scratch: true,
+      },
+      uploads: {
+        parts: [
+          {
+            inputKey: 'artifact',
+            filename: 'note.txt',
+            declaredMime: 'text/plain',
+            blob: new Blob(['hello'], { type: 'text/plain' }),
+          },
+        ],
+        limits: { perFile: 1_024, perRequest: 2_048, perCount: 2 },
+      },
+    })
+
+    expect(task).toMatchObject({
+      id: 'task-agent',
+      status: 'pending',
+      sourceAgentId: agent.id,
+      sourceAgentName: agent.name,
+      gitUserName: 'Owner',
+      gitUserEmail: 'owner@example.test',
+      spaceKind: 'scratch',
+    })
+    expect(task.inputs['artifact']).toBe('.agent-workflow/inputs/agent/artifact/note.txt')
+    expect(readFileSync(join(task.worktreePath, task.inputs['artifact'] ?? ''), 'utf8')).toBe(
+      'hello',
+    )
+    expect(existsSync(join(task.worktreePath, '.workspace-prepared'))).toBe(true)
+    expect(testHarness.committed).toEqual(['task-agent'])
+    expect(testHarness.rolledBack).toEqual([])
+    expect(testHarness.closures).toEqual([{ actor, workflowId: '00000000000000AGENTHOST00' }])
+    expect(testHarness.integrityCalls).toEqual([[agent.id]])
+    expect(testHarness.submissions).toEqual([
+      { taskId: 'task-agent', intentId: 'intent-agent', completionMode: 'background' },
+    ])
+
+    expect(await createWorkspacePreparationJournal(provider.db).forTask(task.id)).toMatchObject({
+      state: 'admitted',
+      lane: 'pre-materialized',
+    })
+    expect(await provider.db.select().from(tasks).where(eq(tasks.id, task.id))).toHaveLength(1)
+    expect(
+      await provider.db.select().from(taskRepos).where(eq(taskRepos.taskId, task.id)),
+    ).toHaveLength(1)
+    expect(
+      await provider.db
+        .select()
+        .from(taskCollaborators)
+        .where(eq(taskCollaborators.taskId, task.id)),
+    ).toHaveLength(1)
+    expect(
+      await provider.db
+        .select()
+        .from(taskExecutionIntents)
+        .where(eq(taskExecutionIntents.taskId, task.id)),
+    ).toHaveLength(1)
+    expect((await provider.db.select().from(committedEvents)).length).toBeGreaterThan(0)
   })
 })
