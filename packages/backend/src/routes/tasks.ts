@@ -93,12 +93,12 @@ export interface TaskRouteDependencies {
 }
 
 export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
-  if (deps.workspaceQueries === undefined) throw new Error('task-workspace-queries-not-composed')
   // Keep direct dispatcher/tests fail-closed even though production callers
   // are statically required to supply the complete selected-provider bundle.
   if (deps.taskExecutionReadModels === undefined) {
     throw new Error('task-execution-read-models-not-composed')
   }
+  if (deps.workspaceQueries === undefined) throw new Error('task-workspace-queries-not-composed')
   if (deps.operations === undefined) {
     throw new Error('task-route-operations-not-composed')
   }

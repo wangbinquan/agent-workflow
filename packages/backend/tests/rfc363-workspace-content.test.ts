@@ -20,6 +20,8 @@ async function fixture() {
   return { root, queries }
 }
 
+// Real 5,004-entry directory: six complete enumerations plus the display projection.
+// Keep the cross-cap oracle without 37 repeated scans under Bun's five-second default.
 test('full sorted paging reaches entries beyond the old display cap', async () => {
   const { root, queries } = await fixture()
   await mkdir(join(root, 'directory'))
@@ -35,7 +37,7 @@ test('full sorted paging reaches entries beyond the old display cap', async () =
     const page = await queries.list('task', {
       relativeDirectory: '',
       page: { offset },
-      maxEntries: 137,
+      maxEntries: 1001,
     })
     expect(page.truncated).toBe(false)
     all.push(...page.entries.map((entry) => entry.name))
@@ -46,7 +48,7 @@ test('full sorted paging reaches entries beyond the old display cap', async () =
   const display = await queries.listDisplay('task', '')
   expect(display.entries).toHaveLength(WORKTREE_DIR_MAX_ENTRIES)
   expect(display.truncated).toBe(true)
-})
+}, 30_000)
 
 test('byte pages preserve split UTF-8 sequences and binary data; display keeps replacement decoding', async () => {
   const { root, queries } = await fixture()

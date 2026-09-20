@@ -36,3 +36,13 @@ SC 全量枚举并按原 comparator 加稳定 tie-break 排序，再切 offset �
 新增 `rfc363-workspace-content.test.ts`，沿用双库 HTTP `routes-worktree-files.test.ts` 与原 filesystem suite。canonical 只注销 reader 6 个 SC public 声明与 TaskWorkspaceReadPort，剩余 16 个 launch public 声明继续记债；T3/T4/T5 的 production launch 未完成。
 
 第二批 `5ca700bb7d49cc550175abc8f4253d585368d95e` Main `35498701132` 已发现 source seal 的 contextual typing 和测试闭包 null narrowing 错误，本批显式绑定 exact port 类型并捕获已准入 authority；其余作业继续由终态证据裁决。
+
+## T4 物理实现归位候选（尚未 durable effect 接线）
+
+从 `services/task.ts` 提取 Git source resolution、scratch/single/group materializer 与 cleanup 到 `source-control/infrastructure/workspaceMaterializer.ts`。Task row、旧任务 frozen layout DB reader、launch ownership 与 deferred step 留 Task 原调用方；SC mechanism 不接 DB client。原公开 service 名暂作同一实现的兼容转发，精确由 T4/T7 后续清零，不能据此领取 participant 完成信用。
+
+相对 reader 批 `958b078d24e5d94c4af9ee5630c8d43b1542a992`，通过 TypeScript AST printer 对拍 11 个迁移函数 body（忽略注释和格式），全部一致。依赖类型改成 SC 私有显式字段；原 Git/abort/group/cleanup 行为 suites 继续执行同一函数。RFC066/067/248/287 source guards 同时扫描新 owner 或其真实汇流函数，原断言不删除。
+
+下一步将 concrete commit 集与物化前 provenance 记录到 operation，再接 Task launch/preparation/retry/cancel；当前只完成物理 owner 归位，跨进程 effect receipt 恢复仍未实现。
+
+reader 批 CI 后续发现六个失败分片，归为四项：bootstrap 引用需经 composition、route 缺失依赖顺序和覆盖、三条已消费 contract ledger 基线未缩小、5004 项真实目录测试在 5 秒内反复枚举 37 次超时。本批逐项修复；目录仍全量排序后分页，测试减少重复页数并给真实 FS 场景显式 30 秒预算。Windows `35499425753` 已 success，但不能代替 Main 全绿。

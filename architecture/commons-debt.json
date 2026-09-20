@@ -4593,7 +4593,17 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:5b61552fce6c72aa3783"
+        "import:156df4518f3284d8c318",
+        "import:18284860bdad669c19aa",
+        "import:37e297673fb3848a30ba",
+        "import:5b61552fce6c72aa3783",
+        "import:6c227f2bf9c4b929c73e",
+        "import:93ab9a9b4a56ad7a2d00",
+        "import:a44224020597b952313b",
+        "import:a8d6e431aa2b91146f12",
+        "import:bf164a2d7eb5dea8cd23",
+        "import:c5f926f8bc087cfe3e79",
+        "import:c9eed9a8c5ad379d8863"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -4616,13 +4626,21 @@
       "removeAfterWave": "RFC-294 W5（Source-control 边界）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
+        "import:08c29608fcb9a37f1821",
         "import:11e4b63b4f9f4226637f",
-        "import:de17d18a53431aaefb1a"
+        "import:133faf21e37bbcc8ce21",
+        "import:2aa9bb18b775e5086562",
+        "import:41c8ee752dc430e2e37b",
+        "import:49f5bf4e45b1d7db9993",
+        "import:6b4fa01ea6aecd869caa",
+        "import:852c99d2af011dd70920",
+        "import:9bd06af00c9c1e373b90",
+        "import:de17d18a53431aaefb1a",
+        "import:f86b86987121f16fad5b"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/source-control/composition.ts#$file",
-        "owner:packages/backend/src/modules/source-control/composition.ts#bindWorkspaceExcludeParticipant"
+        "owner:packages/backend/src/modules/source-control/composition.ts#$file"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
@@ -6642,7 +6660,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/childExecutionLaunchOperations.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/task.ts#MaterializedSpace"
+        "owner:packages/backend/src/services/task.ts#$file"
       ],
       "canonicalFacadeIds": []
     },
@@ -7867,7 +7885,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:908eeaf4e04a9c5a7a931f46a52533c88a3fcdf03dbd6d827c30201bc6ca8f22",
+    "sourceDigest": "sha256:23147e2559572ba2403c51843b26516336d6272c1b7efd7ab46f99f4c888ae79",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

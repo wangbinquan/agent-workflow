@@ -113,7 +113,10 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
     // `resolveCachedRepo` 之前。一处覆盖 URL 直填 / cachedRepoId 反查 / 仓库组成员 /
     // 多仓循环 / sourceTaskId 重放 / webhook 命中存量缓存。
     const taskSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
+      resolve(
+        import.meta.dir,
+        '../src/modules/source-control/infrastructure/workspaceMaterializer.ts',
+      ),
       'utf8',
     )
     const fnStart = taskSrc.indexOf('export async function resolveRepoSourceSingle')

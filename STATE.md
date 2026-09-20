@@ -1,6 +1,12 @@
 # 当前执行状态
 
 
+## 2026-09-20 RFC-363 T4 物理 owner 归位候选
+
+reader 批已发布 `958b078d24e5d94c4af9ee5630c8d43b1542a992`，Main `35499425739` 正在执行。Git source resolution、single/group/scratch materializer 与 cleanup 已迁入 SC infrastructure；11 个函数体 AST 对拍未改变行为，Task DB/ownership/writer 留原 owner。
+本批保留有 T4/T7 退出责任的 service 转发，尚未完成 durable effect、Task 两 lane 与 T7 收口；不把移文件记成 launch participant 已完成。RFC364 仍待继续，RFC365 T1 的兼容报告已上库，T2+ 待决策。
+
+
 ## 2026-09-20 RFC-363 工作区 reader 生产接线候选
 
 第二批 source/snapshot 与 RFC365 T1 已推送 `5ca700bb7d49cc550175abc8f4253d585368d95e`；Main `35498701132` 的三个类型错误已定位并随 reader 批修复，尚未验收全绿。

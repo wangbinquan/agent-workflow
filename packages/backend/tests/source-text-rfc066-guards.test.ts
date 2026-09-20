@@ -19,7 +19,16 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
+const TASK_SRC =
+  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8') +
+  '\n' +
+  readFileSync(
+    resolve(
+      import.meta.dir,
+      '../src/modules/source-control/infrastructure/workspaceMaterializer.ts',
+    ),
+    'utf8',
+  )
 const ROUTES_TASKS_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'),
   'utf-8',
@@ -27,7 +36,7 @@ const ROUTES_TASKS_SRC = readFileSync(
 const MIGRATIONS_DIR = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('RFC-066 PR-A — source guards', () => {
-  test('G1 services/task.ts retains the single-path byte-baseline branch marker', () => {
+  test('G1 Task/SC materialization retains the single-path byte-baseline branch marker', () => {
     // The marker comment is the canonical anchor that tags the single-repo
     // code path inside startTask. Removing or renaming it without a paired
     // RFC-066 design.md amendment is a regression.

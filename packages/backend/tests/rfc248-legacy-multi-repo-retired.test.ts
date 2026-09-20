@@ -25,7 +25,16 @@ import {
   rejectRetiredStartTaskKeys,
 } from '@agent-workflow/shared'
 
-const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+const TASK_SRC =
+  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8') +
+  '\n' +
+  readFileSync(
+    resolve(
+      import.meta.dir,
+      '../src/modules/source-control/infrastructure/workspaceMaterializer.ts',
+    ),
+    'utf8',
+  )
 
 describe('RFC-248 —— wire `repos[]` 退役', () => {
   test('顶层 repos 在 schema 解析**之前**被硬拒', () => {

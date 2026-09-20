@@ -172,7 +172,7 @@ import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/com
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
-import { createWorkspaceContentScope } from '@/modules/source-control/infrastructure/workspaceContent'
+import { createWorkspaceContentScope } from '@/modules/source-control/composition'
 import { createChildTaskLifecycleParticipant } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'

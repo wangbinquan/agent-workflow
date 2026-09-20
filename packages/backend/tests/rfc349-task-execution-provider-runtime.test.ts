@@ -61,6 +61,7 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
       'task-route-operations-not-composed',
       'task-recovery-operations-not-composed',
       'task-code-workspace-not-composed',
+      'task-workspace-queries-not-composed',
       'task-repository-workspace-not-composed',
       'task-change-narrative-not-composed',
     ]) {

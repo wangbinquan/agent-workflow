@@ -1,5 +1,5 @@
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
-import { createWorkspaceContentScope } from '@/modules/source-control/infrastructure/workspaceContent'
+import { createWorkspaceContentScope } from '@/modules/source-control/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'

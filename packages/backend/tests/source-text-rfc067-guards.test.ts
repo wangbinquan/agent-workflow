@@ -27,7 +27,16 @@ const SPAWN_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
   'utf-8',
 )
-const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
+const TASK_SRC =
+  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8') +
+  '\n' +
+  readFileSync(
+    resolve(
+      import.meta.dir,
+      '../src/modules/source-control/infrastructure/workspaceMaterializer.ts',
+    ),
+    'utf8',
+  )
 const SCHEMA_SRC = readFileSync(
   resolve(import.meta.dir, '..', '..', 'shared', 'src', 'schemas', 'task.ts'),
   'utf-8',

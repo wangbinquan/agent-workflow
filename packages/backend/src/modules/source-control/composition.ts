@@ -2,11 +2,9 @@ import type {
   RepositoryBackupPreparationParticipant,
   RepositoryCommitCandidateParticipant,
   RepositoryCommitPublicationParticipant,
-  WorkspaceExcludeParticipant,
 } from './public/participants'
 import type { RepositoryOverviewQueries } from './public/queries'
 import type { RepositoryPublicationTransport, RepositoryPublishMode } from './public/types'
-import { ensureWorkspaceExcludeProfile } from './infrastructure/workspaceExcludeManager'
 import {
   prepareRepositoryCommit,
   commitPreparedRepository,
@@ -175,19 +173,7 @@ export async function reconcileRepositoryTransportConnectionProjections(
   }
 }
 
-/** RFC-308 temporary composition seam until RFC-294 W5 owns durable WorkspaceRef. */
-export function bindWorkspaceExcludeParticipant(input: {
-  worktreePath: string
-  appHome?: string
-}): WorkspaceExcludeParticipant {
-  return {
-    ensure: (request = {}) =>
-      ensureWorkspaceExcludeProfile({
-        ...input,
-        directChildMounts: request.directChildMounts ?? [],
-      }),
-  }
-}
+export { bindWorkspaceExcludeParticipant } from './infrastructure/workspaceExcludeBinding'
 
 /**
  * RFC-308 temporary path binder. Consumers receive operations bound to one
@@ -328,3 +314,27 @@ export function bindEmployeeCaseWorkspaceParticipant(
     importCommit: importEmployeeWorkspaceCommit,
   }
 }
+
+export { createWorkspaceContentScope } from './infrastructure/workspaceContent'
+// RFC-363 T4/T7 compatibility binding; launch adapters retire this path after durable cutover.
+export {
+  type WorkspaceMaterializationDependencies,
+  materializeWorktree,
+  type ResolvedRepoSource,
+  type RepoSourceSpec,
+  normalizeStartTaskRepos,
+  resolveRepoSourceSingleWithProvider,
+  type MaterializedRepo,
+  type MaterializedSpace,
+  type WorkspaceCleanupHookEvent,
+  type WorkspaceCleanupFailure,
+  type WorkspaceCleanupReport,
+  type MaterializedSpaceCleanup,
+  createMaterializedSpaceCleanup,
+  cleanupMaterializedSpaceLease,
+  cleanupMaterializedSpace,
+  commitMaterializedSpace,
+  withWorkspaceCleanupReport,
+  type PlannedSpaceLayout,
+  materializeSpaceWithProvider,
+} from './infrastructure/workspaceMaterializer'

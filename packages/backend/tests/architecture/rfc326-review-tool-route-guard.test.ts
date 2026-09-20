@@ -145,6 +145,13 @@ describe('RFC-326 AC-31 — /api/reviews* routes ⟷ MCP gate tools, both direct
       Reflect.apply(mountTaskRoutes, undefined, [new Hono(), { configPath: '' }]),
     ).toThrow('task-execution-read-models-not-composed')
 
+    expect(() =>
+      Reflect.apply(mountTaskRoutes, undefined, [
+        new Hono(),
+        { configPath: '', taskExecutionReadModels: {} },
+      ]),
+    ).toThrow('task-workspace-queries-not-composed')
+
     expect(() => Reflect.apply(mountReviewRoutes, undefined, [new Hono(), undefined, ''])).toThrow(
       'collaboration-route-operations-not-composed',
     )
