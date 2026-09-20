@@ -64,3 +64,11 @@ SC infrastructure 解析冻结事实并沿用原 cache/fetch、Git 物化路径�
 新增 `rfc363-preparation-process-recovery.test.ts`：使用真实 smart HTTP Git、SQLite 文件 / 真 PostgreSQL generation，在 before-add、post-add、working-branch-before-CAS 处等待持久化 checkpoint 后 SIGKILL；新进程读取同一 journal 后恢复。远端分支后移仍读旧 commit、已有目录标记保留、branchBefore 不被 retry 覆盖；对已改变的物化分支返回失败且保留其内容。测试已编写，尚待托管取证；不把测试存在记成验收通过。
 
 取消适配与 journal 补偿、Task repository/pre-materialized admission、全部 roots/legacy 退役仍是剩余 T4/T5/T7 工作；不领取完整 E1/W5。
+
+## T4 持久化补偿候选（Task 接线仍待完成）
+
+物理清理复用原 Git 注册锁与 expected-old branch CAS；进程在 remove 后、branch restore 前退出时，新进程按同一 provenance 完成清理。现有树身份/HEAD 已变则保留并报告冲突；组成员清理未完成时不删除容器。停止物化也执行同一路径，diagnostics 始终保留物理 evidence，不因错误/stop 包装丢失。
+
+SC application cleanup 接受 Task-owned 当前 fence/binding 检查；每次效果与写库前后复查，不铸新 lease。部分失败持久化但不标 cleaned；重复恢复保留原 resolved commits/成功 receipt，成功后只重放已存 cleanup receipt。新双库 driver 测试验证陈旧 owner 不启动/不接受 cleanup、部分失败再进入与稳定回执；真实进程测试增加取消前/后 add、remove/restore 之间 SIGKILL、外部改写后的 cleanup 冲突。仍未证明生产 Task adapter，T4/T5/T7 不记完成。
+
+`97b1e45de` Main `35501905328` 类型检查报可选 baseBranch 不能赋给必填的 string|undefined、递归 participant 缺显式类型；本批精确修复。最终测试结论以包含本批的终态 hosted SHA 为准。

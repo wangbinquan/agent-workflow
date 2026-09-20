@@ -52,6 +52,15 @@ export interface RepositoryPreparationJournal {
     readonly now: number
     readonly evidenceJson: string
   }): Promise<RepositoryPreparationRecord | null>
+  /** Retain cleanup attempts, including incomplete ones, without changing preparation facts. */
+  recordCleanup(input: {
+    readonly id: string
+    readonly expectedVersion: number
+    readonly from: 'prepared' | 'failed' | 'stopped'
+    readonly complete: boolean
+    readonly diagnosticsJson: string
+    readonly now: number
+  }): Promise<RepositoryPreparationRecord | null>
   advance(input: {
     readonly id: string
     readonly expectedVersion: number

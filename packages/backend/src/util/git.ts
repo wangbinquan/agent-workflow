@@ -1269,6 +1269,7 @@ async function assertWorkingBranchNotInUse(
 
 async function cleanupFailedWorkingBranchAttach(
   provenance: WorktreeCleanupProvenance,
+  opts?: { beforeStage?: (stage: 'worktree-remove' | 'branch-restore') => void | Promise<void> },
 ): Promise<WorktreeCleanupResult> {
   let registrations: RegisteredWorktree[]
   try {
@@ -1294,7 +1295,7 @@ async function cleanupFailedWorkingBranchAttach(
     }
   }
   if (ownedRegistration) {
-    return cleanupCreatedWorktree(provenance)
+    return cleanupCreatedWorktree(provenance, opts)
   }
 
   const externalOwner = registrations.find(
@@ -1313,8 +1314,19 @@ async function cleanupFailedWorkingBranchAttach(
     }
   }
 
-  const branch = await restoreBranchRefCas(provenance)
+  const branch = await restoreBranchRefCas(provenance, () => opts?.beforeStage?.('branch-restore'))
   return { worktreeRemoved: true, branchRestored: branch.branchRestored, failures: branch.failures }
+}
+
+/** Reconcile an already journaled cleanup after process death. The caller must
+ * verify the physical worktree identity and hold its existing Task ownership. */
+export async function cleanupRecordedWorktree(
+  provenance: WorktreeCleanupProvenance,
+  opts?: { beforeStage?: (stage: 'worktree-remove' | 'branch-restore') => void | Promise<void> },
+): Promise<WorktreeCleanupResult> {
+  return withWorktreeRegistryLock(provenance.repoPath, () =>
+    cleanupFailedWorkingBranchAttach(provenance, opts),
+  )
 }
 
 /**

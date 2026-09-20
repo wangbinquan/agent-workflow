@@ -203,7 +203,7 @@ export function createJournaledWorktreeMaterializer(input: {
   }
 }
 
-async function verifyExistingWorktree(provenance: WorktreeCleanupProvenance): Promise<void> {
+export async function verifyExistingWorktree(provenance: WorktreeCleanupProvenance): Promise<void> {
   const [head, branch, top, common, sourceCommon] = await Promise.all([
     runGit(provenance.worktreePath, ['rev-parse', '--verify', 'HEAD']),
     runGit(provenance.worktreePath, ['symbolic-ref', 'HEAD']),

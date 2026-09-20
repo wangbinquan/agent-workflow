@@ -4,6 +4,7 @@ import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { sha256Hex } from '@/util/hash'
 import { composeRepositoryPreparationParticipant } from '@/modules/source-control/infrastructure/repositoryPreparationParticipant'
+import { cleanupRepositoryWorkspace } from '@/modules/source-control/application/repositoryPreparationCleanup'
 import { prepareRepositoryWorkspace } from '@/modules/source-control/application/repositoryPreparation'
 import type { RepositoryPreparationEffects } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
 import { createRepositoryPreparationJournal } from '@/modules/source-control/infrastructure/repositoryPreparationJournal'
@@ -216,5 +217,86 @@ describeEachProvider('RFC-363 preparation driver durability', (harness) => {
     await expect(
       owner.participant.prepare(bound.capability, f.operation, f.source),
     ).rejects.toThrow('repository-preparation-effect-scope-ended')
+  })
+  test('cleanup keeps incomplete receipts, original evidence and success receipts across replay', async () => {
+    const f = await fixture()
+    await prepareRepositoryWorkspace({
+      ...f,
+      effects: {
+        assertCurrent: async () => {},
+        resolveCommits: async () => ({ kind: 'resolved', planJson: 'first commits' }),
+        materialize: async ({ checkpoint }) => {
+          await checkpoint('{"original":"physical evidence"}')
+          return { kind: 'prepared', receiptJson: 'original receipt' }
+        },
+      },
+    })
+    let attempts = 0
+    const effects = {
+      assertCurrent: async () => {},
+      cleanup: async (input: { planJson: string | null; diagnosticsJson: string | null }) => {
+        expect(input.planJson).toBe('first commits')
+        expect(input.diagnosticsJson).toBe('{"original":"physical evidence"}')
+        attempts++
+        return { complete: attempts > 1, receiptJson: `cleanup-${attempts}` }
+      },
+    }
+    expect(await cleanupRepositoryWorkspace({ ...f, effects })).toEqual({
+      complete: false,
+      receiptJson: 'cleanup-1',
+    })
+    const partial = await f.journal.operation(f.operation)
+    expect(partial?.state).toBe('prepared')
+    expect(partial?.diagnosticsJson).toContain('cleanup-1')
+    const complete = await cleanupRepositoryWorkspace({
+      ...f,
+      journal: createRepositoryPreparationJournal(harness.db),
+      effects,
+    })
+    expect(complete).toEqual({ complete: true, receiptJson: 'cleanup-2' })
+    expect(await cleanupRepositoryWorkspace({ ...f, effects })).toEqual(complete)
+    expect(attempts).toBe(2)
+    const row = await f.journal.operation(f.operation)
+    expect(row?.state).toBe('cleaned')
+    expect(row?.resolvedJson).toBe('first commits')
+    expect(row?.receiptJson).toBe('original receipt')
+    expect(
+      await f.journal.recordCleanup({
+        id: f.operation,
+        expectedVersion: partial!.version,
+        from: 'prepared',
+        complete: true,
+        diagnosticsJson: 'stale cleanup',
+        now: 3,
+      }),
+    ).toBeNull()
+  })
+
+  test('a Task binding or owner rejection cannot start cleanup or publish a stale result', async () => {
+    const f = await fixture()
+    let physical = 0
+    let allowed = false
+    const effects = {
+      assertCurrent: async () => {
+        if (!allowed) throw new Error('task-workspace-already-bound')
+      },
+      cleanup: async () => {
+        physical++
+        allowed = false
+        return { complete: true, receiptJson: 'stale' }
+      },
+    }
+    await expect(cleanupRepositoryWorkspace({ ...f, effects })).rejects.toThrow(
+      'task-workspace-already-bound',
+    )
+    expect(physical).toBe(0)
+    expect((await f.journal.operation(f.operation))?.state).toBe('planned')
+    allowed = true
+    await expect(cleanupRepositoryWorkspace({ ...f, effects })).rejects.toThrow(
+      'task-workspace-already-bound',
+    )
+    expect(physical).toBe(1)
+    expect((await f.journal.operation(f.operation))?.state).toBe('stopped')
+    expect((await f.journal.operation(f.operation))?.diagnosticsJson).toBeNull()
   })
 })

@@ -1,5 +1,10 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 可重放补偿候选
+
+恢复批 `97b1e45dec6ede7f5b7c82f4d0d74d824d69b473` 已同步 origin/main；Main `35501905328` 定位三个 TypeScript 推断/可选属性错误，本批显式补齐类型，不改变合同。
+SC 清理复用现 Git registry lock 和原 expected-old CAS，记录部分失败与完成回执；取消、移除工作树后崩溃、外部内容冲突的真双库进程测试已补，尚待托管验收。Task 当前 owner/binding 检验是调用前置，生产 Task admission/retry/cancel 接线仍未完成；RFC363/364 继续 In Progress，RFC365 仅 T1。
+
 ## 2026-09-20 RFC-363 物理恢复与 effect capability 候选
 
 上一批已发布 `b6cfd3e5355fd58c161c4531593575e11e7b0084`（Main `35500819972`）；Main 已终态 failure：旧 preset-task-id / clone timeout source guards 仍读 Task 原路径，W29 根装配摘要漏记 reader；本批迁到 SC 真 owner，并为 reader 同实例绑定补精确断言后更新摘要，原生命周期判据保留。

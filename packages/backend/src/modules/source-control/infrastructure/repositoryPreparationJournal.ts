@@ -115,6 +115,25 @@ export function createRepositoryPreparationJournal(
         .returning()
       return rows[0] ?? null
     },
+    async recordCleanup(input) {
+      const rows = await db
+        .update(scPreparationOperations)
+        .set({
+          state: input.complete ? 'cleaned' : input.from,
+          version: input.expectedVersion + 1,
+          diagnosticsJson: input.diagnosticsJson,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(scPreparationOperations.id, input.id),
+            eq(scPreparationOperations.version, input.expectedVersion),
+            eq(scPreparationOperations.state, input.from),
+          ),
+        )
+        .returning()
+      return rows[0] ?? null
+    },
     async advance(input) {
       if (!canAdvanceRepositoryPreparation(input.from, input.to))
         throw new ConflictError(

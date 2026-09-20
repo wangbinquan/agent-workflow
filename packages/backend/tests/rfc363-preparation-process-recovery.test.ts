@@ -78,6 +78,9 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
     'post-add-before-submodules',
     'working-branch-prepared-before-cas',
     'changed-prepared-branch',
+    'stop-before-add',
+    'stop-after-add',
+    'cleanup-after-remove',
   ] as const) {
     test(`same operation survives process death at ${point}`, async () => {
       const f = fixture()
@@ -102,11 +105,11 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
       const inputPath = join(f.root, 'input.json')
       writeFileSync(inputPath, JSON.stringify(input))
       const children: Array<Pick<ReturnType<typeof Bun.spawn>, 'exitCode' | 'kill' | 'exited'>> = []
-      const launch = (crashPoint: string) => {
+      const launch = (crashPoint: string, mode = 'prepare') => {
         const child = Bun.spawn({
           cmd: [process.execPath, 'run', worker, inputPath],
           cwd: resolve(import.meta.dir, '..'),
-          env: { ...process.env, RFC363_CRASH_POINT: crashPoint },
+          env: { ...process.env, RFC363_CRASH_POINT: crashPoint, RFC363_MODE: mode },
           stdin: 'ignore',
           stdout: 'pipe',
           stderr: 'pipe',
@@ -118,7 +121,13 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
         return child
       }
       const first = launch(
-        point === 'changed-prepared-branch' ? 'post-add-before-submodules' : point,
+        point === 'changed-prepared-branch' ||
+          point === 'stop-after-add' ||
+          point === 'cleanup-after-remove'
+          ? 'post-add-before-submodules'
+          : point === 'stop-before-add'
+            ? 'before-worktree-add'
+            : point,
       )
       const firstOut = new Response(first.stdout).text(),
         firstErr = new Response(first.stderr).text()
@@ -132,6 +141,9 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
         }
         const checkpoint = JSON.parse(readFileSync(join(f.root, 'ready.json'), 'utf8')) as {
           worktreePath: string
+          repoPath: string
+          branchRef: string
+          branchBefore: string | null
         }
         first.kill('SIGKILL')
         await first.exited
@@ -154,7 +166,8 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
         }
         const marker = join(checkpoint.worktreePath, 'retained-after-crash')
         if (point === 'post-add-before-submodules') writeFileSync(marker, 'reuse this directory')
-        const resumed = launch('')
+        const stopped = point === 'stop-before-add' || point === 'stop-after-add'
+        const resumed = launch('', stopped ? 'stop' : 'prepare')
         const stdout = new Response(resumed.stdout).text(),
           stderr = new Response(resumed.stderr).text()
         const code = await resumed.exited
@@ -165,10 +178,47 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
         }).toEqual({ code: 0, stderr: '', stdout: '' })
         const result = JSON.parse(readFileSync(join(f.root, 'result.json'), 'utf8')) as {
           outcome: { kind: string; receipt: string }
-          row: { resolvedJson: string; receiptJson: string }
+          row: { state: string; resolvedJson: string; receiptJson: string }
+        }
+        if (stopped) {
+          expect(result.outcome.kind).toBe('stopped')
+          expect(result.row.state).toBe('stopped')
+          expect(existsSync(checkpoint.worktreePath)).toBe(false)
+          const ref = Bun.spawnSync([
+            'git',
+            '-C',
+            checkpoint.repoPath,
+            'rev-parse',
+            '--verify',
+            '--quiet',
+            checkpoint.branchRef,
+          ])
+          expect(ref.exitCode).toBe(1)
+          const cleaned = launch('', 'cleanup')
+          const error = new Response(cleaned.stderr).text()
+          void new Response(cleaned.stdout).text()
+          expect({ code: await cleaned.exited, error: await error }).toEqual({ code: 0, error: '' })
+          const stored = JSON.parse(readFileSync(join(f.root, 'result.json'), 'utf8'))
+          expect(stored.outcome.complete).toBe(true)
+          expect(stored.row.state).toBe('cleaned')
+          return
         }
         if (changedHead !== undefined) {
           expect(result.outcome.kind).toBe('failed')
+          expect(git(checkpoint.worktreePath, 'rev-parse', 'HEAD')).toBe(changedHead)
+          expect(readFileSync(join(checkpoint.worktreePath, 'a.txt'), 'utf8')).toBe(
+            'another writer',
+          )
+          const cleanup = launch('', 'cleanup')
+          const cleanupError = new Response(cleanup.stderr).text()
+          void new Response(cleanup.stdout).text()
+          expect({ code: await cleanup.exited, error: await cleanupError }).toEqual({
+            code: 0,
+            error: '',
+          })
+          const conflict = JSON.parse(readFileSync(join(f.root, 'result.json'), 'utf8'))
+          expect(conflict.outcome.complete).toBe(false)
+          expect(conflict.row.state).toBe('failed')
           expect(git(checkpoint.worktreePath, 'rev-parse', 'HEAD')).toBe(changedHead)
           expect(readFileSync(join(checkpoint.worktreePath, 'a.txt'), 'utf8')).toBe(
             'another writer',
@@ -188,6 +238,55 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
         expect(receipt.space.cleanup.worktrees[0]?.branchBefore).toBeNull()
         if (point === 'post-add-before-submodules')
           expect(readFileSync(marker, 'utf8')).toBe('reuse this directory')
+        if (point === 'cleanup-after-remove') {
+          rmSync(join(f.root, 'ready.json'))
+          const cleaning = launch('branch-restore', 'cleanup')
+          const cleaningError = new Response(cleaning.stderr).text()
+          void new Response(cleaning.stdout).text()
+          try {
+            await waitForCheckpoint(f.root, cleaning.exited)
+          } catch (error) {
+            cleaning.kill('SIGKILL')
+            await cleaning.exited
+            throw new Error(`${String(error)}\n${await cleaningError}`)
+          }
+          cleaning.kill('SIGKILL')
+          await cleaning.exited
+          expect(existsSync(checkpoint.worktreePath)).toBe(false)
+          const finish = launch('', 'cleanup')
+          const finishError = new Response(finish.stderr).text()
+          void new Response(finish.stdout).text()
+          expect({ code: await finish.exited, error: await finishError }).toEqual({
+            code: 0,
+            error: '',
+          })
+          const cleaned = JSON.parse(readFileSync(join(f.root, 'result.json'), 'utf8'))
+          expect(cleaned.outcome.complete).toBe(true)
+          expect(cleaned.row.state).toBe('cleaned')
+          expect(cleaned.row.resolvedJson).toBe(result.row.resolvedJson)
+          expect(cleaned.row.receiptJson).toBe(result.row.receiptJson)
+          const ref = Bun.spawnSync([
+            'git',
+            '-C',
+            checkpoint.repoPath,
+            'rev-parse',
+            '--verify',
+            '--quiet',
+            checkpoint.branchRef,
+          ])
+          expect(ref.exitCode).toBe(1)
+          const repeat = launch('', 'cleanup')
+          const repeatError = new Response(repeat.stderr).text()
+          void new Response(repeat.stdout).text()
+          expect({ code: await repeat.exited, error: await repeatError }).toEqual({
+            code: 0,
+            error: '',
+          })
+          expect(JSON.parse(readFileSync(join(f.root, 'result.json'), 'utf8')).outcome).toEqual(
+            cleaned.outcome,
+          )
+          return
+        }
         const replay = launch('')
         const replayError = new Response(replay.stderr).text()
         void new Response(replay.stdout).text()

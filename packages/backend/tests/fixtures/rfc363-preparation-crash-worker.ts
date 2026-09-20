@@ -10,6 +10,7 @@ import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresq
 import { createRepositoryPreparationJournal } from '@/modules/source-control/infrastructure/repositoryPreparationJournal'
 import { createRepositoryPreparationEffects } from '@/modules/source-control/infrastructure/repositoryPreparationEffects'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
+import { cleanupRepositoryWorkspace } from '@/modules/source-control/application/repositoryPreparationCleanup'
 import { prepareRepositoryWorkspace } from '@/modules/source-control/application/repositoryPreparation'
 import {
   repositoryPreparationFactsJson,
@@ -112,29 +113,41 @@ try {
     })
     await journal.plan({ id: operation, snapshotRef: snapshot, now: 1 })
   }
-  const outcome = await prepareRepositoryWorkspace({
-    journal,
-    operation,
-    source: snapshot,
-    now: Date.now,
-    effects: createRepositoryPreparationEffects({
-      taskId: input.taskId,
-      appHome,
-      repositoryWorkspace: store,
-      gitCommitIdentity: null,
-      ...(input.workingBranch === undefined ? {} : { workingBranch: input.workingBranch }),
-      assertCurrent: async () => {},
-      worktreeLifecycleHook: async (event) => {
-        if (event.stage !== process.env.RFC363_CRASH_POINT) return
-        // The journaled materializer has awaited the real database checkpoint
-        // before forwarding this hook. No callback can advance after the sentinel.
-        writeFileSync(join(input.root, 'ready.tmp'), JSON.stringify(event))
-        renameSync(join(input.root, 'ready.tmp'), join(input.root, 'ready.json'))
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)
-        throw new Error('crash latch unexpectedly released')
-      },
-    }),
+  const effects = createRepositoryPreparationEffects({
+    taskId: input.taskId,
+    appHome,
+    repositoryWorkspace: store,
+    gitCommitIdentity: null,
+    ...(input.workingBranch === undefined ? {} : { workingBranch: input.workingBranch }),
+    assertCurrent: async () => {},
+    ...(process.env.RFC363_MODE === 'stop' ? { signal: AbortSignal.abort('user-cancel') } : {}),
+    workspaceCleanupHook: async (event) => {
+      if (event.stage !== process.env.RFC363_CRASH_POINT) return
+      writeFileSync(join(input.root, 'ready.tmp'), JSON.stringify(event))
+      renameSync(join(input.root, 'ready.tmp'), join(input.root, 'ready.json'))
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)
+      throw new Error('cleanup crash latch unexpectedly released')
+    },
+    worktreeLifecycleHook: async (event) => {
+      if (event.stage !== process.env.RFC363_CRASH_POINT) return
+      // The journaled materializer has awaited the real database checkpoint
+      // before forwarding this hook. No callback can advance after the sentinel.
+      writeFileSync(join(input.root, 'ready.tmp'), JSON.stringify(event))
+      renameSync(join(input.root, 'ready.tmp'), join(input.root, 'ready.json'))
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)
+      throw new Error('crash latch unexpectedly released')
+    },
   })
+  const outcome =
+    process.env.RFC363_MODE === 'cleanup'
+      ? await cleanupRepositoryWorkspace({ journal, operation, effects, now: Date.now })
+      : await prepareRepositoryWorkspace({
+          journal,
+          operation,
+          source: snapshot,
+          effects,
+          now: Date.now,
+        })
   writeFileSync(
     join(input.root, 'result.json'),
     JSON.stringify({ outcome, row: await journal.operation(operation) }),

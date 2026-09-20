@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1792,
+    "backendFiles": 1794,
     "frontendFiles": 622,
     "legacyFiles": 550,
-    "moduleFiles": 1242,
-    "productionFiles": 2569,
+    "moduleFiles": 1244,
+    "productionFiles": 2571,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24729
+    "symbolsIncludingFileRoots": 24735
   },
   "entries": [
     {
@@ -105224,6 +105224,42 @@
       "currentContext": "source-control",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/repositoryPreparationCleanup.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryPreparationCleanup.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/repositoryPreparationCleanup.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryPreparationCleanup.ts#cleanupRepositoryWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "cleanupRepositoryWorkspace",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/repositoryPreparationCleanup.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryPreparationCleanup.ts#RepositoryPreparationCleanupEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryPreparationCleanupEffects",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/application/repositoryScopeAuthorization.ts",
       "id": "owner:packages/backend/src/modules/source-control/application/repositoryScopeAuthorization.ts#$file",
       "removeAfterWave": null,
@@ -106687,7 +106723,7 @@
     {
       "currentContext": "source-control",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/source-control/infrastructure/journaledWorktreeMaterializer.ts",
       "id": "owner:packages/backend/src/modules/source-control/infrastructure/journaledWorktreeMaterializer.ts#verifyExistingWorktree",
       "removeAfterWave": null,
@@ -106837,6 +106873,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "readRepositoryPreparationFacts",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryPreparationCleanup.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryPreparationCleanup.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryPreparationCleanup.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryPreparationCleanup.ts#cleanupRepositoryPreparationWorktrees",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "cleanupRepositoryPreparationWorktrees",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -192689,6 +192749,18 @@
       "removeAfterWave": "W5",
       "status": "legacy-target",
       "symbol": "cleanupFailureDetails",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/git.ts",
+      "id": "owner:packages/backend/src/util/git.ts#cleanupRecordedWorktree",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "cleanupRecordedWorktree",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -297468,5 +297540,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b2a10dba7bfb4a82b5d07bca7e36a1a6667218f01369993da8e66351e92f645"
+  "sourceDigest": "sha256:09f22085decce69c20f5359dbddb808d18c15c746ebbce7b7cf5c6fe059d7d47"
 }

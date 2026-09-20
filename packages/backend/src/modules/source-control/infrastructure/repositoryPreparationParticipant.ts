@@ -48,42 +48,43 @@ export function composeRepositoryPreparationParticipant(input: {
       throw new Error('repository-preparation-effect-scope-mismatch')
     return binding
   }
-  const participant = Object.freeze<RepositoryPreparationParticipant>({
-    async prepare(capability, operation, source) {
-      const binding = requireBinding(capability, operation, source)
-      const assertCurrent = async () => {
-        requireBinding(capability, operation, source)
-        await binding.effects.assertCurrent()
-        requireBinding(capability, operation, source)
-      }
-      await assertCurrent()
-      // Do not race two same-process calls into the same worktree. A restarted
-      // process still relies on the existing Task fence and the durable journal.
-      const pending = running.get(operation)
-      if (pending !== undefined) {
-        try {
-          await pending
-        } catch {
-          /* A new current Task attempt may recover its predecessor. */
+  const participant: RepositoryPreparationParticipant =
+    Object.freeze<RepositoryPreparationParticipant>({
+      async prepare(capability, operation, source) {
+        const binding = requireBinding(capability, operation, source)
+        const assertCurrent = async () => {
+          requireBinding(capability, operation, source)
+          await binding.effects.assertCurrent()
+          requireBinding(capability, operation, source)
         }
         await assertCurrent()
-        return participant.prepare(capability, operation, source)
-      }
-      const execution = prepareRepositoryWorkspace({
-        journal: input.journal,
-        effects: { ...binding.effects, assertCurrent },
-        operation,
-        source,
-        now: input.now ?? Date.now,
-      })
-      running.set(operation, execution)
-      try {
-        return await execution
-      } finally {
-        if (running.get(operation) === execution) running.delete(operation)
-      }
-    },
-  })
+        // Do not race two same-process calls into the same worktree. A restarted
+        // process still relies on the existing Task fence and the durable journal.
+        const pending = running.get(operation)
+        if (pending !== undefined) {
+          try {
+            await pending
+          } catch {
+            /* A new current Task attempt may recover its predecessor. */
+          }
+          await assertCurrent()
+          return participant.prepare(capability, operation, source)
+        }
+        const execution = prepareRepositoryWorkspace({
+          journal: input.journal,
+          effects: { ...binding.effects, assertCurrent },
+          operation,
+          source,
+          now: input.now ?? Date.now,
+        })
+        running.set(operation, execution)
+        try {
+          return await execution
+        } finally {
+          if (running.get(operation) === execution) running.delete(operation)
+        }
+      },
+    })
   return Object.freeze({
     participant,
     bindEffect(binding: EffectBinding) {

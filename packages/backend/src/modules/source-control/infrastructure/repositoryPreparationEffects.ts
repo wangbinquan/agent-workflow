@@ -11,11 +11,16 @@ import { runGit, type WorktreeLifecycleHookEvent } from '@/util/git'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 import type { RepositoryPreparationEffects } from '../application/ports/repositoryPreparationEffects'
 import {
-  cleanupMaterializedSpace,
   materializeSpaceWithProvider,
   resolveRepoSourceSingleWithProvider,
 } from './workspaceMaterializer'
-import { createJournaledWorktreeMaterializer } from './journaledWorktreeMaterializer'
+import {
+  createJournaledWorktreeMaterializer,
+  WorktreePreparationEvidenceSchema,
+} from './journaledWorktreeMaterializer'
+import { cleanupRepositoryPreparationWorktrees } from './repositoryPreparationCleanup'
+import type { WorkspaceCleanupHookEvent } from './workspaceMaterializer'
+import type { RepositoryPreparationCleanupEffects } from '../application/repositoryPreparationCleanup'
 
 const resolvedSourceSchema = z
   .object({
@@ -54,8 +59,9 @@ export function createRepositoryPreparationEffects(input: {
   readonly gitCommitIdentity: GitCommitIdentity | null
   readonly signal?: AbortSignal
   readonly worktreeLifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
+  readonly workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
   readonly assertCurrent: () => Promise<void>
-}): RepositoryPreparationEffects {
+}): RepositoryPreparationEffects & RepositoryPreparationCleanupEffects {
   const dependencies = {
     appHome: input.appHome,
     repositoryWorkspace: input.repositoryWorkspace,
@@ -88,8 +94,44 @@ export function createRepositoryPreparationEffects(input: {
       },
     }),
   })
+  async function cleanup(planJson: string | null, evidenceJson: string | null) {
+    const plan =
+      planJson === null ? null : RepositoryMaterializationPlanSchema.parse(JSON.parse(planJson))
+    if (plan !== null && plan.taskId !== input.taskId)
+      throw new ConflictError(
+        'repository-preparation-replay-mismatch',
+        'preparation belongs to another task',
+      )
+    return cleanupRepositoryPreparationWorktrees({
+      taskId: input.taskId,
+      appHome: plan?.appHome ?? input.appHome,
+      group: plan?.layout !== null && plan?.layout !== undefined,
+      evidenceJson,
+      assertCurrent: input.assertCurrent,
+      ...(input.workspaceCleanupHook === undefined ? {} : { hook: input.workspaceCleanupHook }),
+    })
+  }
+  async function stop(planJson: string, evidenceJson: string | null, detail: unknown) {
+    return stopped({ detail, evidenceJson, cleanup: await cleanup(planJson, evidenceJson) })
+  }
   return {
     assertCurrent: input.assertCurrent,
+    async cleanup(request) {
+      const diagnostic =
+        request.diagnosticsJson === null ? null : JSON.parse(request.diagnosticsJson)
+      // Prepared rows retain the physical journal directly; failed/stopped rows
+      // wrap that same immutable evidence alongside their diagnostic payload.
+      const evidenceJson =
+        diagnostic === null
+          ? null
+          : WorktreePreparationEvidenceSchema.safeParse(diagnostic).success
+            ? request.diagnosticsJson
+            : ((diagnostic.evidenceJson ?? diagnostic.detail?.evidenceJson ?? null) as
+                | string
+                | null)
+      const report = await cleanup(request.planJson, evidenceJson)
+      return { complete: report.complete, receiptJson: JSON.stringify({ version: 1, report }) }
+    },
     async resolveCommits(facts) {
       await input.assertCurrent()
       if (input.signal?.aborted) return stopped({ stage: 'before-resolution' })
@@ -149,10 +191,10 @@ export function createRepositoryPreparationEffects(input: {
           'preparation belongs to another task',
         )
       await input.assertCurrent()
-      // Cancellation compensation consumes the same durable evidence in the
-      // Task-owned stop adapter; a stopped attempt cannot create new worktrees.
+      // The caller retains the current Task/pre-admission ownership while this
+      // adapter compensates physical effects, including a previous process's work.
       if (input.signal?.aborted)
-        return stopped({ stage: 'before-materialization', evidenceJson: request.evidenceJson })
+        return stop(request.planJson, request.evidenceJson, { stage: 'before-materialization' })
       let latestEvidenceJson = request.evidenceJson
       let checkpointError: unknown
       const worktreeMaterializer = createJournaledWorktreeMaterializer({
@@ -178,7 +220,10 @@ export function createRepositoryPreparationEffects(input: {
             ...dependencies,
             appHome: plan.appHome,
             gitCommitIdentity: plan.gitCommitIdentity,
-            preResolvedSources: plan.sources,
+            preResolvedSources: plan.sources.map((source) => ({
+              ...source,
+              baseBranch: source.baseBranch,
+            })),
             frozenLayout: plan.layout,
             worktreeMaterializer,
           },
@@ -186,27 +231,38 @@ export function createRepositoryPreparationEffects(input: {
         )
         await input.assertCurrent()
         if (input.signal?.aborted)
-          return stopped({
-            stage: 'after-materialization',
-            evidenceJson: latestEvidenceJson,
-            cleanup: await cleanupMaterializedSpace(space),
-          })
+          return stop(request.planJson, latestEvidenceJson, { stage: 'after-materialization' })
         if (space.earlyError !== null)
           return {
             kind: 'failed',
             safeCode: 'preparation-failed',
-            diagnosticsJson: JSON.stringify({ version: 1, space }),
+            diagnosticsJson: JSON.stringify({
+              version: 1,
+              space,
+              evidenceJson: latestEvidenceJson,
+            }),
           }
-        return { kind: 'prepared', receiptJson: JSON.stringify({ version: 1, space }) }
+        return {
+          kind: 'prepared',
+          receiptJson: JSON.stringify({ version: 1, space, evidenceJson: latestEvidenceJson }),
+        }
       } catch (error) {
         if (error === checkpointError) throw error
         if (input.signal?.aborted)
-          return stopped({
+          return stop(request.planJson, latestEvidenceJson, {
             stage: 'materialization',
-            evidenceJson: latestEvidenceJson,
             message: error instanceof Error ? error.message : String(error),
           })
-        if (error instanceof DomainError) return failure(error)
+        if (error instanceof DomainError) {
+          const failed = failure(error)
+          return {
+            ...failed,
+            diagnosticsJson: JSON.stringify({
+              ...JSON.parse(failed.diagnosticsJson),
+              evidenceJson: latestEvidenceJson,
+            }),
+          }
+        }
         throw error
       }
     },
