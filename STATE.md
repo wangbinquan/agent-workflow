@@ -1,5 +1,12 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-361 provider 归位候选
+
+RC 接管 Agent/Workflow projection；Task 接管原 Script fixture mechanism；EC 保留输入 pairing 与 exact-output 校验。
+三个生产根显式注入两类 provider，旧 EC adapter 删除。两个 required SPI 已有 canonical active 消费链，待本批托管 CI。
+RFC-360 最新发布 `c77b08a6d` 的 CI 发现两个账本遗漏：旧 runtime kernel 路径和新注入字段的 child inheritance disposition；本批修复，行为验证结果与全 CI 终态分开报告。
+RFC-360/361/362 均仍 In Progress；RFC-362 尚待实施。
+
 ## 2026-09-20 RFC-360 第四批候选：旧入口退役与根注入
 
 旧 registry service/platform 与两组横向 HTTP 文件退役，生产切分组 public 合同；默认 runtime 配置判据归 RM。

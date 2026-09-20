@@ -1,3 +1,4 @@
+import { validateProgramFixture } from '@/modules/execution-contract/application/validateProgramFixture'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -9,7 +10,6 @@ import {
   renderUserPrompt,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import { agents as agentRows, nodeRuns, tasks, workflows } from '@/db/schema'
 import {
   developmentEmployeeRuntimeCodec,
@@ -17,10 +17,8 @@ import {
   developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
-import {
-  createExecutionContractProgramFixtureAdapter,
-  createExecutionContractResourceAdapter,
-} from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
+import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import {
   executionContractGuideSchema,
   validateExactContractInput,
@@ -796,18 +794,12 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
       const service = new ExecutionContractService({
         registrations: developmentExecutionContractRegistrations,
         resources: createExecutionContractResourceAdapter(
-          // `createExecutionContractResourceAdapter`（`src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts:168`）
-          // 的 `db` 还写着 `DbClient`，但它体内只调 `getAgentById` /
-          // `getWorkflow`——两者早已收 `ProviderNeutralDatabase`
-          // （`src/modules/resource-catalog/infrastructure/legacy/agent.ts:169`、
-          // `.../legacy/workflow.ts:142`），运行期两个引擎上都正确。等那一行注解放宽后这个
-          // cast 就能删。同 `tests/rfc310-event-center.test.ts:39` 的处置。
-          db as DbClient,
+          db,
           developmentImplicitAgentContractDeclarations,
         ),
         programFixtures: {
-          async validate() {
-            return []
+          async run() {
+            throw new Error('this resource-only fixture must not execute a program')
           },
         },
       })
@@ -961,17 +953,20 @@ process.stdout.write(JSON.stringify({
         source,
         parameterValues: null,
       })
-      const checks = await createExecutionContractProgramFixtureAdapter({
-        appHome,
-        scriptInterpreterOverrides: { node: process.execPath },
-      }).validate({
-        guide: guide('development.prepare-materials'),
-        implementation: {
-          kind: 'program',
-          runtimeKind: 'node',
-          ...artifact,
-          runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+      const checks = await validateProgramFixture({
+        ...{
+          guide: guide('development.prepare-materials'),
+          implementation: {
+            kind: 'program',
+            runtimeKind: 'node',
+            ...artifact,
+            runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+          },
         },
+        fixtures: createExecutionContractProgramFixtureAdapter({
+          appHome,
+          scriptInterpreterOverrides: { node: process.execPath },
+        }),
       })
       expect(checks).toEqual([
         {
@@ -994,18 +989,21 @@ process.stdout.write(JSON.stringify({
           registration.contractRef.contractId === 'development.implement-change' &&
           registration.contractRef.version === 2,
       )!
-      const directChecks = await createExecutionContractProgramFixtureAdapter({
-        appHome,
-        scriptInterpreterOverrides: { node: process.execPath },
-      }).validate({
-        guide: guide('development.implement-change'),
-        implementation: {
-          kind: 'program',
-          runtimeKind: 'node',
-          ...invalidDirectArtifact,
-          runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+      const directChecks = await validateProgramFixture({
+        ...{
+          guide: guide('development.implement-change'),
+          implementation: {
+            kind: 'program',
+            runtimeKind: 'node',
+            ...invalidDirectArtifact,
+            runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+          },
+          validateOutputJson: directRegistration.validateOutputJson,
         },
-        validateOutputJson: directRegistration.validateOutputJson,
+        fixtures: createExecutionContractProgramFixtureAdapter({
+          appHome,
+          scriptInterpreterOverrides: { node: process.execPath },
+        }),
       })
       expect(directChecks).toEqual([
         expect.objectContaining({ code: 'program-fixture-exact-output', ok: false }),

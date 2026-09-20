@@ -98,3 +98,11 @@ EC public commands/types/receipt wire 保持；内部 required-port 方法变更
 
 新增 architecture 负扫描证明 EC 无 legacy/table依赖、无 composition fallback 与 value cycle；新增行为用例只补迁移风险。
 回滚可回退 provider binding 与内部调用形状，保持 public wire；不能留下只有某个数据库使用的旧 adapter。
+
+## 6. 实施落位细化（2026-09-20）
+
+为符合 RFC-294 的 required SPI 边界，两个 EC-required 合同声明在 `composition/required-ports.ts`。
+RC / TE 的 `application/adapters/execution-contract-adapter.ts` 分别实现对应 SPI，只依赖自己的 lookup / runner port；
+实际数据库与进程机制仍在原计划的 `infrastructure/adapters` 路径。RC Workflow closure 是本域纯 domain 判据。
+因此 provider 没有跨域 infrastructure → application 深层引用；EC 也没有 provider value import。
+这属于已批准 provider 归位的层次拆分，资源字段、程序机制与 public wire 均保持。

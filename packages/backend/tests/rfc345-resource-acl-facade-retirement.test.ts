@@ -319,16 +319,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'review node Agent snapshot',
     REMOVE_OWNERS.agentQueries,
   ),
-  edge(
-    'services/agent.ts',
-    'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
-    // RFC-359 AC-1（plan §5fp）：`getAgentById` → `exposedFrontmatterExtra`。合一那对适配器时
-    // 投影收窄成 4 列，整行读没了；换来的是**存储 JSON 的对外视图解码口**——四个 sidecar 键
-    // 已提升为 `Agent` 的一等字段，这个口负责把它们从 extra 里剥掉，与整行路径同一个函数。
-    ['exposedFrontmatterExtra'],
-    'execution-contract Agent projection',
-    REMOVE_OWNERS.executionContractResources,
-  ),
   // RFC-359 AC-1（plan §5hl）：这条边**销账**——数字员工执行的两份 composer 合一后，
   // Agent 查询改成由装配方交进来的 `agents` 端口（三个组合根各自绑自己的目录查询面），
   // composer 自己不再 import `services/agent` 的 `getAgentById`。债是还掉的，不是挪走的。
@@ -461,17 +451,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['skillFilesRel'],
     'task Skill file projection',
     REMOVE_OWNERS.skillQueries,
-  ),
-  edge(
-    'services/workflow.ts',
-    'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
-    // RFC-359 AC-1（plan §5fp）：`getWorkflow` + `migrateDefinitionToLatest` →
-    // `decodeStoredWorkflowDefinition`。同上，投影收窄成 3 列；解码走与整行路径同一个口，
-    // 于是坏 definition 在两条路上都抬成 `ValidationError('workflow-definition-corrupt')`
-    // ——合一前窄投影那条路漏的是裸 `SyntaxError`。
-    ['decodeStoredWorkflowDefinition'],
-    'execution-contract Workflow projection',
-    REMOVE_OWNERS.executionContractResources,
   ),
   // RFC-359 AC-1（第 13 刀）**销账**：手动执行门两个引擎合一，SQLite 那份本地实现
   //（`getWorkflow` 判内置）随之删除——共用那份走 `builtinCandidateWorkflow` +

@@ -39,3 +39,11 @@ EventCenter-owned response rule 与 Integration-owned WebhookTrigger 分别迁�
 - [ ] 原真实 fixture、resource revision、DE 三条链和双库行为通过。
 - [ ] manifest/entrypoints/external import 精确对拍；其他 E9 debt 保持正确 owner。
 - [ ] 最终 exact-SHA Main CI 成功；父 RFC 仍 In Progress。
+
+## 4. 首批实现候选（2026-09-20）
+
+T1 原 exact IDs 固化在 `implementation-baseline.json`。T2～T5 已落候选：RC 窄列读取与 closure、TE 原 Script 机制、
+EC 输入 pairing 与 validator/exact-output 编排分离；三个生产根强制注入两类 provider，旧 EC adapter 删除。
+两个 required ports 经 canonical 识别为 active，各有一个真实 provider adapter 和一个 EC composition。
+新增用例覆盖输入配对、direct validator 返回值、失败透传、参数、真实程序退出/超时和临时目录清理；托管 CI 待本批发布验证。
+本 RFC 仅抵扣 EC provider slice，不关闭整个 E9；RFC-360 另有已定位的公共内核路径与子任务注入字段账本修复随本批补齐。

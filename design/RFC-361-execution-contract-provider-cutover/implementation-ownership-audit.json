@@ -1,0 +1,83 @@
+{
+  "status": "candidate-awaiting-hosted-ci",
+  "sourceDigest": "sha256:dbdc16abca352f2136ec0ded58721eb2152ef0600695492483ff263b7ac9794c",
+  "remainingOwnedSourcePaths": [],
+  "ownedIdReconciliation": {
+    "module-symbol-owners.entries": {
+      "baseline": 13,
+      "remaining": []
+    },
+    "cross-context-imports.architectureExceptions": {
+      "baseline": 8,
+      "remaining": []
+    },
+    "cross-context-imports.observedEdges": {
+      "baseline": 9,
+      "remaining": []
+    }
+  },
+  "requiredPorts": [
+    {
+      "compositionFiles": ["packages/backend/src/modules/execution-contract/composition.ts"],
+      "compositionOwnerEntryIds": [
+        "owner:packages/backend/src/modules/execution-contract/composition.ts#$file"
+      ],
+      "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/execution-contract/application/executionContractService.ts#$file",
+        "owner:packages/backend/src/modules/execution-contract/application/validateProgramFixture.ts#$file",
+        "owner:packages/backend/src/modules/execution-contract/composition.ts#$file"
+      ],
+      "context": "execution-contract",
+      "id": "required:execution-contract:ExecutionContractProgramFixturePort",
+      "ownerEntryId": "owner:packages/backend/src/modules/execution-contract/composition/required-ports.ts#ExecutionContractProgramFixturePort",
+      "providerAdapters": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:74606ba6b65d43f00394",
+          "file": "packages/backend/src/modules/task-execution/application/adapters/execution-contract-adapter.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/execution-contract-adapter.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "status": "active",
+      "symbol": "ExecutionContractProgramFixturePort"
+    },
+    {
+      "compositionFiles": ["packages/backend/src/modules/execution-contract/composition.ts"],
+      "compositionOwnerEntryIds": [
+        "owner:packages/backend/src/modules/execution-contract/composition.ts#$file"
+      ],
+      "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/execution-contract/application/executionContractService.ts#$file",
+        "owner:packages/backend/src/modules/execution-contract/composition.ts#$file"
+      ],
+      "context": "execution-contract",
+      "id": "required:execution-contract:ExecutionContractResourcePort",
+      "ownerEntryId": "owner:packages/backend/src/modules/execution-contract/composition/required-ports.ts#ExecutionContractResourcePort",
+      "providerAdapters": [
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:a95d73dfa7d5d518a814",
+          "file": "packages/backend/src/modules/resource-catalog/application/adapters/execution-contract-adapter.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/adapters/execution-contract-adapter.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "status": "active",
+      "symbol": "ExecutionContractResourcePort"
+    }
+  ],
+  "residualOwners": [
+    {
+      "owner": "task-execution",
+      "file": "packages/backend/src/services/scriptRun.ts",
+      "removeWave": "W5/W7",
+      "reason": "Shared script process mechanism preserved; this slice removes EC ownership, not this Task mechanism."
+    },
+    {
+      "owner": "digital-employee/event-center",
+      "removeWave": "W4-E9 successor slices",
+      "reason": "Reaction admission, event target providers and route/observer cutover remain outside this RFC."
+    }
+  ]
+}

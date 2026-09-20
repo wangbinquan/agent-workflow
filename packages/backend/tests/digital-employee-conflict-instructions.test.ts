@@ -43,7 +43,11 @@ describe('digital employee conflict repair instructions', () => {
     const contracts = new ExecutionContractService({
       registrations: developmentExecutionContractRegistrations,
       resources: { inspect: async () => null },
-      programFixtures: { validate: async () => [] },
+      programFixtures: {
+        async run() {
+          throw new Error('this resource-only fixture must not execute a program')
+        },
+      },
     })
     const projected = JSON.parse(
       contracts.projectInput({

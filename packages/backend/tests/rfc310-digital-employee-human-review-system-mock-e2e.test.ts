@@ -258,8 +258,8 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           },
         },
         programFixtures: {
-          async validate() {
-            return []
+          async run() {
+            throw new Error('this resource-only fixture must not execute a program')
           },
         },
       })

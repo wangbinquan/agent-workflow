@@ -1,5 +1,9 @@
+import { validateProgramFixture } from './validateProgramFixture'
 import { ConflictError, NotFoundError } from '@/util/errors'
-import type { ExecutionContractProgramFixturePort, ExecutionContractResourcePort } from './ports'
+import type {
+  ExecutionContractProgramFixturePort,
+  ExecutionContractResourcePort,
+} from '../composition/required-ports'
 import {
   EXECUTION_CONTRACT_RESULT_PORT,
   executionContractGuideSchema,
@@ -144,7 +148,8 @@ export class ExecutionContractService {
 
     if (implementation.kind === 'program') {
       checks.push(
-        ...(await this.#programFixtures.validate({
+        ...(await validateProgramFixture({
+          fixtures: this.#programFixtures,
           guide,
           implementation,
           validateOutputJson: this.#registrations.get(executionContractRefKey(guide.contractRef))

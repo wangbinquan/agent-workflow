@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1684,
+    "entries": 1687,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -9138,79 +9138,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createExecutionContractProgramFixtureAdapter",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createExecutionContractProgramFixtureAdapter",
-      "symbol": "createExecutionContractProgramFixtureAdapter",
-      "targetContext": "execution-contract",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createExecutionContractResourceAdapter",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createExecutionContractResourceAdapter",
-      "symbol": "createExecutionContractResourceAdapter",
-      "targetContext": "execution-contract",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createExecutionContractResourceAdapterFromLookup",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createExecutionContractResourceAdapterFromLookup",
-      "symbol": "createExecutionContractResourceAdapterFromLookup",
-      "targetContext": "execution-contract",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -13272,6 +13199,29 @@
         "fenceOrOcc": true,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/resource-catalog/application/adapters/execution-contract-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/adapters/execution-contract-adapter.ts#createExecutionContractResourceAdapterFromLookup",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/adapters/execution-contract-adapter.ts#createExecutionContractResourceAdapterFromLookup",
+      "symbol": "createExecutionContractResourceAdapterFromLookup",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts#createAgentApplication",
@@ -15443,6 +15393,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/resource-catalog/composition/executionContractResource.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/composition/executionContractResource.ts#createExecutionContractResourceAdapter",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/executionContractResource.ts#createExecutionContractResourceAdapter",
+      "symbol": "createExecutionContractResourceAdapter",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#createLegacyPluginInstaller",
@@ -15651,6 +15626,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aclReadRepository.ts#createResourceCatalogAclIdentityReadPort",
       "symbol": "createResourceCatalogAclIdentityReadPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts#createExecutionContractResourceLookup",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts#createExecutionContractResourceLookup",
+      "symbol": "createExecutionContractResourceLookup",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -23506,6 +23506,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/adapters/execution-contract-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/adapters/execution-contract-adapter.ts#createExecutionContractProgramFixturePort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/execution-contract-adapter.ts#createExecutionContractProgramFixturePort",
+      "symbol": "createExecutionContractProgramFixturePort",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "effect",
         "authorization": false,
         "event": false,
@@ -24457,6 +24482,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#runTaskExecutionBootRecovery",
       "symbol": "runTaskExecutionBootRecovery",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/executionContractFixture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/executionContractFixture.ts#createExecutionContractProgramFixtureAdapter",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/executionContractFixture.ts#createExecutionContractProgramFixtureAdapter",
+      "symbol": "createExecutionContractProgramFixtureAdapter",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -26040,6 +26090,31 @@
       "symbol": "createWrapperDelegatingNodeExecutors",
       "targetContext": "task-execution",
       "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/adapters/executionContractFixtureAdapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/adapters/executionContractFixtureAdapter.ts#createScriptFixtureRunner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/adapters/executionContractFixtureAdapter.ts#createScriptFixtureRunner",
+      "symbol": "createScriptFixtureRunner",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -40256,7 +40331,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a",
+  "sourceDigest": "sha256:dbdc16abca352f2136ec0ded58721eb2152ef0600695492483ff263b7ac9794c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

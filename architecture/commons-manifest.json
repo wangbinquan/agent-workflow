@@ -574,13 +574,15 @@
       "layer": "application",
       "core": true,
       "files": [
-        "packages/backend/src/services/runtimeRegistry.ts"
+        "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts"
       ],
       "singleSourceOf": "Capability-gated write-time validator for per-runtime extraArgs, plus resolveRuntimeByName / resolveAgentRuntime / setRuntimeEnabled / deleteRuntime default handling.",
       "claimAudit": "The capability gate (acceptsExtraArgs) HOLDS at the top of the function; the body is claude dialect applied to every opted-in driver (F2), and the gate is bypassable via the probe/smoke route (F3).",
       "auditedBy": "runtime-driver-port",
       "guards": [],
-      "canonicalOwnerEntryIds": []
+      "canonicalOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#$file"
+      ]
     },
     {
       "id": "runassembly-assemblyspec",
@@ -1393,7 +1395,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a",
+    "sourceDigest": "sha256:dbdc16abca352f2136ec0ded58721eb2152ef0600695492483ff263b7ac9794c",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {

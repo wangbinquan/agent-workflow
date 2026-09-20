@@ -1,3 +1,5 @@
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
+import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // `agent-workflow start` — daemon foreground entry.
@@ -2907,10 +2909,12 @@ async function composeSqliteProviderSession(
   // bootstrap. HTTP and the Digital Employee worker must not independently
   // choose or reopen a database provider.
   const employeeExecutionContracts = composeExecutionContract({
-    db,
-    appHome: Paths.root,
     registrations: developmentExecutionContractRegistrations,
-    implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
+    resources: createExecutionContractResourceAdapter(
+      db,
+      developmentImplicitAgentContractDeclarations,
+    ),
+    programFixtures: createExecutionContractProgramFixtureAdapter({ appHome: Paths.root }),
   })
   const codeHistoryQueries = composeCodeHistoryQueries(db)
   const databaseMigration = composeDatabaseMigrationModule({

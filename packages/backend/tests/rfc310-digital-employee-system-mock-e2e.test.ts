@@ -1,3 +1,4 @@
+import { exampleProgramFixture } from './helpers/executionContractFixture'
 // RFC-310 Digital Employee OS system-mock journey.
 //
 // Issue ingress is normalized by the real webhook/Event Center path. Pipeline
@@ -898,11 +899,10 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
             }
           },
         },
-        programFixtures: {
-          async validate() {
-            return [{ code: 'system-mock-program-fixture', ok: true, detail: 'covered by journey' }]
-          },
-        },
+        programFixtures: exampleProgramFixture(
+          developmentExecutionContractRegistrations,
+          'development.prepare-materials',
+        ),
       })
       const employeeOs = composeDigitalEmployee({
         db,

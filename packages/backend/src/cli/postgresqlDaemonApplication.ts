@@ -1,3 +1,4 @@
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // RFC-349 — PostgreSQL daemon application composition.
@@ -130,10 +131,8 @@ import {
 import { createPostgresqlCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
-import {
-  composeExecutionContract,
-  createExecutionContractResourceAdapter,
-} from '@/modules/execution-contract/composition'
+import { composeExecutionContract } from '@/modules/execution-contract/composition'
+import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import {
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
@@ -737,9 +736,8 @@ export async function composePostgresqlApplication(
       input.db,
       developmentImplicitAgentContractDeclarations,
     ),
-    appHome: input.appHome,
     registrations: developmentExecutionContractRegistrations,
-    implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
+    programFixtures: createExecutionContractProgramFixtureAdapter({ appHome: input.appHome }),
   })
   const capabilityTemplatePersistence = createCapabilityTemplatePersistence(input.db)
   const capabilityTemplateOperations = composeCapabilityTemplateOperations({

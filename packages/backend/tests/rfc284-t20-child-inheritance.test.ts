@@ -48,6 +48,8 @@ const DISPOSITION = {
   memoryInjectionQueries: 'dropped-registered',
   runtimeSessionLeases: 'dropped-registered',
   runtimeRegistry: 'dropped-registered',
+  // RFC-360: the daemon injects a live transaction selection adapter for each drive.
+  nodeRunRuntime: 'dropped-registered',
   taskDagCollaboration: 'dropped-registered',
   collaborationRuntime: 'dropped-registered',
   workgroupTurns: 'dropped-registered',
@@ -113,6 +115,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'memoryInjectionQueries',
         'runtimeSessionLeases',
         'runtimeRegistry',
+        'nodeRunRuntime',
         'taskDagCollaboration',
         'collaborationRuntime',
         'workgroupTurns',

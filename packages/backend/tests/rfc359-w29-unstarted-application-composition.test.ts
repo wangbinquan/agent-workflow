@@ -563,7 +563,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
       // RFC-360: both runtime route families and config consume the same management instance;
       // the PostgreSQL task runtime reuses core.runtimeRegistry rather than creating another.
-      'c6f3f04470ac0747e66e2586c14f3cbd2d8b6fd67132c40b28e8a2ceb1ae85e4',
+      '284238424a99487bcacb708b6500588c66d86960b1a0a5e5d4c2cb4ae0ee866e',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -623,7 +623,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `finishClaimedWebhookWorkspacePrune` 收尾），两格是这条回退路本来就在用的那一对
     // （`composeLegacyTaskActivityParticipant` 此前就住在同一个文件里）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      '4fd2c2d5b0409975b90397079c3d663a5e044497e76a7b8e3d47614ef291c391',
+      '1325ee4ad1f748b98ba3cd50515a0c463b3b8e4828a1c014e77da987aee8aaa7',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。

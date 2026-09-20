@@ -413,8 +413,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
           },
         },
         programFixtures: {
-          async validate() {
-            return [{ code: 'planning-isolation', ok: true, detail: 'fixture validated' }]
+          async run() {
+            throw new Error('this resource-only fixture must not execute a program')
           },
         },
       })
@@ -728,8 +728,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
           },
         },
         programFixtures: {
-          async validate() {
-            return [{ code: 'runtime-test-fixture', ok: true, detail: 'exact test fixture' }]
+          async run() {
+            throw new Error('this resource-only fixture must not execute a program')
           },
         },
       })

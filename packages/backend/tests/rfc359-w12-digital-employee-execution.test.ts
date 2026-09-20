@@ -1,3 +1,4 @@
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 W12: exercise both production Digital Employee execution composers
 // through the complete selected TaskEngine and a real mock-opencode child.
 // Task, node, output, owner and usage rows are produced by the runtime itself.
@@ -13,7 +14,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
 import {
   agents,
   nodeRunOutputs,
@@ -24,10 +24,8 @@ import {
   workflows,
 } from '@/db/schema'
 import { developmentExecutionContractRegistrations } from '@/modules/development-automation/composition/employeeTypePackage'
-import {
-  composeExecutionContract,
-  createExecutionContractResourceAdapter,
-} from '@/modules/execution-contract/composition'
+import { composeExecutionContract } from '@/modules/execution-contract/composition'
+import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
@@ -41,7 +39,6 @@ import {
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { DigitalEmployeeExecutionResult } from '@/modules/task-execution/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -203,24 +200,12 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
             return { ok: true }
           },
         }
-        const executionContracts =
-          provider.provider === 'sqlite'
-            ? composeExecutionContract({
-                db: harness.db as unknown as DbClient,
-                appHome,
-                registrations: developmentExecutionContractRegistrations,
-              })
-            : composeExecutionContract({
-                resources: createExecutionContractResourceAdapter(
-                  harness.db as unknown as PostgresqlDatabaseClient,
-                ),
-                appHome,
-                registrations: developmentExecutionContractRegistrations,
-              })
-        // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，所以这里也只剩**一个**装配形状。
-        // 两个引擎的差别缩到两处、且都不是 composer 的：`executionContracts` 的资源面
-        // （上面那段）与启动内核从哪来（PG 的 provider runtime 自带、SQLite 这条测试自己装
-        // 一台同形的）。库内三个端口取缺省实现——生产两个 SQLite 组合根用的是同一个。
+        const executionContracts = composeExecutionContract({
+          resources: createExecutionContractResourceAdapter(harness.db),
+          programFixtures: createExecutionContractProgramFixtureAdapter({ appHome }),
+          registrations: developmentExecutionContractRegistrations,
+        })
+        // RFC-361: resource and fixture providers are identical for both database bindings.
         const compose = () =>
           composeDigitalEmployeeExecution({
             appHome,

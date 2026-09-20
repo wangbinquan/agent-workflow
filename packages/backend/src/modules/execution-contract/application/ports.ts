@@ -1,6 +1,5 @@
 import type {
   ExecutionContractCheck,
-  ExecutionContractGuide,
   ExecutionContractImplementation,
   ExecutionContractRef,
 } from '../domain/model'
@@ -14,20 +13,10 @@ export interface ExecutionContractResourceProjection {
   readonly declaredContractRefs: readonly ExecutionContractRef[] | null
 }
 
-export interface ExecutionContractResourcePort {
-  inspect(input: {
-    readonly implementation: Extract<
-      ExecutionContractImplementation,
-      { kind: 'agent' | 'workflow' }
-    >
-    readonly expectedOutputPort: string
-  }): Promise<ExecutionContractResourceProjection | null>
+export interface ExecutionContractFixtureRequest {
+  readonly implementation: Extract<ExecutionContractImplementation, { kind: 'program' }>
+  readonly inputJson: string
 }
-
-export interface ExecutionContractProgramFixturePort {
-  validate(input: {
-    readonly guide: ExecutionContractGuide
-    readonly implementation: Extract<ExecutionContractImplementation, { kind: 'program' }>
-    readonly validateOutputJson?: (outputJson: string) => string
-  }): Promise<readonly ExecutionContractCheck[]>
-}
+export type ExecutionContractFixtureResult =
+  | { readonly kind: 'completed'; readonly rawStdout: string }
+  | { readonly kind: 'failed'; readonly checks: readonly ExecutionContractCheck[] }

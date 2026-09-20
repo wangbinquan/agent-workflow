@@ -1,3 +1,4 @@
+import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,7 +20,7 @@ import {
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { isEmployeeReactionEventEnabled } from '@/modules/digital-employee/application/runtimeService'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
-import { inspectExecutionContractWorkflowDefinition } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
+import { inspectExecutionContractWorkflowDefinition } from '@/modules/resource-catalog/domain/executionContractWorkflow'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import {
   effectiveReactionPriority,
@@ -78,11 +79,10 @@ function developmentExecutionContracts(): ExecutionContractParticipant {
         }
       },
     },
-    programFixtures: {
-      async validate() {
-        return [{ code: 'test-program-fixture', ok: true, detail: 'exact test fixture' }]
-      },
-    },
+    programFixtures: exampleProgramFixture(
+      developmentExecutionContractRegistrations,
+      'development.prepare-materials',
+    ),
   })
 }
 

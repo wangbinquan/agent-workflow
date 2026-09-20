@@ -1,3 +1,5 @@
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
+import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // Hono app factory. Routes that touch DB / config / version probe receive
@@ -2116,10 +2118,12 @@ export function composeSqliteApplicationDeps(
     executionContracts:
       deps.executionContracts ??
       composeExecutionContract({
-        db: deps.db,
-        appHome,
         registrations: developmentExecutionContractRegistrations,
-        implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
+        resources: createExecutionContractResourceAdapter(
+          deps.db,
+          developmentImplicitAgentContractDeclarations,
+        ),
+        programFixtures: createExecutionContractProgramFixtureAdapter({ appHome: appHome }),
       }),
     codeHistoryQueries: deps.codeHistoryQueries ?? composeCodeHistoryQueries(deps.db),
     developmentAdmissionLookup:

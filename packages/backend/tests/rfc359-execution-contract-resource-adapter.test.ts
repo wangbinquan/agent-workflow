@@ -1,3 +1,4 @@
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 AC-1 —— 执行合同资源读取**只有一份实现**，两个引擎跑同一组判据。
 //
 // 为什么这个文件存在（plan §5fp）：这里原来是一对孪生适配器——中立那份走
@@ -24,7 +25,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
-import { createExecutionContractResourceAdapter } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
+import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { composeSqliteAppDeps, createApp } from '@/server'
 import { resolve } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -202,13 +203,15 @@ describeEachProvider('RFC-359 执行合同资源读取（双引擎，单一实�
 describe('RFC-359 执行合同装配（SQLite 组合根）', () => {
   test('HTTP bootstrap 保留注入进来的 provider-中立组合根', async () => {
     const executionContracts = composeExecutionContract({
-      appHome: '/not-used-by-this-query',
       registrations: [],
       resources: {
         async inspect() {
           return null
         },
       },
+      programFixtures: createExecutionContractProgramFixtureAdapter({
+        appHome: '/not-used-by-this-query',
+      }),
     })
     const app = createApp(
       composeSqliteAppDeps({
@@ -232,13 +235,15 @@ describe('RFC-359 执行合同装配（SQLite 组合根）', () => {
 
   test('装配接受 provider-中立的资源端口，不需要 SQLite 客户端', () => {
     const module = composeExecutionContract({
-      appHome: '/not-used-by-this-query',
       registrations: [],
       resources: {
         async inspect() {
           return null
         },
       },
+      programFixtures: createExecutionContractProgramFixtureAdapter({
+        appHome: '/not-used-by-this-query',
+      }),
     })
 
     expect(module.list()).toEqual([])

@@ -324,8 +324,8 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
             },
           },
           programFixtures: {
-            async validate() {
-              return [{ code: 'conflict-system-mock', ok: true, detail: 'covered by E2E' }]
+            async run() {
+              throw new Error('this resource-only fixture must not execute a program')
             },
           },
         })

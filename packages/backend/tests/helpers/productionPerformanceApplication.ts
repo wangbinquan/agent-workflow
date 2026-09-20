@@ -1,10 +1,10 @@
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 AC11: the original HTTP transport around the real measured owner graph.
 // Construction completes before callers time app.request and consume its response.
 import type { Hono } from 'hono'
 
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
@@ -24,10 +24,8 @@ import {
   composeDigitalEmployee,
   composeDigitalEmployeeTaskCatalogSource,
 } from '@/modules/digital-employee/composition'
-import {
-  composeExecutionContract,
-  createExecutionContractResourceAdapter,
-} from '@/modules/execution-contract/composition'
+import { composeExecutionContract } from '@/modules/execution-contract/composition'
+import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { composeWebhookIngressPersistenceFor } from '@/modules/integration/composition/webhookIngress'
@@ -43,7 +41,6 @@ import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/com
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountWellKnownRoutes } from '@/routes/docs'
@@ -62,14 +59,6 @@ export interface ProductionPerformanceApplicationInput {
   readonly appHome: string
   readonly configPath: string
   readonly daemonToken: string
-}
-
-function isPostgresql(db: ProviderNeutralDatabase): db is PostgresqlDatabaseClient {
-  return '$provider' in db && db.$provider === 'postgresql'
-}
-
-function assertSqlite(db: ProviderNeutralDatabase): asserts db is DbClient {
-  if ('$provider' in db) throw new Error('unsupported-performance-test-provider')
 }
 
 function unusedRuntimeCapability(): never {
@@ -94,19 +83,11 @@ export async function createProductionPerformanceApplication(
   }
   const repositoryStore = composeRepositoryWorkspaceStore(db)
   const overview = createProductionOverviewQuery(db, identityAccess)
-  const executionContractInput = {
-    appHome,
+  const executionContracts = composeExecutionContract({
     registrations: developmentExecutionContractRegistrations,
-  }
-  const executionContracts = isPostgresql(db)
-    ? composeExecutionContract({
-        ...executionContractInput,
-        resources: createExecutionContractResourceAdapter(db),
-      })
-    : (() => {
-        assertSqlite(db)
-        return composeExecutionContract({ ...executionContractInput, db })
-      })()
+    resources: createExecutionContractResourceAdapter(db),
+    programFixtures: createExecutionContractProgramFixtureAdapter({ appHome }),
+  })
   const digitalEmployee = composeDigitalEmployee({
     db,
     appHome,
