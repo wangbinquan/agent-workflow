@@ -8,7 +8,7 @@ import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 
 export interface LegacyWorkspaceRecoveryLog {
-  warn(message: string, context: Record<string, unknown>): void
+  warn(message: string, context: Readonly<Record<string, string>>): void
 }
 
 export async function reclaimLegacyWorkspaceArtifacts(

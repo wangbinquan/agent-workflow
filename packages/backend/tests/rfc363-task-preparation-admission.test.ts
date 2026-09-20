@@ -75,7 +75,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
           taskId: ulid(),
           plan: {
             worktreePath: target,
-            defs: [],
+            defs: new Map(),
             files: [],
             limits: { perFile: 1024, perRequest: 2048, perCount: 2 },
           },

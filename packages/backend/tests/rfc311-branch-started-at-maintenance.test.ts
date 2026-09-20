@@ -20,7 +20,9 @@ import type { StartTask } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, users, workflows } from '../src/db/schema'
-import { __setActiveTaskForTesting, startTask, type MaterializedSpace } from '../src/services/task'
+import { __setActiveTaskForTesting, startTask } from '@/services/task'
+import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { deleteTask } from '../src/services/taskDelete'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 

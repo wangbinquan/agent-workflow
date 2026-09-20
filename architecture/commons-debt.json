@@ -4567,14 +4567,11 @@
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
         "import:156df4518f3284d8c318",
-        "import:18284860bdad669c19aa",
         "import:37e297673fb3848a30ba",
         "import:5b61552fce6c72aa3783",
-        "import:6c227f2bf9c4b929c73e",
         "import:93ab9a9b4a56ad7a2d00",
         "import:a44224020597b952313b",
         "import:a8d6e431aa2b91146f12",
-        "import:bf164a2d7eb5dea8cd23",
         "import:c5f926f8bc087cfe3e79",
         "import:c9eed9a8c5ad379d8863"
       ],
@@ -4602,10 +4599,7 @@
         "import:08c29608fcb9a37f1821",
         "import:11e4b63b4f9f4226637f",
         "import:133faf21e37bbcc8ce21",
-        "import:2aa9bb18b775e5086562",
         "import:41c8ee752dc430e2e37b",
-        "import:49f5bf4e45b1d7db9993",
-        "import:6b4fa01ea6aecd869caa",
         "import:852c99d2af011dd70920",
         "import:9bd06af00c9c1e373b90",
         "import:de17d18a53431aaefb1a",
@@ -7837,15 +7831,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:cb3750d0087b25ec9318e875c44b2cae3d9ce5c3c8bc3da9cb4473717d13daac",
+    "sourceDigest": "sha256:0f2cb439852955c775c2450a7d05623053a069ed68616da6b96c0b1b7a00bcfd",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "0bed153d446c05b1bb64f63f0aaa1fa47609dedb",
-    "contentDigest": "sha256:64ac5daecd100b1ba8c3f36b6bb5e282be8aa335123100063d35b4c06750d988",
+    "currentSnapshotSha": "0584a1c23483d416b91aca2b57a9ab50d784ff75",
+    "contentDigest": "sha256:34f8cacfd4f42e57f2ac13e7a5ebf34afb9b831ad64cca3cba3dccf6f29af4f3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

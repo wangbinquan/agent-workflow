@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 // RFC-363: lock the irreversible Task admission boundary independently of adapters.
 import { expect, test } from 'bun:test'
 import { launchTask } from '@/modules/task-execution/application/launch/launchTask'
@@ -109,4 +111,22 @@ test('a mismatched preparation is compensated before uploads or admission', asyn
   f.workspace.taskId = 'another-task'
   await expect(launchTask(f.ports)).rejects.toThrow('task-route-workspace-id-mismatch')
   expect(f.trace).toEqual(['preflight', 'prepare', 'rollback', 'failed:launch-failed', 'release'])
+})
+
+// Prevent production callers from regaining a second physical preparation route.
+test('the legacy Task service no longer exports physical workspace preparation', () => {
+  const service = readFileSync(resolve(import.meta.dir, '../src/services/task.ts'), 'utf8')
+  for (const name of ['materializeSpace', 'resolveRepoSourceSingle']) {
+    expect(service).not.toContain(`export async function ${name}(`)
+  }
+  const adapter = readFileSync(
+    resolve(
+      import.meta.dir,
+      '../src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts',
+    ),
+    'utf8',
+  )
+  expect(adapter).not.toContain("from '@/services/task'")
+  expect(adapter).not.toContain("from '@/modules/source-control/composition'")
+  expect(adapter).toContain('dependencies.repositoryPreparation.legacy.prepare')
 })

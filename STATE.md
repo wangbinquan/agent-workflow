@@ -1,5 +1,10 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 旧物理 facade 退役与 Windows 验收接线候选
+
+`services/task.ts` 不再导出物理准备/清理 facade；原物化测试改指 SC 实现与仅测试使用的装配 helper，Task 私有历史恢复仍保留。三个根的 deferred adapter 不再传 SC store，要求同一 preparation binding；循环的重试/退避/终态与唯一 Task writer 未改。原生 Windows workflow 新增 7 个 SC + 8 个 Task/upload 中断窗口，等待 hosted 取证。
+`0584a1c23` 的 Windows `35510245406` 报日志字段过宽、child state 字面量收窄和上传 defs 错用数组，本批按实际字符串字段/对象状态断言/Map 修复。RFC363/364 仍待完整 AC 与最终 CI，不记 Done；RFC365 仅 T1。
+
 ## 2026-09-20 RFC-363 Workspace adapter 边界与严格上传 journal 候选
 
 Task workspace/retry 移除 SC composition、cache/group service 和物理 Task facade import；根提供明确的旧任务恢复 adapter，原物理回收算法归 SC，Task 私有接收投影替代 legacy service 类型。上传缺 journal 不再落回无回执写盘，Agent 上传 oracle 改为真实双库/实际 scratch，新增缺 journal 零副作用拒绝测试。

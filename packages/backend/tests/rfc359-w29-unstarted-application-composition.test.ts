@@ -602,11 +602,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
       // RFC-360: both runtime route families and config consume the same management instance;
       // the PostgreSQL task runtime reuses core.runtimeRegistry rather than creating another.
-      // RFC-363: add only the Task workspace reader binding, verified below.
+      // RFC-363: Task workspace reader plus explicit preparation binding.
+      // Deferred Task composition no longer receives an SC repository store;
+      // its required binding owns physical legacy recovery too.
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
       // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
-      '2b6f16a61930c42bb37107c2445d06d4889f443b9c3f27ac1f618de35aa33d87',
+      'ae0365e491407852ebf48f3687fc85126c2e6b81842e94f559525e89f1363975',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -784,7 +786,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
       // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
-      'fc88b76c225dd80b6c1e3ca85b8850fb16607e3b1c0738947f3799a85c7462ba',
+      '9aace7e9bfc56b8b2067d7216401459a4d9d71a51f565c37c80e883e8027ee92',
     )
     expect(
       namedCalls(

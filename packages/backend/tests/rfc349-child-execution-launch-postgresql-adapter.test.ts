@@ -32,7 +32,7 @@ import {
 } from '@/modules/task-execution/composition/childExecutionLaunch'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import type { MaterializedSpace } from '@/services/task'
+import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 const actor = buildActor({
   user: {
@@ -249,7 +249,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       refClosureJson: null,
     })
 
-    expect(inheritedSpace.cleanup.state).toBe('committed')
+    expect(inheritedSpace.cleanup).toMatchObject({ state: 'committed' })
     expect(schedulerCalls).toEqual([])
     expect(trace).toEqual(['event:after-commit'])
     expect(publishedTask).toMatchObject({

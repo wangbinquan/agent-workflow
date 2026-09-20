@@ -40,7 +40,6 @@ import {
 } from '../src/modules/task-execution/composition/triggerExecution'
 import { composeWorkgroupLaunchResourceOperations } from '../src/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDeferredRepositoryPreparation } from '../src/modules/task-execution/composition/deferredRepositoryPreparation'
-import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { createTaskDriveCoordinator } from '../src/services/task'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { fireSchedule, getScheduledTaskRow } from './helpers/integrationTriggerResourceBinding'
@@ -111,7 +110,6 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
         repositoryPreparation: composeRepositoryPreparation({ db: db, appHome: appHome }),
         db,
         appHome,
-        repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
       }),
       engineFailureMessage: 'rfc165 scheduled kinds drive threw',
       failureReporter: { report: () => undefined },

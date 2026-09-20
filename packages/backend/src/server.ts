@@ -3040,7 +3040,7 @@ function composeSqliteApiRouteMounts(
         }),
         db: deps.db,
         appHome,
-        repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(deps.db),
+
         ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
         ...launchRuntimeKnobs,
       }),

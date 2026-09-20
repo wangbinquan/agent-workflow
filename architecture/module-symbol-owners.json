@@ -6,7 +6,7 @@
     "moduleFiles": 1267,
     "productionFiles": 2592,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24815
+    "symbolsIncludingFileRoots": 24816
   },
   "entries": [
     {
@@ -188029,7 +188029,7 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#materializeSpace",
       "removeAfterWave": "W4-E1",
@@ -188119,6 +188119,18 @@
       "removeAfterWave": "W5",
       "status": "legacy-target",
       "symbol": "PreCreatedWorktree",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/task.ts",
+      "id": "owner:packages/backend/src/services/task.ts#prepareLegacyDeferredWorkspace",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "prepareLegacyDeferredWorkspace",
       "targetContext": "source-control",
       "targetLayer": "application"
     },
@@ -188233,7 +188245,7 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#resolveRepoSourceSingle",
       "removeAfterWave": "W5",
@@ -298502,5 +298514,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cb3750d0087b25ec9318e875c44b2cae3d9ce5c3c8bc3da9cb4473717d13daac"
+  "sourceDigest": "sha256:0f2cb439852955c775c2450a7d05623053a069ed68616da6b96c0b1b7a00bcfd"
 }

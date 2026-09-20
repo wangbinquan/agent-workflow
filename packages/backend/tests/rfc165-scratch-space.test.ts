@@ -33,7 +33,9 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { materializeSpace, startTask } from '../src/services/task'
+import { startTask } from '@/services/task'
+import { materializeSpace } from './helpers/legacyTaskWorkspace'
+
 import {
   materializingSpaces,
   runScratchOrphanGc,

@@ -1057,7 +1057,7 @@ export async function composePostgresqlApplication(
       }),
       db: input.db,
       appHome: input.appHome,
-      repositoryWorkspace: repositoryWorkspaceStore,
+
       secretBox: input.secretBox,
       ...(launchRuntime.cloneTimeoutMs === undefined
         ? {}

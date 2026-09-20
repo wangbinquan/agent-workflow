@@ -110,7 +110,6 @@ import {
 } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
-import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import {
   composeTaskIdleTimeoutOperations,
   createSqliteTaskIdleTimeoutPersistence,
@@ -2044,7 +2043,7 @@ async function composeSqliteProviderSession(
       }),
       db,
       appHome: Paths.root,
-      repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
+
       secretBox,
       ...(launchRuntimeConfig.cloneTimeoutMs === undefined
         ? {}

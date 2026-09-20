@@ -79,7 +79,8 @@ import type {
   TaskExecutionTopologyLogger,
 } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { MaterializedSpace } from '@/services/task'
+import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_788_278_400_000

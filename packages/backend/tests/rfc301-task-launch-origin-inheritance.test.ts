@@ -15,7 +15,9 @@ import { ulid } from 'ulid'
 import type { TaskCatalogVisibility, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { startTask, type MaterializedSpace } from '../src/services/task'
+import { startTask } from '@/services/task'
+import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

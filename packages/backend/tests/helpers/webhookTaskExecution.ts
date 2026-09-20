@@ -22,7 +22,6 @@ import { createTaskExecutionTriggerParticipant } from '../../src/modules/task-ex
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeSqliteRepositoryWorkspaceStore } from '../../src/modules/source-control/composition'
 import type { WebhookTaskExecutionParticipant } from '../../src/modules/integration/composition/webhookDispatch'
 import type { TaskExecutionResourceAuthority } from '../../src/services/execution/taskExecutionResources'
 import type { ExecutionInvoker } from '../../src/services/execution/types'
@@ -128,7 +127,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
         }),
         db: input.db,
         appHome,
-        repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(input.db),
+
         secretBox: input.secretBox,
         ...launchRuntimeKnobs,
       }),

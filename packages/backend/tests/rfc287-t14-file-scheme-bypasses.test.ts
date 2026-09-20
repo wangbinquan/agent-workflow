@@ -76,7 +76,7 @@ describeEachProvider(
     test('拿存量 file:// 的 cachedRepoId 启动 → 被拒（这是一轮真正漏掉的洞）', async () => {
       const db = harness.db
       const id = await seedFileMirror(db)
-      const { resolveRepoSourceSingle } = await import('@/services/task')
+      const { resolveRepoSourceSingle } = await import('./helpers/legacyTaskWorkspace')
       let msg = ''
       try {
         await resolveRepoSourceSingle(

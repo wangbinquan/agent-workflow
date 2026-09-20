@@ -26,12 +26,13 @@ import {
   type WorkflowWritePrincipal,
 } from '../src/services/workflow'
 import {
-  materializeSpace,
-  materializeWorktree,
   startTask,
   startTaskWithLocalRepo,
   type WorkflowLaunchCommitHookEvent,
-} from '../src/services/task'
+} from '@/services/task'
+import { materializeSpace } from './helpers/legacyTaskWorkspace'
+import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { createRepoGroup } from '@/services/repoGroup'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

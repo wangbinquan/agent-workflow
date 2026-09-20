@@ -142,3 +142,13 @@ Task workspace/retry 不再 import SC composition、cache identity/group service
 根启动上传现在必须读到准备好的 Task artifact；删除缺 journal 时直接调用原 writer 的 fallback。旧 Agent multipart recording-pool oracle 改用真实双库和实际 scratch driver，保留全部内容、路径、身份、闭包、记录集、drive 断言；新增缺 journal 写前拒绝且目录不存在用例。旧 guard 更新到 application 的唯一 prepare，并确认上传/admission 消费同一个 workspace；fusion fixture 补 gitName（生产身份规则未改）。前批 `929db4dc0` Main `35509624994` 对应失败待本批验证。
 
 仍须清理剩余 service 导出/受控历史调用、逐 AC 汇总最终托管证据；不记 RFC363/364 Done。
+
+## T7 旧物理 facade 退役候选与剩余边界
+
+`services/task.ts` 的物理机制转发导出删除，`materializeSpace`/`resolveRepoSourceSingle` 收为私有。原物化行为测试直接验证 SC infrastructure；两个旧 SQLite 测试调用签名由 test-only 装配 helper 保持，未放入生产路径。Task multipart 错误报告和 child hand-off 消费 Task 私有接收投影。三个根的 deferred adapter 只拿必填 preparation binding，不再 import/传递 SC store；旧记录在同一 root-owned legacy capability 下准备，新 journal 在 public participant 下驱动。Task ownership、重试循环/分类/窗口/退避与历史 cleanup 保持。
+
+旧 `services/task` 内部仅保留受控历史 Task/本地测试与已有 fusion writer 的兼容机制；不再作为新 root/Agent/Workgroup/multipart 的物理入口。SC composition 中旧机制的内部装配面、cache/repository CRUD/Git SCC、Task engine 与 detail/catalog 的其余迁移仍属完整 RFC294 E1/W5，不因本纵切退役服务导出而倒签完成。
+
+W29 PostgreSQL 仍 161 statements；摘要变化仅为 deferred root 不再重复注入 SC store。三个根仍通过原 preparation binding 提供该能力。Task INSERT 的 lineage/origin 字段保留，行号按 AST 实际站点同步。
+
+原生 Windows 工作流增加现有两份真实进程 suite（SC 7 个窗口、Task/upload 8 个窗口），沿用 Windows SQLite lane，Ubuntu 验证真实双库。`0584a1c23` Windows `35510245406` 已定位的日志类型、测试状态字面量收窄、空 UploadInputDef Map 类型问题随本批修复。完整 AC-1～8 与最终托管证据继续待验收，不将候选标 Done。

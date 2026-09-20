@@ -21,7 +21,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { listCachedRepos } from '../src/services/gitRepoCache'
-import { normalizeStartTaskRepos } from '../src/services/task'
+import { normalizeStartTaskRepos } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'ghp_SUPERSECRET_TOKEN_VALUE'

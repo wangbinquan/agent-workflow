@@ -62,12 +62,9 @@ import {
   workflowDraftSnapshotOf,
   type WorkflowWritePrincipal,
 } from '../src/services/workflow'
-import {
-  abortAllActiveTasks,
-  isTaskActive,
-  materializeWorktree,
-  startTask as startTaskBase,
-} from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '@/services/task'
+import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { ValidationError } from '../src/util/errors'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'

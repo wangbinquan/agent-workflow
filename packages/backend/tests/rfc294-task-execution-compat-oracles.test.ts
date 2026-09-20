@@ -40,8 +40,9 @@ import {
   isTaskActive,
   startTask,
   startTaskWithLocalRepo,
-  type MaterializedSpace,
-} from '../src/services/task'
+} from '@/services/task'
+import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
 import {

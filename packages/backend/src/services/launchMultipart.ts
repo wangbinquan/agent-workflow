@@ -21,7 +21,8 @@ import {
   type UploadInputDef,
   type UploadLimits,
 } from '@/services/upload'
-import type { WorkspaceCleanupReport } from '@/services/task'
+import { type WorkspaceCleanupReport } from '@/modules/task-execution/composition/taskRouteLaunch'
+
 import { DomainError, ValidationError } from '@/util/errors'
 
 const UPLOAD_FIELD_PREFIX = 'files['

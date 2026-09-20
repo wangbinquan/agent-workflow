@@ -1,11 +1,9 @@
 import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { SecretBox } from '@/auth/secretBox'
-import type { RepositoryWorkspaceStore } from '@/modules/source-control/ports/repositoryWorkspaceStore'
-import {
-  composeDeferredRepositoryPreparationStep,
-  type WorkspaceCleanupHookEvent,
-} from '@/services/task'
+import { composeDeferredRepositoryPreparationStep } from '@/services/task'
+import { type WorkspaceCleanupHookEvent } from '../application/ports/preparedWorkspace'
+
 import { loadFrozenSpaceLayout } from '../infrastructure/frozenWorkspaceLayout'
 import type { PersistedRepositoryPreparationStep } from '../application/drive/repositoryPreparationStep'
 
@@ -16,13 +14,12 @@ import type { PersistedRepositoryPreparationStep } from '../application/drive/re
  * `skipRepositoryPreparation`，于是 G7 在那一侧等于没实现：远端拉不动时同步抛错、
  * 一行任务都不留（`rfc359-w5hn-deferred-repo-preparation-parity` 钉过那处落差）。
  *
- * `repositoryWorkspace` 必填、`loadFrozenSpaceLayout` 用中立那份：这一步因此不认识任何引擎。
+ * `repositoryPreparation` 必填、`loadFrozenSpaceLayout` 由 Task 提供：这一步因此不认识任何引擎。
  */
 export function composeDeferredRepositoryPreparation(input: {
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
-  readonly repositoryWorkspace: RepositoryWorkspaceStore
   readonly secretBox?: SecretBox
   readonly cloneTimeoutMs?: number
   readonly gitBaselineSyncWindowMs?: number
@@ -32,7 +29,6 @@ export function composeDeferredRepositoryPreparation(input: {
     deps: {
       db: input.db,
       repositoryPreparation: input.repositoryPreparation,
-      repositoryWorkspace: input.repositoryWorkspace,
       loadFrozenSpaceLayout: (sourceTaskId) => loadFrozenSpaceLayout(input.db, sourceTaskId),
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
       ...(input.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: input.cloneTimeoutMs }),

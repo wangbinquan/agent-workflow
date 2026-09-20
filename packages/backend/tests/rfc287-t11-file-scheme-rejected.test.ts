@@ -119,7 +119,7 @@ describe('RFC-287 T11 ③ — 内外通道源码锁', () => {
       ),
       'utf8',
     )
-    const fnStart = taskSrc.indexOf('export async function resolveRepoSourceSingle')
+    const fnStart = taskSrc.indexOf('async function resolveRepoSourceSingle')
     expect(fnStart, '收口点所在函数应存在').toBeGreaterThan(0)
     // 边界用顶格 `}`，不是下一个 `\nasync function `——后者会跳过每一个
     // `export async function`，实测把函数体从 831→976 撑成 831→1252，顺带吞进

@@ -28,12 +28,9 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkflow } from '../src/services/workflow'
-import {
-  abortAllActiveTasks,
-  isTaskActive,
-  materializeWorktree,
-  startTask as startTaskBase,
-} from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '@/services/task'
+import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { ulid } from 'ulid'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

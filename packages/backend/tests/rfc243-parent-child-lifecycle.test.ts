@@ -38,7 +38,9 @@ import { enforceLimits, parseCallHumanWait } from '../src/services/limits'
 import { runIsoWorktreeGc } from '../src/services/gc'
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { resolveRunLiveness } from '../src/services/runLiveness'
-import type { MaterializedSpace, StartTaskDeps } from '../src/services/task'
+import type { StartTaskDeps } from '@/services/task'
+import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 

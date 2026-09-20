@@ -28,7 +28,8 @@ import {
   refreshCachedRepo,
   resolveCachedRepo,
 } from '../src/services/gitRepoCache'
-import { resolveRepoSourceSingle } from '../src/services/task'
+import { resolveRepoSourceSingle } from './helpers/legacyTaskWorkspace'
+
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import {

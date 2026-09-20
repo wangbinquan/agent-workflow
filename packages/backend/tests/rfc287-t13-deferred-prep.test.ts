@@ -993,8 +993,6 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
       await import('@/modules/task-execution/composition/workgroupLaunchResources')
     const { composeDeferredRepositoryPreparation } =
       await import('@/modules/task-execution/composition/deferredRepositoryPreparation')
-    const { composeSqliteRepositoryWorkspaceStore } =
-      await import('@/modules/source-control/composition')
     const { createTaskDriveCoordinator } = await import('@/services/task')
     const { buildActor } = await import('../src/auth/actor')
 
@@ -1082,7 +1080,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
               }),
               db: db2,
               appHome: home,
-              repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db2),
+
               gitBaselineSyncWindowMs: 0,
               cloneTimeoutMs: 3000,
             }),
@@ -2144,7 +2142,8 @@ describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功',
     // RFC-363: each iteration enters the durable participant; pre-journal Tasks
     // retain the original materializer. Both calls must remain inside this loop.
     expect(loop).toContain('await taskDriveComposition.prepareDurableRepositoryWorkspace(')
-    expect(loop).toMatch(/prepared\s*=\s*durable\s*\?\?\s*\(await materializeSpaceWithProvider\(/)
+    expect(loop).toMatch(/prepared\s*=\s*durable\s*\?\?\s*\(await prepareLegacyDeferredWorkspace\(/)
+    expect(src).toContain('deps.repositoryPreparation.legacy.prepare')
     // ②成功即出（earlyError 为 null 就 break）——否则会白转满窗口。
     expect(loop).toMatch(/if \(prepared\.earlyError === null\) break/)
     // ③**先判可重试、再看窗口**：反过来会让永久失败也白耗一次退避。

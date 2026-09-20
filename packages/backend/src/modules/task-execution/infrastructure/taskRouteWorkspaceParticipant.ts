@@ -70,7 +70,7 @@ export interface TaskWorkspacePreparation {
 export interface TaskWorkspaceMaterializer {
   reclaimLegacyArtifacts(
     task: { id: string; cachedRepoId: string | null; repoGroupId: string | null },
-    log: { warn(message: string, context: Record<string, unknown>): void },
+    log: { warn(message: string, context: Readonly<Record<string, string>>): void },
   ): Promise<void>
 
   prepare(input: TaskWorkspacePreparation): Promise<TaskRoutePreparedWorkspace>

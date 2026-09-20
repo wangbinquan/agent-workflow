@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:cb3750d0087b25ec9318e875c44b2cae3d9ce5c3c8bc3da9cb4473717d13daac`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:0f2cb439852955c775c2450a7d05623053a069ed68616da6b96c0b1b7a00bcfd`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -21,7 +21,7 @@
 | background work entries | 332 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 76 |
-| RFC-317 boundary census（inbound / outbound） | 252 / 31 |
+| RFC-317 boundary census（inbound / outbound） | 253 / 31 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4775 |
+| `architectureExceptions` | 4767 |
 | `backgroundJobs` | 332 |
-| `crossContextImports` | 5341 |
+| `crossContextImports` | 5333 |
 | `facades` | 292 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24815 |
+| `moduleSymbolOwners` | 24816 |
 | `mutationEntrypoints` | 1713 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1016 |
@@ -200,11 +200,11 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3155 |
-| legacy-inbound | 1432 |
+| legacy-outbound | 3154 |
+| legacy-inbound | 1426 |
 | infrastructure-external | 277 |
 | offered-consumption | 188 |
-| temporary-internal-debt | 92 |
+| temporary-internal-debt | 91 |
 | off-dag-offered | 84 |
 | authority-type-only | 75 |
 | required-implementation | 32 |
@@ -215,9 +215,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3155 |
-| legacy-inbound | 1432 |
-| temporary-internal-debt | 92 |
+| legacy-outbound | 3154 |
+| legacy-inbound | 1426 |
+| temporary-internal-debt | 91 |
 | off-dag-offered | 84 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
@@ -231,8 +231,8 @@
 | W4-E1 | 820 |
 | W4-C | 339 |
 | W4-E0 | 220 |
-| W5 | 197 |
 | W4 | 193 |
+| W5 | 189 |
 | W4-B | 182 |
 | W4-E8 | 110 |
 | W4-E4b | 59 |

@@ -12,31 +12,7 @@ import {
   withWorkspaceCleanupReport,
   type PlannedSpaceLayout,
   materializeSpaceWithProvider,
-  type WorkspaceMaterializationDependencies,
-  materializeWorktree,
-  type WorkspaceCleanupFailure,
-  type WorkspaceCleanupReport,
-  cleanupMaterializedSpace,
-  commitMaterializedSpace,
 } from '@/modules/source-control/composition'
-// RFC-363 compatibility consumers remain until their Task launch adapters switch to the participant.
-export {
-  type WorkspaceMaterializationDependencies,
-  materializeWorktree,
-  type ResolvedRepoSource,
-  type RepoSourceSpec,
-  normalizeStartTaskRepos,
-  resolveRepoSourceSingleWithProvider,
-  type MaterializedSpace,
-  type WorkspaceCleanupHookEvent,
-  type WorkspaceCleanupFailure,
-  type WorkspaceCleanupReport,
-  type MaterializedSpaceCleanup,
-  cleanupMaterializedSpace,
-  commitMaterializedSpace,
-  type PlannedSpaceLayout,
-  materializeSpaceWithProvider,
-}
 // Task service — start / list / get.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
@@ -817,7 +793,8 @@ export interface DeferredRepositoryPreparationDependencies extends Pick<
 > {
   readonly repositoryPreparation?: taskDriveComposition.TaskRepositoryPreparationBinding
   readonly db: LegacyProviderNeutralDatabase
-  readonly repositoryWorkspace: RepositoryWorkspaceStore
+  /** Only legacy direct-service callers without an injected root binding. */
+  readonly repositoryWorkspace?: RepositoryWorkspaceStore
   /**
    * 重放（`sourceTaskId`）用的冻结布局读取。SQLite 那份在本文件里是同步 `.all()`，
    * PostgreSQL 那份在 `taskRouteWorkspaceParticipant.ts` 里是中立异步——
@@ -1005,7 +982,7 @@ async function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTas
 }
 
 /** Legacy SQLite adapter retained for direct service callers. */
-export async function resolveRepoSourceSingle(
+async function resolveRepoSourceSingle(
   spec: RepoSourceSpec,
   input: StartTask,
   deps: StartTaskDeps,
@@ -1561,7 +1538,7 @@ async function loadFrozenSpaceLayout(
 
 /** Existing SQLite service entry, now only a provider adapter around the
  * shared materializer. */
-export async function materializeSpace(
+async function materializeSpace(
   input: StartTask,
   deps: StartTaskDeps,
   appHome: string,
@@ -4028,6 +4005,49 @@ export async function retryRepositoryPreparation(
  * 返回 `ok:false` 表示准备失败且**已记账**（合成行 failed、任务 failed、租约已释放），
  * 调用方不得再往下走调度。
  */
+async function prepareLegacyDeferredWorkspace(
+  input: StartTask,
+  deps: DeferredRepositoryPreparationDependencies,
+  appHome: string,
+  taskId: string,
+  signal: AbortSignal,
+): Promise<MaterializedSpace> {
+  const options = {
+    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+    ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
+    ...(deps.workspaceCleanupHook === undefined
+      ? {}
+      : { workspaceCleanupHook: deps.workspaceCleanupHook }),
+  }
+  if (deps.repositoryPreparation !== undefined)
+    return deps.repositoryPreparation.legacy.prepare({
+      task: input,
+      taskId,
+      signal,
+      gitCommitIdentity: deps.gitCommitIdentity ?? null,
+      loadFrozenSpaceLayout: deps.loadFrozenSpaceLayout,
+      ...options,
+    })
+  // The pre-RFC363 direct-service test/local compatibility face has no root.
+  // Production deferred composition always supplies repositoryPreparation.
+  if (deps.repositoryWorkspace === undefined)
+    throw new Error('legacy-repository-workspace-not-composed')
+  return materializeSpaceWithProvider(
+    input,
+    {
+      appHome,
+      repositoryWorkspace: deps.repositoryWorkspace,
+      loadFrozenSpaceLayout: deps.loadFrozenSpaceLayout,
+      ...(deps.gitCommitIdentity === undefined
+        ? {}
+        : { gitCommitIdentity: deps.gitCommitIdentity }),
+      sourceTerminationLaunchSignal: signal,
+      ...options,
+    },
+    taskId,
+  )
+}
+
 async function runDeferredRepoPreparation(args: {
   deps: DeferredRepositoryPreparationDependencies
   input: StartTask
@@ -4157,25 +4177,7 @@ async function runDeferredRepoPreparation(args: {
               signal,
             })
       prepared =
-        durable ??
-        (await materializeSpaceWithProvider(
-          input,
-          {
-            appHome,
-            repositoryWorkspace: deps.repositoryWorkspace,
-            loadFrozenSpaceLayout: deps.loadFrozenSpaceLayout,
-            ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-            ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
-            ...(deps.gitCommitIdentity === undefined
-              ? {}
-              : { gitCommitIdentity: deps.gitCommitIdentity }),
-            ...(deps.workspaceCleanupHook === undefined
-              ? {}
-              : { workspaceCleanupHook: deps.workspaceCleanupHook }),
-            sourceTerminationLaunchSignal: signal,
-          },
-          prepTaskId,
-        ))
+        durable ?? (await prepareLegacyDeferredWorkspace(input, deps, appHome, prepTaskId, signal))
     } catch (err) {
       prepared = {
         ...space,
