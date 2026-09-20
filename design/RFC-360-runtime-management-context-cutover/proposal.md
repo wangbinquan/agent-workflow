@@ -1,6 +1,6 @@
 # RFC-360：Runtime Management 管理与选择合同归位
 
-- 状态：Draft（2026-09-20）；尚未批准实施。
+- 状态：In Progress（2026-09-20 用户批准实施并提交远端）。
 - 母 RFC：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E4b，以及本域对应的 W4-B/D。
 - 前置：[RFC-359](../RFC-359-database-provider-unification/proposal.md) Done、W4-A/C/E0 Done。
 - 基线：`9ba159a7f3b1688806e54f374ab30e2aca1a4bff`。

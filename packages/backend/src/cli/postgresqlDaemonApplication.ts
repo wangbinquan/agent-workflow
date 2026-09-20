@@ -29,7 +29,10 @@ import { eq } from 'drizzle-orm'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
-import type { RuntimeDiagnosticDependencies } from '@/routes/runtimes'
+import {
+  composeRuntimeManagement,
+  type RuntimeDiagnosticDependencies,
+} from '@/modules/runtime-management/composition/runtimeManagement'
 import {
   supportsEventCenterCodeHostDelivery,
   supportsEventCenterWorkStart,
@@ -1869,6 +1872,14 @@ export async function composePostgresqlApplication(
       memories: memoryCatalog,
       tasks: taskExecutionProvider.overview,
     })
+  const runtimeManagement = composeRuntimeManagement({
+    configPath: input.configPath,
+    runtimeRegistry: core.runtimeRegistry,
+    runtimeTests: mcpRuntimeTests,
+    ...(input.runtimeDiagnosticTestDependencies === undefined
+      ? {}
+      : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
+  })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     config: Object.freeze({
       configPath: input.configPath,
@@ -1897,15 +1908,8 @@ export async function composePostgresqlApplication(
     }),
     daemon: Object.freeze({ daemonInfoPath: input.daemonInfoPath }),
     plantuml: Object.freeze({ configPath: input.configPath }),
-    runtime: Object.freeze({ configPath: input.configPath, runtimeRegistry: core.runtimeRegistry }),
-    runtimes: Object.freeze({
-      configPath: input.configPath,
-      runtimeRegistry: core.runtimeRegistry,
-      runtimeTests: mcpRuntimeTests,
-      ...(input.runtimeDiagnosticTestDependencies === undefined
-        ? {}
-        : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
-    }),
+    runtime: runtimeManagement.models,
+    runtimes: runtimeManagement.runtimes,
     overview: Object.freeze({
       authorization: Object.freeze({ directAuthority: identityAccess.directAuthority }),
       query: overviewQuery,

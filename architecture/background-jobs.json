@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:538",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:541",
       "kind": "register-call",
-      "line": 538,
+      "line": 541,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -527,6 +527,17 @@
       "removeAfterWave": "W6/W9",
       "symbol": "executeHostTurn",
       "targetContext": "resource-catalog"
+    },
+    {
+      "callee": "setRuntimeEnabled",
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeManagement.ts",
+      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeManagement.ts#setRuntimeEnabled:81",
+      "kind": "global-setter",
+      "line": 81,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeManagement.ts#createRuntimeManagement",
+      "removeAfterWave": "W6/W9",
+      "symbol": "createRuntimeManagement",
+      "targetContext": "runtime-management"
     },
     {
       "callee": "registerKnownChildTask",
@@ -3699,9 +3710,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtime.ts",
-      "id": "ambient:packages/backend/src/routes/runtime.ts#registerRoute:22",
+      "id": "ambient:packages/backend/src/routes/runtime.ts#registerRoute:10",
       "kind": "register-call",
-      "line": 22,
+      "line": 10,
       "ownerEntryId": "owner:packages/backend/src/routes/runtime.ts#mountRuntimeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimeRoutes",
@@ -3710,9 +3721,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:136",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:100",
       "kind": "register-call",
-      "line": 136,
+      "line": 100,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -3721,9 +3732,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:165",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:113",
       "kind": "register-call",
-      "line": 165,
+      "line": 113,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -3732,9 +3743,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:233",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:127",
       "kind": "register-call",
-      "line": 233,
+      "line": 127,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -3743,9 +3754,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:270",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:141",
       "kind": "register-call",
-      "line": 270,
+      "line": 141,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -3754,9 +3765,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:338",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:155",
       "kind": "register-call",
-      "line": 338,
+      "line": 155,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -3765,9 +3776,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:374",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:169",
       "kind": "register-call",
-      "line": 374,
+      "line": 169,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -3776,9 +3787,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:401",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:182",
       "kind": "register-call",
-      "line": 401,
+      "line": 182,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -3787,20 +3798,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:430",
+      "id": "ambient:packages/backend/src/routes/runtimes.ts#registerRoute:87",
       "kind": "register-call",
-      "line": 430,
-      "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountRuntimesRoutes",
-      "targetContext": "runtime-management"
-    },
-    {
-      "callee": "setRuntimeEnabled",
-      "file": "packages/backend/src/routes/runtimes.ts",
-      "id": "ambient:packages/backend/src/routes/runtimes.ts#setRuntimeEnabled:387",
-      "kind": "global-setter",
-      "line": 387,
+      "line": 87,
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#mountRuntimesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRuntimesRoutes",
@@ -5349,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3544",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3541",
       "kind": "register-call",
-      "line": 3544,
+      "line": 3541,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5360,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1385",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1386",
       "kind": "register-call",
-      "line": 1385,
+      "line": 1386,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3330",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3327",
       "kind": "register-call",
-      "line": 3330,
+      "line": 3327,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3611",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3608",
       "kind": "register-call",
-      "line": 3611,
+      "line": 3608,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -10748,7 +10748,6 @@
     },
     {
       "dependencies": [
-        "client",
         "runtime"
       ],
       "file": "packages/backend/src/routes/runtime.ts",
@@ -10760,7 +10759,7 @@
         "readiness": false,
         "run": false,
         "start": false,
-        "state": true,
+        "state": false,
         "stop": false
       },
       "lifetime": "execution-local",
@@ -12755,5 +12754,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:57a28fe8441b0a45f3012f2ff8145260dba1381b8dc5a3634c9115ca251696ce"
+  "sourceDigest": "sha256:4acda67e818a25ba8f0e0537e2b9de561e449f0c6197e5802f1e05012e3907dd"
 }

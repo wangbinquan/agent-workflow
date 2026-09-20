@@ -1,5 +1,19 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-360～362 已获实施与远端发布授权
+
+用户批准三个 RFC 的具体三件套并要求提交远端。三者均进入 In Progress，按各自完整 AC 推进；
+RFC-360 先进行管理用例/注册表/执行选择纵切，RFC-361 接续 EC provider 归位，RFC-362 完成已批准的合同准备与行为验证。
+当前基线 `47ebc43e1160dbab88a882550f412ccb84a68f20`，Main CI `35483606868` 46/46 success。
+实施仅在共享主 checkout 的 main；保留原有 system-mocks CLI mode WIP；最终完成需本次代码的 exact-SHA 托管证据。
+
+第一批代码：RM application 统一 profile/probe/status/models 编排，两组 HTTP route 仅 decode/call/map；
+SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 registry 实例。新增四组真实双库行为测试，
+同时迁移原源码测试的调用位置；registry 单一持久化和 per-NodeRun selection 尚未迁位。
+本批推进 RFC-360 T2/T4，三个 RFC 仍 In Progress；不领取完整 E4b/E9/E1 完成信用。
+
+
+
 ## 2026-09-20 RFC-294 后续推进：文档对账与三份独立草案
 
 进行中 RFC：RFC-294 继续 In Progress；新增 [RFC-360](design/RFC-360-runtime-management-context-cutover/proposal.md)、

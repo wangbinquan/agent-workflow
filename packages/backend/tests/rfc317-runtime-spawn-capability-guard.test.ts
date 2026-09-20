@@ -151,8 +151,12 @@ describeEachProviderHttpApplication(
 // 下面这些是纯源码扫描（不碰库）——刻意留在普通 describe 里：放进 provider 作用域
 // 只会把同一份 AST 扫描跑两遍，双引擎对它毫无信息量（pre-flight 的 PURE-DESCRIBE）。
 describe('RFC-317 T71 —— spawn 能力门的源码棘轮与 matcher 自证', () => {
-  test('源码棘轮：src/routes 下每一处 smokeRuntime( 的同一函数体内必须先有能力门', () => {
-    const files = readdirRecursive(ROUTES_DIR).filter((p) => p.endsWith('.ts'))
+  test('源码棘轮：route/application 下每一处 smokeRuntime( 的同一函数体内必须先有能力门', () => {
+    const files = [
+      ...readdirRecursive(ROUTES_DIR).filter((p) => p.endsWith('.ts')),
+      // RFC-360 relocates the unchanged three management use cases behind their HTTP adapters.
+      resolve(ROUTES_DIR, '../modules/runtime-management/application/runtimeManagement.ts'),
+    ]
     expect(files.length, 'src/routes 枚举断了，本条棘轮失去意义').toBeGreaterThan(10)
 
     const offenders: string[] = []
@@ -164,7 +168,10 @@ describe('RFC-317 T71 —— spawn 能力门的源码棘轮与 matcher 自证', 
       smokeSites += scan.sites
       offenders.push(...scan.offenders)
     }
-    expect(smokeSites, 'src/routes 下一处 spawn 调用都没找到——判据的被测面没了').toBeGreaterThan(2)
+    expect(
+      smokeSites,
+      'route/application 下一处 spawn 调用都没找到——判据的被测面没了',
+    ).toBeGreaterThan(2)
     expect(
       offenders,
       '这些 spawn 站点没有在同一函数体内先过 assertRuntimeSpawnCapabilities。' +

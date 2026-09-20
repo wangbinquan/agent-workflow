@@ -2202,6 +2202,8 @@
       "boundaryEdgeIds": [
         "import:312fc350e0ada4ad51c5",
         "import:60049d29d60866b8b8de",
+        "import:75a696ee4a4fc9f8066d",
+        "import:7662ac52c9e23327f379",
         "import:c627b586c75eb0c3f2b0"
       ],
       "exportedSymbols": [
@@ -3742,8 +3744,10 @@
         "import:292e6f622426fed4dffb",
         "import:508585b40e2cf04f1432",
         "import:55e8e7319736fc529828",
+        "import:6086843b83980e7f72de",
         "import:6d5a94d223636922c768",
-        "import:933405a99ca17491e5e0"
+        "import:933405a99ca17491e5e0",
+        "import:9b54bbf2ad1b84de8700"
       ],
       "exportedSymbols": [
         "RUNTIME_KINDS",
@@ -4155,7 +4159,13 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:03735285e4900dcb304f",
+        "import:8f546e81c28ec42c6355",
+        "import:a2727a15af5600be93d5",
+        "import:a6f7509d4e1f6d6f23dc",
+        "import:b27ce62fc855e7a9fd45",
         "import:cb0df11fa1b51981f7fe",
+        "import:d99993140213f8fae357",
         "import:f3ad3b94931e4b921699"
       ],
       "exportedSymbols": [
@@ -4240,7 +4250,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:3144e5a4f14f5dbed83a",
+        "import:6c0a2da5429a0320e9dd",
+        "import:d9c0cef5e5bfa7968efc"
+      ],
       "exportedSymbols": [
         "MODEL_FAIL_SIGNATURES",
         "SmokeOptions",
@@ -6323,5 +6337,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:57a28fe8441b0a45f3012f2ff8145260dba1381b8dc5a3634c9115ca251696ce"
+  "sourceDigest": "sha256:4acda67e818a25ba8f0e0537e2b9de561e449f0c6197e5802f1e05012e3907dd"
 }

@@ -193,6 +193,7 @@ import { mountPlantumlRoutes } from '@/routes/plantuml'
 import { mountPluginRoutes } from '@/routes/plugins'
 import { mountUserRoutes } from '@/routes/users'
 import { mountRepoRoutes } from '@/routes/repos'
+import { composeRuntimeManagement } from '@/modules/runtime-management/composition/runtimeManagement'
 import { mountRuntimeRoutes } from '@/routes/runtime'
 import { mountRuntimesRoutes } from '@/routes/runtimes'
 import { mountSkillRoutes } from '@/routes/skills'
@@ -3235,6 +3236,14 @@ function composeSqliteApiRouteMounts(
       ),
     }),
   })
+  const runtimeManagement = composeRuntimeManagement({
+    configPath: deps.configPath,
+    runtimeRegistry: deps.runtimeRegistry,
+    runtimeTests: mcpRuntimeTests,
+    ...(deps.runtimeDiagnosticTestDependencies === undefined
+      ? {}
+      : { runtimeDiagnosticTestDependencies: deps.runtimeDiagnosticTestDependencies }),
+  })
   const apiRoutes = Object.freeze({
     config: (app) =>
       mountConfigRoutes(app, {
@@ -3246,20 +3255,8 @@ function composeSqliteApiRouteMounts(
     maintenance: (app) => mountMaintenanceRoutes(app, deps),
     daemon: (app) => mountDaemonRoutes(app, deps),
     plantuml: (app) => mountPlantumlRoutes(app, deps),
-    runtime: (app) =>
-      mountRuntimeRoutes(app, {
-        configPath: deps.configPath,
-        runtimeRegistry: deps.runtimeRegistry,
-      }),
-    runtimes: (app) =>
-      mountRuntimesRoutes(app, {
-        configPath: deps.configPath,
-        runtimeRegistry: deps.runtimeRegistry,
-        runtimeTests: mcpRuntimeTests,
-        ...(deps.runtimeDiagnosticTestDependencies === undefined
-          ? {}
-          : { runtimeDiagnosticTestDependencies: deps.runtimeDiagnosticTestDependencies }),
-      }),
+    runtime: (app) => mountRuntimeRoutes(app, runtimeManagement.models),
+    runtimes: (app) => mountRuntimesRoutes(app, runtimeManagement.runtimes),
     overview: (app) =>
       mountOverviewRoutes(
         app,

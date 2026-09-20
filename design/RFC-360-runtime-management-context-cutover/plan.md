@@ -1,7 +1,7 @@
 # RFC-360 实施计划
 
-- 状态：Draft；本文件所有实施任务未开始。
-- 当前只完成三件套编写，不计 W4-E4b 完成。
+- 状态：In Progress（2026-09-20 用户批准实施）；正在按批准的全部验收标准实施。
+- 已获实施授权；各任务按实际源码和托管证据关闭，不提前计 W4-E4b 完成。
 
 ## 1. 任务与提交批次
 
@@ -42,3 +42,14 @@
 
 回滚：按批回退调用绑定与兼容 DTO，持久数据不反迁；profile 写入与 session invalidation 必须始终在同一 owner。
 禁止以回滚为由恢复两套 provider 实现或改变现有运行时能力。
+
+## 4. 实施记录（2026-09-20，未完成）
+
+T1 current-source 清单见 `implementation-baseline.json`（source SHA `47ebc43e1160dbab88a882550f412ccb84a68f20`，
+7 个 owned 实现/route 文件、18 个生产引用文件，保留原 exact IDs 与 source hash）。
+第一批将两组 HTTP adapter 的管理/probe/status/model 用例迁入 `application/runtimeManagement.ts`，
+由同一实例提供分组 public commands/queries；两种 provider 的组合根使用同一 factory。
+新增真实双库 application characterization，原 HTTP 测试继续作为 wire oracle。
+
+本批只推进 T2/T4。底层 registry 仍在 legacy 路径，T3 的事务 participant 归位、T5 的执行选择与 T6 的完整根收缩仍未完成；
+不能将这个中间批次作为 RFC-360 或 W4-E4b Done。RFC-361/362 已批准，尚待接续其实施任务。

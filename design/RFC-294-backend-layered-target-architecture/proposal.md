@@ -11,7 +11,7 @@
   最新数值由 `architecture/current-report.json` 与 [generated status](./status.md) 提供。本次文档对账不改 canonical、不计迁移 credit。
 - 下一批独立草案：[RFC-360 Runtime Management](../RFC-360-runtime-management-context-cutover/proposal.md)、
   [RFC-361 Execution Contract provider](../RFC-361-execution-contract-provider-cutover/proposal.md)、
-  [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md)。均为 Draft，尚未实施；优先批准/推进 RFC-360。
+  [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md)。均已批准并进入 In Progress；优先推进 RFC-360。
 - 性质：目标架构总纲 + 迁移治理合同；未完成 wave 不因局部模块、单一 provider 实现或账本存在而倒签 Done。
   旧 measurement seed、历次 SHA 与 hosted 证据保留在 plan 历史章节；不得把历史数字当作当前新增债务额度。
 - 架构重采触发器：后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量/行为证据，不追着重算总体架构，也不给

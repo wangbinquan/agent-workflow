@@ -1,6 +1,6 @@
 # RFC-361 实施计划
 
-- 状态：Draft；尚未开始实施，只领取 W4-E9 的 EC provider slice。
+- 状态：In Progress（2026-09-20 用户批准实施）；开始实施，只领取 W4-E9 的 EC provider slice。
 
 ## 1. 任务
 

@@ -6,7 +6,7 @@
 > [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已统一 provider 事务和多条生产算法；
 > 本文 §4.3 据此使用异步 `DatabaseSession`，不能再要求新合同只能由 `dbTxSync` 实现。
 > 旧 scope/receipt 的职责仍适用；本节后历史伪代码中的同步 DB participant 返回形状，实施时按 §4.3 升级为 Promise 并 await。
-> 同步纯函数不因此改为异步。RFC-360/361/362 仅为下一批 Draft，不代表后续 wave 已取得实施许可。
+> 同步纯函数不因此改为异步。RFC-360/361/362 已于 2026-09-20 获批；授权范围以各自三件套为准，不扩展到其他 wave。
 
 ## 1. 设计原则
 
