@@ -26,7 +26,7 @@ import {
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'

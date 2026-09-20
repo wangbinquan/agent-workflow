@@ -356,6 +356,7 @@ import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { createTaskExecutionTriggerParticipant } from '@/modules/task-execution/composition/triggerExecution'
 import { createBuildScheduleLaunch } from '@/modules/task-execution/composition/triggerExecution'
 import { composeRuntimeRegistryOperations } from '@/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeProfileParticipants } from '@/modules/resource-catalog/composition/runtimeProfileParticipants'
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/composition/runtimeRegistry'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
@@ -630,7 +631,10 @@ export function composeSqliteDaemonProviderCore(
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createHealthDatabaseReadModel(input.db),
-    runtimeRegistry: composeRuntimeRegistryOperations(input.db),
+    runtimeRegistry: composeRuntimeRegistryOperations(
+      input.db,
+      composeRuntimeProfileParticipants(),
+    ),
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository,
@@ -684,7 +688,10 @@ export function composePostgresqlDaemonProviderCore(
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createHealthDatabaseReadModel(input.db),
-    runtimeRegistry: composeRuntimeRegistryOperations(input.db),
+    runtimeRegistry: composeRuntimeRegistryOperations(
+      input.db,
+      composeRuntimeProfileParticipants(),
+    ),
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository,
@@ -1958,7 +1965,7 @@ export function composeSqliteApplicationDeps(
   const runtimeRegistry =
     deps.runtimeRegistry ??
     deps.providerCore?.runtimeRegistry ??
-    composeRuntimeRegistryOperations(deps.db)
+    composeRuntimeRegistryOperations(deps.db, composeRuntimeProfileParticipants())
   const configConcurrencyHotApply =
     deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
   const memoryInjectionQueries =

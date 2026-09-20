@@ -78,7 +78,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
-import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { describeEachProvider } from './helpers/eachProvider'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'

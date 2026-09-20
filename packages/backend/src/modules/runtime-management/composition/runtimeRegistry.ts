@@ -4,16 +4,14 @@ import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryE
 import type { RuntimeRegistryOperations } from '../application/ports/runtimeRegistry'
 export { initializeRuntimeRegistryBoot } from '../application/runtimeRegistryBoot'
 import { DrizzleRuntimeRegistryPersistence } from '@/modules/runtime-management/infrastructure/runtimeRegistryPersistence'
-import { composeRuntimeProfileParticipants } from '@/modules/resource-catalog/composition/runtimeProfileParticipants'
 
 export function composeRuntimeRegistryOperations(
   db: ProviderNeutralDatabase,
+  participants: ConstructorParameters<typeof DrizzleRuntimeRegistryPersistence>[1],
 ): RuntimeRegistryOperations {
   return createRuntimeRegistryApplication(
     createRuntimeRegistryEffects(),
-  ).composeRuntimeRegistryOperations(
-    new DrizzleRuntimeRegistryPersistence(db, composeRuntimeProfileParticipants()),
-  )
+  ).composeRuntimeRegistryOperations(new DrizzleRuntimeRegistryPersistence(db, participants))
 }
 
 export type { RuntimeRegistryOperations } from '../application/ports/runtimeRegistry'

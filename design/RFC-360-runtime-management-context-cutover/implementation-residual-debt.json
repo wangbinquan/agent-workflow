@@ -1,0 +1,119 @@
+{
+  "status": "candidate-awaiting-hosted-ci",
+  "sourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
+  "canonicalClassification": "W4-E4b",
+  "classificationNote": "The canonical generator retains its generic context bucket. No entries are filtered or removed by this handoff; the exact IDs below name the actual successor responsibility.",
+  "count": 60,
+  "groups": [
+    {
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "reason": "Root composition explicitly injects the provider. The physical legacy root remains until W9; it is not a missing RM use case.",
+      "exactExceptionIds": [
+        "exception:import:042c02eb7ba1017aa73f",
+        "exception:import:4746a85598d259a225f4",
+        "exception:import:557d9913721cd9118882",
+        "exception:import:6c0aeb6fc638aa998a19",
+        "exception:import:72e3493b6c68f5797191",
+        "exception:import:736f30f12d1577fdbbe8",
+        "exception:import:792645aff99254ce8579",
+        "exception:import:7d267bbba3352a3f45a5",
+        "exception:import:80d86c5ac19940efc90e",
+        "exception:import:8c3df7e94cd960fd54b9",
+        "exception:import:8e7a731b2457fcd9aff2",
+        "exception:import:98529c3a5711195f0f44",
+        "exception:import:b1cfbb70bdffa4a7de18",
+        "exception:import:ba658ea0b60dd4831503",
+        "exception:import:cce8fa5f321246d34372"
+      ]
+    },
+    {
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1/W5/W7",
+      "reason": "Task execution keeps mint, frozen-runtime, session and injection mechanics pending its engine/runtime cutover.",
+      "exactExceptionIds": [
+        "exception:import:058b994ce80ccee0a668",
+        "exception:import:2109fd6c1d2bd2caa6f7",
+        "exception:import:28490b02663597eaeebe",
+        "exception:import:2c57d5f26601e387e86e",
+        "exception:import:3ddbe3e2c3025ef8f5f6",
+        "exception:import:4e66dd18de4c624c19ee",
+        "exception:import:508585b40e2cf04f1432",
+        "exception:import:656d3a45711f5db539f7",
+        "exception:import:70fef04c52ff0c283a17",
+        "exception:import:7efd824461f9f7ad36ec",
+        "exception:import:854a224b32edc29b4408",
+        "exception:import:86007ed50499ace8a726",
+        "exception:import:878817dd026ba03d55c6",
+        "exception:import:9cb4cd454ef118124fbd",
+        "exception:import:c400eab6bf8fdaa82a62",
+        "exception:import:db7df63daa492bb50c75",
+        "exception:import:e8aa1e4bd3212a2bbe81"
+      ]
+    },
+    {
+      "owner": "runtime-management",
+      "removeAfterWave": "W5/W7",
+      "reason": "RM owns the use cases and injects effects; existing driver/model/smoke process mechanisms remain shared pending W5/W7.",
+      "exactExceptionIds": [
+        "exception:import:05fe4f6fbe5724b98381",
+        "exception:import:0f471184ca5f65924937",
+        "exception:import:3144e5a4f14f5dbed83a",
+        "exception:import:3b0939b8480fceab955a",
+        "exception:import:4980f696ab97c6ab2c79",
+        "exception:import:6086843b83980e7f72de",
+        "exception:import:6c0a2da5429a0320e9dd",
+        "exception:import:9b54bbf2ad1b84de8700",
+        "exception:import:d9c0cef5e5bfa7968efc",
+        "exception:import:ed4eeb7ac1111ebf2f6e"
+      ]
+    },
+    {
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E6",
+      "reason": "Full MCP session/process diagnostic lifecycle remains with RC; this slice only moves same-transaction profile invalidation.",
+      "exactExceptionIds": [
+        "exception:import:0a4e481b18f9ae393ba9",
+        "exception:import:5eae06720c6150e5cb64",
+        "exception:import:6f8ca790bd17f296a756",
+        "exception:import:75a696ee4a4fc9f8066d",
+        "exception:import:7662ac52c9e23327f379",
+        "exception:import:a64646eef0dc7f59ceec",
+        "exception:import:c619d23edeebb3fcb72d",
+        "exception:import:d61b4b6f842a76450b3d"
+      ]
+    },
+    {
+      "owner": "memory/runtime-management",
+      "removeAfterWave": "W5/W7",
+      "reason": "Memory keeps current runtime protocol consumption; runtime snapshot/driver mechanism cutover is a successor.",
+      "exactExceptionIds": [
+        "exception:import:0d84849979600beb3392",
+        "exception:import:4b4421b45d99d5bec864",
+        "exception:import:6d5a94d223636922c768",
+        "exception:import:86c06fa8239e4780e974",
+        "exception:import:933405a99ca17491e5e0",
+        "exception:import:a2b50384b7bb21ab2616",
+        "exception:import:a99307c8c8debf377c51"
+      ]
+    },
+    {
+      "owner": "knowledge-evolution/task-execution",
+      "removeAfterWave": "W4-E1/W5",
+      "reason": "Fusion launch retains current Task runtime configuration admission until the Task launch successor.",
+      "exactExceptionIds": ["exception:import:9bc8047f5efc4f5ec80f"]
+    },
+    {
+      "owner": "intent/runtime-management",
+      "removeAfterWave": "W5/W7",
+      "reason": "Intent keeps the existing runtime output evidence type until the shared runtime protocol seam is relocated.",
+      "exactExceptionIds": ["exception:import:f06b8f7e6beb1bea9509"]
+    },
+    {
+      "owner": "integration/task-execution",
+      "removeAfterWave": "W4-B/W4-E1",
+      "reason": "Scheduled trigger validation consumes the existing launch runtime type until Integration/Task admission cutover.",
+      "exactExceptionIds": ["exception:import:f582bd6d3f3bee2f2e16"]
+    }
+  ]
+}

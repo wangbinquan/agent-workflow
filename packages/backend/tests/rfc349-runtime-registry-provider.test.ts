@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -137,6 +137,9 @@ describe('RFC-349 runtime registry provider operations', () => {
       'src/modules/runtime-management/composition/runtimeRegistryCompatibility.ts',
     ])
       expect(existsSync(resolve(import.meta.dir, '..', path))).toBe(false)
+    const registry = source('src/modules/runtime-management/composition/runtimeRegistry.ts')
+    expect(registry).not.toContain('@/modules/resource-catalog/composition/')
+    expect(registry).toContain('new DrizzleRuntimeRegistryPersistence(db, participants)')
     const provider = source('src/modules/task-execution/composition/providerRuntime.ts')
     expect(provider).not.toContain('composeRuntimeRegistryOperations')
     expect(provider).toContain('...dependencies.runtime')

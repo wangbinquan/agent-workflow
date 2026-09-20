@@ -186,11 +186,12 @@ function oldRuntimeRegistryFactory(source: ts.SourceFile, body: ts.Block): ts.Bl
     call === undefined ||
     call.typeArguments !== undefined ||
     call.questionDotToken !== undefined ||
-    call.arguments.length !== 1 ||
+    call.arguments.length !== 2 ||
+    compact(call.arguments[1]!, source) !== 'composeRuntimeProfileParticipants()' ||
     compact(call.arguments[0]!, source) !== 'deps.db' ||
     bindings.length !== 1 ||
     compact(bindings[0]!, source) !==
-      'runtimeRegistry=deps.runtimeRegistry??deps.providerCore?.runtimeRegistry??composeRuntimeRegistryOperations(deps.db)'
+      'runtimeRegistry=deps.runtimeRegistry??deps.providerCore?.runtimeRegistry??composeRuntimeRegistryOperations(deps.db,composeRuntimeProfileParticipants())'
   )
     throw new Error('runtime registry must preserve its original database and lazy fallbacks')
 
@@ -202,7 +203,7 @@ function oldRuntimeRegistryFactory(source: ts.SourceFile, body: ts.Block): ts.Bl
               call,
               ts.factory.createIdentifier('composeSqliteRuntimeRegistryOperations'),
               call.typeArguments,
-              call.arguments,
+              [call.arguments[0]!],
             )
           : ts.visitEachChild(node, visit, context)
       return (node) => ts.visitEachChild(node, visit, context)

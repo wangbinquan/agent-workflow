@@ -63,3 +63,14 @@
 
 本批 source/ledger 对拍为候选证据，不能替代最终 exact-SHA CI。只有本批行为用例、完整 Main CI 与必要平台用例均成功，
 才关闭 T7/T8、RFC-360 与母 RFC 的 E4b/B/D 本域条目。RFC-361/362 是独立的已批准范围，仍待实施。
+
+## 最终根接线复核（2026-09-20）
+
+RM composition 的 RC participant 构造已移到 `server.ts` 的三个既有 provider/application 装配点；
+必填参数把 RC 同事务 invalidation/usage 实例交给唯一 RM persistence。没有默认构造或模块内部 composition bridge。
+测试根显式装配真实 RC provider；新增双库 application 用例锁住注入失败导致 profile 回滚。
+W29 的旧装配体摘要保持不变，新增参数经过明确结构校验后才投影回历史形状，不放松其他根时序判据。
+
+剩余通用 E4b bucket 不按目录隐藏：`implementation-residual-debt.json` 穷举当前每个 exact exception ID，
+记录 actual successor owner/removeWave。启动根物理迁位归 W9-D，MCP 全流程归 E6，Task/Memory/Intent 等 consumer
+与 driver/runtime 机制各归明确后继。canonical 原始分桶仍保留，不能把 handoff 误写成全局 exception 归零。

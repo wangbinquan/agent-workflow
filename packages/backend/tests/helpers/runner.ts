@@ -6,7 +6,7 @@ import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
-import { composeRuntimeRegistryOperations } from '../../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 
 export * from '../../src/services/runner'
 

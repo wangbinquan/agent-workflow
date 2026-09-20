@@ -1,5 +1,11 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-360 收口复核：RC participant 改由启动根注入
+
+最终源码对拍发现 RM composition 仍构造 RC 内部 factory；本批把 required participant 参数收为必填，
+由 server 中 SQLite/PG provider core 与独立 application 根显式注入。测试根注入同一真实 RC 实现，
+新增双库用例证明注入的失效失败会回滚 profile。剩余 exact debt 按后继 owner 另列；三个 RFC 等待本批 CI。
+
 ## 2026-09-20 RFC-362 declared debt 完整对账
 
 `59c1fff1c` 的 Windows 原生流程 `35491113835` 已 success；Main 发现四个新增 SC offered seam 尚未进入既有零 consumer 精确账本。

@@ -1,7 +1,8 @@
 # RFC-362 实施台账与后继切换清单
 
 源码基线：`475fbb43c09b3be0eeb0dc036c41bcbe508fc277`；只审功能。路径以下均相对 `packages/backend/src`。
-本批仅新增声明、引用 codec、测试 provider 和账本；生产 launch/writer/root 不变。
+RFC-362 仅新增声明、引用 codec、测试 provider 和账本；生产 launch/writer 不变。
+21 文件账中 `server.ts` 的后续变化属于 RFC-360 的 RC participant 根注入，已单独保留基线 hash 与归属；其余 20 文件不变。
 
 ## 1. 当前入口、lane 和唯一写点
 

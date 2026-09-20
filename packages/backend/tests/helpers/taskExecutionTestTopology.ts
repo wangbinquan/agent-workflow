@@ -20,7 +20,7 @@ import { taskExecutionResourceDependencies } from '../../src/services/execution/
 import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { runGit } from '../../src/util/git'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
-import { composeRuntimeRegistryOperations } from '../../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 import { createWorkgroupClarifyAskGate } from '../../src/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTurnsOperations } from '../../src/modules/resource-catalog/composition/workgroupTurns'

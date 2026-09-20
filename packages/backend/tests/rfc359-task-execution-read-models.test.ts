@@ -35,7 +35,7 @@ import {
   singleProcessDeploymentPorts,
 } from './helpers/taskExecutionTestTopology'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { describeEachProvider } from './helpers/eachProvider'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'

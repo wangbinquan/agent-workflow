@@ -41,7 +41,7 @@ import { composeWorkgroupLaunchResourceOperations } from '../src/modules/task-ex
 import { composeDeferredRepositoryPreparation } from '../src/modules/task-execution/composition/deferredRepositoryPreparation'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { createTaskDriveCoordinator } from '../src/services/task'
-import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { fireSchedule, getScheduledTaskRow } from './helpers/integrationTriggerResourceBinding'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,

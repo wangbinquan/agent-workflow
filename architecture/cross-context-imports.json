@@ -33187,6 +33187,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6c06202c9bb186aa497e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts",
+      "toSymbol": "composeRuntimeProfileParticipants",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#$file",
       "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts",
       "fromSymbol": "$file",
@@ -68781,23 +68798,6 @@
       "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toSymbol": "DeleteWorkflowCatalogReceipt",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#$file",
-      "fromPath": "packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:df6eea24420d03b44e5d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "runtime-management",
-      "removeAfterWave": "W4-E4b",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts",
-      "toSymbol": "composeRuntimeProfileParticipants",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "type",
@@ -113523,6 +113523,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#rowToAgent"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:6c06202c9bb186aa497e",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/runtimeProfileParticipants",
+      "syntax": "static-import",
+      "targetSymbol": "composeRuntimeProfileParticipants",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts",
@@ -150739,22 +150755,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#DeleteWorkflowCatalogReceipt"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "runtime-management",
-      "fromFile": "packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#$file",
-      "id": "import:df6eea24420d03b44e5d",
-      "owner": "runtime-management",
-      "removeAfterWave": "W4-E4b",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/composition/runtimeProfileParticipants",
-      "syntax": "static-import",
-      "targetSymbol": "composeRuntimeProfileParticipants",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/dynamicWorkflowRunner.ts",
@@ -161725,7 +161725,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1b69690560d3d7b6963fe2e2304aab51a1efeb8541954a6f9662cd70730ef380",
+  "sourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -10,7 +10,9 @@ import type {
   RuntimeSmokeRequest,
 } from '../src/modules/runtime-management/application/ports/runtimeManagement'
 import type { RuntimeSmokeResult } from '../src/modules/runtime-management/public/types'
-import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
+import { composeRuntimeRegistryOperations as composeRegistry } from '../src/modules/runtime-management/composition/runtimeRegistry'
+import { composeRuntimeProfileParticipants } from '../src/modules/resource-catalog/composition/runtimeProfileParticipants'
 import { runtimes } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -91,6 +93,29 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
       reconciles: () => reconciles,
     }
   }
+
+  test('root-injected invalidation failure rolls back the registry update', async () => {
+    const participants = composeRuntimeProfileParticipants()
+    let calls = 0
+    const registry = composeRegistry(harness.db, {
+      ...participants,
+      testInvalidation: {
+        ...participants.testInvalidation,
+        async invalidate(transaction, input) {
+          await participants.testInvalidation.invalidate(transaction, input)
+          calls++
+          throw new Error('root-injected-invalidation-failed')
+        },
+      },
+    })
+    await registry.createRuntime({ name: 'root-injection', protocol: 'opencode' })
+    const before = await registry.getRuntime('root-injection')
+    await expect(
+      registry.updateRuntime('root-injection', { binaryPath: '/changed/runtime' }),
+    ).rejects.toThrow('root-injected-invalidation-failed')
+    expect(calls).toBe(1)
+    expect(await registry.getRuntime('root-injection')).toEqual(before)
+  })
 
   test('config default validation keeps disabled, unchanged and unknown-name behavior', async () => {
     const h = await setup()

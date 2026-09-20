@@ -94,8 +94,11 @@
     },
     {
       "file": "packages/backend/src/server.ts",
-      "sha256": "3d08f716f0cd8c3aa9bf92d94ec976ba90ee6c4dd03f59a45f485a9100ffdcc5",
-      "unchangedFromBaseline": true
+      "sha256": "c5ea090cb74f5fb744df9a2c7ebd04e9103c20bfa0e0390a732afa9884a07850",
+      "unchangedFromBaseline": false,
+      "baselineSha256": "3d08f716f0cd8c3aa9bf92d94ec976ba90ee6c4dd03f59a45f485a9100ffdcc5",
+      "changeOwner": "RFC-360",
+      "changeReason": "Only root injection of the RC runtime-profile participant; no Task/SC launch cutover."
     },
     {
       "file": "packages/backend/src/cli/start.ts",
