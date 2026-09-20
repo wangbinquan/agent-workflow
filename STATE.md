@@ -7,6 +7,8 @@ SC offered 与 Task required 合同、引用 codec、真实双库/Git 测试适�
 现有存储不能兑付跨进程 sealed/frozen ref；group/revision/raw-byte gaps 明确交后继，不领取 E1/W5 完成信用。
 该 SHA 的 Main CI 已发现 route source scan 路径、兼容债务高水位和示例合同版本三项遗漏，本批修复。
 RFC360/361/362 均仍 In Progress，等待本批最终 exact-SHA CI；system-mocks CLI mode WIP 原样保留。
+`45cf0f4ba` 的目标用例已确认：旧三项失败通过，RM/EC 与 RFC362 SQLite 行为通过；
+该轮 typecheck 的 branded-ref 测试比较错误已修为字符串 round-trip，双库与全 CI 终态继续由后继 SHA 验收。
 
 
 ## 2026-09-20 RFC-361 provider 归位候选

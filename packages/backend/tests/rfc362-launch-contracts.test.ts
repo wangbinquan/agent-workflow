@@ -324,7 +324,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
 
 test('RFC-362 reference codec preserves exact kind/version and rejects a different record kind', () => {
   const encoded = `sc:preparation:v1:${ulid()}`
-  expect(decodeRepositoryLaunchRef('preparation', encoded)).toBe(encoded)
+  expect(String(decodeRepositoryLaunchRef('preparation', encoded))).toBe(encoded)
   expect(() => decodeRepositoryLaunchRef('source', encoded)).toThrow(
     'invalid-repository-launch-ref:source',
   )
