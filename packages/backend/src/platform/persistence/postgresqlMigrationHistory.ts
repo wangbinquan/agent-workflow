@@ -93,7 +93,7 @@ const ColumnSchema = z
     providerType: z.object({ sqlite: z.string(), postgresql: z.string() }).strict(),
   })
   .strict()
-const ContractSchema: z.ZodType<LogicalSchemaContract> = z
+const ContractObjectSchema = z
   .object({
     contractVersion: z.number().int(),
     sourceProjection: z.literal('sqlite'),
@@ -170,6 +170,7 @@ const ContractSchema: z.ZodType<LogicalSchemaContract> = z
     ),
   })
   .strict()
+const ContractSchema: z.ZodType<LogicalSchemaContract> = ContractObjectSchema
 const StatementSchema = z
   .object({
     kind: z.enum(['bootstrap', 'table', 'constraint', 'index', 'metadata']),
@@ -215,7 +216,17 @@ const RootSchema: z.ZodType<PostgresqlMigrationRoot> = z
   .strict()
 const UpgradeSchema: z.ZodType<PostgresqlIndexUpgrade> = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
+    logicalTables: z
+      .array(
+        z
+          .object({
+            position: z.number().int().nonnegative(),
+            table: ContractObjectSchema.shape.tables.element,
+          })
+          .strict(),
+      )
+      .optional(),
     id: z.string().regex(/^\d{4,}_[a-z0-9_]+$/u),
     sequence: z.number().int().positive(),
     digest: DigestSchema,

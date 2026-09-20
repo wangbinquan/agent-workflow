@@ -35,7 +35,7 @@ import {
   type LogicalTableContract,
 } from './schemaContract'
 import { loadPostgresqlMigrationHistory } from './postgresqlMigrationHistory'
-import { resolvePostgresqlIndexOnlyRowBridge } from './postgresqlMigrationSequence'
+import { resolvePostgresqlAdditiveRowBridge } from './postgresqlMigrationSequence'
 
 export interface LogicalDatabaseRestoreTarget {
   readonly provider: DatabaseProvider
@@ -119,7 +119,7 @@ function assertExact(actual: unknown, expected: unknown, detail: string): void {
   if (canonicalSchemaJson(actual) !== canonicalSchemaJson(expected)) corrupt(detail)
 }
 
-/** The source keeps its published identity; only a verified index-only edge can
+/** The source keeps its published identity; only a verified additive edge can
  * supply rows to the current complete target contract. Same-contract restores
  * retain their original path, including explicit infrastructure fixtures. */
 export async function resolveLogicalDatabaseRestoreSourceContract(input: {
@@ -134,7 +134,7 @@ export async function resolveLogicalDatabaseRestoreSourceContract(input: {
       input.targetContract,
       'restore target differs from the complete current schema head',
     )
-    const bridge = resolvePostgresqlIndexOnlyRowBridge(history, {
+    const bridge = resolvePostgresqlAdditiveRowBridge(history, {
       fromContractDigest: input.sourceSchemaDigest,
       toContractDigest: input.targetContract.digest,
     })
@@ -146,7 +146,7 @@ export async function resolveLogicalDatabaseRestoreSourceContract(input: {
     return bridge.source
   } catch (error) {
     if (error instanceof LogicalDatabaseRestoreError) throw error
-    return corrupt('restore source and target have no verified index-only schema bridge')
+    return corrupt('restore source and target have no verified additive schema bridge')
   }
 }
 
@@ -565,12 +565,19 @@ export async function restoreLogicalDatabaseArtifact(input: {
   }
   await input.target.finalizeSchema(
     now(),
-    verified.manifest.payload.tables.map(({ table, disposition, rowCount, chunkCount }) => ({
-      table,
-      disposition,
-      rowCount,
-      chunkCount,
-    })),
+    targetContract.tables.map((table) => {
+      const entry = verified.manifest.payload.tables.find(
+        (candidate) => candidate.table === table.id,
+      )
+      // The verified history above admits only whole new KEEP tables. They have
+      // no historical rows; include them in the target's exact final census.
+      return {
+        table: table.id,
+        disposition: table.disposition,
+        rowCount: entry?.rowCount ?? 0,
+        chunkCount: entry?.chunkCount ?? 0,
+      }
+    }),
   )
   return Object.freeze({
     version: 1,

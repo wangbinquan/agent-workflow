@@ -157,6 +157,9 @@ export const RFC349_SOURCE_TABLES = [
   'runtime_session_leases',
   'runtimes',
   'scheduled_tasks',
+  'sc_preparation_operations',
+  'sc_repository_snapshots',
+  'sc_repository_sources',
   'skill_operation_locks',
   'skill_operations',
   'skill_versions',
@@ -175,6 +178,7 @@ export const RFC349_SOURCE_TABLES = [
   'task_node_clarify_directives',
   'task_questions',
   'task_repos',
+  'task_workspace_preparations',
   'task_space_nodes',
   'tasks',
   'token_audit',
@@ -401,6 +405,7 @@ function ownerFor(table: string): OwnerContext {
   }
   if (
     table === 'cached_repos' ||
+    table.startsWith('sc_') ||
     table.startsWith('repo_') ||
     table.startsWith('repository_transport_')
   ) {

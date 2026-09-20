@@ -17,7 +17,7 @@ import {
 } from '../src/platform/persistence/postgresqlMigrationHistory'
 import {
   assertPostgresqlMigrationHead,
-  createPostgresqlIndexUpgrade,
+  createPostgresqlAdditiveUpgrade,
   createPostgresqlMigrationRoot,
   postgresqlMigrationDigest,
   postgresqlSqliteMigrationIdentity,
@@ -113,7 +113,7 @@ export async function generatePostgresqlMigrationHistory(
   }
   const existingAt = history.steps.findIndex((step) => step.id === input.appendId)
   const at = existingAt < 0 ? history.steps.length : existingAt
-  const step = createPostgresqlIndexUpgrade({
+  const step = createPostgresqlAdditiveUpgrade({
     from: history.versions[at]!,
     to: target,
     id: input.appendId,

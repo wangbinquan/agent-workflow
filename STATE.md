@@ -1,5 +1,13 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 / RFC-364 实施与发布已获批准；RFC-365 先完成 T1
+
+用户明确批准实现及代码上库。RFC-363/364 进入 In Progress；RFC-365 仅 T1 兼容性对拍获批，后续合同定稿/生产切换仍按其方案的兼容前置推进。
+基线 `586819d2f391049e3ca0aa9acbaa7e469969a7ce`；Main `35495502258` 终态 44 success / 2 failure（RFC185 PostgreSQL runtime stream retry 账本断言，及 CI required）。该 SHA 仅文档，不能把失败当作新实现回归或直接重跑掩盖。
+本轮保留共享 system-mocks CLI executable mode WIP；生产批次均在主 checkout main exact-stage/push、逐 SHA 验证。
+首批 T1/T2 候选已具备四表 journal、PostgreSQL additive history 和旧备份恢复兼容；生产 launch 尚未切换，T3–T8 与 RFC-364/RFC-365 T1 继续推进。测试随代码提交，托管证据待采。
+
+
 ## 2026-09-20 进行中 RFC：363 / 364 / 365 后继设计落档（Draft）
 
 用户要求按 RFC-294 下一步推荐推进。本批仅新增三件套与当前源码指纹，生产代码、schema 和 canonical 未改；三项均未获具体设计实施批准，不记实现进度。

@@ -36,7 +36,7 @@ const realTest = process.env.RFC349_DATABASE_URL === undefined ? test.skip : tes
 
 describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
   realTest(
-    'copies 178 active tables, archives six legacy tables and switches one verified generation',
+    'copies 182 active tables, archives six legacy tables and switches one verified generation',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'rfc349-real-copy-'))
       roots.push(root)
@@ -124,7 +124,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         })
         const status = await runner.run('dbm_real_postgresql_01')
         expect(status.phase).toBe('accepting-writes')
-        expect(status.progress.tablesCompleted).toBe(184)
+        expect(status.progress.tablesCompleted).toBe(188)
 
         const userRows = await runtime
           .providerPool()
@@ -139,7 +139,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         const artifact = readLogicalArtifactManifest(
           join(operationsDir, 'dbm_real_postgresql_01', 'logical-manifest.json'),
         )
-        expect(artifact.payload.tables).toHaveLength(184)
+        expect(artifact.payload.tables).toHaveLength(188)
         expect(
           artifact.payload.tables.find((table) => table.table === 'code_artifacts'),
         ).toMatchObject({ disposition: 'ARCHIVE_THEN_OMIT', rowCount: 1 })

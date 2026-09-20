@@ -470,6 +470,14 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
           now: () => 67,
         })
         expect(await pool.unsafe('SELECT * FROM agent_workflow.tasks ORDER BY id')).toEqual(oldRows)
+        for (const table of [
+          'sc_repository_sources',
+          'sc_repository_snapshots',
+          'sc_preparation_operations',
+          'task_workspace_preparations',
+        ]) {
+          expect(await pool.unsafe(`SELECT * FROM agent_workflow."${table}"`)).toEqual([])
+        }
         expect(restored.receipt).toMatchObject({
           sourceProvider: 'postgresql',
           targetProvider: 'postgresql',

@@ -40,7 +40,7 @@ import {
 import { verifyDatabaseMigrationManifest } from '../domain/databaseMigration'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
-  resolvePostgresqlIndexOnlyRowBridge,
+  resolvePostgresqlAdditiveRowBridge,
   type PostgresqlMigrationHistory,
 } from '@/platform/persistence/postgresqlMigrationSequence'
 import {
@@ -215,7 +215,7 @@ export function readDatabaseSchemaUpgradeGeneration(options: {
         'database generation manifest does not identify a recoverable copy checkpoint',
       )
     }
-    const bridge = resolvePostgresqlIndexOnlyRowBridge(options.history, {
+    const bridge = resolvePostgresqlAdditiveRowBridge(options.history, {
       fromContractDigest: operation.source.schemaDigest,
       toContractDigest: payload.schemaDigest,
     })
@@ -281,7 +281,7 @@ export function createDatabaseMigrationCoordinator(
     const manifest = controlPlane.readManifest(operationId)
     if (manifest.payload.source.schemaDigest === contract.digest) return { contract, plan }
     const verified = await history()
-    resolvePostgresqlIndexOnlyRowBridge(verified, {
+    resolvePostgresqlAdditiveRowBridge(verified, {
       fromContractDigest: manifest.payload.source.schemaDigest,
       toContractDigest: contract.digest,
     })
@@ -378,7 +378,7 @@ export function createDatabaseMigrationCoordinator(
         live.generationId !== `dbg_pg_${operationId.slice(4)}`
       )
         return version.contract.digest
-      resolvePostgresqlIndexOnlyRowBridge(await history(), {
+      resolvePostgresqlAdditiveRowBridge(await history(), {
         fromContractDigest: version.contract.digest,
         toContractDigest: live.schemaDigest,
       })

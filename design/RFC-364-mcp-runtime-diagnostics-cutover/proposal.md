@@ -1,6 +1,6 @@
 # RFC-364：MCP runtime diagnostics 归入 Resource Catalog
 
-- 状态：Draft（2026-09-20；待三件套批准）。
+- 状态：In Progress（2026-09-20；用户已批准具体设计、实现与代码上库）。
 - 母项：RFC-294 W4-E6 与该域 B/D；前置 W4-C 和 RFC-360 / E4b 已 Done。
 - 源码基线：`cae3e4ea2579bc1d13ff34008fa011d4073d8b59`，见 [source-baseline.json](./source-baseline.json)。
 

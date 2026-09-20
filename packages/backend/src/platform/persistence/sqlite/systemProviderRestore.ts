@@ -42,7 +42,7 @@ import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logica
 import { verifyLogicalDatabaseSourceMatchesArtifact } from '@/platform/persistence/logicalDatabaseRestore'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { resolvePostgresqlIndexOnlyRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
+import { resolvePostgresqlAdditiveRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
 import { Paths } from '@/util/paths'
 import {
   type BackupManifest,
@@ -103,7 +103,7 @@ async function verifyPortableDatabasePayload(
   if (database.schemaDigest !== contract.digest) {
     try {
       const history = await loadPostgresqlMigrationHistory()
-      contract = resolvePostgresqlIndexOnlyRowBridge(history, {
+      contract = resolvePostgresqlAdditiveRowBridge(history, {
         fromContractDigest: database.schemaDigest,
         toContractDigest: contract.digest,
       }).source

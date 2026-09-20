@@ -929,6 +929,67 @@ export const cachedRepos = sqliteTable(
 // repo_groups / repo_group_nodes — RFC-249. 仓库组是一棵显式目录树；repo/group
 // 是目录节点上的可选 attachment，root path=''，纯目录也会持久化。
 // -----------------------------------------------------------------------------
+/** RFC-363: durable source identities, frozen facts and physical preparation receipts.
+ * These records outlive a request/process; none of them is a Task execution lease. */
+export const scRepositorySources = sqliteTable('sc_repository_sources', {
+  id: text('id').primaryKey(),
+  requestKey: text('request_key').notNull().unique(),
+  requestDigest: text('request_digest').notNull(),
+  kind: text('kind', { enum: ['repository', 'repository-group', 'public-url'] }).notNull(),
+  factsJson: text('facts_json').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const scRepositorySnapshots = sqliteTable('sc_repository_snapshots', {
+  id: text('id').primaryKey(),
+  sourceRef: text('source_ref')
+    .notNull()
+    .references(() => scRepositorySources.id),
+  revision: text('revision').notNull(),
+  factsJson: text('facts_json').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const scPreparationOperations = sqliteTable('sc_preparation_operations', {
+  id: text('id').primaryKey(),
+  snapshotRef: text('snapshot_ref')
+    .notNull()
+    .references(() => scRepositorySnapshots.id),
+  state: text('state', {
+    enum: ['planned', 'resolving', 'materializing', 'prepared', 'failed', 'stopped', 'cleaned'],
+  })
+    .notNull()
+    .default('planned'),
+  version: integer('version').notNull().default(0),
+  resolvedJson: text('resolved_json'),
+  receiptRef: text('receipt_ref').unique(),
+  receiptJson: text('receipt_json'),
+  failureCode: text('failure_code'),
+  diagnosticsJson: text('diagnostics_json'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+/** The pre-materialized lane creates this record before any Task exists. */
+export const taskWorkspacePreparations = sqliteTable('task_workspace_preparations', {
+  id: text('id').primaryKey(),
+  admissionKey: text('admission_key').notNull().unique(),
+  requestDigest: text('request_digest').notNull(),
+  lane: text('lane', { enum: ['repository-preparation', 'pre-materialized'] }).notNull(),
+  operationRef: text('operation_ref'),
+  artifactJson: text('artifact_json'),
+  admittedTaskId: text('admitted_task_id').unique(),
+  state: text('state', {
+    enum: ['preparing', 'prepared', 'admitted', 'compensating', 'cleaned', 'failed'],
+  })
+    .notNull()
+    .default('preparing'),
+  ownerFence: integer('owner_fence').notNull().default(0),
+  version: integer('version').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
 export const repoGroups = sqliteTable(
   'repo_groups',
   {

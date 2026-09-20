@@ -16,7 +16,7 @@ import {
 } from '@/platform/persistence/generationStore'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
-  resolvePostgresqlIndexOnlyRowBridge,
+  resolvePostgresqlAdditiveRowBridge,
   type PostgresqlMigrationHistory,
 } from '@/platform/persistence/postgresqlMigrationSequence'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
@@ -128,7 +128,7 @@ export async function prepareDatabaseSchemaUpgrade(
       (historicalCopy || boundTargetOperation || candidate.kind === 'operation-recovery') &&
       pending !== null
     ) {
-      const bridge = resolvePostgresqlIndexOnlyRowBridge(history, {
+      const bridge = resolvePostgresqlAdditiveRowBridge(history, {
         fromContractDigest: pending.payload.source.schemaDigest,
         toContractDigest: options.contract.digest,
       })

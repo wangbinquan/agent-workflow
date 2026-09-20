@@ -1,6 +1,6 @@
 # RFC-363：Task / Source Control 启动与工作区生产切换
 
-- 状态：Draft（2026-09-20；待本三件套获批后实施）。
+- 状态：In Progress（2026-09-20；用户已批准具体设计、实现与代码上库）。
 - 母项：RFC-294 W4-E1 启动纵切、关联 B/D；W5 最小生产接缝，不关闭完整 W5。
 - 前置：RFC-359 数据库共用实现、RFC-360 runtime selection、RFC-362 启动合同准备均 Done。
 - 当前源码：`cae3e4ea2579bc1d13ff34008fa011d4073d8b59`；文件指纹见 [source-baseline.json](./source-baseline.json)。

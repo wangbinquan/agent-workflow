@@ -15,6 +15,7 @@ import {
   digestSchemaContract,
   type LogicalIndexContract,
   type LogicalSchemaContract,
+  type LogicalTableContract,
 } from './schemaContract'
 
 export interface PostgresqlSchemaIdentity {
@@ -48,8 +49,15 @@ interface LogicalIndexAddition {
   readonly index: LogicalIndexContract
 }
 
+interface LogicalTableAddition {
+  readonly position: number
+  readonly table: LogicalTableContract
+}
+
 export interface PostgresqlIndexUpgrade {
-  readonly version: 1
+  readonly version: 1 | 2
+  /** V2 adds whole new active tables; V1 artifacts remain byte-for-byte unchanged. */
+  readonly logicalTables?: readonly LogicalTableAddition[]
   readonly id: string
   readonly sequence: number
   readonly digest: string
@@ -331,6 +339,30 @@ function appendLogicalIndexes(
   return { ...payload, digest: digestSchemaContract(payload) }
 }
 
+/** Only additive, active tables. Existing rows, constraints and retention stay immutable. */
+function appendLogicalTables(
+  contract: LogicalSchemaContract,
+  additions: readonly LogicalTableAddition[],
+): LogicalSchemaContract {
+  const names = new Set(contract.tables.map((table) => table.id))
+  for (const { table } of additions) {
+    requireSequence(!names.has(table.id), 'table addition duplicates an existing table')
+    requireSequence(table.disposition === 'KEEP', 'table addition requires an active KEEP table')
+    names.add(table.id)
+  }
+  const tables = insertAtPositions(
+    contract.tables,
+    additions.map(({ position, table }) => ({ position, value: table })),
+  )
+  const payload = {
+    ...contractPayload(contract),
+    sourceTableCount: contract.sourceTableCount + additions.length,
+    activeTableCount: contract.activeTableCount + additions.length,
+    tables,
+  }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
 function contractUpdate(
   from: PostgresqlSchemaPlan,
   to: PostgresqlSchemaPlan,
@@ -355,23 +387,47 @@ export function renderPostgresqlUpgradeSql(
   )
 }
 
-export function createPostgresqlIndexUpgrade(input: {
+interface PostgresqlUpgradeInput {
   readonly from: PostgresqlMigrationVersion
   readonly to: PostgresqlMigrationVersion
   readonly id: string
   readonly sequence: number
   readonly previousEntryDigest: string
-}): PostgresqlIndexUpgrade {
+}
+
+export function createPostgresqlIndexUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  return createPostgresqlUpgrade(input, false)
+}
+
+/** RFC-363 expand-only migration: new tables plus ordinary indexes on existing tables. */
+export function createPostgresqlAdditiveUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  return createPostgresqlUpgrade(input, true)
+}
+
+function createPostgresqlUpgrade(
+  input: PostgresqlUpgradeInput,
+  allowNewTables: boolean,
+): PostgresqlIndexUpgrade {
   const { from, to } = input
   validateVersion(from)
   validateVersion(to)
-  const logicalIndexes = logicalIndexAdditions(from.contract, to.contract)
-  requireSequence(logicalIndexes.length > 0, 'schema upgrade has no new indexes')
-  exact(
-    appendLogicalIndexes(from.contract, logicalIndexes),
-    to.contract,
-    'logical index replay differs',
+  const oldTableIds = new Set(from.contract.tables.map((table) => table.id))
+  const logicalTables = allowNewTables
+    ? to.contract.tables.flatMap((table, position) =>
+        oldTableIds.has(table.id) ? [] : [{ position, table }],
+      )
+    : []
+  const expanded = appendLogicalTables(from.contract, logicalTables)
+  const logicalIndexes = logicalIndexAdditions(expanded, to.contract)
+  requireSequence(
+    logicalTables.length + logicalIndexes.length > 0,
+    'schema upgrade has no new indexes or tables',
   )
+  exact(appendLogicalIndexes(expanded, logicalIndexes), to.contract, 'logical index replay differs')
   exact(
     to.sqliteMigrations.slice(0, from.sqliteMigrations.length),
     from.sqliteMigrations,
@@ -406,7 +462,8 @@ export function createPostgresqlIndexUpgrade(input: {
     contractUpdate(from.plan, to.plan),
   ]
   const payload = {
-    version: 1 as const,
+    version: logicalTables.length === 0 ? (1 as const) : (2 as const),
+    ...(logicalTables.length === 0 ? {} : { logicalTables }),
     id: input.id,
     sequence: input.sequence,
     previousEntryDigest: input.previousEntryDigest,
@@ -441,7 +498,7 @@ function applyPostgresqlIndexUpgrade(
 ): PostgresqlMigrationVersion {
   const { digest, ...payload } = step
   requireSequence(
-    step.version === 1 && digest === postgresqlMigrationDigest(payload),
+    (step.version === 1 || step.version === 2) && digest === postgresqlMigrationDigest(payload),
     'upgrade entry digest differs',
   )
   requireSequence(
@@ -458,8 +515,17 @@ function applyPostgresqlIndexUpgrade(
     step.to.baselineId === previous.plan.baselineId,
     'upgrade baseline identity changed',
   )
-  requireSequence(step.logicalIndexes.length > 0, 'schema upgrade has no new indexes')
-  const contract = appendLogicalIndexes(previous.contract, step.logicalIndexes)
+  const logicalTables = step.logicalTables ?? []
+  requireSequence(
+    step.version === 1 ? step.logicalTables === undefined : logicalTables.length > 0,
+    'upgrade table additions do not match its version',
+  )
+  requireSequence(
+    step.logicalIndexes.length + logicalTables.length > 0,
+    'schema upgrade has no new indexes or tables',
+  )
+  const expanded = appendLogicalTables(previous.contract, logicalTables)
+  const contract = appendLogicalIndexes(expanded, step.logicalIndexes)
   requireSequence(
     contract.digest === step.to.contractDigest,
     'upgrade target contract digest differs',
@@ -486,24 +552,33 @@ function applyPostgresqlIndexUpgrade(
       value: addition.statement,
     })),
   )
-  const planBody = { ...planPayload(previous.plan), contractDigest: contract.digest, statements }
+  const planBody = {
+    ...planPayload(previous.plan),
+    contractDigest: contract.digest,
+    activeTableCount: contract.activeTableCount,
+    archiveOnlyTableCount: contract.archiveOnlyTableCount,
+    statements,
+  }
   const plan = { ...planBody, digest: postgresqlMigrationDigest(planBody) }
   requireSequence(plan.digest === step.to.planDigest, 'upgrade target plan digest differs')
   const projected = buildPostgresqlSchemaPlan(contract)
-  const addedIds = new Set(
-    step.logicalIndexes.map((addition) => `${addition.tableId}:index:${addition.index.name}`),
+  const oldStatements = new Map(
+    previous.plan.statements.map((statement) => [statementKey(statement), statement]),
   )
-  requireSequence(
-    addedIds.size === step.indexAdditions.length,
-    'logical and physical index additions differ',
+  for (const statement of projected.statements) {
+    const prior = oldStatements.get(statementKey(statement))
+    if (prior !== undefined && statementKey(statement) !== 'metadata:contract-row')
+      exact(statement, prior, 'schema upgrade changed an existing statement')
+  }
+  const additions = projected.statements.filter(
+    (statement) => !oldStatements.has(statementKey(statement)),
   )
   exact(
     step.indexAdditions.map((addition) => addition.statement),
-    projected.statements.filter(
-      (statement) => statement.kind === 'index' && addedIds.has(statement.logicalId),
-    ),
+    additions,
     'added index SQL differs from its logical projection',
   )
+  exact(statements, projected.statements, 'schema upgrade statement replay differs')
   exact(
     step.contractRow.after,
     projected.statements.find((statement) => statementKey(statement) === 'metadata:contract-row'),
@@ -629,12 +704,10 @@ export function resolvePostgresqlHistoricalContract(
   return version.contract
 }
 
-export function resolvePostgresqlIndexOnlyRowBridge(
+function resolvePostgresqlRowBridge(
   history: PostgresqlMigrationHistory,
-  input: {
-    readonly fromContractDigest: string
-    readonly toContractDigest: string
-  },
+  input: HistoricalRowBridgeInput,
+  allowNewTables: boolean,
 ): {
   readonly source: LogicalSchemaContract
   readonly target: LogicalSchemaContract
@@ -650,7 +723,16 @@ export function resolvePostgresqlIndexOnlyRowBridge(
   const source = history.versions[from]!.contract
   const target = history.versions[to]!.contract
   exact(
-    rowContract(source),
+    rowContract(
+      allowNewTables
+        ? history.steps
+            .slice(from, to)
+            .reduce(
+              (contract, step) => appendLogicalTables(contract, step.logicalTables ?? []),
+              source,
+            )
+        : source,
+    ),
     rowContract(target),
     'historical row, codec, key or disposition changed',
   )
@@ -660,4 +742,25 @@ export function resolvePostgresqlIndexOnlyRowBridge(
     'historical archive-only table contract changed',
   )
   return { source, target, steps: history.steps.slice(from, to) }
+}
+
+interface HistoricalRowBridgeInput {
+  readonly fromContractDigest: string
+  readonly toContractDigest: string
+}
+
+/** The original V1 contract still rejects table additions. */
+export function resolvePostgresqlIndexOnlyRowBridge(
+  history: PostgresqlMigrationHistory,
+  input: HistoricalRowBridgeInput,
+) {
+  return resolvePostgresqlRowBridge(history, input, false)
+}
+
+/** New active tables start empty when restoring a historical backup. Existing rows are unchanged. */
+export function resolvePostgresqlAdditiveRowBridge(
+  history: PostgresqlMigrationHistory,
+  input: HistoricalRowBridgeInput,
+) {
+  return resolvePostgresqlRowBridge(history, input, true)
 }

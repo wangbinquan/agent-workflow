@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 178 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 182 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -18,12 +18,12 @@ import {
 } from '@/platform/persistence/schemaContract'
 
 describe('RFC-349 PostgreSQL schema projection', () => {
-  test('projects the exact 178-table active parity set', () => {
+  test('projects the exact 182-table active parity set', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(178)
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(178)
+    expect(tables).toHaveLength(182)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(182)
     expect(plan.activeTableCount).toBe(contract.activeTableCount)
     expect(plan.archiveOnlyTableCount).toBe(6)
   })

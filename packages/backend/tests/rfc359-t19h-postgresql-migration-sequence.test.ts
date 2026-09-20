@@ -28,6 +28,7 @@ import {
 import {
   assertPostgresqlMigrationHead,
   createPostgresqlIndexUpgrade,
+  createPostgresqlAdditiveUpgrade,
   planPostgresqlUpgrade,
   postgresqlMigrationDigest,
   postgresqlMigrationSqlDigest,
@@ -38,6 +39,7 @@ import {
   replayPostgresqlMigrationHistory,
   resolvePostgresqlHistoricalContract,
   resolvePostgresqlIndexOnlyRowBridge,
+  resolvePostgresqlAdditiveRowBridge,
   type PostgresqlIndexUpgrade,
   type PostgresqlMigrationHistory,
   type PostgresqlMigrationVersion,
@@ -164,8 +166,8 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
     )
   })
 
-  test('one combined index edge and the full ordered chain reach the same whole plan', () => {
-    const combined = createPostgresqlIndexUpgrade({
+  test('one combined additive edge and the full ordered chain reach the same whole plan', () => {
+    const combined = createPostgresqlAdditiveUpgrade({
       from: committed.versions[0]!,
       to: next,
       id: '0001_combined_fixture',
@@ -375,8 +377,24 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
     ).toThrow('old indexes changed, moved or were removed')
   })
 
-  test('bridges old archive rows only across verified index-only contracts', () => {
-    const bridge = resolvePostgresqlIndexOnlyRowBridge(extended, {
+  test('bridges unchanged old rows across verified additive contracts while keeping the index-only API strict', () => {
+    expect(() =>
+      resolvePostgresqlIndexOnlyRowBridge(extended, {
+        fromContractDigest: committed.root.contract.digest,
+        toContractDigest: next.contract.digest,
+      }),
+    ).toThrow('historical row, codec, key or disposition changed')
+    const prefix = replayPostgresqlMigrationHistory(
+      committed.root,
+      committed.steps.filter((step) => step.version === 1),
+    )
+    expect(
+      resolvePostgresqlIndexOnlyRowBridge(prefix, {
+        fromContractDigest: prefix.root.contract.digest,
+        toContractDigest: prefix.head.contract.digest,
+      }).target,
+    ).toEqual(prefix.head.contract)
+    const bridge = resolvePostgresqlAdditiveRowBridge(extended, {
       fromContractDigest: committed.root.contract.digest,
       toContractDigest: next.contract.digest,
     })

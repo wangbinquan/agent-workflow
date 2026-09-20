@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1689,
+    "entries": 1693,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -21930,6 +21930,29 @@
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryPreparationJournal.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/repositoryPreparationJournal.ts#createRepositoryPreparationJournal",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryPreparationJournal.ts#createRepositoryPreparationJournal",
+      "symbol": "createRepositoryPreparationJournal",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
         "transaction": true
       },
       "file": "packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts",
@@ -29008,6 +29031,29 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workspacePreparationJournal.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/workspacePreparationJournal.ts#createWorkspacePreparationJournal",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspacePreparationJournal.ts#createWorkspacePreparationJournal",
+      "symbol": "createWorkspacePreparationJournal",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -31516,7 +31562,32 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlAdditiveUpgrade",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlAdditiveUpgrade",
+      "symbol": "createPostgresqlAdditiveUpgrade",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -31527,6 +31598,7 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -31558,6 +31630,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlMigrationRoot",
       "symbol": "createPostgresqlMigrationRoot",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlUpgrade",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlUpgrade",
+      "symbol": "createPostgresqlUpgrade",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -40381,7 +40477,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
+  "sourceDigest": "sha256:d5d4e1bfb72593acbb74a60cf0a82e83cd8488370dad2b95b8d7a0342967679a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

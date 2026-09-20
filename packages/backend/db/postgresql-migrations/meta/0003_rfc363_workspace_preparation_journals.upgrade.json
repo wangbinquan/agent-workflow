@@ -1,0 +1,1048 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:3e64b52d2ac2166405475f71c3160eac22c8617ee8822a108aa6fe2ca472c430', 182, 6)"
+    },
+    "beforeDigest": "sha256:bc2810c95fe459672fd3e512c4b65bc0876fc665cde77286f3632d445a1b014f"
+  },
+  "digest": "sha256:c4466887b780aaf913693ff5277c2e8d3b027db8fec5e3b7806c7b6319e9774e",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "sc_preparation_operations",
+      "sql": "CREATE TABLE \"agent_workflow\".\"sc_preparation_operations\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"snapshot_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'planned',\n  \"version\" BIGINT NOT NULL DEFAULT 0,\n  \"resolved_json\" TEXT COLLATE \"C\",\n  \"receipt_ref\" TEXT COLLATE \"C\",\n  \"receipt_json\" TEXT COLLATE \"C\",\n  \"failure_code\" TEXT COLLATE \"C\",\n  \"diagnostics_json\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"sc_preparation_operations_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "sc_repository_snapshots",
+      "sql": "CREATE TABLE \"agent_workflow\".\"sc_repository_snapshots\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" TEXT COLLATE \"C\" NOT NULL,\n  \"facts_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"sc_repository_snapshots_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "sc_repository_sources",
+      "sql": "CREATE TABLE \"agent_workflow\".\"sc_repository_sources\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"facts_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"sc_repository_sources_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_workspace_preparations",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_workspace_preparations\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"admission_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"lane\" TEXT COLLATE \"C\" NOT NULL,\n  \"operation_ref\" TEXT COLLATE \"C\",\n  \"artifact_json\" TEXT COLLATE \"C\",\n  \"admitted_task_id\" TEXT COLLATE \"C\",\n  \"state\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'preparing',\n  \"owner_fence\" BIGINT NOT NULL DEFAULT 0,\n  \"version\" BIGINT NOT NULL DEFAULT 0,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_workspace_preparations_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "sc_preparation_operations:unique:sc_preparation_operations_receipt_ref_unique",
+      "sql": "ALTER TABLE \"agent_workflow\".\"sc_preparation_operations\" ADD CONSTRAINT \"sc_preparation_operations_receipt_ref_unique\" UNIQUE (\"receipt_ref\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "sc_preparation_operations:fk:sc_preparation_operations_snapshot_ref_sc_repository_snapshots_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"sc_preparation_operations\" ADD CONSTRAINT \"sc_preparation_operations_snapshot_ref_sc_reposito_9dc5f480f1b4\" FOREIGN KEY (\"snapshot_ref\") REFERENCES \"agent_workflow\".\"sc_repository_snapshots\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "sc_repository_snapshots:fk:sc_repository_snapshots_source_ref_sc_repository_sources_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"sc_repository_snapshots\" ADD CONSTRAINT \"sc_repository_snapshots_source_ref_sc_repository_sources_id_fk\" FOREIGN KEY (\"source_ref\") REFERENCES \"agent_workflow\".\"sc_repository_sources\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "sc_repository_sources:unique:sc_repository_sources_request_key_unique",
+      "sql": "ALTER TABLE \"agent_workflow\".\"sc_repository_sources\" ADD CONSTRAINT \"sc_repository_sources_request_key_unique\" UNIQUE (\"request_key\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_workspace_preparations:unique:task_workspace_preparations_admission_key_unique",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_workspace_preparations\" ADD CONSTRAINT \"task_workspace_preparations_admission_key_unique\" UNIQUE (\"admission_key\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_workspace_preparations:unique:task_workspace_preparations_admitted_task_id_unique",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_workspace_preparations\" ADD CONSTRAINT \"task_workspace_preparations_admitted_task_id_unique\" UNIQUE (\"admitted_task_id\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:3e64b52d2ac2166405475f71c3160eac22c8617ee8822a108aa6fe2ca472c430', active_table_count = 182, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:0a8fe7af8576c0642020a55a1609f2fe48df69a22459234ba785f2148a69f4d4' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:0a8fe7af8576c0642020a55a1609f2fe48df69a22459234ba785f2148a69f4d4",
+    "planDigest": "sha256:e47d5390010b2be5fe34797e7cd4f48d2377357300f0c766e00747d9feb624a4"
+  },
+  "id": "0003_rfc363_workspace_preparation_journals",
+  "indexAdditions": [
+    {
+      "position": 141,
+      "statement": {
+        "kind": "table",
+        "logicalId": "sc_preparation_operations",
+        "sql": "CREATE TABLE \"agent_workflow\".\"sc_preparation_operations\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"snapshot_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'planned',\n  \"version\" BIGINT NOT NULL DEFAULT 0,\n  \"resolved_json\" TEXT COLLATE \"C\",\n  \"receipt_ref\" TEXT COLLATE \"C\",\n  \"receipt_json\" TEXT COLLATE \"C\",\n  \"failure_code\" TEXT COLLATE \"C\",\n  \"diagnostics_json\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"sc_preparation_operations_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 142,
+      "statement": {
+        "kind": "table",
+        "logicalId": "sc_repository_snapshots",
+        "sql": "CREATE TABLE \"agent_workflow\".\"sc_repository_snapshots\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" TEXT COLLATE \"C\" NOT NULL,\n  \"facts_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"sc_repository_snapshots_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 143,
+      "statement": {
+        "kind": "table",
+        "logicalId": "sc_repository_sources",
+        "sql": "CREATE TABLE \"agent_workflow\".\"sc_repository_sources\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"facts_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"sc_repository_sources_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 162,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_workspace_preparations",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_workspace_preparations\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"admission_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"lane\" TEXT COLLATE \"C\" NOT NULL,\n  \"operation_ref\" TEXT COLLATE \"C\",\n  \"artifact_json\" TEXT COLLATE \"C\",\n  \"admitted_task_id\" TEXT COLLATE \"C\",\n  \"state\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'preparing',\n  \"owner_fence\" BIGINT NOT NULL DEFAULT 0,\n  \"version\" BIGINT NOT NULL DEFAULT 0,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_workspace_preparations_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 751,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "sc_preparation_operations:unique:sc_preparation_operations_receipt_ref_unique",
+        "sql": "ALTER TABLE \"agent_workflow\".\"sc_preparation_operations\" ADD CONSTRAINT \"sc_preparation_operations_receipt_ref_unique\" UNIQUE (\"receipt_ref\")"
+      }
+    },
+    {
+      "position": 752,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "sc_preparation_operations:fk:sc_preparation_operations_snapshot_ref_sc_repository_snapshots_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"sc_preparation_operations\" ADD CONSTRAINT \"sc_preparation_operations_snapshot_ref_sc_reposito_9dc5f480f1b4\" FOREIGN KEY (\"snapshot_ref\") REFERENCES \"agent_workflow\".\"sc_repository_snapshots\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+      }
+    },
+    {
+      "position": 753,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "sc_repository_snapshots:fk:sc_repository_snapshots_source_ref_sc_repository_sources_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"sc_repository_snapshots\" ADD CONSTRAINT \"sc_repository_snapshots_source_ref_sc_repository_sources_id_fk\" FOREIGN KEY (\"source_ref\") REFERENCES \"agent_workflow\".\"sc_repository_sources\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+      }
+    },
+    {
+      "position": 754,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "sc_repository_sources:unique:sc_repository_sources_request_key_unique",
+        "sql": "ALTER TABLE \"agent_workflow\".\"sc_repository_sources\" ADD CONSTRAINT \"sc_repository_sources_request_key_unique\" UNIQUE (\"request_key\")"
+      }
+    },
+    {
+      "position": 809,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_workspace_preparations:unique:task_workspace_preparations_admission_key_unique",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_workspace_preparations\" ADD CONSTRAINT \"task_workspace_preparations_admission_key_unique\" UNIQUE (\"admission_key\")"
+      }
+    },
+    {
+      "position": 810,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_workspace_preparations:unique:task_workspace_preparations_admitted_task_id_unique",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_workspace_preparations\" ADD CONSTRAINT \"task_workspace_preparations_admitted_task_id_unique\" UNIQUE (\"admitted_task_id\")"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 137,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "snapshot_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"planned\"",
+            "enumValues": [
+              "planned",
+              "resolving",
+              "materializing",
+              "prepared",
+              "failed",
+              "stopped",
+              "cleaned"
+            ],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "'planned'",
+              "sqlite": "'planned'"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "version",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "resolved_json",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "receipt_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": "sc_preparation_operations_receipt_ref_unique"
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "receipt_json",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "failure_code",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "diagnostics_json",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["snapshot_ref"],
+            "foreignColumns": ["id"],
+            "foreignTable": "sc_repository_snapshots",
+            "name": "sc_preparation_operations_snapshot_ref_sc_repository_snapshots_id_fk",
+            "onDelete": "no action",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "sc_preparation_operations",
+        "indexes": [],
+        "migrationKey": ["id"],
+        "ownerContext": "source-control",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "sc_preparation_operations",
+          "sqlite": "sc_preparation_operations"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-operational",
+          "owner": "source-control",
+          "rule": "The owning bounded context defines retention and archive jobs through its application port."
+        },
+        "schemaSymbol": "scPreparationOperations",
+        "sourceTable": "sc_preparation_operations",
+        "unique": []
+      }
+    },
+    {
+      "position": 138,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "source_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "facts_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["source_ref"],
+            "foreignColumns": ["id"],
+            "foreignTable": "sc_repository_sources",
+            "name": "sc_repository_snapshots_source_ref_sc_repository_sources_id_fk",
+            "onDelete": "no action",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "sc_repository_snapshots",
+        "indexes": [],
+        "migrationKey": ["id"],
+        "ownerContext": "source-control",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "sc_repository_snapshots",
+          "sqlite": "sc_repository_snapshots"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "source-control",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "scRepositorySnapshots",
+        "sourceTable": "sc_repository_snapshots",
+        "unique": []
+      }
+    },
+    {
+      "position": 139,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": "sc_repository_sources_request_key_unique"
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["repository", "repository-group", "public-url"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "kind",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "facts_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "sc_repository_sources",
+        "indexes": [],
+        "migrationKey": ["id"],
+        "ownerContext": "source-control",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "sc_repository_sources",
+          "sqlite": "sc_repository_sources"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "source-control",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "scRepositorySources",
+        "sourceTable": "sc_repository_sources",
+        "unique": []
+      }
+    },
+    {
+      "position": 158,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "admission_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": "task_workspace_preparations_admission_key_unique"
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["repository-preparation", "pre-materialized"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "lane",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "operation_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "artifact_json",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "admitted_task_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": "task_workspace_preparations_admitted_task_id_unique"
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"preparing\"",
+            "enumValues": [
+              "preparing",
+              "prepared",
+              "admitted",
+              "compensating",
+              "cleaned",
+              "failed"
+            ],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "'preparing'",
+              "sqlite": "'preparing'"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "owner_fence",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "version",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "task_workspace_preparations",
+        "indexes": [],
+        "migrationKey": ["id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "task_workspace_preparations",
+          "sqlite": "task_workspace_preparations"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "taskWorkspacePreparations",
+        "sourceTable": "task_workspace_preparations",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:655114f79720c7666ffc53fac668ebb716a920268ad529dc0941b2f13e9d8d8a",
+  "sequence": 3,
+  "sqlDigest": "sha256:4d109b0e41bfdca06ec54e880af84db4a519bd9226297dea6647582a3beec6ba",
+  "sqlFile": "0003_rfc363_workspace_preparation_journals.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790179212067,
+        "hash": "a1b988d318971345827fc7ba6a6f53387acff37238d670fa6269fb921e984f7f",
+        "index": 226,
+        "tag": "0227_rfc363_workspace_preparation_journals"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:e37a8fb5e2ebdf21cd3648ba904f24adb079eab3cc5ad5395b953904f5b2bf10",
+      "count": 226,
+      "last": {
+        "folderMillis": 1790179212066,
+        "hash": "43195bc288669c8ba468d6612cfe2a52569b25cde78217ecc60b48aad2bad869",
+        "index": 225,
+        "tag": "0226_rfc359_task_list_facets_index"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:55157963993d87903a6d2def98a8605c61e6623f753818ff91e94fb6f105cecc",
+      "count": 227,
+      "last": {
+        "folderMillis": 1790179212067,
+        "hash": "a1b988d318971345827fc7ba6a6f53387acff37238d670fa6269fb921e984f7f",
+        "index": 226,
+        "tag": "0227_rfc363_workspace_preparation_journals"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:3e64b52d2ac2166405475f71c3160eac22c8617ee8822a108aa6fe2ca472c430",
+    "planDigest": "sha256:af9cf609499c4d531808dca95676271304fa3ed51315f4165e9b4ecbab0117cb"
+  },
+  "version": 2
+}

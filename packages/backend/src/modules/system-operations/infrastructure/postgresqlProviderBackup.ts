@@ -18,7 +18,7 @@ import {
 } from '@/platform/persistence/postgresqlLogicalSource'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { resolvePostgresqlIndexOnlyRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
+import { resolvePostgresqlAdditiveRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
 import {
   buildLogicalSchemaContract,
   type LogicalSchemaContract,
@@ -115,7 +115,7 @@ export async function createPostgresqlProviderBackup(
   if (migration.payload.source.schemaDigest !== contract.digest) {
     try {
       const history = await loadPostgresqlMigrationHistory()
-      archiveContract = resolvePostgresqlIndexOnlyRowBridge(history, {
+      archiveContract = resolvePostgresqlAdditiveRowBridge(history, {
         fromContractDigest: migration.payload.source.schemaDigest,
         toContractDigest: contract.digest,
       }).source
