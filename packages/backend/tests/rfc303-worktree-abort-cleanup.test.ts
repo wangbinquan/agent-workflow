@@ -107,7 +107,11 @@ describe('RFC-303 aborted worktree materialization cleanup', () => {
           // Normalize any platform-dependent partial result, then materialize
           // the exact post-ref/post-registration crash shape for reconciliation.
           if (worktreeRegistry(repoPath).includes(`worktree ${event.worktreePath}\n`)) {
-            execFileSync('git', ['worktree', 'remove', '--force', event.worktreePath], {
+            // A killed Git 2.55 add can leave its launch-owned registry locked as
+            // `initializing`. This fixture normalizes that partial result before
+            // constructing its deterministic crash shape; production cleanup and
+            // the three residue assertions below still run unchanged.
+            execFileSync('git', ['worktree', 'remove', '--force', '--force', event.worktreePath], {
               cwd: repoPath,
             })
           }
