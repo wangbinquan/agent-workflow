@@ -1,6 +1,6 @@
 # RFC-362：Task / Source Control 启动合同准备
 
-- 状态：In Progress（2026-09-20 用户批准实施并提交远端）。
+- 状态：Done（2026-09-20；实现与托管验收见本文末尾）。仅关闭 W4-E1/W5 合同准备；生产 launch cutover、durable replay/group/revision 和 reader gaps 留后继，E1/B/D/W5 不记 Done。
 - 母 RFC：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E1 / W5 前置。
 - 前置：W2、W4-C/E0 与 [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已完成。
 - 基线：`9ba159a7f3b1688806e54f374ab30e2aca1a4bff`。
@@ -33,3 +33,14 @@ NodeRun v2 identity、新的 scheduler 或 SourceControl repository/cache 的整
 - AC-5：contract 级测试通过，新增 declared-only public 项显式登记为 E1/W5 待切债务，不伪造 production liveness。
 - AC-6：给出后继生产 cutover 的确切入口、文件归属、依赖、回滚及验收清单；本 RFC 完成不领取 W4-E1/W4-B/D 或 W5 完成信用。
 - AC-7：最终 exact-SHA Main CI 成功；文档与 canonical declared-only 账一致，无新增运行时旁路。
+
+## 2026-09-20 完成验收
+
+实现取证 SHA `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**。
+逐 job 和目标 suite 见 [共同验收记录](../RFC-294-backend-layered-target-architecture/acceptance-rfc360-362-2026-09-20.json)。
+Windows 原生流程 [35491113835](https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835) 在祖先 `59c1fff1c` success；
+其后根注入由本次 Main 的多 OS binary/e2e 覆盖，不混称 Windows workflow 为本 SHA 结果。
+
+AC-1/2/6：逐入口、54 个 root writer 字段、两条 lane 与后继逐批接线/回滚清单；AC-3/4：同事务 snapshot、真实 Git、取消/回滚与既有 recovery oracle；AC-5：22 个 declared public 合同和 1 个 declared required port 显式入账，无生产 liveness；AC-7：本页托管证据。
+
+仅关闭 W4-E1/W5 合同准备；生产 launch cutover、durable replay/group/revision 和 reader gaps 留后继，E1/B/D/W5 不记 Done。后续纯文档提交的最终整仓 CI 与远端同步在发布时继续核对。

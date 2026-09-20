@@ -106,3 +106,14 @@ RC / TE 的 `application/adapters/execution-contract-adapter.ts` 分别实现对
 实际数据库与进程机制仍在原计划的 `infrastructure/adapters` 路径。RC Workflow closure 是本域纯 domain 判据。
 因此 provider 没有跨域 infrastructure → application 深层引用；EC 也没有 provider value import。
 这属于已批准 provider 归位的层次拆分，资源字段、程序机制与 public wire 均保持。
+
+## 2026-09-20 完成验收
+
+实现取证 SHA `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**。
+逐 job 和目标 suite 见 [共同验收记录](../RFC-294-backend-layered-target-architecture/acceptance-rfc360-362-2026-09-20.json)。
+Windows 原生流程 [35491113835](https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835) 在祖先 `59c1fff1c` success；
+其后根注入由本次 Main 的多 OS binary/e2e 覆盖，不混称 Windows workflow 为本 SHA 结果。
+
+AC-1/2/5：EC 只消费两个必填 SPI，RC/TE 各一个 provider，三个根沿用唯一 EC participant，无生产反向 value 环；AC-3/4：真实资源、Script、超时/清理、配对与 exact-output oracle 通过；AC-6：旧 13 个 owner、8 个 exception 与 9 个 import ID 归零；AC-7：本页托管证据。
+
+仅关闭 W4-E9 的 EC resource/fixture provider slice；Reaction、Event target、transport 和 observer lifecycle 继续开放。后续纯文档提交的最终整仓 CI 与远端同步在发布时继续核对。

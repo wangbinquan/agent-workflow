@@ -1,6 +1,6 @@
 # RFC-360：Runtime Management 管理与选择合同归位
 
-- 状态：In Progress（2026-09-20 用户批准实施并提交远端）。
+- 状态：Done（2026-09-20；实现与托管验收见本文末尾）。关闭 RFC-294 W4-E4b 与本域 B/D；driver、Task mechanics、MCP 全流程和根物理迁位按 exact 清单交后继。
 - 母 RFC：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E4b，以及本域对应的 W4-B/D。
 - 前置：[RFC-359](../RFC-359-database-provider-unification/proposal.md) Done、W4-A/C/E0 Done。
 - 基线：`9ba159a7f3b1688806e54f374ab30e2aca1a4bff`。
@@ -45,5 +45,16 @@ MCP runtime test 完整会话状态机（W4-E6）；Realtime 既有组合；全�
 
 ## 5. 下一步
 
-批准本三件套后按 [plan](./plan.md) T1→T8 实施。RFC-361 的独立合同工作不依赖本 RFC；RFC-362 与本 RFC
+本三件套的 [plan](./plan.md) T1→T8 已完成。RFC-361 的独立合同工作不依赖本 RFC；RFC-362 与本 RFC
 共享 TaskExecution composition 时须串行接线。任何新增配置、冻结时点变更或 driver 行为变更先返回设计审议。
+
+## 2026-09-20 完成验收
+
+实现取证 SHA `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**。
+逐 job 和目标 suite 见 [共同验收记录](../RFC-294-backend-layered-target-architecture/acceptance-rfc360-362-2026-09-20.json)。
+Windows 原生流程 [35491113835](https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835) 在祖先 `59c1fff1c` success；
+其后根注入由本次 Main 的多 OS binary/e2e 覆盖，不混称 Windows workflow 为本 SHA 结果。
+
+AC-1/2/4/7：分组 public 管理入口、单一 registry/persistence、必填 RC participant 根注入；AC-3/5：同事务选择/冻结与 profile/session 回滚、原热配置 oracle；AC-6：7 个旧路径与认领 ID 归零，60 条通用 E4b bucket 明确转交；AC-8：本页托管证据。
+
+关闭 RFC-294 W4-E4b 与本域 B/D；driver、Task mechanics、MCP 全流程和根物理迁位按 exact 清单交后继。后续纯文档提交的最终整仓 CI 与远端同步在发布时继续核对。

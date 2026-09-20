@@ -1,7 +1,7 @@
 {
-  "status": "candidate-awaiting-hosted-ci",
+  "status": "accepted",
   "baselineSha": "47ebc43e1160dbab88a882550f412ccb84a68f20",
-  "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a",
+  "sourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
   "retiredSourcePaths": [
     "packages/backend/src/services/runtimeRegistry.ts",
     "packages/backend/src/routes/runtime.ts",
@@ -59,5 +59,13 @@
       "removeWave": "W4-E6",
       "reason": "This slice moves profile test invalidation into the same transaction, not the full MCP lifecycle."
     }
-  ]
+  ],
+  "sourceSha": "123ce2dbc94b10d2c88bf978437bfa0db1b898ba",
+  "hostedEvidence": {
+    "mainRun": 35492271521,
+    "headSha": "123ce2dbc94b10d2c88bf978437bfa0db1b898ba",
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521",
+    "conclusion": "success"
+  },
+  "residualDebtLedger": "implementation-residual-debt.json"
 }

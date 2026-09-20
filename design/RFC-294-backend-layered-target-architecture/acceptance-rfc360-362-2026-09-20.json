@@ -1,0 +1,530 @@
+{
+  "date": "2026-09-20",
+  "status": "implementation-accepted",
+  "sourceSha": "123ce2dbc94b10d2c88bf978437bfa0db1b898ba",
+  "sourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
+  "main": {
+    "id": 35492271521,
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521",
+    "headSha": "123ce2dbc94b10d2c88bf978437bfa0db1b898ba",
+    "conclusion": "success",
+    "successfulJobs": 46,
+    "totalJobs": 46
+  },
+  "windowsProcessEvidence": {
+    "id": 35491113835,
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835",
+    "headSha": "59c1fff1c69702a6ce793dbc892aeb772aab29b0",
+    "conclusion": "success",
+    "scope": "Native Windows platform/process evidence from an implementation ancestor. The later RFC360 root injection is additionally covered by the exact-SHA Main multi-OS build and e2e; this is not a claim that the Windows workflow ran on the final SHA."
+  },
+  "jobs": [
+    {
+      "id": 106029696806,
+      "name": "Perf microbenchmark gate",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696894,
+      "name": "Backend tests (real PostgreSQL)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696896,
+      "name": "Lint + Typecheck + Format + Shared + system mock tests",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696900,
+      "name": "Frontend tests (macos-latest shard 2/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696902,
+      "name": "Markdown link check (design/)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696904,
+      "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696910,
+      "name": "Frontend tests (ubuntu-latest shard 1/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696922,
+      "name": "Backend tests (macos-latest shard 6/6)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696930,
+      "name": "Frontend tests (ubuntu-latest shard 3/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696932,
+      "name": "Build production binary + e2e artifact (smoke) (macos-latest)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696935,
+      "name": "Frontend tests (windows-latest shard 1/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696936,
+      "name": "Build production binary + e2e artifact (smoke) (ubuntu-latest)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696942,
+      "name": "Backend tests (macos-latest shard 5/6)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696944,
+      "name": "Backend tests (macos-latest shard 3/6)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696949,
+      "name": "Backend tests (macos-latest shard 4/6)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696950,
+      "name": "Frontend tests (windows-latest shard 3/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696953,
+      "name": "Backend tests (ubuntu-latest shard 9/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696959,
+      "name": "Backend tests (ubuntu-latest shard 10/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696965,
+      "name": "Frontend tests (ubuntu-latest shard 2/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696970,
+      "name": "Backend tests (macos-latest shard 2/6)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696971,
+      "name": "Backend tests (ubuntu-latest shard 11/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696979,
+      "name": "Frontend tests (windows-latest shard 2/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696994,
+      "name": "Backend tests (ubuntu-latest shard 12/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029696995,
+      "name": "Frontend tests (macos-latest shard 1/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697006,
+      "name": "Backend tests (macos-latest shard 1/6)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697007,
+      "name": "Backend tests (ubuntu-latest shard 5/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697013,
+      "name": "Build production binary + e2e artifact (smoke) (windows-latest)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697024,
+      "name": "Backend tests (ubuntu-latest shard 8/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697037,
+      "name": "Backend tests (ubuntu-latest shard 1/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697039,
+      "name": "Backend tests (ubuntu-latest shard 3/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697040,
+      "name": "Backend tests (ubuntu-latest shard 6/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697041,
+      "name": "Frontend tests (macos-latest shard 3/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697048,
+      "name": "Backend tests (ubuntu-latest shard 2/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697059,
+      "name": "Backend tests (ubuntu-latest shard 7/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029697067,
+      "name": "Backend tests (ubuntu-latest shard 4/12)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029891805,
+      "name": "Playwright e2e (ubuntu-latest shard 1/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029891824,
+      "name": "Playwright e2e (ubuntu-latest shard 2/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029891852,
+      "name": "Playwright e2e (ubuntu-latest shard 3/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029894125,
+      "name": "Playwright e2e (macos-latest shard 2/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029894145,
+      "name": "Playwright e2e (macos-latest shard 1/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106029894152,
+      "name": "Playwright e2e (macos-latest shard 3/3)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106030583626,
+      "name": "Playwright e2e (windows-latest shard 3/4)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106030583644,
+      "name": "Playwright e2e (windows-latest shard 2/4)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106030583667,
+      "name": "Playwright e2e (windows-latest shard 1/4)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106030583670,
+      "name": "Playwright e2e (windows-latest shard 4/4)",
+      "conclusion": "success"
+    },
+    {
+      "id": 106031703457,
+      "name": "CI required",
+      "conclusion": "success"
+    }
+  ],
+  "targetSuites": [
+    {
+      "job": "Backend tests (macos-latest shard 5/6)",
+      "id": 106029696942,
+      "suite": "packages/backend/tests/rfc362-launch-contracts.test.ts:",
+      "pass": 9,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 3/6)",
+      "id": 106029696944,
+      "suite": "packages/backend/tests/rfc360-runtime-profile-participants.test.ts:",
+      "pass": 5,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 4/6)",
+      "id": 106029696949,
+      "suite": "packages/backend/tests/execution-contract-platform.test.ts:",
+      "pass": 16,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 4/6)",
+      "id": 106029696949,
+      "suite": "packages/backend/tests/rfc361-execution-contract-providers.test.ts:",
+      "pass": 12,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 2/6)",
+      "id": 106029696970,
+      "suite": "packages/backend/tests/api-contract-coverage.test.ts:",
+      "pass": 7,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 2/6)",
+      "id": 106029696970,
+      "suite": "packages/backend/tests/rfc310-digital-employee-system-mock-e2e.test.ts:",
+      "pass": 1,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 2/6)",
+      "id": 106029696970,
+      "suite": "packages/backend/tests/rfc360-runtime-management-application.test.ts:",
+      "pass": 6,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 2/6)",
+      "id": 106029696970,
+      "suite": "packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts:",
+      "pass": 40,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (macos-latest shard 2/6)",
+      "id": 106029696970,
+      "suite": "packages/backend/tests/runtime-freeze.test.ts:",
+      "pass": 13,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 5/12)",
+      "id": 106029697007,
+      "suite": "packages/backend/tests/rfc362-launch-contracts.test.ts:",
+      "pass": 17,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 3/12)",
+      "id": 106029697039,
+      "suite": "packages/backend/tests/rfc360-runtime-profile-participants.test.ts:",
+      "pass": 10,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 2/12)",
+      "id": 106029697048,
+      "suite": "packages/backend/tests/api-contract-coverage.test.ts:",
+      "pass": 7,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 2/12)",
+      "id": 106029697048,
+      "suite": "packages/backend/tests/runtime-freeze.test.ts:",
+      "pass": 26,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 2/12)",
+      "id": 106029697048,
+      "suite": "packages/backend/tests/rfc360-runtime-management-application.test.ts:",
+      "pass": 12,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 2/12)",
+      "id": 106029697048,
+      "suite": "packages/backend/tests/rfc310-digital-employee-system-mock-e2e.test.ts:",
+      "pass": 2,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 2/12)",
+      "id": 106029697048,
+      "suite": "packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts:",
+      "pass": 40,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 4/12)",
+      "id": 106029697067,
+      "suite": "packages/backend/tests/execution-contract-platform.test.ts:",
+      "pass": 32,
+      "fail": 0,
+      "failures": []
+    },
+    {
+      "job": "Backend tests (ubuntu-latest shard 4/12)",
+      "id": 106029697067,
+      "suite": "packages/backend/tests/rfc361-execution-contract-providers.test.ts:",
+      "pass": 12,
+      "fail": 0,
+      "failures": []
+    }
+  ],
+  "creditedScope": {
+    "RFC-360": "W4-E4b and its owned B/D slice",
+    "RFC-361": "Only Execution Contract resource and Script fixture providers in W4-E9",
+    "RFC-362": "Only Task/Source Control contracts and characterization before production cutover"
+  },
+  "remainingParentScope": [
+    "W4-E1",
+    "W4-E5/E6/E8/E9/E10",
+    "remaining W4-B/D",
+    "W5",
+    "W6",
+    "W7",
+    "W9",
+    "optional W8"
+  ],
+  "architectureExceptionDelta": {
+    "baselineSha": "47ebc43e1160dbab88a882550f412ccb84a68f20",
+    "baselineCount": 4562,
+    "currentCount": 4630,
+    "addedIds": [
+      "exception:import:0159657aee26555a3b7c",
+      "exception:import:03f904e33a25850bbfca",
+      "exception:import:04185983ccd037287a91",
+      "exception:import:042c02eb7ba1017aa73f",
+      "exception:import:05fe4f6fbe5724b98381",
+      "exception:import:0f471184ca5f65924937",
+      "exception:import:19ddf6478b7589118284",
+      "exception:import:1a34b54a43ebe5e390d0",
+      "exception:import:1f1dfaf525355b129cec",
+      "exception:import:1f920ff392c07021298e",
+      "exception:import:1fe9adfae32c3312d05e",
+      "exception:import:211d79f02f044968e78f",
+      "exception:import:2433dd6e02c29fb84491",
+      "exception:import:25a4e45a7594c712f901",
+      "exception:import:2942ec98c2cc487ff0ef",
+      "exception:import:2fca50eb45436ad12fd8",
+      "exception:import:3144e5a4f14f5dbed83a",
+      "exception:import:384a5b823d8cc18d4142",
+      "exception:import:3aafb64f968ba5640f4b",
+      "exception:import:3b0939b8480fceab955a",
+      "exception:import:3c4984054fae05109e17",
+      "exception:import:40fdc2d35110b7b7a056",
+      "exception:import:44fdd2b300d030041463",
+      "exception:import:456d11a6947c60ad3d54",
+      "exception:import:4980f696ab97c6ab2c79",
+      "exception:import:4d9e24ebf154018d661b",
+      "exception:import:4ed676a8c31fcbd6bdc9",
+      "exception:import:4f88bf3346d2d0aeb9c5",
+      "exception:import:557d9913721cd9118882",
+      "exception:import:5581e191e54edcfe7376",
+      "exception:import:5bf4b9555891195384bb",
+      "exception:import:5eae06720c6150e5cb64",
+      "exception:import:6086843b83980e7f72de",
+      "exception:import:61146f1b6a52862ff579",
+      "exception:import:65602b3fc4a33f1d9b98",
+      "exception:import:6c06202c9bb186aa497e",
+      "exception:import:6c0a2da5429a0320e9dd",
+      "exception:import:6c603f736d50b0e0ac65",
+      "exception:import:6e0453570f17fb63989f",
+      "exception:import:70fef04c52ff0c283a17",
+      "exception:import:723c3909bf6ab695fb3d",
+      "exception:import:72e3493b6c68f5797191",
+      "exception:import:736f30f12d1577fdbbe8",
+      "exception:import:75a696ee4a4fc9f8066d",
+      "exception:import:7662ac52c9e23327f379",
+      "exception:import:77bb61fd143f4b38df8c",
+      "exception:import:77fcd6bfd975ba18bae9",
+      "exception:import:792645aff99254ce8579",
+      "exception:import:793396dc6dc2f7b524dd",
+      "exception:import:7d267bbba3352a3f45a5",
+      "exception:import:7e75ee43f9894c4d0121",
+      "exception:import:80d86c5ac19940efc90e",
+      "exception:import:83f9dd8529fffd20b788",
+      "exception:import:8679d92ee326e12298fd",
+      "exception:import:8c3df7e94cd960fd54b9",
+      "exception:import:8db39eb4c422c5210ca2",
+      "exception:import:8e7a731b2457fcd9aff2",
+      "exception:import:903949b654972f9c50f4",
+      "exception:import:93646f16363446958dfc",
+      "exception:import:954870757f7b45ff85eb",
+      "exception:import:98529c3a5711195f0f44",
+      "exception:import:9880f9de6099ff572944",
+      "exception:import:99aa03665e4b0ed7cb5c",
+      "exception:import:9a4883c7ebbf27acd0c9",
+      "exception:import:9b54bbf2ad1b84de8700",
+      "exception:import:9d6dda55e01de6f981e1",
+      "exception:import:a0be50c8c5f99fc17814",
+      "exception:import:a2c04905ce45adf5c872",
+      "exception:import:b1cfbb70bdffa4a7de18",
+      "exception:import:b9ca18e823ecee63f038",
+      "exception:import:ba658ea0b60dd4831503",
+      "exception:import:c0ecd4d9defac0f06ffe",
+      "exception:import:c619d23edeebb3fcb72d",
+      "exception:import:c8affd5e82e58568a932",
+      "exception:import:cce8fa5f321246d34372",
+      "exception:import:d9c0cef5e5bfa7968efc",
+      "exception:import:db373d4d5dfc8b4b78d1",
+      "exception:import:e182280a11e1811e5a44",
+      "exception:import:e1b6e3540e6aaf1d273a",
+      "exception:import:eb05c76afda20353b2a0",
+      "exception:import:ec68f6104e2657ec1b7a",
+      "exception:import:ed4eeb7ac1111ebf2f6e",
+      "exception:import:ee41b59ab5159388aa96",
+      "exception:import:efbb96719ad198a455e9",
+      "exception:import:f014e49ca7704eb73aa0",
+      "exception:import:f8a4030fdfccacbf609e",
+      "exception:import:ff3e36aebed87601fbd2"
+    ],
+    "retiredIds": [
+      "exception:import:110028091270f0f04df0",
+      "exception:import:1c19a3a5862adb0e556c",
+      "exception:import:226d7e497e0c4f31b400",
+      "exception:import:292e6f622426fed4dffb",
+      "exception:import:5488b95c3da8f51ea341",
+      "exception:import:5c9cd8f3048c33e27d72",
+      "exception:import:7a83a37ad18c39a03f4a",
+      "exception:import:855886e44caa491de19f",
+      "exception:import:9bf51966dfa45456d3f6",
+      "exception:import:a62165f141e79339620c",
+      "exception:import:a79e230e6df69729151d",
+      "exception:import:b9981898c77fe6ccbd4d",
+      "exception:import:c5c84c87727b9776c6cc",
+      "exception:import:cb0df11fa1b51981f7fe",
+      "exception:import:d370b30f1436926239f4",
+      "exception:import:e125768ea65099d7e9f0",
+      "exception:import:f3ad3b94931e4b921699",
+      "exception:import:f7b94ce7932b70fecb08",
+      "exception:import:fc135c10665ead89fc03"
+    ],
+    "note": "Relocation exposes retained root/provider/mechanism edges in the generic canonical census; all remain recorded. RFC360 residual exact IDs have a separate successor handoff, not a filter."
+  }
+}

@@ -1,12 +1,12 @@
 # RFC-294 技术设计：后台最终层次架构
 
 > 本文描述目标态合同，不是一次性目录搬迁清单。当前事实以 [plan §1.2](./plan.md#12-rfc-359-完成后的对账2026-09-20)
-> 和 [generated status](./status.md) 为准；2026-09-20 基线 `9ba159a7f3b1688806e54f374ab30e2aca1a4bff`。
-> P0、W2/W3、W4-A/C/E0/E2/E3/E4a/E7 已由 successor 完成。
+> 和 [generated status](./status.md) 为准；2026-09-20 实现取证基线 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`。
+> P0、W2/W3、W4-A/C/E0/E2/E3/E4a/E4b/E7 已由 successor 完成。
 > [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已统一 provider 事务和多条生产算法；
 > 本文 §4.3 据此使用异步 `DatabaseSession`，不能再要求新合同只能由 `dbTxSync` 实现。
 > 旧 scope/receipt 的职责仍适用；本节后历史伪代码中的同步 DB participant 返回形状，实施时按 §4.3 升级为 Promise 并 await。
-> 同步纯函数不因此改为异步。RFC-360/361/362 已于 2026-09-20 获批；授权范围以各自三件套为准，不扩展到其他 wave。
+> 同步纯函数不因此改为异步。RFC-360/361/362 已于 2026-09-20 完成批准范围：E4b 全纵切、EC provider 与 Task/SC 合同准备。E1、完整 E9 和 W5 等余项保持开放。
 
 ## 1. 设计原则
 

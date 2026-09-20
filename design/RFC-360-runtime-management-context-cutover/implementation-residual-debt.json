@@ -1,5 +1,5 @@
 {
-  "status": "candidate-awaiting-hosted-ci",
+  "status": "accepted-with-successor-handoff",
   "sourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
   "canonicalClassification": "W4-E4b",
   "classificationNote": "The canonical generator retains its generic context bucket. No entries are filtered or removed by this handoff; the exact IDs below name the actual successor responsibility.",
@@ -115,5 +115,6 @@
       "reason": "Scheduled trigger validation consumes the existing launch runtime type until Integration/Task admission cutover.",
       "exactExceptionIds": ["exception:import:f582bd6d3f3bee2f2e16"]
     }
-  ]
+  ],
+  "sourceSha": "123ce2dbc94b10d2c88bf978437bfa0db1b898ba"
 }

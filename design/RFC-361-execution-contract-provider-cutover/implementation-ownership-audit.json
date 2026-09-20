@@ -1,6 +1,6 @@
 {
-  "status": "candidate-awaiting-hosted-ci",
-  "sourceDigest": "sha256:dbdc16abca352f2136ec0ded58721eb2152ef0600695492483ff263b7ac9794c",
+  "status": "accepted",
+  "sourceDigest": "sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812",
   "remainingOwnedSourcePaths": [],
   "ownedIdReconciliation": {
     "module-symbol-owners.entries": {
@@ -79,5 +79,12 @@
       "removeWave": "W4-E9 successor slices",
       "reason": "Reaction admission, event target providers and route/observer cutover remain outside this RFC."
     }
-  ]
+  ],
+  "sourceSha": "123ce2dbc94b10d2c88bf978437bfa0db1b898ba",
+  "hostedEvidence": {
+    "mainRun": 35492271521,
+    "headSha": "123ce2dbc94b10d2c88bf978437bfa0db1b898ba",
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521",
+    "conclusion": "success"
+  }
 }

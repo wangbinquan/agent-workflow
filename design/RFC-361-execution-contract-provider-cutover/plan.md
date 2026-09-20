@@ -1,6 +1,6 @@
 # RFC-361 实施计划
 
-- 状态：In Progress（2026-09-20 用户批准实施）；开始实施，只领取 W4-E9 的 EC provider slice。
+- 状态：Done（2026-09-20；实现与托管验收见本文末尾）。仅关闭 W4-E9 的 EC resource/fixture provider slice；Reaction、Event target、transport 和 observer lifecycle 继续开放。
 
 ## 1. 任务
 
@@ -33,12 +33,12 @@ EventCenter-owned response rule 与 Integration-owned WebhookTrigger 分别迁�
 
 ## 3. 完成清单
 
-- [ ] T1 当前字段/失败矩阵与 exact IDs 齐全。
-- [ ] RC/TE 各一个 provider，两个 SPI 均被真实 EC application 消费。
-- [ ] EC 旧 service/table import 与默认 provider 构造归零。
-- [ ] 原真实 fixture、resource revision、DE 三条链和双库行为通过。
-- [ ] manifest/entrypoints/external import 精确对拍；其他 E9 debt 保持正确 owner。
-- [ ] 最终 exact-SHA Main CI 成功；父 RFC 仍 In Progress。
+- [x] T1 当前字段/失败矩阵与 exact IDs 齐全。
+- [x] RC/TE 各一个 provider，两个 SPI 均被真实 EC application 消费。
+- [x] EC 旧 service/table import 与默认 provider 构造归零。
+- [x] 原真实 fixture、resource revision、DE 三条链和双库行为通过。
+- [x] manifest/entrypoints/external import 精确对拍；其他 E9 debt 保持正确 owner。
+- [x] 最终 exact-SHA Main CI 成功；父 RFC 仍 In Progress。
 
 ## 4. 首批实现候选（2026-09-20）
 
@@ -47,3 +47,14 @@ EC 输入 pairing 与 validator/exact-output 编排分离；三个生产根强�
 两个 required ports 经 canonical 识别为 active，各有一个真实 provider adapter 和一个 EC composition。
 新增用例覆盖输入配对、direct validator 返回值、失败透传、参数、真实程序退出/超时和临时目录清理；托管 CI 待本批发布验证。
 本 RFC 仅抵扣 EC provider slice，不关闭整个 E9；RFC-360 另有已定位的公共内核路径与子任务注入字段账本修复随本批补齐。
+
+## 2026-09-20 完成验收
+
+实现取证 SHA `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**。
+逐 job 和目标 suite 见 [共同验收记录](../RFC-294-backend-layered-target-architecture/acceptance-rfc360-362-2026-09-20.json)。
+Windows 原生流程 [35491113835](https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835) 在祖先 `59c1fff1c` success；
+其后根注入由本次 Main 的多 OS binary/e2e 覆盖，不混称 Windows workflow 为本 SHA 结果。
+
+AC-1/2/5：EC 只消费两个必填 SPI，RC/TE 各一个 provider，三个根沿用唯一 EC participant，无生产反向 value 环；AC-3/4：真实资源、Script、超时/清理、配对与 exact-output oracle 通过；AC-6：旧 13 个 owner、8 个 exception 与 9 个 import ID 归零；AC-7：本页托管证据。
+
+仅关闭 W4-E9 的 EC resource/fixture provider slice；Reaction、Event target、transport 和 observer lifecycle 继续开放。后续纯文档提交的最终整仓 CI 与远端同步在发布时继续核对。

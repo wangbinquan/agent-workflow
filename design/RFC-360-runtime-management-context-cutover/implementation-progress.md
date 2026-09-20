@@ -1,7 +1,7 @@
 # RFC-360 当前实现与接续账
 
-本文件记录第四批候选内容。第三批发布 SHA 为 `a5e70f94d9d12d40e0b9700ff9037d5deb6092e3`；
-最终验收仍须本候选提交后的 exact-SHA CI，不能沿用前一个文档基线的绿。
+当前状态：Done；最终实现 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba` 的 Main CI `35492271521` 为 46/46 success。
+以下保留第四批起的字段、接续和修复记录；收口证据见文末与 plan。
 
 ## 字段与不变量
 
@@ -74,3 +74,5 @@ W29 的旧装配体摘要保持不变，新增参数经过明确结构校验后�
 剩余通用 E4b bucket 不按目录隐藏：`implementation-residual-debt.json` 穷举当前每个 exact exception ID，
 记录 actual successor owner/removeWave。启动根物理迁位归 W9-D，MCP 全流程归 E6，Task/Memory/Intent 等 consumer
 与 driver/runtime 机制各归明确后继。canonical 原始分桶仍保留，不能把 handoff 误写成全局 exception 归零。
+
+2026-09-20 收口：本 RFC 的批准范围已通过 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba` / Main `35492271521`。当前结论见 [plan](plan.md) 完成验收；上文中间批次的待办仅保留历史。

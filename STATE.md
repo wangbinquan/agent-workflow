@@ -1,5 +1,18 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-360 / RFC-361 / RFC-362 完成批准范围
+
+实现取证 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**，双库与多 OS binary/e2e 通过。
+Windows 原生流程 `35491113835` 在祖先 `59c1fff1c` success；证据范围见 RFC294 的 acceptance-rfc360-362-2026-09-20.json。
+
+- RFC-360 Done：RM 管理/registry/selection 与 profile/session 同事务；RC participant 根注入；旧 owned 路径/ID 归零。
+- RFC-361 Done：EC 必填 RC resource / TE Script fixture providers，保留唯一 EC participant 与原 validation/wire。
+- RFC-362 Done：Task/SC 合同准备和真实行为 oracle；22 个 public 与 1 个 required 声明继续待生产接入。
+- RFC-294 保持 In Progress：仅新增 E4b、本域 B/D 与上述局部 credit；E1、完整 E9、W5/W6/W7/W9 等仍开放。
+- 下一步是 Task/SC 生产 cutover 后继设计；E6 前置已满足，可独立立项。没有本轮之外的实施授权。
+
+本轮历史进度段保留如下；当前状态以上述收口及 RFC index 为准。共享 system-mocks CLI mode WIP 保留且不提交。
+
 ## 2026-09-20 RFC-360 收口复核：RC participant 改由启动根注入
 
 最终源码对拍发现 RM composition 仍构造 RC 内部 factory；本批把 required participant 参数收为必填，

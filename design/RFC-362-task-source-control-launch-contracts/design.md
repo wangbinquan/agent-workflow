@@ -89,3 +89,14 @@ CurrentAuthorityInTx 尚未有已交付类型，本批合同使用已有 Request
 SC 返回自身 RepositoryPreparationReceiptRef，由后继 Task adapter 转成 Task receipt，避免 SC 反依赖 Task。
 引用 codec 仅负责 `sc:<kind>:v1:<ULID>` 语法；绝不代表对应持久记录已实现。
 Workspace reader 保留现有 UTF-8 display text 与列表截断语义，不把测试 wrapper 当新 raw byte API。
+
+## 2026-09-20 完成验收
+
+实现取证 SHA `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**。
+逐 job 和目标 suite 见 [共同验收记录](../RFC-294-backend-layered-target-architecture/acceptance-rfc360-362-2026-09-20.json)。
+Windows 原生流程 [35491113835](https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835) 在祖先 `59c1fff1c` success；
+其后根注入由本次 Main 的多 OS binary/e2e 覆盖，不混称 Windows workflow 为本 SHA 结果。
+
+AC-1/2/6：逐入口、54 个 root writer 字段、两条 lane 与后继逐批接线/回滚清单；AC-3/4：同事务 snapshot、真实 Git、取消/回滚与既有 recovery oracle；AC-5：22 个 declared public 合同和 1 个 declared required port 显式入账，无生产 liveness；AC-7：本页托管证据。
+
+仅关闭 W4-E1/W5 合同准备；生产 launch cutover、durable replay/group/revision 和 reader gaps 留后继，E1/B/D/W5 不记 Done。后续纯文档提交的最终整仓 CI 与远端同步在发布时继续核对。

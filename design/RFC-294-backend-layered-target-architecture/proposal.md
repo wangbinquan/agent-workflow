@@ -1,17 +1,17 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
 - 目标架构状态：Approved（2026-08-30 review 记账：D1～D9 已由 RFC-328/331/332/333/334/339/341/342/343/344/345/346 的逐 RFC 用户批准实质确认，见 `review-2026-08-30.md` §A1；本总纲不因 Approved 而自动授权任何未立项 wave）
-- 迁移状态：In Progress（2026-09-20 对账）。P0 全部收束；W2、W3 与 W4-A/C/E0/E2/E3/E4a/E7 已由独立 successor 关闭。
+- 迁移状态：In Progress（2026-09-20 对账）。P0 全部收束；W2、W3 与 W4-A/C/E0/E2/E3/E4a/E4b/E7 已由独立 successor 关闭。
   W4 其余部分、W5/W6/W7/W9 继续开放，W8 为可选后续能力线。
 - [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已 Done：数据库事务、daemon 启动、task launch/routes、
   nodeRun mint 均已有共用实现；这消除了 provider 分叉前置，但不等于 context 边界、唯一 AtomicApply lifecycle、NodeRun v2 identity
   或 DaemonContainer 已完成。具体抵扣与余项见 [plan §1.2](./plan.md#12-rfc-359-完成后的对账2026-09-20)。
-- 当前审阅基线为 `9ba159a7f3b1688806e54f374ab30e2aca1a4bff`；Main CI `35419594466` 为 46/46 success。
-  架构 source digest 为 `sha256:57a28fe8441b0a45f3012f2ff8145260dba1381b8dc5a3634c9115ca251696ce`，
-  最新数值由 `architecture/current-report.json` 与 [generated status](./status.md) 提供。本次文档对账不改 canonical、不计迁移 credit。
-- 下一批独立草案：[RFC-360 Runtime Management](../RFC-360-runtime-management-context-cutover/proposal.md)、
+- 当前实现取证基线为 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`；Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) 为 46/46 success。
+  架构 source digest 为 `sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812`，数值以 canonical 和 [generated status](./status.md) 为准。
+- [RFC-360 Runtime Management](../RFC-360-runtime-management-context-cutover/proposal.md)、
   [RFC-361 Execution Contract provider](../RFC-361-execution-contract-provider-cutover/proposal.md)、
-  [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md)。均已批准并进入 In Progress；优先推进 RFC-360。
+  [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md) 均 Done。
+  只抵扣 E4b 全纵切、E9 的 EC provider 与 E1/SC 合同准备；剩余 wave 不扩大认领。
 - 性质：目标架构总纲 + 迁移治理合同；未完成 wave 不因局部模块、单一 provider 实现或账本存在而倒签 Done。
   旧 measurement seed、历次 SHA 与 hosted 证据保留在 plan 历史章节；不得把历史数字当作当前新增债务额度。
 - 架构重采触发器：后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量/行为证据，不追着重算总体架构，也不给

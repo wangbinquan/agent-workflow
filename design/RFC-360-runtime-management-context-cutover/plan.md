@@ -1,7 +1,7 @@
 # RFC-360 实施计划
 
-- 状态：In Progress（2026-09-20 用户批准实施）；正在按批准的全部验收标准实施。
-- 已获实施授权；各任务按实际源码和托管证据关闭，不提前计 W4-E4b 完成。
+- 状态：Done（2026-09-20；实现与托管验收见本文末尾）。关闭 RFC-294 W4-E4b 与本域 B/D；driver、Task mechanics、MCP 全流程和根物理迁位按 exact 清单交后继。
+- T1～T8 按当前源码与托管证据完成；历史实施批次记录保留于 §4。
 
 ## 1. 任务与提交批次
 
@@ -32,18 +32,18 @@
 
 ## 3. 验证与完成清单
 
-- [ ] T1 冻结完整字段、真实生产入口和 exact IDs；无凭旧桶计数认领。
-- [ ] domain/use-case 行为与当前 oracle 一致；新增 public 合同有生产 consumer。
-- [ ] profile/MCP session 同事务联动在 SQLite/PostgreSQL 故障注入下共同回滚。
-- [ ] route/CLI parity、probe 竞争、默认值/别名、首次 dispatch/resume、热配置均有托管证据。
-- [ ] 本批 owned IDs=0；移交项明确 owner/removeWave 与仍在生产的原因；全局债务无未解释增长。
-- [ ] 最终提交为 origin/main 的祖先；Main CI 终态成功；按实际改动补需要的进程/平台证据。
-- [ ] RFC-294 只按达到的退出条件更新，W4 与父 RFC 不提前 Done。
+- [x] T1 冻结完整字段、真实生产入口和 exact IDs；无凭旧桶计数认领。
+- [x] domain/use-case 行为与当前 oracle 一致；新增 public 合同有生产 consumer。
+- [x] profile/MCP session 同事务联动在 SQLite/PostgreSQL 故障注入下共同回滚。
+- [x] route/CLI parity、probe 竞争、默认值/别名、首次 dispatch/resume、热配置均有托管证据。
+- [x] 本批 owned IDs=0；移交项明确 owner/removeWave 与仍在生产的原因；全局债务无未解释增长。
+- [x] 最终提交为 origin/main 的祖先；Main CI 终态成功；按实际改动补需要的进程/平台证据。
+- [x] RFC-294 只按达到的退出条件更新，W4 与父 RFC 不提前 Done。
 
 回滚：按批回退调用绑定与兼容 DTO，持久数据不反迁；profile 写入与 session invalidation 必须始终在同一 owner。
 禁止以回滚为由恢复两套 provider 实现或改变现有运行时能力。
 
-## 4. 实施记录（2026-09-20，未完成）
+## 4. 历史实施记录（以下各批次当时尚未完成）
 
 T1 current-source 清单见 `implementation-baseline.json`（source SHA `47ebc43e1160dbab88a882550f412ccb84a68f20`，
 7 个 owned 实现/route 文件、18 个生产引用文件，保留原 exact IDs 与 source hash）。
@@ -63,3 +63,14 @@ RC 的试跑失效 participant 与 RM-required 引用 participant 复用同一 l
 具体字段与接续面见 `implementation-progress.md`。
 
 第三、四批候选完成 T5 与 T6 接线：选择与 NodeRun 快照使用同一事务；分组 public consumer、HTTP 归位、配置判据与启动根注入完成，七个初始 owned 路径和临时转发删除。当前仍等待本批 exact-SHA 托管验证，不提前勾选完成清单。细节见 `implementation-progress.md`。
+
+## 2026-09-20 完成验收
+
+实现取证 SHA `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**。
+逐 job 和目标 suite 见 [共同验收记录](../RFC-294-backend-layered-target-architecture/acceptance-rfc360-362-2026-09-20.json)。
+Windows 原生流程 [35491113835](https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835) 在祖先 `59c1fff1c` success；
+其后根注入由本次 Main 的多 OS binary/e2e 覆盖，不混称 Windows workflow 为本 SHA 结果。
+
+AC-1/2/4/7：分组 public 管理入口、单一 registry/persistence、必填 RC participant 根注入；AC-3/5：同事务选择/冻结与 profile/session 回滚、原热配置 oracle；AC-6：7 个旧路径与认领 ID 归零，60 条通用 E4b bucket 明确转交；AC-8：本页托管证据。
+
+关闭 RFC-294 W4-E4b 与本域 B/D；driver、Task mechanics、MCP 全流程和根物理迁位按 exact 清单交后继。后续纯文档提交的最终整仓 CI 与远端同步在发布时继续核对。

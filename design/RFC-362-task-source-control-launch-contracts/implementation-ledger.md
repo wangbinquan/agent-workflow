@@ -93,9 +93,11 @@ clone 中取消：`rfc287-t13-git-abort.test.ts`；准备完 admission 失败：
 5. **root 和旧文件删除**：三个 bootstrap 显式装配；HTTP/MCP/CLI 逐入口替换；确认 legacy consumer 归零才删
    `services/task.ts` 对应 launch/assembly 分段。scheduler assembly/root 与其他会话短时串行修改。
 
-依赖：RFC360 runtime selection 注入已先行，但最终 CI 仍待关闭；RFC361 只完成 EC provider slice，Reaction 的
+依赖：RFC360 runtime selection/RC participant 根注入已通过最终实现 CI；RFC361 只完成 EC provider slice，Reaction 的
 TaskLaunchPlan seam 另行设计，不能随本批倒灌。W5 repository/cache/submodule/git SCC 和 WorkspaceInsight 仍另案。
 
 本批回滚可直接删未装配声明、codec、测试和对应 declared debt，不回退 RFC359。
 后继生产回滚须保留新旧在途记录的读能力，停用新 admission 后收敛旧 task，禁止删除已写 durable records。
 每批以原始 suite + 双库 + 最终 exact-SHA Main CI 验收；本 RFC 完成只关闭准备，不关闭 E1、B/D、W5 或 RFC294。
+
+2026-09-20 收口：本 RFC 的批准范围已通过 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba` / Main `35492271521`。当前结论见 [plan](plan.md) 完成验收；上文中间批次的待办仅保留历史。

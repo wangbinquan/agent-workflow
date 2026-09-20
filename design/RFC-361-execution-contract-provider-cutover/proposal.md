@@ -1,6 +1,6 @@
 # RFC-361：Execution Contract provider 归位（W4-E9 第一刀）
 
-- 状态：In Progress（2026-09-20 用户批准实施并提交远端）。
+- 状态：Done（2026-09-20；实现与托管验收见本文末尾）。仅关闭 W4-E9 的 EC resource/fixture provider slice；Reaction、Event target、transport 和 observer lifecycle 继续开放。
 - 母 RFC：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E9。
 - 前置：W4-C/E0 与 [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已完成。
 - 基线：`9ba159a7f3b1688806e54f374ab30e2aca1a4bff`。
@@ -38,3 +38,14 @@ observer 的 W9 registry 接线仍需后续独立 RFC。它们的顺序见 [plan
 - AC-5：DE authoring/runtime/reaction 共用原唯一 ExecutionContractParticipant；bootstrap 只装配，不添加类型分支。
 - AC-6：manifest/public entrypoint 与所有 external import 对拍；本批 IDs 消除，E9 其余债明确保留。
 - AC-7：最终 exact-SHA Main CI 成功；本 RFC、母 RFC 与 STATE/index 的范围表述一致。
+
+## 2026-09-20 完成验收
+
+实现取证 SHA `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`，Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) **46/46 success**。
+逐 job 和目标 suite 见 [共同验收记录](../RFC-294-backend-layered-target-architecture/acceptance-rfc360-362-2026-09-20.json)。
+Windows 原生流程 [35491113835](https://github.com/wangbinquan/agent-workflow/actions/runs/35491113835) 在祖先 `59c1fff1c` success；
+其后根注入由本次 Main 的多 OS binary/e2e 覆盖，不混称 Windows workflow 为本 SHA 结果。
+
+AC-1/2/5：EC 只消费两个必填 SPI，RC/TE 各一个 provider，三个根沿用唯一 EC participant，无生产反向 value 环；AC-3/4：真实资源、Script、超时/清理、配对与 exact-output oracle 通过；AC-6：旧 13 个 owner、8 个 exception 与 9 个 import ID 归零；AC-7：本页托管证据。
+
+仅关闭 W4-E9 的 EC resource/fixture provider slice；Reaction、Event target、transport 和 observer lifecycle 继续开放。后续纯文档提交的最终整仓 CI 与远端同步在发布时继续核对。
