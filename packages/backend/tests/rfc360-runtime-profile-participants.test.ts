@@ -85,6 +85,7 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
       const store = new DrizzleRuntimeRegistryPersistence(harness.db, {
         usage: f.participants.usage,
         testInvalidation: {
+          ...f.participants.testInvalidation,
           async invalidate(transaction, input) {
             await f.participants.testInvalidation.invalidate(transaction, input)
             const changed = (

@@ -320,6 +320,7 @@ flowchart LR
   TE --> RC["resource-catalog"]
   TE --> SC["source-control"]
   TE --> RM["runtime-management"]
+  RM --> RC
   TC["task-catalog"] --> IA
   COL["collaboration"] --> TE
   MEM["memory"] --> RC
@@ -375,6 +376,9 @@ consumer-owned required SPI，不是 application 同步反向依赖。同一对 
 表示 Integration exact adapter 实现 SC-owned `RepositoryProviderEndpointDiscoveryPort` 与
 `GlobalRepositoryTransportProjectionPort`。SC 不反向 import Integration public/implementation，也不取得 mutable API connection/client。
 `platform` 不在业务 DAG 中：各模块只依赖自己拥有的 platform-facing port，bootstrap 再注入 platform 实现。
+
+`RM → RC` 是 RFC-360 批准的窄试跑失效协作：RM 更新 profile 时消费 RC-owned test invalidation participant，
+沿用同一 live transaction；不授予 RM 通用 Agent/session writer，也不等于 W4-E6 完成。
 
 `WI → RM` 是 WorkspaceInsight 消费 RuntimeManagement purpose-specific immutable runtime snapshot participant 的 offered edge；
 它不暴露 process handle、provider secret、ambient config 或 vendor SDK，也不允许 WorkspaceInsight 直接启动/控制 runtime。

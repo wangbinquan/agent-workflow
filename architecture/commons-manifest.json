@@ -1395,7 +1395,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634",
+    "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {

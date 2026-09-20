@@ -25,10 +25,7 @@ import { isClarifyRerunCause, type NodeRunStatus, type RerunCause } from '@agent
 import type { RuntimeKind } from '@/services/runtime'
 import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
 import { defaultConfigDirProfile } from '@/services/runtimeRegistry'
-import type {
-  RuntimeProfile,
-  RuntimeRegistryOperations,
-} from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
@@ -447,7 +444,6 @@ export async function resolveFrozenRuntime(
   const operations = createLegacySqliteNodeRunOperations(db)
   return await resolveFrozenRuntimeWith(
     operations.runtimes,
-    operations.runtimeRegistry,
     nodeRunId,
     agentRuntime,
     defaultRuntime,
@@ -459,81 +455,68 @@ export async function resolveFrozenRuntime(
 /** Provider-selected runtime freeze entry; no provider client crosses it. */
 export async function resolveFrozenRuntimeWith(
   persistence: NodeRunRuntimePersistence,
-  runtimeRegistry: RuntimeRegistryOperations,
   nodeRunId: string,
   agentRuntime: string | null | undefined,
   defaultRuntime: string | null | undefined,
   inheritFrom?: FrozenRuntime | null,
   binaryConfig?: { opencodePath?: string | null; claudeCodePath?: string | null },
 ): Promise<FrozenRuntime> {
-  const row = await persistence.load(nodeRunId)
-  if (row != null && isKnownRuntimeKind(row.runtime)) {
-    // already frozen — return the self-contained snapshot, registry-independent.
-    // Codex impl-gate P1-3 (RFC-282 收尾门): a NULL frozen binary means "no
-    // explicit head was ever frozen" — pre-C1 rows never froze the config head
-    // (it rode the per-entry opencodeCmd channel, read at spawn time), so NULL
-    // must keep resolving against the CURRENT config or resuming such a row
-    // regresses to the bare protocol command. D15 stays intact for non-NULL
-    // frozen values; the stored column is not backfilled (compat read only).
-    return {
-      protocol: row.runtime,
-      binary: row.runtimeBinary ?? configBackedBinary(row.runtime, binaryConfig),
-      params: parseFrozenParams(row.runtimeParamsJson),
-      configDir: parseFrozenConfigDir(row.runtimeParamsJson, row.runtime),
+  return persistence.withSelection(nodeRunId, async (session) => {
+    const row = await session.load()
+    if (row != null && isKnownRuntimeKind(row.runtime)) {
+      // already frozen — return the self-contained snapshot, registry-independent.
+      // Codex impl-gate P1-3 (RFC-282 收尾门): a NULL frozen binary means "no
+      // explicit head was ever frozen" — pre-C1 rows never froze the config head
+      // (it rode the per-entry opencodeCmd channel, read at spawn time), so NULL
+      // must keep resolving against the CURRENT config or resuming such a row
+      // regresses to the bare protocol command. D15 stays intact for non-NULL
+      // frozen values; the stored column is not backfilled (compat read only).
+      return {
+        protocol: row.runtime,
+        binary: row.runtimeBinary ?? configBackedBinary(row.runtime, binaryConfig),
+        params: parseFrozenParams(row.runtimeParamsJson),
+        configDir: parseFrozenConfigDir(row.runtimeParamsJson, row.runtime),
+      }
     }
-  }
-  // Codex impl-gate P2-2: a NON-null stored value that isn't a known protocol
-  // means corruption or a future runtime downgraded away. Re-resolve (a recovery
-  // that keeps the run alive) but log loudly so it is never silent.
-  if (row?.runtime != null && row.runtime !== '') {
-    createLogger('nodeRunMint').warn('frozen-runtime-invalid-reresolved', {
+    // Codex impl-gate P2-2: a NON-null stored value that isn't a known protocol
+    // means corruption or a future runtime downgraded away. Re-resolve (a recovery
+    // that keeps the run alive) but log loudly so it is never silent.
+    if (row?.runtime != null && row.runtime !== '') {
+      createLogger('nodeRunMint').warn('frozen-runtime-invalid-reresolved', {
+        nodeRunId,
+        stored: row.runtime,
+      })
+    }
+    // RFC-112 P1: a resuming row inherits the session-owner's frozen snapshot so the
+    // session id + (protocol, binary, params) stay consumed together across the new
+    // row. RFC-113: params are part of the snapshot. RFC-154: so is configDir —
+    // the resumed session's transcript/skills live under the frozen dir.
+    const frozen: FrozenRuntime =
+      inheritFrom != null
+        ? {
+            ...inheritFrom,
+            // Codex impl-gate P1-2 (RFC-282 收尾门): inherit-literal callers
+            // (commit/merge sessions pass a pre-resolved profile) and resume
+            // inherits from pre-C1 rows carry NULL when the head used to arrive
+            // via the deleted opencodeCmd channel. Fold the config head here so
+            // this first freeze of the new row captures it — same semantics as
+            // the fresh-resolve branch below.
+            binary: inheritFrom.binary ?? configBackedBinary(inheritFrom.protocol, binaryConfig),
+          }
+        : await session.select(agentRuntime, defaultRuntime).then((selected) => ({
+            ...selected,
+            binary: selected.binary ?? configBackedBinary(selected.protocol, binaryConfig),
+          }))
+    await session.freeze({
       nodeRunId,
-      stored: row.runtime,
+      runtime: frozen.protocol,
+      runtimeBinary: frozen.binary,
+      // RFC-154: __configDir rides inside the same JSON column (no new column);
+      // parseFrozenParams whitelists its keys so it never leaks into params.
+      runtimeParamsJson: JSON.stringify({ ...frozen.params, __configDir: frozen.configDir }),
     })
-  }
-  // RFC-112 P1: a resuming row inherits the session-owner's frozen snapshot so the
-  // session id + (protocol, binary, params) stay consumed together across the new
-  // row. RFC-113: params are part of the snapshot. RFC-154: so is configDir —
-  // the resumed session's transcript/skills live under the frozen dir.
-  const frozen: FrozenRuntime =
-    inheritFrom != null
-      ? {
-          ...inheritFrom,
-          // Codex impl-gate P1-2 (RFC-282 收尾门): inherit-literal callers
-          // (commit/merge sessions pass a pre-resolved profile) and resume
-          // inherits from pre-C1 rows carry NULL when the head used to arrive
-          // via the deleted opencodeCmd channel. Fold the config head here so
-          // this first freeze of the new row captures it — same semantics as
-          // the fresh-resolve branch below.
-          binary: inheritFrom.binary ?? configBackedBinary(inheritFrom.protocol, binaryConfig),
-        }
-      : await runtimeRegistry.resolveAgentRuntime(agentRuntime, defaultRuntime).then((r) => ({
-          protocol: r.protocol,
-          // Which config key backs which protocol is DRIVER knowledge
-          // (defaultBinary); freeze the config-backed head only when config
-          // actually contributes one (differs from the bare default), so a
-          // null stays null and custom-fork detection is untouched.
-          binary: r.binaryPath ?? configBackedBinary(r.protocol, binaryConfig),
-          params: {
-            model: r.model,
-            variant: r.variant,
-            temperature: r.temperature,
-            steps: r.steps,
-            maxSteps: r.maxSteps,
-            isSandbox: r.isSandbox,
-            extraArgs: r.extraArgs ?? null,
-          },
-          configDir: r.configDir,
-        }))
-  await persistence.freeze({
-    nodeRunId,
-    runtime: frozen.protocol,
-    runtimeBinary: frozen.binary,
-    // RFC-154: __configDir rides inside the same JSON column (no new column);
-    // parseFrozenParams whitelists its keys so it never leaks into params.
-    runtimeParamsJson: JSON.stringify({ ...frozen.params, __configDir: frozen.configDir }),
+    return frozen
   })
-  return frozen
 }
 
 /**

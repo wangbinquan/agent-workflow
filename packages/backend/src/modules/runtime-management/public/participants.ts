@@ -110,3 +110,27 @@ export interface RealtimeIdentityAccess {
   readonly presenceConnections: PresenceConnectionTracker
   readonly presenceQuery: PresenceQuery
 }
+
+/** Task owns minting and lifetime; composition binds it to one live NodeRun transaction. */
+declare const nodeRunRuntimeSelectionBrand: unique symbol
+export interface NodeRunRuntimeSelectionCapabilityInTx {
+  readonly [nodeRunRuntimeSelectionBrand]: 'node-run-runtime-selection-in-live-tx'
+}
+
+declare const frozenRuntimeRefBrand: unique symbol
+export type FrozenRuntimeRef = string & { readonly [frozenRuntimeRefBrand]: 'frozen-runtime' }
+
+export interface NodeRunRuntimeSelection {
+  readonly agentRuntime: string | null | undefined
+  readonly defaultRuntime: string | null | undefined
+}
+
+/** No database, profile fields, binary path or process handle crosses this offered contract. */
+declare const runtimeSelectionParticipantBrand: unique symbol
+export interface RuntimeSelectionParticipantInTx {
+  readonly [runtimeSelectionParticipantBrand]: 'runtime-selection-participant'
+  freeze(
+    capability: NodeRunRuntimeSelectionCapabilityInTx,
+    input: NodeRunRuntimeSelection,
+  ): Promise<FrozenRuntimeRef>
+}

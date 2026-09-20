@@ -201,7 +201,6 @@ export async function maybeRunCommitPush(
         // here, getting the same node_runs snapshot the other 3 dispatch points do.
         const frozen = await resolveFrozenRuntimeWith(
           state.opts.persistence.nodeRunRuntime,
-          state.opts.runtimeRegistry,
           sessionRunId,
           null,
           null,

@@ -21,17 +21,17 @@ public 只导出调用合同与 DTO；infrastructure 依赖实际 driver/DB/conf
 
 下列为待实施的目标名称，不是已经存在的 API。每组不超过五个方法，避免把当前 registry mega-interface 原样改名。
 
-| public / required 合同               | 方法                            | 输入 / 输出与 owner                                                         |
-| ------------------------------------ | ------------------------------- | --------------------------------------------------------------------------- |
-| `RuntimeProfileCommands`             | create/update/setEnabled/remove | 既有完整 profile 字段、当前调用上下文；返回现有管理 DTO/receipt             |
-| `RuntimeProfileQueries`              | list/get/status                 | 同现有 runtime 管理查询语义；不暴露存储 row                                 |
-| `RuntimeDiagnosticCommands`          | probe                           | 既有 probe input → typed smoke/probe receipt；保存前与保存后探测共用判据    |
-| `RuntimeModelQueries`                | list                            | runtime name、refresh → 当前模型列表结果                                    |
-| `RuntimeSelectionParticipantInTx`    | freeze                          | RFC-294 已定义 capability + selection → `Promise<FrozenRuntimeRef>`         |
-| `RuntimeProbeEffectPort`             | probe                           | RM-owned resolved probe request → typed receipt；实际进程 effect 在事务外   |
-| `RuntimeModelDiscoveryPort`          | list                            | 已解析 profile/binary facts → typed model result                            |
-| `RuntimeManagementConfigPort`        | current                         | 管理/probe 所需配置的具名投影；不传 configPath 或完整 config 给 application |
-| `RuntimeProfileUsageParticipantInTx` | inspect                         | 删除/停用涉及的具名引用投影，按现有判据提供完整引用集合                     |
+| public / required 合同            | 方法                            | 输入 / 输出与 owner                                                         |
+| --------------------------------- | ------------------------------- | --------------------------------------------------------------------------- |
+| `RuntimeProfileCommands`          | create/update/setEnabled/remove | 既有完整 profile 字段、当前调用上下文；返回现有管理 DTO/receipt             |
+| `RuntimeProfileQueries`           | list/get/status                 | 同现有 runtime 管理查询语义；不暴露存储 row                                 |
+| `RuntimeDiagnosticCommands`       | probe                           | 既有 probe input → typed smoke/probe receipt；保存前与保存后探测共用判据    |
+| `RuntimeModelQueries`             | list                            | runtime name、refresh → 当前模型列表结果                                    |
+| `RuntimeSelectionParticipantInTx` | freeze                          | RFC-294 已定义 capability + selection → `Promise<FrozenRuntimeRef>`         |
+| `RuntimeProbeEffectPort`          | probe                           | RM-owned resolved probe request → typed receipt；实际进程 effect 在事务外   |
+| `RuntimeModelDiscoveryPort`       | list                            | 已解析 profile/binary facts → typed model result                            |
+| `RuntimeManagementConfigPort`     | current                         | 管理/probe 所需配置的具名投影；不传 configPath 或完整 config 给 application |
+| `RuntimeProfileUsageReader`       | inspect                         | 删除/停用涉及的具名引用投影，按现有判据提供完整引用集合                     |
 
 profile 字段清单以当前 `RuntimeProfile`、Create/Update body 与 registry parser 三方对拍为准，至少覆盖 model、variant、
 temperature、steps、maxSteps、isSandbox、extraArgs、binaryPath、configDirEnv、configDirName、enabled 与 probe metadata。
@@ -48,7 +48,8 @@ profile 选择只迁位现有默认值、override、未知 name fallback、inter
 
 注册表目前在 profile 修改事务内联动 MCP test session 状态。迁位时必须与 ResourceCatalog 共同提供 tx-bound
 `RuntimeProfileTestInvalidationInTx.invalidate` participant，保留同一 live transaction 的失效写入；实现复用当前逻辑。
-删除/停用的引用判据也在原事务范围内通过 `RuntimeProfileUsageParticipantInTx` 读取，不改为事务前的快照检查。
+删除/停用的引用判据也在原事务范围内通过 `RuntimeProfileUsageReader` 读取，不改为事务前的快照检查。该 required reader 明确接收 transaction，不冒充 opaque capability；
+RC-owned invalidation participant 与 RM selection participant 则由各自唯一工厂创建，并保留 private brand、freeze 与实例登记。
 这个薄 participant 是本 RFC 的必要接缝，不扩大为 W4-E6 的完整会话迁移，也不能改为提交后的异步通知。
 
 任务路径：TaskExecution 首次 dispatch → task-owned runtime selection capability → RM participant → frozen ref →

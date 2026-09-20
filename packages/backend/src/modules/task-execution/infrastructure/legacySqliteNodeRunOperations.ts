@@ -1,8 +1,7 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { DrizzleNodeExecutionPersistence } from './nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from './nodeRunLifecyclePersistence'
-import { DrizzleNodeRunRuntimePersistence } from './nodeRunRuntimePersistence'
+import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 
 export type LegacySqliteNodeRunDatabase = ProviderNeutralDatabase
 
@@ -11,8 +10,7 @@ export function createLegacySqliteNodeRunOperations(db: ProviderNeutralDatabase)
   return Object.freeze({
     lifecycle: new DrizzleNodeRunLifecyclePersistence(db),
     projections: new DrizzleNodeExecutionPersistence(db),
-    runtimes: new DrizzleNodeRunRuntimePersistence(db),
-    runtimeRegistry: composeRuntimeRegistryOperations(db),
+    runtimes: composeNodeRunRuntimePersistence(db),
   })
 }
 

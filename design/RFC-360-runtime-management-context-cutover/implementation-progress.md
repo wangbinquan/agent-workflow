@@ -43,3 +43,16 @@
    收口 production bootstrap 唯一实例。八条临时 R1 边均属于本任务的兼容转发，不是交给其他 RFC 的永久债。
 3. 完整 source→ledger / ledger→source 对拍、最终托管行为验收和 RFC-294 E4b/B/D 关闭，须等以上调用链实际完成。
 4. RFC-361 的资源与 Script fixture provider、RFC-362 的 Task/SC 合同验证仍是独立的已批准工作，尚未获得完成信用。
+
+## 第三批：执行冻结同事务 participant（待托管验证）
+
+`RuntimeSelectionParticipantInTx.freeze` 已由 Task composition 消费；capability 由 Task 在 live transaction 内铸造，
+与本次 NodeRun、owner fence 和事务生命周期绑定。RM 从该事务读取唯一 profile，返回无 profile/path 字段的 opaque ref；
+组合 adapter 将它投影到现有 NodeRun 三列快照，不新增 schema 或第二个 mint。既有 binary fallback、configDir、extraArgs、
+未知协议恢复和 same-session 继承口径保留。dependent agent 的 live profile 查询未改为 task-wide freeze。
+
+首次 dispatch 先执行现有 owner 围栏，再按 provider capability 锁 NodeRun 行，重读快照后决定是否选择，防止并发首次写互相覆盖。
+已冻结行仍直接读快照，不因本次迁位新增 owner 拒绝。测试补充同事务未提交 profile 可见、真实写后回滚、并发首次选择和能力到期；
+继续保留原 runtime-freeze、binary-freeze、CFG45 17 项热读取与双库适配器用例。
+
+本批仍不关闭 T6：management registry aggregate 的其他 consumer、重复根构造和 legacy 转发入口待统一收缩。

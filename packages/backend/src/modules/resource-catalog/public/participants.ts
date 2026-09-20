@@ -305,7 +305,9 @@ export interface SkillVersionCommitParticipantInTx {
 }
 
 /** The caller supplies the runtime names it changed; Resource Catalog owns only test sessions. */
+declare const runtimeProfileTestInvalidationBrand: unique symbol
 export interface RuntimeProfileTestInvalidationInTx<Transaction> {
+  readonly [runtimeProfileTestInvalidationBrand]: 'runtime-profile-test-invalidation'
   invalidate(
     transaction: Transaction,
     input: {

@@ -117,6 +117,7 @@ const OFFERED_CONTEXT_EDGES: ReadonlyArray<readonly [TargetContext, TargetContex
   ['task-execution', 'resource-catalog'],
   ['task-execution', 'source-control'],
   ['task-execution', 'runtime-management'],
+  ['runtime-management', 'resource-catalog'],
   ['task-catalog', 'identity-access'],
   ['collaboration', 'task-execution'],
   ['memory', 'resource-catalog'],

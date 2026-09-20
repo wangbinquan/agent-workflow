@@ -27,7 +27,7 @@ import {
   createTaskIdleTimeoutPersistence,
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { DrizzleNodeRunRuntimePersistence } from '@/modules/task-execution/infrastructure/nodeRunRuntimePersistence'
+import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import {
   assertTaskOwnerlessTx,
   assertTaskOwnerTx,
@@ -227,7 +227,7 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— node run 冻结运行时', (ha
     const db = harness.db
     const taskId = await seedTask(db)
     const runId = await seedRun(db, taskId, { opencodeSessionId: `ses_${taskId}` })
-    const persistence = new DrizzleNodeRunRuntimePersistence(db)
+    const persistence = composeNodeRunRuntimePersistence(db)
     expect(await persistence.load(runId)).toEqual({
       runtime: null,
       runtimeBinary: null,

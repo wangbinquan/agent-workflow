@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 843,
+    "consumers": 847,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1052,
+    "methods": 1053,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20662,
-    "symbols": 976
+    "recursiveFields": 20676,
+    "symbols": 980
   },
   "entries": [
     {
@@ -100249,7 +100249,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:82a4723ffc48ecb815f3"
+        "import:c0bcf2bd1ad69879c17b"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -100258,7 +100258,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:82a4723ffc48ecb815f3"
+            "import:c0bcf2bd1ad69879c17b"
           ],
           "fieldPath": "$method:invalidate.$parameter:input.now",
           "type": "number"
@@ -100280,7 +100280,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:82a4723ffc48ecb815f3"
+            "import:c0bcf2bd1ad69879c17b"
           ],
           "fieldPath": "$method:invalidate.$parameter:input.runtimeNames",
           "type": "readonly string[]"
@@ -100299,12 +100299,13 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:RuntimeProfileTestInvalidationInTx",
       "members": [
+        "[runtimeProfileTestInvalidationBrand]",
         "invalidate"
       ],
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:82a4723ffc48ecb815f3"
+            "import:c0bcf2bd1ad69879c17b"
           ],
           "name": "invalidate",
           "signatureDigest": "sha256:a252fef141adcc386f2175a77e122cd6e5fc59f52eca5729f7decd5dd47b3c6c"
@@ -100314,7 +100315,7 @@
       "productionConsumers": [
         {
           "context": "runtime-management",
-          "edgeId": "import:82a4723ffc48ecb815f3",
+          "edgeId": "import:c0bcf2bd1ad69879c17b",
           "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#$file"
         }
@@ -100322,7 +100323,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:099c1f4d57831650260468c9ccf72765d2f7aab14408e35cd77b3047e885ddab",
+      "signatureDigest": "sha256:229db4694ce333439fb26029fea55f341e88c1b55e0be96bc4cbbd813510791f",
       "status": "target-context-current-surface",
       "symbol": "RuntimeProfileTestInvalidationInTx",
       "transaction": "caller-tx",
@@ -117791,6 +117792,144 @@
     {
       "authority": "context-bound",
       "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:FrozenRuntimeRef",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#FrozenRuntimeRef",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:RuntimeSelectionParticipantInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5cb89c49b734dde7356ec002fc513c2cca2e5a751eb60ba2f69567edc8b429f8",
+      "status": "target-context-current-surface",
+      "symbol": "FrozenRuntimeRef",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRuntime.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "defaultRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "defaultRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "defaultRuntime.$variant:2",
+          "type": "undefined"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:NodeRunRuntimeSelection",
+      "members": [
+        "agentRuntime",
+        "defaultRuntime"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#NodeRunRuntimeSelection",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:RuntimeSelectionParticipantInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:fad41abaca582c0a78f983fa1c9c423b9be91e4e0f74cfa406095d201d7310c1",
+      "status": "target-context-current-surface",
+      "symbol": "NodeRunRuntimeSelection",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:NodeRunRuntimeSelectionCapabilityInTx",
+      "members": [
+        "[nodeRunRuntimeSelectionBrand]"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#NodeRunRuntimeSelectionCapabilityInTx",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:RuntimeSelectionParticipantInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e817638f0743559e76631b8716a07d9adc301d222009b0b07cca1d8f49c8c5b6",
+      "status": "target-context-current-surface",
+      "symbol": "NodeRunRuntimeSelectionCapabilityInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
         "maxMethods": 6,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 93,
@@ -120542,6 +120681,92 @@
       "version": 1
     },
     {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:2922aeb36499d13ce4b5"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:freeze.$parameter:input.agentRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:freeze.$parameter:input.agentRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:freeze.$parameter:input.agentRuntime.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:freeze.$parameter:input.defaultRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:freeze.$parameter:input.defaultRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:freeze.$parameter:input.defaultRuntime.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:freeze.$return",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:RuntimeSelectionParticipantInTx",
+      "members": [
+        "[runtimeSelectionParticipantBrand]",
+        "freeze"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:2922aeb36499d13ce4b5"
+          ],
+          "name": "freeze",
+          "signatureDigest": "sha256:9f6f538f883f886ac298f0296f29b31c309fbaea606bd4e785df5075ec93d41d"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#RuntimeSelectionParticipantInTx",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:2922aeb36499d13ce4b5",
+          "file": "packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:72bb559e2725eb64d99b362c85ce823e2e4b30ec9a7f11a2028ab6ae975a7eba",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeSelectionParticipantInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
       "authority": "request-authority",
       "budget": {
         "maxMethods": 5,
@@ -121085,7 +121310,8 @@
       },
       "consumerEdgeIds": [
         "import:72ca89ab22e501baac76",
-        "import:a2b50384b7bb21ab2616"
+        "import:a2b50384b7bb21ab2616",
+        "import:a3ea8a05247a8c94cfc7"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -121120,6 +121346,12 @@
           "edgeId": "import:a2b50384b7bb21ab2616",
           "file": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:a3ea8a05247a8c94cfc7",
+          "file": "packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -121147,7 +121379,10 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:03f904e33a25850bbfca",
+        "import:7b8cb59508e966060646"
+      ],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -121164,7 +121399,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:03f904e33a25850bbfca"
+          ],
           "fieldPath": "isSandbox",
           "type": "boolean"
         },
@@ -121232,7 +121469,20 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfile",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:03f904e33a25850bbfca",
+          "file": "packages/backend/src/services/nodeRunMint.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:7b8cb59508e966060646",
+          "file": "packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:types:RuntimeView"
@@ -162134,7 +162384,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634",
+  "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd",
   "targetContexts": [
     "collaboration",
     "development-automation",

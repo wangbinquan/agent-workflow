@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1678,
+    "entries": 1685,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -14063,6 +14063,29 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/runtimeProfileTestInvalidation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/runtimeProfileTestInvalidation.ts#createRuntimeProfileTestInvalidationInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/runtimeProfileTestInvalidation.ts#createRuntimeProfileTestInvalidationInTx",
+      "symbol": "createRuntimeProfileTestInvalidationInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -18957,6 +18980,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/participants.ts#runtimeProfileTestInvalidationBrand",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#runtimeProfileTestInvalidationBrand",
+      "symbol": "runtimeProfileTestInvalidationBrand",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": true
@@ -20135,7 +20183,7 @@
       },
       "file": "packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts#RuntimeProfileUsageParticipantInTx",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts#RuntimeProfileUsageReader",
       "missingControls": [
         "audit",
         "authority",
@@ -20143,8 +20191,8 @@
         "event",
         "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts#RuntimeProfileUsageParticipantInTx",
-      "symbol": "RuntimeProfileUsageParticipantInTx",
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeProfileParticipants.ts#RuntimeProfileUsageReader",
+      "symbol": "RuntimeProfileUsageReader",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -20504,6 +20552,54 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts#RuntimeRegistryBootOperations",
       "symbol": "RuntimeRegistryBootOperations",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeSelection.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/runtimeSelection.ts#createNodeRunRuntimeSelectionCapabilityInTx",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeSelection.ts#createNodeRunRuntimeSelectionCapabilityInTx",
+      "symbol": "createNodeRunRuntimeSelectionCapabilityInTx",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeSelection.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/runtimeSelection.ts#createRuntimeSelectionParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeSelection.ts#createRuntimeSelectionParticipantInTx",
+      "symbol": "createRuntimeSelectionParticipantInTx",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -21001,6 +21097,30 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeSelectionPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/runtimeSelectionPersistence.ts#createRuntimeSelectionPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeSelectionPersistence.ts#createRuntimeSelectionPersistence",
+      "symbol": "createRuntimeSelectionPersistence",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/runtime-management/public/commands.ts",
@@ -21066,6 +21186,55 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileCommands",
       "symbol": "RuntimeProfileCommands",
+      "targetContext": "runtime-management",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/public/participants.ts#runtimeSelectionParticipantBrand",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#runtimeSelectionParticipantBrand",
+      "symbol": "runtimeSelectionParticipantBrand",
+      "targetContext": "runtime-management",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/public/participants.ts#RuntimeSelectionParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#RuntimeSelectionParticipantInTx",
+      "symbol": "RuntimeSelectionParticipantInTx",
       "targetContext": "runtime-management",
       "targetLayer": "public"
     },
@@ -40110,7 +40279,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634",
+  "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -40222,7 +40391,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 154,
+      "durableWriterSites": 155,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -41164,8 +41333,24 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#47:nodeRuns",
-        "line": 47,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#135:nodeRuns",
+        "line": 135,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#DrizzleNodeRunRuntimePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeRunRuntimePersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "withSelection",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#90:nodeRuns",
+        "line": 90,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#DrizzleNodeRunRuntimePersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

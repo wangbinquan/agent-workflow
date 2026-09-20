@@ -1,5 +1,13 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-360 第三批：首次执行选择与冻结进入同一事务
+
+第二批已推送 `9ec05084a`；CI 已定位的 canonical facade 精确清单遗漏随本批补齐。
+Task 持有 live transaction / NodeRun / owner 围栏能力，调用 RM offered selection participant；首次选择与三列快照一起提交或回滚。
+保留已冻结恢复与 binary/configDir/params 兼容规则；新增双库回滚、并发首次冻结、事务能力到期用例，等待托管 CI。
+RFC-360 T6 的剩余 consumer/根/转发清理仍在继续，RFC-361/362 尚未实施，均不标记 Done。
+
+
 ## 2026-09-20 RFC-360 管理首批已推送；注册表归位继续推进
 
 用户再次明确批准向 main 推送代码。首批实现 `774464280` 与 provenance `09f35c785` 已发布。

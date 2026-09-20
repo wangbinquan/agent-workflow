@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 4607,
-    "backgroundJobs": 334,
-    "crossContextImports": 5108,
+    "architectureExceptions": 4611,
+    "backgroundJobs": 335,
+    "crossContextImports": 5117,
     "facades": 296,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24579,
-    "mutationEntrypoints": 1678,
+    "moduleSymbolOwners": 24602,
+    "mutationEntrypoints": 1685,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 976,
+    "publicSurfaces": 980,
     "transactionExternalEffects": 252
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1760,
+    "backendProductionFiles": 1765,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 334,
+    "backgroundEntries": 335,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -98,11 +98,11 @@
       },
       {
         "context": "resource-catalog",
-        "files": 208
+        "files": 209
       },
       {
         "context": "runtime-management",
-        "files": 25
+        "files": 28
       },
       {
         "context": "source-control",
@@ -118,10 +118,10 @@
       },
       {
         "context": "task-execution",
-        "files": 296
+        "files": 297
       }
     ],
-    "moduleFiles": 1202,
+    "moduleFiles": 1207,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -134,7 +134,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 33,
+    "outboundBoundaryEdges": 32,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -157,5 +157,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634"
+  "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd"
 }

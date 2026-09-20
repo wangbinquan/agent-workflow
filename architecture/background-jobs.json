@@ -564,9 +564,9 @@
     {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
-      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1506",
+      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1504",
       "kind": "register-call",
-      "line": 1506,
+      "line": 1504,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode",
       "removeAfterWave": "W6/W9",
       "symbol": "runCallWorkflowNode",
@@ -5454,8 +5454,8 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 9,
-    "entries": 334,
-    "executionLocal": 42,
+    "entries": 335,
+    "executionLocal": 43,
     "longRunning": 76,
     "managed": 11,
     "periodic": 207
@@ -7955,6 +7955,27 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/runtime-management/public/participants.ts#frozenRuntimeRefBrand",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#frozenRuntimeRefBrand",
+      "phase": "execution",
+      "symbol": "frozenRuntimeRefBrand",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/modules/source-control/composition.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/source-control/composition.ts#reconcileRepositoryTransportConnectionProjections",
@@ -8309,7 +8330,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1578",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1576",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8323,7 +8344,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1578",
+      "symbol": "$setInterval:1576",
       "targetContext": "task-execution"
     },
     {
@@ -8332,7 +8353,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1962",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1960",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8346,7 +8367,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:1962",
+      "symbol": "$setTimeout:1960",
       "targetContext": "task-execution"
     },
     {
@@ -12823,5 +12844,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634"
+  "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd"
 }

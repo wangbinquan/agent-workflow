@@ -354,7 +354,6 @@ export async function executeWorkgroupHostMechanics(
       spawn: async (): Promise<HostSpawn> => {
         const frozen = await resolveFrozenRuntimeWith(
           opts.persistence.nodeRunRuntime,
-          opts.runtimeRegistry,
           req.nodeRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
@@ -1105,7 +1104,6 @@ export async function resolveMergeConflicts(
     })
     const frozen = await resolveFrozenRuntimeWith(
       state.opts.persistence.nodeRunRuntime,
-      state.opts.runtimeRegistry,
       sessionRunId,
       null,
       null,
@@ -4487,7 +4485,6 @@ export async function runAgentSingleNode(
           : null
       const frozenRuntime = await resolveFrozenRuntimeWith(
         state.opts.persistence.nodeRunRuntime,
-        state.opts.runtimeRegistry,
         nodeRunId,
         agent.runtime,
         state.opts.defaultRuntime,

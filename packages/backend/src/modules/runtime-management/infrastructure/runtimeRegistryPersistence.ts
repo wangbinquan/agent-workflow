@@ -16,7 +16,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { runtimes } from '@/db/schema'
 import type { RuntimeProfileTestInvalidationInTx } from '@/modules/resource-catalog/public/participants'
-import type { RuntimeProfileUsageParticipantInTx } from '../application/ports/runtimeProfileParticipants'
+import type { RuntimeProfileUsageReader } from '../application/ports/runtimeProfileParticipants'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
@@ -35,7 +35,7 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
     private readonly db: ProviderNeutralDatabase,
     private readonly participants: {
       readonly testInvalidation: RuntimeProfileTestInvalidationInTx<DatabaseTransaction>
-      readonly usage: RuntimeProfileUsageParticipantInTx<DatabaseTransaction>
+      readonly usage: RuntimeProfileUsageReader<DatabaseTransaction>
     },
   ) {}
 

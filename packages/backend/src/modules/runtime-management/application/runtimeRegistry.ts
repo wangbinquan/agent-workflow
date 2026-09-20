@@ -158,7 +158,7 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
   }
 
   async function getRuntime(
-    persistence: RuntimeRegistryPersistence,
+    persistence: Pick<RuntimeRegistryPersistence, 'getRuntime'>,
     name: string,
   ): Promise<RuntimeRow | null> {
     return persistence.getRuntime(name)
@@ -172,7 +172,7 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
    * brick a dispatch. db-aware (custom names aren't derivable from the string).
    */
   async function resolveRuntimeByName(
-    persistence: RuntimeRegistryPersistence,
+    persistence: Pick<RuntimeRegistryPersistence, 'getRuntime'>,
     name: string | null | undefined,
   ): Promise<ResolvedRuntime> {
     const n = typeof name === 'string' && name.length > 0 ? name : null
@@ -215,7 +215,7 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
 
   /** agent.runtime ?? config.defaultRuntime ?? 'opencode', resolved to a row. */
   async function resolveAgentRuntime(
-    persistence: RuntimeRegistryPersistence,
+    persistence: Pick<RuntimeRegistryPersistence, 'getRuntime'>,
     agentRuntime: string | null | undefined,
     defaultRuntime: string | null | undefined,
   ): Promise<ResolvedRuntime> {
@@ -251,7 +251,7 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
    * those config fields.
    */
   async function resolveInternalAgentRuntime(
-    persistence: RuntimeRegistryPersistence,
+    persistence: Pick<RuntimeRegistryPersistence, 'getRuntime'>,
     opts: {
       runtimeName?: string | null
       deprecatedModel?: string | null

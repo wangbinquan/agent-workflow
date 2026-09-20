@@ -14,6 +14,9 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { frozenRuntimeOfSession, resolveFrozenRuntime } from '../src/services/nodeRunMint'
 import { createRuntime, seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
+import type { NodeRunRuntimeSelectionSession } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 async function seedRun(
@@ -258,3 +261,51 @@ describeEachProvider(
     })
   },
 )
+
+// RFC-360: use the actual Task/RM binding and both real providers. Selection, owner
+// fencing and snapshot persistence must be one transaction, including reentrant callers.
+describeEachProvider('RFC-360 runtime selection transaction', (harness) => {
+  test('reads an uncommitted profile and rolls back both profile and NodeRun snapshot', async () => {
+    const { db, id } = await seedRun(harness.db)
+    const registry = runtimeRegistryPersistence(db)
+    await createRuntime(registry, {
+      name: 'selection-profile',
+      protocol: 'opencode',
+      model: 'before',
+    })
+    await expect(
+      databaseSessionFor(db).transaction(async () => {
+        await updateRuntime(registry, 'selection-profile', { model: 'inside-transaction' })
+        const selected = await resolveFrozenRuntime(db, id, 'selection-profile', null)
+        expect(selected.params.model).toBe('inside-transaction')
+        expect((await frozenCols(db, id)).runtime).toBe('opencode')
+        throw new Error('after-real-runtime-snapshot-write')
+      }),
+    ).rejects.toThrow('after-real-runtime-snapshot-write')
+    expect(await frozenCols(db, id)).toEqual({ runtime: null, binary: null })
+    expect((await registry.getRuntime('selection-profile'))?.model).toBe('before')
+  })
+
+  test('concurrent first dispatches observe one frozen result', async () => {
+    const { db, id } = await seedRun(harness.db)
+    const [first, second] = await Promise.all([
+      resolveFrozenRuntime(db, id, 'opencode', null),
+      resolveFrozenRuntime(db, id, 'claude-code', null),
+    ])
+    expect(second).toEqual(first)
+    expect((await frozenCols(db, id)).runtime).toBe(first.protocol)
+  })
+
+  test('transaction-bound selection cannot outlive its NodeRun transaction', async () => {
+    const { db, id } = await seedRun(harness.db)
+    const store = composeNodeRunRuntimePersistence(db)
+    let escaped: NodeRunRuntimeSelectionSession | undefined
+    await store.withSelection(id, async (session) => {
+      escaped = session
+    })
+    await expect(escaped!.select('opencode', null)).rejects.toThrow(
+      'node-run-runtime-selection-outside-transaction',
+    )
+    expect((await frozenCols(db, id)).runtime).toBeNull()
+  })
+})
