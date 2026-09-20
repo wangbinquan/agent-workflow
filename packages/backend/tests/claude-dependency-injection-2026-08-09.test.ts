@@ -39,7 +39,7 @@ import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
 import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
 import { claudeExplicitPermissionArgv } from '../src/services/runtime/claudeCode/spawn'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
-import type { RuntimeProfile } from '../src/services/runtimeRegistry'
+import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import { createLogger } from '../src/util/log'
 import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 

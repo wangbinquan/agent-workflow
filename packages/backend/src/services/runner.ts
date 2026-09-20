@@ -78,11 +78,9 @@ import { renderUserPrompt } from './protocol'
 // the inline-config surface are re-exported at the bottom so existing importers
 // (tests, memoryDistiller) keep resolving from './runner'.
 import { getRuntimeDriver, pluginFileSpec, type RuntimeKind } from './runtime'
-import {
-  defaultConfigDirProfile,
-  type RuntimeRegistryOperations,
-  type RuntimeProfile,
-} from '@/services/runtimeRegistry'
+import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
+import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
+import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import type {
   AgentSpawnPlan,
@@ -411,7 +409,7 @@ export interface RunNodeOptions {
    * the runner boundary. */
   persistence: TaskExecutionPersistence
   /** Bootstrap-selected runtime registry operations. */
-  runtimeRegistry: RuntimeRegistryOperations
+  runtimeRegistry: Pick<RuntimeExecutionQueries, 'resolveAgentRuntime'>
   /** Bootstrap-selected durable ownership for native runtime conversations. */
   runtimeSessionLeases: RuntimeSessionLeaseOperations
   log?: Logger
@@ -587,7 +585,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // buildBusinessSpawn so it lands in the directory that runtime actually reads
   // — the old runtime-blind preamble staged into `.opencode` even for claude
   // runs (dead copy the claude binary never read).
-  const configDir = opts.runtimeConfigDir ?? defaultConfigDirProfile(runtime)
+  const configDir = opts.runtimeConfigDir ?? DEFAULT_CONFIG_DIR_PROFILE[runtime]
 
   // 2. Resolve the per-agent runtime profiles (RFC-113): the root agent uses its
   // FROZEN profile (opts.runtimeParams); each dependent subagent uses ITS OWN

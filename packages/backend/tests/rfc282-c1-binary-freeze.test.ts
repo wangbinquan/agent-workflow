@@ -14,7 +14,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { resolveFrozenRuntime } from '../src/services/nodeRunMint'
+import { resolveFrozenRuntime } from './helpers/nodeRunRuntime'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 

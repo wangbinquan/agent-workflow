@@ -13,7 +13,6 @@ import type { GateContinuationPreDrivePersistence } from './gateContinuationPreD
 import type { SchedulerCompletionPersistence } from './schedulerCompletionPersistence'
 import type { ChildTaskBudgetQueries } from './childTaskBudgetQueries'
 import type { NodeRunLifecyclePersistence } from './nodeRunLifecyclePersistence'
-import type { NodeRunRuntimePersistence } from './nodeRunRuntimePersistence'
 import type { WrapperRunPersistence } from './wrapperRunPersistence'
 import type { TaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
 import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
@@ -37,7 +36,6 @@ export interface TaskExecutionPersistence {
   readonly scheduler: SchedulerCompletionPersistence
   readonly childBudget: ChildTaskBudgetQueries
   readonly nodeRuns: NodeRunLifecyclePersistence
-  readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly nodeExecution: NodeExecutionPersistence
   readonly nodeActivation: NodeActivationSnapshotReader
   readonly mergeStates: MergeStateLifecyclePersistence

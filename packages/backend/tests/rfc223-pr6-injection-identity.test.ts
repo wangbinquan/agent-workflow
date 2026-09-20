@@ -19,7 +19,7 @@ import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,
 } from '../src/services/runtime/injectionIdentity'
-import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'

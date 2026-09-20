@@ -9,8 +9,8 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { runtimes } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
-import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
-import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,

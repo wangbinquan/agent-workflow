@@ -580,9 +580,7 @@
       "claimAudit": "The capability gate (acceptsExtraArgs) HOLDS at the top of the function; the body is claude dialect applied to every opted-in driver (F2), and the gate is bypassable via the probe/smoke route (F3).",
       "auditedBy": "runtime-driver-port",
       "guards": [],
-      "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/services/runtimeRegistry.ts#$file"
-      ]
+      "canonicalOwnerEntryIds": []
     },
     {
       "id": "runassembly-assemblyspec",
@@ -1395,7 +1393,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd",
+    "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {

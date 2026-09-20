@@ -200,7 +200,7 @@ export async function maybeRunCommitPush(
         // (not an agent.runtime row), so we pre-resolved `rt` above and freeze it
         // here, getting the same node_runs snapshot the other 3 dispatch points do.
         const frozen = await resolveFrozenRuntimeWith(
-          state.opts.persistence.nodeRunRuntime,
+          state.opts.nodeRunRuntime,
           sessionRunId,
           null,
           null,

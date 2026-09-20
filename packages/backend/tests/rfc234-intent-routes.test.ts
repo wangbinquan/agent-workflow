@@ -18,7 +18,7 @@ import {
 import { agents, intentSessions } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from '../src/services/users'
-import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
+import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   emptySystemAgentOutputEvidence,

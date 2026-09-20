@@ -1,3 +1,4 @@
+import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   CollaborationRuntimeMechanics,
@@ -9,7 +10,7 @@ import type { RepositoryPublicationTransport } from '@/modules/source-control/pu
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
-import type { RuntimeRegistryOperations } from '@/services/runtimeRegistry'
+import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import { isTaskActive } from '@/services/task'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
@@ -63,7 +64,8 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly memoryInjectionQueries: MemoryInjectionQueries
   /** 运行时**档案**注册表（`getRuntime(name)`）——与下面的 `stop` 同名不同物。 */
-  readonly runtimeRegistry: RuntimeRegistryOperations
+  readonly runtimeRegistry: RuntimeExecutionQueries
+  readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations
@@ -119,6 +121,7 @@ export function createTaskExecutionRuntimeParticipants(
           persistence: input.persistence,
           runtimeSessionLeases: input.runtimeSessionLeases,
           runtimeRegistry: input.runtimeRegistry,
+          nodeRunRuntime: input.nodeRunRuntime,
           taskDagCollaboration: input.taskDagCollaboration,
           collaborationRuntime: input.collaborationRuntime,
           workgroupTurns: input.workgroupTurns,

@@ -1,3 +1,4 @@
+import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 // RFC-359 W5-T21b: construct the complete provider runtime, then use its real
 // launch, ownership, driver, read model and maintenance bindings on each engine.
 // The caller owns the temporary Git directory. Both launchers borrow it using
@@ -52,7 +53,7 @@ import {
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../../src/modules/runtime-management/composition/runtimeRegistry'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { startTask } from '@/services/task'
@@ -217,6 +218,7 @@ export async function createEachProviderTaskExecution(
           dynamicWorkflow,
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
           runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
+          nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
           repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
           codeHostConnections: unusedCapability('code-host connection'),
         },
@@ -338,6 +340,8 @@ export async function createEachProviderTaskExecution(
   const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
       runtime: {
+        runtimeRegistry: composeRuntimeRegistryOperations(db),
+        nodeRunRuntime: composeNodeRunRuntimePersistence(db),
         persistence,
         taskDagCollaboration: createTaskDagCollaborationOperations(db),
         collaborationRuntime,

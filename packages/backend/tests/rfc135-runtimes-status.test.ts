@@ -27,7 +27,7 @@ import {
   createRuntime,
   seedBuiltinRuntimes,
   setRuntimeEnabled,
-} from '../src/services/runtimeRegistry'
+} from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'

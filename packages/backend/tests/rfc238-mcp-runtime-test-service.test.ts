@@ -14,7 +14,7 @@ import {
   composeMcpRuntimeTestPersistence,
   composeMcpRuntimeTestProvider,
 } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   mcps,
   mcpRuntimeTestCreateReceipts,

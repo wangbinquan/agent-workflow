@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
+import { initializeRuntimeRegistryBoot } from '../src/modules/runtime-management/composition/runtimeRegistry'
 
 function operations(events: string[]) {
   return {

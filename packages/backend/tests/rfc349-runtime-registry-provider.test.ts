@@ -3,12 +3,12 @@
 // and PostgreSQL keep provider mechanics inside infrastructure adapters.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -99,23 +99,74 @@ describe('RFC-349 runtime registry provider operations', () => {
       'src/modules/runtime-management/application/runtimeRegistry.ts',
       'src/modules/runtime-management/application/runtimeManagement.ts',
       'src/modules/runtime-management/domain/runtimeProfile.ts',
-      'src/routes/runtime.ts',
-      'src/routes/runtimes.ts',
+      'src/modules/runtime-management/infrastructure/http/runtimeRoutes.ts',
+      'src/modules/runtime-management/infrastructure/http/runtimesRoutes.ts',
     ]) {
       const text = source(path)
       expect(text).not.toContain("from '@/db/")
       expect(text).not.toContain("from 'drizzle-orm'")
       expect(text).not.toContain('bun:sqlite')
     }
-    expect(source('src/routes/runtime.ts')).toContain('await deps.list({')
-    expect(source('src/routes/runtimes.ts')).toContain('readonly profiles: RuntimeProfileCommands')
+    expect(source('src/modules/runtime-management/infrastructure/http/runtimeRoutes.ts')).toContain(
+      'await deps.list({',
+    )
+    expect(
+      source('src/modules/runtime-management/infrastructure/http/runtimesRoutes.ts'),
+    ).toContain('readonly profiles: RuntimeProfileCommands')
     expect(source('src/modules/runtime-management/application/runtimeManagement.ts')).toContain(
       'await registry.resolveRuntimeByName(rtParam)',
     )
-    for (const path of ['src/routes/runtime.ts', 'src/routes/runtimes.ts']) {
+    for (const path of [
+      'src/modules/runtime-management/infrastructure/http/runtimeRoutes.ts',
+      'src/modules/runtime-management/infrastructure/http/runtimesRoutes.ts',
+    ]) {
       expect(source(path)).not.toContain("from '@/services/")
       expect(source(path)).not.toContain("from '@/platform/runtime-registry/")
     }
+  })
+
+  test('RFC-360 retires all legacy registry entries and reuses the root registry in PostgreSQL execution', () => {
+    for (const path of [
+      'src/services/runtimeRegistry.ts',
+      'src/routes/runtime.ts',
+      'src/routes/runtimes.ts',
+      'src/platform/runtime-registry/composition.ts',
+      'src/platform/runtime-registry/application/runtimeRegistryOperations.ts',
+      'src/platform/runtime-registry/application/runtimeRegistryBoot.ts',
+      'src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts',
+      'src/modules/runtime-management/composition/runtimeRegistryCompatibility.ts',
+    ])
+      expect(existsSync(resolve(import.meta.dir, '..', path))).toBe(false)
+    const provider = source('src/modules/task-execution/composition/providerRuntime.ts')
+    expect(provider).not.toContain('composeRuntimeRegistryOperations')
+    expect(provider).toContain('...dependencies.runtime')
+    const root = source('src/cli/postgresqlDaemonApplication.ts')
+    expect(root).toContain('runtimeRegistry: core.runtimeRegistry')
+    expect(root).toContain('runtimeRegistry: runtimeManagement.configuration')
+    const config = source('src/routes/config.ts')
+    expect(config).not.toContain('runtime-disabled')
+    expect(config).toContain('deps.runtimeRegistry.validateDefaultChange(')
+  })
+
+  test('RFC-360 roots inject selection without a Task-to-RM internal provider bridge', () => {
+    const adapter = source('src/modules/task-execution/composition/nodeRunRuntime.ts')
+    expect(adapter).not.toContain('@/modules/runtime-management/composition/')
+    expect(adapter).toContain('bindSelection(transaction, assertTaskScope)')
+    expect(adapter).toContain('selection.freeze(binding.capability')
+    const persistence = source('src/modules/task-execution/composition/taskExecutionPersistence.ts')
+    expect(persistence).not.toContain('nodeRunRuntime:')
+    for (const path of [
+      'src/server.ts',
+      'src/cli/start.ts',
+      'src/cli/postgresqlDaemonApplication.ts',
+    ]) {
+      const root = source(path)
+      expect(root).toContain('nodeRunRuntime: composeNodeRunRuntimePersistence(')
+      expect(root).toContain('composeRuntimeSelectionParticipantInTx')
+    }
+    expect(source('src/services/nodeRunMint.ts')).not.toContain(
+      'export async function resolveFrozenRuntime(',
+    )
   })
 
   test('PostgreSQL composition resolves the same closed row without a SQLite facade', async () => {

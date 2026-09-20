@@ -28,7 +28,7 @@ import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
-import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { createRuntime, seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

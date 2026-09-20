@@ -1,5 +1,13 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-360 第四批候选：旧入口退役与根注入
+
+旧 registry service/platform 与两组横向 HTTP 文件退役，生产切分组 public 合同；默认 runtime 配置判据归 RM。
+首次派发选择端口由三个启动根注入，通用 Task persistence 不再构造 RM；事务、唯一 mint、恢复快照语义保持。
+第三批 SHA `a5e70f94d` Main CI `35487858387` 为 failure；已定位问题随本批修复，最终验收等待新 SHA。
+RFC-360 仍 In Progress，RFC-361/362 尚待实施；保留他人的 system-mocks CLI mode WIP。
+
+
 ## 2026-09-20 RFC-360 第三批：首次执行选择与冻结进入同一事务
 
 第二批已推送 `9ec05084a`；CI 已定位的 canonical facade 精确清单遗漏随本批补齐。

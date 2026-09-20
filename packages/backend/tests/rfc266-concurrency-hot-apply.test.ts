@@ -23,7 +23,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem, taskFanoutPoolCount } from '@/services/taskFanoutPools'
-import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
+import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'

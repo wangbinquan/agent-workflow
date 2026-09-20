@@ -43,7 +43,7 @@ import {
   recordingOperationInvoker,
   type RecordedOperationCall,
 } from './helpers/mcpOperationRecording'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createUser } from '../src/services/users'
 

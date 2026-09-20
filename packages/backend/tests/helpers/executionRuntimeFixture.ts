@@ -1,5 +1,5 @@
 import type { ProviderNeutralDatabase } from '../../src/db/query'
-import { composeRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../../src/modules/runtime-management/composition/runtimeRegistry'
 
 export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
 

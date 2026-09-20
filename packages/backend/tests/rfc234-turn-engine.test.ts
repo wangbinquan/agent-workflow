@@ -22,7 +22,7 @@ import {
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { createRuntime, setRuntimeEnabled } from '../src/services/runtimeRegistry'
+import { createRuntime, setRuntimeEnabled } from './helpers/runtimeRegistryApplication'
 import { RUNTIME_INVENTORY_RULE } from '@/modules/intent/application/dumpBuilder'
 import {
   emptySystemAgentOutputEvidence,

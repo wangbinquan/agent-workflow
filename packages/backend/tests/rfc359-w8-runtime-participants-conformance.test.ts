@@ -1,3 +1,4 @@
+import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // RFC-359 —— `TaskExecutionRuntimeParticipants` 的双引擎对拍。
 //
 // # 现状：这一对**已合一**（AC-1 第 12 刀）
@@ -77,7 +78,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
-import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
 import { describeEachProvider } from './helpers/eachProvider'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
@@ -145,6 +146,7 @@ function sharedInput(
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     memoryInjectionQueries: sqliteMemoryInjectionQueries(db as unknown as DbClient),
     runtimeRegistry: composeRuntimeRegistryOperations(db),
+    nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db),
     childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db as unknown as DbClient),
     workgroupTurns: passthrough('workgroupTurns'),

@@ -12,10 +12,14 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { frozenRuntimeOfSession, resolveFrozenRuntime } from '../src/services/nodeRunMint'
-import { createRuntime, seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
+import { frozenRuntimeOfSession, resolveFrozenRuntime } from './helpers/nodeRunRuntime'
+import {
+  createRuntime,
+  seedBuiltinRuntimes,
+  updateRuntime,
+} from './helpers/runtimeRegistryApplication'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
+import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 import type { NodeRunRuntimeSelectionSession } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
@@ -274,11 +278,11 @@ describeEachProvider('RFC-360 runtime selection transaction', (harness) => {
       model: 'before',
     })
     await expect(
-      databaseSessionFor(db).transaction(async () => {
+      databaseSessionFor(db).transaction(async (tx) => {
         await updateRuntime(registry, 'selection-profile', { model: 'inside-transaction' })
         const selected = await resolveFrozenRuntime(db, id, 'selection-profile', null)
         expect(selected.params.model).toBe('inside-transaction')
-        expect((await frozenCols(db, id)).runtime).toBe('opencode')
+        expect((await frozenCols(tx, id)).runtime).toBe('opencode')
         throw new Error('after-real-runtime-snapshot-write')
       }),
     ).rejects.toThrow('after-real-runtime-snapshot-write')

@@ -31,7 +31,7 @@ import type { LivePollOptions, LivePollerHandle } from './opencode/subagentLiveC
 // Type-only (erased at runtime): runtimeRegistry value-imports runtime/index,
 // so a VALUE import here would close a module-init cycle. RuntimeProfile is the
 // RFC-113 resolved param set threaded through BusinessNodeSpawnContext.
-import type { RuntimeProfile } from '@/services/runtimeRegistry'
+import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 // RFC-280 T1 — unified injection layer shapes (type-only; agentInjection is a
 // leaf module, see its header).
 import type { DeclaredManifestV1, RuntimePlugin } from '@/services/execution/agentInjection'

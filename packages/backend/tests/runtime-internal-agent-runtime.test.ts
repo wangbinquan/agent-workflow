@@ -7,8 +7,8 @@
 
 import { expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
-import { createRuntime, resolveInternalAgentRuntime } from '../src/services/runtimeRegistry'
-import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
+import { createRuntime, resolveInternalAgentRuntime } from './helpers/runtimeRegistryApplication'
+import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('resolveInternalAgentRuntime (RFC-117)', (harness) => {

@@ -1,3 +1,4 @@
+import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // RFC-359 AC-1 / AC-6 —— 任务执行读模型**只有一份实现**，两个引擎跑同一组判据。
 //
 // 这个文件原名 `rfc349-task-execution-read-models-postgresql-adapter.test.ts`，
@@ -34,7 +35,7 @@ import {
   singleProcessDeploymentPorts,
 } from './helpers/taskExecutionTestTopology'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { describeEachProvider } from './helpers/eachProvider'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
@@ -217,6 +218,7 @@ describe('RFC-359 任务执行读模型的装配身份（SQLite 组合根）', (
         persistence: createTaskExecutionPersistence(sqlite),
         runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
         runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
+        nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
         workgroupTurns: composeTestWorkgroupTurns(sqlite),
         dynamicWorkflow: {
           persistence: composeDynamicWorkflowPersistence(sqlite),

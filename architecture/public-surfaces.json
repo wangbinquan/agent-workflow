@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 847,
+    "consumers": 861,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1053,
+    "methods": 1059,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20676,
-    "symbols": 980
+    "recursiveFields": 20830,
+    "symbols": 985
   },
   "entries": [
     {
@@ -116704,7 +116704,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:3d29d80d45248faad578"
+        "import:211d79f02f044968e78f"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -116713,50 +116713,42 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
+            "import:211d79f02f044968e78f"
           ],
           "fieldPath": "$method:probe.$parameter:input.$variant:0.kind",
           "type": "'registered'"
         },
         {
           "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
+            "import:211d79f02f044968e78f"
           ],
           "fieldPath": "$method:probe.$parameter:input.$variant:0.name",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:probe.$parameter:input.$variant:1.binaryPath",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:probe.$parameter:input.$variant:1.extraArgs",
           "type": "readonly string[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:probe.$parameter:input.$variant:1.isSandbox",
           "type": "boolean"
         },
         {
           "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
+            "import:211d79f02f044968e78f"
           ],
           "fieldPath": "$method:probe.$parameter:input.$variant:1.kind",
           "type": "'unsaved'"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:probe.$parameter:input.$variant:1.model",
           "type": "string"
         },
@@ -116781,7 +116773,9 @@
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:211d79f02f044968e78f"
+          ],
           "fieldPath": "$method:probe.$return.smoke.detail",
           "type": "string"
         },
@@ -116844,7 +116838,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:3d29d80d45248faad578"
+            "import:211d79f02f044968e78f"
           ],
           "name": "probe",
           "signatureDigest": "sha256:09c83c29bef7b9485dc906fb4ba9c3a9155b2a4946bc185cdc33c42e94dbf444"
@@ -116854,9 +116848,9 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:3d29d80d45248faad578",
-          "file": "packages/backend/src/routes/runtimes.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#$file"
+          "edgeId": "import:211d79f02f044968e78f",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -116956,7 +116950,7 @@
         "maxUnionVariants": 112
       },
       "consumerEdgeIds": [
-        "import:bcada434036a46c465af"
+        "import:ee41b59ab5159388aa96"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -117014,9 +117008,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$parameter:input.isSandbox",
           "type": "boolean"
         },
@@ -117052,21 +117044,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "fieldPath": "$method:create.$parameter:input.name",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "fieldPath": "$method:create.$parameter:input.probe",
           "type": "boolean"
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "fieldPath": "$method:create.$parameter:input.protocol",
           "type": "string"
@@ -117147,9 +117139,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$return.runtime.enabled",
           "type": "boolean"
         },
@@ -117169,9 +117159,7 @@
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$return.runtime.isSandbox",
           "type": "boolean"
         },
@@ -117202,7 +117190,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "fieldPath": "$method:create.$return.runtime.name",
           "type": "string"
@@ -117238,7 +117226,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ee41b59ab5159388aa96"
+          ],
           "fieldPath": "$method:create.$return.runtime.updatedAt",
           "type": "number"
         },
@@ -117263,7 +117253,9 @@
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ee41b59ab5159388aa96"
+          ],
           "fieldPath": "$method:create.$return.smoke.detail",
           "type": "string"
         },
@@ -117323,7 +117315,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ee41b59ab5159388aa96"
+          ],
           "fieldPath": "$method:remove.$return.ok",
           "type": "true"
         },
@@ -117373,9 +117367,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:setEnabled.$return.runtime.enabled",
           "type": "boolean"
         },
@@ -117395,9 +117387,7 @@
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:setEnabled.$return.runtime.isSandbox",
           "type": "boolean"
         },
@@ -117428,7 +117418,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "fieldPath": "$method:setEnabled.$return.runtime.name",
           "type": "string"
@@ -117464,7 +117454,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ee41b59ab5159388aa96"
+          ],
           "fieldPath": "$method:setEnabled.$return.runtime.updatedAt",
           "type": "number"
         },
@@ -117519,9 +117511,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:update.$parameter:input.isSandbox",
           "type": "boolean"
         },
@@ -117626,9 +117616,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:update.$return.runtime.enabled",
           "type": "boolean"
         },
@@ -117648,9 +117636,7 @@
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:update.$return.runtime.isSandbox",
           "type": "boolean"
         },
@@ -117681,7 +117667,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "fieldPath": "$method:update.$return.runtime.name",
           "type": "string"
@@ -117717,7 +117703,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ee41b59ab5159388aa96"
+          ],
           "fieldPath": "$method:update.$return.runtime.updatedAt",
           "type": "number"
         },
@@ -117743,28 +117731,26 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "name": "create",
           "signatureDigest": "sha256:92f3b2efd2201ecbdb0a1b8a997ada77b087b0989d947b0a4dc98ad4ba34cc9e"
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "name": "remove",
           "signatureDigest": "sha256:cfd0a958fdee265c44aac377a91fbcf1d1d2630c4ed9a936fc624ab6ed9ceba6"
         },
         {
-          "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
-          ],
+          "consumerEdgeIds": [],
           "name": "setEnabled",
           "signatureDigest": "sha256:7d739e881596977ce6ccd162f2100b5b079bda0330d8aa781ed44b0fc55f2a99"
         },
         {
           "consumerEdgeIds": [
-            "import:bcada434036a46c465af"
+            "import:ee41b59ab5159388aa96"
           ],
           "name": "update",
           "signatureDigest": "sha256:444cd6b4ff292ba7f5180b5cf1ebd1e3a5df220b5316e9f3dbb92f0bf1ad42b5"
@@ -117774,9 +117760,9 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:bcada434036a46c465af",
-          "file": "packages/backend/src/routes/runtimes.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#$file"
+          "edgeId": "import:ee41b59ab5159388aa96",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -117790,6 +117776,101 @@
       "version": 1
     },
     {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:6c603f736d50b0e0ac65"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:invalidateInheritedRuntimeProbeReceipts.$parameter:protocols",
+          "type": "readonly RuntimeProtocol[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:invalidateInheritedRuntimeProbeReceipts.$return",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6c603f736d50b0e0ac65"
+          ],
+          "fieldPath": "$method:validateDefaultChange.$parameter:input.next",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateDefaultChange.$parameter:input.previous.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateDefaultChange.$parameter:input.previous.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateDefaultChange.$parameter:input.previous.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateDefaultChange.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/commands.ts",
+      "id": "public:runtime-management:commands:RuntimeProfileConfigurationCommands",
+      "members": [
+        "invalidateInheritedRuntimeProbeReceipts",
+        "validateDefaultChange"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:6c603f736d50b0e0ac65"
+          ],
+          "name": "invalidateInheritedRuntimeProbeReceipts",
+          "signatureDigest": "sha256:77d6fa7efc490f56ca1c2c9280d4f8f1131a992ab26222bee5c760a79a0b044a"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6c603f736d50b0e0ac65"
+          ],
+          "name": "validateDefaultChange",
+          "signatureDigest": "sha256:ca284054f5e8a57a09b33a8263d886e8b0bf09cfbe69743ff81518b419bd40a3"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:6c603f736d50b0e0ac65",
+          "file": "packages/backend/src/routes/config.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:756534a2c166168b3422ae364de0ff34d23b3041cea23e9a1b2984d22e0a1df8",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeProfileConfigurationCommands",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
       "authority": "context-bound",
       "budget": {
         "maxMethods": 5,
@@ -117797,7 +117878,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:ac46b2eb947020756815"
+      ],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -117814,7 +117897,14 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#FrozenRuntimeRef",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:ac46b2eb947020756815",
+          "file": "packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:runtime-management:participants:RuntimeSelectionParticipantInTx"
       ],
@@ -117901,7 +117991,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:4ef574ce0763615790e0"
+      ],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -117914,7 +118006,14 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#NodeRunRuntimeSelectionCapabilityInTx",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:4ef574ce0763615790e0",
+          "file": "packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:runtime-management:participants:RuntimeSelectionParticipantInTx"
       ],
@@ -120771,6 +120870,493 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 75,
+        "maxUnionVariants": 63
+      },
+      "consumerEdgeIds": [
+        "import:408db528f9771d26aa95",
+        "import:a98760213c9c85577b89",
+        "import:f8a4030fdfccacbf609e"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$parameter:agentRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$parameter:agentRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$parameter:agentRuntime.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$parameter:defaultRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$parameter:defaultRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$parameter:defaultRuntime.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveAgentRuntime.$return.configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:408db528f9771d26aa95",
+            "import:a98760213c9c85577b89",
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveAgentRuntime.$return.configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveAgentRuntime.$return.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:408db528f9771d26aa95",
+            "import:a98760213c9c85577b89",
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveAgentRuntime.$return.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$parameter:input.defaultRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$parameter:input.defaultRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$parameter:input.deprecatedModel.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$parameter:input.deprecatedModel.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$parameter:input.runtimeName.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$parameter:input.runtimeName.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:408db528f9771d26aa95",
+            "import:a98760213c9c85577b89",
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:408db528f9771d26aa95",
+            "import:a98760213c9c85577b89",
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$parameter:name.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$parameter:name.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$parameter:name.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveRuntimeByName.$return.configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:408db528f9771d26aa95",
+            "import:a98760213c9c85577b89",
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveRuntimeByName.$return.configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveRuntimeByName.$return.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:408db528f9771d26aa95",
+            "import:a98760213c9c85577b89",
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "fieldPath": "$method:resolveRuntimeByName.$return.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.variant.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "id": "public:runtime-management:queries:RuntimeExecutionQueries",
+      "members": [
+        "resolveAgentRuntime",
+        "resolveInternalAgentRuntime",
+        "resolveRuntimeByName"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
+          "name": "resolveAgentRuntime",
+          "signatureDigest": "sha256:fe9b1db37bb088e5fe3d1d6f9673ed025181522bc9b0f7fb0d33ebba0eb83c9a"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "resolveInternalAgentRuntime",
+          "signatureDigest": "sha256:523b0976e2bed5a474f9f5128188ccc273e362e553e6f4f5cf7d8e201cc53732"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "resolveRuntimeByName",
+          "signatureDigest": "sha256:6209e73bbef8f4afc74062a6bfbc104c79841125e2d2daa66eded125659bd176"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeExecutionQueries",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:408db528f9771d26aa95",
+          "file": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:a98760213c9c85577b89",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f8a4030fdfccacbf609e",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:9660b5b8a1bac046347a96101525caec3f61b16d19f5e6a71bef19b34d3879d6",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeExecutionQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -120828,7 +121414,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:b6aadf9f13e4bf5b2ad6"
+        "import:ec68f6104e2657ec1b7a"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -120836,22 +121422,20 @@
       "entrypoint": "queries",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:b6aadf9f13e4bf5b2ad6"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$parameter:input.refresh",
           "type": "boolean"
         },
         {
           "consumerEdgeIds": [
-            "import:b6aadf9f13e4bf5b2ad6"
+            "import:ec68f6104e2657ec1b7a"
           ],
           "fieldPath": "$method:list.$parameter:input.runtime",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:b6aadf9f13e4bf5b2ad6"
+            "import:ec68f6104e2657ec1b7a"
           ],
           "fieldPath": "$method:list.$return.$variant:0.kind",
           "type": "'listed'"
@@ -120862,29 +121446,37 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ec68f6104e2657ec1b7a"
+          ],
           "fieldPath": "$method:list.$return.$variant:0.models.cached",
           "type": "boolean"
         },
         {
           "consumerEdgeIds": [
-            "import:b6aadf9f13e4bf5b2ad6"
+            "import:ec68f6104e2657ec1b7a"
           ],
           "fieldPath": "$method:list.$return.$variant:0.models.models",
           "type": "readonly {\n    readonly id: string\n    readonly provider?: string\n    readonly modelID?: string\n    readonly name?: string\n  }[]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ec68f6104e2657ec1b7a"
+          ],
           "fieldPath": "$method:list.$return.$variant:1.error.code",
           "type": "'opencode-models-failed'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ec68f6104e2657ec1b7a"
+          ],
           "fieldPath": "$method:list.$return.$variant:1.error.message",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ec68f6104e2657ec1b7a"
+          ],
           "fieldPath": "$method:list.$return.$variant:1.error.ok",
           "type": "false"
         },
@@ -120900,7 +121492,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:b6aadf9f13e4bf5b2ad6"
+            "import:ec68f6104e2657ec1b7a"
           ],
           "fieldPath": "$method:list.$return.$variant:1.kind",
           "type": "'unavailable'"
@@ -120913,9 +121505,7 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [
-            "import:b6aadf9f13e4bf5b2ad6"
-          ],
+          "consumerEdgeIds": [],
           "name": "list",
           "signatureDigest": "sha256:4286511059e14c55dd1ba7828124dadb122a23a32f681e71920354f287840729"
         }
@@ -120924,9 +121514,9 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:b6aadf9f13e4bf5b2ad6",
-          "file": "packages/backend/src/routes/runtime.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/runtime.ts#$file"
+          "edgeId": "import:ec68f6104e2657ec1b7a",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -121027,11 +121617,206 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 27,
+        "maxUnionVariants": 22
+      },
+      "consumerEdgeIds": [
+        "import:5eae06720c6150e5cb64"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirEnv.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirEnv.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirName.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.configDirName.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5eae06720c6150e5cb64"
+          ],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5eae06720c6150e5cb64"
+          ],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5eae06720c6150e5cb64"
+          ],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5eae06720c6150e5cb64"
+          ],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5eae06720c6150e5cb64"
+          ],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.probeFence",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:0.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRuntime.$return.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "id": "public:runtime-management:queries:RuntimeProfileInspectionQueries",
+      "members": [
+        "getRuntime"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:5eae06720c6150e5cb64"
+          ],
+          "name": "getRuntime",
+          "signatureDigest": "sha256:eb2d68c63720a74f53b372ae6daf8d7d108069b5de0063c58f1276291d080523"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeProfileInspectionQueries",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:5eae06720c6150e5cb64",
+          "file": "packages/backend/src/services/mcpRuntimeTest.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:b76f70997bdd35c4d03a1da4b14a3c5feb8ccfb81387fe16526aeac167699ba7",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeProfileInspectionQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:e4b05136521576b3535c"
+        "import:93646f16363446958dfc"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -121040,14 +121825,14 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:e4b05136521576b3535c"
+            "import:93646f16363446958dfc"
           ],
           "fieldPath": "$method:list.$return.runtimes",
           "type": "readonly (RuntimeView & {\n      readonly capabilities: { readonly mcpRuntimeTestV1: boolean }\n    })[]"
         },
         {
           "consumerEdgeIds": [
-            "import:e4b05136521576b3535c"
+            "import:93646f16363446958dfc"
           ],
           "fieldPath": "$method:status.$return.runtimes",
           "type": "readonly RuntimeStatusView[]"
@@ -121061,15 +121846,13 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [
-            "import:e4b05136521576b3535c"
-          ],
+          "consumerEdgeIds": [],
           "name": "list",
           "signatureDigest": "sha256:e7a2611f29bd34b80d2ba1a7fb4f4ab4b96ab03d303ef31d862c1291e851cfd3"
         },
         {
           "consumerEdgeIds": [
-            "import:e4b05136521576b3535c"
+            "import:93646f16363446958dfc"
           ],
           "name": "status",
           "signatureDigest": "sha256:01b40acccfb911e9b2ac73365cafc3d52c75fc08c46bc7d25e565483329d4bea"
@@ -121079,9 +121862,9 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:e4b05136521576b3535c",
-          "file": "packages/backend/src/routes/runtimes.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#$file"
+          "edgeId": "import:93646f16363446958dfc",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -121306,10 +122089,159 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 16
+      },
+      "consumerEdgeIds": [
+        "import:412e2f7ca2c0c42322f2"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:412e2f7ca2c0c42322f2"
+          ],
+          "fieldPath": "isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:ResolvedRuntimeProfile",
+      "members": [
+        "binaryPath",
+        "configDir",
+        "name",
+        "protocol"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#ResolvedRuntimeProfile",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:412e2f7ca2c0c42322f2",
+          "file": "packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:queries:RuntimeExecutionQueries"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:67ba3f6d62c060ed220409c977b0987cc5c0809612d6d5050035a72db27641f3",
+      "status": "target-context-current-surface",
+      "symbol": "ResolvedRuntimeProfile",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:72ca89ab22e501baac76",
+        "import:19ddf6478b7589118284",
         "import:a2b50384b7bb21ab2616",
         "import:a3ea8a05247a8c94cfc7"
       ],
@@ -121337,9 +122269,9 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:72ca89ab22e501baac76",
-          "file": "packages/backend/src/routes/runtimes.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#$file"
+          "edgeId": "import:19ddf6478b7589118284",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         },
         {
           "context": "memory",
@@ -121359,6 +122291,10 @@
         "public:runtime-management:commands:RuntimeDiagnosticCommands",
         "public:runtime-management:commands:RuntimeProbeInput",
         "public:runtime-management:commands:RuntimeProfileCommands",
+        "public:runtime-management:queries:RuntimeExecutionQueries",
+        "public:runtime-management:queries:RuntimeProfileInspectionQueries",
+        "public:runtime-management:types:ResolvedRuntimeProfile",
+        "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeProtocol",
         "public:runtime-management:types:RuntimeView"
       ],
@@ -121381,7 +122317,11 @@
       },
       "consumerEdgeIds": [
         "import:03f904e33a25850bbfca",
-        "import:7b8cb59508e966060646"
+        "import:0f471184ca5f65924937",
+        "import:1f1dfaf525355b129cec",
+        "import:4980f696ab97c6ab2c79",
+        "import:7b8cb59508e966060646",
+        "import:a0be50c8c5f99fc17814"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -121400,7 +122340,10 @@
         },
         {
           "consumerEdgeIds": [
-            "import:03f904e33a25850bbfca"
+            "import:03f904e33a25850bbfca",
+            "import:0f471184ca5f65924937",
+            "import:1f1dfaf525355b129cec",
+            "import:a0be50c8c5f99fc17814"
           ],
           "fieldPath": "isSandbox",
           "type": "boolean"
@@ -121477,14 +122420,42 @@
           "ownerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file"
         },
         {
+          "context": "legacy",
+          "edgeId": "import:0f471184ca5f65924937",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:1f1dfaf525355b129cec",
+          "file": "packages/backend/src/services/execution/agentInjection.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/execution/agentInjection.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:4980f696ab97c6ab2c79",
+          "file": "packages/backend/src/services/runtime/opencode/inlineConfig.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/inlineConfig.ts#$file"
+        },
+        {
           "context": "task-execution",
           "edgeId": "import:7b8cb59508e966060646",
           "file": "packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a0be50c8c5f99fc17814",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
         "public:runtime-management:commands:RuntimeProfileCommands",
+        "public:runtime-management:queries:RuntimeExecutionQueries",
+        "public:runtime-management:queries:RuntimeProfileInspectionQueries",
+        "public:runtime-management:types:ResolvedRuntimeProfile",
+        "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeView"
       ],
       "removeAfterWave": null,
@@ -121609,11 +122580,199 @@
       "authority": "none",
       "budget": {
         "maxMethods": 5,
+        "maxTopLevelFields": 15,
+        "maxTransitiveLeafFields": 25,
+        "maxUnionVariants": 20
+      },
+      "consumerEdgeIds": [
+        "import:c619d23edeebb3fcb72d"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c619d23edeebb3fcb72d"
+          ],
+          "fieldPath": "enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c619d23edeebb3fcb72d"
+          ],
+          "fieldPath": "id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c619d23edeebb3fcb72d"
+          ],
+          "fieldPath": "isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c619d23edeebb3fcb72d"
+          ],
+          "fieldPath": "name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c619d23edeebb3fcb72d"
+          ],
+          "fieldPath": "probeFence",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:RuntimeProfileInspection",
+      "members": [
+        "binaryPath",
+        "configDirEnv",
+        "configDirName",
+        "enabled",
+        "id",
+        "name",
+        "probeFence",
+        "protocol"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfileInspection",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c619d23edeebb3fcb72d",
+          "file": "packages/backend/src/services/mcpRuntimeTest.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:queries:RuntimeProfileInspectionQueries"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:dfdd19a53c34bdca31a768a5eab8188f04392e83afee9c528468c887fe26f924",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeProfileInspection",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:65602b3fc4a33f1d9b98"
+      ],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -121635,9 +122794,20 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProtocol",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:65602b3fc4a33f1d9b98",
+          "file": "packages/backend/src/routes/config.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:runtime-management:commands:RuntimeProfileCommands",
+        "public:runtime-management:queries:RuntimeExecutionQueries",
+        "public:runtime-management:queries:RuntimeProfileInspectionQueries",
+        "public:runtime-management:types:ResolvedRuntimeProfile",
+        "public:runtime-management:types:RuntimeProfileInspection",
         "public:runtime-management:types:RuntimeView"
       ],
       "removeAfterWave": null,
@@ -162384,7 +163554,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd",
+  "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a",
   "targetContexts": [
     "collaboration",
     "development-automation",

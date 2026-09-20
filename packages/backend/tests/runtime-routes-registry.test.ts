@@ -20,7 +20,7 @@ import {
   deleteRuntime,
   getRuntime,
   seedBuiltinRuntimes,
-} from '../src/services/runtimeRegistry'
+} from './helpers/runtimeRegistryApplication'
 import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
 import { agents } from '../src/db/schema'
 import { ulid } from 'ulid'

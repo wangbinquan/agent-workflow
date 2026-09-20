@@ -28,7 +28,7 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import type { Hono } from 'hono'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from '../src/services/users'
-import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
+import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '../src/ws/broadcaster'
 import {

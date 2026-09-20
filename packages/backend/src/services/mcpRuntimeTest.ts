@@ -36,7 +36,8 @@ import { getRuntimeDriver, tryGetRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
 import type { RuntimeDriver } from '@/services/runtime/types'
 import type { SpawnPlan } from '@/services/runtime/types'
-import type { RuntimeRow } from '@/services/runtimeRegistry'
+import type { RuntimeProfileInspection } from '@/modules/runtime-management/public/types'
+import type { RuntimeProfileInspectionQueries } from '@/modules/runtime-management/public/queries'
 import {
   emptySystemAgentOutputEvidence,
   runSystemAgent,
@@ -71,7 +72,7 @@ import {
 } from '@/services/mcpRuntimeTestLease'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 import { sha256Hex } from '@/util/hash'
-import { defaultConfigDirProfile } from '@/services/runtimeRegistry'
+import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 
 export const MCP_RUNTIME_TEST_IDLE_MS = 10 * 60_000
 export const MCP_RUNTIME_TEST_TURN_TIMEOUT_MS = 10 * 60_000
@@ -101,7 +102,7 @@ export interface McpRuntimeTestDependencies {
    * system authority.
    */
   loadMcp: (mcpId: string) => Promise<Mcp | null>
-  loadRuntime: (name: string) => Promise<RuntimeRow | null>
+  loadRuntime: RuntimeProfileInspectionQueries['getRuntime']
   configPath: string
   appHome: string
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
@@ -125,13 +126,15 @@ export function getMcpRuntimeTestService(deps: McpRuntimeTestDependencies): McpR
 }
 
 interface ResolvedTestRuntime {
-  row: RuntimeRow
+  row: RuntimeProfileInspection
   driver: RuntimeDriver
   binary: string
   snapshotJson: string
 }
 
-export function isRuntimeMcpTestEligible(row: Pick<RuntimeRow, 'protocol' | 'model'>): boolean {
+export function isRuntimeMcpTestEligible(
+  row: Pick<RuntimeProfileInspection, 'protocol' | 'model'>,
+): boolean {
   // RFC-280 T6: playground support = the driver implements the session
   // strategy (the spawn itself is the ordinary system-agent surface now).
   // RFC-282 实现门 P2-1 — this rides the /api/runtimes LIST (display path):
@@ -1472,7 +1475,7 @@ export class McpRuntimeTestService {
                 // RFC-284 T13（审计 N4）：手写二元 cast 会绕开 shared 的
                 // RuntimeKind 完备性设计（新增第三 kind 编译照过、运行时
                 // TypeError）——改走 runtimeRegistry 的穷尽访问器。
-                const protocolDefaults = defaultConfigDirProfile(session.runtimeProtocol)
+                const protocolDefaults = DEFAULT_CONFIG_DIR_PROFILE[session.runtimeProtocol]
                 // RFC-280 T6 — the playground rides the unified injection layer;
                 // the RFC-029 inventory plugin is FORCED on runtimes that observe
                 // via file (P1-4 — a strict consumer must never run blind).

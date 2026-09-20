@@ -27,7 +27,7 @@ import {
   createTaskIdleTimeoutPersistence,
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
+import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 import {
   assertTaskOwnerlessTx,
   assertTaskOwnerTx,

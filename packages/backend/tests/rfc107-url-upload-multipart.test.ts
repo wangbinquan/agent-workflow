@@ -53,7 +53,7 @@ import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   createWorkflow,

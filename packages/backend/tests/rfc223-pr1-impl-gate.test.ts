@@ -28,7 +28,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createMcpFixture } from './helpers/mcpServiceBinding'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createUser } from '../src/services/users'
 

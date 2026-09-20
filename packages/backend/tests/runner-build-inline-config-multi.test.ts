@@ -13,7 +13,7 @@ import {
   buildInlineAgentEntry,
   buildInlineConfig,
 } from '../src/services/runtime/opencode/inlineConfig'
-import type { RuntimeProfile } from '../src/services/runtimeRegistry'
+import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 
 function mkAgent(overrides: Partial<Agent> = {}): Agent {
   return {

@@ -49,7 +49,7 @@ import {
   launchAgentTaskViaParticipant,
 } from './helpers/participantLaunch'
 import { users } from '../src/db/schema'
-import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,

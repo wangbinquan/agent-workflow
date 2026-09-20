@@ -1,3 +1,5 @@
+import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
+import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // Hono app factory. Routes that touch DB / config / version probe receive
 // their dependencies via the `AppDeps` interface so tests can inject mocks
 // without monkey-patching the module.
@@ -193,9 +195,23 @@ import { mountPlantumlRoutes } from '@/routes/plantuml'
 import { mountPluginRoutes } from '@/routes/plugins'
 import { mountUserRoutes } from '@/routes/users'
 import { mountRepoRoutes } from '@/routes/repos'
-import { composeRuntimeManagement } from '@/modules/runtime-management/composition/runtimeManagement'
-import { mountRuntimeRoutes } from '@/routes/runtime'
-import { mountRuntimesRoutes } from '@/routes/runtimes'
+import {
+  composeRuntimeManagement,
+  composeRuntimeProbeConfigFence,
+} from '@/modules/runtime-management/composition/runtimeManagement'
+import {
+  mountRuntimeRoutes,
+  mountRuntimesRoutes,
+} from '@/modules/runtime-management/composition/runtimeRoutes'
+import type {
+  RuntimeModelQueries,
+  RuntimeProfileQueries,
+} from '@/modules/runtime-management/public/queries'
+import type {
+  RuntimeProfileCommands,
+  RuntimeDiagnosticCommands,
+} from '@/modules/runtime-management/public/commands'
+import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import { mountSkillRoutes } from '@/routes/skills'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
@@ -337,8 +353,8 @@ import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/c
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { createTaskExecutionTriggerParticipant } from '@/modules/task-execution/composition/triggerExecution'
 import { createBuildScheduleLaunch } from '@/modules/task-execution/composition/triggerExecution'
-import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
-import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+import { composeRuntimeRegistryOperations } from '@/modules/runtime-management/composition/runtimeRegistry'
+import type { RuntimeRegistryOperations } from '@/modules/runtime-management/composition/runtimeRegistry'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
@@ -1147,8 +1163,13 @@ export interface ProviderPlatformRouteComposition {
   readonly maintenance: Parameters<typeof mountMaintenanceRoutes>[1]
   readonly daemon: Parameters<typeof mountDaemonRoutes>[1]
   readonly plantuml: Parameters<typeof mountPlantumlRoutes>[1]
-  readonly runtime: Parameters<typeof mountRuntimeRoutes>[1]
-  readonly runtimes: Parameters<typeof mountRuntimesRoutes>[1]
+  readonly runtime: RuntimeModelQueries
+  readonly runtimes: {
+    readonly protocols: readonly RuntimeKind[]
+    readonly profiles: RuntimeProfileCommands
+    readonly queries: RuntimeProfileQueries
+    readonly diagnostics: RuntimeDiagnosticCommands
+  }
   readonly overview: Readonly<{
     readonly authorization: Parameters<typeof mountOverviewRoutes>[1]
     readonly query: Parameters<typeof mountOverviewRoutes>[2]
@@ -1966,6 +1987,10 @@ export function composeSqliteApplicationDeps(
             persistence: taskExecutionPersistence,
             runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
             runtimeRegistry,
+            nodeRunRuntime: composeNodeRunRuntimePersistence(
+              deps.db,
+              composeRuntimeSelectionParticipantInTx,
+            ),
             dynamicWorkflow: {
               persistence: composeDynamicWorkflowPersistence(deps.db),
               validationContext: composeSqliteDynamicWorkflowValidationContext(deps.db),
@@ -3248,7 +3273,8 @@ function composeSqliteApiRouteMounts(
     config: (app) =>
       mountConfigRoutes(app, {
         configPath: deps.configPath,
-        runtimeRegistry: deps.runtimeRegistry,
+        runtimeRegistry: runtimeManagement.configuration,
+        withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(deps.configPath),
         runtimeTests: mcpRuntimeTests,
         concurrencyHotApply: deps.configConcurrencyHotApply,
       }),

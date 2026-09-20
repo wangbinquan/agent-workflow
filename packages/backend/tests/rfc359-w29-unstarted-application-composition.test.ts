@@ -156,7 +156,8 @@ function oldRuntimeRegistryFactory(source: ts.SourceFile, body: ts.Block): ts.Bl
     (node): node is ts.ImportDeclaration =>
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === '@/platform/runtime-registry/composition',
+      node.moduleSpecifier.text === '@/modules/runtime-management/composition/runtimeRegistry' &&
+      !node.importClause?.isTypeOnly,
   )
   const clause = imports[0]?.importClause
   const names = clause?.namedBindings
@@ -560,8 +561,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 发起人原样传下去、数字员工执行在 launch 前播种合成宿主工作流行。三条都是**补齐**，
       // 判据分别在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts` 与
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
-      // RFC-360: one new const binding; both runtime route families consume it.
-      'd5afa2afc2be6062ed0916e128125171c0670256db995fc5618c6dafee6bf26b',
+      // RFC-360: both runtime route families and config consume the same management instance;
+      // the PostgreSQL task runtime reuses core.runtimeRegistry rather than creating another.
+      'c6f3f04470ac0747e66e2586c14f3cbd2d8b6fd67132c40b28e8a2ceb1ae85e4',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -621,7 +623,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `finishClaimedWebhookWorkspacePrune` 收尾），两格是这条回退路本来就在用的那一对
     // （`composeLegacyTaskActivityParticipant` 此前就住在同一个文件里）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      'db70348162d5cc8d4414dde05b7104c9582d4d64a408e17214ba95f3ec78e7ef',
+      '4fd2c2d5b0409975b90397079c3d663a5e044497e76a7b8e3d47614ef291c391',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -731,8 +733,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 发起人原样传下去、数字员工执行在 launch 前播种合成宿主工作流行。三条都是**补齐**，
       // 判据分别在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts` 与
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
-      // RFC-360: the same management factory/route binding change as PostgreSQL.
-      '00f51ae35d3623f099ad4bdd04ec84394eb6b3a008e9f4a3273e4ca5f8dc4c79',
+      // RFC-360: config uses the same management application and composition-bound probe fence.
+      'df6644949982ec3b86ed21cedc23e26cd8ed974553f20b001776b54ff3b09dfc',
     )
     expect(
       namedCalls(

@@ -12,7 +12,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { applyConfigPatch } from '../src/config'
 import { clearOpencodeModelsCache } from '../src/services/runtime/opencode/models'
-import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { createRuntime, seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const TOKEN = 'a'.repeat(64)

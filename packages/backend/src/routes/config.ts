@@ -6,8 +6,8 @@ import type { Hono } from 'hono'
 import type { Config } from '@agent-workflow/shared'
 import { applyConfigPatch, loadConfig, previewConfigPatch } from '@/config'
 import { registerRoute } from '@/routes/registry'
-import { type RuntimeProtocol, withRuntimeProbeConfigFence } from '@/services/runtimeRegistry'
-import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+import type { RuntimeProtocol } from '@/modules/runtime-management/public/types'
+import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { ValidationError } from '@/util/errors'
 import type { McpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { notifyConfigApplied } from '@/services/configAppliedListeners'
@@ -31,10 +31,8 @@ export interface ConfigConcurrencyHotApplyCommand {
 
 export interface ConfigRouteDependencies {
   readonly configPath: string
-  readonly runtimeRegistry: Pick<
-    RuntimeRegistryOperations,
-    'getRuntime' | 'invalidateInheritedRuntimeProbeReceipts'
-  >
+  readonly runtimeRegistry: RuntimeProfileConfigurationCommands
+  readonly withRuntimeProbeConfigFence: <T>(operation: () => Promise<T>) => Promise<T>
   readonly runtimeTests: Pick<McpRuntimeTestService, 'reconcileDurableIntents'>
   readonly concurrencyHotApply: ConfigConcurrencyHotApplyCommand
 }
@@ -65,7 +63,7 @@ export function mountConfigRoutes(app: Hono, deps: ConfigRouteDependencies): voi
     },
     async (c) => {
       const body = await c.req.json().catch(() => ({}))
-      return withRuntimeProbeConfigFence(deps.configPath, async () => {
+      return deps.withRuntimeProbeConfigFence(async () => {
         const currentConfig = loadConfig(deps.configPath)
         const nextConfig = previewConfigPatch(deps.configPath, body)
         // RFC-118: re-pointing the default runtime must target an ENABLED runtime
@@ -73,16 +71,10 @@ export function mountConfigRoutes(app: Hono, deps: ConfigRouteDependencies): voi
         // when the patch actually CHANGES defaultRuntime (keeping the current value is a
         // no-op — and the effective default is protected from being disabled anyway).
         if (typeof body.defaultRuntime === 'string' && body.defaultRuntime.length > 0) {
-          const current = currentConfig.defaultRuntime
-          if (body.defaultRuntime !== current) {
-            const row = await deps.runtimeRegistry.getRuntime(body.defaultRuntime)
-            if (row !== null && !row.enabled) {
-              throw new ValidationError(
-                'runtime-disabled',
-                `cannot make disabled runtime '${body.defaultRuntime}' the default; enable it first`,
-              )
-            }
-          }
+          await deps.runtimeRegistry.validateDefaultChange({
+            previous: currentConfig.defaultRuntime,
+            next: body.defaultRuntime,
+          })
         }
         // RFC-261 (D9'): body 置空窗口不得长于整行保留窗口——行先删的话 body 段
         // 永远空转，这是自相矛盾的意图，挡在保存门（运行期对手改 config 的畸形

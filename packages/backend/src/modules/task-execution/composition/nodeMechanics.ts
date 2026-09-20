@@ -353,7 +353,7 @@ export async function executeWorkgroupHostMechanics(
       },
       spawn: async (): Promise<HostSpawn> => {
         const frozen = await resolveFrozenRuntimeWith(
-          opts.persistence.nodeRunRuntime,
+          opts.nodeRunRuntime,
           req.nodeRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
@@ -1103,7 +1103,7 @@ export async function resolveMergeConflicts(
       overrides: { parentNodeRunId: opts.conflictNodeRunId },
     })
     const frozen = await resolveFrozenRuntimeWith(
-      state.opts.persistence.nodeRunRuntime,
+      state.opts.nodeRunRuntime,
       sessionRunId,
       null,
       null,
@@ -4478,13 +4478,10 @@ export async function runAgentSingleNode(
       // binary) so the id + runtime stay a pair across the new row.
       const inheritedRuntime =
         effectiveResumeSessionId !== undefined
-          ? await frozenRuntimeOfSessionWith(
-              state.opts.persistence.nodeRunRuntime,
-              effectiveResumeSessionId,
-            )
+          ? await frozenRuntimeOfSessionWith(state.opts.nodeRunRuntime, effectiveResumeSessionId)
           : null
       const frozenRuntime = await resolveFrozenRuntimeWith(
-        state.opts.persistence.nodeRunRuntime,
+        state.opts.nodeRunRuntime,
         nodeRunId,
         agent.runtime,
         state.opts.defaultRuntime,

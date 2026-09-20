@@ -17,7 +17,7 @@
 // driver / runner / scheduler 的运行时依赖（会成环）。
 
 import type { Agent, DeclaredInjectionManifest, Mcp, Plugin } from '@agent-workflow/shared'
-import type { RuntimeProfile } from '@/services/runtimeRegistry'
+import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 
 export class AgentInjectionError extends Error {
   constructor(

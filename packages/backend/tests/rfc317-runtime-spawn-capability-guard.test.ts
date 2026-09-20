@@ -27,7 +27,7 @@ import ts from 'typescript'
 import type { Hono } from 'hono'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
 

@@ -22,7 +22,7 @@
 
 import type { Agent, Mcp } from '@agent-workflow/shared'
 import type { RuntimePlugin } from '@/services/execution/agentInjection'
-import type { RuntimeProfile } from '@/services/runtimeRegistry'
+import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 import {
   renderOpencodeAgentEntry,
   renderOpencodeMcpInjection,

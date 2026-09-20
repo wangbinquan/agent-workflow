@@ -61,3 +61,5 @@ RC 的试跑失效 participant 与 RM-required 引用 participant 复用同一 l
 短期兼容：`services/runtimeRegistry.ts`、`platform/runtime-registry/**` 只转发到唯一 RM 实现；八条新增 R1 import/export
 逐条登记至 commons-debt，owner 为 RFC-360 T6。不得因实现已搬迁而宣称这些入口/执行选择/根绑定已经退役。
 具体字段与接续面见 `implementation-progress.md`。
+
+第三、四批候选完成 T5 与 T6 接线：选择与 NodeRun 快照使用同一事务；分组 public consumer、HTTP 归位、配置判据与启动根注入完成，七个初始 owned 路径和临时转发删除。当前仍等待本批 exact-SHA 托管验证，不提前勾选完成清单。细节见 `implementation-progress.md`。

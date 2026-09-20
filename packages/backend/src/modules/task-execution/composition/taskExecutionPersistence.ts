@@ -15,7 +15,6 @@ import { DrizzleGateContinuationPreDrivePersistence } from '../infrastructure/ga
 import { DrizzleSchedulerCompletionPersistence } from '../infrastructure/schedulerCompletionPersistence'
 import { DrizzleChildTaskBudgetQueries } from '../infrastructure/childTaskBudgetQueries'
 import { DrizzleNodeRunLifecyclePersistence } from '../infrastructure/nodeRunLifecyclePersistence'
-import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { DrizzleWrapperRunPersistence } from '../infrastructure/wrapperRunPersistence'
 import { DrizzleTaskRuntimeLifecyclePersistence } from '../infrastructure/taskRuntimeLifecyclePersistence'
 import { createRuntimeSessionCapturePersistence } from '../infrastructure/runtimeSessionCapturePersistence'
@@ -133,7 +132,6 @@ export function createTaskExecutionPersistence(
     scheduler: new DrizzleSchedulerCompletionPersistence(db),
     childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
-    nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     nodeExecution: new DrizzleNodeExecutionPersistence(db),
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),

@@ -1,3 +1,4 @@
+import type { ResolvedRuntimeProfile, RuntimeProfileInspection } from './types'
 import type { RuntimeView } from './types'
 import type { RuntimeKind } from './types'
 
@@ -49,4 +50,21 @@ export interface RuntimeModelQueries {
     readonly runtime?: string
     readonly refresh: boolean
   }): Promise<RuntimeModelQueryResult>
+}
+
+export interface RuntimeExecutionQueries {
+  resolveRuntimeByName(name: string | null | undefined): Promise<ResolvedRuntimeProfile>
+  resolveAgentRuntime(
+    agentRuntime: string | null | undefined,
+    defaultRuntime: string | null | undefined,
+  ): Promise<ResolvedRuntimeProfile>
+  resolveInternalAgentRuntime(input: {
+    readonly runtimeName?: string | null
+    readonly deprecatedModel?: string | null
+    readonly defaultRuntime?: string | null
+  }): Promise<ResolvedRuntimeProfile>
+}
+
+export interface RuntimeProfileInspectionQueries {
+  getRuntime(name: string): Promise<RuntimeProfileInspection | null>
 }

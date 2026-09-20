@@ -20,7 +20,10 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { runtimes } from '../src/db/schema'
-import { assertConfigDefaultsMigrated, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import {
+  assertConfigDefaultsMigrated,
+  seedBuiltinRuntimes,
+} from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 describeEachProvider(

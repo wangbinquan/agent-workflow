@@ -40,8 +40,8 @@ import {
   seedBuiltinRuntimes,
   updateRuntime,
   validateExtraArgs,
-} from '../src/services/runtimeRegistry'
-import { resolveFrozenRuntime } from '../src/services/nodeRunMint'
+} from './helpers/runtimeRegistryApplication'
+import { resolveFrozenRuntime } from './helpers/nodeRunRuntime'
 import { getRuntimeDriver } from '../src/services/runtime'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {

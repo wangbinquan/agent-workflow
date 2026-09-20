@@ -798,7 +798,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the fanout shard
         // so a claude-selected agent-multi dispatches its shards on claude, not opencode.
         const shardRuntime = await resolveFrozenRuntimeWith(
-          opts.persistence.nodeRunRuntime,
+          opts.nodeRunRuntime,
           shardRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
@@ -1295,7 +1295,7 @@ async function dispatchFanoutAggregatorAttempt(
       spawn: async () => {
         // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the aggregator.
         const aggRuntime = await resolveFrozenRuntimeWith(
-          opts.persistence.nodeRunRuntime,
+          opts.nodeRunRuntime,
           aggRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,

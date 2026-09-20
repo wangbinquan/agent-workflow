@@ -17,8 +17,8 @@ import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, mcps, mcpRuntimeTestSessions, runtimes, users } from '@/db/schema'
-import type { RuntimeInsertRecord } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
-import { DrizzleRuntimeRegistryPersistence } from '@/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
+import type { RuntimeInsertRecord } from '../src/modules/runtime-management/application/ports/runtimeRegistry'
+import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function insertRecord(name: string): RuntimeInsertRecord {

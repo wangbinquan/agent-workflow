@@ -41,7 +41,6 @@ import {
 } from '../infrastructure/taskDriverLifecycle'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { composePostgresqlMemoryInjectionQueries } from '@/modules/memory/composition'
-import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { createProviderTaskExecutionModule } from '../composition'
 import { createRuntimeSessionLeaseOperations } from '../infrastructure/runtimeSessionLeaseOperations'
@@ -396,12 +395,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
  */
 export interface PostgresqlTaskExecutionRuntimeDependencies extends Omit<
   TaskExecutionRuntimeParticipantsInput,
-  | 'db'
-  | 'persistence'
-  | 'runtimeSessionLeases'
-  | 'memoryInjectionQueries'
-  | 'runtimeRegistry'
-  | 'childLaunchWorkgroup'
+  'db' | 'persistence' | 'runtimeSessionLeases' | 'memoryInjectionQueries' | 'childLaunchWorkgroup'
 > {
   readonly childLaunchWorkgroup: TaskExecutionRuntimeParticipantsInput['childLaunchWorkgroup']
   /** 装配方选定的凭据读取面；PostgreSQL 执行绝不回头开一条 SQLite 兜底。 */
@@ -462,7 +456,6 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     runtimeSessionLeases:
       dependencies.runtime.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
     memoryInjectionQueries: composePostgresqlMemoryInjectionQueries(db),
-    runtimeRegistry: composeRuntimeRegistryOperations(db),
     childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
     lifecycle: createTaskDriverLifecyclePort({
       db,

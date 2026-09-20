@@ -35,7 +35,7 @@ import {
 } from '../src/services/changeNarrative'
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { requireTaskMember } from '../src/services/taskCollab'
-import { resolveInternalAgentRuntime } from '../src/services/runtimeRegistry'
+import { resolveInternalAgentRuntime } from './helpers/runtimeRegistryApplication'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunResult,

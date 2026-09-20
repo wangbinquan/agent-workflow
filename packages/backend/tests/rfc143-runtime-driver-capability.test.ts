@@ -19,7 +19,7 @@ import {
   RUNTIME_KINDS,
   type RuntimeDriver,
 } from '@/services/runtime'
-import { BUILTIN_RUNTIMES, RUNTIME_PROTOCOLS } from '@/services/runtimeRegistry'
+import { BUILTIN_RUNTIMES, RUNTIME_PROTOCOLS } from './helpers/runtimeRegistryApplication'
 
 /** 驱动实现目录（从 runtime 注册表派生，见 rfc282-single-implementation-lock 同名常量）。 */
 const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(

@@ -7,7 +7,7 @@ import { mcps, mcpRuntimeTestSessions, resourceGrants, runtimes, users } from '.
 import { mcpAclRuntimeTestLifecycle } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createMcpTransactionLifecycle } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   composeMcpServiceBindingForTest,
   deleteMcpForTest as deleteMcp,
@@ -17,7 +17,7 @@ import {
 import {
   invalidateInheritedRuntimeProbeReceipts,
   updateRuntime,
-} from '../src/services/runtimeRegistry'
+} from './helpers/runtimeRegistryApplication'
 import { disableUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 296,
-    "thinFacades": 50
+    "serviceFiles": 295,
+    "thinFacades": 49
   },
   "entries": [
     {
@@ -1122,7 +1122,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:1f1dfaf525355b129cec"
+      ],
       "exportedSymbols": [
         "AgentInjectionError",
         "ClaudeAgentEntry",
@@ -2201,9 +2203,11 @@
     {
       "boundaryEdgeIds": [
         "import:312fc350e0ada4ad51c5",
+        "import:5eae06720c6150e5cb64",
         "import:60049d29d60866b8b8de",
         "import:75a696ee4a4fc9f8066d",
         "import:7662ac52c9e23327f379",
+        "import:c619d23edeebb3fcb72d",
         "import:c627b586c75eb0c3f2b0"
       ],
       "exportedSymbols": [
@@ -2428,13 +2432,11 @@
         "SchedulerRunRowCandidate",
         "buildMintNodeRunValues",
         "continuesClarifyLineage",
-        "frozenRuntimeOfSession",
         "frozenRuntimeOfSessionWith",
         "generateEnvelopeNonce",
         "loadRunEnvelopeNonce",
         "mintNodeRun",
         "mintNodeRunWith",
-        "resolveFrozenRuntime",
         "resolveFrozenRuntimeWith",
         "resolveSchedulerRunRow",
         "schedulerMintCause"
@@ -3527,6 +3529,7 @@
       "boundaryEdgeIds": [
         "import:647d2f3472f9ceefca7f",
         "import:6c106e47305a3b3ebdc5",
+        "import:a0be50c8c5f99fc17814",
         "import:a6fb16c2bb04fa5da12f",
         "import:c6c1a3eab289cb08185f",
         "import:c6d83040f9bf48f345f9",
@@ -3534,7 +3537,8 @@
         "import:cb91aa44b71df5165d3c",
         "import:dba082fcaa3501c2d332",
         "import:ddb1a9cb8d5a6063f9cf",
-        "import:ef6d239c3d1ca57471ef"
+        "import:ef6d239c3d1ca57471ef",
+        "import:f8a4030fdfccacbf609e"
       ],
       "exportedSymbols": [
         "MAX_AGENT_TEXT_CHARS",
@@ -3855,7 +3859,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:4980f696ab97c6ab2c79"
+      ],
       "exportedSymbols": [
         "buildInlineConfig"
       ],
@@ -4104,6 +4110,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0f471184ca5f65924937",
         "import:2c57d5f26601e387e86e",
         "import:7bd3f93dd694207b26f4",
         "import:878817dd026ba03d55c6",
@@ -4158,21 +4165,6 @@
       "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file",
       "removeAfterWave": "W4-E4b",
       "status": "legacy-implementation",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:5f952f54612e7dd6c069",
-        "import:cb0df11fa1b51981f7fe",
-        "import:f3ad3b94931e4b921699"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/runtimeRegistry.ts",
-      "id": "facade:packages/backend/src/services/runtimeRegistry.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#$file",
-      "removeAfterWave": "W4-E4b",
-      "status": "thin-facade",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -6294,5 +6286,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd"
+  "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a"
 }

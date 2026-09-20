@@ -41,7 +41,7 @@ import {
 } from '../src/services/systemResources'
 import { WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/constants'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { listWorkflows } from '../src/services/workflow'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { ForbiddenError } from '../src/util/errors'

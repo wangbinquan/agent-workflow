@@ -1,3 +1,5 @@
+import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
+import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // RFC-349 — PostgreSQL daemon application composition.
 //
 // This file is intentionally a bootstrap composition root. Provider clients
@@ -31,6 +33,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import {
   composeRuntimeManagement,
+  composeRuntimeProbeConfigFence,
   type RuntimeDiagnosticDependencies,
 } from '@/modules/runtime-management/composition/runtimeManagement'
 import {
@@ -939,6 +942,11 @@ export async function composePostgresqlApplication(
     })
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
     runtime: {
+      runtimeRegistry: core.runtimeRegistry,
+      nodeRunRuntime: composeNodeRunRuntimePersistence(
+        input.db,
+        composeRuntimeSelectionParticipantInTx,
+      ),
       taskDagCollaboration,
       collaborationRuntime,
       workgroupTurns,
@@ -1883,7 +1891,8 @@ export async function composePostgresqlApplication(
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     config: Object.freeze({
       configPath: input.configPath,
-      runtimeRegistry: core.runtimeRegistry,
+      runtimeRegistry: runtimeManagement.configuration,
+      withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(input.configPath),
       runtimeTests: mcpRuntimeTests,
       concurrencyHotApply: Object.freeze({
         apply(

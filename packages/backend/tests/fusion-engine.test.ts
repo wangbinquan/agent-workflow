@@ -55,7 +55,7 @@ import { getTask } from '../src/services/task'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   createManagedSkill,

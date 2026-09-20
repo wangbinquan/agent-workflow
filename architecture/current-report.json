@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 4611,
-    "backgroundJobs": 335,
-    "crossContextImports": 5117,
-    "facades": 296,
+    "architectureExceptions": 4626,
+    "backgroundJobs": 333,
+    "crossContextImports": 5137,
+    "facades": 295,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24602,
-    "mutationEntrypoints": 1685,
+    "moduleSymbolOwners": 24583,
+    "mutationEntrypoints": 1684,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 980,
+    "publicSurfaces": 985,
     "transactionExternalEffects": 252
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1765,
+    "backendProductionFiles": 1761,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 335,
+    "backgroundEntries": 333,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -49,7 +49,7 @@
     ],
     "directNativeIntervals": 22,
     "directNativeTimers": 77,
-    "inboundBoundaryEdges": 261,
+    "inboundBoundaryEdges": 253,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -102,7 +102,7 @@
       },
       {
         "context": "runtime-management",
-        "files": 28
+        "files": 31
       },
       {
         "context": "source-control",
@@ -121,7 +121,7 @@
         "files": 297
       }
     ],
-    "moduleFiles": 1207,
+    "moduleFiles": 1210,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -152,10 +152,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 296,
+    "serviceFiles": 295,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:80269da61d73ed203d343008232c43269262a97c44ac4e0cfd97a31c869da3dd"
+  "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a"
 }

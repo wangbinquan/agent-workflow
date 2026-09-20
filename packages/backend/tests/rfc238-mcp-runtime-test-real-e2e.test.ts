@@ -15,7 +15,7 @@ import {
 import { McpRuntimeTestService } from '../src/services/mcpRuntimeTest'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
 import { composeMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   composeMcpServiceBindingForTest,

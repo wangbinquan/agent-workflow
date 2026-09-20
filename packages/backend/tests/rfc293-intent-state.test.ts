@@ -34,7 +34,7 @@ import {
   submitIntentWorkingSetChange,
 } from '@/modules/intent/application/workingSet'
 import { createUser } from '../src/services/users'
-import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'

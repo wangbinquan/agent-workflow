@@ -29,7 +29,7 @@ import type {
   SystemAgentSpawnContext,
 } from '../src/services/runtime/types'
 import { createLogger } from '../src/util/log'
-import type { RuntimeProfile } from '../src/services/runtimeRegistry'
+import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import {
   assembleOpencodeBusinessSpawn,
   assembleOpencodePersonaSpawn,

@@ -2,6 +2,7 @@
 // Effects are injected; registry writes/receipt storage use the actual provider implementation.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
+import { createRuntimeProfileConfigurationCommands } from '../src/modules/runtime-management/application/runtimeConfiguration'
 import { createRuntimeManagement } from '../src/modules/runtime-management/application/runtimeManagement'
 import type {
   RuntimeManagementConfig,
@@ -9,7 +10,7 @@ import type {
   RuntimeSmokeRequest,
 } from '../src/modules/runtime-management/application/ports/runtimeManagement'
 import type { RuntimeSmokeResult } from '../src/modules/runtime-management/public/types'
-import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/modules/runtime-management/composition/runtimeRegistry'
 import { runtimes } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -90,6 +91,26 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
       reconciles: () => reconciles,
     }
   }
+
+  test('config default validation keeps disabled, unchanged and unknown-name behavior', async () => {
+    const h = await setup()
+    await h.registry.createRuntime({ name: 'disabled-profile', protocol: 'opencode' })
+    await h.registry.setRuntimeEnabled('disabled-profile', false, 'opencode')
+    const commands = createRuntimeProfileConfigurationCommands(h.registry)
+    await expect(
+      commands.validateDefaultChange({ previous: 'opencode', next: 'disabled-profile' }),
+    ).rejects.toMatchObject({
+      code: 'runtime-disabled',
+      message: "cannot make disabled runtime 'disabled-profile' the default; enable it first",
+    })
+    await expect(
+      commands.validateDefaultChange({ previous: 'disabled-profile', next: 'disabled-profile' }),
+    ).resolves.toBeUndefined()
+    await expect(
+      commands.validateDefaultChange({ previous: 'opencode', next: 'not-registered' }),
+    ).resolves.toBeUndefined()
+    expect((await h.registry.getRuntime('disabled-profile'))?.enabled).toBe(false)
+  })
 
   test('advisory probe failure still saves the full profile and returns its persisted receipt', async () => {
     const h = await setup()

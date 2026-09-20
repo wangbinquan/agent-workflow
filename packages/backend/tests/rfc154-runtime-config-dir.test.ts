@@ -33,7 +33,7 @@ import type { Agent } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { frozenRuntimeOfSession, resolveFrozenRuntime } from '../src/services/nodeRunMint'
+import { frozenRuntimeOfSession, resolveFrozenRuntime } from './helpers/nodeRunRuntime'
 import {
   createRuntime,
   defaultConfigDirProfile,
@@ -42,7 +42,7 @@ import {
   updateRuntime,
   validateConfigDirEnv,
   validateConfigDirName,
-} from '../src/services/runtimeRegistry'
+} from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { stageSkills } from '../src/services/runtime/stageSkills'

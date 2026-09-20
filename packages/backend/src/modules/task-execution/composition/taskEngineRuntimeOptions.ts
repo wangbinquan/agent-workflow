@@ -1,3 +1,4 @@
+import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 // RFC-349 provider-neutral task drive options. Provider clients are captured
 // by infrastructure participants and never cross the scheduler/runtime seam.
 import type { Language, ScriptLanguage } from '@agent-workflow/shared'
@@ -12,7 +13,7 @@ import type { TaskExecutionResourceBinding } from '@/services/execution/taskExec
 import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
-import type { RuntimeRegistryOperations } from '@/services/runtimeRegistry'
+import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import type { DynamicWorkflowPersistence } from '@/modules/task-execution/application/ports/dynamicWorkflowPersistence'
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
@@ -29,7 +30,8 @@ export interface RunTaskOptions {
   /** RFC-349 bootstrap-selected native runtime session ownership operations. */
   runtimeSessionLeases?: RuntimeSessionLeaseOperations
   /** RFC-349 bootstrap-selected runtime registry aggregate. */
-  runtimeRegistry?: RuntimeRegistryOperations
+  runtimeRegistry?: RuntimeExecutionQueries
+  nodeRunRuntime?: NodeRunRuntimePersistence
   /** Collaboration-owned DAG scheduling projection selected by bootstrap. */
   taskDagCollaboration?: TaskDagCollaborationOperations
   /** Collaboration-owned node/review/clarify mechanics selected by bootstrap. */
@@ -187,7 +189,8 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly memoryInjectionQueries: MemoryInjectionQueries
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
-  readonly runtimeRegistry: RuntimeRegistryOperations
+  readonly runtimeRegistry: RuntimeExecutionQueries
+  readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations

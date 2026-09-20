@@ -26,7 +26,7 @@ import { toClaudeAgents } from '../src/services/runtime/claudeCode/inject'
 import { renderClaudeMcpInjection } from '../src/services/execution/agentInjection'
 import { claudeBusinessGate } from '../src/services/runtime/claudeCode/permissionMap'
 import { createLogger } from '../src/util/log'
-import type { RuntimeProfile } from '../src/services/runtimeRegistry'
+import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import { assembleOpencodeBusinessSpawn } from '../src/services/runtime/opencode/driver'
 import { assembleClaudeBusinessSpawn } from '../src/services/runtime/claudeCode/driver'
 

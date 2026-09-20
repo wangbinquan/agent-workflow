@@ -101,3 +101,23 @@ export interface UpdateRuntimeInput extends RuntimeProfileInput {
   configDirName?: string | null
   lastProbeJson?: string | null
 }
+
+/** Immutable profile facts required by execution mechanisms and dependent-agent injection. */
+export interface ResolvedRuntimeProfile extends RuntimeProfile {
+  readonly name: string
+  readonly protocol: RuntimeProtocol
+  readonly binaryPath: string | null
+  readonly configDir: { readonly env: string; readonly name: string }
+}
+
+/** Purpose-specific projection for catalog references and MCP test target identity. */
+export interface RuntimeProfileInspection extends RuntimeProfile {
+  readonly id: string
+  readonly name: string
+  readonly protocol: RuntimeProtocol
+  readonly binaryPath: string | null
+  readonly enabled: boolean
+  readonly configDirEnv: string | null
+  readonly configDirName: string | null
+  readonly probeFence: number
+}

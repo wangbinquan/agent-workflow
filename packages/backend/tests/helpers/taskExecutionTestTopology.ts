@@ -1,3 +1,4 @@
+import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 import type { DbClient } from '../../src/db/client'
 import { createTaskDagCollaborationOperations } from '../../src/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { createCollaborationRuntimeMechanics } from '../../src/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
@@ -19,7 +20,7 @@ import { taskExecutionResourceDependencies } from '../../src/services/execution/
 import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { runGit } from '../../src/util/git'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
-import { composeRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../../src/modules/runtime-management/composition/runtimeRegistry'
 import { createWorkgroupClarifyAskGate } from '../../src/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTurnsOperations } from '../../src/modules/resource-catalog/composition/workgroupTurns'
@@ -139,6 +140,7 @@ export function composeTaskExecutionTestRuntime(
       ),
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       runtimeRegistry: composeRuntimeRegistryOperations(db),
+      nodeRunRuntime: composeNodeRunRuntimePersistence(db),
       dynamicWorkflow: {
         persistence: composeDynamicWorkflowPersistence(db),
         validationContext: { load: () => buildWorkflowValidationContext(db) },
@@ -246,6 +248,7 @@ export function runTaskWithRealTestTopology(
   const persistence = options.persistence ?? createTaskExecutionPersistence(options.db)
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
+  const nodeRunRuntime = options.nodeRunRuntime ?? composeNodeRunRuntimePersistence(options.db)
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
   const repositoryPublicationTransport =
     options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
@@ -274,6 +277,7 @@ export function runTaskWithRealTestTopology(
       ),
       runtimeSessionLeases,
       runtimeRegistry,
+      nodeRunRuntime,
       dynamicWorkflow,
       repositoryPublicationTransport,
     }),
@@ -286,6 +290,7 @@ export function runTaskWithRealTestTopology(
       persistence,
       runtimeSessionLeases,
       runtimeRegistry,
+      nodeRunRuntime,
       taskDagCollaboration:
         options.taskDagCollaboration ?? createTaskDagCollaborationOperations(options.db),
       collaborationRuntime:

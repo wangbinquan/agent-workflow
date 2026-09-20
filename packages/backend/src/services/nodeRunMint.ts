@@ -24,7 +24,7 @@
 import { isClarifyRerunCause, type NodeRunStatus, type RerunCause } from '@agent-workflow/shared'
 import type { RuntimeKind } from '@/services/runtime'
 import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
-import { defaultConfigDirProfile } from '@/services/runtimeRegistry'
+import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
@@ -389,7 +389,7 @@ function parseFrozenConfigDir(
       /* fall through to default */
     }
   }
-  return defaultConfigDirProfile(protocol)
+  return DEFAULT_CONFIG_DIR_PROFILE[protocol]
 }
 
 /**
@@ -415,41 +415,6 @@ function configBackedBinary(
   const withConfig = driver.defaultBinary(binaryConfig)[0] ?? null
   const bare = driver.defaultBinary({})[0] ?? null
   return withConfig !== null && withConfig !== bare ? withConfig : null
-}
-
-export async function resolveFrozenRuntime(
-  db: LegacySqliteNodeRunDatabase,
-  nodeRunId: string,
-  agentRuntime: string | null | undefined,
-  defaultRuntime: string | null | undefined,
-  /**
-   * RFC-112 (Codex impl-gate P1): when this dispatch RESUMES a captured session,
-   * the runtime must be INHERITED from the row that owns that session — NOT
-   * re-resolved from the (mutable) registry — or a changed / deleted runtime
-   * could resume the session under the wrong driver/binary. The caller passes the
-   * source row's frozen `{protocol, binary}` here; it is used only when THIS row
-   * isn't frozen yet (the first dispatch of a fresh retry / clarify-rerun row).
-   */
-  inheritFrom?: FrozenRuntime | null,
-  /**
-   * RFC-282 C1-2 — config-level binary fallbacks (config.opencodePath /
-   * claudeCodePath), folded into the FROZEN value at mint time. The old shape
-   * read config at SPAWN time via the per-entry opencodeCmd channel, so a
-   * config edit could flip the head of an already-minted run on resume —
-   * against the RFC-111 D15 "resume reads the frozen snapshot" ruling. Now
-   * the fallback freezes with everything else; registry binaryPath still wins.
-   */
-  binaryConfig?: { opencodePath?: string | null; claudeCodePath?: string | null },
-): Promise<FrozenRuntime> {
-  const operations = createLegacySqliteNodeRunOperations(db)
-  return await resolveFrozenRuntimeWith(
-    operations.runtimes,
-    nodeRunId,
-    agentRuntime,
-    defaultRuntime,
-    inheritFrom,
-    binaryConfig,
-  )
 }
 
 /** Provider-selected runtime freeze entry; no provider client crosses it. */
@@ -517,22 +482,6 @@ export async function resolveFrozenRuntimeWith(
     })
     return frozen
   })
-}
-
-/**
- * RFC-112 (Codex impl-gate P1): the frozen runtime of the node_run that CAPTURED
- * a given session id — used to inherit (protocol, binary) when a retry /
- * clarify-rerun resumes that session under a fresh row. Returns null if no frozen
- * row owns the session (then the caller resolves fresh).
- */
-export async function frozenRuntimeOfSession(
-  db: LegacySqliteNodeRunDatabase,
-  sessionId: string,
-): Promise<FrozenRuntime | null> {
-  return await frozenRuntimeOfSessionWith(
-    createLegacySqliteNodeRunOperations(db).runtimes,
-    sessionId,
-  )
 }
 
 export async function frozenRuntimeOfSessionWith(

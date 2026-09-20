@@ -1,0 +1,63 @@
+{
+  "status": "candidate-awaiting-hosted-ci",
+  "baselineSha": "47ebc43e1160dbab88a882550f412ccb84a68f20",
+  "sourceDigest": "sha256:76f3046a47d92f08e62337ca273f3424db7817286e6eb9228417e98235ed5f0a",
+  "retiredSourcePaths": [
+    "packages/backend/src/services/runtimeRegistry.ts",
+    "packages/backend/src/routes/runtime.ts",
+    "packages/backend/src/routes/runtimes.ts",
+    "packages/backend/src/platform/runtime-registry/composition.ts",
+    "packages/backend/src/platform/runtime-registry/application/runtimeRegistryOperations.ts",
+    "packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts",
+    "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts"
+  ],
+  "remainingOwnedSourcePaths": [],
+  "ownedIdReconciliation": {
+    "facades": {
+      "baseline": 1,
+      "remaining": []
+    },
+    "module-symbol-owners": {
+      "baseline": 102,
+      "remaining": []
+    },
+    "public-surfaces": {
+      "baseline": 0,
+      "remaining": []
+    },
+    "cross-context-imports.architectureExceptions": {
+      "baseline": 7,
+      "remaining": []
+    },
+    "cross-context-imports.observedEdges": {
+      "baseline": 7,
+      "remaining": []
+    }
+  },
+  "runtimeManagementPublic": {
+    "count": 32,
+    "unconsumed": []
+  },
+  "sourceToLedgerMissing": [],
+  "ledgerToSourceMissing": [],
+  "residualOwnerBoundaries": [
+    {
+      "scope": "runtime driver, model discovery and smoke process mechanisms",
+      "owner": "runtime-management infrastructure adapters / existing platform mechanisms",
+      "removeWave": "W5/W7",
+      "reason": "RFC360 preserves protocol mechanisms and binds them behind required effects; it does not relocate driver implementations."
+    },
+    {
+      "scope": "Task node runtime adapter and mint / scheduler mechanics",
+      "owner": "task-execution",
+      "removeWave": "W4-E1/W5",
+      "reason": "Task retains live owner/NodeRun transaction and snapshot persistence; bootstrap injects the RM participant factory. No Task-to-RM internal composition edge remains."
+    },
+    {
+      "scope": "MCP process lifecycle and session coordinator",
+      "owner": "resource-catalog",
+      "removeWave": "W4-E6",
+      "reason": "This slice moves profile test invalidation into the same transaction, not the full MCP lifecycle."
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, runtimes } from '../src/db/schema'
-import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   createRuntime,
   deleteRuntime,
@@ -26,7 +26,7 @@ import {
   seedBuiltinRuntimes,
   setRuntimeEnabled,
   updateRuntime,
-} from '../src/services/runtimeRegistry'
+} from './helpers/runtimeRegistryApplication'
 
 const registryByDb = new WeakMap<ProviderNeutralDatabase, DrizzleRuntimeRegistryPersistence>()
 

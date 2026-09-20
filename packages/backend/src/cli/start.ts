@@ -1,3 +1,5 @@
+import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
+import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // `agent-workflow start` — daemon foreground entry.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
@@ -330,7 +332,7 @@ import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqlite/maintenanceAdmissionStore'
 import { enforceLimits } from '@/services/limits'
-import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
+import { initializeRuntimeRegistryBoot } from '@/modules/runtime-management/composition/runtimeRegistry'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
@@ -1879,6 +1881,10 @@ async function composeSqliteProviderSession(
         ),
         runtimeSessionLeases,
         runtimeRegistry,
+        nodeRunRuntime: composeNodeRunRuntimePersistence(
+          db,
+          composeRuntimeSelectionParticipantInTx,
+        ),
         identityAccess: Object.freeze({
           delegatedRequests: identityAccess.delegatedRequests,
           taskExecutionResources,

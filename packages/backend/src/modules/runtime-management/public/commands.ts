@@ -1,3 +1,4 @@
+import type { RuntimeProtocol } from './types'
 import type { CreateRuntimeInput, RuntimeView, UpdateRuntimeInput } from './types'
 import type { RuntimeKind, RuntimeSmokeResult } from './types'
 
@@ -30,4 +31,13 @@ export interface RuntimeProfileCommands {
 
 export interface RuntimeDiagnosticCommands {
   probe(input: RuntimeProbeInput): Promise<{ readonly smoke: RuntimeSmokeResult }>
+}
+
+/** Config mutation invalidates inherited probe receipts before replacing the config file. */
+export interface RuntimeProfileConfigurationCommands {
+  validateDefaultChange(input: {
+    readonly previous: string | null | undefined
+    readonly next: string
+  }): Promise<void>
+  invalidateInheritedRuntimeProbeReceipts(protocols: readonly RuntimeProtocol[]): Promise<number>
 }

@@ -31,7 +31,7 @@ export function composeRuntimeSelectionParticipantInTx(
     readSnapshot(reference: FrozenRuntimeRef): ResolvedRuntime {
       assertTaskScope()
       const snapshot = snapshots.get(reference)
-      if (snapshot === undefined) throw new Error('runtime-selection-reference-not-bound')
+      if (snapshot === undefined) throw new Error('runtime-selection-reference-unavailable')
       return structuredClone(snapshot)
     },
   })

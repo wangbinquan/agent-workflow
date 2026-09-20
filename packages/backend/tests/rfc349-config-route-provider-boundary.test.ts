@@ -1,3 +1,5 @@
+import { createRuntimeProfileConfigurationCommands } from '@/modules/runtime-management/application/runtimeConfiguration'
+import { composeRuntimeProbeConfigFence } from '@/modules/runtime-management/composition/runtimeManagement'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -40,7 +42,8 @@ function harness(): {
   }
   const deps: ConfigRouteDependencies = {
     configPath,
-    runtimeRegistry: {
+    withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(configPath),
+    runtimeRegistry: createRuntimeProfileConfigurationCommands({
       async getRuntime(name) {
         calls.runtimeNames.push(name)
         return null
@@ -49,7 +52,7 @@ function harness(): {
         calls.invalidated.push([...protocols])
         return protocols.length
       },
-    },
+    }),
     runtimeTests: {
       async reconcileDurableIntents() {
         calls.reconciled += 1
@@ -135,7 +138,8 @@ describe('RFC-349 config route provider boundary', () => {
     expect(source).not.toContain('deps.db')
     expect(source).not.toContain('getMcpRuntimeTestService(')
     expect(source).not.toContain('resizeAllNodePools(')
-    expect(source).toContain('runtimeRegistry.getRuntime(')
+    expect(source).toContain('runtimeRegistry.validateDefaultChange(')
+    expect(source).not.toContain('runtimeRegistry.getRuntime(')
     expect(source).toContain('runtimeRegistry.invalidateInheritedRuntimeProbeReceipts(')
     expect(source).toContain('runtimeTests.reconcileDurableIntents()')
     expect(source).toContain('concurrencyHotApply.apply({')

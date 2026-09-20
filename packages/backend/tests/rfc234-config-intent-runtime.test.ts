@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path'
 
 import { loadConfig } from '@/config'
 import type { createApp } from '@/server'
-import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
+import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveIntentTurnConfig } from '@/modules/intent/application/turnEngine'
 import { intentTurnRuntimeResolverForTest } from './helpers/intentResourceCatalogBinding'

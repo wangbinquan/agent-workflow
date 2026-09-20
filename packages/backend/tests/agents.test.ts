@@ -22,7 +22,7 @@ import {
 } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError } from '../src/util/errors'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps

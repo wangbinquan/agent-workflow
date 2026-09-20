@@ -14,7 +14,7 @@ import {
   createRuntime,
   seedBuiltinRuntimes,
   setRuntimeEnabled,
-} from '../src/services/runtimeRegistry'
+} from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const base: Omit<CreateAgent, 'name' | 'runtime'> = {
