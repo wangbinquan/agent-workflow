@@ -50,7 +50,7 @@ export function borrowedPostgresqlWorkspace(input: {
         earlyError: null,
         repositories: [],
         nodePaths: [],
-        admit: (transaction) =>
+        admit: (transaction: ProviderNeutralDatabase) =>
           admitTransferredWorkspace(transaction, {
             kind: 'borrowed',
             taskId: request.taskId,

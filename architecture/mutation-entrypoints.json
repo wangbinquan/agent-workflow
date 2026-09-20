@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1711,
+    "entries": 1713,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24131,6 +24131,54 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#LaunchGuard",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#LaunchGuard",
+      "symbol": "LaunchGuard",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#launchTask",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#launchTask",
+      "symbol": "launchTask",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": false,
@@ -40893,7 +40941,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:44e861619d9067f896818202c238b2e8e7b1749075855b35f485f617c9b0ab33",
+  "sourceDigest": "sha256:cdd9f1bb8ae75791f222d787b8f3c3f7988da42fb89e91095f13b384251d530e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42903,12 +42951,12 @@
           "tasks"
         ],
         "authorityKind": "control-revision",
-        "consumer": "createRootLaunch",
+        "consumer": "admit",
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#849:tasks",
-        "line": 849,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#845:tasks",
+        "line": 845,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42919,12 +42967,12 @@
           "taskExecutionIntents"
         ],
         "authorityKind": "control-revision",
-        "consumer": "createRootLaunch",
+        "consumer": "admit",
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#934:taskExecutionIntents",
-        "line": 934,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#930:taskExecutionIntents",
+        "line": 930,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

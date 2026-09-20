@@ -67,7 +67,7 @@ const TASK_INSERT_SITES: readonly string[] = [
   // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：行号 813 → 826——`resourceAuthorityFor` 从两条臂的
   // 依赖面挪到路由面时加了注释与一个新接口，站点本身与它写的三列一格未动。
-  'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts:849 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts:845 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 W10：行号从 3509 挪到 3530——铸行事务从 `dbTxSync` 换成 `withTaskExecutionWrite`
   // 时在事务开头加了注释，站点本身与它写的三列一格未动（正是上面 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 3538 → 3590——延后准备的依赖面拆成中立形状时
@@ -79,7 +79,7 @@ const TASK_INSERT_SITES: readonly string[] = [
   // 2026-09-19：3548 → 3570。`createTaskDriveCoordinator` 的运行期配置改成每次 drive 现读
   // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
   // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
-  'services/task.ts:2446 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'services/task.ts:2445 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

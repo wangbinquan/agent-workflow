@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1812,
+    "backendFiles": 1813,
     "frontendFiles": 622,
     "legacyFiles": 548,
-    "moduleFiles": 1264,
-    "productionFiles": 2589,
+    "moduleFiles": 1265,
+    "productionFiles": 2590,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24798
+    "symbolsIncludingFileRoots": 24803
   },
   "entries": [
     {
@@ -115672,6 +115672,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "loadFrameChain",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#Admission",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Admission",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#LaunchGuard",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LaunchGuard",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#launchTask",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "launchTask",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#PreparedWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "PreparedWorkspace",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -298298,5 +298358,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:44e861619d9067f896818202c238b2e8e7b1749075855b35f485f617c9b0ab33"
+  "sourceDigest": "sha256:cdd9f1bb8ae75791f222d787b8f3c3f7988da42fb89e91095f13b384251d530e"
 }

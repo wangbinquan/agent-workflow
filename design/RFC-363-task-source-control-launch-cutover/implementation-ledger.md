@@ -89,7 +89,6 @@ canonical 注销已进入 deferred 生产链的 snapshot/effect 合同及关联�
 
 Main `35503125522`（`cb2ce5b566b754683505338c1e1979963e894051`）的 Ubuntu shard 11 job `106058374913`：SQLite/PG 各 7 个 SC 进程中断窗口全部 pass；macOS shard 4 job `106058374917`：SQLite 7 个窗口 pass。窗口为 before-add、post-add、working-branch-before-CAS、changed-prepared-branch、stop-before-add、stop-after-add、cleanup-after-remove。这证明 SC 物理 driver/cleanup；不把它倒签为本批 Task 接线验收，也不把有其他失败的 Main 称全绿。
 
-
 ## T5 同步仓库与 multipart 候选
 
 同步 repository/group 先在短事务内保存 `pre-materialized` Task plan、SC snapshot/operation，再在事务外物化。上传仍位于 prepare 与 Task INSERT 之间；admission hook 在同一个 Task transaction 内接受 artifact。working branch、Git identity、错误码与 failed Task 投影保持原入口语义。没有 journal 的旧任务继续兼容读取；scratch/sourceTaskId/call/fusion/DE 内部空间仍待后续切换，T5/T7 不记完成。
@@ -129,3 +128,9 @@ Root prepared workspace 的 admission 方法现为必填，返回闭合 TaskWork
 上传 writer 增加 Task-owned 文件名 intent checkpoint，仍沿用原 target、rename/overwrite 与路径处理。恢复使用原已选择的名称；文件尚未写入则写入，已写且内容一致则复用，内容改变报告冲突并走原失败补偿。Task receipt 保存每个名称再执行对应写入，完整结果仍先于 Task INSERT。新增 repository/scratch 在 reserve-before-file 和 file-before-receipt 处的双库 SIGKILL 例，总计 8 个 Task pre-admission 进程窗口，等待本批托管结果。
 
 此批尚未完成 owned legacy facade/import 清退、application launch 归位和完整 AC/最终 CI；RFC363 保持 In Progress。没有因此把 RFC294 E1/W5 整波关单。
+
+## T7 Task application 启动编排候选
+
+`application/launch/launchTask` 现在裁决 preflight、prepare、上传、Task admission、workspace commit、事件发布、drive 与 guard settled 的顺序。事务前失败补偿一次；事务后 guard/event/drive 失败不删除已绑定工作区。基础设施只供应具体预检/上传/事务/发布适配，原 54 字段 Task INSERT 经 TypeScript AST printer 对拍完全一致。新增 application 失败窗口测试；生产真实双库/进程 oracle 继续覆盖完整链。
+
+前批 `1827fbe7c` Main `35508969487` 已定位 DE adapter 参数类型、旧 child 假池没有 journal 和旧 service 行号 oracle 漂移。本批补类型并将 child oracle 改为真实双库，保留 inherited workspace、所有行集、提交后可见、终态赢家阻止 drive 的断言；上传 SIGKILL fixture 系统用户 identity 改为与真实 root 一致的 null。仍待 owned facade/import 清退、完整 AC 与最终托管结果。

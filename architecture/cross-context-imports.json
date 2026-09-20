@@ -28631,23 +28631,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:59cfa0c54198165f327b",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "DomainError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
       "fromSymbol": "$file",
@@ -49570,6 +49553,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#parsePortValidationFailuresJson",
       "toPath": "packages/backend/src/services/envelope.ts",
       "toSymbol": "parsePortValidationFailuresJson",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9cdeb7358de210a8be2b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "DomainError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -111363,22 +111363,6 @@
     {
       "edgeKind": "value",
       "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#$file",
-      "id": "import:59cfa0c54198165f327b",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "DomainError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#$file",
       "id": "import:59d21db154e92e8fa23f",
@@ -133583,6 +133567,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/envelope.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#parsePortValidationFailuresJson"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#$file",
+      "id": "import:9cdeb7358de210a8be2b",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "DomainError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
     },
     {
       "edgeKind": "value",
@@ -167690,7 +167690,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:44e861619d9067f896818202c238b2e8e7b1749075855b35f485f617c9b0ab33",
+  "sourceDigest": "sha256:cdd9f1bb8ae75791f222d787b8f3c3f7988da42fb89e91095f13b384251d530e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

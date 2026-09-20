@@ -1,3 +1,4 @@
+import { launchTask } from '../application/launch/launchTask'
 import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import {
   UPLOAD_INPUTS_DIR,
@@ -70,13 +71,7 @@ import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
 import type { WorkspaceCleanupReport } from '@/services/task'
 import { validateUploadPlan } from '@/services/upload'
 import { applyTaskWorkspaceUploads } from './taskWorkspaceUploads'
-import {
-  ConflictError,
-  DomainError,
-  NotFoundError,
-  ValidationError,
-  staleConflictError,
-} from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
@@ -715,11 +710,7 @@ function createRootLaunch(
         }
       : request
     const guard = input.guard
-    let workspace: TaskRoutePreparedWorkspace | undefined
-    let databaseCommitted = false
-    let rolledBack = false
-    let guardSettled = false
-    try {
+    const preflight = async () => {
       if (input.resourceAuthority.actor !== input.actor) {
         throw new ValidationError(
           'task-launch-authority-mismatch',
@@ -763,54 +754,59 @@ function createRootLaunch(
       // 带上传时**绝不**延后：上传物要写进真工作树（RFC-287 G7 原文把 multipart 与
       // preCreated 两条一起排除在外）。这一格由内核自己兜住，调用方不必各自记得。
       const deferPreparation = input.deferRepoPreparation === true && input.uploads === undefined
-      const preparedWorkspace = await (input.internal?.workspace ?? dependencies.workspace).prepare(
-        {
-          actor: input.actor,
-          authority: input.resourceAuthority.authority,
-          taskId,
-          task: input.task,
-          gitCommitIdentity,
-          ...(deferPreparation ? { defer: true } : {}),
-          ...(guard === undefined ? {} : { sourceTerminationSignal: guard.signal }),
-        },
-      )
-      workspace = preparedWorkspace
-      if (preparedWorkspace.taskId !== taskId) {
-        await rollbackWorkspace(preparedWorkspace)
-        rolledBack = true
-        throw new Error(
-          `task-route-workspace-id-mismatch: expected '${taskId}', got '${preparedWorkspace.taskId}'`,
-        )
+      return {
+        taskId,
+        intentId,
+        refClosureJson,
+        metadata,
+        gitCommitIdentity,
+        bufferedUploads,
+        deferPreparation,
       }
-
-      const persistedInputs: Record<string, string> = { ...input.task.inputs }
+    }
+    type LaunchContext = Awaited<ReturnType<typeof preflight>>
+    const prepare = async ({ taskId, gitCommitIdentity, deferPreparation }: LaunchContext) => {
+      return await (input.internal?.workspace ?? dependencies.workspace).prepare({
+        actor: input.actor,
+        authority: input.resourceAuthority.authority,
+        taskId,
+        task: input.task,
+        gitCommitIdentity,
+        ...(deferPreparation ? { defer: true } : {}),
+        ...(guard === undefined ? {} : { sourceTerminationSignal: guard.signal }),
+      })
+    }
+    const applyUploads = async (
+      { taskId, bufferedUploads }: LaunchContext,
+      preparedWorkspace: TaskRoutePreparedWorkspace,
+      persistedInputs: Record<string, string>,
+    ) => {
       if (
         input.uploads !== undefined &&
         bufferedUploads !== undefined &&
         preparedWorkspace.earlyError === null
       ) {
-        try {
-          const landed = await applyTaskWorkspaceUploads({
-            db: dependencies.db,
-            taskId,
-            plan: {
-              worktreePath: preparedWorkspace.worktreePath,
-              ...(preparedWorkspace.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
-              defs: input.uploads.definitions,
-              files: bufferedUploads,
-              limits: input.uploads.limits,
-            },
-          })
-          for (const [key, paths] of landed.packedByKey.entries()) {
-            persistedInputs[key] = paths.join('\n')
-          }
-        } catch (error) {
-          const report = await rollbackWorkspace(preparedWorkspace)
-          rolledBack = true
-          throw attachWorkspaceCleanupToMultipartError(error, report)
+        const landed = await applyTaskWorkspaceUploads({
+          db: dependencies.db,
+          taskId,
+          plan: {
+            worktreePath: preparedWorkspace.worktreePath,
+            ...(preparedWorkspace.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
+            defs: input.uploads.definitions,
+            files: bufferedUploads,
+            limits: input.uploads.limits,
+          },
+        })
+        for (const [key, paths] of landed.packedByKey.entries()) {
+          persistedInputs[key] = paths.join('\n')
         }
       }
-
+    }
+    const admit = async (
+      { taskId, intentId, refClosureJson, metadata, gitCommitIdentity }: LaunchContext,
+      preparedWorkspace: TaskRoutePreparedWorkspace,
+      persistedInputs: Record<string, string>,
+    ) => {
       const startedAt = now()
       const projection = taskProjection({
         taskId,
@@ -976,36 +972,22 @@ function createRootLaunch(
           occurredAt: startedAt,
         })
       })
-      databaseCommitted = true
-      await guard?.taskCommitted(taskId)
-      preparedWorkspace.commit()
-      await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
-      if (!failed) {
-        await dependencies.coordinator.submit({
-          taskId,
-          intentId,
-          completionMode: 'background',
-        })
-      }
-      await guard?.launchSettled(taskId)
-      guardSettled = true
-      return projection
-    } catch (error) {
-      if (workspace !== undefined && !databaseCommitted && !rolledBack) {
-        await rollbackWorkspace(workspace)
-      }
-      if (guard !== undefined && !guardSettled) {
-        try {
-          await guard.failed(error instanceof DomainError ? error.code : 'launch-failed')
-        } catch {
-          // Preserve the launch failure. Durable guard recovery owns a failed
-          // failure-receipt write; callers must still observe the launch error.
-        }
-      }
-      throw error
-    } finally {
-      guard?.release()
+      return { taskId, intentId, failed, eventRef, projection }
     }
+    return await launchTask({
+      preflight,
+      prepare,
+      initialInputs: () => ({ ...input.task.inputs }),
+      applyUploads,
+      admit,
+      rollback: rollbackWorkspace,
+      uploadFailure: attachWorkspaceCleanupToMultipartError,
+      publish: ({ eventRef }) =>
+        publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef]),
+      submit: ({ taskId, intentId }) =>
+        dependencies.coordinator.submit({ taskId, intentId, completionMode: 'background' }),
+      guard,
+    })
   }
 }
 

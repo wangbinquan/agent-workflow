@@ -1,3 +1,4 @@
+import { SYSTEM_USER_ID } from '@/auth/actor'
 import { applyUploadsToWorktree } from '@/services/upload'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 // Hosted real-process oracle: kill a production Task launch before its row is committed.
@@ -121,7 +122,10 @@ try {
         inputs: {},
         ...(input.scratch ? { scratch: true } : { repoUrl: input.remote }),
       }),
-      gitCommitIdentity: await identityAccess.getUserGitCommitIdentity.execute(actor.user.id),
+      gitCommitIdentity:
+        actor.user.id === SYSTEM_USER_ID
+          ? null
+          : await identityAccess.getUserGitCommitIdentity.execute(actor.user.id),
     })
     await applyTaskWorkspaceUploads({
       db,

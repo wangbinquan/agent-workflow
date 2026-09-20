@@ -1,5 +1,9 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 Task application 启动编排候选
+
+启动顺序与提交前/后补偿裁决归入 Task application，原 adapter 保留唯一 Task INSERT；AST 对拍确认字段和值未改。新增失败窗口单测，进程 fixture 的系统 Git identity 与生产一致。前批 `1827fbe7c` Main `35508969487` 报 DE admission 参数类型、旧 child recording-pool 缺 journal 与 Task writer 行号漂移；本批补类型、把 child oracle 改为真实双库并保留 commit-before-drive/终态赢家断言、精确更新行号。T7 owned facade/import 与完整验收继续，不记 RFC363/364 Done。
+
 ## 2026-09-20 RFC-363 转交 artifact / 必填 lane / 上传逐文件 intent 候选
 
 call、双 fusion writer、DE 借用工作区在原 Task 事务接受 artifact，物理清理归属保持。Root admission 方法必填并返回两种闭合 lane；旧任务兼容空间不得借此创建新 Task。上传名称在写文件前持久化，重放复用同一路径；SIGKILL 测试扩至 8 个双库窗口，另补实际 fusion writer 与 hand-off 回滚测试。
