@@ -90,7 +90,7 @@ function contract(tables: readonly LogicalTableContract[]): LogicalSchemaContrac
 }
 
 describe('RFC-349 PostgreSQL logical-target business invariants', () => {
-  test('the canonical 178-table contract binds every closed D11 invariant', async () => {
+  test('the canonical 182-table contract binds every closed D11 invariant', async () => {
     const statements: string[] = []
     const connection: PostgresqlReservedConnection = {
       unsafe(sql) {

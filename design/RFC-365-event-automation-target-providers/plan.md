@@ -21,3 +21,7 @@ T1 可与 RFC-363/364 独立准备；合同兼容未定时 T2 以后暂停，继
 - [ ] TE/DE providers 各 1，所有方法真实消费；root 无业务 target switch。
 - [ ] Integration WebhookTrigger 仍走自身链路；Reaction 和 W9 无范围外改动。
 - [ ] owned debt 出账、最终 exact-SHA Main CI success；RFC-294 仍 In Progress。
+
+## T1 候选（2026-09-20）
+
+[兼容性报告](./compatibility-report.md) 已逐字段覆盖 source/render/current admission/V1，新增生产 renderer 与真实 codec 的特征测试。发现 UTF-8/UTF-16、Task 257 inputs、form-field grammar 和 trim 差异；DE target 受 manifest≤20 约束，未误报为新增256限制。候选待托管 CI；推荐的兼容合同修订仍待批准，不启动 T2+。

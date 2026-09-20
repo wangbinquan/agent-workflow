@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1779,
+    "backendFiles": 1783,
     "frontendFiles": 622,
     "legacyFiles": 551,
-    "moduleFiles": 1228,
-    "productionFiles": 2556,
+    "moduleFiles": 1232,
+    "productionFiles": 2560,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24677
+    "symbolsIncludingFileRoots": 24694
   },
   "entries": [
     {
@@ -105104,6 +105104,66 @@
       "currentContext": "source-control",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createRepositoryLaunchSnapshot",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#flattened",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "flattened",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#readRepositoryPreparationFactsFromJournal",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "readRepositoryPreparationFactsFromJournal",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#repositoryFact",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "repositoryFact",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/application/repositoryScopeAuthorization.ts",
       "id": "owner:packages/backend/src/modules/source-control/application/repositoryScopeAuthorization.ts#$file",
       "removeAfterWave": null,
@@ -106220,6 +106280,90 @@
       "currentContext": "source-control",
       "currentLayer": "domain",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#repository",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "repository",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#RepositoryPreparationFacts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryPreparationFacts",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#repositoryPreparationFactsJson",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "repositoryPreparationFactsJson",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#RepositoryPreparationFactsSchema",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryPreparationFactsSchema",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#repositoryPreparationRevision",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "repositoryPreparationRevision",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#SealedRepositorySourceFactsSchema",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SealedRepositorySourceFactsSchema",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "domain",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationState.ts",
       "id": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationState.ts#$file",
       "removeAfterWave": null,
@@ -106513,6 +106657,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ensurePlatformWorkspaceDirectory",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts#createPublicRepositorySourceSeal",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createPublicRepositorySourceSeal",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshotInTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createRepositoryLaunchSnapshotInTx",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts#readRepositoryPreparationFacts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "readRepositoryPreparationFacts",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -296843,5 +297047,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d5d4e1bfb72593acbb74a60cf0a82e83cd8488370dad2b95b8d7a0342967679a"
+  "sourceDigest": "sha256:7042363bde58b35349f37c0971c6d9936def5b3fdf993903a3a488f9b10e23a4"
 }

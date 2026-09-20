@@ -18,6 +18,7 @@ import {
 import {
   assertPostgresqlMigrationHead,
   createPostgresqlAdditiveUpgrade,
+  createPostgresqlIndexUpgrade,
   createPostgresqlMigrationRoot,
   postgresqlMigrationDigest,
   postgresqlSqliteMigrationIdentity,
@@ -113,14 +114,19 @@ export async function generatePostgresqlMigrationHistory(
   }
   const existingAt = history.steps.findIndex((step) => step.id === input.appendId)
   const at = existingAt < 0 ? history.steps.length : existingAt
-  const step = createPostgresqlAdditiveUpgrade({
+  const upgrade = {
     from: history.versions[at]!,
     to: target,
     id: input.appendId,
     sequence: at + 1,
     previousEntryDigest:
       at === 0 ? postgresqlMigrationDigest(history.root) : history.steps[at - 1]!.digest,
-  })
+  }
+  const oldTables = new Set(upgrade.from.contract.tables.map((table) => table.id))
+  const addsTables = target.contract.tables.some((table) => !oldTables.has(table.id))
+  const step = addsTables
+    ? createPostgresqlAdditiveUpgrade({ ...upgrade })
+    : createPostgresqlIndexUpgrade({ ...upgrade })
   const sqlFile = resolve(folder, step.sqlFile)
   const journalFile = resolve(folder, 'meta', `${step.id}.upgrade.json`)
   if (await writeImmutable(sqlFile, renderPostgresqlUpgradeSql(step))) created.push(sqlFile)

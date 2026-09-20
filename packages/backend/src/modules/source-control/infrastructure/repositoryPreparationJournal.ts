@@ -16,6 +16,16 @@ export function createRepositoryPreparationJournal(
         null
       )
     },
+    async sourceByRequest(requestKey) {
+      return (
+        (
+          await db
+            .select()
+            .from(scRepositorySources)
+            .where(eq(scRepositorySources.requestKey, requestKey))
+        )[0] ?? null
+      )
+    },
     async seal(input) {
       await db.insert(scRepositorySources).values(input).onConflictDoNothing()
       const row = (

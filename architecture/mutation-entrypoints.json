@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1693,
+    "entries": 1697,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -21787,6 +21787,28 @@
     {
       "controls": {
         "audit": false,
+        "authority": "request",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshot",
+      "missingControls": [
+        "audit",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshot",
+      "symbol": "createRepositoryLaunchSnapshot",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": false,
@@ -21881,6 +21903,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#SealedRepositorySourceFactsSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/domain/repositoryPreparationFacts.ts#SealedRepositorySourceFactsSchema",
+      "symbol": "SealedRepositorySourceFactsSchema",
+      "targetContext": "source-control",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -21920,6 +21967,53 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem.ts#createNodeWorkspaceMaintenanceFilesystem",
       "symbol": "createNodeWorkspaceMaintenanceFilesystem",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts#createPublicRepositorySourceSeal",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts#createPublicRepositorySourceSeal",
+      "symbol": "createPublicRepositorySourceSeal",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshotInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryLaunchSnapshot.ts#createRepositoryLaunchSnapshotInTx",
+      "symbol": "createRepositoryLaunchSnapshotInTx",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -40477,7 +40571,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d5d4e1bfb72593acbb74a60cf0a82e83cd8488370dad2b95b8d7a0342967679a",
+  "sourceDigest": "sha256:7042363bde58b35349f37c0971c6d9936def5b3fdf993903a3a488f9b10e23a4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

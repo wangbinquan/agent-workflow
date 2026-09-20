@@ -258,7 +258,7 @@ export const RFC349_T10_FUNCTIONAL_EVIDENCE = Object.freeze([
       {
         lane: 'backend-main',
         testFile: 'packages/backend/tests/rfc349-postgresql-schema.test.ts',
-        testName: 'projects the exact 178-table active parity set',
+        testName: 'projects the exact 182-table active parity set',
       },
       {
         lane: 'backend-main',

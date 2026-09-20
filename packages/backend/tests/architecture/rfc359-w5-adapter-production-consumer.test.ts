@@ -330,7 +330,11 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       unit.path.endsWith('/rfc349-postgresql-schema.ts'),
     )!
     expect(adaptersWithoutProductionConsumer([sequence, authoring])).toEqual([])
-    const constructors = ['createPostgresqlIndexUpgrade', 'createPostgresqlMigrationRoot']
+    const constructors = [
+      'createPostgresqlAdditiveUpgrade',
+      'createPostgresqlIndexUpgrade',
+      'createPostgresqlMigrationRoot',
+    ]
     let withoutCalls = authoring.text
     for (const symbol of constructors) {
       withoutCalls = withoutCalls.replaceAll(`${symbol}({`, 'unrelatedAuthoringCall({')

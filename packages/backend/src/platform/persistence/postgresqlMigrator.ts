@@ -194,15 +194,21 @@ function historyState(
       'PostgreSQL target contains a partial or unmanaged agent-workflow schema',
     )
   }
-  const expectedTables = history.head.plan.statements
+  // The installed schema may precede additive-table edges. Validate its exact
+  // historical roster before executing DDL, then validate the head after commit.
+  const installed = history.versions.find(
+    (version) => version.contract.digest === snapshot.contract?.digest,
+  )
+  if (installed === undefined) schemaDrift()
+  const expectedTables = installed.plan.statements
     .filter((statement) => statement.kind === 'table')
     .map((statement) => statement.logicalId)
     .sort()
   if (
     snapshot.contract === null ||
     !snapshot.metadataTables.includes('database_generations') ||
-    snapshot.contract.activeTableCount !== history.head.plan.activeTableCount ||
-    snapshot.contract.archiveOnlyTableCount !== history.head.plan.archiveOnlyTableCount ||
+    snapshot.contract.activeTableCount !== installed.plan.activeTableCount ||
+    snapshot.contract.archiveOnlyTableCount !== installed.plan.archiveOnlyTableCount ||
     JSON.stringify([...snapshot.applicationTables].sort()) !== JSON.stringify(expectedTables)
   ) {
     schemaDrift()

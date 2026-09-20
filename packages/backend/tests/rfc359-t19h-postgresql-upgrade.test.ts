@@ -44,6 +44,11 @@ function fixture(
   const calls: { sql: string; parameters: readonly unknown[] }[] = []
   const initial = {
     contractDigest: history.root.contract.digest,
+    activeTableCount: history.root.plan.activeTableCount,
+    archiveOnlyTableCount: history.root.plan.archiveOnlyTableCount,
+    tables: history.root.plan.statements
+      .filter((statement) => statement.kind === 'table')
+      .map((statement) => statement.logicalId),
     migrations: [
       {
         baseline_id: POSTGRESQL_BASELINE_ID,
@@ -89,12 +94,10 @@ function fixture(
       }
       if (sql.includes('information_schema.tables')) {
         return rows([
-          ...history.root.plan.statements
-            .filter((statement) => statement.kind === 'table')
-            .map((statement) => ({
-              table_schema: 'agent_workflow',
-              table_name: statement.logicalId,
-            })),
+          ...state().tables.map((table) => ({
+            table_schema: 'agent_workflow',
+            table_name: table,
+          })),
           ...['schema_migrations', 'schema_contract', 'database_generations'].map((table_name) => ({
             table_schema: 'agent_workflow_meta',
             table_name,
@@ -112,8 +115,8 @@ function fixture(
         return rows([
           {
             contract_digest: state().contractDigest,
-            active_table_count: history.root.plan.activeTableCount,
-            archive_only_table_count: history.root.plan.archiveOnlyTableCount,
+            active_table_count: state().activeTableCount,
+            archive_only_table_count: state().archiveOnlyTableCount,
           },
         ])
       }
@@ -152,6 +155,11 @@ function fixture(
         return rows(matched)
       }
       const matched = upgrades.find(({ statement }) => statement.sql === sql)
+      if (matched?.statement.kind === 'table') {
+        pending.tables.push(matched.statement.logicalId)
+        return rows([])
+      }
+      if (matched?.statement.kind === 'constraint') return rows([])
       if (matched?.statement.kind === 'index') {
         pending.installed.push(sql)
         return rows([])
@@ -164,6 +172,11 @@ function fixture(
           return rows([])
         }
         pending.contractDigest = matched.step.to.contractDigest
+        const target = history.versions.find(
+          (version) => version.contract.digest === pending!.contractDigest,
+        )!
+        pending.activeTableCount = target.plan.activeTableCount
+        pending.archiveOnlyTableCount = target.plan.archiveOnlyTableCount
         return rows([{ contract_digest: pending.contractDigest }])
       }
       throw new Error('unexpected schema statement in controlled fixture')

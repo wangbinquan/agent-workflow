@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 868,
+    "consumers": 869,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
     "methods": 1064,
@@ -50040,6 +50040,7 @@
       "consumerEdgeIds": [
         "import:1b2384502fc5997ff0a1",
         "import:1f1c41512df17330ca10",
+        "import:4bf7e323e8218ac14c0f",
         "import:5cb81a2768a79730ff00",
         "import:ae9218baef05fc626909",
         "import:de5c415b39b10df6f013",
@@ -50069,6 +50070,12 @@
           "edgeId": "import:1f1c41512df17330ca10",
           "file": "packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts#$file"
+        },
+        {
+          "context": "source-control",
+          "edgeId": "import:4bf7e323e8218ac14c0f",
+          "file": "packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts#$file"
         },
         {
           "context": "memory",
@@ -164953,7 +164960,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d5d4e1bfb72593acbb74a60cf0a82e83cd8488370dad2b95b8d7a0342967679a",
+  "sourceDigest": "sha256:7042363bde58b35349f37c0971c6d9936def5b3fdf993903a3a488f9b10e23a4",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -2,7 +2,7 @@
 //
 // LOCKS: a daemon home stopped at an old migration must (a) accept the
 // current migrations folder on startup and apply the missing migrations
-// idempotently, (b) end up with the HEAD schema (all 226 entries in
+// idempotently, (b) end up with the HEAD schema (all 227 entries in
 // `__drizzle_migrations` + all current tables present), and (c) remain
 // operationally functional — a fresh task driven by the scheduler runs
 // through to `done`. A regression in any of these three means existing
@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 226 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 227 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -549,7 +549,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     //
     // 注意：本条断言与上面的 test 标题在 0223 那一轮曾经脱节（标题停在 222、断言已是 223）。
     // 两处都要改——标题是 CI 日志里唯一能看见的那一行。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(226)
+    // RFC-363 adds four preparation journal tables in 0227 (PostgreSQL 0003).
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(227)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

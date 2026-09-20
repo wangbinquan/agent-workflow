@@ -35,6 +35,7 @@ export interface RepositoryPreparationRecord {
 
 export interface RepositoryPreparationJournal {
   source(id: string): Promise<RepositorySourceRecord | null>
+  sourceByRequest(requestKey: string): Promise<RepositorySourceRecord | null>
   seal(input: RepositorySourceRecord): Promise<RepositorySourceRecord>
   snapshot(id: string): Promise<RepositorySnapshotRecord | null>
   freeze(input: RepositorySnapshotRecord): Promise<RepositorySnapshotRecord>

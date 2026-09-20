@@ -1,5 +1,13 @@
 # 当前执行状态
 
+
+## 2026-09-20 RFC-363 第二批候选与 RFC-365 T1 兼容报告
+
+首批已发布 `2220057676037f3e6fa0a71bf56dc2a9a05fd6a8`；Main `35497628814` 已发现 PostgreSQL 历史 roster 校验和 current oracle 未同步问题，本批修复，尚无全绿验收。
+T3 候选提供 SC 私有 source seal、repository revision、嵌套 group 同事务冻结和 durable ref reader，尚未接入生产 launch；T4–T8 继续推进。
+RFC-365 T1 报告与 characterization tests 已落档：现有输入按 UTF-16 计数，257 个合法 workflow/agent 输入可用，DE target 使用 camelCase；V1 的 UTF-8/256-key 收紧会改变现能力。建议保留当前语义，T2+ 合同与生产切换仍待兼容结论批准。RFC-364 尚未实施，仍在批准范围内。
+共享 system-mocks CLI mode WIP 保持，不纳入提交。各候选由发布 SHA 的 GitHub Actions 验收，不以本地测试代替。
+
 ## 2026-09-20 RFC-363 / RFC-364 实施与发布已获批准；RFC-365 先完成 T1
 
 用户明确批准实现及代码上库。RFC-363/364 进入 In Progress；RFC-365 仅 T1 兼容性对拍获批，后续合同定稿/生产切换仍按其方案的兼容前置推进。
