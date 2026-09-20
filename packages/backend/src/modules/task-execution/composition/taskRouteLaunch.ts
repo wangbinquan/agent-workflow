@@ -30,9 +30,3 @@ export type {
   AgentRouteTaskLaunchOperations,
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
-
-// Legacy inbound adapters use Task's receiving facts, never SC mechanism exports.
-export type {
-  WorkspaceCleanupReport,
-  WorkspaceCleanupHookEvent,
-} from '../application/ports/preparedWorkspace'

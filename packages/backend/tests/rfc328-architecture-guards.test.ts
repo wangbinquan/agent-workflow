@@ -143,9 +143,12 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     [
       {
         callable: 'runDeferredRepoPreparation',
-        // RFC-359 AC-1（plan §5hn 批次二 ①）：这一步收成两个引擎共用之后直接打中立物化面。
-        // `materializeSpace` 是它的 SQLite 适配壳；受观测的「动作」本来就是物化本身。
-        actCallees: new Set(['materializeSpaceWithProvider']),
+        // RFC-363：同一个 effect observer 覆盖 durable participant 与历史任务适配入口；
+        // 原物化机制现在在 adapter 内。两条实际分支都必须存在，不能只保留一个空壳调用。
+        actCallees: new Set([
+          'prepareDurableRepositoryWorkspace',
+          'prepareLegacyDeferredWorkspace',
+        ]),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
     ],
@@ -645,5 +648,35 @@ describe('RFC-328 architecture guards', () => {
     ).toContain(
       'unregistered task effect boundary: packages/backend/src/services/runner.ts#runNode',
     )
+    const preparationActs = ['prepareDurableRepositoryWorkspace', 'prepareLegacyDeferredWorkspace']
+    const preparationPath = 'packages/backend/src/services/task.ts'
+    expect(
+      taskEffectBoundaryViolations(
+        fixture(
+          preparationPath,
+          `async function runDeferredRepoPreparation() {
+            ${preparationActs.map((act) => `await ${act}();`).join('\n')}
+          }`,
+        )[0]!,
+      ),
+    ).toContain(`unregistered task effect boundary: ${preparationPath}#runDeferredRepoPreparation`)
+    for (const missing of preparationActs) {
+      expect(
+        taskEffectBoundaryViolations(
+          fixture(
+            preparationPath,
+            `async function runDeferredRepoPreparation() {
+              createLocalEffectAttemptObserver({});
+              ${preparationActs
+                .filter((act) => act !== missing)
+                .map((act) => `await ${act}();`)
+                .join('\n')}
+            }`,
+          )[0]!,
+        ),
+      ).toContain(
+        `missing task effect act boundary ${missing}: ${preparationPath}#runDeferredRepoPreparation`,
+      )
+    }
   })
 })

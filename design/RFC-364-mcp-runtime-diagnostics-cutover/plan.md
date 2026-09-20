@@ -24,3 +24,7 @@ T2/T3 在 RC 模块内可与 RFC-363 开发独立推进；T4/T5 root 及共用�
 - [ ] 本域旧 imports/facades/WeakMap 为零，reconcile timer 明确留 W9。
 - [ ] 最终 SHA Main CI success，原生进程测试按触及范围取证。
 - [ ] 只关闭 E6 与该域 B/D，RFC-294 其余波次保持开放。
+
+## AC 证据与范围转交
+
+逐项映射见 [acceptance.md](./acceptance.md)。最终 Main CI 未终态前保留 In Progress；历史各批局部成功不能替代当前源码验收。

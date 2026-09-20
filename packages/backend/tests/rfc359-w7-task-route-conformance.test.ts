@@ -19,6 +19,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -231,6 +232,11 @@ function launchOperations(harness: ProviderHarness): LaunchArms {
   return createSqliteTaskRouteLaunchOperations({
     db: harness.db as unknown as DbClient,
     configPath,
+    routeWorkspace: {
+      appHome: APP_HOME,
+      repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: APP_HOME }),
+      sourceContexts: () => unusedDependency('sourceContexts'),
+    },
     executionFor: () => unusedDependency('executionFor'),
   } as never)
 }

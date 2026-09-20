@@ -3590,23 +3590,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/launchMultipart.ts#$file",
-      "fromPath": "packages/backend/src/services/launchMultipart.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:0a85bff2a5b60b77c6b0",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts",
-      "toSymbol": "WorkspaceCleanupReport",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "fromPath": "packages/backend/src/services/task.ts",
       "fromSymbol": "$file",
@@ -81041,9 +81024,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4767,
+    "architectureExceptions": 4766,
     "implementationSccs": 0,
-    "observedEdges": 5333,
+    "observedEdges": 5332,
     "requiredPorts": 30,
     "targetEdges": 66
   },
@@ -84570,22 +84553,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/time.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/time.ts#monotonicNow"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/launchMultipart.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/launchMultipart.ts#$file",
-      "id": "import:0a85bff2a5b60b77c6b0",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/taskRouteLaunch",
-      "syntax": "static-import",
-      "targetSymbol": "WorkspaceCleanupReport",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -166997,7 +166964,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0f2cb439852955c775c2450a7d05623053a069ed68616da6b96c0b1b7a00bcfd",
+  "sourceDigest": "sha256:55410f258afdae9edc5ccbc718dfa3c13720ad46b521926e2edcaa91d1cd302d",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -1,5 +1,9 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363/364 最终验收收口中
+
+`f24b7b5ef` 的 Windows `35510835760` 已终态成功，包含 SC 七个和 Task/upload 八个真实进程恢复窗口。Main `35510835709` 发现旧 effect-boundary 锚、W7 fixture 缺必填装配、已迁真库的 fake-runtime 旧账和 multipart 类型边；本批分别对齐两个真实入口/补装配/销过期账/移除类型边，保留原功能断言与生产运行时。逐 AC 映射及 E1/W5/W9 残余转交见 RFC363/364 `acceptance.md`；最终 Main 尚待修复版本验收，两个 RFC 不记 Done，RFC365 仍仅 T1。
+
 ## 2026-09-20 RFC-363 旧物理 facade 退役与 Windows 验收接线候选
 
 `services/task.ts` 不再导出物理准备/清理 facade；原物化测试改指 SC 实现与仅测试使用的装配 helper，Task 私有历史恢复仍保留。三个根的 deferred adapter 不再传 SC store，要求同一 preparation binding；循环的重试/退避/终态与唯一 Task writer 未改。原生 Windows workflow 新增 7 个 SC + 8 个 Task/upload 中断窗口，等待 hosted 取证。

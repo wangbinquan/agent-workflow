@@ -65,7 +65,6 @@ const FAKE_RUNTIME_TYPES: ReadonlySet<string> = new Set([
  * 落地时 69 个文件、183 处。
  */
 export const FAKE_POSTGRESQL_RUNTIME_LITERALS: readonly string[] = [
-  'rfc349-child-execution-launch-postgresql-adapter.test.ts: 3',
   'rfc349-code-attempts-postgresql-adapter.test.ts: 3',
   'rfc349-code-delivery-postgresql-adapter.test.ts: 3',
   'rfc349-code-demo-seed-provider.test.ts: 3',

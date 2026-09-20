@@ -1,5 +1,9 @@
 # RFC-364 实施台账
 
+## 当前验收入口
+
+实现已完成接线，正在核对最终托管证据。逐项 AC、已验证平台和母项残余转交以 [acceptance.md](./acceptance.md) 为准。下面按发布顺序保留每批的历史状态，不将早期的“待后续”误作当前缺口。
+
 ## T1 基线与本批边界
 
 基线 `4a3b3c5ae05ef93182329bb40a2930eebd48f79b`，本批不增加表/迁移，不改变七个 HTTP endpoint 的状态码、payload、锁范围或 lifecycle 注册次序。完整 root/public 切换仍待 T4/T5/T6；临时 service 构造转发与 `SERVICE_INSTANCES` 的退出责任明确归 T6，不能以移文件领取 E6 完成信用。

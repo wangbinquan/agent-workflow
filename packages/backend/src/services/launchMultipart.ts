@@ -21,8 +21,6 @@ import {
   type UploadInputDef,
   type UploadLimits,
 } from '@/services/upload'
-import { type WorkspaceCleanupReport } from '@/modules/task-execution/composition/taskRouteLaunch'
-
 import { DomainError, ValidationError } from '@/util/errors'
 
 const UPLOAD_FIELD_PREFIX = 'files['
@@ -220,10 +218,9 @@ export function resolveUploadLimits(configPath: string): UploadLimits {
  * not-yet-owned workspace also fails. The cleanup report is recovery metadata,
  * not a reason to erase the actionable upload code/status/details.
  */
-export function attachWorkspaceCleanupToMultipartError(
-  error: unknown,
-  report: WorkspaceCleanupReport,
-): DomainError {
+export function attachWorkspaceCleanupToMultipartError<
+  Report extends { readonly complete: boolean },
+>(error: unknown, report: Report): DomainError {
   const primary =
     error instanceof DomainError
       ? error

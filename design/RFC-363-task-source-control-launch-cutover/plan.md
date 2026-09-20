@@ -27,4 +27,8 @@ T6 可在 T3 合同固定后独立开发。RFC-364 模块内工作无直接依�
 - [ ] 最终 Main CI terminal success；若触及原生 Windows 行为，相关托管任务有同源码证据。
 - [ ] 文档、STATE、索引只按验收范围标记；RFC-294 整体、完整 W5 不记 Done。
 
-本 Draft 批次仅文档，不运行本地 Bun 测试或服务。实施时新增测试随实现提交，由 GitHub Actions 取证。
+实施测试已随源码提交；不运行本地 Bun 测试或服务，行为验收由 GitHub Actions 取证。
+
+## AC 证据与范围转交
+
+逐项映射见 [acceptance.md](./acceptance.md)。最终 Main CI 未终态前保留 In Progress；历史各批局部成功不能替代当前源码验收。
