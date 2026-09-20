@@ -60,7 +60,7 @@ describe('RFC-143 (A) 派生单源', () => {
   })
 
   it('runtimeRegistry 内建名 fallback 用 BUILTIN_NAMES（不再硬编码字面量）', () => {
-    const src = SRC('services/runtimeRegistry.ts')
+    const src = SRC('modules/runtime-management/application/runtimeRegistry.ts')
     expect(src).not.toMatch(/n === 'opencode' \|\| n === 'claude-code'/)
     expect(src).toContain('BUILTIN_NAMES.has(n)')
   })
@@ -429,8 +429,12 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     expect(SRC('services/nodeRunMint.ts')).toContain('configBackedBinary')
     // T19 同批：registry 对二进制缓存驱逐保持 kind-blind（走 driver 可选能力面，
     // 不具名依赖 opencode 缓存实现）。
-    expect(SRC('services/runtimeRegistry.ts')).not.toContain('evictOpencodeModelsCache')
-    expect(SRC('services/runtimeRegistry.ts')).toContain('evictBinaryCaches?.(')
+    expect(SRC('modules/runtime-management/application/runtimeRegistry.ts')).not.toContain(
+      'evictOpencodeModelsCache',
+    )
+    expect(SRC('modules/runtime-management/application/runtimeRegistry.ts')).toContain(
+      'evictBinaryCaches?.(',
+    )
   })
 
   it('semver 单份：extractVersion/compareSemver 只定义在 util/semver.ts（claude probe 曾有逐字拷贝）', () => {
@@ -453,7 +457,7 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     // design §5 预案二选一：无活数据删 / 有活数据显式标注。审计结论 = 有活数据
     // （commitPushModel / mergeAgentModel / memoryDistillModel 三字段仍在
     // ConfigSchema 并线上传入），故分支保留 + 注释固化删除条件。
-    const src = SRC('services/runtimeRegistry.ts')
+    const src = SRC('modules/runtime-management/application/runtimeRegistry.ts')
     expect(src).toContain('RFC-143 PR-5 audit')
     expect(src).toContain('explicitly opencode-only')
   })

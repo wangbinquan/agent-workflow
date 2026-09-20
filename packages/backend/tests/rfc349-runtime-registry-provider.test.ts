@@ -96,7 +96,9 @@ afterEach(() => {
 describe('RFC-349 runtime registry provider operations', () => {
   test('business and HTTP surfaces contain no database mechanism', () => {
     for (const path of [
-      'src/services/runtimeRegistry.ts',
+      'src/modules/runtime-management/application/runtimeRegistry.ts',
+      'src/modules/runtime-management/application/runtimeManagement.ts',
+      'src/modules/runtime-management/domain/runtimeProfile.ts',
       'src/routes/runtime.ts',
       'src/routes/runtimes.ts',
     ]) {
@@ -105,12 +107,15 @@ describe('RFC-349 runtime registry provider operations', () => {
       expect(text).not.toContain("from 'drizzle-orm'")
       expect(text).not.toContain('bun:sqlite')
     }
-    expect(source('src/routes/runtime.ts')).toContain(
-      'deps.runtimeRegistry.resolveRuntimeByName(rtParam)',
+    expect(source('src/routes/runtime.ts')).toContain('await deps.list({')
+    expect(source('src/routes/runtimes.ts')).toContain('readonly profiles: RuntimeProfileCommands')
+    expect(source('src/modules/runtime-management/application/runtimeManagement.ts')).toContain(
+      'await registry.resolveRuntimeByName(rtParam)',
     )
-    expect(source('src/routes/runtimes.ts')).toContain(
-      'readonly runtimeRegistry: RuntimeRegistryOperations',
-    )
+    for (const path of ['src/routes/runtime.ts', 'src/routes/runtimes.ts']) {
+      expect(source(path)).not.toContain("from '@/services/")
+      expect(source(path)).not.toContain("from '@/platform/runtime-registry/")
+    }
   })
 
   test('PostgreSQL composition resolves the same closed row without a SQLite facade', async () => {

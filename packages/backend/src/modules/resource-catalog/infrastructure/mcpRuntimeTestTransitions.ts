@@ -5,7 +5,7 @@
 // 此前只有 SQLite 有，PG 版漏了——现在两边同一份。
 // `legacy/mcpRuntimeTestTransitions.ts` 的同步版仍服务 runtime / user 写者（它们尚未迁到统一事务），随其各自合一退役。
 
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import {
   normalizeStoredAdditionalPermissions,
   resolveEffectiveAccountPermissions,
@@ -15,7 +15,6 @@ import {
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestSessions,
   mcpRuntimeTestSessionLeases,
-  runtimes,
   userPermissionGrants,
   users,
 } from '@/db/schema'
@@ -221,30 +220,5 @@ export async function transitionRuntimeTests(
     if (input.reason === 'runtime-profile-changed')
       await blockAfterTurn(transaction, session, input.reason, input.now)
     else await endNow(transaction, session, input.reason, input.now)
-  }
-}
-
-/**
- * 继承型 runtime（没有自己的 `binaryPath`，跟着协议默认走）在协议侧变更时一并失效。
- * 原因固定为 `runtime-profile-changed`——变的是它继承的那份画像，不是它自己被停用或删除。
- */
-export async function transitionInheritedRuntimeTests(
-  transaction: DatabaseTransaction,
-  input: {
-    readonly protocols: readonly ('opencode' | 'claude-code')[]
-    readonly now: number
-  },
-): Promise<void> {
-  if (input.protocols.length === 0) return
-  const inherited = await transaction
-    .select({ name: runtimes.name })
-    .from(runtimes)
-    .where(and(inArray(runtimes.protocol, [...input.protocols]), isNull(runtimes.binaryPath)))
-  for (const row of inherited) {
-    await transitionRuntimeTests(transaction, {
-      runtimeName: row.name,
-      reason: 'runtime-profile-changed',
-      now: input.now,
-    })
   }
 }

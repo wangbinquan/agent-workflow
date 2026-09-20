@@ -303,3 +303,15 @@ export interface SkillVersionCommitParticipantInTx {
     hooks?: SkillVersionCommitHooks<Promise<void> | void>,
   ): Promise<number>
 }
+
+/** The caller supplies the runtime names it changed; Resource Catalog owns only test sessions. */
+export interface RuntimeProfileTestInvalidationInTx<Transaction> {
+  invalidate(
+    transaction: Transaction,
+    input: {
+      readonly runtimeNames: readonly string[]
+      readonly reason: 'runtime-profile-changed' | 'runtime-disabled' | 'runtime-deleted'
+      readonly now: number
+    },
+  ): Promise<void>
+}

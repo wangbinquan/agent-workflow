@@ -1,7 +1,7 @@
-import type { RuntimeView } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+import type { RuntimeView } from './types'
 import type { RuntimeKind } from './types'
 
-export interface RuntimeStatusView {
+interface RuntimeStatusView {
   readonly name: string
   readonly protocol: RuntimeKind
   readonly binary: string

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 842,
+    "consumers": 843,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1051,
+    "methods": 1052,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20567,
-    "symbols": 970
+    "recursiveFields": 20662,
+    "symbols": 976
   },
   "entries": [
     {
@@ -100249,6 +100249,95 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:82a4723ffc48ecb815f3"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:82a4723ffc48ecb815f3"
+          ],
+          "fieldPath": "$method:invalidate.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:invalidate.$parameter:input.reason.$variant:0",
+          "type": "'runtime-profile-changed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:invalidate.$parameter:input.reason.$variant:1",
+          "type": "'runtime-disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:invalidate.$parameter:input.reason.$variant:2",
+          "type": "'runtime-deleted'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:82a4723ffc48ecb815f3"
+          ],
+          "fieldPath": "$method:invalidate.$parameter:input.runtimeNames",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:invalidate.$parameter:transaction",
+          "type": "Transaction"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:invalidate.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:RuntimeProfileTestInvalidationInTx",
+      "members": [
+        "invalidate"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:82a4723ffc48ecb815f3"
+          ],
+          "name": "invalidate",
+          "signatureDigest": "sha256:a252fef141adcc386f2175a77e122cd6e5fc59f52eca5729f7decd5dd47b3c6c"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#RuntimeProfileTestInvalidationInTx",
+      "productionConsumers": [
+        {
+          "context": "runtime-management",
+          "edgeId": "import:82a4723ffc48ecb815f3",
+          "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:099c1f4d57831650260468c9ccf72765d2f7aab14408e35cd77b3047e885ddab",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeProfileTestInvalidationInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:f346e2b503fba92e3aa5"
       ],
       "context": "resource-catalog",
@@ -120781,28 +120870,103 @@
       "version": 1
     },
     {
-      "authority": "request-authority",
+      "authority": "none",
       "budget": {
         "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
+        "maxTopLevelFields": 14,
+        "maxTransitiveLeafFields": 25,
+        "maxUnionVariants": 22
       },
       "consumerEdgeIds": [],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
-      "entrypoint": "queries",
+      "entrypoint": "types",
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "binary",
+          "fieldPath": "binaryPath.$variant:0",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "isDefault",
+          "fieldPath": "binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "createdBy.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "createdBy.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "isSandbox",
           "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lastProbeJson.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lastProbeJson.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -120811,76 +120975,63 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "ok",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:0",
-          "type": "'opencode'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "protocol.$variant:1",
-          "type": "'claude-code'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "reportedVersion.$variant:0",
+          "fieldPath": "protocol",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "reportedVersion.$variant:1",
+          "fieldPath": "steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:1",
           "type": "null"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "state.$variant:0",
-          "type": "'ready'"
+          "fieldPath": "temperature.$variant:0",
+          "type": "number"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "state.$variant:1",
-          "type": "'protocol-incompatible'"
+          "fieldPath": "temperature.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "state.$variant:2",
-          "type": "'not-found'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "version.$variant:0",
+          "fieldPath": "variant.$variant:0",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "version.$variant:1",
+          "fieldPath": "variant.$variant:1",
           "type": "null"
         }
       ],
-      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
-      "id": "public:runtime-management:queries:RuntimeStatusView",
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:CreateRuntimeInput",
       "members": [
-        "binary",
-        "isDefault",
+        "binaryPath",
+        "configDirEnv",
+        "configDirName",
+        "createdBy",
+        "lastProbeJson",
         "name",
-        "ok",
-        "protocol",
-        "reportedVersion",
-        "state",
-        "version"
+        "protocol"
       ],
       "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeStatusView",
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#CreateRuntimeInput",
       "productionConsumers": [],
-      "publicTypeConsumerIds": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:commands:RegisterRuntimeInput",
+        "public:runtime-management:commands:RuntimeProfileCommands"
+      ],
       "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:e0eadb3a691d670e8b78e6980c22b3ac332de0a364db8520c93f06b490dafd77",
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:61e6709974a59fecb3b78c5f5b58b5bc24a42826f90863c0c94fd56385a11f8d",
       "status": "target-context-current-surface",
-      "symbol": "RuntimeStatusView",
+      "symbol": "CreateRuntimeInput",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -120976,13 +121127,274 @@
         "public:runtime-management:commands:RuntimeDiagnosticCommands",
         "public:runtime-management:commands:RuntimeProbeInput",
         "public:runtime-management:commands:RuntimeProfileCommands",
-        "public:runtime-management:queries:RuntimeStatusView"
+        "public:runtime-management:types:RuntimeProtocol",
+        "public:runtime-management:types:RuntimeView"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:2c419578a0eebda3aa10898dff55c1e8060f4b0b1dbd841a3f1b73553f6d55d9",
       "status": "target-context-current-surface",
       "symbol": "RuntimeKind",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:RuntimeProfile",
+      "members": [
+        "extraArgs",
+        "isSandbox",
+        "maxSteps",
+        "model",
+        "steps",
+        "temperature",
+        "variant"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfile",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:commands:RuntimeProfileCommands",
+        "public:runtime-management:types:RuntimeView"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:ec8d757b2b6d26b1eb221010a196fe40e86f3db2b449310b2e7ba05b07341bf9",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeProfile",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:RuntimeProfileInput",
+      "members": [
+        "extraArgs",
+        "isSandbox",
+        "maxSteps",
+        "model",
+        "steps",
+        "temperature",
+        "variant"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfileInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:commands:RegisterRuntimeInput",
+        "public:runtime-management:commands:RuntimeProfileCommands",
+        "public:runtime-management:types:CreateRuntimeInput",
+        "public:runtime-management:types:UpdateRuntimeInput"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b793ff76d7d13a6bff2f459b76bc83beb540822e36db6f30cc561c1a3802c1bc",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeProfileInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1",
+          "type": "'claude-code'"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:RuntimeProtocol",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProtocol",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:commands:RuntimeProfileCommands",
+        "public:runtime-management:types:RuntimeView"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:39e5af71cbc9731c57d7d81177b6042894391159ad6639c7f42712a2fe9e4e8e",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeProtocol",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -121090,6 +121502,329 @@
       "signatureDigest": "sha256:bc6d6b64df04393e8132025ca4a118879447bb0d4a0d940a6163b6accfc6c30c",
       "status": "target-context-current-surface",
       "symbol": "RuntimeSmokeResult",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 17,
+        "maxTransitiveLeafFields": 27,
+        "maxUnionVariants": 20
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "createdAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "isDefault",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lastProbe",
+          "type": "unknown"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:RuntimeView",
+      "members": [
+        "binaryPath",
+        "configDirEnv",
+        "configDirName",
+        "createdAt",
+        "enabled",
+        "isDefault",
+        "isSandbox",
+        "lastProbe",
+        "name",
+        "protocol",
+        "updatedAt"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeView",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:commands:RuntimeProfileCommands"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e91c291f8a6fe67e5f9d9e121395be3b630a1b159be853c48d6dd134c77e2df7",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeView",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 20
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "binaryPath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirEnv.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDirName.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lastProbeJson.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lastProbeJson.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "variant.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:UpdateRuntimeInput",
+      "members": [
+        "binaryPath",
+        "configDirEnv",
+        "configDirName",
+        "lastProbeJson"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#UpdateRuntimeInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:commands:RuntimeProfileCommands"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:0d93cab7d2b17454c154d3733c84153536903ff9a03d770fb8d8ff0ff74673e9",
+      "status": "target-context-current-surface",
+      "symbol": "UpdateRuntimeInput",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -161399,7 +162134,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4acda67e818a25ba8f0e0537e2b9de561e449f0c6197e5802f1e05012e3907dd",
+  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634",
   "targetContexts": [
     "collaboration",
     "development-automation",

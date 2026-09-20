@@ -1,5 +1,15 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-360 管理首批已推送；注册表归位继续推进
+
+用户再次明确批准向 main 推送代码。首批实现 `774464280` 与 provenance `09f35c785` 已发布。
+Main CI `35485912641` 已发现源码位置/装配摘要和架构声明接线失败；修复随本批提交，不能记为绿色交付。
+第二批将唯一 registry application/boot/persistence 与 profile 判据迁入 Runtime Management，注入 driver/config effects，
+以同事务 participant 调用 Resource Catalog 的会话失效与 Agent 引用查询；新增真实双库回滚与引用可见性判据。
+旧 service/platform 入口暂时只转发，八条精确边明确由 RFC-360 T6 删除。
+RFC-360 的执行选择/T6 最终根收缩仍未完成，RFC-361/362 仍待实施；三个 RFC 均 In Progress。
+共享 system-mocks CLI executable mode WIP 保留且不提交。
+
 ## 2026-09-20 RFC-360～362 已获实施与远端发布授权
 
 用户批准三个 RFC 的具体三件套并要求提交远端。三者均进入 In Progress，按各自完整 AC 推进；

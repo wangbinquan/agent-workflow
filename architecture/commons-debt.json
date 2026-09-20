@@ -3,10 +3,10 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 254,
+    "inboundEdges": 261,
     "outboundEdges": 33,
     "registeredFindings": 79,
-    "recordedAtShaNote": "RFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged."
+    "recordedAtShaNote": "RFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added."
   },
   "entries": [
     {
@@ -704,29 +704,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#taskLifecycleWriteSequence"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions",
-      "specifier": "@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "resource-catalog",
-      "why": "RFC-359 W4-D28b：runtime 注册表两份 provider 实现合成一份中立实现后，会话失效改消费 resource-catalog 的**中立** infrastructure 实现（不再是 legacy 同步版，那两个同步导出已随之删除）。边的形状不变——仍是 platform 直接消费 owner 内部实现，须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:1c19a3a5862adb0e556c",
-        "import:7a83a37ad18c39a03f4a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTests",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionRuntimeTests"
       ],
       "canonicalFacadeIds": []
     },
@@ -6731,6 +6708,194 @@
         "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#createChildTaskLifecycleParticipant"
       ],
       "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts",
+      "to": "modules/runtime-management/application/runtimeRegistryBoot",
+      "specifier": "@/modules/runtime-management/application/runtimeRegistryBoot",
+      "edgeKind": "value",
+      "syntax": "export",
+      "context": "runtime-management",
+      "layer": "application",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:c08818779b83c5c4d459"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts",
+      "to": "modules/runtime-management/application/runtimeRegistryBoot",
+      "specifier": "@/modules/runtime-management/application/runtimeRegistryBoot",
+      "edgeKind": "type",
+      "syntax": "export",
+      "context": "runtime-management",
+      "layer": "application",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:4c7b467c534c7860fa90"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts#RuntimeRegistryBootInput"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryOperations.ts",
+      "to": "modules/runtime-management/application/ports/runtimeRegistry",
+      "specifier": "@/modules/runtime-management/application/ports/runtimeRegistry",
+      "edgeKind": "type",
+      "syntax": "export",
+      "context": "runtime-management",
+      "layer": "application",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:04136a7101c6b8fb1ea1"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/application/runtimeRegistryOperations.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeRegistry.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/runtime-registry/composition.ts",
+      "to": "modules/runtime-management/application/ports/runtimeRegistry",
+      "specifier": "@/modules/runtime-management/application/ports/runtimeRegistry",
+      "edgeKind": "type",
+      "syntax": "export",
+      "context": "runtime-management",
+      "layer": "application",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:835ca3c6c89ad1645cfb"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/composition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeRegistry.ts#RuntimeRegistryOperations"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/runtime-registry/composition.ts",
+      "to": "modules/runtime-management/composition/runtimeRegistry",
+      "specifier": "@/modules/runtime-management/composition/runtimeRegistry",
+      "edgeKind": "value",
+      "syntax": "export",
+      "context": "runtime-management",
+      "layer": "composition",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:22a71050e3d6acc198e9",
+        "import:481314735028cbda833f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/composition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#$file",
+        "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#composeRuntimeRegistryOperations"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
+      "to": "modules/resource-catalog/composition/runtimeProfileParticipants",
+      "specifier": "@/modules/resource-catalog/composition/runtimeProfileParticipants",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "context": "resource-catalog",
+      "layer": "composition",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b2648098cbb12ca98b1f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/composition/runtimeProfileParticipants.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
+      "to": "modules/runtime-management/infrastructure/runtimeRegistryPersistence",
+      "specifier": "@/modules/runtime-management/infrastructure/runtimeRegistryPersistence",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "context": "runtime-management",
+      "layer": "infrastructure",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b0f711f498d2eb6a9abe"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runtimeRegistry.ts",
+      "to": "modules/runtime-management/composition/runtimeRegistryCompatibility",
+      "specifier": "@/modules/runtime-management/composition/runtimeRegistryCompatibility",
+      "edgeKind": "value",
+      "syntax": "export",
+      "context": "runtime-management",
+      "layer": "composition",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-360 T3 transitional forwarding",
+      "why": "RFC-360 T3 moves the sole runtime registry into Runtime Management. This exact legacy forwarding edge temporarily preserves the current production and test consumers while T5/T6 switch execution selection and bootstrap; it contains no copied registry algorithm.",
+      "removeAfterWave": "RFC-360 T6 / RFC-294 W4-E4b",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:5f952f54612e7dd6c069"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistryCompatibility.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runtimeRegistry.ts"
+      ]
     }
   ],
   "registeredFindings": [
@@ -7911,7 +8076,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4acda67e818a25ba8f0e0537e2b9de561e449f0c6197e5802f1e05012e3907dd",
+    "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

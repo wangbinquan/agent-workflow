@@ -2,7 +2,7 @@ import type {
   RuntimeRefConfig,
   RuntimeRegistryOperations,
   RuntimeRow,
-} from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+} from '@/modules/runtime-management/application/ports/runtimeRegistry'
 import type { RuntimeKind, RuntimeSmokeResult } from '../../public/types'
 import type { RuntimeModelList } from '../../public/queries'
 

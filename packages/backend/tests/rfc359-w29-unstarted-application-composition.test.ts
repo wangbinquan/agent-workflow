@@ -481,7 +481,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // `composeIntentApplyArtifactLifecycle` + `composeIntentApplyOperations`；
   // `composePostgresqlIntentMaintenanceSnapshotQueries` 一并改叫
   // `composeIntentMaintenanceSnapshotQueriesFor`。
-  test('daemon phase retains the complete original 160-statement graph and ordered effects', () => {
+  test('daemon phase retains the complete graph plus one RFC-360 management instance and ordered effects', () => {
     const body = functionBody(pg, 'composePostgresqlApplication')
     const phaseBlocks = body.statements.filter(
       (node): node is ts.IfStatement =>
@@ -489,7 +489,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     )
     expect(phaseBlocks).toHaveLength(8)
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
-    expect(restored.statements).toHaveLength(160)
+    // RFC-360 adds one management application shared by the two runtime route families.
+    expect(restored.statements).toHaveLength(161)
+    expect(namedCalls(body, pg, 'composeRuntimeManagement')).toHaveLength(1)
     // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
     // 相同、函数体从不读它），删掉它同时消掉了 `main.ts` 里那条三元分叉。
@@ -558,7 +560,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 发起人原样传下去、数字员工执行在 launch 前播种合成宿主工作流行。三条都是**补齐**，
       // 判据分别在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts` 与
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
-      '1d143f41c9f21c823eb21e0ea58accdb3813ee0e988b4bead48ed4b82d6cd354',
+      // RFC-360: one new const binding; both runtime route families consume it.
+      'd5afa2afc2be6062ed0916e128125171c0670256db995fc5618c6dafee6bf26b',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -728,8 +731,16 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 发起人原样传下去、数字员工执行在 launch 前播种合成宿主工作流行。三条都是**补齐**，
       // 判据分别在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts` 与
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
-      '9de0ff1fbb9a1fdd0d8b3f86f780b7f9de2ab02c204352604957c8aa40944a53',
+      // RFC-360: the same management factory/route binding change as PostgreSQL.
+      '00f51ae35d3623f099ad4bdd04ec84394eb6b3a008e9f4a3273e4ca5f8dc4c79',
     )
+    expect(
+      namedCalls(
+        functionBody(server, 'composeSqliteApiRouteMounts'),
+        server,
+        'composeRuntimeManagement',
+      ),
+    ).toHaveLength(1)
     expect(digest(oldEventCenterBody(), server)).toBe(
       '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',
     )

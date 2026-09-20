@@ -352,7 +352,15 @@ describeEachProviderHttpApplication(
 
     test('RFC-284 T26 源码锁：status probe 的 env 通道已删（deps 注入是唯一缝）', async () => {
       const src = await Bun.file(
-        resolve(import.meta.dir, '..', 'src', 'routes', 'runtimes.ts'),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'runtime-management',
+          'infrastructure',
+          'runtimeManagementEffects.ts',
+        ),
       ).text()
       expect(src).not.toContain('AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS')
       expect(src).toContain('probeTimeoutMsForTest')

@@ -53,3 +53,11 @@ T1 current-source 清单见 `implementation-baseline.json`（source SHA `47ebc43
 
 本批只推进 T2/T4。底层 registry 仍在 legacy 路径，T3 的事务 participant 归位、T5 的执行选择与 T6 的完整根收缩仍未完成；
 不能将这个中间批次作为 RFC-360 或 W4-E4b Done。RFC-361/362 已批准，尚待接续其实施任务。
+
+第二批继续 T2/T3：profile DTO、纯 profile 判据、注册表 application/boot 和唯一持久化迁入 RM；driver 能力、缓存驱逐和旧配置读取通过 required effect port 注入。
+RC 的试跑失效 participant 与 RM-required 引用 participant 复用同一 live transaction；继承失效的 runtime 名单由 RM 返回，不再让 RC 查询 runtimes 表。
+新增双库故障注入覆盖更新/停用/删除/继承失效的共同回滚，以及同事务未提交 Agent 引用可见性。
+
+短期兼容：`services/runtimeRegistry.ts`、`platform/runtime-registry/**` 只转发到唯一 RM 实现；八条新增 R1 import/export
+逐条登记至 commons-debt，owner 为 RFC-360 T6。不得因实现已搬迁而宣称这些入口/执行选择/根绑定已经退役。
+具体字段与接续面见 `implementation-progress.md`。

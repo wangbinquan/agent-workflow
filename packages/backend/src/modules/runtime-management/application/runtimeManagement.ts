@@ -5,11 +5,11 @@ import {
   parseRuntimeExtraArgs,
   runtimeProbeTargetOf,
   runtimeRowToView,
-} from '@/services/runtimeRegistry'
+} from '../domain/runtimeProfile'
 import type { RuntimeDiagnosticCommands, RuntimeProfileCommands } from '../public/commands'
 import type { RuntimeModelQueries, RuntimeProfileQueries } from '../public/queries'
 import type { RuntimeManagementDependencies } from './ports/runtimeManagement'
-import type { RuntimeRow } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+import type { RuntimeRow } from '../domain/runtimeProfile'
 
 export interface RuntimeManagementApplication {
   readonly profiles: RuntimeProfileCommands

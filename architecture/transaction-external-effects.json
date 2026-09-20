@@ -2593,6 +2593,30 @@
       "transactionCallee": "withTransaction"
     },
     {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#transaction:122",
+      "line": 122,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
+      "status": "clear",
+      "symbol": "DrizzleRuntimeRegistryPersistence",
+      "targetContext": "runtime-management",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#transaction:57",
+      "line": 57,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
+      "status": "clear",
+      "symbol": "DrizzleRuntimeRegistryPersistence",
+      "targetContext": "runtime-management",
+      "transactionCallee": "transaction"
+    },
+    {
       "effectTokens": [
         "provider"
       ],
@@ -3038,30 +3062,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#transaction:117",
-      "line": 117,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
-      "status": "clear",
-      "symbol": "DrizzleRuntimeRegistryPersistence",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#transaction:52",
-      "line": 52,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
-      "status": "clear",
-      "symbol": "DrizzleRuntimeRegistryPersistence",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/services/taskArchive.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/services/taskArchive.ts#transaction:688",
@@ -3088,7 +3088,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4acda67e818a25ba8f0e0537e2b9de561e449f0c6197e5802f1e05012e3907dd",
+  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

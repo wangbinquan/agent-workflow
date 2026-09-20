@@ -572,8 +572,8 @@ test('RFC-153 impl-gate 2nd pass: 删除序列仍在一笔事务里，且实现�
     import.meta.dir,
     '..',
     'src',
-    'platform',
-    'runtime-registry',
+    'modules',
+    'runtime-management',
     'infrastructure',
   )
   const providerSpecific = readdirSync(dir).filter((name) => /^(sqlite|postgresql)/i.test(name))
@@ -590,6 +590,7 @@ test('RFC-153 impl-gate 2nd pass: 删除序列仍在一笔事务里，且实现�
     'await databaseSessionFor(this.db).serializable(async (transaction) => {',
   )
   // 计数 / 引用检查 / 试跑失效 / 删除四件事都必须落在那一笔事务体内。
-  expect(deleteBody).toContain('await transitionRuntimeTests(transaction, {')
+  expect(deleteBody).toContain('await this.participants.testInvalidation.invalidate(transaction, {')
+  expect(deleteBody).toContain('await this.participants.usage.inspect(transaction, {')
   expect(deleteBody).toContain('await transaction.delete(runtimes)')
 })

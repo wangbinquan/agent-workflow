@@ -1,9 +1,8 @@
 import { loadConfig } from '@/config'
 import { getRuntimeDriver, tryGetRuntimeDriver } from '@/services/runtime'
-import {
-  assertRuntimeSpawnCapabilities,
-  withRuntimeProbeConfigFence,
-} from '@/services/runtimeRegistry'
+import { createRuntimeRegistryApplication } from '../application/runtimeRegistry'
+import { createRuntimeRegistryEffects } from './runtimeRegistryEffects'
+import { withRuntimeProbeConfigFence } from './runtimeProbeFence'
 import { smokeRuntime, type SmokeOptions, type SmokeResult } from '@/services/runtimeSmoke'
 import { isRuntimeMcpTestEligible, type McpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import type { RuntimeManagementDependencies } from '../application/ports/runtimeManagement'
@@ -19,6 +18,9 @@ export function createRuntimeManagementEffects(input: {
   readonly runtimeTests: Pick<McpRuntimeTestService, 'reconcileDurableIntents'>
   readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
 }): Omit<RuntimeManagementDependencies, 'registry'> {
+  const { assertRuntimeSpawnCapabilities } = createRuntimeRegistryApplication(
+    createRuntimeRegistryEffects(),
+  )
   return {
     config: {
       current() {

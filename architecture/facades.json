@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 296,
-    "thinFacades": 49
+    "thinFacades": 50
   },
   "entries": [
     {
@@ -3739,15 +3739,18 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:05fe4f6fbe5724b98381",
         "import:0d84849979600beb3392",
         "import:28490b02663597eaeebe",
         "import:292e6f622426fed4dffb",
+        "import:3b0939b8480fceab955a",
         "import:508585b40e2cf04f1432",
         "import:55e8e7319736fc529828",
         "import:6086843b83980e7f72de",
         "import:6d5a94d223636922c768",
         "import:933405a99ca17491e5e0",
-        "import:9b54bbf2ad1b84de8700"
+        "import:9b54bbf2ad1b84de8700",
+        "import:ed4eeb7ac1111ebf2f6e"
       ],
       "exportedSymbols": [
         "RUNTIME_KINDS",
@@ -4159,63 +4162,16 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:03735285e4900dcb304f",
-        "import:8f546e81c28ec42c6355",
-        "import:a2727a15af5600be93d5",
-        "import:a6f7509d4e1f6d6f23dc",
-        "import:b27ce62fc855e7a9fd45",
+        "import:5f952f54612e7dd6c069",
         "import:cb0df11fa1b51981f7fe",
-        "import:d99993140213f8fae357",
         "import:f3ad3b94931e4b921699"
       ],
-      "exportedSymbols": [
-        "BUILTIN_RUNTIMES",
-        "CreateRuntimeInput",
-        "RUNTIME_EXTRA_ARGS_MAX",
-        "RUNTIME_EXTRA_ARG_MAX_LENGTH",
-        "RUNTIME_NAME_RE",
-        "RUNTIME_PROTOCOLS",
-        "ResolvedRuntime",
-        "RuntimeExecutionProfileFingerprint",
-        "RuntimeProbeTarget",
-        "RuntimeProfile",
-        "RuntimeProfileInput",
-        "RuntimeProtocol",
-        "RuntimeRefConfig",
-        "RuntimeRow",
-        "RuntimeView",
-        "UpdateRuntimeInput",
-        "assertConfigDefaultsMigrated",
-        "assertRuntimeSpawnCapabilities",
-        "cacheRuntimeProbe",
-        "composeRuntimeRegistryOperations",
-        "createRuntime",
-        "defaultConfigDirProfile",
-        "deleteRuntime",
-        "getRuntime",
-        "invalidateInheritedRuntimeProbeReceipts",
-        "listRuntimes",
-        "migrateConfigIntoBuiltins",
-        "parseRuntimeExtraArgs",
-        "resolveAgentRuntime",
-        "resolveInternalAgentRuntime",
-        "resolveRuntimeByName",
-        "runtimeProbeTargetOf",
-        "runtimeProfileOf",
-        "runtimeRowToView",
-        "seedBuiltinRuntimes",
-        "setRuntimeEnabled",
-        "updateRuntime",
-        "validateConfigDirEnv",
-        "validateConfigDirName",
-        "validateExtraArgs",
-        "withRuntimeProbeConfigFence"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/runtimeRegistry.ts",
       "id": "facade:packages/backend/src/services/runtimeRegistry.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#$file",
       "removeAfterWave": "W4-E4b",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -6337,5 +6293,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4acda67e818a25ba8f0e0537e2b9de561e449f0c6197e5802f1e05012e3907dd"
+  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634"
 }

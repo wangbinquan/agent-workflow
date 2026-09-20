@@ -1,8 +1,4 @@
-import type {
-  CreateRuntimeInput,
-  RuntimeView,
-  UpdateRuntimeInput,
-} from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+import type { CreateRuntimeInput, RuntimeView, UpdateRuntimeInput } from './types'
 import type { RuntimeKind, RuntimeSmokeResult } from './types'
 
 export interface RegisterRuntimeInput extends CreateRuntimeInput {

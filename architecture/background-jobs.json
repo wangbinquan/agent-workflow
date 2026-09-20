@@ -540,6 +540,28 @@
       "targetContext": "runtime-management"
     },
     {
+      "callee": "setRuntimeEnabled",
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
+      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:496",
+      "kind": "global-setter",
+      "line": 496,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
+      "removeAfterWave": "W6/W9",
+      "symbol": "createRuntimeRegistryApplication",
+      "targetContext": "runtime-management"
+    },
+    {
+      "callee": "setRuntimeEnabled",
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
+      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:705",
+      "kind": "global-setter",
+      "line": 705,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
+      "removeAfterWave": "W6/W9",
+      "symbol": "createRuntimeRegistryApplication",
+      "targetContext": "runtime-management"
+    },
+    {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1506",
@@ -5391,28 +5413,6 @@
       "targetContext": "bootstrap"
     },
     {
-      "callee": "setRuntimeEnabled",
-      "file": "packages/backend/src/services/runtimeRegistry.ts",
-      "id": "ambient:packages/backend/src/services/runtimeRegistry.ts#setRuntimeEnabled:1154",
-      "kind": "global-setter",
-      "line": 1154,
-      "ownerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#composeRuntimeRegistryOperations",
-      "removeAfterWave": "W6/W9",
-      "symbol": "composeRuntimeRegistryOperations",
-      "targetContext": "runtime-management"
-    },
-    {
-      "callee": "setRuntimeEnabled",
-      "file": "packages/backend/src/services/runtimeRegistry.ts",
-      "id": "ambient:packages/backend/src/services/runtimeRegistry.ts#setRuntimeEnabled:945",
-      "kind": "global-setter",
-      "line": 945,
-      "ownerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#setRuntimeEnabled",
-      "removeAfterWave": "W6/W9",
-      "symbol": "setRuntimeEnabled",
-      "targetContext": "runtime-management"
-    },
-    {
       "callee": "registerRevalidationTrigger",
       "file": "packages/backend/src/ws/connections.ts",
       "id": "ambient:packages/backend/src/ws/connections.ts#registerRevalidationTrigger:297",
@@ -5453,9 +5453,9 @@
   },
   "denominator": {
     "ambientWiring": 494,
-    "disabled": 8,
-    "entries": 331,
-    "executionLocal": 40,
+    "disabled": 9,
+    "entries": 334,
+    "executionLocal": 42,
     "longRunning": 76,
     "managed": 11,
     "periodic": 207
@@ -7749,6 +7749,56 @@
       "targetContext": "resource-catalog"
     },
     {
+      "dependencies": [
+        "client",
+        "config",
+        "db",
+        "registry",
+        "runtime"
+      ],
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
+      "finalCriterion": "remain disabled or delete",
+      "id": "background:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
+      "kind": "disabled",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "disabled",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
+      "phase": "before-ready",
+      "symbol": "createRuntimeRegistryApplication",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [
+        "config"
+      ],
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot",
+      "phase": "before-ready",
+      "symbol": "initializeRuntimeRegistryBoot",
+      "targetContext": "runtime-management"
+    },
+    {
       "dependencies": [],
       "file": "packages/backend/src/modules/runtime-management/composition.ts",
       "finalCriterion": "owner lifecycle",
@@ -7790,6 +7840,117 @@
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition.ts#composeRealtimeRuntimeFor",
       "phase": "execution",
       "symbol": "composeRealtimeRuntimeFor",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#composeRuntimeRegistryOperations",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#composeRuntimeRegistryOperations",
+      "phase": "execution",
+      "symbol": "composeRuntimeRegistryOperations",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/runtime-management/composition/runtimeRegistryCompatibility.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/runtime-management/composition/runtimeRegistryCompatibility.ts#composeRuntimeRegistryOperations",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistryCompatibility.ts#composeRuntimeRegistryOperations",
+      "phase": "execution",
+      "symbol": "composeRuntimeRegistryOperations",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/runtime-management/domain/runtimeProfile.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/runtime-management/domain/runtimeProfile.ts#runtimeRowToView",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/domain/runtimeProfile.ts#runtimeRowToView",
+      "phase": "execution",
+      "symbol": "runtimeRowToView",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryEffects.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryEffects.ts#createRuntimeRegistryEffects",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryEffects.ts#createRuntimeRegistryEffects",
+      "phase": "execution",
+      "symbol": "createRuntimeRegistryEffects",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [
+        "config",
+        "db",
+        "runtime"
+      ],
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts",
+      "finalCriterion": "remain disabled or delete",
+      "id": "background:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
+      "kind": "disabled",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "disabled",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
+      "phase": "unknown",
+      "symbol": "DrizzleRuntimeRegistryPersistence",
       "targetContext": "runtime-management"
     },
     {
@@ -10677,34 +10838,11 @@
     },
     {
       "dependencies": [
-        "config"
-      ],
-      "file": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot",
-      "phase": "before-ready",
-      "symbol": "initializeRuntimeRegistryBoot",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
         "db"
       ],
-      "file": "packages/backend/src/platform/runtime-registry/composition.ts",
+      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
       "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/platform/runtime-registry/composition.ts#composeRuntimeRegistryOperations",
+      "id": "background:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
       "kind": "execution-local",
       "lifecycle": {
         "health": false,
@@ -10716,33 +10854,8 @@
       },
       "lifetime": "execution-local",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/composition.ts#composeRuntimeRegistryOperations",
-      "phase": "execution",
-      "symbol": "composeRuntimeRegistryOperations",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "config",
-        "db",
-        "runtime"
-      ],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
-      "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
-      "kind": "disabled",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "disabled",
-      "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
-      "phase": "unknown",
+      "phase": "execution",
       "symbol": "DrizzleRuntimeRegistryPersistence",
       "targetContext": "platform"
     },
@@ -12049,50 +12162,6 @@
     },
     {
       "dependencies": [
-        "config"
-      ],
-      "file": "packages/backend/src/services/runtimeRegistry.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/services/runtimeRegistry.ts#composeRuntimeRegistryOperations",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#composeRuntimeRegistryOperations",
-      "phase": "execution",
-      "symbol": "composeRuntimeRegistryOperations",
-      "targetContext": "runtime-management"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/runtimeRegistry.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/services/runtimeRegistry.ts#runtimeRowToView",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#runtimeRowToView",
-      "phase": "execution",
-      "symbol": "runtimeRowToView",
-      "targetContext": "runtime-management"
-    },
-    {
-      "dependencies": [
         "timer"
       ],
       "file": "packages/backend/src/services/scheduledTaskScheduler.ts",
@@ -12754,5 +12823,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4acda67e818a25ba8f0e0537e2b9de561e449f0c6197e5802f1e05012e3907dd"
+  "sourceDigest": "sha256:350d0dd288ec3d48539bbe624a990abde06b37545c7f44cafb5733e65f3fc634"
 }
