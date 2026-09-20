@@ -162,3 +162,7 @@ W29 PostgreSQL 仍 161 statements；摘要变化仅为 deferred root 不再重�
 `f24b7b5ef` Main `35510835709` Ubuntu 12/12 的 RFC328 effect-boundary 守卫仍寻找内联 `materializeSpaceWithProvider`；实际 deferred loop 已通过 durable 与 legacy 两入口调用。守卫改为同时要求 `prepareDurableRepositoryWorkspace`、`prepareLegacyDeferredWorkspace` 与原 observer，并补无 observer/缺任一分支的负例；不放松 effect boundary，也不改生产算法。该 SHA Windows `35510835760` 已终态成功，SC 七个与 Task/upload 八个真实进程恢复窗口全部通过。
 
 同批 macOS 2/6 暴露旧 W7 SQLite predicate fixture 未传新增必填 preparation binding，本批按真实 SC composition 补装配，不给生产 factory 增 fallback。macOS 5/6 的两项精确账差也修复：已迁真双库的 child suite 删除旧 fake-runtime 三处基线；multipart error mapper 只观察 `complete` 并原样附带 report，改为最小结构参数，移除新增的 Task composition 类型边及无人消费 re-export，未新增豁免。TypeScript transpile 对拍确认这两个生产文件运行时输出与 `f24b7b5ef` 相同。
+
+## T8 总账基线同步
+
+`f20110888` Windows `35512285261` 同 SHA 原生验收通过；Main `35512158270` 的 RFC317 highwater 揭示上一批删除 child 假运行时明细后，独立总账仍留 69。将总基线同步为真实 68 并说明真双库替代，未放宽守卫或增加 allowance。生产源码及所有功能测试均不改。

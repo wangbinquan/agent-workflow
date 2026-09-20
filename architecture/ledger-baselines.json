@@ -797,8 +797,8 @@
       "id": "rfc359-w5-postgresql-fake-runtime",
       "file": "packages/backend/tests/architecture/rfc359-w5-postgresql-fake-runtime.test.ts",
       "symbol": "FAKE_POSTGRESQL_RUNTIME_LITERALS",
-      "baseline": 69,
-      "why": "RFC-359 W5（plan §5gp）—— 测试里**手搓的假 PostgreSQL 运行时**清单。判据：一个对象字面量被直接安上 `PostgresqlPool` / `PostgresqlReservedConnection` / `PostgresqlDatabaseRuntime`（注解或断言；`as unknown as` 那种绕一跳的写法也算——判据第一版正是漏在这里，是负 fixture 探出来的，真语料里当时确实躺着一处没记到）。为什么另开一本：隔壁 `rfc359-w5-provider-runtime-exercised` 守的是「组合根有没有被测试构造过」（那本账已清零），而「构造过」与「在真 PostgreSQL 上跑过」是两件事——那条守卫自己的头注释就把「喂假 pool，证明的是接线不是 PostgreSQL 行为」列为已查实的危害③，那一层此前没有任何判据看着。假池有多弱有个决定性实例（plan §5go）：把生产查询里的 pg_stat_user_tables 改错一个字，旧的「SQL 文本里有没有这个子串」断言**照过**，换成真库后当场红在 relation does not exist。**这个数字刻意不做分类**——里面混着「正当的」（被测物就是驱动/编译器本身：编译探针、连接 reserve 计数）与「该还的债」（业务行为拿罐头行代替数据库，plan §5gn 的 A 组）。分类必须逐个读源码，而按语法形状聚类正是本 RFC 反复栽跟头的地方（§5gh → §5gi）。想让某一行变小只有两条路：迁到真库（describeEachProvider / harness.applicationBinding 在 PG 侧直接交出真的 InstrumentedPostgresqlDatabaseRuntime），或在提交说明里指名它属于「正当」那一类。长期目标不是 0（正当的那类会留下来），是**债那部分清零**。"
+      "baseline": 68,
+      "why": "RFC-359 W5（plan §5gp）—— 测试里**手搓的假 PostgreSQL 运行时**清单。判据：一个对象字面量被直接安上 `PostgresqlPool` / `PostgresqlReservedConnection` / `PostgresqlDatabaseRuntime`（注解或断言；`as unknown as` 那种绕一跳的写法也算——判据第一版正是漏在这里，是负 fixture 探出来的，真语料里当时确实躺着一处没记到）。为什么另开一本：隔壁 `rfc359-w5-provider-runtime-exercised` 守的是「组合根有没有被测试构造过」（那本账已清零），而「构造过」与「在真 PostgreSQL 上跑过」是两件事——那条守卫自己的头注释就把「喂假 pool，证明的是接线不是 PostgreSQL 行为」列为已查实的危害③，那一层此前没有任何判据看着。假池有多弱有个决定性实例（plan §5go）：把生产查询里的 pg_stat_user_tables 改错一个字，旧的「SQL 文本里有没有这个子串」断言**照过**，换成真库后当场红在 relation does not exist。**这个数字刻意不做分类**——里面混着「正当的」（被测物就是驱动/编译器本身：编译探针、连接 reserve 计数）与「该还的债」（业务行为拿罐头行代替数据库，plan §5gn 的 A 组）。分类必须逐个读源码，而按语法形状聚类正是本 RFC 反复栽跟头的地方（§5gh → §5gi）。想让某一行变小只有两条路：迁到真库（describeEachProvider / harness.applicationBinding 在 PG 侧直接交出真的 InstrumentedPostgresqlDatabaseRuntime），或在提交说明里指名它属于「正当」那一类。长期目标不是 0（正当的那类会留下来），是**债那部分清零**。 RFC-363：child launch suite 改用真实 SQLite/PostgreSQL，删除三处 recording-pool 假运行时所在的一行；文件条目基线 69 → 68。"
     },
     {
       "id": "rfc362-declared-public-contracts",
@@ -920,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f4fd175fe0527a0c79da697a2a8d64ebfb58b732",
-    "contentDigest": "sha256:540bea7fc69b925785b3f9de6ca14434e4b9b8b5c5532b9ccff9bb0310277689",
+    "currentSnapshotSha": "f20110888fbd2988c11c5367f109597d7a5ba257",
+    "contentDigest": "sha256:90c6d025ace2e72dbde1a832500891130c8636c083a7b548987c3dfb34f40217",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
