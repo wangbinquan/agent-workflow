@@ -1,3 +1,4 @@
+import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { afterEach, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -27,10 +28,12 @@ import {
 import {
   MCP_RUNTIME_TEST_IDLE_MS,
   MCP_RUNTIME_TEST_TURN_TIMEOUT_MS,
-  McpRuntimeTestEventSink,
-  McpRuntimeTestService,
-  type McpRuntimeTestDependencies,
-} from '../src/services/mcpRuntimeTest'
+} from '@/modules/resource-catalog/domain/mcps/runtimeDiagnostics'
+import { McpRuntimeTestEventSink } from '@/modules/resource-catalog/application/mcps/runtimeTestEventSink'
+import {
+  createMcpDiagnosticsApplication,
+  type McpDiagnosticsApplicationInput,
+} from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { getRuntimeDriver } from '../src/services/runtime'
 import {
@@ -81,11 +84,12 @@ function mcpBinding(db: ProviderNeutralDatabase): McpServiceBinding {
 function runtimeTestDependencies(
   db: ProviderNeutralDatabase,
   root: string,
-): McpRuntimeTestDependencies {
+): McpDiagnosticsApplicationInput {
   const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
   const mcp = mcpBinding(db)
   return {
     ...composeMcpRuntimeTestProvider(db),
+    isRuntimeEligible: isRuntimeMcpTestEligible,
     loadMcp: (mcpId) => getMcpById(mcp, mcpId),
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
     configPath: join(root, 'config.json'),
@@ -164,7 +168,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('rejects empty and over-64-KiB UTF-8 messages before scheduling a runtime', async () => {
     const { db, mcp, root } = await seed(harness.db)
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
@@ -193,7 +197,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     let now = 1_000
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
@@ -271,7 +275,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const observedBeforeRuns: Array<string | null> = []
     let initialNativeId: string | null = null
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
@@ -374,7 +378,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('reset without replacement makes an established playground session unusable', async () => {
     const { db, mcp, root, runtimeName } = await seed(harness.db, 'claude-code')
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
@@ -458,7 +462,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('native identity integrity failure cannot restore a prior ready resume id', async () => {
     const { db, mcp, root, runtimeName } = await seed(harness.db, 'claude-code')
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
@@ -525,7 +529,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     let now = 5_000
     let runIndex = 0
     let nativeSessionObserved = false
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
@@ -591,7 +595,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
 
   test('canceling the first turn before a native session is ready ends the logical session', async () => {
     const { db, mcp, root } = await seed(harness.db)
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.onSpawned?.({
@@ -645,7 +649,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('create idempotency and canonical event dedupe prevent repeated side effects', async () => {
     const { db, mcp, root } = await seed(harness.db)
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
@@ -721,7 +725,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('message response-loss replay is exact and does not schedule a duplicate turn', async () => {
     const { db, mcp, root } = await seed(harness.db)
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
@@ -810,7 +814,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       source: 'session',
       additionalPermissions: ['mcp-runtime-tests:audit'],
     })
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.eventSink?.setRootSessionId('native-private')
@@ -852,7 +856,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const proceed = new Promise<void>((resolveProceed) => {
       releasePlan = resolveProceed
     })
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         if (opts.testPlanOverride === undefined) throw new Error('missing test build plan')
@@ -898,7 +902,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     let now = 1_000
     let promptDelivered = false
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
@@ -954,7 +958,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     let runs = 0
     let reapOutcome: 'kill-failed' | 'not-alive' = 'kill-failed'
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
@@ -1091,7 +1095,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     })
 
     let reapedPid: number | null = null
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => 1_000,
       killStaleRunProcessTree: async (run) => {
@@ -1174,7 +1178,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       createdAt: 900,
     })
 
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => 1_000,
       killStaleRunProcessTree: async () => 'not-alive',
@@ -1193,7 +1197,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('graceful shutdown reaps the turn, preserves a proven native session, and rejects new work', async () => {
     const { db, mcp, root } = await seed(harness.db)
     let running = false
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.onSpawned?.({
@@ -1249,7 +1253,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
 
   test('provider-session pause closes admission and resume reopens the same service', async () => {
     const { db, mcp, root } = await seed(harness.db)
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => successResult(opts, 'native-after-resume'),
     })
@@ -1278,7 +1282,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('graceful shutdown also reaps a turn already marked ending by a durable mutation', async () => {
     const { db, mcp, root } = await seed(harness.db)
     let running = false
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.onSpawned?.({
@@ -1333,7 +1337,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     let now = 20_000
     let running = false
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
@@ -1385,7 +1389,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     let now = 100
     let runs = 0
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
@@ -1468,7 +1472,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const blockingRun = new Promise<void>((resolveRun) => {
       releaseBlockingRun = resolveRun
     })
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => now,
       capacity: 1,
@@ -1544,7 +1548,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const turnId = 'blocked-queued-turn'
     const scratchRoot = join(root, 'mcp-runtime-tests', sessionId)
     mkdirSync(join(scratchRoot, 'session-store'), { recursive: true })
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => 10,
       runFn: async () => {
@@ -1641,7 +1645,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       createdAt: 1,
     })
 
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => 10,
     })
@@ -1712,7 +1716,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       },
     ])
 
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => 10,
     })
@@ -1767,7 +1771,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       expiresAt: 2,
     })
 
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...runtimeTestDependencies(db, root),
       now: () => 10,
     })
@@ -1792,7 +1796,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('nextDeadline 读失败只落日志，不留下无人处理的 rejection', async () => {
     const { db, root } = await seed(harness.db)
     const base = runtimeTestDependencies(db, root)
-    const service = new McpRuntimeTestService({
+    const service = createMcpDiagnosticsApplication({
       ...base,
       persistence: {
         ...base.persistence,

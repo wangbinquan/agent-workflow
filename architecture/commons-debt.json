@@ -7212,9 +7212,9 @@
       "kind": "missing-guard",
       "title": "MCP-playground support is a method-presence proxy — the exact shape RFC-282 C2 eliminated for inventory — and its two-method contract is not enforced together",
       "anchors": [
-        "packages/backend/src/services/mcpRuntimeTest.ts:127-133",
-        "packages/backend/src/services/mcpRuntimeTest.ts:2232-2238",
-        "packages/backend/src/services/mcpRuntimeTest.ts:858",
+        "packages/backend/src/modules/runtime-management/infrastructure/mcpTestEligibility.ts:3-9",
+        "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts:109-124",
+        "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts:101-103",
         "packages/backend/src/services/runtime/types.ts:781-792",
         "packages/backend/src/services/runtime/claudeCode/driver.ts:485-488",
         "packages/backend/tests/rfc282-a3-driver-selfcheck.test.ts:59-173"
@@ -7858,15 +7858,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:49af403f4dc6cfcbd91b8cf4b68ab3d7bf11a9da8ffe684daed9845e00497ec4",
+    "sourceDigest": "sha256:9f60903d51ec899ad528a1e49a30a51e6445a7fe908ac0f19c4bfad6dd668c27",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "ffd2da43f6b4c1dc89e7583453ad187bbcef735d",
-    "contentDigest": "sha256:ad1cdf733654cda5ff946cf06a056a15772173f41ba73ad2f2e826fd45cd8ed3",
+    "currentSnapshotSha": "cb2ce5b566b754683505338c1e1979963e894051",
+    "contentDigest": "sha256:02e1e6b5e0c0bc74f7985b117e992b0e7d7e70f773488e98ee55c2b0b5cf437e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -20,3 +20,15 @@
 ## 剩余工作
 
 T4/T5：四 commands + 三 queries 使用 IA context；锁内 fresh MCP lookup、同 coordinator、三 root 单实例和 lifecycle 注入；T6 删除临时 service/lease facade 与 WeakMap、精确 debt/canonical 出账、完整 AC/最终 CI。RFC363 Task 两 lane/admission/取消 owner 接线和 RFC365 T1 后续边界保持原状态。
+
+## T4/T5/T6 生产接线候选（2026-09-20）
+
+基线 `cb2ce5b566b754683505338c1e1979963e894051`。四个 public commands 与三个 queries 消费 IA command/query context；application 保留共享 MCP coordinator、create/message 锁外解析和锁内 fresh lookup。七个 HTTP handler 保留解析、权限、状态码和 DTO，只调用窄合同。
+
+三个 root 均一次冷构造，HTTP、catalog lifecycle、RM/config reconciliation 与 daemon/provider background 显式共享同一 application。server 的 bootstrap 注入优先和 unstarted scope factory 保留，W29 全量图 digest 只随明确装配变更更新，并新增 exact coordinator/IA/eligibility/projection 断言。生产 `services/mcpRuntimeTest.ts`、`services/mcpRuntimeTestLease.ts` 和实例 WeakMap 删除；原真实双库、进程和生命周期测试直接导入真实 owner。
+
+上一批 Main `35503125522` 暴露 application 反向 legacy 类型和 RC→RM offered DAG 边。本批移除这些边：运行结果/stream 是 application 自有合同；启动验证回调限定在同一 turn，仍在 final capture flush 后执行。Runtime Management inspection/eligibility 由 root 经现 public surface 注入 RC 所需事实，RC 不反向依赖 RM；RM→RC 的同事务失效和窄 reconciliation 保持。没有新增 allowed DAG 边或豁免。RT-13 method-presence 债只是更新实际 owner 锚点，不宣称驱动能力政策已改变。
+
+新增真实 IA context + ResourceOperationCoordinator 并发 oracle，覆盖 start/message 等待 catalog 修改后使用新行、其余五操作共享锁、缺失仍404。原 RFC303 macOS fixture 的 registry 比较在 /var 与 /private/var 别名下会漏掉残留，现从 realpath 临时根构造，保留原三项 cleanup 结果断言和所有生产实现。
+
+本批只完成可上库候选；E6/AC-7 仍等待本批最终 SHA Main 与原生进程证据。RFC363 Task 两 lane 与生产 fence/admission 接线仍需继续，RFC365 后续范围不变。

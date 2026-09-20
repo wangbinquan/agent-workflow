@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 294,
+    "serviceFiles": 292,
     "thinFacades": 49
   },
   "entries": [
@@ -2211,59 +2211,6 @@
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:1b7a84d5e8553ba8659a",
-        "import:45aa3de5d0ff0fc59e6a",
-        "import:51aaccea29330d6f63a2",
-        "import:56b4a64998a74182359b",
-        "import:59e478aa99d3a029690d",
-        "import:68c1f03d7ab22aca75af",
-        "import:6fac3c64358ae0bfa17c",
-        "import:82000244ed5e7b103454",
-        "import:ab67e5078db94f0110a8",
-        "import:aef356f5a91f2519db73",
-        "import:afda18e30aba1b4f7830",
-        "import:b0b6316a31c51d0a68e7",
-        "import:d288fa0740b7f2997d80",
-        "import:d83d28be11f1cb191d5f",
-        "import:f915d14f757425d4986b"
-      ],
-      "exportedSymbols": [
-        "McpRuntimeTestDependencies",
-        "McpRuntimeTestService",
-        "getMcpRuntimeTestService"
-      ],
-      "file": "packages/backend/src/services/mcpRuntimeTest.ts",
-      "id": "facade:packages/backend/src/services/mcpRuntimeTest.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file",
-      "removeAfterWave": "W4-E4b",
-      "status": "legacy-implementation",
-      "targetContext": "runtime-management",
-      "targetLayer": "inbound"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:0a4e481b18f9ae393ba9",
-        "import:6f8ca790bd17f296a756",
-        "import:a64646eef0dc7f59ceec",
-        "import:d61b4b6f842a76450b3d"
-      ],
-      "exportedSymbols": [
-        "claimNewMcpRuntimeTestSessionLease",
-        "preclaimMcpRuntimeTestSessionLease",
-        "releaseMcpRuntimeTestSessionLease",
-        "repairMcpRuntimeTestSessionLeaseAfterReap",
-        "rotateMcpRuntimeTestSessionLease"
-      ],
-      "file": "packages/backend/src/services/mcpRuntimeTestLease.ts",
-      "id": "facade:packages/backend/src/services/mcpRuntimeTestLease.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTestLease.ts#$file",
-      "removeAfterWave": "W4-E4b",
-      "status": "legacy-implementation",
-      "targetContext": "runtime-management",
-      "targetLayer": "inbound"
     },
     {
       "boundaryEdgeIds": [],
@@ -4495,11 +4442,7 @@
       "boundaryEdgeIds": [
         "import:12d3f0f99705bcfcc7d3",
         "import:44aa22593d2ee03168f2",
-        "import:662345ce19825157d173",
-        "import:71ce3d2a59f1295300bb",
-        "import:8a2fbbee32bdd192466c",
-        "import:91999cb95df7221220ca",
-        "import:aedc4909ee96b32d2e93"
+        "import:71ce3d2a59f1295300bb"
       ],
       "exportedSymbols": [
         "SessionCaptureIncompleteReason",
@@ -5105,20 +5048,16 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:09391e9041070a98f0f6",
         "import:249d06f167e02a472939",
         "import:2711368a4665ccb332af",
         "import:36fa4c83d3ffdf9f5e25",
-        "import:373f2405c35af6cd8dac",
         "import:48b3c18a0fdb0377aa32",
         "import:53e55db700007e9b1478",
         "import:8d997d1153638cbf6d9e",
         "import:ab9070ad98812d5f5e5a",
-        "import:b32d9d4d60af04eacedc",
         "import:b46f36cab99cedaaf41c",
         "import:c5a217a7da3a23f11087",
-        "import:cab426d1510e3863950c",
-        "import:f0f65a17d9689acc396b"
+        "import:cab426d1510e3863950c"
       ],
       "exportedSymbols": [
         "SystemAgentRunOptions",
@@ -6302,5 +6241,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:49af403f4dc6cfcbd91b8cf4b68ab3d7bf11a9da8ffe684daed9845e00497ec4"
+  "sourceDigest": "sha256:9f60903d51ec899ad528a1e49a30a51e6445a7fe908ac0f19c4bfad6dd668c27"
 }

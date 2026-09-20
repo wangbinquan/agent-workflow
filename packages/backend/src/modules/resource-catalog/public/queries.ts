@@ -1,4 +1,10 @@
 import type {
+  McpDiagnosticsResourceRef,
+  McpDiagnosticsSessionRef,
+  McpDiagnosticsTranscript,
+  McpRuntimeTestSessionDto,
+} from './types'
+import type {
   FileNode,
   ResolveAgentImportRefsRequest,
   ResolveAgentImportRefsResult,
@@ -247,4 +253,16 @@ export interface WorkgroupTaskRoomQueries {
 /** Closed snapshot of apply operations currently owned by this process. */
 export interface ResourcePackageApplyActivityQuery {
   activeApplyIds(): readonly string[]
+}
+
+export interface McpDiagnosticsQueries {
+  latest(
+    context: QueryContext,
+    input: McpDiagnosticsResourceRef,
+  ): Promise<McpRuntimeTestSessionDto | null>
+  session(context: QueryContext, input: McpDiagnosticsSessionRef): Promise<McpRuntimeTestSessionDto>
+  transcript(
+    context: QueryContext,
+    input: McpDiagnosticsSessionRef,
+  ): Promise<McpDiagnosticsTranscript>
 }

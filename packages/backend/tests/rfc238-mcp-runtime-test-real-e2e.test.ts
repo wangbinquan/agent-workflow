@@ -1,3 +1,4 @@
+import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { afterEach, expect, test } from 'bun:test'
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +13,7 @@ import {
   runtimes,
   tasks,
 } from '../src/db/schema'
-import { McpRuntimeTestService } from '../src/services/mcpRuntimeTest'
+import { createMcpDiagnosticsApplication } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
 import { composeMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -199,8 +200,9 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
         const mcp = await getMcpById(mcpBinding, 'mcp-fixture')
         if (mcp === null) throw new Error('fixture MCP missing')
         const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
-        const service = new McpRuntimeTestService({
+        const service = createMcpDiagnosticsApplication({
           ...composeMcpRuntimeTestProvider(db),
+          isRuntimeEligible: isRuntimeMcpTestEligible,
           loadMcp: (mcpId) => getMcpById(mcpBinding, mcpId),
           loadRuntime: (name) => runtimeRegistry.getRuntime(name),
           configPath: join(root, 'config.json'),

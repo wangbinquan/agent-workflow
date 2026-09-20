@@ -88,7 +88,7 @@ describe('RFC-364 MCP diagnostics policy', () => {
     expect(source).toContain('this.deps.persistence.recordSpawn(')
     expect(source).toContain('this.deps.persistence.settleTurn(')
     expect(source.indexOf("await sink.markTerminal('complete')")).toBeLessThan(
-      source.indexOf('await this.deps.effects.verifyTurn('),
+      source.indexOf('await result.verifyAfterCapture('),
     )
   })
 })

@@ -1,7 +1,5 @@
+import type { McpRuntimeTestCaptureIncompleteReason } from './runtimeTestPersistence'
 import type { Mcp, StartupVerificationResult } from '@agent-workflow/shared'
-import type { RuntimeProfileInspection } from '@/modules/runtime-management/public/types'
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
-import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 import type { StaleRunKillOutcome } from '@/util/process'
 import type {
   McpRuntimeTestSessionRecord,
@@ -10,7 +8,7 @@ import type {
   McpRuntimeTestBroadcastSnapshot,
 } from './runtimeTestPersistence'
 export interface ResolvedTestRuntime {
-  readonly row: RuntimeProfileInspection
+  readonly row: McpDiagnosticRuntime
   readonly binary: string
   readonly snapshotJson: string
 }
@@ -42,19 +40,73 @@ export interface McpDiagnosticsEffects {
     readonly mcp: Mcp
     readonly runtime: ResolvedTestRuntime
     readonly signal: AbortSignal
-    readonly sink: SystemAgentEventSinkV1
+    readonly sink: McpDiagnosticEventSink
     readonly timeoutMs: number
     readonly assertSpawnAllowed: () => Promise<void>
-    readonly onSpawned: NonNullable<SystemAgentRunOptions['onSpawned']>
-  }): Promise<SystemAgentRunResult>
-  verifyTurn(
-    session: McpRuntimeTestSessionRecord,
-    turn: McpRuntimeTestTurnRecord,
-    result: SystemAgentRunResult,
-  ): Promise<StartupVerificationResult | undefined>
+    readonly onSpawned: (receipt: {
+      pid: number | null
+      spawnedAt: number
+      spawnBinaryPath: string
+    }) => void | Promise<void>
+  }): Promise<McpDiagnosticRunResult>
   failedResult(
     session: McpRuntimeTestSessionRecord,
     aborted: boolean,
     durationMs: number,
-  ): SystemAgentRunResult
+  ): McpDiagnosticRunResult
+}
+
+/** A turn-scoped effect receipt; verification runs only after the capture barrier. */
+export interface McpDiagnosticRunResult {
+  readonly status:
+    | 'ok'
+    | 'spawn-failed'
+    | 'timeout'
+    | 'aborted'
+    | 'exit-nonzero'
+    | 'result-error'
+    | 'unreaped'
+  readonly exitCode: number | null
+  readonly stderrTail: string
+  readonly durationMs: number
+  readonly capturedSessionId?: string
+  readonly nativeSessionIntegrityFailed?: boolean
+  readonly verifyAfterCapture: () => Promise<StartupVerificationResult | undefined>
+}
+export type SessionCaptureTerminalState = 'complete' | 'truncated' | 'incomplete'
+export type SessionCaptureIncompleteReason = McpRuntimeTestCaptureIncompleteReason
+export interface McpDiagnosticEventSink {
+  append(event: {
+    ts: number
+    kind: string
+    payload: string
+    sessionId: string | null
+    parentSessionId: string | null
+    source: 'stream' | 'live-child' | 'post-run-child'
+    externalEventId?: string
+  }): Promise<void>
+  markRootSessionResetPending(sessionId: string): Promise<void>
+  setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void>
+  markTerminal(
+    state: SessionCaptureTerminalState,
+    reason?: SessionCaptureIncompleteReason,
+  ): Promise<void>
+}
+
+/** Purpose-specific facts supplied by the root's Runtime Management inspection binding. */
+export interface McpDiagnosticRuntime {
+  readonly id: string
+  readonly name: string
+  readonly protocol: 'opencode' | 'claude-code'
+  readonly binaryPath: string | null
+  readonly enabled: boolean
+  readonly configDirEnv: string | null
+  readonly configDirName: string | null
+  readonly probeFence: number
+  readonly model: string | null
+  readonly variant: string | null
+  readonly temperature: number | null
+  readonly steps: number | null
+  readonly maxSteps: number | null
+  readonly isSandbox: boolean
 }

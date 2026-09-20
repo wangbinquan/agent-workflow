@@ -5,10 +5,8 @@ import { DEFAULT_CONFIG_DIR_PROFILE, type StartupVerificationResult } from '@age
 import { loadConfig } from '@/config'
 import { getRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan, SpawnPlan } from '@/services/runtime/types'
-import type { RuntimeProfileInspectionQueries } from '@/modules/runtime-management/public/queries'
 import {
   runSystemAgent,
-  emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
@@ -24,7 +22,6 @@ import {
 import { ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
-import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import {
   AGENT_NAME,
   SYSTEM_PROMPT,
@@ -33,13 +30,18 @@ import {
 } from '../domain/mcps/runtimeDiagnostics'
 import type {
   McpDiagnosticsEffects,
+  McpDiagnosticRuntime,
   ResolvedTestRuntime,
 } from '../application/mcps/runtimeDiagnosticsEffects'
-import type { McpRuntimeTestSessionRecord as SessionRow } from '../application/mcps/runtimeTestPersistence'
+import type {
+  McpRuntimeTestSessionRecord as SessionRow,
+  McpRuntimeTestTurnRecord,
+} from '../application/mcps/runtimeTestPersistence'
 export interface McpDiagnosticsEffectDependencies {
   readonly configPath: string
   readonly appHome: string
-  readonly loadRuntime: RuntimeProfileInspectionQueries['getRuntime']
+  readonly loadRuntime: (name: string) => Promise<McpDiagnosticRuntime | null>
+  readonly isRuntimeEligible: (runtime: McpDiagnosticRuntime) => boolean
   readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   readonly now?: () => number
   readonly killStaleRunProcessTree?: (
@@ -52,6 +54,38 @@ export function createMcpDiagnosticsEffects(
 ): McpDiagnosticsEffects {
   const runFn = deps.runFn ?? runSystemAgent
   const log = createLogger('mcp-runtime-test')
+  async function verifyTurn(
+    session: SessionRow,
+    turn: McpRuntimeTestTurnRecord,
+    result: SystemAgentRunResult,
+  ) {
+    let verification: StartupVerificationResult | undefined
+    if (result.status === 'ok' && deps.runFn === undefined) {
+      const driver = getRuntimeDriver(session.runtimeProtocol)
+      const turnRunRootForRead = join(session.scratchRoot, 'run', 'turns', turn.id)
+      // RFC-282 C2 — observation source from the driver's static declaration
+      // (the presence-proxy sent a third runtime down the claude branch).
+      // RFC-297 T12：判据收进 execution 层单点，测试台与 runner 共用同一份
+      // （此前两处各写一遍同样的 switch）。取数时机仍归调用方（它持有 runRoot），
+      // 判据归被调方——收口后这里只剩一次赋值，故 const。
+      const observation: StartupObservation = await observationForVerification(
+        driver.capabilities,
+        {
+          claudeInit: result.startupInventory ?? null,
+          // 惰性：只有以文件为观测源的运行时才会真的去读（判据在被调方）。
+          loadSnapshot: async () =>
+            (await driver
+              .readInventory?.({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
+              .catch(() => null)) ?? null,
+        },
+      )
+      if (result.declared === undefined) {
+        throw new Error('mcp-test declared manifest missing from run result (assembly seam broken)')
+      }
+      verification = verifyStartup(result.declared, observation)
+    }
+    return verification
+  }
   return {
     now: deps.now ?? Date.now,
     setTimeout(callback, delay) {
@@ -82,7 +116,7 @@ export function createMcpDiagnosticsEffects(
         throw new ValidationError('mcp-test-runtime-disabled', `runtime '${selected}' is disabled`)
       }
       const driver = getRuntimeDriver(row.protocol)
-      if (driver.mcpTestSessionReference === undefined || !isRuntimeMcpTestEligible(row)) {
+      if (driver.mcpTestSessionReference === undefined || !deps.isRuntimeEligible(row)) {
         throw new ValidationError(
           'mcp-test-runtime-unsupported',
           `runtime '${selected}' does not support mcp-test-v1`,
@@ -172,7 +206,7 @@ export function createMcpDiagnosticsEffects(
       onSpawned,
     }) {
       const driver = getRuntimeDriver(runtime.row.protocol)
-      return runFn({
+      const result = await runFn({
         feature: 'mcp-runtime-test',
         agentName: AGENT_NAME,
         systemPrompt: SYSTEM_PROMPT,
@@ -278,47 +312,27 @@ export function createMcpDiagnosticsEffects(
             }),
         onSpawned,
       })
-    },
-    async verifyTurn(session, turn, result) {
-      let verification: StartupVerificationResult | undefined
-      if (result.status === 'ok' && deps.runFn === undefined) {
-        const driver = getRuntimeDriver(session.runtimeProtocol)
-        const turnRunRootForRead = join(session.scratchRoot, 'run', 'turns', turn.id)
-        // RFC-282 C2 — observation source from the driver's static declaration
-        // (the presence-proxy sent a third runtime down the claude branch).
-        // RFC-297 T12：判据收进 execution 层单点，测试台与 runner 共用同一份
-        // （此前两处各写一遍同样的 switch）。取数时机仍归调用方（它持有 runRoot），
-        // 判据归被调方——收口后这里只剩一次赋值，故 const。
-        const observation: StartupObservation = await observationForVerification(
-          driver.capabilities,
-          {
-            claudeInit: result.startupInventory ?? null,
-            // 惰性：只有以文件为观测源的运行时才会真的去读（判据在被调方）。
-            loadSnapshot: async () =>
-              (await driver
-                .readInventory?.({ runRoot: turnRunRootForRead, nodeKind: 'agent-single' })
-                .catch(() => null)) ?? null,
-          },
-        )
-        if (result.declared === undefined) {
-          throw new Error(
-            'mcp-test declared manifest missing from run result (assembly seam broken)',
-          )
-        }
-        verification = verifyStartup(result.declared, observation)
+      return {
+        status: result.status,
+        exitCode: result.exitCode,
+        stderrTail: result.stderrTail,
+        durationMs: result.durationMs,
+        ...(result.capturedSessionId === undefined
+          ? {}
+          : { capturedSessionId: result.capturedSessionId }),
+        ...(result.nativeSessionIntegrityFailed === undefined
+          ? {}
+          : { nativeSessionIntegrityFailed: result.nativeSessionIntegrityFailed }),
+        verifyAfterCapture: () => verifyTurn(session, turn, result),
       }
-      return verification
     },
-    failedResult(session, aborted, durationMs) {
+    failedResult(_session, aborted, durationMs) {
       return {
         status: aborted ? 'aborted' : 'spawn-failed',
         exitCode: null,
-        eventText: '',
         stderrTail: 'runtime test attempt failed before completion',
         durationMs: Math.max(0, durationMs),
-        scratchDir: session.scratchRoot,
-        scratchRetained: true,
-        outputEvidence: emptySystemAgentOutputEvidence(),
+        verifyAfterCapture: async () => undefined,
       }
     },
   }

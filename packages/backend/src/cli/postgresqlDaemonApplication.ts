@@ -1,3 +1,4 @@
+import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import { createWorkspaceContentScope } from '@/modules/source-control/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -289,7 +290,7 @@ import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import { composeMcpDiagnostics } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
@@ -395,7 +396,7 @@ export interface PostgresqlDaemonApplicationInput {
    * RFC-238 / RFC-359 —— MCP 运行时测试的测试接缝。生产两侧都省略（用真的 runner 与真时钟）。
    *
    * 与 `runtimeDiagnosticTestDependencies` 同类：SQLite 根一直把这三项条件展开进
-   * `getMcpRuntimeTestService(...)`（`server.ts` 的 `runFn` / `now` / `capacity`），
+   * `composeMcpDiagnostics(...)`（`server.ts` 的 `runFn` / `now` / `capacity`），
    * PG 根建的是**同一个**服务却没转发它们，于是同一批用例在 PG 上没法双跑。
    * `appHome` 不在这里——PG 根本来就从 `input.appHome` 取。
    */
@@ -462,7 +463,7 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
   /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
-  readonly mcpRuntimeTests: ReturnType<typeof getMcpRuntimeTestService>
+  readonly mcpRuntimeTests: ReturnType<typeof composeMcpDiagnostics>
   readonly webhookTerminalControl: ReturnType<typeof composeMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
   readonly intentMaintenance: ReturnType<typeof composeIntentMaintenanceSnapshotQueriesFor>
@@ -617,9 +618,16 @@ export async function composePostgresqlApplication(
   })
   const mcpProbeStore = composeMcpProbeStore(input.db)
   const mcpRuntimeTests = (
-    phase.kind === 'daemon' ? getMcpRuntimeTestService : phase.scope.createMcpRuntimeTests
+    phase.kind === 'daemon' ? composeMcpDiagnostics : phase.scope.createMcpRuntimeTests
   )({
     ...composeMcpRuntimeTestProvider(input.db),
+    isRuntimeEligible: isRuntimeMcpTestEligible,
+    coordinator: mcpOperationCoordinator,
+    requestBinding: {
+      contexts: identityAccess.contexts,
+      directAuthority: identityAccess.directAuthority,
+      loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),
+    },
     // RFC-359 W11：运行时测试要查 MCP、MCP 目录的删除 / 对账又要运行时测试——同一作用域里的
     // `const mcpCatalog`（下面几行）由词法闭包解析，两边都只在运行期取值，可空槽消失。
     async loadMcp(mcpId) {
@@ -1887,7 +1895,7 @@ export async function composePostgresqlApplication(
   const runtimeManagement = composeRuntimeManagement({
     configPath: input.configPath,
     runtimeRegistry: core.runtimeRegistry,
-    runtimeTests: mcpRuntimeTests,
+    runtimeTests: mcpRuntimeTests.reconciliation,
     ...(input.runtimeDiagnosticTestDependencies === undefined
       ? {}
       : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
@@ -1897,7 +1905,7 @@ export async function composePostgresqlApplication(
       configPath: input.configPath,
       runtimeRegistry: runtimeManagement.configuration,
       withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(input.configPath),
-      runtimeTests: mcpRuntimeTests,
+      runtimeTests: mcpRuntimeTests.reconciliation,
       concurrencyHotApply: Object.freeze({
         apply(
           next: Parameters<
@@ -1943,7 +1951,9 @@ export async function composePostgresqlApplication(
       aclIdentity: mcpCatalog.participants.aclIdentity,
       probeStore: mcpProbeStore,
       authorityFor,
-      runtimeTests: mcpRuntimeTests,
+      runtimeTests: { commands: mcpRuntimeTests.commands, queries: mcpRuntimeTests.queries },
+      runtimeTestCommandContextFor: mcpRuntimeTests.contexts.command,
+      runtimeTestQueryContextFor: mcpRuntimeTests.contexts.query,
     }),
     plugins: Object.freeze({
       queries: pluginCatalog.queries,

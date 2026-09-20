@@ -3,8 +3,8 @@ import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   SessionCaptureIncompleteReason,
   SessionCaptureTerminalState,
-  SystemAgentEventSinkV1,
-} from '@/services/sessionEventSink'
+  McpDiagnosticEventSink,
+} from './runtimeDiagnosticsEffects'
 import type { McpRuntimeTestPersistence } from './runtimeTestPersistence'
 import {
   sha256,
@@ -17,7 +17,7 @@ interface EventSinkOwner {
   sessionId: string
   turnId: string
 }
-export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
+export class McpRuntimeTestEventSink implements McpDiagnosticEventSink {
   private tail: Promise<void> = Promise.resolve()
   private stopped = false
   private resetPendingFrom: string | undefined
@@ -35,7 +35,7 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
     ) => Promise<void>,
   ) {}
 
-  append(event: Parameters<SystemAgentEventSinkV1['append']>[0]): Promise<void> {
+  append(event: Parameters<McpDiagnosticEventSink['append']>[0]): Promise<void> {
     if (this.stopped) return Promise.resolve()
     return this.enqueue(async () => {
       if (this.stopped) return

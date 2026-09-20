@@ -1,3 +1,4 @@
+import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
@@ -129,7 +130,7 @@ import {
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
-import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import { composeMcpDiagnostics } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import {
   composeMcpRuntimeTestProvider,
@@ -2341,9 +2342,16 @@ async function composeSqliteProviderSession(
   })
 
   // RFC-238 — complete boot recovery before accepting a playground request.
-  // The routes resolve the same DB-keyed daemon singleton.
-  const mcpRuntimeTests = getMcpRuntimeTestService({
+  // The routes receive this same explicit application-owned instance.
+  const mcpRuntimeTests = composeMcpDiagnostics({
     ...composeMcpRuntimeTestProvider(db),
+    isRuntimeEligible: isRuntimeMcpTestEligible,
+    coordinator: mcpOperationCoordinator,
+    requestBinding: {
+      contexts: identityAccess.contexts,
+      directAuthority: identityAccess.directAuthority,
+      loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),
+    },
     async loadMcp(mcpId) {
       const identity = await admitDaemonIdentity(identityAccess)
       if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')

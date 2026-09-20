@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import type { McpRuntimeTestPersistence } from '@/modules/resource-catalog/application/mcps/runtimeTestPersistence'
 import {
-  getMcpRuntimeTestService,
-  McpRuntimeTestService,
-  type McpRuntimeTestDependencies,
-} from '@/services/mcpRuntimeTest'
+  createMcpDiagnosticsApplication,
+  type McpDiagnosticsApplicationInput,
+} from '@/modules/resource-catalog/composition/mcpDiagnostics'
+import type { McpDiagnosticsApplication } from '@/modules/resource-catalog/application/mcps/runtimeDiagnostics'
 
 // Real service lifecycle with controlled persistence protocol replies. No database,
 // runtime driver, MCP process, network, configuration file or lease is opened.
-const services: McpRuntimeTestService[] = []
+const services: McpDiagnosticsApplication[] = []
 const timerSpies: Array<{ mockRestore(): void }> = []
 
-function internal(service: McpRuntimeTestService, name: string, ...args: unknown[]): unknown {
+function internal(service: McpDiagnosticsApplication, name: string, ...args: unknown[]): unknown {
   const method: unknown = Reflect.get(service, name)
   if (typeof method !== 'function') throw new Error(`missing lifecycle method ${name}`)
   return Reflect.apply(method, service, args)
@@ -102,7 +102,7 @@ function fixture(overrides: Partial<McpRuntimeTestPersistence> = {}) {
     },
   }
   Object.assign(persistence, overrides)
-  const deps: McpRuntimeTestDependencies = {
+  const deps: McpDiagnosticsApplicationInput = {
     persistence,
     leaseOperations: {
       claimNew: unexpected,
@@ -113,6 +113,7 @@ function fixture(overrides: Partial<McpRuntimeTestPersistence> = {}) {
     },
     loadMcp: unexpected,
     loadRuntime: unexpected,
+    isRuntimeEligible: unexpected,
     configPath: '/unused/w29-mcp.yml',
     appHome: '/unused/w29-mcp-home',
     runFn: unexpected,
@@ -120,7 +121,7 @@ function fixture(overrides: Partial<McpRuntimeTestPersistence> = {}) {
     capacity: 1,
     killStaleRunProcessTree: unexpected,
   }
-  const service = new McpRuntimeTestService(deps)
+  const service = createMcpDiagnosticsApplication(deps)
   services.push(service)
   return { service, persistence, deps, calls }
 }
@@ -144,7 +145,7 @@ function timers() {
   return { interval, timeout }
 }
 
-function emptyLocalState(service: McpRuntimeTestService) {
+function emptyLocalState(service: McpDiagnosticsApplication) {
   expect(Reflect.get(service, 'idleTimer')).toBeNull()
   expect(Reflect.get(service, 'reconcileTimer')).toBeNull()
   expect(Reflect.get(service, 'queue')).toEqual([])
@@ -152,13 +153,11 @@ function emptyLocalState(service: McpRuntimeTestService) {
 }
 
 describe('RFC359 W29 original MCP lifecycle controls', () => {
-  test('constructors do no work and the existing getter keeps its identity cache', () => {
+  test('constructors do no work and each application owns an explicit independent instance', () => {
     const { deps, service, calls } = fixture()
-    const other = new McpRuntimeTestService(deps)
+    const other = createMcpDiagnosticsApplication(deps)
     services.push(other)
     expect(other).not.toBe(service)
-    expect(getMcpRuntimeTestService(deps)).toBe(getMcpRuntimeTestService({ ...deps }))
-    expect(getMcpRuntimeTestService(deps)).not.toBe(service)
     expect(calls).toEqual([])
     emptyLocalState(service)
   })
@@ -395,7 +394,7 @@ describe('RFC359 W29 application-owned MCP disposal', () => {
 
   test('closing one directly constructed app instance leaves its sibling instance usable', async () => {
     const f = fixture()
-    const sibling = new McpRuntimeTestService(f.deps)
+    const sibling = createMcpDiagnosticsApplication(f.deps)
     services.push(sibling)
     await f.service.dispose()
     await sibling.start()

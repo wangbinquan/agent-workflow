@@ -14,13 +14,6 @@ import {
   users,
   workflows,
 } from '../src/db/schema'
-import {
-  claimNewMcpRuntimeTestSessionLease,
-  preclaimMcpRuntimeTestSessionLease,
-  releaseMcpRuntimeTestSessionLease,
-  repairMcpRuntimeTestSessionLeaseAfterReap,
-  rotateMcpRuntimeTestSessionLease,
-} from '../src/services/mcpRuntimeTestLease'
 import { createMcpRuntimeTestLeaseOperations } from '../src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import {
@@ -478,7 +471,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
   test('MCP turns resume under the same single-writer lease and release after proven reap', async () => {
     const db = await seedMcpTurn(harness.db)
     const leases = createMcpRuntimeTestLeaseOperations(db)
-    const first = await claimNewMcpRuntimeTestSessionLease(leases, {
+    const first = await leases.claimNew({
       protocol: 'opencode',
       runtimeSessionId: 'native-mcp-lease',
       testSessionId: 'test-session-lease',
@@ -486,7 +479,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       leaseNonceDigest: HASH,
       leasedAt: 10,
     })
-    expect(await releaseMcpRuntimeTestSessionLease(leases, first)).toBe(true)
+    expect(await leases.release(first)).toBe(true)
 
     await db
       .update(mcpRuntimeTestTurns)
@@ -509,7 +502,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       .set({ inFlightTurnId: 'turn-2', turnSeq: 2, sessionVersion: 2, updatedAt: 3 })
       .where(eq(mcpRuntimeTestSessions.id, 'test-session-lease'))
 
-    const second = await preclaimMcpRuntimeTestSessionLease(leases, {
+    const second = await leases.preclaim({
       protocol: 'opencode',
       runtimeSessionId: 'native-mcp-lease',
       testSessionId: 'test-session-lease',
@@ -518,7 +511,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       leasedAt: 20,
     })
     await expect(
-      preclaimMcpRuntimeTestSessionLease(leases, {
+      leases.preclaim({
         protocol: 'opencode',
         runtimeSessionId: 'native-mcp-lease',
         testSessionId: 'test-session-lease',
@@ -526,10 +519,8 @@ describeEachProvider('natural runtime session leases', (harness) => {
         leaseNonceDigest: 'b'.repeat(64),
       }),
     ).rejects.toThrow('mcp-test-session-conflict')
-    expect(
-      await repairMcpRuntimeTestSessionLeaseAfterReap(leases, 'test-session-lease', 'turn-2', true),
-    ).toBe(true)
-    expect(await releaseMcpRuntimeTestSessionLease(leases, second)).toBe(false)
+    expect(await leases.repairAfterReap('test-session-lease', 'turn-2', true)).toBe(true)
+    expect(await leases.release(second)).toBe(false)
     expect(
       (
         await db
@@ -546,7 +537,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
   test('MCP conversation reset atomically rotates its unique native lease', async () => {
     const db = await seedMcpTurn(harness.db, 'claude-code')
     const leases = createMcpRuntimeTestLeaseOperations(db)
-    const first = await claimNewMcpRuntimeTestSessionLease(leases, {
+    const first = await leases.claimNew({
       protocol: 'claude-code',
       runtimeSessionId: 'native-mcp-lease',
       testSessionId: 'test-session-lease',
@@ -559,7 +550,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       .set({ nativeSessionState: 'unusable' })
       .where(eq(mcpRuntimeTestSessions.id, 'test-session-lease'))
 
-    const rotated = await rotateMcpRuntimeTestSessionLease(leases, first, 'native-mcp-after-reset')
+    const rotated = await leases.rotate(first, 'native-mcp-after-reset')
 
     expect(rotated.runtimeSessionId).toBe('native-mcp-after-reset')
     expect(
@@ -580,15 +571,15 @@ describeEachProvider('natural runtime session leases', (harness) => {
           .limit(1)
       )[0],
     ).toEqual({ runtimeSessionId: 'native-mcp-after-reset' })
-    expect(await releaseMcpRuntimeTestSessionLease(leases, first)).toBe(false)
-    expect(await releaseMcpRuntimeTestSessionLease(leases, rotated)).toBe(true)
+    expect(await leases.release(first)).toBe(false)
+    expect(await leases.release(rotated)).toBe(true)
   })
 
   test('MCP lease claims must match the logical session runtime protocol', async () => {
     const db = await seedMcpTurn(harness.db, 'opencode')
     const leases = createMcpRuntimeTestLeaseOperations(db)
     await expect(
-      claimNewMcpRuntimeTestSessionLease(leases, {
+      leases.claimNew({
         protocol: 'claude-code',
         runtimeSessionId: 'native-mcp-lease',
         testSessionId: 'test-session-lease',
@@ -601,16 +592,16 @@ describeEachProvider('natural runtime session leases', (harness) => {
   test('MCP conversation reset requires a durable unusable fence before rotation', async () => {
     const db = await seedMcpTurn(harness.db, 'claude-code')
     const leases = createMcpRuntimeTestLeaseOperations(db)
-    const first = await claimNewMcpRuntimeTestSessionLease(leases, {
+    const first = await leases.claimNew({
       protocol: 'claude-code',
       runtimeSessionId: 'native-mcp-lease',
       testSessionId: 'test-session-lease',
       turnId: 'turn-1',
       leaseNonceDigest: HASH,
     })
-    await expect(
-      rotateMcpRuntimeTestSessionLease(leases, first, 'unannounced-native-id'),
-    ).rejects.toThrow('mcp-test-session-conflict')
+    await expect(leases.rotate(first, 'unannounced-native-id')).rejects.toThrow(
+      'mcp-test-session-conflict',
+    )
     expect(
       (
         await db
@@ -625,7 +616,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
   test('MCP conversation reset collision rolls back pointer, lease, and fence state', async () => {
     const db = await seedMcpTurn(harness.db, 'claude-code')
     const leases = createMcpRuntimeTestLeaseOperations(db)
-    const first = await claimNewMcpRuntimeTestSessionLease(leases, {
+    const first = await leases.claimNew({
       protocol: 'claude-code',
       runtimeSessionId: 'native-mcp-lease',
       testSessionId: 'test-session-lease',
@@ -679,7 +670,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       startedAt: 1,
       createdAt: 1,
     })
-    await claimNewMcpRuntimeTestSessionLease(leases, {
+    await leases.claimNew({
       protocol: 'claude-code',
       runtimeSessionId: 'native-mcp-taken',
       testSessionId: 'test-session-other',
@@ -687,9 +678,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       leaseNonceDigest: 'b'.repeat(64),
     })
 
-    await expect(
-      rotateMcpRuntimeTestSessionLease(leases, first, 'native-mcp-taken'),
-    ).rejects.toThrow()
+    await expect(leases.rotate(first, 'native-mcp-taken')).rejects.toThrow()
     expect(
       (
         await db

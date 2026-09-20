@@ -1,3 +1,4 @@
+import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
@@ -154,7 +155,11 @@ import {
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { createOidcProvidersService } from '@/services/oidcProviders'
-import { getMcpRuntimeTestService, type McpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import {
+  composeMcpDiagnostics,
+  type McpDiagnosticsRuntime,
+  type McpDiagnosticsCompositionInput,
+} from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import {
   mcpOperationCoordinator,
@@ -916,7 +921,7 @@ export interface AppDeps {
     capacity?: number
   }
   /** RFC-349 bootstrap-selected MCP runtime-test service. */
-  mcpRuntimeTests?: McpRuntimeTestService
+  mcpRuntimeTests?: McpDiagnosticsRuntime
 }
 
 /**
@@ -1929,9 +1934,7 @@ function composeFallbackDevelopmentAutomation(
 /** Owned finite initialization and runtime-test lifetime for one unstarted application. */
 export interface UnstartedApplicationScope {
   readonly trackReady: <T>(ready: Promise<T>) => Promise<T>
-  readonly createMcpRuntimeTests: (
-    deps: ConstructorParameters<typeof McpRuntimeTestService>[0],
-  ) => McpRuntimeTestService
+  readonly createMcpRuntimeTests: (deps: McpDiagnosticsCompositionInput) => McpDiagnosticsRuntime
 }
 
 export function composeSqliteAppDeps(
@@ -2186,8 +2189,15 @@ export function composeSqliteApplicationDeps(
 
   const userRuntimeTests =
     effectiveDeps.mcpRuntimeTests ??
-    (unstarted?.createMcpRuntimeTests ?? getMcpRuntimeTestService)({
+    (unstarted?.createMcpRuntimeTests ?? composeMcpDiagnostics)({
       ...composeMcpRuntimeTestProvider(effectiveDeps.db),
+      isRuntimeEligible: isRuntimeMcpTestEligible,
+      coordinator: mcpOperationCoordinator,
+      requestBinding: {
+        contexts: identityAccess.contexts,
+        directAuthority: identityAccess.directAuthority,
+        loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),
+      },
       // RFC-359 W11：运行时测试要查 MCP、MCP 目录的删除 / 对账又要运行时测试——环打在词法
       // 作用域上，`mcpCatalog` 是同一作用域里的 `const`（下面几十行），两边都只在运行期取值。
       async loadMcp(mcpId) {
@@ -2558,7 +2568,7 @@ function composeSqliteApiRouteMounts(
   identityAccess: IdentityAccessModule & IntegrationTriggerIdentityAccess,
   identityUserOperations: IdentityUserOperations,
   systemOperations: SystemOperationsModule,
-  mcpRuntimeTests: McpRuntimeTestService,
+  mcpRuntimeTests: McpDiagnosticsRuntime,
   agentCatalog: AgentCatalogModule,
   mcpCatalog: McpCatalogModule,
   mcpProbeStore: ReturnType<typeof composeMcpProbeStore>,
@@ -3281,7 +3291,7 @@ function composeSqliteApiRouteMounts(
   const runtimeManagement = composeRuntimeManagement({
     configPath: deps.configPath,
     runtimeRegistry: deps.runtimeRegistry,
-    runtimeTests: mcpRuntimeTests,
+    runtimeTests: mcpRuntimeTests.reconciliation,
     ...(deps.runtimeDiagnosticTestDependencies === undefined
       ? {}
       : { runtimeDiagnosticTestDependencies: deps.runtimeDiagnosticTestDependencies }),
@@ -3292,7 +3302,7 @@ function composeSqliteApiRouteMounts(
         configPath: deps.configPath,
         runtimeRegistry: runtimeManagement.configuration,
         withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(deps.configPath),
-        runtimeTests: mcpRuntimeTests,
+        runtimeTests: mcpRuntimeTests.reconciliation,
         concurrencyHotApply: deps.configConcurrencyHotApply,
       }),
     maintenance: (app) => mountMaintenanceRoutes(app, deps),
@@ -3328,7 +3338,9 @@ function composeSqliteApiRouteMounts(
         aclIdentity: mcpCatalog.participants.aclIdentity,
         probeStore: mcpProbeStore,
         authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-        runtimeTests: mcpRuntimeTests,
+        runtimeTests: { commands: mcpRuntimeTests.commands, queries: mcpRuntimeTests.queries },
+        runtimeTestCommandContextFor: mcpRuntimeTests.contexts.command,
+        runtimeTestQueryContextFor: mcpRuntimeTests.contexts.query,
       }),
     plugins: (app) =>
       mountPluginRoutes(app, {

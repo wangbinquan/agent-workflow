@@ -16,8 +16,7 @@ import {
   type SessionViewResponse,
   type StartupVerificationResult,
 } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
-import type { SystemAgentRunResult } from '@/services/systemAgentRun'
+import type { McpDiagnosticRunResult } from './runtimeDiagnosticsEffects'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { StaleRunKillOutcome } from '@/util/process'
@@ -52,6 +51,11 @@ import {
   applyPlaygroundVerification,
   resultFailureCode,
 } from '../../domain/mcps/runtimeDiagnostics'
+/** Only the existing session ownership and audit facts are needed here. */
+export interface McpDiagnosticsCaller {
+  readonly user: { readonly id: string }
+  readonly permissions: { has(permission: 'mcp-runtime-tests:audit'): boolean }
+}
 export interface McpDiagnosticsDependencies {
   readonly persistence: McpRuntimeTestPersistence
   readonly leaseOperations: McpRuntimeTestLeaseOperations
@@ -247,7 +251,7 @@ export class McpDiagnosticsApplication {
   }
 
   async create(
-    actor: Actor,
+    actor: McpDiagnosticsCaller,
     mcp: Mcp,
     input: McpRuntimeTestCreateRequest,
   ): Promise<McpRuntimeTestCreateReceipt> {
@@ -263,7 +267,7 @@ export class McpDiagnosticsApplication {
   }
 
   private async createReady(
-    actor: Actor,
+    actor: McpDiagnosticsCaller,
     mcp: Mcp,
     input: McpRuntimeTestCreateRequest,
   ): Promise<McpRuntimeTestCreateReceipt> {
@@ -331,7 +335,7 @@ export class McpDiagnosticsApplication {
   }
 
   async message(
-    actor: Actor,
+    actor: McpDiagnosticsCaller,
     mcp: Mcp,
     sessionId: string,
     input: McpRuntimeTestMessageRequest,
@@ -408,7 +412,7 @@ export class McpDiagnosticsApplication {
   }
 
   async cancel(
-    actor: Actor,
+    actor: McpDiagnosticsCaller,
     mcpId: string,
     sessionId: string,
     input: McpRuntimeTestCancelRequest,
@@ -434,7 +438,7 @@ export class McpDiagnosticsApplication {
   }
 
   async end(
-    actor: Actor,
+    actor: McpDiagnosticsCaller,
     mcpId: string,
     sessionId: string,
   ): Promise<McpRuntimeTestMutationReceipt> {
@@ -457,14 +461,21 @@ export class McpDiagnosticsApplication {
     return { session: await this.get(actor, mcpId, sessionId) }
   }
 
-  async latest(actor: Actor, mcpId: string): Promise<McpRuntimeTestSessionDto | null> {
+  async latest(
+    actor: McpDiagnosticsCaller,
+    mcpId: string,
+  ): Promise<McpRuntimeTestSessionDto | null> {
     await this.start()
     await this.reconcile()
     const row = await this.deps.persistence.findLatestSession(mcpId, actor.user.id)
     return row === null ? null : this.project(row)
   }
 
-  async get(actor: Actor, mcpId: string, sessionId: string): Promise<McpRuntimeTestSessionDto> {
+  async get(
+    actor: McpDiagnosticsCaller,
+    mcpId: string,
+    sessionId: string,
+  ): Promise<McpRuntimeTestSessionDto> {
     await this.start()
     await this.reconcile()
     const row = await this.requireSession(sessionId, mcpId)
@@ -476,7 +487,11 @@ export class McpDiagnosticsApplication {
     return this.project(row)
   }
 
-  async sessionView(actor: Actor, mcpId: string, sessionId: string): Promise<SessionViewResponse> {
+  async sessionView(
+    actor: McpDiagnosticsCaller,
+    mcpId: string,
+    sessionId: string,
+  ): Promise<SessionViewResponse> {
     await this.start()
     const session = await this.requireSession(sessionId, mcpId)
     assertSessionActor(
@@ -1005,7 +1020,7 @@ export class McpDiagnosticsApplication {
       claimNativeSession,
     )
     const timeoutMs = Math.max(1, turn.hardDeadlineAt - this.now())
-    let result: SystemAgentRunResult
+    let result: McpDiagnosticRunResult
     try {
       const assertSpawnAllowed = async (): Promise<void> => {
         const allowed = await this.deps.persistence.isSpawnAllowed({
@@ -1047,7 +1062,7 @@ export class McpDiagnosticsApplication {
     // RFC-282 B1b (§2.1b-2) — the declared manifest rides the run result from
     // the SAME assembly that spawned the turn; the old re-render here was the
     // last "two computations" seam the unification exists to close.
-    const verification = await this.deps.effects.verifyTurn(session, turn, result)
+    const verification = await result.verifyAfterCapture()
     if (nativeLease !== undefined && result.status !== 'unreaped') {
       const released = await this.deps.leaseOperations.release(nativeLease)
       if (!released) {
@@ -1083,7 +1098,7 @@ export class McpDiagnosticsApplication {
   private async settleTurn(
     originalSession: SessionRow,
     originalTurn: TurnRow,
-    result: SystemAgentRunResult,
+    result: McpDiagnosticRunResult,
     verification?: StartupVerificationResult,
   ): Promise<void> {
     const now = this.now()

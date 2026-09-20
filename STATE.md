@@ -1,5 +1,10 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-364 公开操作与显式单实例装配候选
+
+七 HTTP 操作接 RC 四 commands/三 queries，IA context、同 coordinator 与锁内 fresh MCP lookup 保持；三根显式共享 diagnostics，RM/config 只拿 reconciliation。旧 service/lease 转发与实例 WeakMap 删除，生命周期/双库/进程 oracle 迁到真实 owner。
+上一批 `cb2ce5b56` Main `35503125522` 的边界错误已定位，本批删除 application→legacy 及 RC→RM 反向依赖，RM inspection/eligibility 由 root 注入，未扩大 DAG 豁免。macOS RFC303 fixture 同时修正临时路径别名；生产 cleanup 不变。最终 hosted 验收仍待本批，RFC364/RFC294 不标 Done；RFC363 Task 启动接线继续、RFC365 仅 T1 已实施。
+
 ## 2026-09-20 RFC-364 domain/application/effects 拆分候选
 
 RFC363 补偿批已推送 `4a3b3c5ae05ef93182329bb40a2930eebd48f79b`，Main `35502491149` / Windows `35502491170` 正在执行；尚无最终全绿结论。

@@ -583,7 +583,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-360: both runtime route families and config consume the same management instance;
       // the PostgreSQL task runtime reuses core.runtimeRegistry rather than creating another.
       // RFC-363: add only the Task workspace reader binding, verified below.
-      '787e5307948dfd2b694c9c65946247021d4199cd9d44434507439d822418b313',
+      // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
+      // Exact root bindings are guarded in rfc364-diagnostics-bindings.test.ts; lifecycle order is unchanged.
+      'fe210ef27c545bd8e824276689b0f82413fb4e5ad19d320e986c63119e52c1ba',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -643,7 +645,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `finishClaimedWebhookWorkspacePrune` 收尾），两格是这条回退路本来就在用的那一对
     // （`composeLegacyTaskActivityParticipant` 此前就住在同一个文件里）。
     expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
-      '1325ee4ad1f748b98ba3cd50515a0c463b3b8e4828a1c014e77da987aee8aaa7',
+      // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
+      // Exact root bindings are guarded in rfc364-diagnostics-bindings.test.ts; lifecycle order is unchanged.
+      '16a07147e2f02d084a1e3de0fdb41a59db7e445778c31065a0ed81d916809b56',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -755,7 +759,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `tests/rfc319-task27-de28-manual-retry-and-host-anchor.test.ts`。
       // RFC-360: config uses the same management application and composition-bound probe fence.
       // RFC-363: add only the same-provider Task workspace reader, verified below.
-      '48c744f93860ef1a6ad4b8d8321e39d828e91bc915589a0439c984ea12a001fa',
+      // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
+      // Exact root bindings are guarded in rfc364-diagnostics-bindings.test.ts; lifecycle order is unchanged.
+      '1285e4550b62d68784f1d702ee8c5acb1bef5cb6c2ddfc59543f39f2cf2e6f7e',
     )
     expect(
       namedCalls(
@@ -846,8 +852,8 @@ function actualLifetimeHelper(): ComposeControlledScope {
   }).outputText
   // Only this actual pure lifetime function is evaluated. The constructor is a
   // controlled lifecycle collaborator; no application, database, or rows are faked.
-  return new Function('McpRuntimeTestService', `${code}\nreturn composeUnstartedApplication`)(
-    ControlledMcpService,
+  return new Function('composeMcpDiagnostics', `${code}\nreturn composeUnstartedApplication`)(
+    (input: ControlledMcpInput) => new ControlledMcpService(input),
   ) as ComposeControlledScope
 }
 

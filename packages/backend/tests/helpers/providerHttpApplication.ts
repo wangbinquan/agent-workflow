@@ -21,7 +21,10 @@ import {
   type AppDeps,
   type UnstartedApplicationScope,
 } from '@/server'
-import { McpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import {
+  composeMcpDiagnostics,
+  type McpDiagnosticsRuntime,
+} from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import type { ProviderDatabaseHarness } from './eachProvider'
 
 export type ProviderHttpApplicationInput = Pick<
@@ -120,7 +123,7 @@ export async function composeUnstartedApplication<T extends object>(
   compose: (scope: UnstartedApplicationScope) => T | Promise<T>,
 ): Promise<T & { readonly dispose: () => Promise<void> }> {
   const initializations: Promise<unknown>[] = []
-  const runtimeTests: McpRuntimeTestService[] = []
+  const runtimeTests: McpDiagnosticsRuntime[] = []
   let disposal: Promise<void> | undefined
   const dispose = (): Promise<void> => {
     disposal ??= (async () => {
@@ -141,7 +144,7 @@ export async function composeUnstartedApplication<T extends object>(
       return ready
     },
     createMcpRuntimeTests(deps) {
-      const service = new McpRuntimeTestService(deps)
+      const service = composeMcpDiagnostics(deps)
       runtimeTests.push(service)
       return service
     },

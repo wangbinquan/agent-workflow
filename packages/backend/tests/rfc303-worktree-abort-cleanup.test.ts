@@ -5,7 +5,15 @@
 // that existed before spawn must never be removed.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,7 +22,9 @@ import { createWorktree } from '@/util/git'
 const roots: string[] = []
 
 function fixture(): { root: string; repoPath: string; appHome: string } {
-  const root = mkdtempSync(join(tmpdir(), 'aw-rfc303-worktree-abort-'))
+  // Git reports a canonical path on macOS; /var and /private/var must identify
+  // the same launch-owned partial registration in the fixture normalization.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'aw-rfc303-worktree-abort-')))
   roots.push(root)
   const repoPath = join(root, 'repo')
   const appHome = join(root, 'home')

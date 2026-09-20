@@ -1,3 +1,13 @@
+import type { CommandContext } from '@/modules/identity-access/public/participants'
+import type {
+  CancelMcpDiagnosticsTurnInput,
+  McpDiagnosticsSessionRef,
+  McpRuntimeTestCreateReceipt,
+  McpRuntimeTestMessageReceipt,
+  McpRuntimeTestMutationReceipt,
+  StartMcpDiagnosticsInput,
+  SubmitMcpDiagnosticsTurnInput,
+} from './types'
 import type { SkillOperationContext, WorkgroupOperationContext } from './participants'
 import type {
   DeleteSkillFileCatalogInput,
@@ -97,4 +107,23 @@ export interface WorkgroupTaskRoomCommands {
     authority: WorkgroupOperationContext,
     input: WorkgroupTaskAssignmentRef,
   ): Promise<void>
+}
+
+export interface McpDiagnosticsCommands {
+  start(
+    context: CommandContext,
+    input: StartMcpDiagnosticsInput,
+  ): Promise<McpRuntimeTestCreateReceipt>
+  submitTurn(
+    context: CommandContext,
+    input: SubmitMcpDiagnosticsTurnInput,
+  ): Promise<McpRuntimeTestMessageReceipt>
+  cancel(
+    context: CommandContext,
+    input: CancelMcpDiagnosticsTurnInput,
+  ): Promise<McpRuntimeTestMutationReceipt>
+  end(
+    context: CommandContext,
+    input: McpDiagnosticsSessionRef,
+  ): Promise<McpRuntimeTestMutationReceipt>
 }

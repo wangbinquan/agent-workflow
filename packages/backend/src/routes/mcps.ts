@@ -56,7 +56,9 @@ import {
   staleConflictError,
 } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import type { McpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
+import type { McpDiagnosticsCommands } from '@/modules/resource-catalog/public/commands'
+import type { McpDiagnosticsQueries } from '@/modules/resource-catalog/public/queries'
 import { safeJsonOrEmpty } from '@/util/http'
 
 const log = createLogger('mcps-routes')
@@ -78,7 +80,12 @@ export interface McpRouteDependencies {
   readonly aclIdentity: McpAclIdentityParticipant
   readonly probeStore: McpProbeStore
   readonly authorityFor: (actor: Actor) => McpOperationContext
-  readonly runtimeTests: McpRuntimeTestService
+  readonly runtimeTests: {
+    readonly commands: McpDiagnosticsCommands
+    readonly queries: McpDiagnosticsQueries
+  }
+  readonly runtimeTestCommandContextFor: (actor: Actor) => CommandContext
+  readonly runtimeTestQueryContextFor: (actor: Actor) => QueryContext
 }
 
 export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
@@ -151,9 +158,8 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
     async (c) => {
       const actor = actorOf(c)
       const mcpId = c.req.param('id')
-      const session = await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-        const mcp = await loadVisibleMcp(actor, mcpId)
-        return runtimeTests.latest(actor, mcp.id)
+      const session = await runtimeTests.queries.latest(module.runtimeTestQueryContextFor(actor), {
+        mcpId,
       })
       return session === null ? c.body(null, 204) : c.json(session)
     },
@@ -176,11 +182,13 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
         })
       }
       const actor = actorOf(c)
-      const resolved = await loadVisibleMcp(actor, c.req.param('id'))
-      const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-        const fresh = await loadVisibleMcp(actor, resolved.id)
-        return runtimeTests.create(actor, fresh, parsed.data)
-      })
+      const receipt = await runtimeTests.commands.start(
+        module.runtimeTestCommandContextFor(actor),
+        {
+          mcpId: c.req.param('id'),
+          request: parsed.data,
+        },
+      )
       return c.json(receipt, 202)
     },
   )
@@ -198,9 +206,9 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
       const actor = actorOf(c)
       const mcpId = c.req.param('id')
       return c.json(
-        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-          const mcp = await loadVisibleMcp(actor, mcpId)
-          return runtimeTests.get(actor, mcp.id, c.req.param('sessionId'))
+        await runtimeTests.queries.session(module.runtimeTestQueryContextFor(actor), {
+          mcpId,
+          sessionId: c.req.param('sessionId'),
         }),
       )
     },
@@ -223,11 +231,14 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
         })
       }
       const actor = actorOf(c)
-      const resolved = await loadVisibleMcp(actor, c.req.param('id'))
-      const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-        const fresh = await loadVisibleMcp(actor, resolved.id)
-        return runtimeTests.message(actor, fresh, c.req.param('sessionId'), parsed.data)
-      })
+      const receipt = await runtimeTests.commands.submitTurn(
+        module.runtimeTestCommandContextFor(actor),
+        {
+          mcpId: c.req.param('id'),
+          sessionId: c.req.param('sessionId'),
+          request: parsed.data,
+        },
+      )
       return c.json(receipt, 202)
     },
   )
@@ -251,9 +262,10 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
       const actor = actorOf(c)
       const mcpId = c.req.param('id')
       return c.json(
-        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-          const mcp = await loadVisibleMcp(actor, mcpId)
-          return runtimeTests.cancel(actor, mcp.id, c.req.param('sessionId'), parsed.data)
+        await runtimeTests.commands.cancel(module.runtimeTestCommandContextFor(actor), {
+          mcpId,
+          sessionId: c.req.param('sessionId'),
+          request: parsed.data,
         }),
       )
     },
@@ -278,9 +290,9 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
       const actor = actorOf(c)
       const mcpId = c.req.param('id')
       return c.json(
-        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-          const mcp = await loadVisibleMcp(actor, mcpId)
-          return runtimeTests.end(actor, mcp.id, c.req.param('sessionId'))
+        await runtimeTests.commands.end(module.runtimeTestCommandContextFor(actor), {
+          mcpId,
+          sessionId: c.req.param('sessionId'),
         }),
       )
     },
@@ -299,9 +311,9 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
       const actor = actorOf(c)
       const mcpId = c.req.param('id')
       return c.json(
-        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-          const mcp = await loadVisibleMcp(actor, mcpId)
-          return runtimeTests.sessionView(actor, mcp.id, c.req.param('sessionId'))
+        await runtimeTests.queries.transcript(module.runtimeTestQueryContextFor(actor), {
+          mcpId,
+          sessionId: c.req.param('sessionId'),
         }),
       )
     },

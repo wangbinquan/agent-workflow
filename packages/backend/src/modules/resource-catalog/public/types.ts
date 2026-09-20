@@ -1,3 +1,8 @@
+import type {
+  McpRuntimeTestCancelRequest,
+  McpRuntimeTestCreateRequest,
+  McpRuntimeTestMessageRequest,
+} from '@agent-workflow/shared'
 // RFC-352 T9 —— `resource-acl:bypass` 判定经 public 暴露。
 // 由来：memory 的两个 provider 此前从**不同地方**取同一个谓词——SQLite 侧走 legacy
 // `@/services/resourceAcl`、PostgreSQL 侧直接深入 `resource-catalog/domain/resourceAccess`
@@ -1115,3 +1120,27 @@ export const preparedPackageMutation = Object.freeze({
     prepared.mutation.kind === 'capability-template-create' ||
     prepared.mutation.kind === 'capability-template-update',
 })
+
+/** MCP diagnostics retain their existing wire DTOs and request budgets. */
+export type {
+  McpRuntimeTestCreateReceipt,
+  McpRuntimeTestMessageReceipt,
+  McpRuntimeTestMutationReceipt,
+  McpRuntimeTestSessionDto,
+  SessionViewResponse as McpDiagnosticsTranscript,
+} from '@agent-workflow/shared'
+export interface McpDiagnosticsResourceRef {
+  readonly mcpId: string
+}
+export interface McpDiagnosticsSessionRef extends McpDiagnosticsResourceRef {
+  readonly sessionId: string
+}
+export interface StartMcpDiagnosticsInput extends McpDiagnosticsResourceRef {
+  readonly request: McpRuntimeTestCreateRequest
+}
+export interface SubmitMcpDiagnosticsTurnInput extends McpDiagnosticsSessionRef {
+  readonly request: McpRuntimeTestMessageRequest
+}
+export interface CancelMcpDiagnosticsTurnInput extends McpDiagnosticsSessionRef {
+  readonly request: McpRuntimeTestCancelRequest
+}

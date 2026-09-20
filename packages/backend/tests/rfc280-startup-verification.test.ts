@@ -245,7 +245,8 @@ describe('applyPlaygroundVerification (RFC-280 T6 strict playground verdict)', (
   }
 
   test('unusable MCP fails an otherwise-succeeded turn with mcp-test-mcp-unusable', async () => {
-    const { applyPlaygroundVerification } = await import('@/services/mcpRuntimeTest')
+    const { applyPlaygroundVerification } =
+      await import('@/modules/resource-catalog/domain/mcps/runtimeDiagnostics')
     expect(
       applyPlaygroundVerification('succeeded', null, {
         ...cleanVerification,
@@ -255,7 +256,8 @@ describe('applyPlaygroundVerification (RFC-280 T6 strict playground verdict)', (
   })
 
   test('unobservable startup fails closed with mcp-test-verification-unavailable', async () => {
-    const { applyPlaygroundVerification } = await import('@/services/mcpRuntimeTest')
+    const { applyPlaygroundVerification } =
+      await import('@/modules/resource-catalog/domain/mcps/runtimeDiagnostics')
     for (const observation of ['unavailable', 'malformed'] as const) {
       expect(
         applyPlaygroundVerification('succeeded', null, {
@@ -268,7 +270,8 @@ describe('applyPlaygroundVerification (RFC-280 T6 strict playground verdict)', (
   })
 
   test('durable failure codes take priority and are never overwritten', async () => {
-    const { applyPlaygroundVerification } = await import('@/services/mcpRuntimeTest')
+    const { applyPlaygroundVerification } =
+      await import('@/modules/resource-catalog/domain/mcps/runtimeDiagnostics')
     expect(
       applyPlaygroundVerification('timed_out', 'mcp-test-turn-timeout', {
         ...cleanVerification,
@@ -278,7 +281,8 @@ describe('applyPlaygroundVerification (RFC-280 T6 strict playground verdict)', (
   })
 
   test('a verified, connected run stays succeeded', async () => {
-    const { applyPlaygroundVerification } = await import('@/services/mcpRuntimeTest')
+    const { applyPlaygroundVerification } =
+      await import('@/modules/resource-catalog/domain/mcps/runtimeDiagnostics')
     expect(applyPlaygroundVerification('succeeded', null, cleanVerification)).toEqual({
       turnStatus: 'succeeded',
       failureCode: null,
