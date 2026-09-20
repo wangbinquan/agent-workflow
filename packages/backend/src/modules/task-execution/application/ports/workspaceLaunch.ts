@@ -1,4 +1,4 @@
-/** RFC-362: Task-owned required contract; production admission and readers stay unchanged. */
+/** RFC-362 Task-owned contracts; RFC-363 binds the workspace reader, launch cutover follows. */
 import type {
   FrozenRepositoryPreparationRef,
   WorkspaceListRequest,

@@ -32,7 +32,7 @@ import type {
 } from '@/modules/task-execution/application/ports/workspaceLaunch'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { ensureCachedRepoIdentity } from '@/services/gitRepoCache'
-import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
+import { listWorktreeDir, readWorktreeFile } from './workspaceDisplay'
 import {
   cleanupCreatedWorktree,
   createWorktree,

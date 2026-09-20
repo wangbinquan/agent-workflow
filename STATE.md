@@ -1,6 +1,13 @@
 # 当前执行状态
 
 
+## 2026-09-20 RFC-363 工作区 reader 生产接线候选
+
+第二批 source/snapshot 与 RFC365 T1 已推送 `5ca700bb7d49cc550175abc8f4253d585368d95e`；Main `35498701132` 的三个类型错误已定位并随 reader 批修复，尚未验收全绿。
+两种 provider 的工作区 HTTP reader 已经由 Task application → required read port → SC content participant 执行，保留原权限、绑定、目录 cap 与 UTF-8/oversized wire。新增完整分页、原始字节与 scope 生命周期测试；旧 worktreeFiles service 删除。
+只清 reader 的 6 个 public 声明与 1 个 required debt，launch 的 16 项声明仍待 T4/T5/T7。RFC363 仍 In Progress，RFC364 后续实施、RFC365 T2+ 兼容合同决策均未冒充完成。
+
+
 ## 2026-09-20 RFC-363 第二批候选与 RFC-365 T1 兼容报告
 
 首批已发布 `2220057676037f3e6fa0a71bf56dc2a9a05fd6a8`；Main `35497628814` 已发现 PostgreSQL 历史 roster 校验和 current oracle 未同步问题，本批修复，尚无全绿验收。

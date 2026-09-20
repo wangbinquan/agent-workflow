@@ -985,7 +985,16 @@ function capabilityForgeViolations(units: readonly SourceUnit[]): string[] {
       if (
         (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) &&
         SENSITIVE_TYPE.test(statement.name.text) &&
-        entrypoint === 'participants'
+        (entrypoint === 'participants' ||
+          // RFC-363 implements the RFC-362 ports in their declared owner files.
+          // Apply the same brand/factory/registry rules to these private port
+          // declarations instead of treating their owner as an external forger.
+          (location.context === 'source-control' &&
+            location.rest === 'application/ports/repositoryLaunch' &&
+            statement.name.text === 'RepositoryLaunchSnapshotInTx') ||
+          (location.context === 'task-execution' &&
+            location.rest === 'application/ports/workspaceLaunch' &&
+            statement.name.text === 'WorkspaceReadCapability'))
       ) {
         const key = `${location.context}:${statement.name.text}`
         sensitiveOwners.set(key, unit.path)

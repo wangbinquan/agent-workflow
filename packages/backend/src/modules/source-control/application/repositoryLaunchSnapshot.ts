@@ -83,10 +83,15 @@ export function createRepositoryLaunchSnapshot(input: {
   readonly now: number
 }) {
   const { journal, store } = input
+  let closed = false
+  function assertLive() {
+    input.assertLive()
+    if (closed) throw new Error('repository-launch-scope-ended')
+  }
   async function row(id: string) {
-    input.assertLive()
+    assertLive()
     const value = await store.findCachedRepoById(id)
-    input.assertLive()
+    assertLive()
     if (value === null)
       throw new NotFoundError('cached-repo-not-found', `cached repository ${id} not found`)
     return value
@@ -179,52 +184,63 @@ export function createRepositoryLaunchSnapshot(input: {
       },
     }
   }
-  const participant = Object.freeze({
-    async resolveAuthorized(
-      authority: RequestAuthority,
-      source: RepositoryLaunchSource,
-    ): Promise<FrozenRepositoryPreparationRef> {
-      input.assertLive()
-      if (authority !== input.authority)
-        throw new Error('repository-launch-authority-scope-mismatch')
-      const facts = await factsFor(source)
-      input.assertLive()
-      const factsJson = repositoryPreparationFactsJson(facts)
-      const revision = `sha256:${sha256Hex(factsJson)}`
-      const sealed =
-        source.kind === 'sealed-public-repository'
-          ? (await journal.source(source.source))!
-          : await journal.seal({
-              id: `sc:source:v1:${ulid()}`,
-              requestKey: `snapshot-source:${revision}`,
-              requestDigest: revision,
-              kind: source.kind,
-              factsJson,
-              createdAt: input.now,
-            })
-      const frozen = await journal.freeze({
-        id: `sc:preparation:v1:${ulid()}`,
-        sourceRef: sealed.id,
-        revision,
-        factsJson,
-        createdAt: input.now,
-      })
-      input.assertLive()
-      return decodeRepositoryLaunchRef('preparation', frozen.id)
-    },
-  }) as RepositoryLaunchSnapshotInTx
+  const liveParticipants = new WeakSet<RepositoryLaunchSnapshotInTx>()
+  function createRepositoryLaunchSnapshotParticipant(): RepositoryLaunchSnapshotInTx {
+    const participant = Object.freeze({
+      async resolveAuthorized(
+        authority: RequestAuthority,
+        source: RepositoryLaunchSource,
+      ): Promise<FrozenRepositoryPreparationRef> {
+        if (!liveParticipants.has(participant)) throw new Error('repository-launch-scope-ended')
+        assertLive()
+        if (authority !== input.authority)
+          throw new Error('repository-launch-authority-scope-mismatch')
+        const facts = await factsFor(source)
+        assertLive()
+        const factsJson = repositoryPreparationFactsJson(facts)
+        const revision = `sha256:${sha256Hex(factsJson)}`
+        const sealed =
+          source.kind === 'sealed-public-repository'
+            ? (await journal.source(source.source))!
+            : await journal.seal({
+                id: `sc:source:v1:${ulid()}`,
+                requestKey: `snapshot-source:${revision}`,
+                requestDigest: revision,
+                kind: source.kind,
+                factsJson,
+                createdAt: input.now,
+              })
+        const frozen = await journal.freeze({
+          id: `sc:preparation:v1:${ulid()}`,
+          sourceRef: sealed.id,
+          revision,
+          factsJson,
+          createdAt: input.now,
+        })
+        assertLive()
+        return decodeRepositoryLaunchRef('preparation', frozen.id)
+      },
+    }) as RepositoryLaunchSnapshotInTx
+    liveParticipants.add(participant)
+    return participant
+  }
+  const participant = createRepositoryLaunchSnapshotParticipant()
   return Object.freeze({
     participant,
+    close() {
+      closed = true
+      liveParticipants.delete(participant)
+    },
     async currentRepository(id: string): Promise<VersionedRepositoryRef> {
       const current = await row(id)
       return { id: current.id, revision: repositoryPreparationRevision(current) }
     },
     async currentGroup(id: string) {
-      input.assertLive()
+      assertLive()
       const current = (await store.readRepositoryGroupSnapshot()).groups.find(
         (group) => group.id === id,
       )
-      input.assertLive()
+      assertLive()
       if (current === undefined)
         throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
       return { id: current.id, version: current.version }

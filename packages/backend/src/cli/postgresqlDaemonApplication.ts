@@ -1,3 +1,5 @@
+import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
+import { createWorkspaceContentScope } from '@/modules/source-control/infrastructure/workspaceContent'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
@@ -1088,6 +1090,10 @@ export async function composePostgresqlApplication(
   const taskRoutes = Object.freeze({
     configPath: input.configPath,
     operations: taskExecutionProvider.routes.tasks,
+    workspaceQueries: composeTaskWorkspaceQueries({
+      load: taskExecutionProvider.routes.tasks.get,
+      contentScope: createWorkspaceContentScope,
+    }),
     taskExecutionReadModels: taskExecutionProvider.readModels,
     taskRecoveryOperations: taskExecutionProvider.recovery,
     codeWorkspace,

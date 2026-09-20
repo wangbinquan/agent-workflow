@@ -19,7 +19,7 @@ export function createPublicRepositorySourceSeal(input: {
 }): PublicRepositorySourceSealPort {
   const journal = createRepositoryPreparationJournal(input.db)
   const store = composeRepositoryWorkspaceStore(input.db)
-  return Object.freeze({
+  return Object.freeze<PublicRepositorySourceSealPort>({
     async seal(context, source) {
       const requestKey = `public-source:${context.idempotencyKey}`
       const requestDigest = `sha256:${sha256Hex(canonicalJson(source))}`

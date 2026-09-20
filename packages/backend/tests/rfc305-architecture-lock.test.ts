@@ -359,6 +359,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/runtime-management/composition.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/runtime-management/public/participants.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',

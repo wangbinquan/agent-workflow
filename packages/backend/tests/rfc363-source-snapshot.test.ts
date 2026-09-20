@@ -29,6 +29,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
   async function fixture() {
     const identity = await admitDaemonIdentity(createIdentityAccessRuntime({ db: harness.db }))
     if (identity === null) throw new Error('daemon identity missing')
+    const { authority } = identity
     const root = mkdtempSync(join(tmpdir(), 'rfc363-source-'))
     roots.push(root)
     const repository = {
@@ -51,7 +52,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
         let active = true
         const owner = createRepositoryLaunchSnapshotInTx({
           transaction,
-          authority: identity.authority,
+          authority,
           now: 2,
           assertLive: () => {
             if (!active) throw new Error('snapshot-scope-ended')
@@ -60,6 +61,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
         try {
           return await body(owner, transaction)
         } finally {
+          owner.close()
           active = false
         }
       })
@@ -142,6 +144,8 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
         .insert(repoGroups)
         .values({ id, name, version: 1, createdAt: 1, updatedAt: 1 })
     await harness.db.insert(repoGroupNodes).values([
+      { groupId: root, path: '', attachmentKind: null },
+      { groupId: empty, path: '', attachmentKind: null },
       { groupId: root, path: 'code', attachmentKind: 'group', childGroupId: child },
       { groupId: root, path: 'docs', attachmentKind: 'group', childGroupId: empty },
       {

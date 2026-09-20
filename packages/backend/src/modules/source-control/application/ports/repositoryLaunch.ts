@@ -1,4 +1,4 @@
-/** RFC-362 declared-only SPI. Live-scope and effect factories belong to the E1 successor. */
+/** RFC-362 contracts. RFC-363 binds content queries; launch/effect cutover is in progress. */
 import type {
   IdempotentCommandContext,
   RequestAuthority,

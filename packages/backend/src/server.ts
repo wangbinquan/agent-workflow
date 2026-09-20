@@ -171,6 +171,8 @@ import {
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
+import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
+import { createWorkspaceContentScope } from '@/modules/source-control/infrastructure/workspaceContent'
 import { createChildTaskLifecycleParticipant } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
@@ -2676,6 +2678,10 @@ function composeSqliteApiRouteMounts(
     repositoryPublicationTransport,
     schedulerDriver,
     operations: taskRouteOperations,
+    workspaceQueries: composeTaskWorkspaceQueries({
+      load: taskRouteOperations.get,
+      contentScope: createWorkspaceContentScope,
+    }),
     taskExecutionReadModels: deps.taskExecutionReadModels,
     taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
     codeWorkspace,

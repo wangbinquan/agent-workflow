@@ -1,4 +1,4 @@
-// RFC-065 T2 — services/worktreeFiles.ts unit coverage.
+// RFC-065 T2 — Task display projection and Source Control filesystem coverage.
 //
 // Uses a real tmpdir so the symlink + ENAMETOOLONG paths actually exercise
 // the OS, not a mock. Each test seeds a tiny tree under a fresh worktree
@@ -14,7 +14,7 @@ import {
   readWorktreeFile,
   WORKTREE_DIR_MAX_ENTRIES,
   WORKTREE_FILE_MAX_BYTES,
-} from '../src/services/worktreeFiles'
+} from './helpers/workspaceDisplay'
 
 let root: string
 

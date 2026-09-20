@@ -230,10 +230,10 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     )
   })
 
-  test('RFC-362 planned offered and required contracts remain explicit debt without runtime bindings', () => {
+  test('RFC-363 workspace reader is active while remaining launch contracts stay explicit debt', () => {
     const surfaces = generated.publicSurfaces.entries as Array<Record<string, unknown>>
     const offered = surfaces.filter((entry) => entry.status === 'declared-contract-debt')
-    expect(offered).toHaveLength(22)
+    expect(offered).toHaveLength(16)
     expect(
       offered.every(
         (entry) =>
@@ -243,12 +243,10 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     const ports = generated.crossContextImports.requiredPorts as Array<Record<string, unknown>>
     const port = ports.find((entry) => entry.id === 'required:task-execution:TaskWorkspaceReadPort')
     expect(port).toMatchObject({
-      status: 'declared-debt',
-      removeAfterWave: 'W4-E1/W5',
-      consumerOwnerEntryIds: [],
-      providerAdapters: [],
-      compositionFiles: [],
+      status: 'active',
     })
+    expect((port!.consumerOwnerEntryIds as unknown[]).length).toBeGreaterThan(0)
+    expect((port!.providerAdapters as unknown[]).length).toBeGreaterThan(0)
     const missingOwner = cloneArtifacts(generated)
     const missing = (missingOwner.publicSurfaces.entries as Array<Record<string, unknown>>).find(
       (entry) => entry.id === 'public:source-control:participants:RepositoryPreparationParticipant',

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1697,
+    "entries": 1700,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22115,6 +22115,30 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#createWorkspaceContentScope",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#createWorkspaceContentScope",
+      "symbol": "createWorkspaceContentScope",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -24434,6 +24458,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskLifecycleConsumers.ts#createTaskLifecycleDurableConsumerDefinitions",
       "symbol": "createTaskLifecycleDurableConsumerDefinitions",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/workspaceRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/workspaceRead.ts#createTaskWorkspaceQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/workspaceRead.ts#createTaskWorkspaceQueries",
+      "symbol": "createTaskWorkspaceQueries",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -29147,6 +29196,30 @@
     {
       "controls": {
         "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#createWorkspaceReadCapability",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#createWorkspaceReadCapability",
+      "symbol": "createWorkspaceReadCapability",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -33551,7 +33624,7 @@
       },
       "file": "packages/backend/src/routes/tasks.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/tasks.ts#$http:delete:423",
+      "id": "mutation:packages/backend/src/routes/tasks.ts#$http:delete:425",
       "missingControls": [
         "audit",
         "authority",
@@ -33561,7 +33634,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file",
-      "symbol": "$http:delete:423",
+      "symbol": "$http:delete:425",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -40571,7 +40644,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7042363bde58b35349f37c0971c6d9936def5b3fdf993903a3a488f9b10e23a4",
+  "sourceDigest": "sha256:908eeaf4e04a9c5a7a931f46a52533c88a3fcdf03dbd6d827c30201bc6ca8f22",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

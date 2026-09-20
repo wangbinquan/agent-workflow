@@ -24143,6 +24143,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4cf7b0a0505807f440b0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W5",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#createWorkspaceContentScope",
+      "toPath": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "toSymbol": "createWorkspaceContentScope",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -50884,6 +50901,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a61a1ad4e4fc265dfe37",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition.ts#composeTaskWorkspaceQueries",
+      "toPath": "packages/backend/src/modules/task-execution/composition.ts",
+      "toSymbol": "composeTaskWorkspaceQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -51083,6 +51117,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroupMembers",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "workgroupMembers",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a6b47610cc4776fe1483",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ValidationError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -53296,6 +53347,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file",
+      "fromPath": "packages/backend/src/routes/tasks.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:aeb3f36390d7a2eb3889",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#TaskWorkspaceQueries",
+      "toPath": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "toSymbol": "TaskWorkspaceQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
@@ -54756,6 +54824,23 @@
       "toPath": "packages/backend/src/modules/collaboration/application/ports/humanGateTerminalSweep.ts",
       "toSymbol": "HumanGateTerminalSweepResult",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b3b8f56e291488a3cc5c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "NotFoundError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -68341,6 +68426,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dc7ad54c94dd56c90d09",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "NotFoundError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts#$file",
@@ -72846,6 +72948,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ec26c47edcad7d56cd57",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition.ts#composeTaskWorkspaceQueries",
+      "toPath": "packages/backend/src/modules/task-execution/composition.ts",
+      "toSymbol": "composeTaskWorkspaceQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/publicRepositorySourceSeal.ts#$file",
@@ -77220,6 +77339,23 @@
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
+      "id": "exception:import:f9b02deef5780d709e1d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W5",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#createWorkspaceContentScope",
+      "toPath": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "toSymbol": "createWorkspaceContentScope",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
       "id": "exception:import:f9bd373706ebac4d146d",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
@@ -79035,9 +79171,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4649,
+    "architectureExceptions": 4657,
     "implementationSccs": 0,
-    "observedEdges": 5172,
+    "observedEdges": 5184,
     "requiredPorts": 30,
     "targetEdges": 66
   },
@@ -104040,6 +104176,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:4cf7b0a0505807f440b0",
+      "owner": "bootstrap",
+      "removeAfterWave": "W5",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/source-control/infrastructure/workspaceContent",
+      "syntax": "static-import",
+      "targetSymbol": "createWorkspaceContentScope",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#createWorkspaceContentScope"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "id": "import:4d0401d41820806f23ce",
@@ -115942,6 +116094,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#eventTypeCatalog"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file",
+      "id": "import:717ddfff7448255ac005",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "WorkspaceContentParticipant",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/application/developmentAdapterCommands.ts",
@@ -125191,6 +125359,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file",
+      "id": "import:8f2234cc03a924522dc5",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../application/ports/workspaceLaunch",
+      "syntax": "static-import",
+      "targetSymbol": "WorkspaceReadCapability",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#WorkspaceReadCapability"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts#$file",
@@ -132408,6 +132592,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:a61a1ad4e4fc265dfe37",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition",
+      "syntax": "static-import",
+      "targetSymbol": "composeTaskWorkspaceQueries",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition.ts#composeTaskWorkspaceQueries"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "id": "import:a61e9bcd7666f30c2b77",
@@ -132676,6 +132876,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroupMembers"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#$file",
+      "id": "import:a6b47610cc4776fe1483",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ValidationError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
       "edgeKind": "value",
@@ -135046,6 +135262,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/tasks.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file",
+      "id": "import:aeb3f36390d7a2eb3889",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "TaskWorkspaceQueries",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#TaskWorkspaceQueries"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
@@ -136532,6 +136764,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/application/ports/humanGateTerminalSweep.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/ports/humanGateTerminalSweep.ts#HumanGateTerminalSweepResult"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file",
+      "id": "import:b3b8f56e291488a3cc5c",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "NotFoundError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
       "edgeKind": "value",
@@ -150598,6 +150846,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestEvents"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#$file",
+      "id": "import:dc7ad54c94dd56c90d09",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "NotFoundError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts",
@@ -152372,6 +152636,22 @@
       "toContext": "intent",
       "toFile": "packages/backend/src/modules/intent/composition/apply.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file",
+      "id": "import:e335bc79b5388f9fc52b",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../application/ports/workspaceLaunch",
+      "syntax": "static-import",
+      "targetSymbol": "TaskWorkspaceReadPort",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#TaskWorkspaceReadPort"
     },
     {
       "edgeKind": "value",
@@ -155348,6 +155628,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:ec26c47edcad7d56cd57",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition",
+      "syntax": "static-import",
+      "targetSymbol": "composeTaskWorkspaceQueries",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition.ts#composeTaskWorkspaceQueries"
     },
     {
       "edgeKind": "type",
@@ -159898,6 +160194,22 @@
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:f9b02deef5780d709e1d",
+      "owner": "task-execution",
+      "removeAfterWave": "W5",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/source-control/infrastructure/workspaceContent",
+      "syntax": "static-import",
+      "targetSymbol": "createWorkspaceContentScope",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceContent.ts#createWorkspaceContentScope"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "id": "import:f9bd373706ebac4d146d",
       "owner": "task-execution",
       "removeAfterWave": "W4-E9",
@@ -161108,6 +161420,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/gitRef.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/gitRef.ts#stableIdentityComponent"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file",
+      "id": "import:fd96ee0e40a5be4c98d6",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "AuthorizedWorkspaceSnapshotRef",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#AuthorizedWorkspaceSnapshotRef"
     },
     {
       "edgeKind": "value",
@@ -162387,20 +162715,35 @@
       "symbol": "DigitalEmployeeWorkspacePort"
     },
     {
-      "compositionFiles": [],
-      "compositionOwnerEntryIds": [],
-      "consumerOwnerEntryIds": [],
+      "compositionFiles": [
+        "packages/backend/src/modules/task-execution/composition.ts"
+      ],
+      "compositionOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition.ts#$file"
+      ],
+      "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/workspaceRead.ts#$file",
+        "owner:packages/backend/src/modules/task-execution/composition.ts#$file",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file"
+      ],
       "context": "task-execution",
       "id": "required:task-execution:TaskWorkspaceReadPort",
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceLaunch.ts#TaskWorkspaceReadPort",
-      "providerAdapters": [],
-      "removeAfterWave": "W4-E1/W5",
-      "status": "declared-debt",
+      "providerAdapters": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:e335bc79b5388f9fc52b",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceRead.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "status": "active",
       "symbol": "TaskWorkspaceReadPort"
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7042363bde58b35349f37c0971c6d9936def5b3fdf993903a3a488f9b10e23a4",
+  "sourceDigest": "sha256:908eeaf4e04a9c5a7a931f46a52533c88a3fcdf03dbd6d827c30201bc6ca8f22",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

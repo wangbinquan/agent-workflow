@@ -1,22 +1,28 @@
-// RFC-065 — task worktree files tab service.
+// RFC-363 — Source Control workspace content mechanism.
 //
-// Two pure functions: list one directory's direct children, and read one
-// file's content bounded by WORKTREE_FILE_MAX_BYTES. Both defend against
+// List direct children with complete pagination and read bounded raw bytes.
+// Both preserve the established path and symlink behavior, including
 // path traversal + symlinks pointing outside the worktree root.
 //
 // Kept dependency-light (no DB, no Hono) so unit tests can drive these
 // against a real tmpdir without the rest of the daemon spinning up.
 
 import type { Dirent } from 'node:fs'
-import { lstat, readdir, realpath, stat } from 'node:fs/promises'
+import { lstat, open, readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, normalize, resolve, sep } from 'node:path'
 
-import {
-  WORKTREE_DIR_MAX_ENTRIES,
-  WORKTREE_FILE_MAX_BYTES,
-  type WorktreeTreeEntry,
-} from '@agent-workflow/shared'
+import { WORKTREE_FILE_MAX_BYTES, type WorktreeTreeEntry } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
+import { ulid } from 'ulid'
+import type { WorkspaceContentParticipant } from '../public/participants'
+import type {
+  AuthorizedWorkspaceSnapshotRef,
+  WorkspaceListRequest,
+  WorkspaceReadRequest,
+  WorkspaceEntryPage,
+  BoundedWorkspaceContent,
+} from '../public/types'
+import { decodeRepositoryLaunchRef } from '../domain/repositoryLaunchRef'
 
 /**
  * Resolve `relPath` against `worktreePath` and assert the result is still
@@ -59,7 +65,10 @@ async function isInsideAfterRealpath(rootReal: string, target: string): Promise<
 
 function compareEntries(a: WorktreeTreeEntry, b: WorktreeTreeEntry): number {
   if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
-  return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
+  return (
+    a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) ||
+    (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+  )
 }
 
 /**
@@ -71,7 +80,7 @@ function compareEntries(a: WorktreeTreeEntry, b: WorktreeTreeEntry): number {
  * - Symlinks whose realpath escapes the worktree are silently skipped (not
  *   surfaced as errors — repos often contain such links and the listing
  *   should remain stable).
- * - Result truncated to WORKTREE_DIR_MAX_ENTRIES after sort.
+ * - Enumerate and sort the complete directory before slicing the requested page.
  *
  * Throws:
  *   - NotFoundError('worktree-dir-not-found') — relPath does not exist.
@@ -79,10 +88,13 @@ function compareEntries(a: WorktreeTreeEntry, b: WorktreeTreeEntry): number {
  *     a regular file or other non-dir entry.
  *   - ValidationError — relPath malformed or escapes root.
  */
-export async function listWorktreeDir(
+async function listWorkspaceDirectory(
   worktreePath: string,
-  relPath: string,
-): Promise<{ entries: WorktreeTreeEntry[]; truncated: boolean }> {
+  request: WorkspaceListRequest,
+): Promise<WorkspaceEntryPage> {
+  assertBound(request.page.offset, false)
+  assertBound(request.maxEntries, true)
+  const relPath = request.relativeDirectory
   const target = resolveInsideWorktree(worktreePath, relPath)
   let st
   try {
@@ -156,16 +168,17 @@ export async function listWorktreeDir(
   }
 
   entries.sort(compareEntries)
-  const truncated = entries.length > WORKTREE_DIR_MAX_ENTRIES
+  const end = Math.min(entries.length, request.page.offset + request.maxEntries)
   return {
-    entries: truncated ? entries.slice(0, WORKTREE_DIR_MAX_ENTRIES) : entries,
-    truncated,
+    entries: entries.slice(request.page.offset, end),
+    nextOffset: end < entries.length ? end : null,
+    truncated: false,
   }
 }
 
 /**
- * Read a single file from inside `worktreePath`. Returns oversized=true (with
- * size populated from `stat` and content='') when the file exceeds 2 MiB.
+ * Read actual bytes without UTF-8 decoding. Large files remain readable in
+ * bounded pages; the Task HTTP projection preserves its original display cap.
  *
  * Throws:
  *   - NotFoundError('worktree-file-not-found') — file does not exist.
@@ -174,10 +187,13 @@ export async function listWorktreeDir(
  *   - ValidationError — relPath empty / malformed / escapes root, or symlink
  *     target escapes root.
  */
-export async function readWorktreeFile(
+async function readWorkspaceBytes(
   worktreePath: string,
-  relPath: string,
-): Promise<{ size: number; oversized: boolean; content: string }> {
+  request: WorkspaceReadRequest,
+): Promise<BoundedWorkspaceContent> {
+  assertBound(request.offset, false)
+  assertBound(request.maxBytes, false)
+  const relPath = request.relativeFile
   if (relPath.length === 0) {
     throw new ValidationError('worktree-file-missing-path', 'file path is required')
   }
@@ -205,15 +221,82 @@ export async function readWorktreeFile(
     )
   }
 
-  if (st.size > WORKTREE_FILE_MAX_BYTES) {
-    return { size: st.size, oversized: true, content: '' }
+  // A zero-byte observation lets the existing display projection preserve its
+  // oversized short circuit without opening content it previously never read.
+  if (request.maxBytes === 0)
+    return {
+      encoding: 'base64',
+      content: '',
+      size: st.size,
+      offset: request.offset,
+      nextOffset: request.offset < st.size ? request.offset : null,
+      oversized: st.size > WORKTREE_FILE_MAX_BYTES,
+    }
+  const file = await open(target, 'r')
+  try {
+    const bytes = Buffer.alloc(Math.min(request.maxBytes, Math.max(0, st.size - request.offset)))
+    let count = 0
+    while (count < bytes.length) {
+      const read = await file.read(bytes, count, bytes.length - count, request.offset + count)
+      if (read.bytesRead === 0) break
+      count += read.bytesRead
+    }
+    const next = request.offset + count
+    return {
+      encoding: 'base64',
+      content: bytes.subarray(0, count).toString('base64'),
+      size: st.size,
+      offset: request.offset,
+      nextOffset: count > 0 && next < st.size ? next : null,
+      oversized: st.size > WORKTREE_FILE_MAX_BYTES,
+    }
+  } finally {
+    await file.close()
   }
-  // Use Bun.file when available (fast path); falls back to fs/promises so
-  // unit tests can run under any runtime if Bun is unavailable.
-  const buf = await Bun.file(target).arrayBuffer()
-  const content = new TextDecoder('utf-8', { fatal: false }).decode(buf)
-  return { size: st.size, oversized: false, content }
 }
 
-// Re-exported so route layer + tests don't have to reach into shared.
-export { WORKTREE_DIR_MAX_ENTRIES, WORKTREE_FILE_MAX_BYTES }
+function assertBound(value: number, positive: boolean) {
+  if (!Number.isSafeInteger(value) || value < (positive ? 1 : 0))
+    throw new ValidationError(
+      'workspace-read-bounds-invalid',
+      'workspace bounds must be finite integers',
+    )
+}
+
+/**
+ * Root-only binding from the current Task-owned workspace lookup. The authorized
+ * reference is valid only in this query scope; it is not a durable preparation ref.
+ * No Task row/database or root path crosses the public participant methods.
+ */
+export function createWorkspaceContentScope(worktreePath: string) {
+  const snapshot: AuthorizedWorkspaceSnapshotRef = decodeRepositoryLaunchRef(
+    'workspace',
+    `sc:workspace:v1:${ulid()}`,
+  )
+  let live = true
+  function assertScope(reference: AuthorizedWorkspaceSnapshotRef) {
+    if (!live || reference !== snapshot)
+      throw new Error('workspace-content-scope-ended-or-mismatched')
+  }
+  const participant = Object.freeze<WorkspaceContentParticipant>({
+    async list(reference, request) {
+      assertScope(reference)
+      const result = await listWorkspaceDirectory(worktreePath, request)
+      assertScope(reference)
+      return result
+    },
+    async read(reference, request) {
+      assertScope(reference)
+      const result = await readWorkspaceBytes(worktreePath, request)
+      assertScope(reference)
+      return result
+    },
+  })
+  return Object.freeze({
+    snapshot,
+    participant,
+    close: () => {
+      live = false
+    },
+  })
+}

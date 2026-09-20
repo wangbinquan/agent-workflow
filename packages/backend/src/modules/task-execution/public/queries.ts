@@ -1,6 +1,19 @@
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
 import type { Actor } from '@/auth/actor'
 import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
+import type { WorktreeTreeEntry } from '@agent-workflow/shared'
+
+/** The existing Task visibility gate runs before these bound workspace queries. */
+export interface TaskWorkspaceQueries {
+  listDisplay(
+    taskId: string,
+    relativeDirectory: string,
+  ): Promise<{ readonly entries: readonly WorktreeTreeEntry[]; readonly truncated: boolean }>
+  readDisplay(
+    taskId: string,
+    relativeFile: string,
+  ): Promise<{ readonly content: string; readonly size: number; readonly oversized: boolean }>
+}
 
 export { parseLoopExitCondition } from '@agent-workflow/shared'
 

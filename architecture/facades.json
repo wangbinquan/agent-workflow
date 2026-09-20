@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 295,
+    "serviceFiles": 294,
     "thinFacades": 49
   },
   "entries": [
@@ -6266,24 +6266,10 @@
       "status": "legacy-implementation",
       "targetContext": "source-control",
       "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [
-        "listWorktreeDir",
-        "readWorktreeFile"
-      ],
-      "file": "packages/backend/src/services/worktreeFiles.ts",
-      "id": "facade:packages/backend/src/services/worktreeFiles.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/worktreeFiles.ts#$file",
-      "removeAfterWave": "W5",
-      "status": "legacy-implementation",
-      "targetContext": "source-control",
-      "targetLayer": "application"
     }
   ],
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7042363bde58b35349f37c0971c6d9936def5b3fdf993903a3a488f9b10e23a4"
+  "sourceDigest": "sha256:908eeaf4e04a9c5a7a931f46a52533c88a3fcdf03dbd6d827c30201bc6ca8f22"
 }

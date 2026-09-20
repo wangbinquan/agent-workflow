@@ -217,7 +217,7 @@ export interface WorkspaceEntryPage {
     readonly size: number | null
   }[]
   readonly nextOffset: number | null
-  /** Existing listing cap can prevent later pages; do not imply a complete listing. */
+  /** True only when the provider cannot expose the rest; nextOffset describes ordinary paging. */
   readonly truncated: boolean
 }
 export interface BoundedWorkspaceContent {

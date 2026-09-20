@@ -261,10 +261,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
     id: 'public:source-control:participants:RepositoryPreparationParticipant',
     removeAfterWave: 'W4-E1/W5',
   },
-  {
-    id: 'public:source-control:participants:WorkspaceContentParticipant',
-    removeAfterWave: 'W4-E1/W5',
-  },
   { id: 'public:source-control:participants:WorkspaceExcludeParticipant', removeAfterWave: 'W5' },
   {
     id: 'public:source-control:queries:OwnRepositoryTransportCredentialQueries',
@@ -332,11 +328,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
 
 /** provider=0 且 consumer=0 的 required SPI：死声明。 */
 export const DEAD_REQUIRED_PORT_DEBT: readonly DeadPortDebt[] = [
-  {
-    id: 'required:task-execution:TaskWorkspaceReadPort',
-    why: 'RFC-362 已批准的 Task application-owned workspace read 合同准备；真实测试 adapter 调用既有 SC/workspace reader，生产 root/route 不在本批接入，RFC-362-E1-production-cutover 接线后删除此项。',
-    removeAfterWave: 'W4-E1/W5',
-  },
   {
     id: 'required:development-automation:AgentActionExecutionPort',
     why: 'development-automation 声明的 required SPI 既无 provider adapter 也无 consumer；W4-E8 要么接入 use-case-specific provider，要么删除死声明。',

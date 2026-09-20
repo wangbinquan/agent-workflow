@@ -1,3 +1,12 @@
+import { createTaskWorkspaceQueries } from './application/workspaceRead'
+import {
+  bindTaskWorkspaceReadScope,
+  type TaskWorkspaceReadDependencies,
+} from './infrastructure/workspaceRead'
+import type {
+  TaskWorkspaceReadPort,
+  WorkspaceReadCapability,
+} from './application/ports/workspaceLaunch'
 // RFC-328 — the daemon-owned task-execution composition root.
 
 import { ulid } from 'ulid'
@@ -182,4 +191,14 @@ export function createProviderTaskExecutionModule(input: {
   readonly persistence: TaskExecutionPersistence
 }): ProviderTaskExecutionModule {
   return new ProviderTaskExecutionModule(input.daemonGeneration, input.persistence)
+}
+
+// RFC-363: the Task query root binds the required port for one admitted read.
+export function composeTaskWorkspaceQueries(input: TaskWorkspaceReadDependencies) {
+  const bind: (taskId: string) => Promise<{
+    readonly port: TaskWorkspaceReadPort
+    readonly capability: WorkspaceReadCapability
+    close(): void
+  }> = (taskId) => bindTaskWorkspaceReadScope(input, taskId)
+  return createTaskWorkspaceQueries(bind)
 }

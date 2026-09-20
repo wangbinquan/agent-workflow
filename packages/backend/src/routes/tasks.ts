@@ -42,7 +42,7 @@ import { structuralScopeSchema } from '@agent-workflow/shared'
 import { getSessionTree } from '@/services/sessionView'
 import { getRuntimeInventory } from '@/services/execution/inventoryRead'
 import { getStartupVerification } from '@/services/execution/startupVerificationRead'
-import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
+import type { TaskWorkspaceQueries } from '@/modules/task-execution/public/queries'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { listRecoveryEventsForTask } from '@/services/recovery'
 import { clearAutoRecoverySuspension, isAutoRecoverySuspended } from '@/services/recoveryBreaker'
@@ -79,6 +79,7 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
 }
 
 export interface TaskRouteDependencies {
+  readonly workspaceQueries: TaskWorkspaceQueries
   readonly configPath: string
   readonly operations: TaskRouteOperations
   readonly taskExecutionReadModels: TaskExecutionReadModels
@@ -92,6 +93,7 @@ export interface TaskRouteDependencies {
 }
 
 export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
+  if (deps.workspaceQueries === undefined) throw new Error('task-workspace-queries-not-composed')
   // Keep direct dispatcher/tests fail-closed even though production callers
   // are statically required to supply the complete selected-provider bundle.
   if (deps.taskExecutionReadModels === undefined) {
@@ -1089,15 +1091,8 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const task = await operations.get(id)
-      if (task === null) {
-        throw new NotFoundError('task-not-found', `task '${id}' not found`)
-      }
-      if (task.worktreePath === '') {
-        throw new NotFoundError('task-worktree-missing', `task '${id}' has no worktree`)
-      }
       const rel = c.req.query('path') ?? ''
-      const { entries, truncated } = await listWorktreeDir(task.worktreePath, rel)
+      const { entries, truncated } = await deps.workspaceQueries.listDisplay(id, rel)
       return c.json({ path: rel, entries, truncated })
     },
   )
@@ -1116,15 +1111,8 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const task = await operations.get(id)
-      if (task === null) {
-        throw new NotFoundError('task-not-found', `task '${id}' not found`)
-      }
-      if (task.worktreePath === '') {
-        throw new NotFoundError('task-worktree-missing', `task '${id}' has no worktree`)
-      }
       const rel = c.req.query('path') ?? ''
-      const result = await readWorktreeFile(task.worktreePath, rel)
+      const result = await deps.workspaceQueries.readDisplay(id, rel)
       return c.json({ path: rel, ...result })
     },
   )
