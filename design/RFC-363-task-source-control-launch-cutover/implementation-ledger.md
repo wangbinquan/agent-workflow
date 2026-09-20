@@ -166,3 +166,5 @@ W29 PostgreSQL 仍 161 statements；摘要变化仅为 deferred root 不再重�
 ## T8 总账基线同步
 
 `f20110888` Windows `35512285261` 同 SHA 原生验收通过；Main `35512158270` 的 RFC317 highwater 揭示上一批删除 child 假运行时明细后，独立总账仍留 69。将总基线同步为真实 68 并说明真双库替代，未放宽守卫或增加 allowance。生产源码及所有功能测试均不改。
+
+同一 Main 的 Windows E2E 4/4 在 leader-worker Claude 用例两次得到 6 次 leader run（原断言 5），既有 trace 只含 `[Object]`，无法区分协议重试和调度。保留原 5 次断言，只补 run ID/status/retry/cause/failure、prompt phase 与 leader outputs 诊断，等待后续真实托管结果；不把未归因的失败称为偶发噪声，也不改工作组生产政策。

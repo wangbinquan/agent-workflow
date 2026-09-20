@@ -345,7 +345,28 @@ for (const protocol of ['opencode', 'claude-code'] as const satisfies readonly P
       const beforeApproval = await nodeRuns(task.id)
       assertNoPromptIdentityLeak(beforeApproval)
       const leaderRuns = runsForRoomMember(beforeApproval, secondGate, 'lead')
-      expect(leaderRuns).toHaveLength(5)
+      expect(
+        leaderRuns,
+        JSON.stringify({
+          taskId: task.id,
+          protocol,
+          leaderRuns: leaderRuns.map(({ promptText, ...run }) => ({
+            ...run,
+            promptPhases: [
+              '## Clarify Q&A',
+              '## Completion gate REJECTED',
+              'research complete',
+              'implementation-code-v1 complete',
+              'implementation-tests-v1 complete',
+              'implementation-v2 complete',
+              '## Protocol errors in your previous reply',
+            ].filter((marker) => promptText?.includes(marker)),
+          })),
+          leaderOutputs: beforeApproval.outputs.filter((output) =>
+            leaderRuns.some((run) => run.id === output.nodeRunId),
+          ),
+        }),
+      ).toHaveLength(5)
       expect(leaderRuns[0]?.promptText).toContain('WG_MATRIX_GOAL literal {{do_not_expand}}')
       expect(
         leaderRuns.some(
