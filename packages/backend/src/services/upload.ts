@@ -7,7 +7,15 @@
 // Pure I/O with explicit limits; no DB / no scheduler / no Hono coupling
 // so we can unit-test it directly.
 
-import { existsSync, lstatSync, mkdirSync, type Stats, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  type Stats,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, isAbsolute, normalize, parse as parsePath, resolve, sep } from 'node:path'
 import {
   findDuplicateUploadTarget,
@@ -84,6 +92,12 @@ export interface UploadFile {
 }
 
 export interface UploadPlan {
+  /** Task-owned recovery journal; absent preserves the original upload path. */
+  recovery?: {
+    placement(index: number): string | null
+    reserve(index: number, filename: string): Promise<void>
+  }
+
   /**
    * RFC-248 D12: 上传物的额外根前缀（相对 `worktreePath`）。多仓任务传
    * `.agent-workflow/inputs`——上传物不属于任何成员仓，落进某个仓会变成它的
@@ -444,10 +458,12 @@ export async function applyUploadsToWorktree(plan: UploadPlan): Promise<UploadRe
       // `overwrite` keeps the ORIGINAL name — that is the entire value of the
       // mode: repo-internal references to the colliding path must resolve to
       // what the user just uploaded, not to `spec/api (1).yaml`.
+      const restoredName = plan.recovery?.placement(idx - 1) ?? null
       const finalName =
-        (def.onConflict ?? 'rename') === 'overwrite'
+        restoredName ??
+        ((def.onConflict ?? 'rename') === 'overwrite'
           ? clearOverwriteTarget(targetAbs, safeName)
-          : resolveUniqueName(targetAbs, safeName)
+          : resolveUniqueName(targetAbs, safeName))
       const absPath = resolve(targetAbs, finalName)
       // Second-layer guard against `resolveUniqueName` returning a separator-bearing name.
       if (dirname(absPath) !== targetAbs) {
@@ -461,8 +477,19 @@ export async function applyUploadsToWorktree(plan: UploadPlan): Promise<UploadRe
       // entry (incl. symlinks, via lstat), so this only fires on a TOCTOU race
       // where a symlink appears between the name pick and the write; O_EXCL then
       // fails (EEXIST) instead of following it outside the worktree.
-      writeFileSync(absPath, f.bytes, { flag: 'wx' })
-      written.push(absPath)
+      if (restoredName === null && plan.recovery !== undefined)
+        await plan.recovery.reserve(idx - 1, finalName)
+      const existing = restoredName === null ? null : lstatOrNull(absPath)
+      if (existing !== null) {
+        if (!existing.isFile() || !readFileSync(absPath).equals(Buffer.from(f.bytes)))
+          throw new ValidationError(
+            'upload-replay-changed',
+            'an interrupted upload path contains different content',
+          )
+      } else {
+        writeFileSync(absPath, f.bytes, { flag: 'wx' })
+        written.push(absPath)
+      }
 
       // Repo-relative path for packed value.
       const rel = normalize(effectiveTarget).replace(/\\/g, '/')

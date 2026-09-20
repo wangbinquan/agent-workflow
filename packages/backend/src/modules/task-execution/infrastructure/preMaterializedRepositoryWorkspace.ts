@@ -1,3 +1,5 @@
+import { preparedArtifactLane } from './workspaceLaunchLane'
+import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
@@ -126,7 +128,7 @@ export async function preparePreMaterializedRepository(input: {
   signal: AbortSignal
 }): Promise<{
   space: MaterializedSpace
-  admit(tx: ProviderNeutralDatabase): Promise<void>
+  admit(tx: ProviderNeutralDatabase): Promise<TaskWorkspaceLaunchLane>
   commit(): void
   rollback(): Promise<WorkspaceCleanupReport>
 }> {
@@ -240,6 +242,7 @@ export async function preparePreMaterializedRepository(input: {
           })) === null
         )
           throw new Error('workspace-preparation-owner-changed')
+        return preparedArtifactLane(current.id)
       },
       commit() {
         materializingSpaces.delete(input.taskId)

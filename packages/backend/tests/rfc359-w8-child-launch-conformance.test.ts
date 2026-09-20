@@ -1,3 +1,4 @@
+import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 // RFC-359 W8-A —— `ChildExecutionLaunchOperations` 的**双引擎对拍**。
 //
 // 这一对**不是**一份实现被抄了两遍，对拍就是用来把这一点钉住的证据（判定与逐条差额见
@@ -545,6 +546,16 @@ describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHa
     await seed(harness.db)
     expect(await launchError(harness)).toBeNull()
     expect(await childExists(harness.db)).toBe(true)
+    const preparation = await createWorkspacePreparationJournal(harness.db).forTask(CHILD_TASK_ID)
+    expect(preparation).toMatchObject({
+      state: 'admitted',
+      lane: 'pre-materialized',
+      operationRef: null,
+    })
+    expect(JSON.parse(preparation!.artifactJson!).artifact).toMatchObject({
+      kind: 'call',
+      ownerRef: PARENT_RUN_ID,
+    })
   })
 
   // RFC-359 AC-1（plan §5hn 批次二 ⑤）—— **落库那几行**也要比，不能只比「铸出来了没有」。

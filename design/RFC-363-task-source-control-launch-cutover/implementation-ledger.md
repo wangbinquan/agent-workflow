@@ -119,3 +119,13 @@ Task 上传编排复用原 applyUploadsToWorktree，并在完整上传成功后�
 新增真实双库子进程测试使用生产 RootTaskLaunchKernel，分别在 repository prepared-before-upload、repository uploaded-before-admit、scratch root-before-artifact、scratch uploaded-before-admit 处 SIGKILL；新进程检查原目录/marker/commit、单一上传路径、唯一 Task 和 admitted 后拒绝补偿。待本批 hosted 验收，不能把源码存在记成通过。原 RFC349 scratch 假池测试迁到真实 eachProvider，保留全部物理 rollback 断言。
 
 `fb0b97a28` Main `35507694692` typecheck 暴露 public source input 漏填固定 `kind: 'url'`，本批补齐合同字段。T5 call/fusion/DE、T7 required lane/facade 和完整 AC 继续待完成。
+
+## T5 转交 artifact 与 T7 闭合 lane 候选
+
+call 子启动、两个 fusion Task writer 和 DE 借用工作区在原 Task admission transaction 中记录并接受 pre-materialized artifact；Task 只接收引用，既有 parent call-node / KE / DE 物理准备、所有权和补偿路径保持。admission 失败时同事务回滚 artifact，不把调用方目录误当 Task orphan。新增真实双库 borrowed kernel、child 与 selected fusion writer 断言，以及三种 hand-off 回滚后调用方文件保留测试。
+
+Root prepared workspace 的 admission 方法现为必填，返回闭合 TaskWorkspaceLaunchLane；repository lane 从 SC live snapshot 返回 source 与 Task plan，pre-materialized lane 返回 Task journal 的 artifact ref。原 Task 写入事务消费该 lane，并拒绝已带物理目录的 deferred lane。旧任务 retry 的无 journal 兼容面明确不能用于新 Task admission；原记录池夹具显式返回其替代的 prepared lane。
+
+上传 writer 增加 Task-owned 文件名 intent checkpoint，仍沿用原 target、rename/overwrite 与路径处理。恢复使用原已选择的名称；文件尚未写入则写入，已写且内容一致则复用，内容改变报告冲突并走原失败补偿。Task receipt 保存每个名称再执行对应写入，完整结果仍先于 Task INSERT。新增 repository/scratch 在 reserve-before-file 和 file-before-receipt 处的双库 SIGKILL 例，总计 8 个 Task pre-admission 进程窗口，等待本批托管结果。
+
+此批尚未完成 owned legacy facade/import 清退、application launch 归位和完整 AC/最终 CI；RFC363 保持 In Progress。没有因此把 RFC294 E1/W5 整波关单。

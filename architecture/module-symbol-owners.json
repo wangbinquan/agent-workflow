@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1810,
+    "backendFiles": 1812,
     "frontendFiles": 622,
     "legacyFiles": 548,
-    "moduleFiles": 1262,
-    "productionFiles": 2587,
+    "moduleFiles": 1264,
+    "productionFiles": 2589,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24792
+    "symbolsIncludingFileRoots": 24798
   },
   "entries": [
     {
@@ -137795,6 +137795,42 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/transferredWorkspaceAdmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/transferredWorkspaceAdmission.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/transferredWorkspaceAdmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/transferredWorkspaceAdmission.ts#admitTransferredWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "admitTransferredWorkspace",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/transferredWorkspaceAdmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/transferredWorkspaceAdmission.ts#TransferredWorkspaceArtifact",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TransferredWorkspaceArtifact",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#$file",
       "removeAfterWave": null,
@@ -138004,6 +138040,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "taskSnapshot",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts#preparedArtifactLane",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "preparedArtifactLane",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts#repositoryPreparationLane",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "repositoryPreparationLane",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -298226,5 +298298,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b60b679b16ce203a3c8d63d63fec7937f620c15756a81daa720069b687e9f07e"
+  "sourceDigest": "sha256:44e861619d9067f896818202c238b2e8e7b1749075855b35f485f617c9b0ab33"
 }

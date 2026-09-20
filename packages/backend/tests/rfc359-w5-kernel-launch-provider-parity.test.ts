@@ -1,3 +1,4 @@
+import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 // RFC-359 AC-1（plan §5hh）—— **启动内核在两个引擎上都要能真启动一次**。
 //
 // 为什么这条用例存在（plan §5hg 的表）：全仓此前跑过的组合只有两种——
@@ -125,6 +126,17 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
           '合并 action 执行装配面（取内核那半）就会把生产打坏',
       ).toBeDefined()
       expect(row).toMatchObject({ id: launched.taskId, ownerUserId: userId })
+      const artifact = await createWorkspacePreparationJournal(harness.db).forTask(launched.taskId)
+      expect(artifact).toMatchObject({
+        lane: 'pre-materialized',
+        state: 'admitted',
+        operationRef: null,
+      })
+      expect(JSON.parse(artifact!.artifactJson!).artifact).toMatchObject({
+        kind: 'borrowed',
+        worktreePath: workspacePath,
+        baseCommit: baselineSha,
+      })
       expect(
         launched.submitted,
         '启动提交后应当把驱动请求交给协调器；没有说明提交后的那一段在这个引擎上断了',

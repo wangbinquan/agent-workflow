@@ -1,3 +1,4 @@
+import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
@@ -107,6 +108,13 @@ async function insertFusionTask(
   const intentId = ulid()
   const slotPathJson = taskSlotPath(command.taskId, workflow.version)
   const eventRefs = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    await admitTransferredWorkspace(tx, {
+      kind: 'fusion',
+      taskId: command.taskId,
+      worktreePath: command.worktreePath,
+      baseCommit: command.baseCommit,
+      ownerRef: command.taskId,
+    })
     await tx.insert(tasks).values({
       id: command.taskId,
       name: command.name,

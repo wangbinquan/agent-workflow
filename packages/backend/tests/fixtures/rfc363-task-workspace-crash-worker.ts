@@ -1,3 +1,5 @@
+import { applyUploadsToWorktree } from '@/services/upload'
+import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 // Hosted real-process oracle: kill a production Task launch before its row is committed.
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -104,6 +106,56 @@ try {
       definition: JSON.stringify(definition),
     })
     .onConflictDoNothing()
+  if (
+    ['upload-reserved-before-file', 'uploaded-file-before-receipt'].includes(
+      process.env.RFC363_TASK_CRASH_POINT ?? '',
+    )
+  ) {
+    const prepared = await participant.prepare({
+      actor,
+      authority: identity.authority,
+      taskId: input.taskId,
+      task: StartTaskSchema.parse({
+        workflowId: input.workflowId,
+        name: 'crash recovery',
+        inputs: {},
+        ...(input.scratch ? { scratch: true } : { repoUrl: input.remote }),
+      }),
+      gitCommitIdentity: await identityAccess.getUserGitCommitIdentity.execute(actor.user.id),
+    })
+    await applyTaskWorkspaceUploads({
+      db,
+      taskId: input.taskId,
+      plan: {
+        worktreePath: prepared.worktreePath,
+        files: [
+          {
+            inputKey: 'refs',
+            filename: 'attachment.txt',
+            declaredMime: 'text/plain',
+            bytes: new TextEncoder().encode('durable upload'),
+          },
+        ],
+        defs: new Map([['refs', { key: 'refs', targetDir: 'inputs' }]]),
+        limits: { perFile: 1024, perRequest: 1024, perCount: 1 },
+      },
+      async write(plan) {
+        const recovery = plan.recovery!
+        const result = await applyUploadsToWorktree({
+          ...plan,
+          recovery: {
+            ...recovery,
+            async reserve(index, filename) {
+              await recovery.reserve(index, filename)
+              checkpoint('upload-reserved-before-file', prepared.worktreePath, prepared.baseCommit)
+            },
+          },
+        })
+        checkpoint('uploaded-file-before-receipt', prepared.worktreePath, prepared.baseCommit)
+        return result
+      },
+    })
+  }
   const kernel = createRootTaskLaunchKernel({
     db,
     id: () => input.taskId,
@@ -116,7 +168,7 @@ try {
           ...space,
           async admit(tx) {
             checkpoint('uploaded-before-admit', space.worktreePath, space.baseCommit)
-            await space.admit!(tx)
+            return space.admit(tx)
           },
         }
       },

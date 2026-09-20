@@ -12,6 +12,8 @@ export async function applyTaskWorkspaceUploads(input: {
   db: ProviderNeutralDatabase
   taskId: string
   plan: UploadPlan
+  /** Effect substitution is used by the process interruption oracle. */
+  write?: (plan: UploadPlan) => Promise<UploadResult>
 }): Promise<UploadResult> {
   const requestDigest = sha256Hex(
     canonicalJson({
@@ -41,6 +43,7 @@ export async function applyTaskWorkspaceUploads(input: {
       'uploads require an unadmitted artifact',
     )
   const receipt = JSON.parse(prepared.artifactJson!) as {
+    uploadPlan?: { requestDigest: string; placements: string[] }
     uploads?: { requestDigest: string; packedByKey: Array<[string, string[]]> }
   }
   if (receipt.uploads !== undefined) {
@@ -51,12 +54,37 @@ export async function applyTaskWorkspaceUploads(input: {
       )
     return { packedByKey: new Map(receipt.uploads.packedByKey) }
   }
-  const result = await applyUploadsToWorktree(input.plan)
+  if (receipt.uploadPlan !== undefined && receipt.uploadPlan.requestDigest !== requestDigest)
+    throw new ConflictError('workspace-upload-request-mismatch', 'workspace upload request changed')
+  let version = prepared.version
+  const placements = [...(receipt.uploadPlan?.placements ?? [])]
+  const result = await (input.write ?? applyUploadsToWorktree)({
+    ...input.plan,
+    recovery: {
+      placement: (index) => placements[index] ?? null,
+      async reserve(index, filename) {
+        if (index !== placements.length) throw new Error('workspace-upload-sequence-changed')
+        placements.push(filename)
+        await withTaskExecutionWrite(input.db, async (tx) => {
+          const saved = await createWorkspacePreparationJournal(tx).checkpointUploadPlan({
+            id: input.taskId,
+            expectedVersion: version,
+            ownerFence: prepared.ownerFence,
+            requestDigest,
+            placements,
+            now: Date.now(),
+          })
+          if (saved === null) throw new Error('workspace-preparation-owner-changed')
+          version = saved.version
+        })
+      },
+    },
+  })
   await withTaskExecutionWrite(input.db, async (tx) => {
     if (
       (await createWorkspacePreparationJournal(tx).completeUploads({
         id: input.taskId,
-        expectedVersion: prepared.version,
+        expectedVersion: version,
         ownerFence: prepared.ownerFence,
         requestDigest,
         packedByKey: [...result.packedByKey],

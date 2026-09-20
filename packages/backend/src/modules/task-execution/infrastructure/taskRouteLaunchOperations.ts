@@ -1,3 +1,4 @@
+import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import {
   UPLOAD_INPUTS_DIR,
   StartTaskSchema,
@@ -253,7 +254,7 @@ export interface TaskRoutePreparedWorkspace {
   readonly repositories: readonly TaskRouteWorkspaceRepository[]
   readonly nodePaths: readonly string[]
   /** Private adapter joins source/plan admission to the existing Task transaction. */
-  admit?(transaction: ProviderNeutralDatabase): Promise<void>
+  admit(transaction: ProviderNeutralDatabase): Promise<TaskWorkspaceLaunchLane>
   /** Non-throwing lease promotion after the owning database commit. */
   commit(): void
   rollback(): Promise<WorkspaceCleanupReport>
@@ -839,7 +840,12 @@ function createRootLaunch(
           ownerUserId: input.actor.user.id,
           collaboratorUserIds: memberIds,
         })
-        await preparedWorkspace.admit?.(tx)
+        const workspaceLane = await preparedWorkspace.admit(tx)
+        if (
+          workspaceLane.kind === 'repository-preparation' &&
+          preparedWorkspace.worktreePath !== ''
+        )
+          throw new Error('repository-preparation-lane-already-materialized')
         await tx.insert(tasks).values({
           id: taskId,
           name: input.task.name,

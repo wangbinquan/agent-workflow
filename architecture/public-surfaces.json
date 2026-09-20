@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 902,
+    "consumers": 903,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
     "methods": 1069,
@@ -128282,6 +128282,7 @@
       },
       "consumerEdgeIds": [
         "import:5c930430354706701eb6",
+        "import:afb706f915ec2f969505",
         "import:fbaa39d9415332bc859e"
       ],
       "context": "source-control",
@@ -128306,6 +128307,12 @@
           "edgeId": "import:5c930430354706701eb6",
           "file": "packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationBinding.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:afb706f915ec2f969505",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workspaceLaunchLane.ts#$file"
         },
         {
           "context": "task-execution",
@@ -165364,7 +165371,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b60b679b16ce203a3c8d63d63fec7937f620c15756a81daa720069b687e9f07e",
+  "sourceDigest": "sha256:44e861619d9067f896818202c238b2e8e7b1749075855b35f485f617c9b0ab33",
   "targetContexts": [
     "collaboration",
     "development-automation",

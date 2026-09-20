@@ -1,3 +1,4 @@
+import { admitTransferredWorkspace } from '../infrastructure/transferredWorkspaceAdmission'
 // RFC-359 W1-T3（F-H2-2）—— 数字员工 action 执行器的两个 provider 装配面。
 //
 // 中立实现在 `actionExecutionRunners.ts`；这里提供它注入的两件能力——「在借用工作区上启动宿主任务」
@@ -49,6 +50,14 @@ export function borrowedPostgresqlWorkspace(input: {
         earlyError: null,
         repositories: [],
         nodePaths: [],
+        admit: (transaction) =>
+          admitTransferredWorkspace(transaction, {
+            kind: 'borrowed',
+            taskId: request.taskId,
+            worktreePath: input.workspacePath,
+            baseCommit: input.baselineSha,
+            ownerRef: request.taskId,
+          }),
         commit() {
           if (state !== 'open') throw new Error(`borrowed-workspace-already-${state}`)
           state = 'committed'

@@ -1,3 +1,4 @@
+import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 import {
   WorkflowDefinitionSchema,
   WORKFLOW_SCHEMA_VERSION,
@@ -550,6 +551,13 @@ async function launchPreparedChild(
     ] satisfies readonly LineageEntry[]
     const branch = space.branch === '' ? `agent-workflow/${taskId}` : space.branch
 
+    await admitTransferredWorkspace(tx, {
+      kind: 'call',
+      taskId,
+      worktreePath: space.worktreePath,
+      baseCommit: space.baseCommit,
+      ownerRef: request.parentNodeRunId,
+    })
     await tx.insert(tasks).values({
       id: taskId,
       name: prepared.task.name,

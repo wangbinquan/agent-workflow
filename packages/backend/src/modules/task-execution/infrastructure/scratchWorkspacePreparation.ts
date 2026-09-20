@@ -1,3 +1,4 @@
+import { preparedArtifactLane } from './workspaceLaunchLane'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -161,6 +162,7 @@ export async function prepareScratchWorkspace(input: {
           })) === null
         )
           throw new Error('workspace-preparation-owner-changed')
+        return preparedArtifactLane(current.id)
       },
       commit() {
         materializingSpaces.delete(input.taskId)

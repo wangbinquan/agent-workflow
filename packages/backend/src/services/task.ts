@@ -2434,6 +2434,14 @@ async function startTaskImpl(
           )
         }
       }
+      if (deps.preCreatedWorktree !== undefined && deps.internalSource !== undefined)
+        await taskDriveComposition.admitTransferredWorkspace(tx, {
+          kind: 'fusion',
+          taskId,
+          worktreePath: space.worktreePath,
+          baseCommit: space.baseCommit,
+          ownerRef: taskId,
+        })
       await tx
         .insert(tasks)
         .values({

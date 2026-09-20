@@ -80,6 +80,10 @@ describeEachProvider('RFC-363 production Task pre-admission process recovery', (
     [false, 'uploaded-before-admit'],
     [true, 'scratch-root-before-artifact'],
     [true, 'uploaded-before-admit'],
+    [false, 'upload-reserved-before-file'],
+    [false, 'uploaded-file-before-receipt'],
+    [true, 'upload-reserved-before-file'],
+    [true, 'uploaded-file-before-receipt'],
   ] as const) {
     test(`${scratch ? 'scratch' : 'repository'} survives SIGKILL at ${point}`, async () => {
       const f = fixture()

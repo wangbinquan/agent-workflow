@@ -32,3 +32,5 @@ export {
   acceptDurableRepositoryWorkspace,
 } from '../infrastructure/durableRepositoryPreparation'
 export { hasDurableRepositoryPreparation } from '../infrastructure/durableRepositoryPreparation'
+
+export { admitTransferredWorkspace } from '../infrastructure/transferredWorkspaceAdmission'

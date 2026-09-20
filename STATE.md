@@ -1,5 +1,10 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363 转交 artifact / 必填 lane / 上传逐文件 intent 候选
+
+call、双 fusion writer、DE 借用工作区在原 Task 事务接受 artifact，物理清理归属保持。Root admission 方法必填并返回两种闭合 lane；旧任务兼容空间不得借此创建新 Task。上传名称在写文件前持久化，重放复用同一路径；SIGKILL 测试扩至 8 个双库窗口，另补实际 fusion writer 与 hand-off 回滚测试。
+前批 `96ed493fc` Main `35508287831` 尚在执行，未宣称全绿。本批仍待 facade/import 与 application 收口、完整 AC/最终 CI；RFC363/364 未标 Done，RFC365 仅 T1。
+
 ## 2026-09-20 RFC-363 scratch 与上传回执候选
 
 scratch 使用无 SC repository operation 的 Task artifact journal，并复用原 Git 初始化/清理；现 scratch GC 双库接补偿。上传完成回执先于 Task admission 保存，重放复用 packed paths。四个生产 Task kernel 的双库 SIGKILL 窗口测试已补，等待本批 CI；逐文件上传中断窗口、call/fusion/DE 和 T7 仍待完成。

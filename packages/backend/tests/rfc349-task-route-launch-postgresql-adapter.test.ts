@@ -1,3 +1,4 @@
+import { preparedArtifactLane } from '@/modules/task-execution/infrastructure/workspaceLaunchLane'
 // RFC-349 — direct Agent/Workgroup launch keeps the existing route contract
 // while the selected PostgreSQL provider owns the task row, collaborators,
 // launch intent, frozen resource closure and committed lifecycle event.
@@ -290,6 +291,7 @@ async function workspaceParticipant(input: {
           input.trace.push('workspace:commit')
           input.committed.push(request.taskId)
         },
+        admit: async () => preparedArtifactLane(request.taskId),
         async rollback() {
           input.trace.push('workspace:rollback')
           rmSync(worktreePath, { recursive: true, force: true })
@@ -840,6 +842,7 @@ function gitMetadataHarness(
           earlyError: null,
           repositories: [],
           nodePaths: [],
+          admit: async () => preparedArtifactLane(request.taskId),
           commit() {
             trace.push('workspace:commit')
           },

@@ -1,3 +1,4 @@
+import { repositoryPreparationLane } from './workspaceLaunchLane'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
@@ -63,6 +64,7 @@ export async function admitDeferredRepositoryPreparation(input: {
         'workspace-preparation-version-changed',
         'workspace admission changed',
       )
+    return repositoryPreparationLane(plan.id, source)
   } finally {
     scope.close()
   }

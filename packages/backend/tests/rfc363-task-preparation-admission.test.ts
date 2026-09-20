@@ -113,8 +113,9 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
                     ...prepared,
                     async admit(tx: ProviderNeutralDatabase) {
                       await inspect?.(prepared.worktreePath, prepared.taskId)
-                      await prepared.admit!(tx)
+                      const lane = await prepared.admit(tx)
                       if (rollback) throw new Error('reject-after-source-freeze')
+                      return lane
                     },
                   }
                 },

@@ -138,7 +138,9 @@ async function prepareDeferredWorkspace(
   store: ReturnType<typeof composePostgresqlRepositoryWorkspaceStore>,
   input: TaskWorkspacePreparation,
 ): Promise<
-  TaskRoutePreparedWorkspace & { readonly sealedSource: SealedPublicRepositorySourceRef | null }
+  Omit<TaskRoutePreparedWorkspace, 'admit'> & {
+    readonly sealedSource: SealedPublicRepositorySourceRef | null
+  }
 > {
   const task = input.task
   let cachedRepoId: string | null = null
@@ -343,7 +345,12 @@ export function createTaskWorkspaceMaterializer(
         earlyError: space.earlyError,
         repositories,
         nodePaths: [...space.nodePaths],
-        ...(artifact === null ? {} : { admit: artifact.admit }),
+        admit:
+          artifact === null
+            ? async () => {
+                throw new Error('legacy-workspace-cannot-admit-new-task')
+              }
+            : artifact.admit,
         commit: () => {
           commitMaterializedSpace(space)
           artifact?.commit()

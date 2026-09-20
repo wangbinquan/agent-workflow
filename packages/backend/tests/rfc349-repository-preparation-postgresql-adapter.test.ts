@@ -1,3 +1,4 @@
+import { preparedArtifactLane } from '@/modules/task-execution/infrastructure/workspaceLaunchLane'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -266,6 +267,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
       commit() {
         trace.push('workspace:commit')
       },
+      admit: async () => preparedArtifactLane('task-1'),
       async rollback() {
         rolledBack = true
         return { taskId: 'task-1', complete: true, failures: [] }
